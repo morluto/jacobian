@@ -94,6 +94,14 @@ def test_serialized_transport_rejects_missing_or_forged_source_maps() -> None:
         decoded.require_valid_transport()
 
     payload = result.model_dump(mode="json")
+    payload["simplicial_complex"]["faces_by_dimension"][1]["faces"].pop()
+    payload["simplicial_complex"]["f_vector"][1] -= 1
+    payload["simplicial_complex"]["closure_size"] -= 1
+    decoded = CubicalTriangulationResult.model_validate_json(json.dumps(payload))
+    with pytest.raises(ValueError, match="closure"):
+        decoded.require_valid_transport()
+
+    payload = result.model_dump(mode="json")
     payload["vertex_map"][-1]["coordinate"] = [3, 3, 3]
     decoded = CubicalTriangulationResult.model_validate_json(json.dumps(payload))
     with pytest.raises(ValueError, match="exact maximal source presentation"):

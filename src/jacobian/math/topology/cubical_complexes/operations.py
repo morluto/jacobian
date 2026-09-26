@@ -30,7 +30,7 @@ from jacobian.math.graphs.values import (
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_FILTER_AMBIENT_DIMENSION,
     MAX_FILTER_LEVELS,
-    FilteredChainComplexRequest,
+    FilteredChainComplex,
     FilteredSubspace,
     FiltrationLevel,
 )
@@ -50,24 +50,26 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_CHAIN_PRODUCT_TERMS,
     MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS,
     MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS,
-    MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES,
+    MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE,
     MAX_CUBICAL_CLOSED_STAR_WORK,
     MAX_CUBICAL_FACE_POSET_CANDIDATES,
     MAX_CUBICAL_FACE_POSET_COORDINATE_DIGITS,
     MAX_CUBICAL_FACE_POSET_COVER_CANDIDATES,
-    MAX_CUBICAL_FACE_POSET_RESULT_BYTES,
+    MAX_CUBICAL_FACE_POSET_RESULT_SIZE,
     MAX_CUBICAL_GRAPH_EDGES,
-    MAX_CUBICAL_GRAPH_RESULT_BYTES,
+    MAX_CUBICAL_GRAPH_RESULT_SIZE,
     MAX_CUBICAL_GRAPH_VERTICES,
     MAX_CUBICAL_GRAPH_WORK,
-    MAX_CUBICAL_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_PRODUCT_RESULT_SIZE,
+    MAX_CUBICAL_SKELETON_COORDINATE_DIGITS,
+    MAX_CUBICAL_SKELETON_RESULT_SIZE,
     MAX_DIM,
     MAX_FACE_CELLS,
     MAX_LOWER_STAR_CELLS,
     MAX_LOWER_STAR_COORDINATE_DIGITS,
     MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES,
     MAX_LOWER_STAR_INCIDENCES,
-    MAX_LOWER_STAR_RESULT_BYTES,
+    MAX_LOWER_STAR_RESULT_SIZE,
     MAX_LOWER_STAR_VALUE_DIGITS,
     MAX_LOWER_STAR_VERTICES,
     CubicalCell,
@@ -79,18 +81,16 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalChainProductRequest,
     CubicalChainTerm,
     CubicalChainValue,
-    CubicalClosedStarRequest,
     CubicalClosedStarResult,
     CubicalComplex,
-    CubicalComplexRequest,
     CubicalFacePosetResult,
-    CubicalLowerStarRequest,
     CubicalOneSkeletonResult,
     CubicalProductResult,
     CubicalSkeletonResult,
     CubicalSquareLedgerEntry,
     CubicalTopCellBirth,
-    CubicalTopCellFiltrationRequest,
+    CubicalTopCellFiltrationValue,
+    CubicalVertexFiltrationValue,
     FaceClosureResult,
     FilteredCubicalComplex,
     FilteredCubicalComplexFromTopCells,
@@ -240,23 +240,23 @@ def _admit_face_poset_source(
     return source_cells, ambient_dimension, maximum_coordinate_digits
 
 
-def _admit_face_poset_result_bytes(
+def _admit_face_poset_result_size(
     ambient_dimension: int, maximum_coordinate_digits: int
 ) -> None:
     relation_pair_bound = MAX_POSET_ELEMENTS * (MAX_POSET_ELEMENTS - 1) // 2
-    estimated_result_bytes = (
+    estimated_result_size = (
         4 * MAX_POSET_ELEMENTS * ambient_dimension * (maximum_coordinate_digits + 2)
         + 3 * relation_pair_bound * 128
         + 512 * MAX_POSET_ELEMENTS
         + 32_768
     )
-    if estimated_result_bytes > MAX_CUBICAL_FACE_POSET_RESULT_BYTES:
+    if estimated_result_size > MAX_CUBICAL_FACE_POSET_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
-            code="cubical_complex.face_poset.result_byte_budget",
+            code="cubical_complex.face_poset.result_size_budget",
             message=(
-                "estimated face-poset encoding exceeds the "
-                f"{MAX_CUBICAL_FACE_POSET_RESULT_BYTES}-byte result bound"
+                "estimated face-poset representation exceeds the "
+                f"{MAX_CUBICAL_FACE_POSET_RESULT_SIZE}-unit size bound"
             ),
         )
 
@@ -293,12 +293,33 @@ def _face_poset_cover_pairs(
     return cover_pairs
 
 
-def face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
+def face_poset(cells: tuple[CubicalCell, ...]) -> CubicalFacePosetResult:
     """Return the inclusion poset of all cells in the face-closed complex."""
+    if (
+        type(cells) is not tuple
+        or not cells
+        or len(cells) > MAX_CELLS
+        or any(type(cell) is not CubicalCell for cell in cells)
+    ):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.face_poset.request_type",
+            message="face_poset requires a nonempty tuple of canonical cubical cells",
+        )
+    try:
+        cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python")) for cell in cells
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.face_poset.invalid_cell",
+            message="face_poset cells must satisfy the cubical-cell contract",
+        ) from exc
     source_cells, ambient_dimension, maximum_coordinate_digits = (
-        _admit_face_poset_source(request.cells)
+        _admit_face_poset_source(cells)
     )
-    _admit_face_poset_result_bytes(ambient_dimension, maximum_coordinate_digits)
+    _admit_face_poset_result_size(ambient_dimension, maximum_coordinate_digits)
     complex_, _ = _canonical_complex(source_cells, face_output_limit=MAX_POSET_ELEMENTS)
     elements = tuple(f"c{index:02d}" for index in range(len(complex_.cells)))
     label_by_cell = dict(zip(complex_.cells, elements, strict=True))
@@ -386,21 +407,26 @@ def _common_coface_hull(
     return hull
 
 
-def closed_star(request: CubicalClosedStarRequest) -> CubicalClosedStarResult:
-    """Return all faces of all source cofaces containing ``request.cell``.
+def closed_star(
+    cells: tuple[CubicalCell, ...], cell: CubicalCell
+) -> CubicalClosedStarResult:
+    """Return all faces of all source cofaces containing ``cell``.
 
     A candidate source cell belongs to the closed star exactly when the
     coordinatewise hull of it and the selected cell is itself a face-closed
     source cell. This avoids a quadratic coface-by-face expansion.
     """
-    if type(request) is not CubicalClosedStarRequest:
+    if (
+        type(cell) is not CubicalCell
+        or not isinstance(cells, tuple)
+        or any(type(item) is not CubicalCell for item in cells)
+    ):
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("cells",),
             code="cubical_complex.closed_star_request_type",
-            message="closed_star requires a canonical CubicalClosedStarRequest",
+            message="closed_star requires canonical cubical cells",
         )
-    cells = request.cells
-    selected = request.cell
+    selected = cell
     if not cells or len(cells) > MAX_CELLS:
         raise OperationDomainValidationError(
             location=("cells",),
@@ -440,12 +466,12 @@ def closed_star(request: CubicalClosedStarRequest) -> CubicalClosedStarResult:
     face_count_upper = sum(3**cell.dimension for cell in source_cells)
     closure_work_bound = ambient_dimension * face_count_upper
     star_work_bound = ambient_dimension * face_count_upper
-    cell_bytes_bound = ambient_dimension * (2 * coordinate_digits + 18) + 32
-    output_bytes_bound = 512 + 2 * face_count_upper * cell_bytes_bound
+    cell_size_bound = ambient_dimension * (2 * coordinate_digits + 18) + 32
+    output_size_bound = 512 + 2 * face_count_upper * cell_size_bound
     if (
         face_count_upper > MAX_FACE_CELLS
         or closure_work_bound + star_work_bound > MAX_CUBICAL_CLOSED_STAR_WORK
-        or output_bytes_bound > MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES
+        or output_size_bound > MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE
     ):
         raise OperationResourceAdmissionError(
             location=("cells",),
@@ -552,21 +578,21 @@ def one_skeleton(cells: tuple[CubicalCell, ...]) -> CubicalOneSkeletonResult:
             ),
         )
     closure_count_bound = min(MAX_FACE_CELLS, face_work_bound)
-    cell_bytes = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 64
-    vertex_bytes = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 48
-    estimated_output_bytes = (
-        closure_count_bound * cell_bytes
-        + vertex_count_bound * vertex_bytes
+    cell_size = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 64
+    vertex_size = ambient_dimension * (2 * maximum_coordinate_digits + 8) + 48
+    estimated_output_size = (
+        closure_count_bound * cell_size
+        + vertex_count_bound * vertex_size
         + edge_count_bound * 32
         + 4_096
     )
-    if estimated_output_bytes > MAX_CUBICAL_GRAPH_RESULT_BYTES:
+    if estimated_output_size > MAX_CUBICAL_GRAPH_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
-            code="cubical_complex.one_skeleton.output_bytes",
+            code="cubical_complex.one_skeleton.output_size",
             message=(
-                f"conservative output estimate {estimated_output_bytes} exceeds "
-                f"{MAX_CUBICAL_GRAPH_RESULT_BYTES} bytes"
+                f"conservative output estimate {estimated_output_size} exceeds "
+                f"{MAX_CUBICAL_GRAPH_RESULT_SIZE} representation-size units"
             ),
         )
 
@@ -589,7 +615,9 @@ def one_skeleton(cells: tuple[CubicalCell, ...]) -> CubicalOneSkeletonResult:
         high[varying_axis] = (right_endpoint, right_endpoint)
         left_vertex = vertex_index[CubicalCell(intervals=tuple(low))]
         right_vertex = vertex_index[CubicalCell(intervals=tuple(high))]
-        graph_edges.add(tuple(sorted((left_vertex, right_vertex))))
+        graph_edges.add(
+            (min(left_vertex, right_vertex), max(left_vertex, right_vertex))
+        )
     if len(vertex_cells) > MAX_INDEXED_SIMPLE_GRAPH_VERTICES:
         raise OperationResourceAdmissionError(
             location=("cells",),
@@ -619,7 +647,86 @@ def skeleton(
     complex. Since every face of a cell of dimension at most k also has
     dimension at most k, filtering that canonical closure produces a subcomplex.
     """
-    complex_, _source_cells = _canonical_complex(cells)
+    if type(dimension_bound) is not int or not 0 <= dimension_bound <= MAX_DIM:
+        raise OperationDomainValidationError(
+            location=("dimension_bound",),
+            code="cubical_complex.skeleton_dimension_bound",
+            message=f"dimension_bound must be an integer in [0, {MAX_DIM}]",
+        )
+    if type(cells) is not tuple or not cells:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.skeleton_cells_shape",
+            message="at least one cubical generator is required",
+        )
+    if len(cells) > MAX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_source_cell_budget",
+            message=f"source exceeds the {MAX_CELLS}-cell input limit",
+        )
+    try:
+        validated_cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python"))
+            for cell in cells
+            if isinstance(cell, CubicalCell)
+        )
+        if len(validated_cells) != len(cells):
+            raise TypeError("every generator must be a cubical cell")
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.skeleton_invalid_cell",
+            message="generators must satisfy the canonical cubical-cell contract",
+        ) from exc
+    if any(
+        len(cell.intervals) != len(validated_cells[0].intervals)
+        for cell in validated_cells
+    ):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.skeleton_ambient_axis",
+            message="all generators must use one ambient coordinate axis",
+        )
+    coordinate_digits = max(
+        _coordinate_digit_count(coordinate)
+        for cell in validated_cells
+        for interval in cell.intervals
+        for coordinate in interval
+    )
+    face_bound = sum(3**cell.dimension for cell in set(validated_cells))
+    if coordinate_digits > MAX_CUBICAL_SKELETON_COORDINATE_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_coordinate_digit_budget",
+            message=(
+                "coordinates exceed the "
+                f"{MAX_CUBICAL_SKELETON_COORDINATE_DIGITS}-digit result limit"
+            ),
+        )
+    if face_bound > MAX_FACE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_result_size",
+            message="skeleton closure exceeds the admitted output bound",
+        )
+    # The result retains both the full face closure and its filtered skeleton.
+    # Cell count and coordinate width are each admitted above, but only their
+    # product bounds the retained scalars, so a full-dimensional closure with
+    # wide coordinates is rejected here before it is materialized.
+    ambient_dimension = len(validated_cells[0].intervals)
+    skeleton_result_size = (
+        2 * face_bound * ambient_dimension * 2 * (coordinate_digits + 4) + 4096
+    )
+    if skeleton_result_size > MAX_CUBICAL_SKELETON_RESULT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("cells",),
+            code="cubical_complex.skeleton_result_representation_size",
+            message=(
+                "skeleton closure exceeds the admitted result representation-size bound"
+            ),
+        )
+    complex_, _source_cells = _canonical_complex(validated_cells)
     retained = tuple(
         cell for cell in complex_.cells if cell.dimension <= dimension_bound
     )
@@ -644,12 +751,33 @@ def product(
     Each factor is first normalized to its full face closure, so the Cartesian
     product of those cells is already face closed.
     """
-    if not left_cells or not right_cells:
-        raise OperationDomainValidationError(
-            location=("cells",),
-            code="cubical_complex.product_empty_factor",
-            message="both cubical product factors must contain at least one cell",
-        )
+    for name, factor in (("left_cells", left_cells), ("right_cells", right_cells)):
+        if (
+            type(factor) is not tuple
+            or not factor
+            or len(factor) > MAX_CELLS
+            or any(type(cell) is not CubicalCell for cell in factor)
+        ):
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="cubical_complex.product_factor_type",
+                message="product factors must be nonempty tuples of canonical cubical cells",
+            )
+        try:
+            validated = tuple(
+                CubicalCell.model_validate(cell.model_dump(mode="python"))
+                for cell in factor
+            )
+        except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="cubical_complex.product_invalid_cell",
+                message="product factor cells must satisfy the cubical-cell contract",
+            ) from exc
+        if name == "left_cells":
+            left_cells = validated
+        else:
+            right_cells = validated
     left_dimension = len(left_cells[0].intervals)
     right_dimension = len(right_cells[0].intervals)
     if left_dimension + right_dimension > MAX_DIM:
@@ -682,19 +810,19 @@ def product(
             for coordinate in interval
         )
 
-    output_bytes_bound = (
+    output_size_bound = (
         128
         + product_cell_count * (64 + 8 * (left_dimension + right_dimension))
         + len(right.cells) * sum(coordinate_digit_bound(cell) for cell in left.cells)
         + len(left.cells) * sum(coordinate_digit_bound(cell) for cell in right.cells)
     )
-    if output_bytes_bound > MAX_CUBICAL_PRODUCT_RESULT_BYTES:
+    if output_size_bound > MAX_CUBICAL_PRODUCT_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.product_result_size",
             message=(
                 "the cubical product exceeds the "
-                f"{MAX_CUBICAL_PRODUCT_RESULT_BYTES}-byte result bound"
+                f"{MAX_CUBICAL_PRODUCT_RESULT_SIZE}-unit representation-size bound"
             ),
         )
 
@@ -1012,40 +1140,65 @@ def _lower_star_vertices(cell: CubicalCell) -> tuple[CubicalCell, ...]:
     )
 
 
-def _admit_lower_star_request(
-    request: CubicalLowerStarRequest,
+def _admit_lower_star(
+    cells: tuple[CubicalCell, ...],
+    vertex_values: tuple[CubicalVertexFiltrationValue, ...],
+    prime: int,
 ) -> tuple[
     int, tuple[CubicalCell, ...], dict[CubicalCell, Fraction], tuple[Fraction, ...]
 ]:
-    if not isinstance(request, CubicalLowerStarRequest):
+    if (
+        type(cells) is not tuple
+        or not cells
+        or len(cells) > MAX_CELLS
+        or any(type(item) is not CubicalCell for item in cells)
+        or type(vertex_values) is not tuple
+        or not vertex_values
+        or len(vertex_values) > MAX_LOWER_STAR_VERTICES
+        or any(type(item) is not CubicalVertexFiltrationValue for item in vertex_values)
+    ):
         raise OperationDomainValidationError(
-            location=(),
+            location=("cells",),
             code="cubical_complex.lower_star_request_type_invalid",
-            message="lower-star filtration requires a canonical request",
+            message="lower-star filtration requires canonical cubical cells",
         )
     try:
-        require_prime_field_admission(CoefficientRing.PRIME_FIELD, request.prime)
+        cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python")) for cell in cells
+        )
+        vertex_values = tuple(
+            CubicalVertexFiltrationValue.model_validate(entry.model_dump(mode="python"))
+            for entry in vertex_values
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("vertex_values",),
+            code="cubical_complex.lower_star_invalid_value",
+            message="lower-star inputs must satisfy their canonical contracts",
+        ) from exc
+    try:
+        require_prime_field_admission(CoefficientRing.PRIME_FIELD, prime)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("prime",),
             code="cubical_complex.lower_star_prime_invalid",
             message=str(exc),
         ) from exc
-    if not request.cells:
+    if not cells:
         raise OperationDomainValidationError(
             location=("cells",),
             code="cubical_complex.lower_star_empty_source",
             message="lower-star filtration requires at least one source cell",
         )
-    ambient_dimension = len(request.cells[0].intervals)
-    if any(len(cell.intervals) != ambient_dimension for cell in request.cells):
+    ambient_dimension = len(cells[0].intervals)
+    if any(len(cell.intervals) != ambient_dimension for cell in cells):
         raise OperationDomainValidationError(
             location=("cells",),
             code="cubical_complex.lower_star_ambient_dimension_mismatch",
             message="all source cells must use one ordered ambient coordinate axis",
         )
 
-    for cell in (*request.cells, *(entry.vertex for entry in request.vertex_values)):
+    for cell in (*cells, *(entry.vertex for entry in vertex_values)):
         if any(
             _coordinate_digit_count(coordinate) > MAX_LOWER_STAR_COORDINATE_DIGITS
             for interval in cell.intervals
@@ -1059,7 +1212,7 @@ def _admit_lower_star_request(
                     f"{MAX_LOWER_STAR_COORDINATE_DIGITS} decimal digits"
                 ),
             )
-    for entry in request.vertex_values:
+    for entry in vertex_values:
         if len(entry.vertex.intervals) != ambient_dimension:
             raise OperationDomainValidationError(
                 location=("vertex_values",),
@@ -1081,7 +1234,7 @@ def _admit_lower_star_request(
 
     input_vertices = tuple(
         sorted(
-            (entry.vertex for entry in request.vertex_values),
+            (entry.vertex for entry in vertex_values),
             key=lambda vertex: vertex.intervals,
         )
     )
@@ -1101,7 +1254,7 @@ def _admit_lower_star_request(
         )
 
     value_by_vertex = {
-        entry.vertex: entry.value.as_fraction() for entry in request.vertex_values
+        entry.vertex: entry.value.as_fraction() for entry in vertex_values
     }
     critical = tuple(sorted(set(value_by_vertex.values())))
     if len(critical) > MAX_FILTER_LEVELS:
@@ -1168,7 +1321,7 @@ def _admit_lower_star_output(
                 f"{MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES}-entry bound"
             ),
         )
-    output_bytes_bound = (
+    output_size_bound = (
         1024
         + len(complex_.cells)
         * (192 + ambient_dimension * (2 * MAX_LOWER_STAR_COORDINATE_DIGITS + 16))
@@ -1182,13 +1335,13 @@ def _admit_lower_star_output(
         + matrix_cells * 16
         + filter_vector_entries * 4
     )
-    if output_bytes_bound > MAX_LOWER_STAR_RESULT_BYTES:
+    if output_size_bound > MAX_LOWER_STAR_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.lower_star_result_size",
             message=(
                 "lower-star output exceeds the "
-                f"{MAX_LOWER_STAR_RESULT_BYTES}-byte result bound"
+                f"{MAX_LOWER_STAR_RESULT_SIZE}-unit representation-size bound"
             ),
         )
     return groups
@@ -1235,15 +1388,15 @@ def _filtered_lower_star_levels(
 
 
 def lower_star_from_vertices(
-    request: CubicalLowerStarRequest,
+    cells: tuple[CubicalCell, ...],
+    vertex_values: tuple[CubicalVertexFiltrationValue, ...],
+    prime: int,
 ) -> FilteredCubicalComplex:
     """Build exact vertex lower-star values and filtered cubical chains."""
-    ambient_dimension, input_vertices, value_by_vertex, critical = (
-        _admit_lower_star_request(request)
+    ambient_dimension, input_vertices, value_by_vertex, critical = _admit_lower_star(
+        cells, vertex_values, prime
     )
-    complex_, _ = _canonical_complex(
-        request.cells, face_output_limit=MAX_LOWER_STAR_CELLS
-    )
+    complex_, _ = _canonical_complex(cells, face_output_limit=MAX_LOWER_STAR_CELLS)
     vertices = tuple(cell for cell in complex_.cells if cell.dimension == 0)
     if vertices != input_vertices:
         raise OperationDomainValidationError(
@@ -1260,19 +1413,19 @@ def lower_star_from_vertices(
     chains = _chain_complex_from_canonical(
         complex_,
         CubicalChainCoefficient.PRIME_FIELD,
-        request.prime,
+        prime,
         groups=groups,
         prime_admitted=True,
         chain_bounds_admitted=True,
     )
-    filtered_chain = FilteredChainComplexRequest(
+    filtered_chain = FilteredChainComplex(
         complex=chains.value,
         filtration=_filtered_lower_star_levels(groups, birth_by_cell, critical),
     )
     return FilteredCubicalComplex(
         complex=complex_,
         vertex_values=tuple(
-            sorted(request.vertex_values, key=lambda entry: entry.vertex.intervals)
+            sorted(vertex_values, key=lambda entry: entry.vertex.intervals)
         ),
         cell_bases=chains.cell_bases,
         cell_births=tuple(
@@ -1291,7 +1444,9 @@ def lower_star_from_vertices(
 
 
 def from_top_cell_values(
-    request: CubicalTopCellFiltrationRequest,
+    cells: tuple[CubicalCell, ...],
+    top_cell_values: tuple[CubicalTopCellFiltrationValue, ...],
+    prime: int,
 ) -> FilteredCubicalComplexFromTopCells:
     """Build a filtration from exact values on the maximal supplied cells.
 
@@ -1299,8 +1454,42 @@ def from_top_cell_values(
     cells containing it. Thus a sublevel consists exactly of the face closure
     of active top cells and is a cubical subcomplex.
     """
+    if (
+        type(cells) is not tuple
+        or not cells
+        or len(cells) > MAX_CELLS
+        or any(type(cell) is not CubicalCell for cell in cells)
+        or type(top_cell_values) is not tuple
+        or not top_cell_values
+        or len(top_cell_values) > MAX_LOWER_STAR_CELLS
+        or any(
+            type(entry) is not CubicalTopCellFiltrationValue
+            for entry in top_cell_values
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.top_cell_request_type_invalid",
+            message="top-cell filtration requires bounded tuples of canonical cells and values",
+        )
     try:
-        require_prime_field_admission(CoefficientRing.PRIME_FIELD, request.prime)
+        cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python")) for cell in cells
+        )
+        top_cell_values = tuple(
+            CubicalTopCellFiltrationValue.model_validate(
+                entry.model_dump(mode="python")
+            )
+            for entry in top_cell_values
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.top_cell_request_invalid",
+            message="top-cell filtration inputs must satisfy their canonical contracts",
+        ) from exc
+    try:
+        require_prime_field_admission(CoefficientRing.PRIME_FIELD, prime)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("prime",),
@@ -1309,7 +1498,7 @@ def from_top_cell_values(
         ) from exc
     if any(
         _coordinate_digit_count(coordinate) > MAX_LOWER_STAR_COORDINATE_DIGITS
-        for cell in request.cells
+        for cell in cells
         for interval in cell.intervals
         for coordinate in interval
     ):
@@ -1321,7 +1510,7 @@ def from_top_cell_values(
                 f"{MAX_LOWER_STAR_COORDINATE_DIGITS} decimal digits"
             ),
         )
-    for entry in request.top_cell_values:
+    for entry in top_cell_values:
         try:
             require_bounded_rational(
                 entry.value,
@@ -1335,9 +1524,7 @@ def from_top_cell_values(
                 message=str(exc),
             ) from exc
 
-    complex_, source = _canonical_complex(
-        request.cells, face_output_limit=MAX_LOWER_STAR_CELLS
-    )
+    complex_, source = _canonical_complex(cells, face_output_limit=MAX_LOWER_STAR_CELLS)
     maximal = tuple(
         cell
         for cell in source
@@ -1353,9 +1540,7 @@ def from_top_cell_values(
             for candidate in source
         )
     )
-    values = tuple(
-        sorted(request.top_cell_values, key=lambda entry: entry.cell.intervals)
-    )
+    values = tuple(sorted(top_cell_values, key=lambda entry: entry.cell.intervals))
     if tuple(entry.cell for entry in values) != maximal:
         raise OperationDomainValidationError(
             location=("top_cell_values",),
@@ -1395,12 +1580,12 @@ def from_top_cell_values(
     chains = _chain_complex_from_canonical(
         complex_,
         CubicalChainCoefficient.PRIME_FIELD,
-        request.prime,
+        prime,
         groups=groups,
         prime_admitted=True,
         chain_bounds_admitted=True,
     )
-    filtered_chain = FilteredChainComplexRequest(
+    filtered_chain = FilteredChainComplex(
         complex=chains.value,
         filtration=_filtered_lower_star_levels(groups, birth_by_cell, critical),
     )

@@ -177,14 +177,16 @@ def test_triangulation_retains_source_axis_through_serialization() -> None:
     square = CubicalCell(intervals=((0, 1), (0, 1)))
     result = triangulate(CubicalTriangulationRequest(cells=(square,)))
     restored = type(result).model_validate(result.model_dump(mode="json"))
-    assert restored.source_cells == (square,)
-    assert len(restored.complex.cells) == 9
-    assert len(restored.simplices_by_cell) == len(restored.source_cells)
+    assert square in restored.source_complex.cells
+    assert len(restored.source_complex.cells) == 9
+    assert len(restored.simplicial_complex.faces_by_dimension[0].faces) == 4
+    assert len(restored.cell_maps) == 1
+    assert restored.cell_maps[0].source_cell == square
 
 
 def test_triangulation_rejects_factorial_output_before_materialization() -> None:
     cube = CubicalCell(intervals=tuple((0, 1) for _ in range(10)))
-    with pytest.raises(OperationResourceAdmissionError, match="simplex output"):
+    with pytest.raises(OperationResourceAdmissionError, match="dimension"):
         triangulate(CubicalTriangulationRequest(cells=(cube,)))
 
 

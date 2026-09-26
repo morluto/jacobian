@@ -212,6 +212,30 @@ def test_rank_deficient_lift_uses_relative_facets_and_exact_inequality_oracle(
     _assert_face_incidence(poly, result)
 
 
+def test_result_validation_checks_affine_relations_and_parent_dimensions() -> None:
+    poly = _polynomial(
+        ("x", "y", "z"),
+        ((0, 0, 0), (1, 0, 0), (2, 0, 0)),
+        (0, 2, 4),
+    )
+    result = tropical_polynomial_essential_part(poly)
+    bad_row = (
+        *result.affine_equalities[0][:-1],
+        CanonicalRational.from_fraction(Fraction(1)),
+    )
+    with pytest.raises(ValueError, match="affine equalities"):
+        TropicalPolynomialEssentialPart.model_validate(
+            result.model_dump(mode="python") | {"affine_equalities": (bad_row,)}
+        )
+
+    child = result.face_incidence[0].model_copy(update={"dimension": 2})
+    with pytest.raises(ValueError, match="parent faces"):
+        TropicalPolynomialEssentialPart.model_validate(
+            result.model_dump(mode="python")
+            | {"face_incidence": (child, *result.face_incidence[1:])}
+        )
+
+
 def test_affine_height_relation_makes_all_terms_tie_somewhere() -> None:
     poly = _polynomial(
         ("x", "y", "z"),

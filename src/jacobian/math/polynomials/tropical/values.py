@@ -593,6 +593,30 @@ class TropicalPolynomialEssentialPart(StrictModel):
                 "essential_part_face_coverage",
                 "finite-normal face incidence must equal the attained source support",
             )
+        lifted_points = tuple(
+            (
+                *term.exponents,
+                term.coefficient.value.as_fraction(),
+            )
+            for term in self.source.terms
+            if term.coefficient.value is not None
+        )
+        if any(
+            not any(value.num for value in row[:-1])
+            or any(
+                sum(
+                    coefficient.as_fraction() * coordinate
+                    for coefficient, coordinate in zip(row[:-1], point, strict=True)
+                )
+                != row[-1].as_fraction()
+                for point in lifted_points
+            )
+            for row in self.affine_equalities
+        ):
+            raise _validation_error(
+                "essential_part_affine_equalities",
+                "affine equalities must be nontrivial exact relations on every lifted source term",
+            )
         if any(
             face.normal[-1].num >= 0
             if self.source.semiring.convention == "MIN_PLUS"
@@ -629,7 +653,8 @@ class TropicalPolynomialEssentialPart(StrictModel):
                 for index in face.source_term_indices
             )
             or any(
-                not set(face.source_term_indices).issubset(
+                face.dimension > self.finite_faces[index].dimension
+                or not set(face.source_term_indices).issubset(
                     self.finite_faces[index].source_term_indices
                 )
                 for index in face.maximal_finite_face_indices

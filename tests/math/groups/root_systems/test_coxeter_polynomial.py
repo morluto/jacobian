@@ -1,12 +1,13 @@
+import json
 from itertools import permutations
 from math import prod
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.groups.root_systems import coxeter_polynomial
+from jacobian.math.groups.root_systems._models import CartanMatrixRequest
+from jacobian.math.groups.root_systems._tools import TOOLS
 
 
 def _determinant(matrix: tuple[tuple[int, ...], ...]) -> int:
@@ -71,14 +72,17 @@ def test_known_coxeter_polynomials_and_direct_determinant(cartan, coefficients):
         assert evaluated == _determinant(characteristic_matrix)
 
 
-def test_catalog_example_returns_the_canonical_integer_polynomial():
-    catalog = Catalog.open()
-    operation = catalog.operation("root_system.coxeter_polynomial.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
+def test_manifest_example_projects_the_canonical_integer_polynomial():
+    operation = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "root_system.coxeter_polynomial.compute"
     )
-    assert result.output["coefficients"] == ["1", "1", "1"]
+    request = CartanMatrixRequest.model_validate_json(
+        json.dumps(operation.examples[0].input), strict=True
+    )
+    result = operation.run(request)
+    assert result.coefficients == (1, 1, 1)
 
 
 def test_coxeter_polynomial_admission_reports_resource_limits(monkeypatch):

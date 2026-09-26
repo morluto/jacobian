@@ -5,16 +5,15 @@ from __future__ import annotations
 from itertools import permutations
 
 import pytest
-from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.symmetric_functions import (
     IntegerPartition,
     littlewood_richardson_coefficient,
     littlewood_richardson_tableaux,
-)
-from jacobian.math.combinatorics.symmetric_functions._models import (
-    LittlewoodRichardsonTableauxRequest,
 )
 from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 
@@ -151,12 +150,13 @@ def test_impossible_large_shape_returns_empty_without_search_admission() -> None
 
 
 def test_lr_tableau_enumeration_rejects_before_expansion_and_is_catalogued() -> None:
-    with pytest.raises(ValidationError, match="lr_skew_size_exceeded"):
-        LittlewoodRichardsonTableauxRequest(
-            outer=IntegerPartition(parts=(9,)),
-            inner=IntegerPartition(parts=()),
-            content=IntegerPartition(parts=(9,)),
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        littlewood_richardson_tableaux(
+            IntegerPartition(parts=(9,)),
+            IntegerPartition(parts=()),
+            IntegerPartition(parts=(9,)),
         )
+    assert error.value.errors()[0]["type"] == "symmetric_functions.lr_skew_size_exceeded"
     tool = next(
         item
         for item in TOOLS

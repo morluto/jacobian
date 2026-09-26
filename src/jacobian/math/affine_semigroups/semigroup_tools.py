@@ -8,6 +8,18 @@ from jacobian.math.affine_semigroups.factorization_count import (
     AffineFactorizationCount,
     factorization_count,
 )
+from jacobian.math.affine_semigroups.group_lattice import (
+    AffineGroupLattice,
+    compute_group_lattice,
+)
+from jacobian.math.affine_semigroups.group_lattice_models import (
+    AffineGroupLatticeRequest,
+)
+from jacobian.math.affine_semigroups.holes import (
+    AffineSemigroupHoleProfile,
+    AffineSemigroupHolesRequest,
+    holes_through_degree,
+)
 from jacobian.math.affine_semigroups.semigroup import (
     AffineFactorization,
     AffineFiber,
@@ -37,6 +49,25 @@ from jacobian.math.affine_semigroups.semigroup_models import (
     AffineSemigroupRequest,
     PositiveGradingRequest,
 )
+
+
+def _group_lattice(r: AffineGroupLatticeRequest) -> AffineGroupLattice:
+    return compute_group_lattice(r.configuration)
+
+
+def _holes_through_degree(
+    request: AffineSemigroupHolesRequest,
+) -> AffineSemigroupHoleProfile:
+    try:
+        return holes_through_degree(request.semigroup, request.max_degree)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.hole_profile",
+            message=str(exc),
+        ) from exc
 
 
 def _grading(r: PositiveGradingRequest) -> PositiveGradingResult:
@@ -85,21 +116,19 @@ def _factorization_count(
         ) from exc
 
 
-def _factorization(r: AffineFactorizationRequest) -> AffineFactorization:
+def _factorization(request: AffineFactorizationRequest) -> AffineFactorization:
     try:
         return _evaluate_factorization(
-            r.semigroup, r.coordinates, validate_parent=False
+            request.semigroup, request.coordinates, validate_parent=False
         )
-    except OperationResourceAdmissionError:
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
         raise
-    except OperationDomainValidationError:
-        raise
-    except (TypeError, ValueError, IndexError, OverflowError) as e:
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
         raise OperationDomainValidationError(
             location=("coordinates",),
             code="affine_semigroup.factorization",
-            message=str(e),
-        ) from e
+            message=str(exc),
+        ) from exc
 
 
 def _membership(r: AffineMembershipRequest) -> AffineMembershipResult:
@@ -236,6 +265,84 @@ TOOLS = (
                         "grading": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
                     },
                     "coordinates": ["2", "3"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.holes_through_degree.compute",
+        title="Enumerate affine-semigroup holes through a positive degree",
+        description=(
+            "Return every point h in cone(S) intersect gp(S) with the retained "
+            "positive grading at most max_degree that is not in S. The operation "
+            "currently admits full-rank pointed cones in two ambient dimensions; "
+            "it enumerates a bounded containing box in generated-lattice coordinates "
+            "and closes the finite semigroup reachability set. Candidate points, "
+            "work, scalar heights, and the complete exact output are preflighted. "
+            "A degree-bounded profile is not the global set of holes."
+        ),
+        request_type=AffineSemigroupHolesRequest,
+        result_type=AffineSemigroupHoleProfile,
+        run=_holes_through_degree,
+        tags=("affine-semigroup", "holes", "normalization", "exact"),
+        discovery_terms=(
+            "affine semigroup holes through degree",
+            "bounded holes in a positive affine semigroup",
+            "lattice points in the normalization missing from the semigroup",
+            "degree bounded nonnormality profile",
+        ),
+        examples=(
+            OperationExample(
+                name="parity_holes_through_degree_two",
+                description=(
+                    "For generators (2,0), (0,2), (1,1), (1,0), the generated "
+                    "lattice is Z^2 and the only hole of x+y degree at most two "
+                    "is (0,1)."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["g0", "g1", "g2", "g3"],
+                            "entries": [
+                                ["2", "0", "1", "1"],
+                                ["0", "2", "1", "0"],
+                            ],
+                        },
+                        "grading": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                    "max_degree": "2",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.group_lattice.compute",
+        title="Compute the generated ambient lattice",
+        description=(
+            "Return the canonical exact integer lattice generated by the labelled "
+            "columns of a bounded affine configuration, retaining its source "
+            "configuration and ambient coordinate dimension."
+        ),
+        request_type=AffineGroupLatticeRequest,
+        result_type=AffineGroupLattice,
+        run=_group_lattice,
+        tags=("affine-semigroup", "lattice", "integer", "exact"),
+        examples=(
+            OperationExample(
+                name="even_axis_lattice",
+                description=(
+                    "Compute the subgroup generated by (2,0), (0,2), and (2,2)."
+                ),
+                input={
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["a", "b", "c"],
+                        "entries": [["2", "0", "2"], ["0", "2", "2"]],
+                    }
                 },
             ),
         ),

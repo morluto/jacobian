@@ -1,0 +1,292 @@
+"""Exact formal shift quotients for proper hypergeometric terms."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from pydantic import ValidationError
+
+from jacobian._execution import request_checkpoint
+from jacobian.canonical import decimal_digit_width
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.ore_algebras.proper_hypergeometric_terms._models import (
+    ProperHypergeometricTerm,
+)
+from jacobian.math.ore_algebras.proper_hypergeometric_terms.shift_quotients_models import (
+    ProperHypergeometricShiftQuotientsResult,
+)
+from jacobian.math.polynomials._conversions import (
+    rational_function_from_sympy,
+    rational_polynomial_to_sympy,
+    symbols_for_variables,
+)
+from jacobian.math.polynomials.values import RationalFunction
+
+_VARIABLES = ("n", "k")
+_MAX_PREFAC_DEGREE = 16
+_MAX_PREFAC_TERMS = 32
+_MAX_FACTORIAL_RATIO_DEGREE = 12
+_MAX_EXPANSION_TERMS = 256
+_MAX_OUTPUT_DIGITS = 128
+
+
+def _term_degree(term: ProperHypergeometricTerm) -> int:
+    return max(
+        (sum(monomial.exponents) for monomial in term.polynomial.polynomial.terms),
+        default=0,
+    )
+
+
+def _shifted_polynomial_term_bound(term: ProperHypergeometricTerm, axis: int) -> int:
+    return sum(
+        monomial.exponents[axis] + 1 for monomial in term.polynomial.polynomial.terms
+    )
+
+
+def _factorial_ratio_degree(term: ProperHypergeometricTerm, axis: int) -> int:
+    return sum(
+        abs((factor.n_coefficient, factor.k_coefficient)[axis]) * abs(factor.power)
+        for factor in term.factorial_factors
+    )
+
+
+def _factorial_offset_excess_digits(term: ProperHypergeometricTerm, axis: int) -> int:
+    """Bound decimal growth from affine offsets wider than three digits.
+
+    ``factorial_degree * 5`` already reserves three decimal digits of affine
+    coefficient per unit of quotient degree.  An integer offset is unbounded in
+    the carrier and multiplies through every shifted affine factor, so charge
+    its excess width on the factor that carries it.
+    """
+
+    return sum(
+        abs((factor.n_coefficient, factor.k_coefficient)[axis])
+        * abs(factor.power)
+        * max(0, decimal_digit_width(factor.offset) - 3)
+        for factor in term.factorial_factors
+    )
+
+
+def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
+    """Bound rational expansion before constructing backend polynomials."""
+    if term.is_zero:
+        raise OperationDomainValidationError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_zero_term",
+            message="shift quotients are undefined for the zero term",
+        )
+    polynomial = term.polynomial.polynomial
+    if (
+        len(polynomial.terms) > _MAX_PREFAC_TERMS
+        or _term_degree(term) > _MAX_PREFAC_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("term", "polynomial"),
+            code="ore_algebra.hypergeometric_prefactor_budget",
+            message="the polynomial prefactor exceeds the shift-quotient envelope",
+        )
+    factorial_degree = _factorial_ratio_degree(term, axis)
+    if factorial_degree > _MAX_FACTORIAL_RATIO_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("term", "factorial_factors"),
+            code="ore_algebra.hypergeometric_factorial_ratio_budget",
+            message="the factorial shift quotient exceeds the admitted product degree",
+        )
+
+    # Track the actual bounded Minkowski supports, rather than an ambient
+    # simplex/rectangle: sparse and mixed-affine products can be much smaller.
+    def support_product(
+        support: set[tuple[int, int]], choices: set[tuple[int, int]], repetitions: int
+    ) -> set[tuple[int, int]]:
+        for _ in range(repetitions):
+            support = {
+                (left[0] + right[0], left[1] + right[1])
+                for left in support
+                for right in choices
+            }
+            if len(support) > _MAX_EXPANSION_TERMS:
+                return support
+        return support
+
+    original = {monomial.exponents for monomial in polynomial.terms}
+    shifted_support = set().union(
+        *(
+            {
+                (
+                    monomial.exponents[0] + (axis == 0) * j,
+                    monomial.exponents[1] + (axis == 1) * j,
+                )
+                for j in range(monomial.exponents[axis] + 1)
+            }
+            for monomial in polynomial.terms
+        )
+    )
+    numerator_support = shifted_support
+    denominator_support = original
+    for factor in term.factorial_factors:
+        coefficient = (factor.n_coefficient, factor.k_coefficient)[axis]
+        for _ in range(abs(factor.power) * abs(coefficient)):
+            choices = {(0, 0)}
+            if factor.n_coefficient:
+                choices.add((1, 0))
+            if factor.k_coefficient:
+                choices.add((0, 1))
+            goes_up = (coefficient > 0) == (factor.power > 0)
+            if goes_up:
+                numerator_support = support_product(numerator_support, choices, 1)
+            else:
+                denominator_support = support_product(denominator_support, choices, 1)
+    expanded_terms = max(len(numerator_support), len(denominator_support))
+    if expanded_terms > _MAX_EXPANSION_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_quotient_expansion_budget",
+            message="the exact quotient numerator or denominator may exceed 256 terms",
+        )
+    coefficient_digits = sum(
+        max(
+            decimal_digit_width(numerator),
+            decimal_digit_width(denominator),
+        )
+        for monomial in polynomial.terms
+        for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
+    )
+    base = term.n_base if axis == 0 else term.k_base
+    base_numerator, base_denominator = base.as_integer_ratio()
+    base_digits = max(
+        decimal_digit_width(base_numerator),
+        decimal_digit_width(base_denominator),
+    )
+    conservative_digits = (
+        2 * coefficient_digits
+        + 2 * base_digits
+        + factorial_degree * 5
+        + _factorial_offset_excess_digits(term, axis)
+        + _term_degree(term)
+        + len(str(max(1, expanded_terms)))
+    )
+    if conservative_digits > _MAX_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_quotient_coefficient_budget",
+            message="the exact quotient coefficient bound exceeds 128 digits",
+        )
+
+
+def _factorial_ratio_expression(
+    term: ProperHypergeometricTerm, axis: int, variables: tuple[Any, ...]
+) -> tuple[Any, Any]:
+    from sympy import Integer
+
+    result_num = Integer(1)
+    result_den = Integer(1)
+    for factor in term.factorial_factors:
+        coefficient = (factor.n_coefficient, factor.k_coefficient)[axis]
+        if coefficient == 0:
+            continue
+        affine = (
+            factor.n_coefficient * variables[0]
+            + factor.k_coefficient * variables[1]
+            + factor.offset
+        )
+        if coefficient > 0:
+            ratio_num = Integer(1)
+            ratio_den = Integer(1)
+            for offset in range(1, coefficient + 1):
+                ratio_num *= affine + offset
+        else:
+            ratio_num = Integer(1)
+            ratio_den = Integer(1)
+            for offset in range(-coefficient):
+                ratio_den *= affine - offset
+        if factor.power > 0:
+            result_num *= ratio_num**factor.power
+            result_den *= ratio_den**factor.power
+        else:
+            result_num *= ratio_den ** (-factor.power)
+            result_den *= ratio_num ** (-factor.power)
+    return result_num, result_den
+
+
+def _quotient(term: ProperHypergeometricTerm, axis: int) -> RationalFunction:
+    from sympy import Rational
+
+    request_checkpoint("before hypergeometric shift quotient normalization")
+    variables = symbols_for_variables(_VARIABLES)
+    polynomial = rational_polynomial_to_sympy(term.polynomial)
+    shift = variables[axis]
+    shifted = polynomial.subs(shift, shift + 1)
+    factorial_num, factorial_den = _factorial_ratio_expression(term, axis, variables)
+    base = term.n_base if axis == 0 else term.k_base
+    base_expression = Rational(*base.as_integer_ratio())
+    expression = (
+        base_expression * shifted * factorial_num / (polynomial * factorial_den)
+    )
+    result = rational_function_from_sympy(
+        expression,
+        _VARIABLES,
+        maximum_terms=_MAX_EXPANSION_TERMS,
+        deadline_check=lambda: request_checkpoint(
+            "during hypergeometric shift quotient normalization"
+        ),
+        symbols=variables,
+    )
+    request_checkpoint("after hypergeometric shift quotient normalization")
+    if any(
+        max(
+            decimal_digit_width(coefficient.as_fraction().numerator),
+            decimal_digit_width(coefficient.as_fraction().denominator),
+        )
+        > _MAX_OUTPUT_DIGITS
+        for polynomial_part in (result.numerator, result.denominator)
+        for coefficient in (item.coefficient for item in polynomial_part.terms)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="ore_algebra.hypergeometric_quotient_output_budget",
+            message="the reduced shift quotient exceeds the 128-digit output envelope",
+        )
+    return result
+
+
+def proper_hypergeometric_shift_quotients(
+    term: ProperHypergeometricTerm,
+) -> ProperHypergeometricShiftQuotientsResult:
+    """Return the formal rational quotients ``T(n+1,k)/T(n,k)`` and
+    ``T(n,k+1)/T(n,k)``.
+
+    The equalities are in ``QQ(n,k)`` and describe the generic nonzero-term
+    locus. They do not define pointwise quotients at zeros, poles, or the
+    reciprocal-factorial support boundary.
+    """
+    if not isinstance(term, ProperHypergeometricTerm):
+        raise OperationDomainValidationError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_term_type",
+            message="term must be a proper hypergeometric term value",
+        )
+    try:
+        term = ProperHypergeometricTerm.model_validate(term.model_dump())
+    except (ValidationError, TypeError, ValueError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_term_invalid",
+            message="term must be a canonical proper hypergeometric term value",
+        ) from exc
+    _admit_quotient(term, 0)
+    _admit_quotient(term, 1)
+    return ProperHypergeometricShiftQuotientsResult(
+        n_ratio=_quotient(term, 0), k_ratio=_quotient(term, 1)
+    )
+
+
+def proper_hypergeometric_n_shift_quotient(
+    term: ProperHypergeometricTerm,
+) -> RationalFunction:
+    """Compute only ``T(n+1,k)/T(n,k)`` for internal n-shift consumers."""
+    term = ProperHypergeometricTerm.model_validate(term.model_dump())
+    _admit_quotient(term, 0)
+    return _quotient(term, 0)

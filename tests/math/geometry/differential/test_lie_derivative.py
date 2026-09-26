@@ -31,7 +31,6 @@ from jacobian.math.geometry.differential import _bounds as lie_bounds
 from jacobian.math.geometry.differential import _sympy as lie_backend
 from jacobian.math.geometry.differential import operations as lie_operations
 from jacobian.math.geometry.differential._bounds import (
-    MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS,
     MAX_LIE_DERIVATIVE_WORK_UNITS,
     build_lie_derivative_plan,
 )
@@ -46,7 +45,6 @@ from jacobian.math.geometry.differential._recognition_process import (
 from jacobian.math.geometry.differential.values import (
     MAX_RATIONAL_TENSOR_COMPONENTS,
     MAX_RATIONAL_TENSOR_LOCUS_GUARDS,
-    MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS,
     MAX_RATIONAL_TENSOR_RANK,
     canonical_locus_guards,
 )
@@ -995,10 +993,7 @@ def test_intermediate_support_is_rejected_before_coprimality_recognition(
         forbidden_recognition,
     )
 
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=f"{MAX_LIE_DERIVATIVE_RAW_POLYNOMIAL_TERMS}-term intermediate budget",
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         lie_derivative(vector, scalar)
     assert error.value.errors()[0]["type"].endswith("intermediate_support")
 
@@ -1166,10 +1161,7 @@ def test_cancellation_support_growth_is_rejected_before_conversion() -> None:
         ),
     )
     scalar = _tensor(axis, (), (rational_function_from_sympy(x + y, axis),))
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=f"{MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS}-term",
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         lie_derivative(vector, scalar)
     assert error.value.errors()[0]["type"].endswith("result_support")
 
@@ -1323,8 +1315,6 @@ def test_polynomial_cancellation_support_growth_is_rejected_before_conversion() 
         (),
         (_function(variables, (1, (1, 0, 0)), (1, (0, 1, 0))),),
     )
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=f"{MAX_RATIONAL_TENSOR_POLYNOMIAL_TERMS}-term",
-    ):
+    with pytest.raises(OperationDomainValidationError) as error:
         lie_derivative(vector, scalar)
+    assert error.value.errors()[0]["type"].endswith("result_support")

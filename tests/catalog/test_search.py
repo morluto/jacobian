@@ -15,21 +15,29 @@ from jacobian.catalog.search import (
 )
 
 
-def _positions(need: str) -> dict[str, int]:
+def _positions(need: str, *target_operation_ids: str) -> dict[str, int]:
+    """Find the global ranks of named operations without scanning later pages."""
+
+    assert target_operation_ids
+    targets = set(target_operation_ids)
     catalog = Catalog.open()
     cursor: str | None = None
-    matches: list[OperationDiscoveryMatch] = []
+    positions: dict[str, int] = {}
+    offset = 0
     while True:
         result = catalog.match(
             OperationMatchRequest(
                 need=need, limit=20, cursor=cursor, search_mode="broad"
             )
         )
-        matches.extend(result.matches)
-        if result.next_cursor is None:
+        for index, match in enumerate(result.matches):
+            if match.operation_id in targets:
+                positions[match.operation_id] = offset + index
+        offset += len(result.matches)
+        if targets <= positions.keys() or result.next_cursor is None:
             break
         cursor = result.next_cursor
-    return {match.operation_id: index for index, match in enumerate(matches)}
+    return positions
 
 
 def test_determinant_need_ranks_determinants_before_charpolys() -> None:
@@ -104,11 +112,9 @@ def test_declared_petal_query_finds_complete_sunflower_family() -> None:
 
 
 def test_r3_sunflower_is_not_a_second_catalog_operation() -> None:
-    ids = {
-        descriptor.operation_id for descriptor in Catalog.open().snapshot().operations
-    }
-    assert "set_system.sunflower_triple_hypergraph.construct" not in ids
-    assert "set_system.sunflower_family.construct" in ids
+    catalog = Catalog.open()
+    assert catalog.operation("set_system.sunflower_triple_hypergraph.construct") is None
+    assert catalog.operation("set_system.sunflower_family.construct") is not None
 
 
 def test_discovery_cursor_is_bound_to_search_mode() -> None:
@@ -315,7 +321,9 @@ def test_discovery_normalizes_only_audited_ordinary_plural_forms() -> None:
 
 def test_plural_queries_preserve_their_semantic_catalog_routing() -> None:
     subset_positions = _positions(
-        "all subset sums and repeated representations of a finite integer set"
+        "all subset sums and repeated representations of a finite integer set",
+        "additive.subset_sum.profile.compute",
+        "combinatorics.integer_set.sidon.decide",
     )
     assert (
         subset_positions["additive.subset_sum.profile.compute"]
@@ -323,7 +331,9 @@ def test_plural_queries_preserve_their_semantic_catalog_routing() -> None:
     )
 
     tree_positions = _positions(
-        "counts independent vertex sets by cardinalities in trees"
+        "counts independent vertex sets by cardinalities in trees",
+        "graph.polynomial.independence.compute",
+        "graph.independent_set.maximal.decide",
     )
     assert (
         tree_positions["graph.polynomial.independence.compute"]
@@ -448,7 +458,11 @@ def test_euler_phi_discovery_terms_outrank_generic_inverse_and_solver_operations
         ("totient inverse image", "matrix.inverse.compute"),
         ("solve phi(n)=m", "matrix.symbolic.linear_system.solve"),
     ):
-        positions = _positions(query)
+        positions = _positions(
+            query,
+            "number_theory.euler_phi.preimages.compute",
+            displaced,
+        )
         assert (
             positions["number_theory.euler_phi.preimages.compute"]
             < positions[displaced]
@@ -460,7 +474,11 @@ def test_t_codegree_discovery_terms_route_to_incidence_containment_profiles() ->
         "compute t-codegrees of a finite hypergraph",
         "uniform codegree profile",
     ):
-        positions = _positions(query)
+        positions = _positions(
+            query,
+            "incidence.containment_profiles.compute",
+            "hypergraph.parameters.compute",
+        )
         assert (
             positions["incidence.containment_profiles.compute"]
             < positions["hypergraph.parameters.compute"]

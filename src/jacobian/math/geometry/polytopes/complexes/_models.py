@@ -346,6 +346,29 @@ class PiecewisePolynomialResult(StrictModel):
         return self
 
 
+class GlobalPolynomialProfileRequest(StrictModel):
+    """Check a compatible full-dimensional piecewise polynomial globally."""
+
+    function: PiecewisePolynomialResult
+
+
+class GlobalPolynomialProfileResult(StrictModel):
+    """Source-bound exact test for one ambient polynomial across all cells."""
+
+    function: PiecewisePolynomialResult
+    status: Literal["GLOBAL_POLYNOMIAL", "NOT_GLOBAL_POLYNOMIAL"]
+    polynomial: RationalPolynomial | None = None
+
+    @model_validator(mode="after")
+    def require_polynomial_shape(self) -> Self:
+        if (self.status == "GLOBAL_POLYNOMIAL") != (self.polynomial is not None):
+            raise _validation_error(
+                "global_polynomial_shape",
+                "a global polynomial is present exactly when the profile succeeds",
+            )
+        return self
+
+
 class PiecewisePolynomialAdditionRequest(StrictModel):
     """Add two compatible piecewise-polynomial functions on one complex."""
 
@@ -772,6 +795,8 @@ __all__ = [
     "ComplexFaceTransport",
     "ComplexPoint",
     "FaceCoverRelation",
+    "GlobalPolynomialProfileRequest",
+    "GlobalPolynomialProfileResult",
     "MaximalCellRecord",
     "PairwiseIntersectionRecord",
     "PieceAssignment",

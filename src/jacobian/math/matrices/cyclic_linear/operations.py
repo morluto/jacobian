@@ -55,14 +55,7 @@ class CyclicRankKernelAdmissionError(OperationDomainValidationError):
 
     def __init__(self, reason: str, message: str) -> None:
         self.reason = reason
-        error_type = (
-            OperationResourceAdmissionError
-            if reason in {"field_work_bound", "element_height_bound"}
-            else OperationDomainValidationError
-        )
-        error_type.__init__(
-            self, location=(), code=f"matrix.cyclic.{reason}", message=message
-        )
+        super().__init__(location=(), code=f"matrix.cyclic.{reason}", message=message)
 
 
 def _inclusion_poly(order: int, target_order: int) -> tuple[Fraction, ...]:
@@ -89,8 +82,10 @@ def _standard_inclusion(
         )
     work = source.degree * target.degree * target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
-        raise CyclicRankKernelAdmissionError(
-            "field_work_bound", "cyclotomic inclusion exceeds the field-work envelope"
+        raise OperationResourceAdmissionError(
+            location=("source", "target"),
+            code="matrix.cyclic.field_work_bound",
+            message="cyclotomic inclusion exceeds the field-work envelope",
         )
     image = _inclusion_poly(source.order, target.order)
     if len(image) != target.degree:
@@ -211,9 +206,10 @@ def apply_cyclotomic_field_inclusion(
     target_degree = inclusion.target.degree
     work = source_degree * target_degree * target_degree
     if work > MAX_CYCLIC_FIELD_WORK:
-        raise CyclicRankKernelAdmissionError(
-            "field_work_bound",
-            "cyclotomic element mapping exceeds the field-work envelope",
+        raise OperationResourceAdmissionError(
+            location=("inclusion",),
+            code="matrix.cyclic.field_work_bound",
+            message="cyclotomic element mapping exceeds the field-work envelope",
         )
     expected = _require_standard_inclusion_image(inclusion)
     coordinates = tuple(value.as_fraction() for value in element.coefficients_ascending)
@@ -251,9 +247,10 @@ def apply_cyclotomic_field_inclusion(
     numerator_bound = Fraction(scaled_numerator) * source_degree * row_norm
     numerator_digits = _decimal_digits(numerator_bound.numerator)
     if max(denominator_digits, numerator_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
-        raise CyclicRankKernelAdmissionError(
-            "element_height_bound",
-            "mapped cyclotomic coordinates exceed the 256-digit envelope",
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="matrix.cyclic.element_height_bound",
+            message="mapped cyclotomic coordinates exceed the 256-digit envelope",
         )
     result = Poly(0, variable, domain="QQ")
     for power, coefficient in zip(powers, coordinates, strict=True):

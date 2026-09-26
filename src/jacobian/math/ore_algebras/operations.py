@@ -25,6 +25,8 @@ from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_TOTAL_DIGITS,
 )
 from jacobian.math.ore_algebras._models import (
+    MAX_COEFFICIENT_RECURRENCE_OUTPUT_BYTES,
+    MAX_COEFFICIENT_RECURRENCE_WORK_CELLS,
     MAX_DFINITE_PREFIX_OUTPUT_BYTES,
     MAX_DFINITE_PREFIX_SCALAR_BITS,
     MAX_DFINITE_PREFIX_WORK_UNITS,
@@ -42,6 +44,7 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_LEDGER_ROWS,
     MAX_SHIFT_ORDER,
     MAX_SHIFT_POWER_EXPONENT,
+    MAX_SHIFT_POWER_RESULT_ORDER,
     MAX_SHIFT_POWER_WORK_CELLS,
     MAX_SHIFT_PREFIX_EVALUATION_CELLS,
     MAX_SHIFT_PREFIX_INDEX,
@@ -51,9 +54,12 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_RESULT_DIGITS,
     MAX_SHIFT_RESULT_ORDER,
     MAX_SHIFT_TERMS,
+    CoefficientRecurrenceBoundaryRow,
+    CoefficientRecurrenceBoundaryTerm,
     DFinitePowerSeries,
     DFinitePowerSeriesPrefixRequest,
     DFinitePowerSeriesRequest,
+    DifferentialCoefficientRecurrence,
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyResult,
     DifferentialOperatorMultiplyResult,
@@ -85,6 +91,18 @@ from jacobian.math.polynomials.values import (
 )
 
 _Poly = dict[int, Fraction]
+
+
+def _falling_factorial_polynomial(offset: int, order: int) -> _Poly:
+    """Expand ``(n + offset)_falling_order`` in QQ[n]."""
+    result: _Poly = {0: Fraction(1)}
+    for factor_index in range(order):
+        factor = {
+            0: Fraction(offset - factor_index),
+            1: Fraction(1),
+        }
+        result = _poly_mul(result, factor)
+    return result
 
 
 @dataclass(frozen=True)
@@ -263,6 +281,51 @@ def _admit_shift_product_degree_bounds(
                 )
 
             result_exponent = left_term.exponent + right_term.exponent
+            # A shift by i expands p(n+i); for degree d and coefficient
+            # height h, each binomial contribution is bounded by h+i*d bits.
+            # Multiplication by the left coefficient adds its height. Preflight
+            # before _plan_shift_product_cells materializes the shifted product.
+            left_numerator_height = max(
+                (abs(v.numerator).bit_length() for v in left_numerator.values()),
+                default=0,
+            )
+            left_denominator_height = max(
+                (abs(v.numerator).bit_length() for v in left_denominator.values()),
+                default=0,
+            )
+            for degree, right_height, left_height in (
+                (
+                    right_numerator_degree,
+                    max(
+                        (
+                            abs(v.numerator).bit_length()
+                            for v in _decode_rf(right_term.coefficient)[0].values()
+                        ),
+                        default=0,
+                    ),
+                    left_numerator_height,
+                ),
+                (
+                    right_denominator_degree,
+                    max(
+                        (
+                            abs(v.numerator).bit_length()
+                            for v in _decode_rf(right_term.coefficient)[1].values()
+                        ),
+                        default=0,
+                    ),
+                    left_denominator_height,
+                ),
+            ):
+                if (
+                    right_height + left_term.exponent * degree + left_height
+                    > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS * 4
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("right", "terms", right_term.exponent),
+                        code="ore_algebra.shift_product_coefficient_digits",
+                        message="shifted coefficient exceeds the rational-function coefficient-digit carrier",
+                    )
             grouped.setdefault(result_exponent, []).append(
                 (contribution_numerator_degree, contribution_denominator_degree)
             )
@@ -724,7 +787,7 @@ def shift_operator_power(
                 f"0..{MAX_SHIFT_POWER_EXPONENT}"
             ),
         )
-    if value.order >= 0 and value.order * exponent > MAX_SHIFT_ORDER:
+    if value.order >= 0 and value.order * exponent > MAX_SHIFT_POWER_RESULT_ORDER:
         raise OperationResourceAdmissionError(
             location=("exponent",),
             code="ore_algebra.shift_power_order",
@@ -2101,6 +2164,208 @@ def differential_series_generate_prefix(
     )
     return _compute_admitted_dfinite_prefix(
         initial, polynomials, coefficient_denominators, order, count
+    )
+
+
+def _differential_coefficient_input(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+) -> tuple[DifferentialOreOperator, list[tuple[int, _Poly]], int, int, int]:
+    """Canonicalize the ODE and collect its bounded polynomial coefficients."""
+    try:
+        value = (
+            operator
+            if isinstance(operator, DifferentialOreOperator)
+            else DifferentialOreOperator.model_validate(operator)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_operator",
+            message="the input must be a valid differential Ore operator over QQ(x)",
+        ) from exc
+    value = _admit_differential_operator(value)
+
+    polynomials: list[tuple[int, _Poly]] = []
+    maximum_degree = 0
+    work_bound = 0
+    byte_bound = 512
+    for term_index, term in enumerate(value.terms):
+        denominator = term.coefficient.denominator.terms
+        if not (
+            len(denominator) == 1
+            and denominator[0].exponents == (0,)
+            and denominator[0].coefficient.as_fraction() == 1
+        ):
+            raise OperationDomainValidationError(
+                location=("operator", "terms", term_index, "coefficient"),
+                code="ore_algebra.coefficient_recurrence_polynomial_domain",
+                message="coefficient recurrence conversion requires polynomial coefficients in QQ[x]",
+            )
+        polynomial = _decode_poly(term.coefficient.numerator.terms)
+        maximum_degree = max(maximum_degree, max(polynomial))
+        work_bound += len(polynomial) * (term.order + 1) ** 2
+        byte_bound += 384 + sum(
+            192
+            + len(str(abs(coefficient.numerator)))
+            + len(str(coefficient.denominator))
+            for coefficient in polynomial.values()
+        )
+        polynomials.append((term.order, polynomial))
+    if not value.terms:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_zero_operator",
+            message="the zero differential operator has no coefficient recurrence",
+        )
+    boundary_work = maximum_degree * sum(
+        len(polynomial) * (order + 1) for order, polynomial in polynomials
+    )
+    boundary_work += maximum_degree * (MAX_SHIFT_ORDER + 1) * 8
+    return value, polynomials, maximum_degree, work_bound + boundary_work, byte_bound
+
+
+def _coefficient_recurrence_boundary_rows(
+    polynomials: list[tuple[int, _Poly]], maximum_degree: int
+) -> tuple[CoefficientRecurrenceBoundaryRow, ...]:
+    """Construct the finite coefficient equations before all terms are active."""
+    rows = []
+    for degree in range(maximum_degree):
+        coefficients: dict[int, Fraction] = {}
+        for order, polynomial in polynomials:
+            for coefficient_degree, scalar in polynomial.items():
+                if degree < coefficient_degree:
+                    continue
+                source_index = degree - coefficient_degree + order
+                falling = 1
+                for factor in range(source_index - order + 1, source_index + 1):
+                    falling *= factor
+                coefficients[source_index] = (
+                    coefficients.get(source_index, Fraction(0)) + scalar * falling
+                )
+        rows.append(
+            CoefficientRecurrenceBoundaryRow(
+                degree=degree,
+                terms=tuple(
+                    CoefficientRecurrenceBoundaryTerm(
+                        index=index,
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                    )
+                    for index, coefficient in sorted(coefficients.items())
+                    if coefficient
+                ),
+            )
+        )
+    return tuple(rows)
+
+
+def differential_operator_to_coefficient_recurrence(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+) -> DifferentialCoefficientRecurrence:
+    """Return exact Taylor coefficient equations for a polynomial ODE.
+
+    For ``L = sum_j p_j(x) D^j`` and ``f = sum_k a_k x^k``, the coefficient
+    of ``x^m`` in ``Lf`` is computed from
+    ``[x^l]p_j * (m-l+j)_falling_j * a_(m-l+j)``. Rows below the largest
+    coefficient degree are returned separately because some summands have
+    not entered the coefficient extraction range yet.
+    """
+    value, polynomials, maximum_degree, work_bound, byte_bound = (
+        _differential_coefficient_input(operator)
+    )
+    if work_bound > MAX_COEFFICIENT_RECURRENCE_WORK_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_work",
+            message="coefficient recurrence expansion exceeds its admitted work budget",
+        )
+    slopes = [
+        order - degree for order, polynomial in polynomials for degree in polynomial
+    ]
+    minimum_slope = min(slopes)
+    maximum_shift = max(slopes) - minimum_slope
+    if maximum_shift > MAX_SHIFT_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_shift",
+            message="the recurrence shift span exceeds its typed output bound",
+        )
+    input_values = [
+        coefficient
+        for _order, polynomial in polynomials
+        for coefficient in polynomial.values()
+    ]
+    common_denominator_bits = sum(
+        value.denominator.bit_length() for value in input_values
+    )
+    maximum_numerator_bits = max(
+        (abs(value.numerator).bit_length() for value in input_values), default=1
+    )
+    output_numerator_digits = _digits_for_bit_bound(
+        maximum_numerator_bits + common_denominator_bits + 8 * value.order + 18
+    )
+    output_denominator_digits = _digits_for_bit_bound(common_denominator_bits)
+    # The returned recurrence is itself a ShiftOreOperator consumed by the
+    # shift-operation envelope; admit its generated coefficients against that
+    # same bound before expanding falling factorials.
+    if (
+        max(output_numerator_digits, output_denominator_digits)
+        > MAX_SHIFT_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("operator", "terms"),
+            code="ore_algebra.coefficient_recurrence_coefficient_digits",
+            message="a coefficient recurrence coefficient may exceed the exact rational carrier",
+        )
+    coefficient_digits = max(output_numerator_digits, output_denominator_digits)
+    projected_output_bytes = byte_bound
+    projected_output_bytes += (MAX_SHIFT_ORDER + 1) * (
+        256 + 17 * (2 * coefficient_digits + 128)
+    )
+    projected_output_bytes += maximum_degree * 256
+    projected_output_bytes += (
+        maximum_degree * (MAX_SHIFT_ORDER + 1) * (2 * coefficient_digits + 128)
+    )
+    if projected_output_bytes > MAX_COEFFICIENT_RECURRENCE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="ore_algebra.coefficient_recurrence_output",
+            message="coefficient recurrence exceeds its serialized output budget",
+        )
+    # The largest possible product is bounded by the input term count times
+    # the falling-factorial degree. Admit that construction before expansion.
+    recurrence_polynomials: dict[int, _Poly] = {}
+    for order, polynomial in polynomials:
+        for degree, scalar in polynomial.items():
+            shift = order - degree - minimum_slope
+            falling = _falling_factorial_polynomial(shift, order)
+            contribution = {
+                power: scalar * coefficient for power, coefficient in falling.items()
+            }
+            target = recurrence_polynomials.setdefault(shift, {})
+            for power, coefficient in contribution.items():
+                target[power] = target.get(power, Fraction(0)) + coefficient
+                if target[power] == 0:
+                    del target[power]
+
+    recurrence_operator = ShiftOreOperator.model_validate(
+        {
+            "variable": "n",
+            "terms": [
+                {
+                    "exponent": shift,
+                    "coefficient": _encode_rf((polynomial, {0: Fraction(1)}), "n"),
+                }
+                for shift, polynomial in sorted(recurrence_polynomials.items())
+                if polynomial
+            ],
+        }
+    )
+    boundary_rows = _coefficient_recurrence_boundary_rows(polynomials, maximum_degree)
+    return DifferentialCoefficientRecurrence(
+        operator=value,
+        recurrence=recurrence_operator,
+        valid_from=maximum_degree + minimum_slope,
+        boundary_rows=boundary_rows,
     )
 
 

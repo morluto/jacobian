@@ -10,7 +10,7 @@ P=\sum_i p_i(n)S^i,
 
 The exponent is at most 16. Exponent zero returns the multiplicative
 identity. The operation rejects any input whose power would exceed the
-canonical shift-order bound of 16. At most 16 products of at most 16-by-16
+operation's result-order limit of 16. At most 16 products of at most 16-by-16
 terms are expanded; each product also uses the shift multiplication
 operation's exact coefficient-degree, digit, and output-carrier admissions.
 For powers above one, coefficients must lie in `ZZ[n]`; this lets admission

@@ -171,6 +171,12 @@ def test_cyclic_fifth_root_character_keeps_exact_cyclotomic_scalar_values():
     assert actual_coefficients == expected_coefficients
 
 
+def test_model_constructed_request_missing_character_is_domain_error():
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        character_center(CharacterCenterRequest.model_construct())
+    assert exc_info.value.errors()[0]["type"] == "groups.characters.center_input_type"
+
+
 def test_negative_virtual_character_is_rejected():
     table = _s3_table()
     character = CharacterRingElement(table=table, irreducible_multiplicities=(1, -1, 0))

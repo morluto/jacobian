@@ -1300,7 +1300,7 @@ def character_center(request: CharacterCenterRequest) -> CharacterCenter:
             "request must contain one table-bound ordinary character",
             ("request",),
         )
-    element = request.character
+    element = getattr(request, "character", None)
     if not isinstance(element, CharacterRingElement):
         raise _invalid(
             "groups.characters.center_input_type",

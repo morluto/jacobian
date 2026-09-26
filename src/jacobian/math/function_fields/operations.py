@@ -58,6 +58,9 @@ from jacobian.math.function_fields._models import (
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
@@ -77,6 +80,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRow,
     FunctionFieldRiemannRochSpace,
     FunctionFieldValuation,
     HyperellipticAffinePlace,
@@ -2533,6 +2538,141 @@ def _rational_riemann_roch_space(
     )
 
 
+def function_field_riemann_roch_membership(
+    element: FiniteFunctionFieldElement,
+    divisor: FunctionFieldDivisor,
+) -> FunctionFieldRiemannRochMembership:
+    """Decide exact membership in ``L(D)`` over the rational field GF(p)(x)."""
+
+    field, terms = _preflight_riemann_roch_input(divisor)
+    _preflight_riemann_roch_profile(field, terms)
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate or parent data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="element and divisor must belong to the same exact function field",
+        )
+    canonical_element = _canonical_element(element, field)
+    coordinate = canonical_element.coordinates[0]
+    is_zero = coordinate.numerator.is_zero()
+
+    # A rational function of numerator and denominator degrees at most 12 has
+    # at most their summed number of finite prime factors and one infinity
+    # place. This bounds the complete support union before any factorization.
+    support_rows_bound = len(terms)
+    if not is_zero:
+        support_rows_bound += (
+            coordinate.numerator.degree + coordinate.denominator.degree + 1
+        )
+    if support_rows_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS:
+        raise OperationResourceAdmissionError(
+            location=("result", "profile"),
+            code="function_field.riemann_roch_membership_profile_exceeds_envelope",
+            message=(
+                "the complete divisor/function support union exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS}-place profile bound"
+            ),
+        )
+
+    input_bytes = len(
+        encode_strict_json(
+            {
+                "element": element.model_dump(mode="json"),
+                "divisor": divisor.model_dump(mode="json"),
+            }
+        )
+    )
+    output_bytes_bound = 4096 + 2 * input_bytes + 4096 * support_rows_bound
+    if output_bytes_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="function_field.riemann_roch_membership_output_exceeds_envelope",
+            message=(
+                "the complete exact membership profile exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES}-byte output envelope"
+            ),
+        )
+
+    prime_bits = field.characteristic.bit_length()
+    factor_work = sum(max(1, term.place.degree**3) * prime_bits for term in terms)
+    if not is_zero:
+        factor_work += (
+            max(1, coordinate.numerator.degree**3)
+            + max(1, coordinate.denominator.degree**3)
+        ) * prime_bits
+    if factor_work > MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK:
+        raise OperationResourceAdmissionError(
+            location=("divisor",),
+            code="function_field.riemann_roch_membership_work_exceeds_envelope",
+            message=(
+                "place and element factorization exceed the admitted "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK}-unit work bound"
+            ),
+        )
+
+    admitted_divisor = _admit_divisor(divisor)
+    canonical_element = _canonical_element(element, admitted_divisor.field)
+    if is_zero:
+        return FunctionFieldRiemannRochMembership(
+            element=canonical_element,
+            divisor=admitted_divisor,
+            status="IN_SPACE",
+            profile=(),
+        )
+
+    principal = function_field_principal_divisor(
+        admitted_divisor.field, canonical_element
+    )
+    divisor_multiplicities = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in admitted_divisor.terms
+    }
+    element_valuations = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in principal.divisor.terms
+    }
+    profile: list[FunctionFieldRiemannRochMembershipRow] = []
+    for key in sorted(divisor_multiplicities.keys() | element_valuations.keys()):
+        divisor_row = divisor_multiplicities.get(key)
+        element_row = element_valuations.get(key)
+        if divisor_row is None:
+            assert element_row is not None
+            place = element_row[0]
+            divisor_multiplicity = 0
+        else:
+            place, divisor_multiplicity = divisor_row
+        element_valuation = element_row[1] if element_row is not None else 0
+        total = element_valuation + divisor_multiplicity
+        profile.append(
+            FunctionFieldRiemannRochMembershipRow(
+                place=place,
+                element_valuation=element_valuation,
+                divisor_multiplicity=divisor_multiplicity,
+                sum=total,
+            )
+        )
+    return FunctionFieldRiemannRochMembership(
+        element=principal.element,
+        divisor=admitted_divisor,
+        status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),
+        profile=tuple(profile),
+    )
+
+
 def _hyperelliptic_infinity_riemann_roch_space(
     field: FiniteFunctionField,
     branch: tuple[int, ...],
@@ -2620,4 +2760,5 @@ __all__ = [
     "function_field_place_valuation",
     "function_field_principal_divisor",
     "function_field_rational_places_degree_bounded",
+    "function_field_riemann_roch_membership",
 ]

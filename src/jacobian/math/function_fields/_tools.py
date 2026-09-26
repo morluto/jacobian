@@ -31,6 +31,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldResidueRequest,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRequest,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
     HyperellipticAffinePlaceValuationRequest,
@@ -56,6 +58,7 @@ from jacobian.math.function_fields.operations import (
     function_field_place_valuation,
     function_field_principal_divisor,
     function_field_rational_places_degree_bounded,
+    function_field_riemann_roch_membership,
     function_field_riemann_roch_space,
 )
 
@@ -385,6 +388,68 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                     "maximum_degree": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.riemann_roch.membership.compute",
+        title="Check exact membership in a rational function-field Riemann-Roch space",
+        description=(
+            "Decide whether a function belongs to L(D) over GF(p)(x), returning "
+            "the complete exact valuation inequalities on the union of the "
+            "function's principal-divisor support and D's support. The zero "
+            "function is always included through a structural empty-profile branch. "
+            "The operation admits at most 256 divisor places, 281 profile places, "
+            "and a 4 MiB conservative output envelope."
+        ),
+        request_type=FunctionFieldRiemannRochMembershipRequest,
+        result_type=FunctionFieldRiemannRochMembership,
+        run=lambda request: function_field_riemann_roch_membership(
+            request.element, request.divisor
+        ),
+        tags=("function-field", "riemann-roch", "membership", "exact"),
+        discovery_terms=(
+            "function-field Riemann-Roch membership",
+            "test a function in L of a divisor",
+            "valuation inequalities for a rational function",
+        ),
+        examples=(
+            OperationExample(
+                name="x_squared_in_twice_infinity_space",
+                description=(
+                    "Check x^2 in L(2[∞]) over GF(5)(x); its infinity "
+                    "valuation plus divisor multiplicity is zero."
+                ),
+                input={
+                    "element": {
+                        "field": _RATIONAL_FIELD,
+                        "coordinates": [
+                            {
+                                "numerator": {
+                                    "characteristic": 5,
+                                    "coefficients": [0, 0, 1],
+                                },
+                                "denominator": {
+                                    "characteristic": 5,
+                                    "coefficients": [1],
+                                },
+                            }
+                        ],
+                    },
+                    "divisor": {
+                        "field": _RATIONAL_FIELD,
+                        "terms": [
+                            {
+                                "place": {
+                                    "field": _RATIONAL_FIELD,
+                                    "kind": "INFINITE",
+                                    "degree": 1,
+                                },
+                                "multiplicity": "2",
+                            }
+                        ],
+                    },
                 },
             ),
         ),

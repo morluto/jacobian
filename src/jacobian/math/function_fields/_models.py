@@ -32,6 +32,9 @@ MAX_DIVISOR_MULTIPLICITY_DIGITS = 1234
 MAX_DIVISOR_DEGREE_DIGITS = 1240
 MAX_RIEMANN_ROCH_BASIS_DIMENSION = MAX_POLYNOMIAL_X_DEGREE + 1
 MAX_RIEMANN_ROCH_CONSTRUCTION_WORK = 4096
+MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS = 256 + 2 * MAX_POLYNOMIAL_X_DEGREE + 1
+MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES = 4 * 1024 * 1024
+MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK = 5_000_000
 MAX_RATIONAL_PLACE_DEGREE = 12
 MAX_RATIONAL_PLACE_CANDIDATES = 16_384
 MAX_RATIONAL_PLACE_OUTPUT = 16_385
@@ -625,6 +628,94 @@ class FunctionFieldRiemannRochSpaceRequest(StrictModel):
             "canonical basis fits the degree-12 coefficient envelope."
         )
     )
+
+
+class FunctionFieldRiemannRochMembershipRequest(StrictModel):
+    """A function and finite divisor whose exact Riemann-Roch membership is asked."""
+
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.element.field != self.divisor.field:
+            raise _validation_error(
+                "riemann_roch_membership_parent",
+                "element and divisor must belong to the same exact function field",
+            )
+        return self
+
+
+class FunctionFieldRiemannRochMembershipRow(StrictModel):
+    """One exact valuation inequality at a place in the complete support union."""
+
+    place: FunctionFieldPlace
+    element_valuation: int = Field(
+        strict=True, ge=-MAX_POLYNOMIAL_X_DEGREE, le=MAX_POLYNOMIAL_X_DEGREE
+    )
+    divisor_multiplicity: DivisorMultiplicity
+    sum: DivisorMultiplicity
+
+    @model_validator(mode="after")
+    def require_exact_sum(self) -> Self:
+        if self.sum != self.element_valuation + self.divisor_multiplicity:
+            raise _validation_error(
+                "riemann_roch_membership_sum",
+                "the returned sum must equal valuation plus divisor multiplicity",
+            )
+        if self.element_valuation == 0 and self.divisor_multiplicity == 0:
+            raise _validation_error(
+                "riemann_roch_membership_empty_row",
+                "profile rows must belong to the union of nonzero supports",
+            )
+        return self
+
+
+class FunctionFieldRiemannRochMembership(StrictModel):
+    """Exact membership in ``L(D)`` with the complete support inequalities."""
+
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+    status: Literal["IN_SPACE", "NOT_IN_SPACE"]
+    profile: tuple[FunctionFieldRiemannRochMembershipRow, ...] = Field(
+        max_length=MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_profile_shape(self) -> Self:
+        if self.element.field != self.divisor.field:
+            raise _validation_error(
+                "riemann_roch_membership_parent",
+                "element and divisor must retain one exact function field",
+            )
+        places = tuple(row.place.model_dump_json() for row in self.profile)
+        if len(set(places)) != len(places) or places != tuple(sorted(places)):
+            raise _validation_error(
+                "riemann_roch_membership_profile_order",
+                "membership profile places must be unique and canonically ordered",
+            )
+        if any(row.place.field != self.divisor.field for row in self.profile):
+            raise _validation_error(
+                "riemann_roch_membership_profile_parent",
+                "every profile place must belong to the divisor function field",
+            )
+        zero = all(
+            coordinate.numerator.is_zero() for coordinate in self.element.coordinates
+        )
+        if zero:
+            if self.status != "IN_SPACE" or self.profile:
+                raise _validation_error(
+                    "riemann_roch_membership_zero_branch",
+                    "zero belongs to every L(D) through its structural empty-profile branch",
+                )
+            return self
+        in_space = all(row.sum >= 0 for row in self.profile)
+        if (self.status == "IN_SPACE") != in_space:
+            raise _validation_error(
+                "riemann_roch_membership_status",
+                "membership status must agree with every returned valuation inequality",
+            )
+        return self
 
 
 class FunctionFieldElementMultiplyRequest(StrictModel):

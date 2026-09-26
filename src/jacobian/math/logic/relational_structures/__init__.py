@@ -2,6 +2,7 @@
 
 from jacobian.math.logic.relational_structures._models import (
     CspAssignmentProfile,
+    CspSolutions,
     CspConstraintEvaluation,
     EmbeddingSearchResult,
     FiniteCspConstraint,
@@ -58,6 +59,7 @@ from jacobian.math.logic.relational_structures.values import (
 # part of this native API.
 __all__ = [
     "CspAssignmentProfile",
+    "CspSolutions",
     "CspConstraintEvaluation",
     "EmbeddingSearchResult",
     "FiniteCspConstraint",

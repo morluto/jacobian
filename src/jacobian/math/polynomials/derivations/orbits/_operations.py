@@ -228,7 +228,10 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
     candidate_count = 0
     pair_products = 0
     maximum_partial_support = 1
-    denominator_digits_by_output: dict[_Monomial, int] = {}
+    # Distinct source denominators can combine whenever substituted supports
+    # overlap, even when their bounding-box maxima differ.  A global set is a
+    # conservative collision group and avoids charging repeated denominators.
+    source_denominators: set[int] = set()
     maximum_contribution_numerator_digits = 1
     target_axis_count = len(action.source_variables) + 1
     for term_index, term in enumerate(source.polynomial.terms):
@@ -252,21 +255,12 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
         maximum_partial_support = max(
             maximum_partial_support, term_plan.maximum_partial_support
         )
-        # Terms that cannot land on the same output monomial cannot add their
-        # denominators. Bound each collision group independently; the monomial
-        # image maxima give a conservative shared support for each source term.
-        term_maxima = tuple(
-            sum(
-                exponent * image_axis_maxima[index][axis]
-                for index, exponent in enumerate(term.exponents)
-            )
-            for axis in range(target_axis_count)
-        )
-        collision_key = term_maxima
-        denominator_digits_by_output[collision_key] = (
-            denominator_digits_by_output.get(collision_key, 0)
-            + term_plan.denominator_digits
-        )
+        source_denominators.add(term.coefficient.den)
+        for exponent, image in zip(term.exponents, images, strict=True):
+            if exponent:
+                source_denominators.update(
+                    coefficient.denominator for _, coefficient in image
+                )
         maximum_contribution_numerator_digits = max(
             maximum_contribution_numerator_digits, term_plan.numerator_digits
         )
@@ -286,8 +280,8 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
             ("polynomial",),
         )
 
-    maximum_collision_denominator_digits = max(
-        denominator_digits_by_output.values(), default=0
+    maximum_collision_denominator_digits = sum(
+        len(str(denominator)) for denominator in source_denominators if denominator > 1
     )
     coefficient_digits_bound = (
         maximum_contribution_numerator_digits

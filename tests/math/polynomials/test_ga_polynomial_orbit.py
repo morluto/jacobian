@@ -128,7 +128,10 @@ def test_invariant_many_terms_bound_denominators_per_output_collision() -> None:
     result = ga_polynomial_orbit(action, source)
 
     assert len(result.polynomial.terms) == 65
-    assert all(term.coefficient.as_fraction() == Fraction(1, 11) for term in result.polynomial.terms)
+    assert all(
+        term.coefficient.as_fraction() == Fraction(1, 11)
+        for term in result.polynomial.terms
+    )
 
 
 def test_orbit_rejects_expansion_before_substitution(monkeypatch) -> None:
@@ -163,3 +166,23 @@ def test_catalog_declaration_example_is_typed_and_computes_the_orbit() -> None:
         (1, 1, 1): Fraction(2),
         (0, 2, 2): Fraction(1),
     }
+
+
+def test_orbit_bounds_denominators_for_terms_with_overlapping_support() -> None:
+    action = PolynomialGaAction(
+        source_variables=("x", "y", "z"),
+        parameter="t",
+        generator_images=(
+            _polynomial(("x", "y", "z", "t"), {(1, 0, 0, 0): 1, (0, 0, 1, 1): 1}),
+            _polynomial(("x", "y", "z", "t"), {(0, 1, 0, 0): 1, (0, 0, 1, 1): 1}),
+            _polynomial(("x", "y", "z", "t"), {(0, 0, 1, 0): 1}),
+        ),
+    )
+    p, q = 10**99 + 1, 10**99 + 3
+    assert p != q and Fraction(1, p) + Fraction(1, q) == Fraction(p + q, p * q)
+    source = _polynomial(
+        ("x", "y", "z"), {(1, 0, 0): Fraction(1, p), (0, 1, 0): Fraction(1, q)}
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient growth"):
+        ga_polynomial_orbit(action, source)

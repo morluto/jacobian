@@ -64,6 +64,27 @@ Restriction to a full-dimensional cell is injective, so exact coefficient
 comparison proves or refutes the profile. Lower-dimensional maximal cells do
 not determine a unique ambient polynomial and are rejected.
 
+## Refinement maps between spline spaces
+
+`polyhedral_complex.spline.refinement_map.compute` takes a coarse complex and
+a face-to-face refinement with the same exact support, then computes the
+coefficient injection for a fixed degree and smoothness. The result retains the
+common-refinement pair lineage, both ordered cell-monomial axes, a basis of the
+coarse spline space, and the refined compatibility matrix. Its cell lineage
+means that each refined cell copies the polynomial coefficient block of its
+unique coarse parent. The operation checks every copied coarse basis vector
+against every refined compatibility equation, establishing that the image lies
+in the refined spline space.
+
+The inclusion follows directly from facet compatibility: a new facet inside a
+coarse cell sees the same polynomial on both sides, while a facet inherited
+from the coarse complex retains the original divisibility condition. Mesh
+subdivision and spline spaces are treated together in Schenck and Sorokina's
+[subdivision paper](https://arxiv.org/abs/1610.05188). The operation admits
+common-refinement work, both spline coefficient widths, combined matrix and
+rank work, coefficient-copy verification work, and the retained JSON result
+before expansion.
+
 ## Affine transport
 
 `polytopal_complex.affine_transform.compute` applies `x -> A*x+b` to every
@@ -110,6 +131,18 @@ maximal cell and the complete shared-face compatibility ledger. Before
 arithmetic, the operation bounds the union of terms per cell, rational scalar
 growth, and the compatibility-reduction work. It rejects results requiring
 more than 4096 terms in any piece.
+
+## Rational scalar multiplication
+
+`piecewise_polynomial.scalar_multiply.compute` multiplies every cell
+polynomial by one exact rational scalar. It rechecks continuity from the
+polynomial pieces and returns the complete shared-face compatibility profile.
+The zero scalar returns the zero function on the same complex, including its
+full zero compatibility ledger. Together with addition, this supplies the
+`QQ`-vector-space operations on a fixed complex and polynomial degree bound;
+the linearity follows because each face-restriction condition is linear in the
+piece coefficients. Admission bounds every product coefficient and the full
+result before constructing scaled polynomials.
 
 ## Multiplication of compatible functions
 

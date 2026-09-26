@@ -21,10 +21,10 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
-    ModularCharacterBasis,
-    ModularCharacterBasisRequest,
     CyclotomicCharacterMap,
     CyclotomicIdentityFieldMap,
+    ModularCharacterBasis,
+    ModularCharacterBasisRequest,
     ModularCharacterCoordinatesProductRequest,
     ModularCharacterCoordinatesRequest,
     ModularCharacterCoordinatesTransportRequest,
@@ -44,7 +44,6 @@ from jacobian.math.number_theory.modular_forms.character_transport import (
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormFieldQExpansion,
-    ModularFormSpace,
 )
 
 

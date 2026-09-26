@@ -50,6 +50,43 @@ def test_enumeration_is_complete_canonical_and_composes_with_valuation():
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_composite_characteristic_rejected_before_rational_normalization() -> None:
+    field = FiniteFunctionField.model_construct(
+        characteristic=4,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            PrimeFieldRationalFunction.model_construct(
+                numerator=PrimeFieldPolynomial.model_construct(
+                    characteristic=4, coefficients=(1,)
+                ),
+                denominator=PrimeFieldPolynomial.model_construct(
+                    characteristic=4, coefficients=(2,)
+                ),
+            ),
+            PrimeFieldRationalFunction.model_construct(
+                numerator=PrimeFieldPolynomial.model_construct(
+                    characteristic=4, coefficients=(0,)
+                ),
+                denominator=PrimeFieldPolynomial.model_construct(
+                    characteristic=4, coefficients=(1,)
+                ),
+            ),
+            PrimeFieldRationalFunction.model_construct(
+                numerator=PrimeFieldPolynomial.model_construct(
+                    characteristic=4, coefficients=(1,)
+                ),
+                denominator=PrimeFieldPolynomial.model_construct(
+                    characteristic=4, coefficients=(1,)
+                ),
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        enumerate_hyperelliptic_affine_places(field)
+    assert exc_info.value.errors()[0]["type"] == "function_field.characteristic_not_prime"
+
+
 def test_non_squarefree_model_is_rejected_by_shape_recognition() -> None:
     field = FiniteFunctionField(
         characteristic=5,

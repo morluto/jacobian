@@ -5,6 +5,8 @@ from __future__ import annotations
 from itertools import permutations, product
 from math import factorial, isqrt
 
+from pydantic import ValidationError
+
 from jacobian._exact import canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -28,6 +30,18 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     RationalQuadraticForm,
 )
+
+
+def _revalidate_request(request: object, request_type: type, label: str):
+    """Re-establish bounded request invariants for native callers too."""
+    try:
+        return request_type.model_validate(request.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=(label,),
+            code="quadratic_form.theta_invalid_request",
+            message="theta request must satisfy its canonical bounded schema",
+        ) from exc
 
 
 def _determinant(rows: tuple[tuple[int, ...], ...]) -> int:
@@ -250,6 +264,7 @@ def theta_series_prefix(
     x_i^2 <= (C^-1)_ii * x^T C x <= 2N*(C^-1)_ii for every vector with
     Q(x)<=N. The exact adjugate diagonal therefore yields a complete box.
     """
+    request = _revalidate_request(request, ThetaSeriesPrefixRequest, "request")
     form = request.form
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
@@ -285,9 +300,17 @@ def theta_series_prefix(
 
 
 def theta_selected_coefficients(
-    request: ThetaSelectedCoefficientsRequest,
+    form: RationalQuadraticForm | ThetaSelectedCoefficientsRequest,
+    indices: tuple[int, ...] | None = None,
 ) -> ThetaSelectedCoefficientsResult:
     """Return only requested r_Q(n), without constructing intervening terms."""
+    if isinstance(form, ThetaSelectedCoefficientsRequest) and indices is None:
+        request = form
+    else:
+        request = ThetaSelectedCoefficientsRequest.model_construct(
+            form=form, indices=indices
+        )
+    request = _revalidate_request(request, ThetaSelectedCoefficientsRequest, "request")
     form = request.form
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
@@ -331,6 +354,7 @@ def theta_representing_vectors(
     request: ThetaRepresentingVectorsRequest,
 ) -> ThetaRepresentingVectorsResult:
     """Return every integer vector at each selected value, in axis order."""
+    request = _revalidate_request(request, ThetaRepresentingVectorsRequest, "request")
     form = request.form
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)

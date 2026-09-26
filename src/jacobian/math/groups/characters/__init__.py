@@ -2,6 +2,8 @@
 
 from jacobian.math.groups.characters._models import (
     CharacterExteriorSquareRequest,
+    CharacterKernel,
+    CharacterKernelRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
@@ -42,6 +44,7 @@ from jacobian.math.groups.characters.operations import (
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
     character_exterior_square,
+    character_kernel,
     character_symmetric_square,
     character_tensor_product,
     class_function_character_decomposition,
@@ -49,6 +52,8 @@ from jacobian.math.groups.characters.representation_ring_operations import (
 
 __all__ = [
     "CharacterExteriorSquareRequest",
+    "CharacterKernel",
+    "CharacterKernelRequest",
     "CharacterRingDecompositionRequest",
     "CharacterRingDecompositionResult",
     "CharacterRingElement",
@@ -75,6 +80,7 @@ __all__ = [
     "FrobeniusSchurIndicatorRequest",
     "FrobeniusSchurIndicatorResult",
     "character_exterior_square",
+    "character_kernel",
     "character_symmetric_square",
     "character_table",
     "character_tensor_decomposition",

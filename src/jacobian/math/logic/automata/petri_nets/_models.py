@@ -456,6 +456,66 @@ class IncidenceMatrixRequest(StrictModel):
     net: PetriNet
 
 
+class PetriNetMatricesRequest(StrictModel):
+    """Project the pre-, post-, and incidence matrices of a Petri net."""
+
+    net: PetriNet
+
+
+class PetriNetMatricesResult(StrictModel):
+    """Exact matrices, with the source net retaining their place/transition axes."""
+
+    net: PetriNet
+    pre: IntegerMatrix
+    post: IntegerMatrix
+    incidence: IntegerMatrix
+    input_places_by_transition: tuple[tuple[int, ...], ...]
+    output_places_by_transition: tuple[tuple[int, ...], ...]
+    consumer_transitions_by_place: tuple[tuple[int, ...], ...]
+    producer_transitions_by_place: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        places = self.net.place_count
+        transitions = self.net.transition_count
+        matrices = (self.pre, self.post, self.incidence)
+        if any(
+            matrix.row_count != places or matrix.column_count != transitions
+            for matrix in matrices
+        ):
+            raise _validation_error(
+                "matrices_axes", "all matrices must match the source net axes"
+            )
+        if (
+            len(self.input_places_by_transition) != transitions
+            or len(self.output_places_by_transition) != transitions
+            or len(self.consumer_transitions_by_place) != places
+            or len(self.producer_transitions_by_place) != places
+        ):
+            raise _validation_error(
+                "support_axes", "support profiles must match the source net axes"
+            )
+        for support in (*self.input_places_by_transition, *self.output_places_by_transition):
+            if tuple(sorted(set(support))) != support or any(
+                index < 0 or index >= places for index in support
+            ):
+                raise _validation_error(
+                    "support_indices", "transition supports must use source place indices"
+                )
+        for support in (
+            *self.consumer_transitions_by_place,
+            *self.producer_transitions_by_place,
+        ):
+            if tuple(sorted(set(support))) != support or any(
+                index < 0 or index >= transitions for index in support
+            ):
+                raise _validation_error(
+                    "support_indices",
+                    "place supports must use source transition indices",
+                )
+        return self
+
+
 class IncidenceMatrixResult(StrictModel):
     """The incidence matrix bound to its net's place/transition axes."""
 
@@ -1295,6 +1355,60 @@ class PetriInvariantsRequest(StrictModel):
     net: PetriNet
 
 
+class PetriNetRelabelingRequest(StrictModel):
+    """Permute place and transition axes of a weighted Petri net.
+
+    Each map sends a source index to its index on the relabeled axis. Optional
+    labels are carried with their elements; unlabeled axes remain unlabeled.
+    """
+
+    net: PetriNet
+    place_source_to_target: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
+    transition_source_to_target: tuple[int, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS
+    )
+
+
+class PetriNetRelabelingResult(StrictModel):
+    """An exact isomorphism between a net and its permuted-axis presentation."""
+
+    source_net: PetriNet
+    target_net: PetriNet
+    place_source_to_target: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
+    transition_source_to_target: tuple[int, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS
+    )
+
+    @model_validator(mode="after")
+    def require_relabeling_shape(self) -> Self:
+        if (self.source_net.place_count, self.source_net.transition_count) != (
+            self.target_net.place_count,
+            self.target_net.transition_count,
+        ):
+            raise _validation_error(
+                "relabel_axes", "source and target net axes must have equal sizes"
+            )
+        for axis_name, mapping, size in (
+            ("place", self.place_source_to_target, self.source_net.place_count),
+            (
+                "transition",
+                self.transition_source_to_target,
+                self.source_net.transition_count,
+            ),
+        ):
+            if len(mapping) != size or tuple(sorted(mapping)) != tuple(range(size)):
+                raise _validation_error(
+                    f"relabel_{axis_name}_bijection",
+                    f"{axis_name} map must be a bijection of its complete axis",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build the result after the kernel establishes the relabeling law."""
+        return cls.model_construct(**values)
+
+
 class PetriInvariantsResult(PetriInvariantsRequest):
     """P/T-invariant bases with their incidence rank profile.
 
@@ -1387,6 +1501,8 @@ __all__ = [
     "PetriInvariantsRequest",
     "PetriInvariantsResult",
     "PetriMarkingState",
+    "PetriNetRelabelingRequest",
+    "PetriNetRelabelingResult",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",
     "PlaceSetInitialMarkingProfileRequest",

@@ -25,6 +25,10 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsRequest,
     PetriInvariantsResult,
+    PetriNetMatricesRequest,
+    PetriNetMatricesResult,
+    PetriNetRelabelingRequest,
+    PetriNetRelabelingResult,
     PlaceSetInitialMarkingProfileRequest,
     PlaceSetInitialMarkingProfileResult,
     PlaceSetSupportRequest,
@@ -54,11 +58,13 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     marking_conflict_profile,
     marking_reachability,
     petri_invariants,
+    petri_net_matrices,
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
     reachability_terminal_scc_profile,
     reachable_dead_markings,
+    relabel_petri_net,
     replay_firing_sequence,
     reverse_petri_net,
     siphon_trap,
@@ -72,6 +78,16 @@ def compute_enabled_transitions(
     request: EnabledTransitionsRequest,
 ) -> EnabledTransitionsResult:
     return enabled_transitions(request.net, request.marking)
+
+
+def compute_petri_net_relabeling(
+    request: PetriNetRelabelingRequest,
+) -> PetriNetRelabelingResult:
+    return relabel_petri_net(
+        request.net,
+        request.place_source_to_target,
+        request.transition_source_to_target,
+    )
 
 
 def compute_marking_conflict_profile(
@@ -149,6 +165,12 @@ def compute_petri_invariants(request: PetriInvariantsRequest) -> PetriInvariants
     return petri_invariants(request.net)
 
 
+def compute_petri_net_matrices(
+    request: PetriNetMatricesRequest,
+) -> PetriNetMatricesResult:
+    return petri_net_matrices(request.net)
+
+
 def compute_place_set_support(request: PlaceSetSupportRequest) -> PlaceSetSupportResult:
     return place_set_support(request.net, request.places)
 
@@ -202,6 +224,45 @@ _PRODUCER_CONSUMER_NET = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="petri_net.relabel.compute",
+        title="Relabel Petri-net place and transition axes",
+        description=(
+            "Permute both ordered axes by explicit source-to-target bijections. "
+            "Arc matrices and optional element IDs follow those maps, and the "
+            "result retains both nets and the exact isomorphism maps."
+        ),
+        request_type=PetriNetRelabelingRequest,
+        result_type=PetriNetRelabelingResult,
+        run=compute_petri_net_relabeling,
+        tags=("petri-net", "net-transform", "isomorphism", "exact"),
+        discovery_terms=(
+            "Petri net isomorphism",
+            "relabel places and transitions",
+            "permute Petri net axes",
+        ),
+        examples=(
+            OperationExample(
+                name="weighted_axis_relabeling",
+                description=(
+                    "Swap both axes of a weighted net while retaining the "
+                    "source-to-target bijections."
+                ),
+                input={
+                    "net": {
+                        "place_count": 2,
+                        "transition_count": 2,
+                        "place_ids": ["buffer", "output"],
+                        "transition_ids": ["load", "unload"],
+                        "pre": [[2, 0], [0, 1]],
+                        "post": [[0, 1], [1, 0]],
+                    },
+                    "place_source_to_target": [1, 0],
+                    "transition_source_to_target": [1, 0],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="petri_net.reverse.compute",
         title="Reverse a Petri net",

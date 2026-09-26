@@ -111,10 +111,11 @@ def modular_form_atkin_lehner_target(
             message="space must be a valid exact modular-form space value",
         ) from exc
 
-    target_character = (
+    source_character = admitted_space.character
+    target_character: Literal["TRIVIAL"] | DirichletCharacter = (
         "TRIVIAL"
-        if admitted_space.character == "TRIVIAL"
-        else dirichlet_character_conjugate(admitted_space.character)
+        if source_character == "TRIVIAL"
+        else dirichlet_character_conjugate(source_character)
     )
     target_space = ModularFormSpace(
         group=admitted_space.group,

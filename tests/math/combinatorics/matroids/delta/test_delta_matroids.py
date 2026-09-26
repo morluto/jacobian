@@ -597,6 +597,26 @@ def test_twist_polynomial_rejects_before_expanding_too_many_masks(
         twist_polynomial(too_wide)
 
 
+@pytest.mark.parametrize("oversized_rows", (False, True))
+def test_twist_polynomial_preflights_forged_feasible_family_before_copy(
+    monkeypatch: pytest.MonkeyPatch, oversized_rows: bool
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta.extra_ops as extra_ops
+
+    feasible = ((),) * 16_386 if oversized_rows else ((0,) * 16_385,)
+    source = FiniteDeltaMatroid.model_construct(ground=("a",), feasible=feasible)
+
+    def fail_if_source_is_copied(_value: object) -> None:
+        raise AssertionError(
+            "oversized feasible family must reject before revalidation"
+        )
+
+    monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_source_is_copied)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        twist_polynomial(source)
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
+
+
 def test_twist_polynomial_accepts_ground_and_state_cardinality_boundary() -> None:
     source = FiniteDeltaMatroid(
         ground=tuple(f"e{i}" for i in range(12)), feasible=((),)
@@ -651,6 +671,23 @@ def test_twist_polynomial_result_rejects_inconsistent_wire_claims() -> None:
     nontotal_histogram["polynomial"]["coefficients"] = ["1"]
     with pytest.raises(ValidationError, match="number of ground subsets"):
         type(result).model_validate_json(json.dumps(nontotal_histogram))
+
+
+@pytest.mark.parametrize("histogram", ([True, True], ["1", "1"], [1.0, 1.0]))
+def test_twist_polynomial_result_requires_strict_wire_histogram(
+    histogram: list[object],
+) -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["coefficients_by_width"] = histogram
+    payload["polynomial"]["coefficients"] = ["1", "1"]
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == "int_type"
 
 
 def test_twist_polynomial_admits_own_native_label_budget_boundary() -> None:

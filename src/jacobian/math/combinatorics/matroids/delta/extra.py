@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -175,7 +175,7 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
     """The twist polynomial and its complete width histogram."""
 
     ground: tuple[str, ...]
-    coefficients_by_width: tuple[int, ...]
+    coefficients_by_width: tuple[StrictInt, ...]
     polynomial: IntegerPolynomial = Field(
         description=(
             "Exact integer polynomial in the formal variable z, stored in "

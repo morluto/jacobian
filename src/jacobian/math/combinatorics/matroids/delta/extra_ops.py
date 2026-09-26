@@ -19,6 +19,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     DeltaMatroidTwistPolynomialResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_MEMBERSHIPS,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
@@ -31,14 +32,18 @@ from jacobian.math.polynomials._models import IntegerPolynomial
 _TWIST_POLYNOMIAL_CHECKPOINT_STRIDE = 4_096
 
 
-def _reject_oversized_twist_polynomial_axis(value: object) -> None:
-    """Reject an over-envelope raw axis before validating its full family."""
+def _reject_oversized_twist_polynomial_source(value: object) -> None:
+    """Bound raw axis and feasible family before copying a native carrier."""
 
     if type(value) is not FiniteDeltaMatroid:
         return
     ground = getattr(value, "ground", None)
     if type(ground) is not tuple:
-        return
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.carrier",
+            message="source ground axis must be a canonical tuple",
+        )
     if len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
         raise OperationResourceAdmissionError(
             location=("delta_matroid", "ground"),
@@ -47,14 +52,52 @@ def _reject_oversized_twist_polynomial_axis(value: object) -> None:
         )
     # Check cheap string lengths before model_dump, native revalidation, or
     # UTF-8 encoding can copy an arbitrarily large retained ground axis.
-    if all(type(label) is str for label in ground) and sum(map(len, ground)) > (
-        MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
-    ):
+    if any(type(label) is not str for label in ground):
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.carrier",
+            message="source ground labels must be canonical strings",
+        )
+    if sum(map(len, ground)) > MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS:
         raise OperationResourceAdmissionError(
             location=("delta_matroid", "ground"),
             code="delta_matroid.twist_polynomial_labels",
             message="ground labels exceed the admitted native codepoint budget",
         )
+    feasible = getattr(value, "feasible", None)
+    if type(feasible) is not tuple:
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "feasible"),
+            code="delta_matroid.carrier",
+            message="source feasible family must be a bounded sequence",
+        )
+    if len(feasible) > MAX_DELTA_MEMBERSHIPS + 1:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "feasible"),
+            code="delta_matroid.memberships_exceeded",
+            message="source feasible family exceeds its admitted row envelope",
+        )
+    remaining = MAX_DELTA_MEMBERSHIPS
+    for row in feasible:
+        if type(row) is not tuple:
+            raise OperationDomainValidationError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.carrier",
+                message="source feasible rows must be bounded sequences",
+            )
+        remaining -= len(row)
+        if remaining < 0:
+            raise OperationResourceAdmissionError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.memberships_exceeded",
+                message="source feasible family exceeds its admitted membership envelope",
+            )
+        if any(type(index) is not int for index in row):
+            raise OperationDomainValidationError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.carrier",
+                message="source feasible rows must contain exact integer indices",
+            )
 
 
 def _admit_delta(value: object) -> FiniteDeltaMatroid:
@@ -239,7 +282,7 @@ def twist_polynomial(d: FiniteDeltaMatroid) -> DeltaMatroidTwistPolynomialResult
     bounded by the recognition operation's byte cap.
     """
 
-    _reject_oversized_twist_polynomial_axis(d)
+    _reject_oversized_twist_polynomial_source(d)
     d = _admit_delta(d)
     n = len(d.ground)
     if n > MAX_TWIST_POLYNOMIAL_GROUND:

@@ -97,16 +97,25 @@ def test_induced_homology_executes_each_admitted_endpoint_plan_once(
     )
     original = simplicial_maps.admit_integral_homology
     calls = 0
+    original_from_tables = simplicial_maps.from_tables
+    table_validations = 0
 
     def count_admissions(complex_value):
         nonlocal calls
         calls += 1
         return original(complex_value)
 
+    def count_table_validations(*args, **kwargs):
+        nonlocal table_validations
+        table_validations += 1
+        return original_from_tables(*args, **kwargs)
+
     monkeypatch.setattr(simplicial_maps, "admit_integral_homology", count_admissions)
+    monkeypatch.setattr(simplicial_maps, "from_tables", count_table_validations)
     induced_normalized_homology_map(collapse)
 
     assert calls == 2
+    assert table_validations == 2
 
 
 def test_composition_admits_both_coordinate_projections_before_either_runs(

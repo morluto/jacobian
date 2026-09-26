@@ -156,6 +156,35 @@ def _require_carrier(
     return checked.simplicial_set
 
 
+def _canonical_simplicial_map(
+    map_value: TruncatedSimplicialMap,
+) -> TruncatedSimplicialMap:
+    """Revalidate both carriers once and retain those canonical endpoints."""
+
+    source = _require_carrier(map_value.source, location="source")
+    raw_target = map_value.target
+    target = (
+        source
+        if (
+            raw_target.max_degree == source.max_degree
+            and raw_target.sets == source.sets
+            and raw_target.face_maps == source.face_maps
+            and raw_target.degeneracy_maps == source.degeneracy_maps
+        )
+        else _require_carrier(raw_target, location="target")
+    )
+    try:
+        return TruncatedSimplicialMap.model_validate(
+            {"source": source, "target": target, "maps": map_value.maps}
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("map",),
+            code="simplicial_map.degreewise_axes_invalid",
+            message="map rows must match the canonical source and target axes",
+        ) from exc
+
+
 def compose_simplicial_maps(
     request: SimplicialMapCompositionRequest,
 ) -> TruncatedSimplicialMap:
@@ -429,6 +458,8 @@ def simplicial_map(request: SimplicialMapRequest) -> SimplicialMapResult:
 
 def normalized_chains(
     simplicial_set: FiniteTruncatedSimplicialSet,
+    *,
+    _canonical: bool = False,
 ) -> NormalizedChainsResult:
     source_sizes = tuple(len(level) for level in simplicial_set.sets)
     cells = sum(
@@ -454,19 +485,22 @@ def normalized_chains(
                 f"exceeds the {MAX_NORMALIZED_CHAIN_OUTPUT_CELLS}-cell output bound"
             ),
         )
-    checked = from_tables(
-        simplicial_set.max_degree,
-        simplicial_set.sets,
-        simplicial_set.face_maps,
-        simplicial_set.degeneracy_maps,
-    )
-    if checked.simplicial_set is None:
-        raise OperationDomainValidationError(
-            location=("simplicial_set",),
-            code="simplicial_set.normalized_source_invalid",
-            message="source tables fail a visible simplicial identity",
+    if _canonical:
+        s = simplicial_set
+    else:
+        checked = from_tables(
+            simplicial_set.max_degree,
+            simplicial_set.sets,
+            simplicial_set.face_maps,
+            simplicial_set.degeneracy_maps,
         )
-    s = checked.simplicial_set
+        if checked.simplicial_set is None:
+            raise OperationDomainValidationError(
+                location=("simplicial_set",),
+                code="simplicial_set.normalized_source_invalid",
+                message="source tables fail a visible simplicial identity",
+            )
+        s = checked.simplicial_set
     nd = []
     for n, level in enumerate(s.sets):
         degenerate = {x for row in (s.degeneracy_maps[n - 1] if n else ()) for x in row}
@@ -519,6 +553,8 @@ def normalized_chains(
 
 def induced_normalized_chain_map(
     map_value: TruncatedSimplicialMap,
+    *,
+    _canonical: bool = False,
 ) -> ChainMapValue:
     """Return the normalized chain map induced by a finite simplicial map.
 
@@ -526,18 +562,9 @@ def induced_normalized_chain_map(
     image if that image is nondegenerate, and to zero otherwise. Basis labels
     retain the exact simplex axes at each endpoint.
     """
-    source = _require_carrier(map_value.source, location="source")
-    target = _require_carrier(map_value.target, location="target")
-    try:
-        map_value = TruncatedSimplicialMap.model_validate(
-            {"source": source, "target": target, "maps": map_value.maps}
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("map",),
-            code="simplicial_map.degreewise_axes_invalid",
-            message="map rows must match the canonical source and target axes",
-        ) from exc
+    if not _canonical:
+        map_value = _canonical_simplicial_map(map_value)
+    source, target = map_value.source, map_value.target
     source_sizes = tuple(map(len, source.sets))
     target_sizes = tuple(map(len, target.sets))
     source_nondegenerate = tuple(
@@ -631,9 +658,11 @@ def induced_normalized_chain_map(
             ),
         )
 
-    normalized_source = normalized_chains(source)
+    normalized_source = normalized_chains(source, _canonical=True)
     normalized_target = (
-        normalized_source if target == source else normalized_chains(target)
+        normalized_source
+        if target == source
+        else normalized_chains(target, _canonical=True)
     )
     _require_naturality(map_value, location="map")
     target_rows = tuple(
@@ -1001,8 +1030,14 @@ def _normalized_homology_endpoint(
     simplicial_set: FiniteTruncatedSimplicialSet,
     plan: IntegralHomologyExecutionPlan,
     cache: list[_NormalizedHomologyEndpoint],
+    *,
+    _canonical: bool = False,
 ) -> _NormalizedHomologyEndpoint:
-    canonical = _require_carrier(simplicial_set, location="simplicial_set")
+    canonical = (
+        simplicial_set
+        if _canonical
+        else _require_carrier(simplicial_set, location="simplicial_set")
+    )
     for endpoint in cache:
         if endpoint.simplicial_set == canonical:
             if endpoint.homology.chain_complex != plan.source:
@@ -1017,6 +1052,7 @@ def _normalized_homology_endpoint(
         canonical,
         _integral_right_inverses=right_inverses,
         _integral_plan=plan,
+        _canonical=True,
     )
     endpoint = _NormalizedHomologyEndpoint(canonical, homology, right_inverses)
     cache.append(endpoint)
@@ -1031,10 +1067,10 @@ def _prepare_induced_normalized_homology_map(
     endpoint_cache: list[_NormalizedHomologyEndpoint],
 ) -> _InducedNormalizedHomologyPlan:
     source = _normalized_homology_endpoint(
-        map_value.source, source_plan, endpoint_cache
+        map_value.source, source_plan, endpoint_cache, _canonical=True
     )
     target = _normalized_homology_endpoint(
-        map_value.target, target_plan, endpoint_cache
+        map_value.target, target_plan, endpoint_cache, _canonical=True
     )
     (
         source_differentials,
@@ -1152,10 +1188,11 @@ def induced_normalized_homology_map(
     map_value: TruncatedSimplicialMap,
 ) -> SimplicialHomologyMapValue:
     """Compute the induced map on every homology degree supported by a prefix."""
-    chain_map = induced_normalized_chain_map(map_value)
+    canonical_map = _canonical_simplicial_map(map_value)
+    chain_map = induced_normalized_chain_map(canonical_map, _canonical=True)
     source_plan = admit_integral_homology(chain_map.source)
-    source_carrier = _require_carrier(map_value.source, location="source")
-    target_carrier = _require_carrier(map_value.target, location="target")
+    source_carrier = canonical_map.source
+    target_carrier = canonical_map.target
     target_plan = (
         source_plan
         if target_carrier == source_carrier
@@ -1163,7 +1200,7 @@ def induced_normalized_homology_map(
     )
     _admit_endpoint_plans(source_plan, target_plan)
     prepared = _prepare_induced_normalized_homology_map(
-        map_value, chain_map, source_plan, target_plan, []
+        canonical_map, chain_map, source_plan, target_plan, []
     )
     return _compute_induced_normalized_homology_map(prepared)
 
@@ -1202,8 +1239,10 @@ def compose_simplicial_homology_maps(
     # Admit the union of both endpoint computations before either computes
     # normalized homology. Reuse plans for equal complexes, including the
     # shared middle complex.
-    first_chain = induced_normalized_chain_map(first.simplicial_map)
-    second_chain = induced_normalized_chain_map(second.simplicial_map)
+    first_map = _canonical_simplicial_map(first.simplicial_map)
+    second_map = _canonical_simplicial_map(second.simplicial_map)
+    first_chain = induced_normalized_chain_map(first_map, _canonical=True)
+    second_chain = induced_normalized_chain_map(second_map, _canonical=True)
     plans: list[
         tuple[
             FiniteTruncatedSimplicialSet,
@@ -1212,15 +1251,14 @@ def compose_simplicial_homology_maps(
         ]
     ] = []
     for carrier, complex_value in (
-        (first.simplicial_map.source, first_chain.source),
-        (first.simplicial_map.target, first_chain.target),
-        (second.simplicial_map.source, second_chain.source),
-        (second.simplicial_map.target, second_chain.target),
+        (first_map.source, first_chain.source),
+        (first_map.target, first_chain.target),
+        (second_map.source, second_chain.source),
+        (second_map.target, second_chain.target),
     ):
-        canonical = _require_carrier(carrier, location="simplicial_set")
-        if not any(existing == canonical for existing, _, _ in plans):
+        if not any(existing == carrier for existing, _, _ in plans):
             plans.append(
-                (canonical, complex_value, admit_integral_homology(complex_value))
+                (carrier, complex_value, admit_integral_homology(complex_value))
             )
     if sum(plan.total_work for _, _, plan in plans) > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
         raise OperationResourceAdmissionError(
@@ -1241,26 +1279,25 @@ def compose_simplicial_homology_maps(
         carrier: FiniteTruncatedSimplicialSet,
         complex_value: ChainComplexValue,
     ) -> IntegralHomologyExecutionPlan:
-        canonical = _require_carrier(carrier, location="simplicial_set")
         return next(
             plan
             for existing_carrier, existing_complex, plan in plans
-            if existing_carrier == canonical and existing_complex == complex_value
+            if existing_carrier == carrier and existing_complex == complex_value
         )
 
     endpoint_cache: list[_NormalizedHomologyEndpoint] = []
     first_prepared = _prepare_induced_normalized_homology_map(
-        first.simplicial_map,
+        first_map,
         first_chain,
-        plan_for(first.simplicial_map.source, first_chain.source),
-        plan_for(first.simplicial_map.target, first_chain.target),
+        plan_for(first_map.source, first_chain.source),
+        plan_for(first_map.target, first_chain.target),
         endpoint_cache,
     )
     second_prepared = _prepare_induced_normalized_homology_map(
-        second.simplicial_map,
+        second_map,
         second_chain,
-        plan_for(second.simplicial_map.source, second_chain.source),
-        plan_for(second.simplicial_map.target, second_chain.target),
+        plan_for(second_map.source, second_chain.source),
+        plan_for(second_map.target, second_chain.target),
         endpoint_cache,
     )
     if (
@@ -1376,6 +1413,7 @@ def normalized_homology(
     *,
     _integral_right_inverses: list[list[list[int]]] | None = None,
     _integral_plan: IntegralHomologyExecutionPlan | None = None,
+    _canonical: bool = False,
 ) -> NormalizedHomologyResult:
     """Compute integral normalized homology below the finite prefix top.
 
@@ -1384,7 +1422,7 @@ def normalized_homology(
     absent. The standard exact integral homology kernel supplies torsion and
     free-cycle representatives in the normalized simplex axes.
     """
-    normalized = normalized_chains(simplicial_set)
+    normalized = normalized_chains(simplicial_set, _canonical=_canonical)
     source = normalized.simplicial_set
     sizes = normalized.chain_complex.basis_sizes
     if any(size > 64 for size in sizes):

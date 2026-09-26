@@ -36,6 +36,8 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
+    ModuleKoszulTopHomology,
+    ModuleKoszulTopHomologyRequest,
     ModuleKoszulUnitContraction,
     ModuleKoszulUnitContractionRequest,
     ModuleKoszulZeroExtension,
@@ -55,6 +57,8 @@ MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_MODULE_MAP_WORK = 2_000_000
 MAX_KOSZUL_MODULE_MAP_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_MODULE_MAP_CELLS = 4_096
+MAX_KOSZUL_TOP_HOMOLOGY_WORK = 1 << 40
+MAX_KOSZUL_TOP_HOMOLOGY_OUTPUT_BYTES = 8 * 1024 * 1024
 _MAX_KOSZUL_HOMOLOGY_COEFFICIENT = 10**MAX_KOSZUL_HOMOLOGY_COEFFICIENT_DIGITS
 
 
@@ -210,13 +214,51 @@ def _action_matrix(
     return result
 
 
+def _build_module_koszul_differential(
+    value: ModuleKoszulRequest,
+    degree: int,
+    actions: tuple[list[list[Fraction]], ...] | None = None,
+) -> ModuleDifferential:
+    """Build one canonical degree differential from cached element actions."""
+    length = len(value.sequence)
+    module_dimension = len(value.module.basis)
+    source_wedges = tuple(combinations(range(length), degree))
+    target_wedges = tuple(combinations(range(length), degree - 1))
+    target_index = {wedge: index for index, wedge in enumerate(target_wedges)}
+    if actions is None:
+        actions = tuple(
+            _action_matrix(value.module, element) for element in value.sequence
+        )
+    entries: list[tuple[int, int, CanonicalRational]] = []
+    for wedge_column, wedge in enumerate(source_wedges):
+        for position, sequence_index in enumerate(wedge):
+            sign = -1 if position % 2 else 1
+            target = wedge[:position] + wedge[position + 1 :]
+            for row in range(module_dimension):
+                for column in range(module_dimension):
+                    coefficient = sign * actions[sequence_index][row][column]
+                    if coefficient:
+                        entries.append(
+                            (
+                                target_index[target] * module_dimension + row,
+                                wedge_column * module_dimension + column,
+                                CanonicalRational.from_fraction(coefficient),
+                            )
+                        )
+    return ModuleDifferential(
+        row_count=len(target_wedges) * module_dimension,
+        column_count=len(source_wedges) * module_dimension,
+        entries=tuple(sorted(entries, key=lambda entry: (entry[0], entry[1]))),
+    )
+
+
 def _admit(
     module: BasedFiniteModule, sequence: tuple[tuple[CanonicalRational, ...], ...]
 ) -> None:
     # This is mathematical admission for the Koszul postcondition, not merely
     # a shape check.  It is intentionally rerun by consumers of authored
     # complexes: serialized/model_construct values carry no trusted provenance.
-    if len(sequence) > 6 or len(module.basis) * (2 ** len(sequence)) > 256:
+    if len(sequence) > 6:
         raise OperationResourceAdmissionError(
             location=("sequence",),
             code="koszul.module.budget",
@@ -333,33 +375,11 @@ def _build_module_koszul_complex(
         for degree in range(sequence_length + 1)
     )
     basis_sizes = tuple(module_dimension * len(basis) for basis in bases)
-    differentials: list[ModuleDifferential] = []
-    for degree in range(1, sequence_length + 1):
-        entries: list[tuple[int, int, CanonicalRational]] = []
-        for wedge_column, indices in enumerate(bases[degree]):
-            for position, sequence_index in enumerate(indices):
-                action = _action_matrix(value.module, value.sequence[sequence_index])
-                sign = -1 if position % 2 else 1
-                target_wedge = indices[:position] + indices[position + 1 :]
-                wedge_row = bases[degree - 1].index(target_wedge)
-                for target in range(module_dimension):
-                    for source in range(module_dimension):
-                        coefficient = sign * action[target][source]
-                        if coefficient:
-                            entries.append(
-                                (
-                                    wedge_row * module_dimension + target,
-                                    wedge_column * module_dimension + source,
-                                    CanonicalRational.from_fraction(coefficient),
-                                )
-                            )
-        differentials.append(
-            ModuleDifferential(
-                row_count=basis_sizes[degree - 1],
-                column_count=basis_sizes[degree],
-                entries=tuple(sorted(entries, key=lambda entry: (entry[0], entry[1]))),
-            )
-        )
+    actions = tuple(_action_matrix(value.module, element) for element in value.sequence)
+    differentials = [
+        _build_module_koszul_differential(value, degree, actions)
+        for degree in range(1, sequence_length + 1)
+    ]
     if check_square:
         for index in range(1, len(differentials)):
             outer = _dense(differentials[index - 1])
@@ -405,7 +425,9 @@ def _admit_complex(
         ) from exc
     sequence_length = len(candidate.sequence)
     module_dimension = len(candidate.module.basis)
-    if sequence_length > 6 or module_dimension * (2**sequence_length) > 256:
+    if sequence_length > 6 or (
+        admit_homology and module_dimension * (2**sequence_length) > 256
+    ):
         raise OperationResourceAdmissionError(
             location=("complex", "sequence"),
             code="koszul.module.budget",
@@ -666,16 +688,23 @@ def _admit_homology_rank_work(value: ModuleKoszulComplex) -> None:
         )
 
 
-def _module_koszul_homology_admitted(
-    value: ModuleKoszulComplex,
+def module_koszul_homology(
+    complex_value: ModuleKoszulComplex | Mapping[str, Any],
 ) -> ModuleKoszulHomology:
-    """Compute homology for an already admitted canonical complex.
-
-    The public entry point revalidates caller-authored values before reaching
-    this kernel. Internal consumers that already established admission while
-    constructing the canonical differentials call it directly, so the
-    operation does not replay semantic admission and exact square-zero work.
-    """
+    try:
+        value = (
+            complex_value
+            if isinstance(complex_value, ModuleKoszulComplex)
+            else ModuleKoszulComplex.model_validate(complex_value)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="koszul.module.complex_shape",
+            message="the supplied module Koszul complex is not canonical",
+        ) from exc
+    value = _admit_complex(value)
+    _require_square_zero(value)
     cycles: list[int] = []
     boundaries: list[int] = []
     dimensions: list[int] = []
@@ -720,24 +749,193 @@ def _module_koszul_homology_admitted(
     )
 
 
-def module_koszul_homology(
-    complex_value: ModuleKoszulComplex | Mapping[str, Any],
-) -> ModuleKoszulHomology:
-    try:
-        value = (
-            complex_value
-            if isinstance(complex_value, ModuleKoszulComplex)
-            else ModuleKoszulComplex.model_validate(complex_value)
+def _admit_top_homology(value: ModuleKoszulComplex) -> None:
+    """Bound retained source context and one top-kernel elimination before work."""
+    retained_coefficients = (
+        *_algebra_rationals(value.algebra),
+        *_algebra_rationals(value.module.algebra),
+        *(
+            coefficient
+            for action in value.module.action
+            for row in action
+            for coefficient in row
+        ),
+        *(coefficient for element in value.sequence for coefficient in element),
+        *(
+            coefficient
+            for differential in value.differentials[-1:]
+            for _, _, coefficient in differential.entries
+        ),
+    )
+    for coefficient in retained_coefficients:
+        if (
+            abs(coefficient.num) >= _MAX_KOSZUL_HOMOLOGY_COEFFICIENT
+            or coefficient.den >= _MAX_KOSZUL_HOMOLOGY_COEFFICIENT
+        ):
+            raise OperationResourceAdmissionError(
+                location=("complex",),
+                code="koszul.module.homology_coefficient_budget",
+                message="top Koszul homology coefficients exceed the exact digit bound",
+            )
+
+    echoed_bytes = (
+        len(value.algebra.model_dump_json().encode("utf-8"))
+        + len(value.module.model_dump_json().encode("utf-8"))
+        + (
+            sum(
+                2 * canonical_rational_component_digits(item) + 24
+                for element in value.sequence
+                for item in element
+            )
         )
+        + (
+            len(value.differentials[-1].model_dump_json().encode("utf-8"))
+            if value.differentials
+            else 0
+        )
+        + 256
+    )
+    module_dimension = len(value.module.basis)
+    differential = value.differentials[-1] if value.differentials else None
+    basis_digits = 1
+    work = 0
+    if differential is not None:
+        rows, columns = differential.row_count, differential.column_count
+        rank_bound = min(rows, columns)
+        row_denominator_bits = [0] * rows
+        row_numerator_bits = [0] * rows
+        max_input_digits = 1
+        for row, _, coefficient in differential.entries:
+            numerator, denominator = abs(coefficient.num), coefficient.den
+            row_numerator_bits[row] = max(
+                row_numerator_bits[row], numerator.bit_length()
+            )
+            if denominator != 1:
+                row_denominator_bits[row] += denominator.bit_length()
+            max_input_digits = max(
+                max_input_digits, canonical_rational_component_digits(coefficient)
+            )
+        row_scale_bits = max(row_denominator_bits, default=0)
+        entry_bits = max(
+            (
+                numerator_bits + denominator_bits
+                for numerator_bits, denominator_bits in zip(
+                    row_numerator_bits, row_denominator_bits, strict=True
+                )
+            ),
+            default=1,
+        )
+        minor_bits = (rank_bound + 1) * (
+            entry_bits + (rank_bound + 1).bit_length()
+        ) + row_scale_bits
+        transient_bits = 4 * minor_bits + 2
+        operations = (
+            rows * columns + rank_bound * columns + 2 * rank_bound * rows * columns
+        )
+        work = operations * transient_bits * transient_bits * 16
+        basis_digits = 4 * max(rows, columns) * (max_input_digits + 4) + 32
+    if work > MAX_KOSZUL_TOP_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex", "differentials"),
+            code="koszul.module.top_homology_work_budget",
+            message="top Koszul homology kernel exceeds its exact work bound",
+        )
+
+    # At most two module-dimension-square bases are returned. The coefficient
+    # bound is the same minor bound used for deterministic rational RREF.
+    output_bytes = (
+        echoed_bytes + 2 * module_dimension**2 * (2 * basis_digits + 48) + 4096
+    )
+    if output_bytes > MAX_KOSZUL_TOP_HOMOLOGY_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="koszul.module.top_homology_output_budget",
+            message="top Koszul homology value exceeds its serialized output bound",
+        )
+
+
+def module_koszul_top_homology(
+    request: ModuleKoszulTopHomologyRequest | Mapping[str, Any],
+) -> ModuleKoszulTopHomology:
+    """Identify top Koszul homology with the common annihilator of the sequence.
+
+    In top degree there is a single exterior basis wedge, and its differential
+    has the signed action matrices of all sequence entries as its row blocks.
+    Thus its kernel is precisely ``{m : f_i m = 0 for every i}``. The source
+    differential is reconstructed from the retained module action before this
+    identity is used.
+    """
+    try:
+        payload = (
+            request.model_dump()
+            if isinstance(request, ModuleKoszulTopHomologyRequest)
+            else request
+        )
+        parsed_request = ModuleKoszulTopHomologyRequest.model_validate(payload)
+        value = ModuleKoszulComplex.model_validate(parsed_request.complex.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="koszul.module.top_homology_request_shape",
+            message="the top-homology request is not canonical",
+        ) from exc
+
+    # The top-kernel contract needs no elimination in lower degrees. Admit the
+    # retained input and this one matrix before rebuilding or densifying it.
+    _admit_top_homology(value)
+    # The top-only envelope is already checked above. Revalidate the source
+    # shape and induced module action without applying the full-chain size cap.
+    try:
+        value = ModuleKoszulComplex.model_validate(value.model_dump())
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("complex",),
             code="koszul.module.complex_shape",
             message="the supplied module Koszul complex is not canonical",
         ) from exc
-    value = _admit_complex(value)
-    _require_square_zero(value)
-    return _module_koszul_homology_admitted(value)
+    if any(
+        size != len(value.module.basis) * comb(len(value.sequence), degree)
+        for degree, size in enumerate(value.basis_sizes)
+    ):
+        raise OperationDomainValidationError(
+            location=("complex", "basis_sizes"),
+            code="koszul.module.result_shape",
+            message="complex basis sizes must be the canonical Koszul dimensions",
+        )
+    _admit(value.module, value.sequence)
+    source_request = ModuleKoszulRequest(
+        algebra=value.algebra, module=value.module, sequence=value.sequence
+    )
+    dimension = len(value.module.basis)
+    top_differential = None
+    if value.sequence:
+        actions = tuple(
+            _action_matrix(value.module, element) for element in value.sequence
+        )
+        top_differential = _build_module_koszul_differential(
+            source_request, len(value.sequence), actions
+        )
+        if top_differential != value.differentials[-1]:
+            raise OperationDomainValidationError(
+                location=("complex", "differentials"),
+                code="koszul.module.source_complex_mismatch",
+                message="top homology requires the top differential induced by the retained sequence",
+            )
+    kernel = _nullspace(
+        _dense(top_differential) if top_differential is not None else [], dimension
+    )
+    exact_basis = tuple(
+        tuple(CanonicalRational.from_fraction(coefficient) for coefficient in vector)
+        for vector in kernel
+    )
+    return ModuleKoszulTopHomology.model_construct(
+        algebra=value.algebra,
+        module=value.module,
+        sequence=value.sequence,
+        top_differential=top_differential,
+        annihilator_basis=exact_basis,
+        top_homology_basis=exact_basis,
+    )
 
 
 def module_koszul_exactness_profile(

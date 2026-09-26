@@ -101,6 +101,17 @@ and output bounds apply. Acyclicity is a statement about this finite complex;
 it does not by itself label the sequence regular under a module convention or
 after localization/base change.
 
+`homological.koszul.top_homology.compute` returns `H_r(f; M)` in the unique
+top exterior coordinate and identifies it with the simultaneous annihilator
+`{m in M : f_i m = 0 for every i}`. The producer reconstructs the top
+differential from the retained module actions before using this identity, so a
+caller-supplied square-zero matrix that is not the sequence-derived Koszul
+differential is rejected. The empty sequence has top degree zero and returns
+all of `M`. The result retains the algebra, module, sequence, and top
+differential needed to interpret both bases. Admission bounds that source
+context and the one top-kernel elimination; it does not compute the lower
+homology groups.
+
 `homological.koszul.sequence_permute.compute` uses `new_to_old[j]` to specify
 which source entry occupies target position `j`. It constructs the target
 sequence in that order and returns source-to-target and inverse chain maps in

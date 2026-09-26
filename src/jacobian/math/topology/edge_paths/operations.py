@@ -31,6 +31,7 @@ from jacobian.math.topology.edge_paths._models import (
     FiniteGroupWord,
     FundamentalGroupPresentationResult,
     OrientedEdge,
+    PresentationAbelianizationResult,
     TriangleRelator,
     WordLetter,
 )
@@ -225,6 +226,31 @@ def _free_reduce(
     return tuple(stack)
 
 
+def free_reduce(
+    generator_count: int, letters: tuple[WordLetter, ...]
+) -> FiniteGroupWord:
+    """Return the unique freely reduced word on the supplied generator axis."""
+    if type(generator_count) is not int or not (
+        0 <= generator_count <= MAX_PRESENTATION_GENERATORS
+    ):
+        _reject(
+            location=("generator_count",),
+            code="edge_paths.free_reduce_generator_axis",
+            message="generator_count must size a bounded presentation axis",
+        )
+    if any(letter.generator >= generator_count for letter in letters):
+        _reject(
+            location=("letters",),
+            code="edge_paths.free_reduce_word_generator",
+            message="every word letter must name a generator on the supplied axis",
+        )
+    return FiniteGroupWord(
+        letters=_free_reduce(
+            [(letter.generator, letter.exponent) for letter in letters]
+        )
+    )
+
+
 def _admit_fundamental_complex(
     complex_: FiniteSimplicialComplex,
     base_vertex: str,
@@ -326,6 +352,24 @@ def _abelianization(
         torsion_invariant_factors=tuple(
             factor for factor in invariant_factors if factor > 1
         ),
+    )
+
+
+def presentation_abelianization(
+    presentation: FiniteGroupPresentation,
+) -> PresentationAbelianizationResult:
+    """Compute the exact integer abelianization of a finite presentation."""
+    total_letters = sum(len(relator.letters) for relator in presentation.relators)
+    maximum_letters = MAX_PRESENTATION_RELATORS * MAX_WORD
+    if total_letters > maximum_letters:
+        raise OperationResourceAdmissionError(
+            location=("presentation",),
+            code="topology.fundamental_group.relator_length_budget",
+            message=f"presentation relators exceed the {maximum_letters}-letter bound",
+        )
+    return PresentationAbelianizationResult(
+        presentation=presentation,
+        abelianization=_abelianization(presentation.generators, presentation.relators),
     )
 
 
@@ -465,6 +509,7 @@ def fundamental_group_presentation(
 __all__ = [
     "concatenate_edge_paths",
     "edge_path_word",
+    "free_reduce",
     "fundamental_group_presentation",
     "verify_edge_path_concatenation",
     "verify_edge_path_word",

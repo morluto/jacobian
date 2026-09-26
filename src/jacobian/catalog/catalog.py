@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
-from functools import cache
 from typing import Any
 
 from jacobian._models import StrictModel
@@ -72,10 +71,7 @@ class Catalog:
         self._snapshot: OperationCatalogSnapshot | None = None
 
     @classmethod
-    @cache
     def open(cls) -> Catalog:
-        """Return the compiled view of the immutable built-in declarations."""
-
         return cls(BUILTIN_TOOLS)
 
     def operation(self, operation_id: str) -> MathTool[Any, Any] | None:

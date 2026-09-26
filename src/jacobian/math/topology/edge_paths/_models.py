@@ -14,6 +14,7 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
     VertexLabel,
 )
+from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 
 MAX_EDGES = 64
 MAX_WORD = 128
@@ -23,6 +24,9 @@ MAX_PRESENTATION_GENERATORS = 64
 MAX_PRESENTATION_RELATORS = 64
 # Each two-simplex contributes at most three edge words after tree collapse.
 MAX_PRESENTATION_RELATOR_LETTERS = 3 * MAX_PRESENTATION_RELATORS
+# Aggregate tree-edge, substitution, and conjugacy-replay occurrences admitted
+# while constructing one induced presentation map.
+MAX_INDUCED_MAP_EDGE_LETTERS = 49_152
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -100,6 +104,22 @@ class FiniteGroupWord(StrictModel):
     """
 
     letters: tuple[WordLetter, ...] = Field(default=(), max_length=MAX_WORD)
+
+
+class FreeReductionRequest(StrictModel):
+    """Freely reduce a bounded word over an explicitly sized generator set."""
+
+    generator_count: int = Field(ge=0, le=MAX_PRESENTATION_GENERATORS)
+    letters: tuple[WordLetter, ...] = Field(max_length=MAX_WORD)
+
+    @model_validator(mode="after")
+    def require_generator_axis(self) -> Self:
+        if any(letter.generator >= self.generator_count for letter in self.letters):
+            raise _validation_error(
+                "word_generator",
+                "every word letter must name a generator on the supplied axis",
+            )
+        return self
 
 
 class FiniteGroupPresentation(StrictModel):
@@ -201,6 +221,19 @@ class AbelianizationResult(StrictModel):
         return self
 
 
+class AbelianizationRequest(StrictModel):
+    """Compute the abelianization of one finite group presentation."""
+
+    presentation: FiniteGroupPresentation
+
+
+class PresentationAbelianizationResult(StrictModel):
+    """Abelianization data bound to its exact input presentation."""
+
+    presentation: FiniteGroupPresentation
+    abelianization: AbelianizationResult
+
+
 class FundamentalGroupPresentationRequest(StrictModel):
     """Compute the edge-path presentation of one complex near a base vertex."""
 
@@ -278,6 +311,105 @@ class FundamentalGroupPresentationResult(StrictModel):
                     "fundamental_group.relator_binding",
                     "triangle relators must bind to the presentation relators",
                 )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class FundamentalGroupMapRequest(StrictModel):
+    """Induce a based presentation map from one exact simplicial map."""
+
+    map: SimplicialMap
+    source_base_vertex: VertexLabel
+    target_base_vertex: VertexLabel
+
+
+class PresentationRelatorImage(StrictModel):
+    """A triangle relation's target relator-conjugacy witness."""
+
+    source_relator_index: int = Field(ge=0, le=MAX_PRESENTATION_RELATORS - 1)
+    target_relator_index: int | None = Field(
+        default=None, ge=0, le=MAX_PRESENTATION_RELATORS - 1
+    )
+    target_orientation: Literal[-1, 1] | None = None
+    conjugator: FiniteGroupWord
+
+    @model_validator(mode="after")
+    def require_witness_shape(self) -> Self:
+        if (self.target_relator_index is None) != (self.target_orientation is None):
+            raise _validation_error(
+                "fundamental_group_map.relator_witness_shape",
+                "target relator index and orientation must be present together",
+            )
+        return self
+
+
+class FundamentalGroupMapResult(StrictModel):
+    """Exact generator words and triangle-relation witnesses for a map."""
+
+    map: SimplicialMap
+    source_presentation: FundamentalGroupPresentationResult
+    target_presentation: FundamentalGroupPresentationResult
+    generator_images: tuple[FiniteGroupWord, ...] = Field(
+        max_length=MAX_PRESENTATION_GENERATORS
+    )
+    abelianization_map: IntegerMatrix
+    relator_images: tuple[PresentationRelatorImage, ...] = Field(
+        max_length=MAX_PRESENTATION_RELATORS
+    )
+
+    @model_validator(mode="after")
+    def require_structural_binding(self) -> Self:
+        if (
+            self.source_presentation.complex != self.map.source
+            or self.target_presentation.complex != self.map.target
+        ):
+            raise _validation_error(
+                "fundamental_group_map.presentation_binding",
+                "presentations must bind the exact simplicial-map carriers",
+            )
+        source_base_image = dict(
+            zip(self.map.source.vertices, self.map.vertex_map, strict=True)
+        ).get(self.source_presentation.base_vertex)
+        if (
+            source_base_image != self.target_presentation.base_vertex
+            or len(self.generator_images)
+            != len(self.source_presentation.presentation.generators)
+            or len(self.relator_images)
+            != len(self.source_presentation.presentation.relators)
+            or self.abelianization_map.row_count
+            != len(self.target_presentation.presentation.generators)
+            or self.abelianization_map.column_count
+            != len(self.source_presentation.presentation.generators)
+            or tuple(item.source_relator_index for item in self.relator_images)
+            != tuple(range(len(self.relator_images)))
+        ):
+            raise _validation_error(
+                "fundamental_group_map.result_axes",
+                "basepoint, generator, and relation axes must bind their presentations",
+            )
+        target_generator_count = len(self.target_presentation.presentation.generators)
+        if any(
+            letter.generator >= target_generator_count
+            for word in self.generator_images
+            for letter in word.letters
+        ):
+            raise _validation_error(
+                "fundamental_group_map.target_generator",
+                "generator images must use the target presentation axis",
+            )
+        if any(
+            item.target_relator_index is not None
+            and item.target_relator_index
+            >= len(self.target_presentation.presentation.relators)
+            for item in self.relator_images
+        ):
+            raise _validation_error(
+                "fundamental_group_map.target_relator",
+                "relator witnesses must use the target presentation axis",
+            )
         return self
 
     @classmethod

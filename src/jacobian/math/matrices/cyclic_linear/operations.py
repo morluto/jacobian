@@ -18,11 +18,16 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     MAX_CYCLIC_FIELD_WORK,
     CyclicRationalBlockSymbol,
     CyclicRationalRankKernelProfile,
+    CyclotomicFieldInclusion,
     CyclotomicNonzeroMinor,
     CyclotomicRankKernelComponent,
     RationalCyclotomicElement,
@@ -45,12 +50,230 @@ _CYCLIC_PROFILE_WALL_SECONDS = 3_600.0
 _ADMISSION_CHECK_INTERVAL = 256
 
 
-class CyclicRankKernelAdmissionError(ValueError):
+class CyclicRankKernelAdmissionError(OperationDomainValidationError):
     """A proved owner-local resource rejection before exact elimination."""
 
     def __init__(self, reason: str, message: str) -> None:
         self.reason = reason
-        super().__init__(message)
+        super().__init__(location=(), code=f"matrix.cyclic.{reason}", message=message)
+
+
+def _inclusion_poly(order: int, target_order: int) -> tuple[Fraction, ...]:
+    """Return the reduced power-basis coordinates of zeta_target^(target/order)."""
+    from sympy import Poly, cyclotomic_poly, symbols
+
+    variable = symbols("x")
+    modulus = Poly(cyclotomic_poly(target_order, variable), variable, domain="QQ")
+    image = Poly(variable ** (target_order // order), variable, domain="QQ") % modulus
+    return tuple(_fraction(image.nth(i)) for i in range(_euler_phi_local(target_order)))
+
+
+def _euler_phi_local(value: int) -> int:
+    return sum(gcd(candidate, value) == 1 for candidate in range(1, value + 1))
+
+
+def _standard_inclusion(
+    source: RationalCyclotomicField, target: RationalCyclotomicField
+) -> CyclotomicFieldInclusion:
+    if target.order % source.order:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_parent",
+            "the source cyclotomic order must divide the target order",
+        )
+    work = source.degree * target.degree * target.degree
+    if work > MAX_CYCLIC_FIELD_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "target"),
+            code="matrix.cyclic.field_work_bound",
+            message="cyclotomic inclusion exceeds the field-work envelope",
+        )
+    image = _inclusion_poly(source.order, target.order)
+    if len(image) != target.degree:
+        raise RuntimeError(
+            "cyclotomic generator image has an invalid power-basis length"
+        )
+    return CyclotomicFieldInclusion(
+        source=source,
+        target=target,
+        generator_image=tuple(
+            CanonicalRational.from_fraction(value) for value in image
+        ),
+    )
+
+
+def _require_standard_inclusion_image(
+    inclusion: CyclotomicFieldInclusion,
+) -> tuple[Fraction, ...]:
+    work = inclusion.source.degree * inclusion.target.degree * inclusion.target.degree
+    if work > MAX_CYCLIC_FIELD_WORK:
+        raise CyclicRankKernelAdmissionError(
+            "field_work_bound", "cyclotomic inclusion exceeds the field-work envelope"
+        )
+    expected = _inclusion_poly(inclusion.source.order, inclusion.target.order)
+    supplied = tuple(value.as_fraction() for value in inclusion.generator_image)
+    if supplied != expected:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_image",
+            "the supplied generator image is not the standard inclusion image",
+        )
+    return expected
+
+
+def cyclotomic_field_inclusion(
+    source: RationalCyclotomicField | Any,
+    target: RationalCyclotomicField | None = None,
+) -> CyclotomicFieldInclusion:
+    """Construct the canonical standard inclusion for orders source | target."""
+    if not isinstance(source, RationalCyclotomicField) or not isinstance(
+        target, RationalCyclotomicField
+    ):
+        raise OperationDomainValidationError(
+            location=("source",)
+            if not isinstance(source, RationalCyclotomicField)
+            else ("target",),
+            code="matrix.cyclic.inclusion_parent_type",
+            message="source and target must be cyclotomic field values",
+        )
+    try:
+        source = RationalCyclotomicField.model_validate(source.model_dump())
+        target = RationalCyclotomicField.model_validate(target.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("source", "target"),
+            code="matrix.cyclic.inclusion_parent_invalid",
+            message="source and target must satisfy their canonical field contracts",
+        ) from error
+    return _standard_inclusion(source, target)
+
+
+def compose_cyclotomic_field_inclusions(
+    first: CyclotomicFieldInclusion | Any,
+    second: CyclotomicFieldInclusion | None = None,
+) -> CyclotomicFieldInclusion:
+    """Compose two standard inclusions with matching intermediate parents."""
+    if not isinstance(first, CyclotomicFieldInclusion) or not isinstance(
+        second, CyclotomicFieldInclusion
+    ):
+        raise OperationDomainValidationError(
+            location=("first",)
+            if not isinstance(first, CyclotomicFieldInclusion)
+            else ("second",),
+            code="matrix.cyclic.inclusion_type",
+            message="both values must be cyclotomic field inclusions",
+        )
+    try:
+        first = CyclotomicFieldInclusion.model_validate(first.model_dump())
+        second = CyclotomicFieldInclusion.model_validate(second.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("first", "second"),
+            code="matrix.cyclic.inclusion_invalid",
+            message="inclusions must satisfy their canonical value contracts",
+        ) from error
+    if first.target != second.source:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_parent", "the first target must equal the second source field"
+        )
+    _require_standard_inclusion_image(first)
+    _require_standard_inclusion_image(second)
+    return _standard_inclusion(first.source, second.target)
+
+
+def apply_cyclotomic_field_inclusion(
+    inclusion: CyclotomicFieldInclusion | Any,
+    element: RationalCyclotomicElement | None = None,
+) -> RationalCyclotomicElement:
+    """Map an exact element along its canonical standard cyclotomic inclusion."""
+    if not isinstance(inclusion, CyclotomicFieldInclusion) or not isinstance(
+        element, RationalCyclotomicElement
+    ):
+        raise OperationDomainValidationError(
+            location=("inclusion",)
+            if not isinstance(inclusion, CyclotomicFieldInclusion)
+            else ("element",),
+            code="matrix.cyclic.element_map_type",
+            message="mapping requires a cyclotomic inclusion and element",
+        )
+    try:
+        inclusion = CyclotomicFieldInclusion.model_validate(inclusion.model_dump())
+        element = RationalCyclotomicElement.model_validate(element.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("inclusion", "element"),
+            code="matrix.cyclic.element_map_invalid",
+            message="inclusion and element must satisfy their canonical contracts",
+        ) from error
+    if element.field != inclusion.source:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_parent",
+            "the element parent must equal the inclusion source field",
+        )
+    source_degree = inclusion.source.degree
+    target_degree = inclusion.target.degree
+    work = source_degree * target_degree * target_degree
+    if work > MAX_CYCLIC_FIELD_WORK:
+        raise OperationResourceAdmissionError(
+            location=("inclusion",),
+            code="matrix.cyclic.field_work_bound",
+            message="cyclotomic element mapping exceeds the field-work envelope",
+        )
+    expected = _require_standard_inclusion_image(inclusion)
+    coordinates = tuple(value.as_fraction() for value in element.coefficients_ascending)
+    if inclusion.source == inclusion.target:
+        return element
+    from sympy import Poly, cyclotomic_poly, symbols
+
+    variable = symbols("x")
+    modulus = Poly(
+        cyclotomic_poly(inclusion.target.order, variable), variable, domain="QQ"
+    )
+    image = Poly.from_list(list(reversed(expected)), gens=variable, domain="QQ")
+    powers = [Poly(1, variable, domain="QQ")]
+    for _ in range(1, source_degree):
+        powers.append((powers[-1] * image) % modulus)
+    row_norm = max(
+        1,
+        *(
+            sum(abs(_fraction(power.nth(i))) for i in range(target_degree))
+            for power in powers
+        ),
+    )
+    # One common-denominator and basis-image norm bound controls exact
+    # rational height before expanding the caller's element.
+    denominator = 1
+    for value in coordinates:
+        denominator = (
+            denominator * value.denominator // gcd(denominator, value.denominator)
+        )
+    denominator_digits = _decimal_digits(denominator)
+    scaled_numerator = max(
+        (
+            abs(value.numerator) * (denominator // value.denominator)
+            for value in coordinates
+        ),
+        default=0,
+    )
+    numerator_bound = Fraction(scaled_numerator) * source_degree * row_norm
+    numerator_digits = _decimal_digits(numerator_bound.numerator)
+    if max(denominator_digits, numerator_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="matrix.cyclic.element_height_bound",
+            message="mapped cyclotomic coordinates exceed the 256-digit envelope",
+        )
+    result = Poly(0, variable, domain="QQ")
+    for power, coefficient in zip(powers, coordinates, strict=True):
+        if coefficient:
+            result += power * coefficient.numerator / coefficient.denominator
+            result %= modulus
+    result %= modulus
+    reduced = tuple(_fraction(result.nth(i)) for i in range(target_degree))
+    return RationalCyclotomicElement(
+        field=inclusion.target,
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(value) for value in reduced
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

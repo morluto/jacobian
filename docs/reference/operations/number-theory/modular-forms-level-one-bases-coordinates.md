@@ -22,23 +22,34 @@ not only a finite q-prefix.
 `modular_form.equal.check` admits both coordinate values against their shared
 canonical basis and compares their exact rational tuples. Since a
 `ModularFormCoordinates` value represents a complete form in a deterministic
-basis, this decides global equality without relying on a finite q-prefix. The
-operation requires the same exact space; cross-level or cross-character
-comparisons need an explicit transport into a common space. An unconsumed,
-unvalidated coordinate payload does not by itself establish membership in that
-space. For q-prefixes,
+basis, this decides global equality within one exact rational space without
+relying on a finite q-prefix. For equal-weight rational trivial-character
+forms in different spaces, the operation takes a common-space path: both forms
+embed into `M_k(Gamma0(lcm(N_1,N_2)))`, and their exact q-expansions through
+that space's Sturm bound are compared; Sturm's theorem decides global equality
+there, and cusp forms embed in the ambient holomorphic space. Cross-character
+or differing-weight comparisons still need an explicit transport into a common
+space. An unconsumed, unvalidated coordinate payload does not by itself
+establish membership in that space. For q-prefixes,
 `modular_form.space.sturm_bound.compute` returns the exact Sturm integer; the
 caller can compare coefficients through that bound after establishing that
 both prefixes come from forms in the declared space. The Sturm bound is `B`,
 so a determining q-prefix contains `B + 1` coefficients, from index zero
 through index `B`.
-Prefix comparison is a separate caller-level use of Sturm's theorem, not the
-implementation of `modular_form.equal.check`.
+Inside one exact rational space the operation compares canonical
+coordinates, not a finite prefix; prefix comparison remains a separate
+caller-level use of Sturm's theorem, and the common-space path above is the
+operation's own use of it.
 
 These rational basis and coordinate operations support level one, holomorphic
 trivial-character spaces at Gamma0(2) and Gamma0(3), even-weight
 trivial-character spaces at Gamma0(4), and the represented
 `M_1`/`M_3(Gamma0(4), chi_{-4})` spaces, all with rational coefficients.
+Beyond those formula families, the bounded PARI Sturm-RREF path in
+[Rational Gamma0 modular-form bases](modular-forms-gamma0-rational-bases.md)
+supports rational trivial-character `M_k(Gamma0(N))` and `S_k(Gamma0(N))`
+spaces through level 10,000 whenever the weight, dimension, Sturm precision,
+aggregate work, and output bounds declared by that path admit the request.
 Other levels, cusp subspaces above level one, and other nontrivial characters
 remain unsupported in the rational basis and coordinate paths.
 
@@ -46,6 +57,8 @@ remain unsupported in the rational basis and coordinate paths.
 the canonical `RationalCyclotomicField` power-basis value. A narrow
 field-valued character basis slice supports even characters of conductor 13
 and order dividing six at levels 13, 26, and 39, in both `M_2` and `S_2`, over
+field-valued character basis slice supports even order-6 characters of
+conductor 13 at levels 13, 26, and 39, in both `M_2` and `S_2`, over
 `Q(zeta_6)`. `modular_form.character_basis.compute` returns the complete
 q-Sturm RREF basis at precisions 3, 8, and 10 for those levels.
 `S_2(Gamma0(13), chi)` remains one-dimensional and retains its previous
@@ -58,6 +71,13 @@ returns its exact field-valued Sturm prefix. The operation
 basis identifiers are identical, using the common q^0..q^2 prefix.
 For this space the index is 14 and the weight-2 Sturm bound is 2, so that
 prefix decides global equality. `modular_form.character_coordinates.hecke.apply`
+`ModularFormCoordinates` represents one exact scalar multiple of that
+basis element; `modular_form.character_coordinates.q_expansion.compute`
+returns its exact field-valued Sturm prefix. For this space the index is 14
+and the weight-2 Sturm bound is 2, so the
+returned q^0..q^2 prefix is the determining finite projection. Callers perform
+coefficient comparisons on returned values themselves.
+`modular_form.character_coordinates.hecke.apply`
 supports `T_n` for `1 <= n <= 32` with `gcd(n,13)=1`; it extends the private
 PARI basis prefix through `q^(2n)`, applies the exact character-valued Hecke
 coefficient formula, and reconstructs the image in the same exact coordinate

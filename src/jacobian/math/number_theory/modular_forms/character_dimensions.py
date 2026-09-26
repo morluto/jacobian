@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from math import gcd
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -21,11 +22,14 @@ from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.cyclotomic import _reduce
 
 
-def _element(field: RationalCyclotomicField, coordinates: tuple[Fraction, ...]):
+def _element(
+    field: RationalCyclotomicField, coordinates: tuple[Fraction, ...]
+) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=tuple(
-            {"num": item.numerator, "den": item.denominator} for item in coordinates
+            CanonicalRational(num=item.numerator, den=item.denominator)
+            for item in coordinates
         ),
     )
 
@@ -36,6 +40,8 @@ def _root_in_field(
     embedded_exponent = Fraction(value.exponent * field.order, value.order)
     if embedded_exponent.denominator != 1:
         raise ValueError("character root is outside the declared coefficient field")
+    # Map ζ_value.order to ζ_field.order ** embedded_exponent, then reduce
+    # in the declared field rather than relabelling the source power.
     exponent = embedded_exponent.numerator
     power = [Fraction(0)] * (exponent + 1)
     power[exponent] = Fraction(1)

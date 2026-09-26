@@ -103,6 +103,19 @@ class ModularFormCoordinatesProductRequest(StrictModel):
     right: ModularFormCoordinates
 
 
+class ModularFormEqualityRequest(StrictModel):
+    """Compare two complete exact coordinate representations."""
+
+    left: ModularFormCoordinates
+    right: ModularFormCoordinates
+
+
+class ModularFormEqualityResult(StrictModel):
+    """Exact equality outcome for two modular-form values."""
+
+    equal: StrictBool
+
+
 class ModularFormCoordinatesFieldExtensionRequest(StrictModel):
     """Extend one rational coordinate value to an explicit cyclotomic parent."""
 
@@ -115,19 +128,6 @@ class ModularFormCoordinatesTransportRequest(StrictModel):
 
     form: ModularFormCoordinates
     target_space: ModularFormSpace
-
-
-class ModularFormEqualityRequest(StrictModel):
-    """Compare coordinate-defined forms through a common Sturm bound."""
-
-    left: ModularFormCoordinates
-    right: ModularFormCoordinates
-
-
-class ModularFormEqualityResult(StrictModel):
-    """Exact equality of two globally represented modular forms."""
-
-    equal: StrictBool
 
 
 class ModularFormCoordinatesHeckeRequest(StrictModel):
@@ -339,6 +339,8 @@ __all__ = [
     "ModularFormBasisRequest",
     "ModularFormCoordinatesHeckeRequest",
     "ModularFormCoordinatesQExpansionRequest",
+    "ModularFormEqualityRequest",
+    "ModularFormEqualityResult",
     "ModularFormCoordinatesU2Request",
     "ModularFormCoordinatesUPrimeRequest",
     "ModularFormCoordinatesV2Request",

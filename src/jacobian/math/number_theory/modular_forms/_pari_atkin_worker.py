@@ -117,27 +117,41 @@ def _action_matrix(request: dict[str, object]) -> list[list[Fraction]]:
     import cypari
 
     pari = cypari.pari
-    level = int(request["level"])
-    weight = int(request["weight"])
-    kind = request["kind"]
-    divisor = int(request["divisor"])
-    basis_vectors = request["basis_vectors"]
+    level = _int(request["level"], minimum=1, maximum=_MAX_LEVEL)
+    weight = _int(request["weight"], minimum=0, maximum=_MAX_WEIGHT)
+    kind_value = request["kind"]
+    if kind_value not in ("M", "S"):
+        raise ValueError("Atkin-Lehner worker kind must be M or S")
+    divisor = _int(request["divisor"], minimum=1, maximum=level)
+    raw_basis_vectors = request["basis_vectors"]
+    if type(raw_basis_vectors) is not list:
+        raise ValueError("Atkin-Lehner basis has an invalid dimension")
+    basis_vectors: list[list[Fraction]] = []
+    for raw_vector in raw_basis_vectors:
+        if type(raw_vector) is not list:
+            raise ValueError("Atkin-Lehner basis vector has an invalid shape")
+        parsed_row: list[Fraction] = []
+        for value in raw_vector:
+            if type(value) is not Fraction:
+                raise ValueError("Atkin-Lehner basis vector has an invalid entry")
+            parsed_row.append(value)
+        basis_vectors.append(parsed_row)
     dimension = len(basis_vectors)
     if dimension == 0:
         return []
-    mf = pari.mfinit([level, weight], 4 if kind == "M" else 1)
+    mf = pari.mfinit([level, weight], 4 if kind_value == "M" else 1)
     if int(pari.mfdim(mf)) != dimension:
         raise RuntimeError("PARI dimension disagrees with the admitted space")
 
     # T columns are PARI's coordinates of Jacobian's canonical basis vectors.
     change = [[Fraction(0) for _ in range(dimension)] for _ in range(dimension)]
-    for column, raw_vector in enumerate(basis_vectors):
-        prefix = [pari(value.numerator) / value.denominator for value in raw_vector]
+    for column, basis_row in enumerate(basis_vectors):
+        prefix = [pari(value.numerator) / value.denominator for value in basis_row]
         backend_coordinates = pari.mftobasis(mf, prefix)
         if len(backend_coordinates) != dimension:
             raise RuntimeError("PARI did not recover unique basis coordinates")
-        for row, value in enumerate(backend_coordinates):
-            change[row][column] = _fraction(value)
+        for row_index, coordinate_value in enumerate(backend_coordinates):
+            change[row_index][column] = _fraction(coordinate_value)
     _check_matrix(change, _MATRIX_DIGITS)
 
     atkin = pari.mfatkininit(mf, divisor)

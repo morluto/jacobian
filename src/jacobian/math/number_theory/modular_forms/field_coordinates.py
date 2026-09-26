@@ -18,13 +18,15 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.basis import (
     MAX_COORDINATE_RESULT_DIGITS,
-    MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES,
+    MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES,
     MAX_LEVEL_ONE_BASIS_WORK,
-    PARI_STURM_RREF_BASIS_ID,
     _admit_basis,
     _admit_coordinates,
     _basis_coefficients,
     _materialize_pari_basis,
+)
+from jacobian.math.number_theory.modular_forms.pari_backend import (
+    PARI_STURM_RREF_BASIS_ID,
 )
 from jacobian.math.number_theory.modular_forms.transforms import sturm_bound
 from jacobian.math.number_theory.modular_forms.values import (
@@ -151,7 +153,13 @@ def modular_form_field_coordinates_q_expansion(
             ),
         )
     rational_space = _rational_space(form.space)
-    plan = _admit_basis(rational_space, precision, materialize_pari=False)
+    # Field coordinates identify one global form, so a prefix shorter than
+    # the Sturm-determining bound is evaluated from the internal determining
+    # basis and truncated to the requested order.
+    plan = _admit_basis(
+        rational_space, precision, materialize_pari=False, at_least_sturm=True
+    )
+    field = form.space.coefficient_domain
     if (
         form.basis_id != plan.basis_id
         or type(form.coordinates) is not tuple
@@ -162,24 +170,36 @@ def modular_form_field_coordinates_q_expansion(
             code="modular_form.field_coordinates_basis_parent",
             message="field coordinate basis and shape must match the exact rational space basis",
         )
+    if type(field) is not RationalCyclotomicField or field != _FIELD:
+        raise OperationDomainValidationError(
+            location=("form", "space"),
+            code="modular_form.field_coordinates_field_parent",
+            message="field-valued q-expansion requires a cyclotomic coefficient field parent",
+        )
+    coordinates: list[RationalCyclotomicElement] = []
+    for value in form.coordinates:
+        if not isinstance(value, RationalCyclotomicElement) or value.field != field:
+            raise OperationDomainValidationError(
+                location=("form", "coordinates"),
+                code="modular_form.field_coordinates_scalar_parent",
+                message="every field coordinate must belong to the exact space coefficient field",
+            )
+        coordinates.append(value)
     coordinate_digits = max(
-        (cyclotomic._validate_element(value)[2] for value in form.coordinates),
-        default=1,
+        (cyclotomic._validate_element(value)[2] for value in coordinates), default=1
     )
     result_digits = (
         max(1, plan.dimension) * (coordinate_digits + plan.coefficient_digits)
         + len(str(max(1, plan.dimension)))
         + 2
     )
-    work = precision * max(1, plan.dimension) * form.space.coefficient_domain.degree**2
-    output_bytes = (
-        precision * form.space.coefficient_domain.degree * (2 * result_digits + 32)
-    )
+    work = precision * max(1, plan.dimension) * field.degree**2
+    allocation_bytes = precision * field.degree * (2 * result_digits + 32)
     if (
         result_digits
         > min(MAX_COORDINATE_RESULT_DIGITS, MAX_CYCLIC_FIELD_ELEMENT_DIGITS)
         or work > MAX_LEVEL_ONE_BASIS_WORK
-        or output_bytes > MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES
+        or allocation_bytes > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -189,13 +209,12 @@ def modular_form_field_coordinates_q_expansion(
     if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
         plan = _materialize_pari_basis(plan)
     basis = _basis_coefficients(plan)
-    field = form.space.coefficient_domain
     zero = _embed_rational(field, 0)
     coefficients = []
     for index in range(precision):
         request_checkpoint("during field-valued modular-form q-expansion")
         value = zero
-        for coordinate, vector in zip(form.coordinates, basis, strict=True):
+        for coordinate, vector in zip(coordinates, basis, strict=True):
             rational = vector[index]
             embedded = _embed_rational(field, rational)
             value = cyclotomic.add(value, cyclotomic.multiply(coordinate, embedded))
@@ -209,48 +228,56 @@ def modular_form_field_coordinates_q_expansion(
 def modular_form_field_coordinates_equal(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> bool:
-    """Compare exact field coordinates in one admitted trivial-character basis."""
-    if not isinstance(left, ModularFormCoordinates) or not isinstance(
-        right, ModularFormCoordinates
-    ):
+    """Compare exact cyclotomic coordinate vectors in the same field basis."""
+    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
         raise OperationDomainValidationError(
             location=(),
-            code="modular_form.coordinates_type",
-            message="both operands must be exact modular-form coordinate values",
+            code="modular_form.field_coordinates_type",
+            message="equality requires two canonical modular-form coordinate values",
         )
     if left.space != right.space or left.basis_id != right.basis_id:
         raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.field_equality_parent",
-            message="field coordinate equality requires the identical space and basis",
+            location=("right",),
+            code="modular_form.field_coordinates_equality_parent",
+            message="field-coordinate equality requires the identical space and basis",
         )
     rational_space = _rational_space(left.space)
-    plan = _admit_basis(rational_space, 1, materialize_pari=False)
+    plan = _admit_basis(
+        rational_space,
+        sturm_bound(rational_space).bound + 1,
+        materialize_pari=False,
+    )
+    field = left.space.coefficient_domain
     if (
-        left.basis_id != plan.basis_id
-        or type(left.coordinates) is not tuple
-        or type(right.coordinates) is not tuple
+        type(field) is not RationalCyclotomicField
+        or field != _FIELD
+        or left.basis_id != plan.basis_id
         or len(left.coordinates) != plan.dimension
         or len(right.coordinates) != plan.dimension
     ):
         raise OperationDomainValidationError(
-            location=("left", "basis_id"),
-            code="modular_form.field_equality_basis",
-            message="field coordinate basis and shape must match the admitted space basis",
+            location=("left",),
+            code="modular_form.field_coordinates_equality_shape",
+            message="field coordinate axes must match the admitted cyclotomic basis",
         )
-    field = left.space.coefficient_domain
-    values = (*left.coordinates, *right.coordinates)
-    if any(
-        not isinstance(value, RationalCyclotomicElement) or value.field != field
-        for value in values
-    ):
-        raise OperationDomainValidationError(
-            location=("left", "coordinates"),
-            code="modular_form.field_equality_scalar",
-            message="every field coordinate must belong to the exact space coefficient field",
+    digits = 1
+    for side, form in (("left", left), ("right", right)):
+        for index, value in enumerate(form.coordinates):
+            if type(value) is not RationalCyclotomicElement or value.field != field:
+                raise OperationDomainValidationError(
+                    location=(side, "coordinates", index),
+                    code="modular_form.field_coordinates_scalar_parent",
+                    message="every coordinate must use the exact declared field",
+                )
+            digits = max(digits, cyclotomic._validate_element(value)[2])
+    work = 2 * max(1, plan.dimension) * field.degree * MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+    allocation = 2 * plan.dimension * field.degree * (2 * digits + 32)
+    if work > MAX_LEVEL_ONE_BASIS_WORK or allocation > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.field_coordinates_equality_bound",
+            message="field-coordinate comparison exceeds its exact work or output envelope",
         )
-    for value in values:
-        cyclotomic._validate_element(value)
     return left.coordinates == right.coordinates
 
 

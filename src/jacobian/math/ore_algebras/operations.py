@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
-from math import comb
+from math import comb, lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
@@ -577,7 +577,10 @@ def _rf_product_coefficient_digits(
 
 
 def _derivative_rf_bound(
-    bound: tuple[int, int, int], order: int
+    bound: tuple[int, int, int],
+    order: int,
+    *,
+    source: RationalFunction | None = None,
 ) -> tuple[int, int, int]:
     """Bound every rational-function carrier reached by ``D**order``."""
     numerator_degree, denominator_degree, digits = bound
@@ -585,6 +588,40 @@ def _derivative_rf_bound(
         return -1, 0, digits
     # N'/Q - N Q'/Q**2 raises the denominator degree by Q's degree and
     # the numerator degree by at most deg(Q)-1 on each step.
+    coefficient_digits = digits
+    if order and source is not None:
+        numerator, denominator = _decode_rf(source)
+
+        def denominator_profile(poly: _Poly) -> tuple[int, int]:
+            common = lcm(*(coefficient.denominator for coefficient in poly.values()))
+            return _bounded_integer_digits(common), max(
+                (_bounded_integer_digits(abs(value.numerator)) for value in poly.values()),
+                default=1,
+            )
+
+        numerator_denominator_digits, numerator_digits = denominator_profile(numerator)
+        denominator_denominator_digits, denominator_digits = denominator_profile(denominator)
+        collision_digits = _bounded_integer_digits(min(len(numerator), len(denominator)))
+        common_product_denominator = (
+            numerator_denominator_digits + denominator_denominator_digits
+        )
+        differentiated_numerator = (
+            common_product_denominator
+            + numerator_digits
+            + denominator_digits
+            + _bounded_integer_digits(max(1, numerator_degree, denominator_degree))
+            + collision_digits
+            + 2
+        )
+        squared_denominator = (
+            2 * denominator_denominator_digits
+            + 2 * denominator_digits
+            + collision_digits
+            + 2
+        )
+        coefficient_digits = max(differentiated_numerator, squared_denominator)
+        for _ in range(1, order):
+            coefficient_digits = (coefficient_digits + 4) * 2
     growth_steps = 1 << order
     return (
         numerator_degree + order * max(denominator_degree - 1, 0),
@@ -592,8 +629,15 @@ def _derivative_rf_bound(
         # Fraction additions can multiply the active denominator at every
         # derivative stage.  Exponential accounting is conservative but keeps
         # the admission independent of the eventual cancellation pattern.
-        (digits + 4) * growth_steps,
+        coefficient_digits if source is not None else (digits + 4) * growth_steps,
     )
+
+
+def _bounded_integer_digits(value: int) -> int:
+    """Cheap upper bound for decimal digits without converting a large int."""
+    if abs(value) <= 1:
+        return 1
+    return (abs(value).bit_length() * 30_103 + 99_999) // 100_000
 
 
 def _admit_differential_result_bounds(
@@ -768,7 +812,9 @@ def differential_operator_apply(
             (
                 0,
                 _rf_bound(term.coefficient),
-                _derivative_rf_bound(function_bound, term.order),
+                _derivative_rf_bound(
+                    function_bound, term.order, source=function_value
+                ),
                 0,
             )
             for term in operator_value.terms
@@ -803,14 +849,19 @@ def differential_operator_multiply(
             message="differential product order exceeds the admitted envelope",
         )
     right_bounds = {
-        term.order: _rf_bound(term.coefficient) for term in right_value.terms
+        id(term): (term.coefficient, _rf_bound(term.coefficient))
+        for term in right_value.terms
     }
     planned = [
         (
             first,
             second,
             k,
-            _derivative_rf_bound(right_bounds[second.order], k),
+            _derivative_rf_bound(
+                right_bounds[id(second)][1],
+                k,
+                source=right_bounds[id(second)][0],
+            ),
         )
         for first in left_value.terms
         for second in right_value.terms

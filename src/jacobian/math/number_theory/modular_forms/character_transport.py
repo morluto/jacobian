@@ -6,15 +6,22 @@ from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd, lcm
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.matrices.cyclic_linear import (
+    apply_cyclotomic_field_inclusion,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     RationalCyclotomicElement,
     RationalCyclotomicField,
+)
+from jacobian.math.matrices.cyclic_linear.operations import (
+    CyclicRankKernelAdmissionError,
 )
 from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_value,
@@ -25,6 +32,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     _TRANSPORT_STURM_BASIS_ENVELOPE,
     CHARACTER_BASIS_ID,
     _character_basis_from_admission,
+    _character_root_of_unity,
     _character_sturm_precision,
     _domain,
     _require_basis_space,
@@ -57,6 +65,7 @@ class _AdmittedTransport:
     target_dimension: int
     precision: int
     field: RationalCyclotomicField
+    target_field: RationalCyclotomicField
     source_character_dimensions: tuple[int, int]
     target_character_dimensions: tuple[int, int]
 
@@ -113,18 +122,19 @@ def _require_inflation_map(
         or target.kind != "S"
         or type(fields.source) is not RationalCyclotomicField
         or type(fields.target) is not RationalCyclotomicField
-        or fields.source != fields.target
         or fields.source != source.coefficient_domain
         or fields.target != target.coefficient_domain
         or fields.source.order != 6
         or fields.source.generator != "CLASS_OF_X"
+        or fields.target.order not in (6, 12)
+        or fields.target.generator != "CLASS_OF_X"
         or type(inclusion.character_map.source) is not DirichletCharacter
         or type(inclusion.character_map.target) is not DirichletCharacter
         or inclusion.character_map.source != source.character
         or inclusion.character_map.target != target.character
     ):
         _domain(
-            "character transport supports explicit S2 inclusions from levels 13, 26, or 39 into levels 13, 26, 39, or 78 over the identical Q(zeta_6) parent"
+            "character transport supports S2 inclusions over Q(zeta_6) or its standard extension to Q(zeta_12)"
         )
     source_char = inclusion.character_map.source
     target_char = inclusion.character_map.target
@@ -135,18 +145,65 @@ def _require_inflation_map(
         _domain(
             "character inflation moduli must bind their exact source and target levels"
         )
-    # Prove the authored map is pullback along residue reduction, on every
-    # target unit. This is bounded by the admitted target level (at most 78).
+    # Validate the authored field map through its canonical owner operation.
+    source_generator = RationalCyclotomicElement(
+        field=fields.source,
+        coefficients_ascending=(
+            CanonicalRational.from_fraction(Fraction(0)),
+            CanonicalRational.from_fraction(Fraction(1)),
+        ),
+    )
+    try:
+        apply_cyclotomic_field_inclusion(fields, source_generator)
+    except CyclicRankKernelAdmissionError as error:
+        raise OperationDomainValidationError(
+            location=("inclusion", "coefficient_field_map"),
+            code="modular_form.character_field_map_invalid",
+            message="the coefficient field map is not the canonical standard inclusion",
+        ) from error
+    # Prove the authored character map is pullback along residue reduction on
+    # every target unit, and that its coefficient values commute with the
+    # standard field inclusion. The target level is at most 78 and each
+    # character has at most six distinct values in this admitted family.
+    checked_character_values: dict[int, int] = {}
     for residue in range(target.level):
         if gcd(residue, target.level) != 1:
             continue
         source_value = dirichlet_character_value(source_char, residue).value
         target_value = dirichlet_character_value(target_char, residue).value
+        if source_value is None or target_value is None:
+            raise OperationDomainValidationError(
+                location=("inclusion", "character_map"),
+                code="modular_form.character_inflation_value_missing",
+                message="unit residues must have exact character values",
+            )
         if source_value != target_value:
             raise OperationDomainValidationError(
                 location=("inclusion", "character_map"),
                 code="modular_form.character_inflation_mismatch",
                 message="target character is not the explicit inflation of the source character",
+            )
+        checked_character_values.setdefault(source_value.exponent, residue)
+    for residue in checked_character_values.values():
+        source_coefficient = _character_root_of_unity(
+            source_char, residue, fields.source
+        )
+        target_coefficient = _character_root_of_unity(
+            target_char, residue, fields.target
+        )
+        try:
+            mapped_value = apply_cyclotomic_field_inclusion(fields, source_coefficient)
+        except CyclicRankKernelAdmissionError as error:
+            raise OperationDomainValidationError(
+                location=("inclusion", "coefficient_field_map"),
+                code="modular_form.character_field_map_invalid",
+                message="the coefficient field map is not the canonical standard inclusion",
+            ) from error
+        if mapped_value != target_coefficient:
+            raise OperationDomainValidationError(
+                location=("inclusion", "coefficient_field_map"),
+                code="modular_form.character_field_map_mismatch",
+                message="the standard coefficient-field map does not preserve the inflated character values",
             )
     return inclusion
 
@@ -176,8 +233,11 @@ def _admit_transport(
         _domain("source form parent must equal the explicit inclusion source")
     source_space = inclusion.source_space
     field = inclusion.coefficient_field_map.source
+    target_field = inclusion.coefficient_field_map.target
+    source_character = inclusion.character_map.source
+    target_character = inclusion.character_map.target
     source_cusp, _ = character_space_dimensions(
-        source_space.level, source_space.weight, source_space.character, field
+        source_space.level, source_space.weight, source_character, field
     )
     target_cusp = (
         0
@@ -185,7 +245,7 @@ def _admit_transport(
         else character_space_dimensions(
             inclusion.target_space.level,
             inclusion.target_space.weight,
-            inclusion.target_space.character,
+            target_character,
             field,
         )[0]
     )
@@ -257,13 +317,18 @@ def _admit_transport(
     target_coordinate_digits = (
         coordinate_digits if same_space else source_expansion_digits
     )
+    mapped_source_expansion_digits = (
+        source_expansion_digits
+        if field == target_field
+        else field.degree * source_expansion_digits
+    )
     target_expansion_digits = (
         source_expansion_digits
         if same_space
-        else source_expansion_digits
-        if inclusion.target_space.level in (13, 78)
+        else mapped_source_expansion_digits
+        if field != target_field or inclusion.target_space.level in (13, 78)
         else _linear_combination_digit_bound(
-            source_expansion_digits, target_cusp, target_basis_digits
+            mapped_source_expansion_digits, target_cusp, target_basis_digits
         )
     )
     if (
@@ -275,10 +340,18 @@ def _admit_transport(
             code="modular_form.character_transport_height_admission",
             message="character transport expansion or target solve exceeds the exact coefficient-height bound",
         )
-    work = target_precision * (source_cusp + target_cusp**2 + source_cusp * target_cusp)
-    output_bytes = target_precision * field.degree * (
+    field_map_work = (
+        (target_precision + len(target_character.group.unit_residues) + 7)
+        * field.degree
+        * target_field.degree**2
+    )
+    work = (
+        target_precision * (source_cusp + target_cusp**2 + source_cusp * target_cusp)
+        + field_map_work
+    )
+    output_bytes = target_precision * target_field.degree * (
         2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32
-    ) + target_cusp * field.degree * (2 * target_coordinate_digits + 32)
+    ) + target_cusp * target_field.degree * (2 * target_coordinate_digits + 32)
     if work > _MAX_TRANSPORT_WORK or output_bytes > _MAX_TRANSPORT_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -292,6 +365,7 @@ def _admit_transport(
         target_dimension=target_cusp,
         precision=target_precision,
         field=field,
+        target_field=target_field,
         source_character_dimensions=(source_cusp, source_cusp),
         target_character_dimensions=(target_cusp, target_cusp),
     )
@@ -376,14 +450,26 @@ def _transport_from_bases(
     source_prefix = _expand_coordinates(admitted.form, source_basis, admitted.field)
     if len(source_prefix) != admitted.precision:
         _domain("source basis must extend through the target Sturm precision")
-    if admitted.inclusion.target_space.level in (13, 78):
+    coefficient_map = admitted.inclusion.coefficient_field_map
+    target_prefix = (
+        source_prefix
+        if admitted.field == admitted.target_field
+        else tuple(
+            apply_cyclotomic_field_inclusion(coefficient_map, coefficient)
+            for coefficient in source_prefix
+        )
+    )
+    if (
+        admitted.inclusion.target_space.level in (13, 78)
+        or admitted.field != admitted.target_field
+    ):
         target_form = None
         target_expansion: (
             ModularCharacterQExpansion | ModularCharacterCommonTargetPrefix
         ) = ModularCharacterCommonTargetPrefix(
             space=admitted.inclusion.target_space,
             precision=admitted.precision,
-            coefficients=source_prefix,
+            coefficients=target_prefix,
         )
     elif admitted.inclusion.source_space == admitted.inclusion.target_space:
         if type(admitted.form) is ModularCharacterCoordinates:
@@ -393,14 +479,14 @@ def _transport_from_bases(
         target_expansion = ModularCharacterQExpansion(
             space=admitted.inclusion.target_space,
             basis_id=target_basis.basis_id,
-            coefficients=source_prefix,
+            coefficients=target_prefix,
         )
     else:
-        target_form = _coordinates_from_prefix(source_prefix, target_basis)
+        target_form = _coordinates_from_prefix(target_prefix, target_basis)
         target_expansion = ModularCharacterQExpansion(
             space=admitted.inclusion.target_space,
             basis_id=target_basis.basis_id,
-            coefficients=source_prefix,
+            coefficients=target_prefix,
         )
     return ModularCharacterTransportedForm(
         source_form=admitted.form,
@@ -426,6 +512,7 @@ def modular_character_coordinates_transport(
     target_basis = (
         None
         if inclusion.target_space.level in (13, 78)
+        or admitted.field != admitted.target_field
         else source_basis
         if inclusion.target_space == inclusion.source_space
         else _basis(
@@ -457,6 +544,22 @@ def _revalidate_transport(
     return value, _admit_transport(value.source_form, value.inclusion)
 
 
+def _transport_equality_work(admitted: _AdmittedTransport) -> int:
+    """Bound one retransport and target-field coefficient map in equality."""
+    target_character = admitted.inclusion.character_map.target
+    coefficient_map_work = (
+        (admitted.precision + len(target_character.group.unit_residues) + 7)
+        * admitted.field.degree
+        * admitted.target_field.degree**2
+    )
+    comparison_work = admitted.precision * (
+        admitted.source_dimension * admitted.field.degree**2
+        + admitted.target_dimension**2 * admitted.target_field.degree
+        + admitted.source_dimension * admitted.target_dimension
+    )
+    return coefficient_map_work + comparison_work
+
+
 def modular_character_coordinates_equal_in_common_space(
     left: ModularCharacterTransportedForm,
     right: ModularCharacterTransportedForm,
@@ -481,25 +584,19 @@ def modular_character_coordinates_equal_in_common_space(
             code="modular_form.character_equality_target_not_lcm",
             message="the common target level must be the least common multiple of source levels",
         )
-    if left_admitted.field != right_admitted.field:
+    if left_admitted.target_field != right_admitted.target_field:
         _domain(
-            "common-target character equality requires the identical coefficient field"
+            "common-target character equality requires the identical target coefficient field"
         )
-    combined_work = sum(
-        admitted.precision
-        * (
-            admitted.source_dimension * admitted.field.degree**2
-            + admitted.target_dimension**2
-            + admitted.source_dimension * admitted.target_dimension
-        )
-        for admitted in (left_admitted, right_admitted)
+    combined_work = _transport_equality_work(left_admitted) + _transport_equality_work(
+        right_admitted
     )
     combined_output_bytes = sum(
         admitted.precision
-        * admitted.field.degree
+        * admitted.target_field.degree
         * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
         + admitted.target_dimension
-        * admitted.field.degree
+        * admitted.target_field.degree
         * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
         for admitted in (left_admitted, right_admitted)
     )
@@ -516,7 +613,7 @@ def modular_character_coordinates_equal_in_common_space(
     request_checkpoint("before common character target basis materialization")
     target_basis = (
         None
-        if target.level in (13, 78)
+        if target.level in (13, 78) or left_admitted.field != left_admitted.target_field
         else _basis(
             target,
             left_admitted.precision,

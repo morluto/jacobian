@@ -6,12 +6,12 @@ import json
 
 from pydantic import ValidationError
 
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_GROUND_AXIS_CODEPOINTS,
     MAX_GROUND_SIZE,
     GraphicMatroidRequest,
     LinearMatroid,
@@ -21,12 +21,6 @@ from jacobian.math.graphs.values import (
     SimpleUndirectedGraph,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
-
-MAX_GRAPHIC_MATROID_RESULT_BYTES = CanonicalLimits().max_output_bytes
-"""Canonical JSON egress limit used by the incidence expansion preflight."""
-
-MAX_GRAPHIC_MATROID_LABEL_BYTES = 2_048
-"""Conservative wire allowance for one JSON-encoded endpoint pair label."""
 
 
 def _reject(location: tuple[str, ...], code: str, message: str) -> None:
@@ -69,18 +63,21 @@ def graphic_matroid(request: GraphicMatroidRequest) -> LinearMatroid:
 
     vertices = tuple(sorted(source.vertices))
     edges = tuple(sorted(source.edges))
-    rows = len(vertices)
     columns = len(edges)
-    cells = rows * columns
-    estimated_output_bytes = (
-        cells * 2 + rows * 4 + columns * MAX_GRAPHIC_MATROID_LABEL_BYTES + 4_096
+    # The incidence entries are GF(2) residues and the ground axis is a JSON
+    # pair of endpoint labels, so the retained result grows only with the two
+    # cardinality bounds admitted above plus the endpoint label text each
+    # pair repeats. Charge that text in Unicode codepoints, not encoded bytes.
+    retained_axis_codepoints = sum(
+        len(json.dumps(edge, ensure_ascii=False, separators=(",", ":")))
+        for edge in edges
     )
-    if estimated_output_bytes > MAX_GRAPHIC_MATROID_RESULT_BYTES:
+    if retained_axis_codepoints > MAX_GROUND_AXIS_CODEPOINTS:
         _refuse(
             ("graph",),
-            "matroid.graphic.result_bytes",
-            f"conservative result bound {estimated_output_bytes} exceeds "
-            f"{MAX_GRAPHIC_MATROID_RESULT_BYTES} bytes",
+            "matroid.graphic.retained_axis_bound",
+            f"retained ground axis exceeds the {MAX_GROUND_AXIS_CODEPOINTS}"
+            "-codepoint allocation bound",
         )
 
     # JSON array encoding is injective on endpoint pairs and independent of
@@ -102,6 +99,5 @@ def graphic_matroid(request: GraphicMatroidRequest) -> LinearMatroid:
 
 
 __all__ = [
-    "MAX_GRAPHIC_MATROID_RESULT_BYTES",
     "graphic_matroid",
 ]

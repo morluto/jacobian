@@ -141,6 +141,10 @@ def _run_direct_sum(
         raise OperationResourceAdmissionError(
             location=("left",), code=f"delta_matroid.{exc.reason}", message=str(exc)
         ) from exc
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        raise
     except (TypeError, ValueError, IndexError) as exc:
         raise _extra_domain(("left",), "delta_matroid.source_not_valid", exc) from exc
 
@@ -201,7 +205,8 @@ TOOLS: MathTools = (  # noqa: RUF005
             "Combine delta-matroids on disjoint labelled ground sets. Feasible "
             "sets are all pairwise unions, on the concatenated ground axis; the "
             "result includes both source index injections. Ground, pair-work, "
-            "exchange, memberships, and output-size bounds are checked first."
+            "and membership cardinality bounds are checked first; symmetric "
+            "exchange of the product follows from the direct-sum theorem."
         ),
         request_type=DeltaMatroidDirectSumRequest,
         result_type=DeltaMatroidDirectSumResult,

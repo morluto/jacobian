@@ -7,7 +7,8 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids._models import (
-    MAX_GROUND_SIZE,
+    MAX_GROUND_AXIS_CODEPOINTS,
+    MAX_INDEPENDENT_SET_OUTPUT_UNITS,
     MAX_WEIGHT_DIGITS,
     ExchangeLedgerRow,
     LinearMatroid,
@@ -15,6 +16,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidWeightFunction,
     MaximumWeightBasisResult,
     MaximumWeightIndependentSetResult,
+    ground_axis_codepoints,
     validate_subset_indices,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import (
@@ -29,6 +31,33 @@ MAX_CLOSURE_RANK_WORK = 50_000_000
 
 def _rank_work(rows: int, columns: int) -> int:
     return rows * columns * min(rows, columns)
+
+
+def require_bounded_retained_axis(
+    *matroids: LinearMatroid,
+    location: tuple[str, ...],
+    code: str,
+) -> None:
+    """Bound retained ground-axis label allocation before any rank expansion.
+
+    Matrices, index tuples, residues, and weights are cardinality- and
+    digit-bounded by the canonical operand contracts; label text is the only
+    quantity a well-formed operand carries without a native bound, so result
+    admission charges it in Unicode codepoints rather than transport bytes.
+    """
+
+    if any(
+        ground_axis_codepoints(matroid) > MAX_GROUND_AXIS_CODEPOINTS
+        for matroid in matroids
+    ):
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=code,
+            message=(
+                "retained linear-matroid ground axis exceeds the "
+                f"{MAX_GROUND_AXIS_CODEPOINTS}-codepoint allocation bound"
+            ),
+        )
 
 
 def _require_closure_work(matroid: LinearMatroid, subset_size: int) -> None:
@@ -234,6 +263,11 @@ def maximum_weight_basis_result(
     that the selection is a basis and that no valid single-element exchange
     strictly improves the total weight.
     """
+    require_bounded_retained_axis(
+        matroid,
+        location=("matroid", "weights"),
+        code="matroid.maximum_weight_basis.work_bound",
+    )
     canonical_weights, canonical_function = _admit_weight_basis(
         matroid, weight_function
     )
@@ -329,12 +363,25 @@ def maximum_weight_independent_set_result(
             code="matroid.carrier",
             message="matroid must be a LinearMatroid",
         )
+    try:
+        matroid = LinearMatroid.model_validate(matroid.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("matroid",),
+            code="matroid.carrier",
+            message="matroid carrier is malformed",
+        ) from exc
     if not isinstance(weight_function, MatroidWeightFunction):
         raise OperationDomainValidationError(
             location=("weight_function",),
             code="matroid.weights.carrier",
             message="weight_function must be a canonical MatroidWeightFunction",
         )
+    require_bounded_retained_axis(
+        matroid,
+        location=("matroid", "weights"),
+        code="matroid.maximum_weight_independent_set.work_bound",
+    )
     canonical_weights, canonical_function, work, output_units = (
         _prepare_maximum_weight_independent_set(matroid, weight_function)
     )
@@ -357,12 +404,19 @@ def _prepare_maximum_weight_independent_set(
     rows = len(matroid.matrix.entries)
     n = matroid.ground_size
     work = (sum(weight > 0 for weight in canonical_weights) + 1) * _rank_work(rows, n)
-    output_units = 3 * n + sum(len(str(abs(weight))) for weight in canonical_weights)
+    # The result retains the source matroid axis and the canonicalized weight
+    # function axis, so both ground-axis label allocations are charged before
+    # the rank kernel runs, alongside the index tuples and weight digits.
+    output_units = (
+        3 * n
+        + sum(len(str(abs(weight))) for weight in canonical_weights)
+        + 2 * ground_axis_codepoints(matroid)
+    )
     return canonical_weights, canonical_function, work, output_units
 
 
 def _admit_maximum_weight_independent_set(work: int, output_units: int) -> None:
-    if work > MAX_CLOSURE_RANK_WORK or output_units > 16 * MAX_GROUND_SIZE:
+    if work > MAX_CLOSURE_RANK_WORK or output_units > MAX_INDEPENDENT_SET_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("matroid", "weights"),
             code="matroid.maximum_weight_independent_set.work_bound",

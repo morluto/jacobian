@@ -15,7 +15,6 @@ from jacobian.math.graphs.decks._models import (
     _canonical_card_edges,
 )
 from jacobian.math.graphs.decks.anonymous_equality._models import (
-    AnonymousDeckEqualityRequest,
     AnonymousDeckEqualityResult,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -118,31 +117,22 @@ def _canonical_multiplicities(
 
 
 def anonymous_deck_equality(
-    request: AnonymousDeckEqualityRequest,
+    left: object,
+    right: object,
 ) -> AnonymousDeckEqualityResult:
     """Compare class multiplicities, independent of each card's vertex labels."""
-    if type(request) is not AnonymousDeckEqualityRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.equality_request",
-            message="request must be an AnonymousDeckEqualityRequest",
-        )
-    left_order, left_checked, left_work = _admit_multiset(
-        getattr(request, "left", None), "left"
-    )
-    right_order, right_checked, right_work = _admit_multiset(
-        getattr(request, "right", None), "right"
-    )
+    left_order, left_checked, left_work = _admit_multiset(left, "left")
+    right_order, right_checked, right_work = _admit_multiset(right, "right")
     if left_work + right_work > MAX_ANONYMOUS_DECK_EQUALITY_WORK:
         raise OperationResourceAdmissionError(
-            location=("request",),
+            location=("inputs",),
             code="graph_deck.equality_work_bound",
             message="deck equality exceeds the exact aggregate canonicalization work bound",
         )
-    left = _canonical_multiplicities(left_order, left_checked)
-    right = _canonical_multiplicities(right_order, right_checked)
+    left_counts = _canonical_multiplicities(left_order, left_checked)
+    right_counts = _canonical_multiplicities(right_order, right_checked)
     return AnonymousDeckEqualityResult(
-        equal=left_order == right_order and left == right
+        equal=left_order == right_order and left_counts == right_counts
     )
 
 

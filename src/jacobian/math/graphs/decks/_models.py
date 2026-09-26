@@ -24,10 +24,10 @@ MAX_DECK_CARD_EDGES = 130_000
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
-MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
+MAX_UNLABELLED_EDGE_RESULT_UNITS = 1_000_000
 MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
-MAX_ANONYMOUS_CARD_RESULT_BYTES = 1_000_000
-MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
+MAX_ANONYMOUS_CARD_RESULT_UNITS = 1_000_000
+MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_UNITS // 64
 """Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
@@ -75,7 +75,8 @@ def _canonical_card_edges(
         )
         if best is None or bits < best:
             best = bits
-    assert best is not None
+    if best is None:
+        raise ValueError("permutation orbit must contain at least one ordering")
     labels = tuple(f"v{i:02d}" for i in range(n))
     return tuple(
         (labels[i], labels[j]) for bit, (i, j) in zip(best, pairs, strict=True) if bit
@@ -141,11 +142,11 @@ class AnonymousGraphCardMultiset(StrictModel):
                 "anonymous_card_classes", "classes exceed the carrier bound"
             )
         pair_count = comb(n, 2)
-        output_bytes = len(self.classes) * (64 + 16 * pair_count)
-        if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
+        output_units = len(self.classes) * (64 + 16 * pair_count)
+        if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
             raise _validation_error(
                 "anonymous_card_output_bound",
-                "canonical classes exceed the result byte bound",
+                "canonical classes exceed the admitted result allocation bound",
             )
         previous_key: tuple[tuple[str, str], ...] | None = None
         expected_vertices = tuple(f"v{i:02d}" for i in range(n))

@@ -49,8 +49,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "the coprime result; a shared normalized first-order operator is "
             "the GCRD. Coefficients may be rational constants, represented on "
             "the existing QQ(x) axis. Input rational scalars are limited to "
-            "20 decimal digits. This bounded contract does not claim higher "
-            "order or variable-coefficient GCRDs."
+            "64 decimal digits per rational component, and each exact result "
+            "coefficient must fit the 64-digit differential-operator envelope. "
+            "This bounded contract does not claim higher order or "
+            "variable-coefficient GCRDs."
         ),
         request_type=DifferentialOperatorGCRDRequest,
         result_type=DifferentialOperatorGCRDResult,

@@ -8,7 +8,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.ore_algebras._models import DifferentialOreOperator
+from jacobian.math.ore_algebras._models import (
+    MAX_SHIFT_COEFFICIENT_DIGITS,
+    DifferentialOreOperator,
+)
 from jacobian.math.ore_algebras.differential_gcrd._models import (
     DifferentialOperatorGCRDResult,
 )
@@ -17,15 +20,24 @@ from jacobian.math.ore_algebras.operations import (
     _decode_rf,
     _encode_differential_rf,
 )
-from jacobian.math.polynomials.values import MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
 
 _MAX_ORDER = 1
-_MAX_INPUT_SCALAR_DIGITS = 20
-_MAX_OPERATION_SCALAR_DIGITS = 5 * _MAX_INPUT_SCALAR_DIGITS + 2
 _MAX_WORK_UNITS = 32
 
 
 def _operator(coefficients: dict[int, Fraction]) -> DifferentialOreOperator:
+    if any(
+        _digits(value) > MAX_SHIFT_COEFFICIENT_DIGITS
+        for value in coefficients.values()
+    ):
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="ore_algebra.differential_gcrd_output_digits",
+            message=(
+                "GCRD result coefficients must fit the 64-digit differential "
+                "operator envelope"
+            ),
+        )
     return DifferentialOreOperator.model_validate(
         {
             "variable": "x",
@@ -82,7 +94,6 @@ def _admit_pair(
             message="the differential operator must be canonical over QQ(x)",
         ) from exc
     work = 0
-    maximum_input_digits = 1
     for label, operator in zip(("left", "right"), structural, strict=True):
         if operator.order > _MAX_ORDER:
             raise OperationResourceAdmissionError(
@@ -99,29 +110,14 @@ def _admit_pair(
                     message="this GCRD slice accepts rational constant coefficients only",
                 )
             value = numerator.get(0, Fraction(0)) / denominator[0]
-            maximum_input_digits = max(maximum_input_digits, _digits(value))
             work += 1
 
-    if maximum_input_digits > _MAX_INPUT_SCALAR_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("request",),
-            code="ore_algebra.differential_gcrd_scalar_digits",
-            message="GCRD input rational constants are limited to 20 decimal digits",
-        )
-    if 5 * maximum_input_digits + 2 > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("request",),
-            code="ore_algebra.differential_gcrd_output_digits",
-            message="GCRD output could exceed the exact rational-function scalar carrier",
-        )
     if work > _MAX_WORK_UNITS:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="ore_algebra.differential_gcrd_work",
             message="GCRD inputs exceed the exact coefficient-work envelope",
         )
-    if _MAX_OPERATION_SCALAR_DIGITS > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
-        raise AssertionError("GCRD output envelope exceeds its scalar carrier")
     return (
         _admit_differential_operator(structural[0]),
         _admit_differential_operator(structural[1]),

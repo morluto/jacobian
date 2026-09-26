@@ -175,14 +175,16 @@ def test_nonconstant_or_higher_order_inputs_are_outside_the_slice() -> None:
         differential_operator_gcrd(_operator({2: 1}), _operator({1: 1}))
 
 
-def test_scalar_height_is_admitted_before_gcd_arithmetic() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="20 decimal digits"):
-        differential_operator_gcrd(
-            _operator({1: 1, 0: 10**20}), _operator({1: 1, 0: -1})
-        )
+def test_large_inputs_with_small_exact_outputs_are_accepted() -> None:
+    result = differential_operator_gcrd(
+        _operator({1: 1, 0: 10**20}),
+        _operator({1: 1, 0: 10**20 + 1}),
+    )
+    assert result.divisor == _operator({0: 1})
+    _check_relations(result)
 
 
-def test_twenty_digit_input_boundary_is_accepted_with_bounded_outputs() -> None:
+def test_twenty_digit_inputs_remain_composable_with_bounded_outputs() -> None:
     result = differential_operator_gcrd(
         _operator({1: 1, 0: 10**19}), _operator({1: 1, 0: -(10**19)})
     )
@@ -194,7 +196,7 @@ def test_twenty_digit_input_boundary_is_accepted_with_bounded_outputs() -> None:
             len(str(abs(term.coefficient.numerator.terms[0].coefficient.num))),
             len(str(term.coefficient.numerator.terms[0].coefficient.den)),
         )
-        <= 102
+        <= 64
         for operator in (
             result.divisor,
             result.left_cofactor,

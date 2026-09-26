@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -125,6 +125,16 @@ class DeltaMatroidRelabelRequest(StrictModel):
     def preflight_source_bounds(cls, data: object) -> object:
         if not isinstance(data, Mapping):
             return data
+        target_ground = data.get("target_ground")
+        if (
+            isinstance(target_ground, (list, tuple))
+            and len(target_ground) > MAX_DELTA_RELABEL_GROUND
+        ):
+            raise _error(
+                "ground_limit",
+                f"relabeling supports at most {MAX_DELTA_RELABEL_GROUND} ground elements",
+            )
+
         source = data.get("delta_matroid")
         if not isinstance(source, Mapping):
             return data
@@ -177,8 +187,13 @@ class DeltaMatroidRelabelRequest(StrictModel):
             raise _error("ground_unique", "target ground labels must be unique")
         label_sizes = tuple(_bounded_utf8_length(label) for label in self.target_ground)
         if any(size is None for size in label_sizes):
+            raise _error("ground_utf8", "target labels must be UTF-8 representable")
+        if (
+            sum(size for size in label_sizes if size is not None)
+            > MAX_DELTA_LABEL_BYTES
+        ):
             raise _error(
-                "ground_utf8", "target labels must be UTF-8 representable"
+                "ground_bytes", "target labels exceed the admitted UTF-8 byte bound"
             )
         return self
 
@@ -224,42 +239,12 @@ def _output_cell_count(source: FiniteDeltaMatroid) -> int:
     return 2 * n + 2 * rows + 2 * memberships + 2 * n + 4
 
 
-def _require_target_ground_bytes(target_ground: tuple[str, ...]) -> None:
-    """Reject oversized targets before constructing the typed request."""
-
-    if any(not isinstance(label, str) for label in target_ground):
-        return
-    target_bytes = 0
-    for label in target_ground:
-        size = _bounded_utf8_length(label)
-        if size is None:
-            return
-        target_bytes += size
-        if target_bytes > MAX_DELTA_LABEL_BYTES:
-            raise OperationResourceAdmissionError(
-                location=("target_ground",),
-                code="delta_matroid.relabel_target_bytes",
-                message="target labels exceed the admitted UTF-8 byte bound",
-            )
-
-
 def relabel(
     delta_matroid: FiniteDeltaMatroid,
     target_ground: tuple[str, ...],
     target_to_source: tuple[int, ...],
 ) -> DeltaMatroidRelabelling:
     """Transport a complete feasible family through a ground-axis bijection."""
-
-    if isinstance(target_ground, tuple) and len(target_ground) > MAX_DELTA_RELABEL_GROUND:
-        raise OperationDomainValidationError(
-            location=("target_ground",),
-            code="delta_matroid.relabel_ground_limit",
-            message=(
-                f"relabeling supports at most {MAX_DELTA_RELABEL_GROUND} ground elements"
-            ),
-        )
-    if isinstance(target_ground, tuple):
-        _require_target_ground_bytes(target_ground)
 
     try:
         request = DeltaMatroidRelabelRequest(
@@ -268,6 +253,24 @@ def relabel(
             target_to_source=target_to_source,
         )
     except Exception as exc:
+        if isinstance(exc, ValidationError) and any(
+            error["type"] == "delta_matroid.relabel_ground_limit"
+            for error in exc.errors()
+        ):
+            raise OperationDomainValidationError(
+                location=("target_ground",),
+                code="delta_matroid.relabel_ground_limit",
+                message="target ground exceeds the relabelling limit",
+            ) from exc
+        if isinstance(exc, ValidationError) and any(
+            error["type"] == "delta_matroid.relabel_ground_bytes"
+            for error in exc.errors()
+        ):
+            raise OperationResourceAdmissionError(
+                location=("target_ground",),
+                code="delta_matroid.relabel_target_bytes",
+                message="target labels exceed the admitted UTF-8 byte bound",
+            ) from exc
         raise OperationDomainValidationError(
             location=("request",),
             code="delta_matroid.relabel_request",
@@ -310,16 +313,11 @@ def relabel(
             message=str(exc),
         ) from exc
 
+    # The request validator already admitted the bounded target-label bytes.
+    # Recount only to price the exact transport work, not to classify input.
     target_bytes = sum(
         _bounded_utf8_length(label) or 0 for label in request.target_ground
     )
-    if target_bytes > MAX_DELTA_LABEL_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("target_ground",),
-            code="delta_matroid.relabel_target_bytes",
-            message="target labels exceed the admitted UTF-8 byte bound",
-        )
-
     n = len(source.ground)
     source_to_target_list = [0] * n
     for target, origin in enumerate(request.target_to_source):

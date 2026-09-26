@@ -93,9 +93,7 @@ def test_every_small_symmetric_matrix_and_twist_matches_independent_oracle() -> 
 @pytest.mark.parametrize("bad", [True, 1.0])
 def test_binary_matrix_rejects_coercible_non_integer_entries(bad: object) -> None:
     with pytest.raises(ValidationError):
-        BinarySymmetricMatrix.model_validate(
-            {"ground": ["e0"], "entries": [[bad]]}
-        )
+        BinarySymmetricMatrix.model_validate({"ground": ["e0"], "entries": [[bad]]})
 
 
 def test_eight_axis_identity_matrix_reaches_the_admitted_output_boundary() -> None:
@@ -123,8 +121,9 @@ def test_binary_matrix_twist_observes_pre_cancelled_native_request() -> None:
     cancellation = Event()
     cancellation.set()
     matrix = BinarySymmetricMatrix(ground=(), entries=())
-    with request_cancellation(cancellation), pytest.raises(
-        OperationExecutionCancelledError
+    with (
+        request_cancellation(cancellation),
+        pytest.raises(OperationExecutionCancelledError),
     ):
         binary_matrix_twist(matrix)
 
@@ -200,9 +199,7 @@ def test_request_schema_publishes_exact_preflight_envelopes() -> None:
 
 @pytest.mark.parametrize("entry", [True, "1", 1.0])
 def test_native_twist_rejects_forged_coerced_matrix_entries(entry: object) -> None:
-    matrix = BinarySymmetricMatrix.model_construct(
-        ground=("e0",), entries=((entry,),)
-    )
+    matrix = BinarySymmetricMatrix.model_construct(ground=("e0",), entries=((entry,),))
     with pytest.raises(Exception, match="canonical symmetric binary matrix"):
         binary_matrix_twist(matrix)
 

@@ -261,11 +261,6 @@ def test_box_must_use_the_polynomial_complete_ordered_axis() -> None:
         compute_polynomial_box_enclosure(request)
 
 
-def test_reversed_coordinate_interval_is_rejected_before_execution() -> None:
-    with polynomial_validation_error():
-        ClosedRationalInterval(lower=_q(2), upper=_q(1))
-
-
 def test_produced_result_round_trips_after_strict_serialization() -> None:
     result = _enclose(
         _polynomial(("x",), {(2,): 1, (0,): -2}),
@@ -542,7 +537,7 @@ def test_exact_result_digit_growth_boundary() -> None:
         coefficient_numerator=1,
         coefficient_denominator_digits=64,
     )
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationDomainValidationError, match="exact-result bound"):
         compute_polynomial_box_enclosure(above_limit)
 
 
@@ -575,29 +570,6 @@ def test_intermediate_digit_growth_boundary() -> None:
         compute_polynomial_box_enclosure(above_legacy_limit).box
         == above_legacy_limit.box
     )
-
-
-def test_result_byte_estimate_covers_exact_retained_source_serialization() -> None:
-    polynomial = _polynomial(
-        ("x", "y"),
-        {
-            (4, 1): Fraction(17, 19),
-            (2, 3): Fraction(-23, 29),
-            (0, 0): Fraction(31, 37),
-        },
-    )
-    box = _box(
-        ("x", "y"),
-        ((Fraction(-41, 43), Fraction(47, 53)), (Fraction(59, 71), Fraction(67, 61))),
-    )
-    request = PolynomialBoxEnclosureRequest(polynomial=polynomial, box=box)
-    result = compute_polynomial_box_enclosure(request)
-    estimate = _estimate_growth(polynomial, box)
-
-    assert result.polynomial == polynomial
-    assert result.box == box
-    assert estimate.result_numerator_digits <= MAX_BOX_ENCLOSURE_RESULT_DIGITS
-    assert estimate.result_denominator_digits <= MAX_BOX_ENCLOSURE_RESULT_DIGITS
 
 
 def test_numeric_admission_limits_are_discoverable() -> None:

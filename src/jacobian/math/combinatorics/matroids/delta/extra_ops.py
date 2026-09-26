@@ -267,8 +267,10 @@ def binary_matrix_twist(
         )
     matrix = _canonical_binary_matrix(matrix)
     n = len(matrix.ground)
-    if len(subset) > n or subset != tuple(sorted(set(subset))) or any(
-        index < 0 or index >= n for index in subset
+    if (
+        len(subset) > n
+        or subset != tuple(sorted(set(subset)))
+        or any(index < 0 or index >= n for index in subset)
     ):
         raise OperationDomainValidationError(
             location=("subset",),

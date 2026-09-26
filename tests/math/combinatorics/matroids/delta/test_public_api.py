@@ -16,9 +16,11 @@ def test_public_api_is_small_and_canonical() -> None:
         "distance_interlace_polynomial",
         "dual",
         "from_feasible_sets",
+        "lower_matroid",
         "minor",
         "relabel",
         "twist",
+        "upper_matroid",
         "verify_from_feasible_sets",
         "width",
     ]

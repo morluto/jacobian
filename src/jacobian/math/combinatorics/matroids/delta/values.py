@@ -252,7 +252,8 @@ class DeltaMatroidDistanceProfile(StrictModel):
                 "distance_profile_value", "distances must be nonnegative integers"
             )
         if any(
-            type(value) is not int or value < 1
+            type(value) is not int
+            or value < 1
             or value > len(self.delta_matroid.feasible)
             for value in self.nearest_feasible_count_by_mask
         ):
@@ -261,8 +262,7 @@ class DeltaMatroidDistanceProfile(StrictModel):
                 "nearest-feasible counts must be positive integers",
             )
         feasible_masks = {
-            sum(1 << index for index in row)
-            for row in self.delta_matroid.feasible
+            sum(1 << index for index in row) for row in self.delta_matroid.feasible
         }
         if any(
             (distance == 0) != (mask in feasible_masks)

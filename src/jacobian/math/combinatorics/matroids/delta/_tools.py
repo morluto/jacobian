@@ -40,8 +40,8 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.relabel import (
-    DeltaMatroidRelabelRequest,
     DeltaMatroidRelabelling,
+    DeltaMatroidRelabelRequest,
     relabel,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
@@ -145,6 +145,14 @@ def _run_binary_twist(request: BinaryMatrixTwistRequest) -> BinaryMatrixResult:
         ) from exc
 
 
+def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid,
+        request.target_ground,
+        request.target_to_source,
+    )
+
+
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
         return DeltaMatroidWidthResult._from_kernel(
@@ -154,6 +162,12 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
             code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
             message=str(exc),
         ) from exc
 
@@ -270,32 +284,37 @@ TOOLS: MathTools = (  # noqa: RUF005
         ),
     ),
     MathTool(
-        operation_id="delta_matroid.relabel.compute",
-        title="Relabel a finite delta-matroid",
+        operation_id="delta_matroid.binary.from_matrix_twist.compute",
+        title="Construct a binary delta-matroid from a twisted matrix presentation",
         description=(
-            "Transport the complete feasible family through an exact bijection "
-            "of ground axes, retaining both inverse index maps. Target labels "
-            "are unique and bounded by 2048 aggregate UTF-8 bytes."
+            "Return D(A)*T for a symmetric matrix A over GF(2) and a sorted "
+            "ground-index subset T. It enumerates all nonsingular principal "
+            "submatrices under the existing eight-element and 250,000-work "
+            "bounds, then applies the exact symmetric-difference bijection. "
+            "The source matrix, twist, and complete feasible family are retained; "
+            "output has at most 256 rows and 1,024 memberships."
         ),
-        request_type=DeltaMatroidRelabelRequest,
-        result_type=DeltaMatroidRelabelling,
-        run=_relabel,
-        tags=("delta-matroid", "relabel", "axis-transport", "exact"),
-        discovery_terms=("delta-matroid relabeling", "ground-set axis bijection"),
+        request_type=BinaryMatrixTwistRequest,
+        result_type=BinaryMatrixResult,
+        run=_run_binary_twist,
+        tags=("delta-matroid", "binary", "matrix-twist", "exact"),
+        discovery_terms=(
+            "binary delta-matroid twist",
+            "twisted principal-minor family",
+        ),
         examples=(
             OperationExample(
-                name="relabel_two_element_cube",
+                name="twist_zero_matrix_by_both_elements",
                 description=(
-                    "Relabel the complete feasible family of the two-element "
-                    "cube while recording the target-to-source permutation."
+                    "The zero matrix has only the empty feasible set; twisting "
+                    "by both axes gives the full two-element set."
                 ),
                 input={
-                    "delta_matroid": {
+                    "matrix": {
                         "ground": ["a", "b"],
-                        "feasible": [[], [0], [0, 1], [1]],
+                        "entries": [[0, 0], [0, 0]],
                     },
-                    "target_ground": ["x", "y"],
-                    "target_to_source": [1, 0],
+                    "subset": [0, 1],
                 },
             ),
         ),
@@ -394,37 +413,33 @@ TOOLS: MathTools = (  # noqa: RUF005
         ),
     ),
     MathTool(
-        operation_id="delta_matroid.binary.from_matrix_twist.compute",
-        title="Construct a binary delta-matroid from a twisted matrix presentation",
+        operation_id="delta_matroid.relabel.compute",
+        title="Relabel and reorder a finite delta-matroid ground set",
         description=(
-            "Return D(A)*T for a symmetric matrix A over GF(2) and a sorted "
-            "ground-index subset T. It enumerates all nonsingular principal "
-            "submatrices under the existing eight-element and 250,000-work "
-            "bounds, then applies the exact symmetric-difference bijection. "
-            "The source matrix, twist, and complete feasible family are retained; "
-            "output has at most 256 rows and 1,024 memberships."
+            "Apply a bijection from the target ground axis to the source axis, "
+            "transport every feasible subset to the target indices, and retain "
+            "both inverse axis maps. The complete source family is checked "
+            "before transport; memberships, ground labels, work, and result "
+            "allocations are bounded."
         ),
-        request_type=BinaryMatrixTwistRequest,
-        result_type=BinaryMatrixResult,
-        run=_run_binary_twist,
-        tags=("delta-matroid", "binary", "matrix-twist", "exact"),
-        discovery_terms=(
-            "binary delta-matroid twist",
-            "twisted principal-minor family",
-        ),
+        request_type=DeltaMatroidRelabelRequest,
+        result_type=DeltaMatroidRelabelling,
+        run=_run_relabel,
+        tags=("delta-matroid", "relabel", "isomorphism", "exact"),
         examples=(
             OperationExample(
-                name="twist_zero_matrix_by_both_elements",
+                name="swap_ground_axis",
                 description=(
-                    "The zero matrix has only the empty feasible set; twisting "
-                    "by both axes gives the full two-element set."
+                    "Swap the source axes while renaming them; feasible subsets "
+                    "and the inverse coordinate maps are transported exactly."
                 ),
                 input={
-                    "matrix": {
+                    "delta_matroid": {
                         "ground": ["a", "b"],
-                        "entries": [[0, 0], [0, 0]],
+                        "feasible": [[], [0], [0, 1]],
                     },
-                    "subset": [0, 1],
+                    "target_ground": ["B", "A"],
+                    "target_to_source": [1, 0],
                 },
             ),
         ),

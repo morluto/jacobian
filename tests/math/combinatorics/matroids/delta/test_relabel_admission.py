@@ -1,11 +1,12 @@
-"""Native relabelling admission checks."""
-
-from __future__ import annotations
+"""Native relabelling distinguishes resource limits from malformed axes."""
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.matroids.delta.relabel import (
     MAX_DELTA_RELABEL_GROUND,
     DeltaMatroidRelabelRequest,
@@ -15,6 +16,28 @@ from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_MEMBERSHIPS,
     FiniteDeltaMatroid,
 )
+
+
+def _source() -> FiniteDeltaMatroid:
+    return FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+
+
+def test_aggregate_target_label_bytes_are_admitted_at_the_boundary() -> None:
+    source = _source()
+    first = "λ" * 512
+    second = "β" * 512
+    result = relabel(source, (first, second), (0, 1))
+    assert result.relabelled.ground == (first, second)
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        relabel(source, (first + "λ", second), (0, 1))
+    assert error.value.errors()[0]["type"] == "delta_matroid.relabel_target_bytes"
+
+
+def test_invalid_utf8_target_remains_a_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        relabel(_source(), ("\ud800", "b"), (0, 1))
+    assert error.value.errors()[0]["type"] == "delta_matroid.relabel_request"
 
 
 def test_oversized_target_is_rejected_before_scanning_labels() -> None:

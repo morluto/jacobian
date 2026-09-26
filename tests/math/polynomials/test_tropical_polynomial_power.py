@@ -94,6 +94,25 @@ def test_power_preflights_exponent_and_intermediate_term_growth() -> None:
     )
 
 
+def test_power_preflights_height_weighted_convolution_work():
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="QQ")
+    coefficient = TropicalScalar(
+        semiring=semiring,
+        kind="FINITE",
+        value=CanonicalRational.from_integer_ratio(10**3_999, 1),
+    )
+    polynomial = TropicalPolynomial(
+        semiring=semiring,
+        variables=("x",),
+        terms=tuple(
+            TropicalPolynomialTerm(exponents=(i,), coefficient=coefficient)
+            for i in range(256)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="height-weighted"):
+        tropical_polynomial_power(polynomial, 2)
+
+
 def test_power_preflights_dimension_weighted_convolution_work():
     semiring = TropicalSemiring(convention="MIN_PLUS", base="ZZ")
     variables = tuple(f"x{index}" for index in range(128))

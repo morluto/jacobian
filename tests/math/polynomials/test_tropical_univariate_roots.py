@@ -168,8 +168,15 @@ def test_pairwise_work_is_admitted_before_crossover_arithmetic() -> None:
         compute_univariate_roots(UnivariateRootsRequest(polynomial=poly))
 
 
+def test_root_profile_preflights_height_weighted_scan_work() -> None:
+    large = 10**1_899
+    poly = _poly(tuple((exponent, large + exponent) for exponent in range(300)))
+    with pytest.raises(OperationResourceAdmissionError, match="height-weighted"):
+        compute_univariate_roots(UnivariateRootsRequest(polynomial=poly))
+
+
 def test_result_byte_estimate_is_admitted_before_crossover_arithmetic() -> None:
     large = 10**3_999
     poly = _poly(tuple((exponent, large + exponent) for exponent in range(360)))
-    with pytest.raises(OperationResourceAdmissionError, match="result-byte bound"):
+    with pytest.raises(OperationResourceAdmissionError, match="height-weighted"):
         compute_univariate_roots(UnivariateRootsRequest(polynomial=poly))

@@ -554,21 +554,38 @@ def _power_support(
     remaining = exponent
     total_pair_work = 0
     total_coordinate_work = 0
+    total_height_work = 0
 
     def product_support(
         left: set[tuple[int, ...]], right: set[tuple[int, ...]]
     ) -> set[tuple[int, ...]]:
-        nonlocal total_pair_work, total_coordinate_work
+        nonlocal total_pair_work, total_coordinate_work, total_height_work
         pair_work = len(left) * len(right)
         total_pair_work += pair_work
         total_coordinate_work += pair_work * max(1, len(polynomial.variables))
-        if total_pair_work > 750_000 or total_coordinate_work > 10_000_000:
+        max_digits = max(
+            (
+                max(
+                    _digits(term.coefficient.value.num),
+                    _digits(term.coefficient.value.den),
+                )
+                for term in polynomial.terms
+                if term.coefficient.value is not None
+            ),
+            default=1,
+        )
+        total_height_work += pair_work * max_digits**2
+        if (
+            total_pair_work > 750_000
+            or total_coordinate_work > 10_000_000
+            or total_height_work > MAX_TROPICAL_ACTIVE_TERM_WORK
+        ):
             raise OperationResourceAdmissionError(
                 location=("polynomial", "exponent"),
                 code="tropical.polynomial_power_work_bound",
                 message=(
-                    "power exceeds the admitted total sparse convolution or "
-                    "coordinate-addition work"
+                    "power exceeds the admitted total sparse convolution, "
+                    "coordinate-addition, or height-weighted work"
                 ),
             )
         output: set[tuple[int, ...]] = set()
@@ -922,6 +939,18 @@ def tropical_polynomial_univariate_roots(
         for term in poly.terms
         if term.coefficient.value is not None
     )
+    # Bound pairwise rational crossovers and the all-lines scan at every
+    # possible breakpoint, weighting arithmetic by input height.
+    weighted_root_work = (
+        pair_count + term_count * max(0, term_count - 1)
+    ) * coefficient_digits**2
+    if weighted_root_work > MAX_TROPICAL_ACTIVE_TERM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms", "coefficient"),
+            code="tropical.root_height_work",
+            message="height-weighted crossover and breakpoint scan exceeds its envelope",
+        )
+
     # A line intersection subtracts two rationals, so numerator and
     # denominator products are bounded by twice the largest admitted input.
     # Reserve a few digits for subtraction and the (bounded) slope difference.

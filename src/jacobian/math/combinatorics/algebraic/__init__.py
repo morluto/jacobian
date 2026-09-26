@@ -1,9 +1,12 @@
 """Algebraic combinatorics operations."""
 
 from jacobian.math.combinatorics.algebraic._models import (
+    LongestDecreasingSubsequenceResult,
+    LongestIncreasingSubsequenceResult,
     PartitionDominanceResult,
     PlacticEquivalenceRequest,
     PlacticEquivalenceResult,
+    PlacticNormalFormResult,
     RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
@@ -12,6 +15,7 @@ from jacobian.math.combinatorics.algebraic._models import (
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
     BiwordRSKPair,
+    GreeneWitnessResult,
     NonnegativeIntegerMatrix,
 )
 from jacobian.math.combinatorics.algebraic.biword_ops import (
@@ -30,9 +34,11 @@ from jacobian.math.combinatorics.algebraic.operations import (
     check_standard_tableau,
     conjugate_partition,
     hook_lengths,
+    inverse_permutation_rsk,
     inverse_row_insertion_rsk,
     knuth_moves,
     partition_dominance,
+    permutation_rsk,
     plactic_equivalence,
     plactic_normal_form,
     row_insertion_rsk,
@@ -40,13 +46,14 @@ from jacobian.math.combinatorics.algebraic.operations import (
     semistandard_young_tableaux_count,
     standard_young_tableaux_count,
     tableau_row_reading_word,
-    verify_rsk,
 )
 from jacobian.math.combinatorics.algebraic.subsequences import (
     longest_decreasing_subsequence,
     longest_increasing_subsequence,
 )
 from jacobian.math.combinatorics.algebraic.values import (
+    FinitePermutation,
+    PermutationRSKPair,
     RSKBumpStep,
     RSKInsertionEvent,
     RSKTableauPair,
@@ -65,10 +72,16 @@ __all__ = [
     "BiwordRSKPair",
     "EndpointProfileEntry",
     "EndpointProfileResult",
+    "FinitePermutation",
+    "GreeneWitnessResult",
+    "LongestDecreasingSubsequenceResult",
+    "LongestIncreasingSubsequenceResult",
     "NonnegativeIntegerMatrix",
     "PartitionDominanceResult",
+    "PermutationRSKPair",
     "PlacticEquivalenceRequest",
     "PlacticEquivalenceResult",
+    "PlacticNormalFormResult",
     "RSKBumpStep",
     "RSKInsertionEvent",
     "RSKTableauPair",
@@ -86,6 +99,7 @@ __all__ = [
     "hook_lengths",
     "inverse_biword",
     "inverse_matrix",
+    "inverse_permutation_rsk",
     "inverse_row_insertion_rsk",
     "knuth_moves",
     "longest_decreasing_subsequence",
@@ -93,6 +107,7 @@ __all__ = [
     "matrix_biword",
     "normalize_biword",
     "partition_dominance",
+    "permutation_rsk",
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
@@ -101,5 +116,4 @@ __all__ = [
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
     "tableau_row_reading_word",
-    "verify_rsk",
 ]

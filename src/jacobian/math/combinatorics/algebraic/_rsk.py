@@ -21,6 +21,8 @@ from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_LENGTH,
     MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKBumpStep,
     RSKInsertionEvent,
     RSKTableauPair,
@@ -227,8 +229,7 @@ def _admit_rsk_trace(
     # Every insertion searches each existing row through the terminal append
     # row; bumps alone omit the final successful/terminal binary search.
     row_searches = bump_steps + sum(
-        min(prefix_length, len(word.alphabet))
-        for prefix_length in range(1, length + 1)
+        min(prefix_length, len(word.alphabet)) for prefix_length in range(1, length + 1)
     )
     work = row_searches * MAX_RSK_ROW_SEARCH_COMPARISONS
     if work > MAX_RSK_TRACE_WORK:
@@ -314,6 +315,51 @@ def _trace_validated_rsk_word(
     return RSKWordTraceResult._from_kernel(canonical_request, pair, tuple(events))
 
 
+def _reverse_insert_ranks(
+    insertion_rows: tuple[tuple[int, ...], ...],
+    recording_rows: tuple[tuple[int, ...], ...],
+) -> tuple[int, ...]:
+    """Return output ranks in reverse source order for a compatible pair."""
+
+    cell_count = sum(map(len, recording_rows))
+    insertion = [list(row) for row in insertion_rows]
+    label_rows_by_entry = [0] * cell_count
+    for row_index, row in enumerate(recording_rows):
+        for label in row:
+            label_rows_by_entry[label - 1] = row_index
+    reversed_ranks: list[int] = []
+
+    for label in range(cell_count, 0, -1):
+        request_checkpoint("during reverse row insertion")
+        row_index = label_rows_by_entry[label - 1]
+        if row_index >= len(insertion) or not insertion[row_index]:
+            raise ValueError("recording tableau does not select an outer corner")
+        current = insertion[row_index].pop()
+        if not insertion[row_index]:
+            if row_index != len(insertion) - 1:
+                raise ValueError("reverse insertion produced a non-partition shape")
+            insertion.pop()
+
+        for upper_index in range(row_index - 1, -1, -1):
+            upper_row = insertion[upper_index]
+            column = bisect_left(upper_row, current) - 1
+            if column < 0:
+                raise ValueError("tableau pair failed reverse row insertion")
+            upper_row[column], current = current, upper_row[column]
+        reversed_ranks.append(current)
+
+    if insertion:
+        raise ValueError("reverse insertion did not remove every tableau cell")
+    return tuple(reversed_ranks)
+
+
+def inverse_permutation_rsk(pair: PermutationRSKPair) -> FinitePermutation:
+    """Invert a standard-tableau permutation pair by reverse row insertion."""
+
+    reversed_images = _reverse_insert_ranks(pair.p_tableau.rows, pair.q_tableau.rows)
+    return FinitePermutation._from_kernel(tuple(reversed(reversed_images)))
+
+
 def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
     """Return the ordinary word-RSK pair with its exact insertion ledger."""
     if type(word) is not FiniteWord:
@@ -327,6 +373,7 @@ def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
 
 
 __all__ = [
+    "inverse_permutation_rsk",
     "inverse_row_insertion_rsk",
     "row_insertion_rsk",
     "row_insertion_rsk_trace",

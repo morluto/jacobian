@@ -102,6 +102,13 @@ def test_right_orientation_differs_from_left_factor_order() -> None:
     )
 
 
+def test_identity_division_at_carrier_degree_bound_is_admitted() -> None:
+    identity = _operator((0, [(64, 1)]), (5, [(0, 1)]))
+    result = differential_operator_right_divide_monic(identity, identity)
+    assert result.quotient == _operator((0, [(0, 1)]))
+    assert result.remainder == _operator()
+
+
 def test_inexpensive_divisions_are_not_rejected_by_ambient_input_ceilings() -> None:
     fifth_order = _operator((5, [(0, 1)]))
     divided = differential_operator_right_divide_monic(fifth_order, fifth_order)
@@ -109,7 +116,9 @@ def test_inexpensive_divisions_are_not_rejected_by_ambient_input_ceilings() -> N
     assert divided.remainder == _operator()
 
     cubic_coefficient = _operator((0, [(3, 1)]))
-    divided = differential_operator_right_divide_monic(cubic_coefficient, _operator((0, [(0, 1)])))
+    divided = differential_operator_right_divide_monic(
+        cubic_coefficient, _operator((0, [(0, 1)]))
+    )
     assert divided.quotient == cubic_coefficient
     assert divided.remainder == _operator()
 

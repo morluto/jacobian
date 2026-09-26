@@ -98,6 +98,19 @@ def _admit(request: DifferentialRightDivisionRequest) -> tuple[int, int, int]:
             message="the divisor must be monic in D (leading coefficient exactly one)",
         )
 
+    # Identical operands have a forced one-step exact cancellation, regardless
+    # of ambient coefficient degree/height. Avoid charging hypothetical growth
+    # from multiplying the divisor by itself when the result is exactly 1, 0.
+    if request.dividend == request.divisor:
+        result_bytes = encoded_bytes + 1024
+        if result_bytes > _MAX_OUTPUT_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("request",),
+                code="ore_algebra.differential_right_division_bound",
+                message="right-division exact output exceeds its envelope",
+            )
+        return 0, 1, 1
+
     iterations = max(0, request.dividend.order - request.divisor.order + 1)
     initial_degree = max(
         (

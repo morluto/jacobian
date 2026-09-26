@@ -13,6 +13,9 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
+    MAX_LR_SKEW_CELLS,
+    MAX_LR_TABLEAU_OUTPUT_BYTES,
+    MAX_LR_TABLEAUX,
     LittlewoodRichardsonCoefficientRequest,
     LittlewoodRichardsonCoefficientResult,
     LittlewoodRichardsonTableauxRequest,
@@ -20,7 +23,9 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurProductRequest,
     SchurProductResult,
     SchurProductTerm,
+    _lr_complete_word_bound,
     _lr_inner_content_orientation,
+    _lr_prefix_state_bound,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
@@ -37,13 +42,74 @@ def _admit_native_request[RequestT: BaseModel](
         native_values = {
             key: value.model_dump(mode="python") for key, value in values.items()
         }
-        return model.model_validate(native_values)
+        request = model.model_validate(native_values)
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=(),
             code="symmetric_functions.littlewood_richardson.invalid_request",
             message="native LR arguments must be canonical partitions within the operation envelope",
         ) from exc
+    if isinstance(
+        request,
+        (LittlewoodRichardsonCoefficientRequest, LittlewoodRichardsonTableauxRequest),
+    ):
+        _admit_lr_resources(request)
+    return request
+
+
+def _admit_lr_resources(
+    request: LittlewoodRichardsonCoefficientRequest
+    | LittlewoodRichardsonTableauxRequest,
+) -> None:
+    skew_size = sum(request.outer.parts) - sum(request.inner.parts)
+    content_size = sum(request.content.parts)
+    if isinstance(request, LittlewoodRichardsonTableauxRequest):
+        inner_contained = all(
+            part
+            <= (request.outer.parts[index] if index < len(request.outer.parts) else 0)
+            for index, part in enumerate(request.inner.parts)
+        )
+        if not inner_contained or skew_size != content_size:
+            return
+    if skew_size > MAX_LR_SKEW_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("outer",),
+            code="symmetric_functions.lr_skew_size_exceeded",
+            message=f"LR skew size must not exceed {MAX_LR_SKEW_CELLS}",
+        )
+    if content_size > MAX_LR_SKEW_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("content",),
+            code="symmetric_functions.lr_content_size_exceeded",
+            message=f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
+        )
+    states = _lr_prefix_state_bound(request.content)
+    if states > MAX_LR_SEARCH_STATES:
+        raise OperationResourceAdmissionError(
+            location=("content",),
+            code="symmetric_functions.lr_search_states_exceeded",
+            message=f"LR search prefix bound exceeds {MAX_LR_SEARCH_STATES}",
+        )
+    if isinstance(request, LittlewoodRichardsonTableauxRequest):
+        complete_words = _lr_complete_word_bound(request.content)
+        context_bytes = 1024 + 48 * (
+            len(request.outer.parts)
+            + len(request.inner.parts)
+            + len(request.content.parts)
+        )
+        output_bytes = context_bytes + complete_words * (64 + 16 * MAX_LR_SKEW_CELLS)
+        if output_bytes > MAX_LR_TABLEAU_OUTPUT_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("content",),
+                code="symmetric_functions.lr_tableau_output_exceeded",
+                message="complete LR tableau family exceeds its output byte bound",
+            )
+        if complete_words > MAX_LR_TABLEAUX:
+            raise OperationResourceAdmissionError(
+                location=("content",),
+                code="symmetric_functions.lr_tableau_count_exceeded",
+                message=f"complete LR tableau family exceeds {MAX_LR_TABLEAUX} candidates",
+            )
 
 
 def littlewood_richardson_coefficient(

@@ -16,6 +16,7 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurProductResult,
 )
 from jacobian.math.combinatorics.symmetric_functions.littlewood_richardson import (
+    _admit_lr_resources,
     _compute_validated_lr,
     _enumerate_validated_lr,
     _schur_product_from_request,
@@ -30,14 +31,14 @@ def _run_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResul
 def _run_littlewood_richardson_coefficient(
     request: LittlewoodRichardsonCoefficientRequest,
 ) -> LittlewoodRichardsonCoefficientResult:
-    # The catalog parsed and admitted this request; run the shared
-    # post-admission path without replaying request validation.
+    _admit_lr_resources(request)
     return _compute_validated_lr(request)
 
 
 def _run_littlewood_richardson_tableaux(
     request: LittlewoodRichardsonTableauxRequest,
 ) -> LittlewoodRichardsonTableauxResult:
+    _admit_lr_resources(request)
     return _enumerate_validated_lr(request)
 
 

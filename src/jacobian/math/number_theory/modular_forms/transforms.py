@@ -449,6 +449,17 @@ def _sturm_space(space: object) -> ModularFormSpace:
                 code="modular_form.character_group_bound",
                 message="character group axes exceed the bounded Sturm parent envelope",
             )
+        if any(
+            type(value) is not int
+            for axis in raw_axes
+            if type(axis) is tuple
+            for value in axis
+        ):
+            raise OperationDomainValidationError(
+                location=("space", "character"),
+                code="modular_form.invalid_character_coordinates",
+                message="character group axes must contain exact integer scalars",
+            )
         raw_units = getattr(raw_group, "unit_residues", None)
         raw_coordinates = getattr(raw_group, "unit_coordinates", None)
         if type(raw_units) is not tuple or type(raw_coordinates) is not tuple:
@@ -471,6 +482,17 @@ def _sturm_space(space: object) -> ModularFormSpace:
                 location=("space", "character", "group", "unit_coordinates"),
                 code="modular_form.character_group_bound",
                 message="character coordinate rows exceed the bounded Sturm parent envelope",
+            )
+        if any(type(value) is not int for value in raw_units) or any(
+            type(value) is not int
+            for row in raw_coordinates
+            if type(row) is tuple
+            for value in row
+        ):
+            raise OperationDomainValidationError(
+                location=("space", "character", "group"),
+                code="modular_form.invalid_character_group",
+                message="character group tables must contain exact integer scalars",
             )
     try:
         # Re-run the parent validators because a caller can construct a model

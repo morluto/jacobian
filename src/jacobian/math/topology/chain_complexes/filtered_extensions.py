@@ -227,6 +227,8 @@ class FilteredChainMapPageZeroResult(StrictModel):
     target_filtration: tuple[FiltrationLevel, ...]
     source_dimensions: tuple[tuple[int, ...], ...]
     target_dimensions: tuple[tuple[int, ...], ...]
+    source_representatives: tuple[tuple[tuple[Vector, ...], ...], ...]
+    target_representatives: tuple[tuple[tuple[Vector, ...], ...], ...]
     maps: tuple[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...], ...]
 
     @model_validator(mode="after")
@@ -246,14 +248,35 @@ class FilteredChainMapPageZeroResult(StrictModel):
             or self.source.prime != self.target.prime
         ):
             raise ValueError("source and target degree windows must agree")
-        for dimensions, complex_value in (
-            (self.source_dimensions, self.source),
-            (self.target_dimensions, self.target),
+        for dimensions, representatives, complex_value in (
+            (self.source_dimensions, self.source_representatives, self.source),
+            (self.target_dimensions, self.target_representatives, self.target),
         ):
-            if len(dimensions) != len(self.source_filtration) or any(
-                len(level) != degree_count for level in dimensions
+            if (
+                len(dimensions) != len(self.source_filtration)
+                or len(representatives) != len(self.source_filtration)
+                or any(len(level) != degree_count for level in dimensions)
+                or any(len(level) != degree_count for level in representatives)
             ):
                 raise ValueError("E0 dimensions must cover every degree and level")
+            for level, degree_representatives in enumerate(representatives):
+                if (
+                    any(
+                        len(vector) != complex_value.basis_sizes[degree]
+                        for degree, vectors in enumerate(degree_representatives)
+                        for vector in vectors
+                    )
+                    or tuple(map(len, degree_representatives)) != dimensions[level]
+                ):
+                    raise ValueError(
+                        "E0 quotient bases must match their graded dimensions"
+                    )
+            if any(
+                not 0 <= level[degree] <= complex_value.basis_sizes[degree]
+                for level in dimensions
+                for degree in range(degree_count)
+            ):
+                raise ValueError("E0 dimensions must be nonnegative chain dimensions")
             if any(
                 sum(level[degree] for level in dimensions)
                 != complex_value.basis_sizes[degree]
@@ -812,6 +835,64 @@ def _filtered_map_result(
 
 def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
     _check_filtered_chain_map_axes(request)
+    level_count = len(request.source_filtration)
+    degree_count = len(request.source.basis_sizes)
+    shape_work = 0
+    for complex_value, filtration in (
+        (request.source, request.source_filtration),
+        (request.target, request.target_filtration),
+    ):
+        for rank in complex_value.basis_sizes:
+            shape_work += level_count * max(1, rank) ** 3
+        if len(filtration) == level_count and all(
+            len(level.subspaces) == degree_count for level in filtration
+        ):
+            shape_work += sum(
+                min(
+                    len(filtration[level].subspaces[degree].vectors),
+                    complex_value.basis_sizes[degree],
+                )
+                * max(1, complex_value.basis_sizes[degree]) ** 2
+                for level in range(level_count)
+                for degree in range(degree_count)
+            )
+    if shape_work > MAX_FILTERED_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_work_exceeded",
+            message="the shape-only E0 work estimate exceeds the admitted limit",
+        )
+    retained_cells = sum(
+        rank * rank
+        for rank in (*request.source.basis_sizes, *request.target.basis_sizes)
+    )
+    map_cells_upper = sum(
+        min(
+            len(request.source_filtration[level].subspaces[degree].vectors),
+            request.source.basis_sizes[degree],
+        )
+        * min(
+            len(request.target_filtration[level].subspaces[degree].vectors),
+            request.target.basis_sizes[degree],
+        )
+        for level in range(level_count)
+        for degree in range(degree_count)
+        if len(request.source_filtration[level].subspaces) == degree_count
+        and len(request.target_filtration[level].subspaces) == degree_count
+    )
+    max_chars = max(
+        (len(str(value)) for matrix in request.maps for row in matrix for value in row),
+        default=1,
+    )
+    output_chars_upper = (retained_cells + map_cells_upper) * (
+        96 * max_chars + 512
+    ) + level_count * degree_count * 128
+    if output_chars_upper > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_chars_exceeded",
+            message="the shape-only E0 output estimate exceeds the admitted limit",
+        )
     source_admission = _admit_filtered_semantics(
         request.source, request.source_filtration
     )
@@ -1014,6 +1095,8 @@ def filtered_chain_map_page_zero(
         target_filtration=request.target_filtration,
         source_dimensions=source_graded.graded_dimensions,
         target_dimensions=target_graded.graded_dimensions,
+        source_representatives=source_graded.quotient_representatives,
+        target_representatives=target_graded.quotient_representatives,
         maps=tuple(source_blocks),
     )
 

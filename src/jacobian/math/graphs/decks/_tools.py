@@ -104,7 +104,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=AnonymousGraphCardMultiset,
         run=lambda request: anonymous_graph_card_multiset(request),
         tags=("graph", "deck", "anonymous", "multiset", "isomorphism", "exact"),
-        discovery_terms=("anonymous graph card multiset", "unlabelled graph cards", "deck realizability input"),
+        discovery_terms=(
+            "anonymous graph card multiset",
+            "unlabelled graph cards",
+            "deck realizability input",
+        ),
         examples=(
             OperationExample(
                 name="anonymous_two_vertex_cards",

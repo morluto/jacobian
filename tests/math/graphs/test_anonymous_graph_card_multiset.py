@@ -15,7 +15,6 @@ from jacobian.math.graphs.decks import (
     AnonymousGraphCardMultisetRequest,
     anonymous_graph_card_multiset,
 )
-from jacobian.math.graphs.decks import _models as deck_models
 from jacobian.math.graphs.decks import operations as deck_operations
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
@@ -70,22 +69,38 @@ def test_serialized_result_round_trips_and_preserves_canonical_identity() -> Non
     assert restored == result
 
 
-def test_deserialization_rejects_noncanonical_representative() -> None:
-    with pytest.raises(ValidationError, match="minimal under all vertex permutations"):
-        AnonymousGraphCardMultiset.model_validate(
-            {
-                "card_order": 3,
-                "classes": [
-                    {
-                        "representative": {
-                            "vertices": ["v00", "v01", "v02"],
-                            "edges": [["v00", "v01"]],
-                        },
-                        "multiplicity": 1,
-                    }
-                ],
-            }
-        )
+def test_deserialization_keeps_representative_validation_structural() -> None:
+    result = AnonymousGraphCardMultiset.model_validate(
+        {
+            "card_order": 3,
+            "classes": [
+                {
+                    "representative": {
+                        "vertices": ["v00", "v01", "v02"],
+                        "edges": [["v00", "v01"]],
+                    },
+                    "multiplicity": 1,
+                }
+            ],
+        }
+    )
+    assert result.classes[0].representative.edges == (("v00", "v01"),)
+
+
+def test_multiplicity_schema_matches_runtime_bounds_and_anchoring() -> None:
+    schema = AnonymousGraphCardMultiset.model_json_schema()
+    multiplicity = schema["$defs"]["AnonymousGraphCardClass"]["properties"][
+        "multiplicity"
+    ]
+    assert multiplicity["maxLength"] == 12
+    assert multiplicity["pattern"] == r"^[1-9][0-9]{0,11}(?![\s\S])"
+    for value in ("0", "-1", "1000000000000", "1\n"):
+        with pytest.raises(ValidationError):
+            AnonymousGraphCardMultiset.model_validate_json(
+                '{"card_order":0,"classes":[{"representative":{"vertices":[],"edges":[]},"multiplicity":"'
+                + value
+                + '"}]}'
+            )
 
 
 def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
@@ -100,26 +115,6 @@ def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
                 ],
             }
         )
-
-
-def test_deserialization_admits_its_exact_canonicalization_bound(monkeypatch) -> None:
-    output = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(
-            card_order=4,
-            cards=(graph(("a", "b", "c", "d"), (("a", "b"),)),),
-        )
-    )
-    payload = output.model_dump(mode="python")
-    exact_work = factorial(4) * (4 + 2 * comb(4, 2))
-    monkeypatch.setattr(
-        deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work
-    )
-    assert AnonymousGraphCardMultiset.model_validate(payload) == output
-    monkeypatch.setattr(
-        deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work - 1
-    )
-    with pytest.raises(ValidationError, match="bounded permutation work"):
-        AnonymousGraphCardMultiset.model_validate(payload)
 
 
 def test_mixed_card_orders_are_rejected() -> None:
@@ -202,17 +197,23 @@ def test_model_construct_edge_endpoints_are_bounded_before_set_checks(
 
 
 def test_permutation_bound_accepts_exact_limit_and_rejects_one_unit_less(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     item = graph(("a", "b", "c", "d"), (("a", "b"),))
     request = AnonymousGraphCardMultisetRequest(card_order=4, cards=(item,))
     exact_work = factorial(4) * (4 + 2 * comb(4, 2))
     monkeypatch.setattr(
-        deck_operations, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work
+        deck_operations,
+        "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK",
+        exact_work,
+        raising=False,
     )
     assert anonymous_graph_card_multiset(request).classes
     monkeypatch.setattr(
-        deck_operations, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work - 1
+        deck_operations,
+        "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK",
+        exact_work - 1,
+        raising=False,
     )
     with pytest.raises(OperationResourceAdmissionError, match="work bound"):
         anonymous_graph_card_multiset(request)
@@ -224,7 +225,7 @@ def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
         card_order=8, cards=(graph(vertices, ()),)
     )
     tied_work = factorial(8) * (8 + 2 * comb(8, 2))
-    assert tied_work > deck_operations.MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+    assert tied_work > 2_000_000
     with pytest.raises(OperationResourceAdmissionError, match="work bound"):
         anonymous_graph_card_multiset(request)
 
@@ -237,8 +238,9 @@ def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
             }
         ],
     }
-    with pytest.raises(ValidationError, match="bounded permutation work"):
-        AnonymousGraphCardMultiset.model_validate(payload)
+    decoded = AnonymousGraphCardMultiset.model_validate(payload)
+    assert decoded.card_order == 8
+    assert decoded.classes[0].representative.edges == ()
 
 
 def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -> None:

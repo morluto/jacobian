@@ -30,6 +30,8 @@ from jacobian.math.logic.relational_structures._models import (
     InducedSubstructureResult,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRequest,
+    RelationalProductRequest,
+    RelationalProductResult,
     RelationalQuotient,
     RelationalQuotientRequest,
     RelationalReductRequest,
@@ -41,6 +43,7 @@ from jacobian.math.logic.relational_structures.operations import (
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
+    direct_product_structure,
     enumerate_csp_solutions,
     enumerate_homomorphisms,
     induced_substructure,
@@ -139,6 +142,10 @@ def _quotient(request: RelationalQuotientRequest) -> RelationalQuotient:
     return quotient_structure(request.source, request.classes)
 
 
+def _direct_product(request: RelationalProductRequest) -> RelationalProductResult:
+    return direct_product_structure(request.left, request.right)
+
+
 def _polymorphism_check(
     request: RelationalPolymorphismRequest,
 ) -> RelationalPolymorphismCheckResult:
@@ -187,6 +194,43 @@ _EDGE_INTO_CYCLE_EXAMPLE = {
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="relational.structure.direct_product.compute",
+        title="Form a direct product of finite relational structures",
+        description=(
+            "Form the direct product of two finite structures with identical "
+            "ranked signatures. Pair (i,j) receives canonical label "
+            "i*|B|+j; each relation contains exactly the coordinatewise "
+            "pairs from the two factor relations. The result retains both "
+            "factors and the two projection maps. Carrier, relation-row, and "
+            "coordinate-work bounds are checked before Cartesian relation "
+            "expansion; the admitted visits bound the product and its "
+            "projections."
+        ),
+        request_type=RelationalProductRequest,
+        result_type=RelationalProductResult,
+        run=_direct_product,
+        tags=("relational-structures", "direct-product", "homomorphism", "exact"),
+        discovery_terms=(
+            "direct product of finite relational structures",
+            "relational structure Cartesian product",
+            "product structure projections",
+            "power of a finite relational structure",
+        ),
+        examples=(
+            OperationExample(
+                name="product_of_two_directed_edges",
+                description=(
+                    "Form the edge relation by coordinatewise pairing; both "
+                    "factors must have identical ordered ranked signatures."
+                ),
+                input={
+                    "left": _DIRECTED_EDGE_STRUCTURE,
+                    "right": _DIRECTED_EDGE_STRUCTURE,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="relational.induced_substructure.compute",
         title="Take an induced finite relational substructure",

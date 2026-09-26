@@ -18,9 +18,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures.values import (
+    MAX_RELATIONAL_CARRIER,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
+    MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
 )
@@ -45,6 +47,7 @@ MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
+MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
 
 
 def candidate_space(source_size: int, target_size: int) -> int:
@@ -376,6 +379,56 @@ def admit_relational_reduct(
         )
 
     return indices, work
+
+
+def admit_relational_product(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> int:
+    """Preflight pairwise relation rows and coordinate work for a product.
+
+    The admitted row and coordinate visits bound the complete product result:
+    every product table entry and both projection arrays are written exactly
+    once from the already-admitted factors before any pair is expanded.
+    """
+    if left.signature != right.signature:
+        raise OperationDomainValidationError(
+            location=("right", "signature"),
+            code="relational.product.signature_mismatch",
+            message="direct product factors must have identical ranked signatures",
+        )
+    carrier_size = left.carrier_size * right.carrier_size
+    if carrier_size > MAX_RELATIONAL_CARRIER:
+        raise OperationResourceAdmissionError(
+            location=("product", "carrier_size"),
+            code="relational.product.carrier_bound",
+            message=f"Cartesian carrier has {carrier_size} labels, exceeding {MAX_RELATIONAL_CARRIER}",
+        )
+    row_pairs = tuple(
+        len(left_table) * len(right_table)
+        for left_table, right_table in zip(
+            left.relation_tables, right.relation_tables, strict=True
+        )
+    )
+    if any(rows > MAX_RELATIONAL_TABLE_ROWS for rows in row_pairs):
+        raise OperationResourceAdmissionError(
+            location=("product", "relation_tables"),
+            code="relational.product.table_rows_bound",
+            message=f"a product relation exceeds the {MAX_RELATIONAL_TABLE_ROWS}-row table bound",
+        )
+    work = (
+        sum(
+            rows * (symbol.arity + 1)
+            for rows, symbol in zip(row_pairs, left.signature, strict=True)
+        )
+        + 2 * carrier_size
+    )
+    if work > MAX_RELATIONAL_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("product",),
+            code="relational.product.work_bound",
+            message=f"direct product needs {work} row/coordinate visits, exceeding {MAX_RELATIONAL_PRODUCT_WORK}",
+        )
+    return work
 
 
 def admit_embedding_search(

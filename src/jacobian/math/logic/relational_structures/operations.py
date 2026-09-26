@@ -20,6 +20,7 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_search,
     admit_induced_substructure,
     admit_polymorphism_check,
+    admit_relational_product,
     admit_relational_reduct,
 )
 from jacobian.math.logic.relational_structures._models import (
@@ -47,6 +48,7 @@ from jacobian.math.logic.relational_structures._models import (
     RelationalPolymorphismRelationProfile,
     RelationalPolymorphismStatus,
     RelationalPolymorphismWitness,
+    RelationalProductResult,
     RelationalQuotient,
     RelationalReductResult,
     SymbolTransportProfile,
@@ -139,6 +141,47 @@ def reduct_structure(
         source=source,
         reduct=reduct,
         source_symbol_indices=indices,
+    )
+
+
+def direct_product_structure(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> RelationalProductResult:
+    """Return the direct product on lexicographically labelled pairs.
+
+    Pair ``(i, j)`` has label ``i * |B| + j``. Each relation is the direct
+    product of its factor relations under coordinatewise pair formation.
+    """
+    left = _admit_structure(left, "left")
+    right = _admit_structure(right, "right")
+    admit_relational_product(left, right)
+    right_size = right.carrier_size
+    product_rows = []
+    for left_table, right_table in zip(
+        left.relation_tables, right.relation_tables, strict=True
+    ):
+        rows = {
+            tuple(a * right_size + b for a, b in zip(left_row, right_row, strict=True))
+            for left_row in left_table
+            for right_row in right_table
+        }
+        product_rows.append(tuple(sorted(rows)))
+    product_size = left.carrier_size * right_size
+    product_value = FiniteRelationalStructure(
+        carrier_size=product_size,
+        signature=left.signature,
+        relation_tables=tuple(product_rows),
+    )
+    return RelationalProductResult(
+        left=left,
+        right=right,
+        product=product_value,
+        left_projection=tuple(index // right_size for index in range(product_size))
+        if right_size
+        else (),
+        right_projection=tuple(index % right_size for index in range(product_size))
+        if right_size
+        else (),
     )
 
 

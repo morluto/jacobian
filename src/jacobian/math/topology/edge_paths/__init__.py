@@ -10,11 +10,13 @@ from jacobian.math.topology.edge_paths.operations import (
     verify_edge_path_word,
 )
 from jacobian.math.topology.edge_paths.presentation_maps import (
+    compose_fundamental_group_maps,
     direct_relator_match,
     induced_fundamental_group_map,
 )
 
 __all__ = [
+    "compose_fundamental_group_maps",
     "concatenate_edge_paths",
     "direct_relator_match",
     "edge_path_word",

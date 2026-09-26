@@ -415,3 +415,10 @@ class FundamentalGroupMapResult(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+class PresentationMapCompositionRequest(StrictModel):
+    """Compose two based simplicial maps after applying pi_1."""
+
+    first: FundamentalGroupMapResult
+    second: FundamentalGroupMapResult

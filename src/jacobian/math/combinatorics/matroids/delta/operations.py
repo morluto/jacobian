@@ -105,6 +105,8 @@ def _preflight_extremal_source(delta_matroid: object) -> FiniteDeltaMatroid:
         raise ValueError("source is missing ground or feasible fields") from exc
     if not isinstance(ground, tuple) or not isinstance(feasible, tuple):
         raise ValueError("source ground and feasible family must be immutable tuples")
+    if any(type(label) is not str for label in ground):
+        raise ValueError("source ground labels must be exact strings")
     if len(ground) > MAX_DELTA_MEMBERSHIPS + 1:
         raise DeltaMatroidAdmissionError(
             "ground_size_exceeded", "source ground axis exceeds conversion preflight"
@@ -139,6 +141,8 @@ def _preflight_extremal_source(delta_matroid: object) -> FiniteDeltaMatroid:
     for row in feasible:
         if not isinstance(row, tuple):
             raise ValueError("source feasible rows must be immutable tuples")
+        if any(type(index) is not int for index in row):
+            raise ValueError("source feasible indices must be exact integers")
         memberships += len(row)
         if memberships > MAX_DELTA_MEMBERSHIPS:
             raise DeltaMatroidAdmissionError(
@@ -239,6 +243,7 @@ def _extremal_matroid(
         )
         if delta_matroid.feasible != canonical_feasible_rows(system):
             raise ValueError("delta-matroid feasible rows must be canonical")
+        delta_matroid = FiniteDeltaMatroid._from_kernel(system)
     except (ValidationError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("delta_matroid",),

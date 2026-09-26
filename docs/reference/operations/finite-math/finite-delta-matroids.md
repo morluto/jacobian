@@ -41,7 +41,10 @@ without catalog declarations. The wrapper preserves the source ground axis and
 includes `source_feasible_indices`, aligned with the result bases, as an exact
 map back to the source's canonical feasible rows. The source
 symmetric-exchange axiom is replayed at each operation boundary. The
-basis-family exchange axiom is checked by the canonical matroid carrier.
+the extremal-bases theorem establishes basis exchange for these conversion
+results. Constructing or deserializing a generic `FiniteBasisMatroid` checks its
+canonical structure and cardinalities only; consumers of authored carriers
+must call `require_basis_exchange()` before relying on the matroid claim.
 The lower/upper matroid theorem is stated in Section 6.1 of Dupont, Fink, and
 Moci, [*Universal Tutte characters via combinatorial coalgebras*](https://doi.org/10.5802/alco.35).
 

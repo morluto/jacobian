@@ -128,17 +128,26 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
     denominator_support = original
     for factor in term.factorial_factors:
         coefficient = (factor.n_coefficient, factor.k_coefficient)[axis]
-        for _ in range(abs(factor.power) * abs(coefficient)):
-            choices = {(0, 0)}
+        for shift_index in range(abs(coefficient)):
+            constant = factor.offset + (
+                shift_index + 1 if coefficient > 0 else -shift_index
+            )
+            choices = set()
+            if constant:
+                choices.add((0, 0))
             if factor.n_coefficient:
                 choices.add((1, 0))
             if factor.k_coefficient:
                 choices.add((0, 1))
             goes_up = (coefficient > 0) == (factor.power > 0)
             if goes_up:
-                numerator_support = support_product(numerator_support, choices, 1)
+                numerator_support = support_product(
+                    numerator_support, choices, abs(factor.power)
+                )
             else:
-                denominator_support = support_product(denominator_support, choices, 1)
+                denominator_support = support_product(
+                    denominator_support, choices, abs(factor.power)
+                )
     expanded_terms = max(len(numerator_support), len(denominator_support))
     if expanded_terms > _MAX_EXPANSION_TERMS:
         raise OperationResourceAdmissionError(
@@ -146,13 +155,18 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             code="ore_algebra.hypergeometric_quotient_expansion_budget",
             message="the exact quotient numerator or denominator may exceed 256 terms",
         )
-    coefficient_digits = sum(
-        max(
-            decimal_digit_width(numerator),
-            decimal_digit_width(denominator),
+    coefficient_digits = (
+        0
+        if len(polynomial.terms) == 1
+        and polynomial.terms[0].exponents == (0, 0)
+        else sum(
+            max(
+                decimal_digit_width(numerator),
+                decimal_digit_width(denominator),
+            )
+            for monomial in polynomial.terms
+            for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
         )
-        for monomial in polynomial.terms
-        for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
     )
     base = term.n_base if axis == 0 else term.k_base
     base_numerator, base_denominator = base.as_integer_ratio()
@@ -162,7 +176,7 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
     )
     conservative_digits = (
         2 * coefficient_digits
-        + 2 * base_digits
+        + base_digits
         + factorial_degree * 5
         + _factorial_offset_excess_digits(term, axis)
         + _term_degree(term)

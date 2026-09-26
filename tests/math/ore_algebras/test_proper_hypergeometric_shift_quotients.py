@@ -166,6 +166,48 @@ def test_mixed_affine_factor_uses_actual_minkowski_support() -> None:
         assert _eval_rf(result.k_ratio, n, k) == _direct(term, n, k + 1) / source
 
 
+def test_zero_constant_shifted_affine_factor_uses_exact_support() -> None:
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial([((16, 0), 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=1, k_coefficient=1, offset=-1, power=12
+            ),
+        ),
+    )
+
+    result = proper_hypergeometric_shift_quotients(term)
+
+    assert len(result.n_ratio.numerator.terms) == 221
+    assert len(result.n_ratio.denominator.terms) == 1
+    for n, k in ((2, 3), (4, 5)):
+        source = _direct(term, n, k)
+        assert _eval_rf(result.n_ratio, n, k) == _direct(term, n + 1, k) / source
+
+
+def test_large_exponential_base_is_charged_once() -> None:
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial([((0, 0), 1)]),
+        n_base=CanonicalRational(num=10**99, den=1),
+    )
+
+    result = proper_hypergeometric_shift_quotients(term)
+
+    assert _eval_rf(result.n_ratio, 2, 3) == 10**99
+    assert _eval_rf(result.k_ratio, 2, 3) == 1
+
+
+def test_scalar_prefactor_cancels_before_coefficient_admission() -> None:
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial([((0, 0), 10**62)]),
+    )
+
+    result = proper_hypergeometric_shift_quotients(term)
+
+    assert _eval_rf(result.n_ratio, 2, 3) == 1
+    assert _eval_rf(result.k_ratio, 2, 3) == 1
+
+
 def test_native_entry_rejects_malformed_term_without_raw_validation_errors() -> None:
     forged = ProperHypergeometricTerm.model_construct(polynomial=None)
     for malformed in (cast(ProperHypergeometricTerm, {}), forged):

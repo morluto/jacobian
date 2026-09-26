@@ -71,7 +71,9 @@ def test_native_substitution_rejects_forged_semiring_parent() -> None:
         {"coefficient": object()},
     ],
 )
-def test_native_substitution_rejects_forged_term_fields(updates: dict[str, object]) -> None:
+def test_native_substitution_rejects_forged_term_fields(
+    updates: dict[str, object],
+) -> None:
     source = _polynomial(("x",), (((1,), 1),))
     forged_term = source.terms[0].model_copy(update=updates)
     source = source.model_copy(update={"terms": (forged_term,)})
@@ -221,6 +223,29 @@ def test_constant_polynomial_can_change_target_axis_without_images() -> None:
     assert result.terms[0].coefficient.value == CanonicalRational.from_fraction(
         Fraction(5, 7)
     )
+
+
+def test_annihilated_monomial_skips_image_digit_scans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.tropical.operations as operations
+
+    source = _polynomial(("x", "y"), (((1, 1), 0),))
+    preceding = _polynomial(("t",), (((0,), 1),))
+    zero = _polynomial(("t",), ())
+
+    def unexpected_digit_scan(_value: int) -> int:
+        raise AssertionError("annihilated image coefficients must not be scanned")
+
+    monkeypatch.setattr(operations, "_digits", unexpected_digit_scan)
+    result = compute_polynomial_substitute(
+        PolynomialSubstituteRequest(
+            polynomial=source,
+            target_variables=("t",),
+            images=(preceding, zero),
+        )
+    ).result
+    assert result.terms == ()
 
 
 def test_annihilated_monomial_does_not_charge_later_image_coefficients() -> None:

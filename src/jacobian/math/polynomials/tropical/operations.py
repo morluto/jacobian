@@ -949,6 +949,13 @@ def _admit_substitution_output(
 ) -> None:
     max_coefficient_digits = 1
     for term in polynomial.terms:
+        # An empty image annihilates the monomial, so none of its coefficients
+        # participate in the result. Check before scanning any image terms.
+        if any(
+            exponent > 0 and not image.terms
+            for exponent, image in zip(term.exponents, images, strict=True)
+        ):
+            continue
         if term.coefficient.value is None:
             continue
         digit_bound = max(

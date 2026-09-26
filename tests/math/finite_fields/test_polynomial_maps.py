@@ -76,6 +76,31 @@ def test_complete_table_and_fibers_reuse_exact_slice_a_field_identity() -> None:
     )
 
 
+def test_map_table_keeps_its_old_row_cap_after_field_presentation_widens(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    presentation = finite_field(65_537, (0, 1))
+    constant = finite_polynomial_map(
+        finite_polynomial(presentation, (element(presentation, (1,)),))
+    )
+
+    def unexpected_enumeration(
+        _presentation: FiniteFieldPresentation,
+    ) -> tuple[object, ...]:
+        raise AssertionError("an over-bound map table must fail before enumeration")
+
+    monkeypatch.setattr(
+        "jacobian.math.finite_fields.operations._field_elements",
+        unexpected_enumeration,
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_map_table(constant)
+
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.finite_map_table_exceeds_supported_domain_bound"
+    )
+
+
 def test_native_point_evaluation_recognizes_field_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

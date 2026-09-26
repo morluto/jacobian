@@ -234,10 +234,7 @@ def test_request_rejects_group_immediately_above_enumeration_bound() -> None:
     )
 
     request = _request(symmetric_sn, (0,))
-    with pytest.raises(
-        OperationDomainValidationError,
-        match=rf"group order exceeds.*{MAX_GROUP_ORDER}",
-    ) as error:
+    with pytest.raises(OperationDomainValidationError) as error:
         _run_subset(request)
     assert error.value.errors()[0]["loc"] == ("action",)
     assert error.value.errors()[0]["type"] == (

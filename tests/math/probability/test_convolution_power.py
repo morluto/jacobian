@@ -215,9 +215,10 @@ def test_widened_power_result_composes_into_finite_distribution_consumers() -> N
     degenerate = _distribution(((Fraction(0), Fraction(1)),))
     with pytest.raises(
         OperationDomainValidationError,
-        match=rf"{MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS}-atom output bound",
-    ):
+    ) as exc_info:
         convolution(powered.distribution, degenerate)
+
+    assert exc_info.value.errors()[0]["type"] == "probability.convolution.output_bound"
 
 
 def test_identity_power_preserves_mixed_large_denominator_source() -> None:
@@ -272,9 +273,10 @@ def test_wider_canonical_carrier_does_not_widen_binary_convolution() -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=rf"{MAX_FINITE_CONVOLUTION_OUTPUT_ATOMS}-atom output bound",
-    ):
+    ) as exc_info:
         convolution(source, source)
+
+    assert exc_info.value.errors()[0]["type"] == "probability.convolution.output_bound"
 
 
 def test_power_rejects_dense_lattice_span_before_backend_execution() -> None:
@@ -297,9 +299,13 @@ def test_power_rejects_dense_lattice_span_before_backend_execution() -> None:
     assert convolution_power(source, 1).distribution == source
     with pytest.raises(
         OperationDomainValidationError,
-        match=rf"at most {MAX_FINITE_DISTRIBUTION_ATOMS} lattice positions",
-    ):
+    ) as exc_info:
         convolution_power(source, 2)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.convolution_power.support_bound"
+    )
 
 
 def test_power_rejects_work_and_height_envelopes_separately() -> None:
@@ -370,10 +376,13 @@ def test_power_rejects_a_lattice_value_over_the_exact_decimal_bound() -> None:
         )
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match=f"{MAX_RESULT_RATIONAL_DIGITS}-digit"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         convolution_power(source, 2)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.convolution_power.height_bound"
+    )
 
 
 def test_power_rejects_an_interior_value_with_a_larger_reduced_numerator() -> None:
@@ -387,10 +396,13 @@ def test_power_rejects_an_interior_value_with_a_larger_reduced_numerator() -> No
         )
     )
 
-    with pytest.raises(
-        OperationDomainValidationError, match=f"{MAX_RESULT_RATIONAL_DIGITS}-digit"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         convolution_power(source, 2)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.convolution_power.height_bound"
+    )
 
 
 def test_peak_admits_when_a_nonmaximal_lattice_value_exceeds_height_bound() -> None:

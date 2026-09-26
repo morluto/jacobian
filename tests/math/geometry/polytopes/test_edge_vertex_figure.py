@@ -264,37 +264,6 @@ class TestEdgeKnownAnswer:
     def test_brute_force_oracle_cross_check(self, polytope: RationalVPolytope) -> None:
         assert _edge_set(polytope) == _oracle_edge_set(polytope)
 
-    def test_facet_row_oracle_agrees_on_prism(self) -> None:
-        # A second independent path: raw facet rows from the shared geometry
-        # backend (not the kernel's bound PrimitiveFacet profile) recover the
-        # same square edge set through incidence intersection plus rank.
-        points = _raw_points(_square())
-        rows = facets_from_points(points, 2)
-        assert len(rows) == 4
-        containing = [
-            {
-                row
-                for row, (normal, offset) in enumerate(rows)
-                if sum(normal[axis] * points[i][axis] for axis in range(2)) == offset
-            }
-            for i in range(4)
-        ]
-        ids = [vertex.vertex_id for vertex in _square().vertices]
-        found = set()
-        for first in range(4):
-            for second in range(first + 1, 4):
-                common = containing[first] & containing[second]
-                members = [points[k] for k in range(4) if common <= containing[k]]
-                reference = members[0]
-                columns = [
-                    Matrix([[point[k] - reference[k]] for k in range(2)])
-                    for point in members[1:]
-                ]
-                rank = Matrix.hstack(*columns).rank() if columns else 0
-                if rank == 1:
-                    found.add(tuple(sorted((ids[first], ids[second]))))
-        assert found == _edge_set(_square())
-
 
 class TestVertexFigureKnownAnswer:
     def test_square_figure_is_segment(self) -> None:
@@ -506,10 +475,15 @@ class TestDefiningInvariant:
     def test_edge_minimal_faces_are_one_dimensional(self) -> None:
         # Every reported edge's minimal face (common-facet intersection)
         # has affine rank exactly one; every non-edge pair has rank != 1.
-        for polytope in (_square(), _cube(), _tetrahedron()):
+        for polytope, expected_facet_count in (
+            (_square(), 4),
+            (_cube(), 6),
+            (_tetrahedron(), 4),
+        ):
             points = _raw_points(polytope)
             dim = len(polytope.space.axes)
             rows = facets_from_points(points, dim)
+            assert len(rows) == expected_facet_count
             containing = [
                 {
                     row

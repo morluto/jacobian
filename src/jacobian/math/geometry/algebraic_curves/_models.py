@@ -102,6 +102,28 @@ class AffineChartRequest(StrictModel):
     chart_variable: PolynomialVariable
 
 
+class PlaneCurveBlowupChartRequest(StrictModel):
+    """One affine blowup chart over a rational point of a plane curve."""
+
+    polynomial: RationalPolynomial
+    center: VariablePoint
+    radial_variable: PolynomialVariable
+    slope_variable: PolynomialVariable
+
+    @model_validator(mode="after")
+    def require_distinct_chart_variables(self) -> Self:
+        if self.radial_variable == self.slope_variable:
+            raise _validation_error(
+                "blowup_chart_axis_collision", "chart variables must be distinct"
+            )
+        if {self.radial_variable, self.slope_variable} & set(self.polynomial.variables):
+            raise _validation_error(
+                "blowup_chart_axis_collision",
+                "chart variables must be fresh relative to the source axes",
+            )
+        return self
+
+
 class RationalConicParametrizationRequest(StrictModel):
     """A smooth affine rational conic with one supplied rational point."""
 
@@ -153,6 +175,38 @@ class AffineChartResult(StrictModel):
     source_polynomial: RationalPolynomial
     chart_variable: PolynomialVariable
     polynomial: RationalPolynomial
+
+
+class PlaneCurveBlowupChartResult(StrictModel):
+    """Strict transform and its exact intersection with the exceptional line."""
+
+    source_polynomial: RationalPolynomial
+    center: VariablePoint
+    radial_variable: PolynomialVariable
+    slope_variable: PolynomialVariable
+    exceptional_multiplicity: int = Field(ge=1, le=_MAX_CURVE_EXPONENT)
+    strict_transform: RationalPolynomial
+    exceptional_intersection_polynomial: RationalPolynomial
+
+    @model_validator(mode="after")
+    def require_chart_axes(self) -> Self:
+        expected = (self.radial_variable, self.slope_variable)
+        if self.strict_transform.variables != expected:
+            raise _validation_error(
+                "blowup_result_axis",
+                "strict transform must use the declared ordered chart axes",
+            )
+        if self.exceptional_intersection_polynomial.variables != (self.slope_variable,):
+            raise _validation_error(
+                "blowup_result_exceptional_axis",
+                "exceptional intersection must use the slope axis",
+            )
+        if self.center.variables != self.source_polynomial.variables:
+            raise _validation_error(
+                "blowup_result_center_axis",
+                "center must retain the ordered source axes",
+            )
+        return self
 
 
 class RationalConicParametrizationResult(StrictModel):
@@ -302,6 +356,8 @@ __all__ = [
     "AffineChartResult",
     "AffineCurveRequest",
     "AffineCurveResult",
+    "PlaneCurveBlowupChartRequest",
+    "PlaneCurveBlowupChartResult",
     "PositiveDimensionalProjectivePlaneCurveSingularLocus",
     "ProjectiveClosureRequest",
     "ProjectiveClosureResult",

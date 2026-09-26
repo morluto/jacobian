@@ -3,8 +3,13 @@ from __future__ import annotations
 from collections.abc import Iterable
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._execution import OperationResourceExhaustedError
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.combinatorics.finite_structures.hypergraph_coloring._models import (
+    NonmonochromaticColoringRequest,
+)
 from jacobian.math.combinatorics.finite_structures.hypergraph_coloring.operations import (
     decide_nonmonochromatic_coloring,
     verify_coloring_witness,
@@ -32,6 +37,18 @@ def test_colorable_3edge() -> None:
     assert result.witness is not None
     color_map = dict(result.witness.assignments)
     assert color_map["0"] != color_map["2"] or color_map["1"] != color_map["2"]
+
+
+def test_result_preserves_source_palette_and_canonical_fast_path() -> None:
+    h = _hg(["a", "b"], [("e0", ("a", "b"))])
+
+    result = decide_nonmonochromatic_coloring(h, 2)
+
+    assert result.hypergraph == h
+    assert result.palette_size == 2
+    assert result.outcome == "COLORABLE"
+    assert result.witness is not None
+    assert result.witness.assignments == (("a", 0), ("b", 1))
 
 
 def test_serialized_colorable_witness_is_verifiable_and_forgery_resistant() -> None:
@@ -180,6 +197,7 @@ def test_singleton_edge_not_colorable() -> None:
     h = _hg(["0"], [("e0", ("0",))])
     result = decide_nonmonochromatic_coloring(h, 2)
     assert result.outcome == "NOT_COLORABLE"
+    assert result.witness is None
 
 
 def test_native_search_exhaustion_is_not_a_negative_decision(
@@ -197,10 +215,39 @@ def test_native_search_exhaustion_is_not_a_negative_decision(
         decide_nonmonochromatic_coloring(h, 2)
 
 
+def test_dense_search_refusal_is_bounded_work_not_domain_rejection() -> None:
+    vertices = [f"v{i:02d}" for i in range(20)]
+    h = _hg(
+        vertices,
+        [
+            (f"e{i}_{j}", (left, right))
+            for i, left in enumerate(vertices)
+            for j, right in enumerate(vertices[i + 1 :], start=i + 1)
+        ],
+    )
+
+    request = NonmonochromaticColoringRequest(hypergraph=h, palette_size=19)
+    assert request.hypergraph == h
+    with pytest.raises(OperationResourceExhaustedError, match="work allowance"):
+        decide_nonmonochromatic_coloring(request.hypergraph, request.palette_size)
+
+
 def test_large_carrier_with_cheap_search_is_admitted() -> None:
     h = _hg([str(i) for i in range(17)], [("e0", ("0", "1"))])
     result = decide_nonmonochromatic_coloring(h, 1)
     assert result.outcome == "NOT_COLORABLE"
+
+
+def test_palette_must_be_positive_in_request_and_operation() -> None:
+    h = _hg(["a"], [])
+
+    with pytest.raises(OperationDomainValidationError, match="palette_size"):
+        decide_nonmonochromatic_coloring(h, 0)
+    with pytest.raises(ValidationError):
+        NonmonochromaticColoringRequest(hypergraph=h, palette_size=0)
+
+    schema = NonmonochromaticColoringRequest.model_json_schema()
+    assert schema["properties"]["palette_size"]["minimum"] == 1
 
 
 def test_injective_presolve_precedes_search_work() -> None:

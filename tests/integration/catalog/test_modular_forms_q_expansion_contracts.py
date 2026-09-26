@@ -38,3 +38,28 @@ def test_dispatch_output_series_feeds_formal_series_power_unchanged() -> None:
         {"num": "480", "den": "1"},
         {"num": "61920", "den": "1"},
     ]
+
+
+def test_hecke_matrix_dispatch_returns_labeled_exact_basis_action() -> None:
+    result = invoke_operation(
+        "modular_form.hecke_matrix.compute",
+        {
+            "space": {
+                "group": "GAMMA0",
+                "level": 2,
+                "weight": 4,
+                "kind": "M",
+                "character": "TRIVIAL",
+                "coefficient_domain": "QQ",
+            },
+            "index": 3,
+        },
+        Catalog.open(),
+    )
+    assert result.output is not None
+    assert result.output["row_labels"] == ["A2^2", "E4"]
+    assert result.output["column_labels"] == ["A2^2", "E4"]
+    assert result.output["entries"] == [
+        [{"num": "28", "den": "1"}, {"num": "0", "den": "1"}],
+        [{"num": "0", "den": "1"}, {"num": "28", "den": "1"}],
+    ]

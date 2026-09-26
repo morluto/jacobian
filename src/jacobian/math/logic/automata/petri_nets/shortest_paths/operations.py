@@ -33,17 +33,23 @@ MAX_SHORTEST_PATH_OUTPUT_BYTES = 10 * 1024 * 1024
 def _admit_source_graph(
     graph: ReachabilityResult,
 ) -> tuple[int, dict[tuple[int, ...], int]]:
-    places, transitions, _, parented_markings = _preflight_terminal_scc_graph_shape(
-        graph
+    places, transitions, label_characters, parented_markings = (
+        _preflight_terminal_scc_graph_shape(graph)
     )
     state_count = len(graph.states)
     edge_count = len(graph.edges)
+    base_labels = (
+        *(graph.net.place_ids or ()),
+        *(graph.net.transition_ids or ()),
+    )
     work = (
         state_count * max(1, transitions) * max(1, places)
         + edge_count * max(1, places)
         + state_count
         + edge_count
         + parented_markings * places * transitions
+        + label_characters
+        + parented_markings * sum(len(label) for label in base_labels)
         + 4 * state_count * max(1, (state_count - 1).bit_length())
         + edge_count * max(1, (transitions - 1).bit_length())
     )

@@ -289,7 +289,7 @@ def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
     boundary = ModularCharacterCoordinates(
         space=source_39,
         basis_id=_GENERIC_BASIS,
-        coordinates=(_element(10**82), _element(0), _element(0)),
+        coordinates=(_element(10**40), _element(0), _element(0)),
     )
     admitted = modular_character_coordinates_transport(
         boundary, _inclusion(source_39, target_space)
@@ -303,7 +303,7 @@ def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
     oversized = ModularCharacterCoordinates(
         space=source_39,
         basis_id=_GENERIC_BASIS,
-        coordinates=(_element(10**83), _element(0), _element(0)),
+        coordinates=(_element(10**41), _element(0), _element(0)),
     )
     with pytest.raises(
         OperationResourceAdmissionError, match="expansion or target solve exceeds"
@@ -431,6 +431,28 @@ def test_transport_rejects_malformed_constructed_inclusion_with_typed_error() ->
     assert error.value.errors()[0]["type"] == "modular_form.character_inclusion_invalid"
 
 
+def test_transport_consumes_canonicalized_inclusion_for_basis_selection() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    canonical = _inclusion(source_space, target_space)
+    # A native caller may retain a valid serialized target space while bypassing
+    # field validation; admission must canonicalize it before selecting bases.
+    uncanonical = canonical.model_copy(
+        update={"target_space": target_space.model_dump()}
+    )
+
+    transported = modular_character_coordinates_transport(
+        _level_13_form(source_space), uncanonical
+    )
+    expected = modular_character_coordinates_transport(
+        _level_13_form(source_space), canonical
+    )
+
+    assert transported == expected
+    assert transported.inclusion == canonical
+
+
 def test_transport_rejects_malformed_constructed_form_with_typed_error() -> None:
     source_character = dirichlet_character(character_group(13), (2,))
     source_space = _space(13, source_character)
@@ -495,7 +517,7 @@ def test_transport_height_boundary_is_admitted_before_basis_materialization(
         raise AssertionError("PARI basis work ran before height admission")
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
-    for coefficient in (10**121, 10**200):
+    for coefficient in (10**29, 10**42):
         oversized = ModularFormCoordinates(
             space=source_space,
             basis_id=_LEGACY_BASIS,
@@ -513,7 +535,7 @@ def test_transport_accepts_admitted_height_boundary_through_exact_expansion() ->
     target_character = _inflate(source_character, 26)
     source_space = _space(13, source_character)
     target_space = _space(26, target_character)
-    coefficient = 10**120  # 121 digits; the next digit is rejected above.
+    coefficient = 10**28  # 29 digits; the next digit is rejected above.
     form = ModularFormCoordinates(
         space=source_space,
         basis_id=_LEGACY_BASIS,

@@ -41,7 +41,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeMatrix,
     ModularCharacterHeckeMatrixRequest,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
     pari_character_basis,
 )
@@ -228,7 +228,7 @@ def test_forged_character_coordinates_are_rejected_before_pari(
     monkeypatch: pytest.MonkeyPatch, coordinates: tuple[object, ...]
 ) -> None:
     from jacobian.math.number_theory.modular_forms import character_basis
-    from jacobian.math.number_theory.modular_forms.pari_basis import (
+    from jacobian.math.number_theory.modular_forms.pari_backend import (
         _pari_character_request,
     )
 
@@ -254,6 +254,25 @@ def test_forged_character_coordinates_are_rejected_before_pari(
         _pari_character_request(forged_space)
     with pytest.raises(OperationDomainValidationError, match="coordinates"):
         modular_character_basis_q_expansions(forged_space)
+
+
+@pytest.mark.parametrize("missing", ["coefficient_domain", "character"])
+def test_character_basis_rejects_constructed_space_missing_required_fields(
+    missing: str,
+) -> None:
+    valid = _space()
+    values = {
+        "group": valid.group,
+        "level": valid.level,
+        "weight": valid.weight,
+        "kind": valid.kind,
+        "character": valid.character,
+        "coefficient_domain": valid.coefficient_domain,
+    }
+    values.pop(missing)
+    malformed = ModularFormSpace.model_construct(**values)
+    with pytest.raises(OperationDomainValidationError):
+        modular_character_basis_q_expansions(malformed)
 
 
 def test_character_basis_carrier_rejects_foreign_coefficient_parent() -> None:
@@ -383,7 +402,7 @@ def test_conjugate_character_product_returns_sturm_reconstructed_target() -> Non
 
     from jacobian.math.number_theory.modular_forms import cyclotomic
     from jacobian.math.number_theory.modular_forms.character_basis import _coefficient
-    from jacobian.math.number_theory.modular_forms.pari_basis import (
+    from jacobian.math.number_theory.modular_forms.pari_backend import (
         _pari_character_request,
         pari_character_basis,
     )

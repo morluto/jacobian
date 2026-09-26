@@ -52,6 +52,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_order,
     finite_field_point_scalar,
     finite_field_points,
+    finite_field_quadratic_twist,
     finite_field_quadratic_twist_relation,
     finite_field_zeta_function,
     finite_field_zeta_polynomial,
@@ -95,6 +96,12 @@ def compute_finite_field_discriminant(
     return finite_field_discriminant(
         request.field, request.coefficient_a, request.coefficient_b
     )
+
+
+def compute_finite_field_quadratic_twist(
+    request: FiniteFieldCurveRequest,
+) -> FiniteFieldShortWeierstrassCurve:
+    return finite_field_quadratic_twist(request.curve)
 
 
 def compute_finite_field_group_structure(
@@ -176,12 +183,6 @@ _F5_PRESENTATION: dict[str, Any] = {
     "generator": "a",
 }
 
-_F25_PRESENTATION: dict[str, Any] = {
-    "characteristic": "5",
-    "modulus_coefficients": ["2", "0", "1"],
-    "generator": "b",
-}
-
 
 def _finite_field_element(coordinate: int) -> dict[str, Any]:
     return {
@@ -208,18 +209,6 @@ def _finite_point(x: int, y: int) -> dict[str, Any]:
 
 
 _FINITE_INFINITY = {"curve": _finite_curve(), "at_infinity": True, "x": None, "y": None}
-
-_FINITE_FIELD_BASE_CHANGE_EXAMPLE: dict[str, Any] = {
-    "curve": _finite_curve(),
-    "embedding": {
-        "source": _F5_PRESENTATION,
-        "target": _F25_PRESENTATION,
-        "generator_image": {
-            "presentation": _F25_PRESENTATION,
-            "coordinates": ["0", "0"],
-        },
-    },
-}
 
 _FINITE_FIELD_DISCRIMINANT_EXAMPLE: dict[str, Any] = {
     "field": _F5_PRESENTATION,
@@ -360,16 +349,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             request.curve, request.embedding, request.point
         ),
         tags=("elliptic-curve", "finite-field", "base-change", "exact"),
-        examples=(
-            OperationExample(
-                name="base_change_f5_to_f25",
-                description=(
-                    "Transport the curve over F5 to F25 along the explicit "
-                    "embedding that sends the source generator to zero."
-                ),
-                input=_FINITE_FIELD_BASE_CHANGE_EXAMPLE,
-            ),
-        ),
     ),
     MathTool(
         operation_id="elliptic_curve.finite_field.cardinality.exhaustive.compute",
@@ -455,6 +434,31 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="count_extensions_five_field",
                 description="Count the curve over F5 and its first two extension fields using exact Frobenius recurrence.",
                 input={"curve": _finite_curve(), "max_degree": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.quadratic_twist.compute",
+        title="Construct the canonical nontrivial quadratic twist",
+        description=(
+            "Return the canonical nontrivial quadratic twist of a nonsingular "
+            "short-Weierstrass curve over an admitted finite field. The kernel "
+            "chooses the least encoded nonsquare d and returns y^2 = x^3 + "
+            "d^2 A x + d^3 B. Its point count has the opposite Frobenius trace."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldShortWeierstrassCurve,
+        run=compute_finite_field_quadratic_twist,
+        tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
+        discovery_terms=(
+            "quadratic twist over finite fields",
+            "nontrivial elliptic curve twist",
+        ),
+        examples=(
+            OperationExample(
+                name="nontrivial_twist_over_five",
+                description="Return the canonical nontrivial twist over F5.",
+                input={"curve": _finite_curve()},
             ),
         ),
     ),

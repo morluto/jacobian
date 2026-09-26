@@ -19,16 +19,18 @@ returns a subcomplex over `ZZ`, `QQ`, or a bounded prime field. It also gives
 the basis-level inclusion used when relating unnormalized chains to the
 normalized quotient.
 
-Admission uses source degree sizes to bound the ambient boundaries, all
-degreewise inclusion matrices, restricted boundaries, row scans, and result
-bytes before constructing matrices. If `c_n = |X_n|` and `r_n` is the
-degenerate rank, the bounds use `r_n <= c_n`, so the inclusion cost is bounded
-by `sum_n c_n^2` and the restricted boundary cost by
-`sum_n c_(n-1)c_n`. They use the exact serialized source size and a fixed
-coefficient-width bound for the matrices. The result codec checks source axes
-and matrix shapes; it does not replay the degeneracy or chain-map computation.
-A consumer of caller-edited serialized values must check any source-to-matrix
-relation on its own admitted input boundary.
+Admission validates the source once, derives the degeneracy images and their
+exact ranks, then bounds the ambient boundaries, degreewise inclusions,
+restricted boundaries, row scans, and complete result bytes before allocating
+chain matrices. The shared chain-result estimate includes both serialized
+copies of the simplex labels (ASCII-escaped from the label length bound), as
+well as the ambient differential; the operation adds bounds for its exact-rank
+inclusions, restricted differentials, index lists, and result envelope. A
+private constructor then builds ambient chains from this already-checked source
+without repeating source admission or `from_tables` validation. The result
+codec checks source axes and matrix shapes; it does not replay the degeneracy
+or chain-map computation. A consumer of caller-edited serialized values must
+check any source-to-matrix relation on its own admitted input boundary.
 
 The alternating-boundary identity for the degenerate subcomplex is given in
 §5.2 of Chris Gillam, [Simplicial Methods in Algebra and Algebraic

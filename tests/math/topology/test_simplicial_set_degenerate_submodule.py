@@ -1,7 +1,9 @@
 import pytest
 from sympy import Matrix, zeros
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.values import CoefficientRing
+from jacobian.math.topology.simplicial_sets import chains as chains_module
 from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
     DegenerateSubmoduleRequest,
     degenerate_submodule,
@@ -165,3 +167,71 @@ def test_degenerate_submodule_wire_round_trip_is_stable_json():
     payload = result.model_dump_json()
 
     assert type(result).model_validate_json(payload) == result
+
+
+def test_degenerate_submodule_checks_source_once_and_constructs_without_replay(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = standard_simplex(1, 2)
+    original_from_tables = chains_module.from_tables
+    validations = 0
+
+    def count_source_checks(*args, **kwargs):
+        nonlocal validations
+        validations += 1
+        return original_from_tables(*args, **kwargs)
+
+    def reject_public_chain_reentry(*args, **kwargs):
+        pytest.fail("degenerate construction re-entered public chain admission")
+
+    monkeypatch.setattr(chains_module, "from_tables", count_source_checks)
+    monkeypatch.setattr(
+        chains_module, "unnormalized_chains", reject_public_chain_reentry
+    )
+
+    result = degenerate_submodule(DegenerateSubmoduleRequest(simplicial_set=source))
+
+    assert validations == 1
+    assert result.unnormalized_chains.simplicial_set == source
+
+
+def test_degenerate_submodule_admits_derived_output_before_chain_matrices(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    source = standard_simplex(1, 2)
+    sizes = tuple(len(level) for level in source.sets)
+    ambient_bound = chains_module._estimate_output_bytes(source, sizes)
+    original_from_tables = chains_module.from_tables
+    validations = 0
+    matrix_construction_started = False
+
+    def count_source_checks(*args, **kwargs):
+        nonlocal validations
+        validations += 1
+        return original_from_tables(*args, **kwargs)
+
+    def reject_chain_matrix_construction(*args, **kwargs):
+        nonlocal matrix_construction_started
+        matrix_construction_started = True
+        pytest.fail("chain matrices were built before derived output admission")
+
+    monkeypatch.setattr(chains_module, "from_tables", count_source_checks)
+    monkeypatch.setattr(
+        chains_module,
+        "MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES",
+        ambient_bound,
+    )
+    monkeypatch.setattr(
+        chains_module,
+        "_unnormalized_chains_from_checked_source",
+        reject_chain_matrix_construction,
+    )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        degenerate_submodule(DegenerateSubmoduleRequest(simplicial_set=source))
+
+    assert error.value.errors()[0]["type"] == (
+        "simplicial_set.degenerate_submodule_output_budget_exceeded"
+    )
+    assert validations == 1
+    assert not matrix_construction_started

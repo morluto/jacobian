@@ -2,6 +2,7 @@
 
 import pytest
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.values import IntegralHomologyGroupValue
 from jacobian.math.topology.simplicial_sets import (
     FiniteTruncatedSimplicialSet,
@@ -10,6 +11,7 @@ from jacobian.math.topology.simplicial_sets import (
     induced_normalized_homology_map,
     normalized_chains,
 )
+from jacobian.math.topology.simplicial_sets import maps as simplicial_maps
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
@@ -81,6 +83,99 @@ def test_zero_rank_target_and_functorial_composition() -> None:
     assert compose_simplicial_homology_maps(identity_map, identity_map) == identity_map
     composed = compose_simplicial_homology_maps(identity_map, collapse_map)
     assert composed == collapse_map
+
+
+def test_induced_homology_executes_each_admitted_endpoint_plan_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _cyclic_group_two_nerve_prefix()
+    point = standard_simplex(0, 2)
+    collapse = TruncatedSimplicialMap(
+        source=source,
+        target=point,
+        maps=tuple((0,) * len(level) for level in source.sets),
+    )
+    original = simplicial_maps.admit_integral_homology
+    calls = 0
+
+    def count_admissions(complex_value):
+        nonlocal calls
+        calls += 1
+        return original(complex_value)
+
+    monkeypatch.setattr(simplicial_maps, "admit_integral_homology", count_admissions)
+    induced_normalized_homology_map(collapse)
+
+    assert calls == 2
+
+
+def test_composition_admits_both_coordinate_projections_before_either_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _cyclic_group_two_nerve_prefix()
+    identity = TruncatedSimplicialMap(
+        source=source,
+        target=source,
+        maps=tuple(tuple(range(len(level))) for level in source.sets),
+    )
+    homology_map = induced_normalized_homology_map(identity)
+    original_admit = simplicial_maps._admit_homology_projection
+    admitted_work: list[int] = []
+
+    def record_admission(*args, **kwargs):
+        result = original_admit(*args, **kwargs)
+        admitted_work.append(result[-1])
+        if len(admitted_work) == 1:
+            monkeypatch.setattr(
+                simplicial_maps,
+                "MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK",
+                result[-1],
+            )
+        return result
+
+    def projection_must_not_run(*args, **kwargs):
+        pytest.fail("coordinate projection ran before combined work admission")
+
+    monkeypatch.setattr(
+        simplicial_maps, "_admit_homology_projection", record_admission
+    )
+    monkeypatch.setattr(
+        simplicial_maps, "_map_homology_generator", projection_must_not_run
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        compose_simplicial_homology_maps(homology_map, homology_map)
+
+    assert len(admitted_work) == 2
+    assert admitted_work[0] > 0
+    assert error.value.errors()[0]["type"] == (
+        "simplicial_set.induced_homology_projection_work_exceeded"
+    )
+
+
+def test_composition_canonicalizes_authored_homology_endpoints() -> None:
+    source = _cyclic_group_two_nerve_prefix()
+    identity = TruncatedSimplicialMap(
+        source=source,
+        target=source,
+        maps=tuple(tuple(range(len(level))) for level in source.sets),
+    )
+    canonical = induced_normalized_homology_map(identity)
+    stale_set = source.model_copy(
+        update={"checked_identities": source.checked_identities + 1}
+    )
+    stale_simplicial_map = canonical.simplicial_map.model_copy(
+        update={"source": stale_set, "target": stale_set}
+    )
+    stale_endpoint = canonical.source.model_copy(update={"simplicial_set": stale_set})
+    stale = canonical.model_copy(
+        update={
+            "simplicial_map": stale_simplicial_map,
+            "source": stale_endpoint,
+            "target": stale_endpoint,
+        }
+    )
+
+    assert compose_simplicial_homology_maps(stale, canonical) == canonical
 
 
 def test_identity_of_contractible_simplex_keeps_zero_rank_map_rows() -> None:

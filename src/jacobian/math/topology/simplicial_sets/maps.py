@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from fractions import Fraction
 
 from pydantic import Field, StrictInt, model_validator
@@ -9,16 +10,18 @@ from pydantic import Field, StrictInt, model_validator
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
     ExactInteger,
-    format_canonical_integer,
 )
 from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.chain_complexes._integral_homology import (
+    IntegralHomologyExecutionPlan,
     admit_integral_homology,
+    compute_integral_homology,
 )
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
@@ -34,6 +37,7 @@ from jacobian.math.topology.chain_complexes.values import (
     ChainMapValue,
     CoefficientRing,
     HomologyGroup,
+    IntegralFreeGenerator,
     IntegralHomologyGroupValue,
     IntegralTorsionGenerator,
 )
@@ -730,6 +734,7 @@ def _admit_homology_projection(
     tuple[tuple[tuple[int, ...], ...], ...],
     tuple[tuple[tuple[int, ...], ...], ...],
     tuple[tuple[tuple[int, ...], ...], ...],
+    int,
 ]:
     source_differentials = tuple(
         _integer_matrix(matrix) for matrix in chain_map.source.differential_matrices
@@ -741,6 +746,10 @@ def _admit_homology_projection(
     inverse_matrices = tuple(
         tuple(tuple(row) for row in inverse) for inverse in target_right_inverses
     )
+    target_integral_groups = []
+    for group in target.homology_groups:
+        assert isinstance(group, IntegralHomologyGroupValue)
+        target_integral_groups.append(group)
     all_matrices = (
         *source_differentials,
         *target_differentials,
@@ -748,7 +757,7 @@ def _admit_homology_projection(
         *inverse_matrices,
         *(
             group.incoming_smith_certificate.left_transformation.entries
-            for group in target.homology_groups
+            for group in target_integral_groups
         ),
     )
     entry_bits_by_identity = {
@@ -789,7 +798,7 @@ def _admit_homology_projection(
         target_coordinates = target_group.free_rank + sum(
             int(order) > 1 for order in target_group.torsion_invariant_factors
         )
-        generators = (
+        generators: tuple[IntegralFreeGenerator | IntegralTorsionGenerator, ...] = (
             *source_group.free_generators,
             *source_group.torsion_generators,
         )
@@ -840,7 +849,7 @@ def _admit_homology_projection(
             code="simplicial_set.induced_homology_projection_output_exceeded",
             message="induced homology coordinates exceed their output reservation",
         )
-    return source_differentials, target_differentials, map_matrices
+    return source_differentials, target_differentials, map_matrices, work
 
 
 def _coordinates_in_target_homology(
@@ -970,17 +979,149 @@ def _map_homology_generator(
     return _coordinates_in_target_homology(image, target_group, inverse_right)
 
 
-def induced_normalized_homology_map(
-    map_value: TruncatedSimplicialMap,
-) -> SimplicialHomologyMapValue:
-    """Compute the induced map on every homology degree supported by a prefix."""
-    chain_map = induced_normalized_chain_map(map_value)
-    source_plan = admit_integral_homology(chain_map.source)
-    target_plan = (
-        source_plan
-        if map_value.target == map_value.source
-        else admit_integral_homology(chain_map.target)
+@dataclass(frozen=True)
+class _NormalizedHomologyEndpoint:
+    simplicial_set: FiniteTruncatedSimplicialSet
+    homology: NormalizedHomologyResult
+    right_inverses: list[list[list[int]]]
+
+
+@dataclass(frozen=True)
+class _InducedNormalizedHomologyPlan:
+    map_value: TruncatedSimplicialMap
+    source: _NormalizedHomologyEndpoint
+    target: _NormalizedHomologyEndpoint
+    source_differentials: tuple[tuple[tuple[int, ...], ...], ...]
+    target_differentials: tuple[tuple[tuple[int, ...], ...], ...]
+    map_matrices: tuple[tuple[tuple[int, ...], ...], ...]
+    projection_work: int
+
+
+def _normalized_homology_endpoint(
+    simplicial_set: FiniteTruncatedSimplicialSet,
+    plan: IntegralHomologyExecutionPlan,
+    cache: list[_NormalizedHomologyEndpoint],
+) -> _NormalizedHomologyEndpoint:
+    canonical = _require_carrier(simplicial_set, location="simplicial_set")
+    for endpoint in cache:
+        if endpoint.simplicial_set == canonical:
+            if endpoint.homology.chain_complex != plan.source:
+                raise OperationDomainValidationError(
+                    location=("simplicial_set",),
+                    code="simplicial_set.normalized_homology_plan_source_mismatch",
+                    message="the admitted homology plan does not match the normalized chain complex",
+                )
+            return endpoint
+    right_inverses: list[list[list[int]]] = []
+    homology = normalized_homology(
+        canonical,
+        _integral_right_inverses=right_inverses,
+        _integral_plan=plan,
     )
+    endpoint = _NormalizedHomologyEndpoint(canonical, homology, right_inverses)
+    cache.append(endpoint)
+    return endpoint
+
+
+def _prepare_induced_normalized_homology_map(
+    map_value: TruncatedSimplicialMap,
+    chain_map: ChainMapValue,
+    source_plan: IntegralHomologyExecutionPlan,
+    target_plan: IntegralHomologyExecutionPlan,
+    endpoint_cache: list[_NormalizedHomologyEndpoint],
+) -> _InducedNormalizedHomologyPlan:
+    source = _normalized_homology_endpoint(
+        map_value.source, source_plan, endpoint_cache
+    )
+    target = _normalized_homology_endpoint(
+        map_value.target, target_plan, endpoint_cache
+    )
+    (
+        source_differentials,
+        target_differentials,
+        map_matrices,
+        projection_work,
+    ) = _admit_homology_projection(
+        chain_map,
+        source.homology,
+        target.homology,
+        target.right_inverses,
+    )
+    return _InducedNormalizedHomologyPlan(
+        map_value,
+        source,
+        target,
+        source_differentials,
+        target_differentials,
+        map_matrices,
+        projection_work,
+    )
+
+
+def _compute_induced_normalized_homology_map(
+    plan: _InducedNormalizedHomologyPlan,
+) -> SimplicialHomologyMapValue:
+    degree_maps: list[NormalizedHomologyDegreeMap] = []
+    for degree, (source_group, target_group) in enumerate(
+        zip(
+            plan.source.homology.homology_groups,
+            plan.target.homology.homology_groups,
+            strict=True,
+        )
+    ):
+        assert isinstance(source_group, IntegralHomologyGroupValue)
+        assert isinstance(target_group, IntegralHomologyGroupValue)
+        inverse_right = tuple(
+            tuple(row) for row in plan.target.right_inverses[degree]
+        )
+        degree_maps.append(
+            NormalizedHomologyDegreeMap(
+                degree=degree,
+                free_generator_images=tuple(
+                    _map_homology_generator(
+                        degree,
+                        tuple(generator.cycle.coefficients),
+                        target_group,
+                        inverse_right,
+                        plan.source_differentials,
+                        plan.target_differentials,
+                        plan.map_matrices,
+                    )
+                    for generator in source_group.free_generators
+                ),
+                torsion_generator_images=tuple(
+                    _map_homology_generator(
+                        degree,
+                        tuple(generator.cycle.coefficients),
+                        target_group,
+                        inverse_right,
+                        plan.source_differentials,
+                        plan.target_differentials,
+                        plan.map_matrices,
+                        torsion_order=int(generator.order),
+                        bounding_chain=tuple(generator.bounding_chain.coefficients),
+                    )
+                    for generator in source_group.torsion_generators
+                ),
+            )
+        )
+    checked_map = TruncatedSimplicialMap(
+        source=plan.source.simplicial_set,
+        target=plan.target.simplicial_set,
+        maps=plan.map_value.maps,
+    )
+    return SimplicialHomologyMapValue(
+        simplicial_map=checked_map,
+        source=plan.source.homology,
+        target=plan.target.homology,
+        degree_maps=tuple(degree_maps),
+    )
+
+
+def _admit_endpoint_plans(
+    source_plan: IntegralHomologyExecutionPlan,
+    target_plan: IntegralHomologyExecutionPlan,
+) -> None:
     combined_work = source_plan.total_work + (
         0 if target_plan is source_plan else target_plan.total_work
     )
@@ -1005,70 +1146,24 @@ def induced_normalized_homology_map(
                 f"the {MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS}-scalar envelope"
             ),
         )
-    source_right_inverses: list[list[list[int]]] = []
-    source = normalized_homology(
-        map_value.source, _integral_right_inverses=source_right_inverses
-    )
-    target_right_inverses = source_right_inverses
-    target = (
-        source
+
+
+def induced_normalized_homology_map(
+    map_value: TruncatedSimplicialMap,
+) -> SimplicialHomologyMapValue:
+    """Compute the induced map on every homology degree supported by a prefix."""
+    chain_map = induced_normalized_chain_map(map_value)
+    source_plan = admit_integral_homology(chain_map.source)
+    target_plan = (
+        source_plan
         if map_value.target == map_value.source
-        else normalized_homology(
-            map_value.target, _integral_right_inverses=(target_right_inverses := [])
-        )
+        else admit_integral_homology(chain_map.target)
     )
-    source_differentials, target_differentials, map_matrices = (
-        _admit_homology_projection(chain_map, source, target, target_right_inverses)
+    _admit_endpoint_plans(source_plan, target_plan)
+    prepared = _prepare_induced_normalized_homology_map(
+        map_value, chain_map, source_plan, target_plan, []
     )
-    degree_maps: list[NormalizedHomologyDegreeMap] = []
-    for degree, (source_group, target_group) in enumerate(
-        zip(source.homology_groups, target.homology_groups, strict=True)
-    ):
-        assert isinstance(source_group, IntegralHomologyGroupValue)
-        assert isinstance(target_group, IntegralHomologyGroupValue)
-        inverse_right = tuple(tuple(row) for row in target_right_inverses[degree])
-        degree_maps.append(
-            NormalizedHomologyDegreeMap(
-                degree=degree,
-                free_generator_images=tuple(
-                    _map_homology_generator(
-                        degree,
-                        tuple(generator.cycle.coefficients),
-                        target_group,
-                        inverse_right,
-                        source_differentials,
-                        target_differentials,
-                        map_matrices,
-                    )
-                    for generator in source_group.free_generators
-                ),
-                torsion_generator_images=tuple(
-                    _map_homology_generator(
-                        degree,
-                        tuple(generator.cycle.coefficients),
-                        target_group,
-                        inverse_right,
-                        source_differentials,
-                        target_differentials,
-                        map_matrices,
-                        torsion_order=int(generator.order),
-                        bounding_chain=tuple(generator.bounding_chain.coefficients),
-                    )
-                    for generator in source_group.torsion_generators
-                ),
-            )
-        )
-    checked_map = TruncatedSimplicialMap(
-        source=source.simplicial_set,
-        target=target.simplicial_set,
-        maps=map_value.maps,
-    )
-    return SimplicialHomologyMapValue(
-        simplicial_map=checked_map,
-        source=source,
-        target=target,
-        degree_maps=tuple(degree_maps),
-    )
+    return _compute_induced_normalized_homology_map(prepared)
 
 
 def _compose_homology_coordinates(
@@ -1102,18 +1197,12 @@ def compose_simplicial_homology_maps(
     second: SimplicialHomologyMapValue,
 ) -> SimplicialHomologyMapValue:
     """Compose two induced normalized integral homology maps."""
-    if first.target != second.source:
-        raise OperationDomainValidationError(
-            location=("second", "source"),
-            code="simplicial_set.homology_map_composition_mismatch",
-            message="the first target homology must equal the second source homology",
-        )
     # Admit the union of both endpoint computations before either computes
     # normalized homology. Reuse plans for equal complexes, including the
     # shared middle complex.
     first_chain = induced_normalized_chain_map(first.simplicial_map)
     second_chain = induced_normalized_chain_map(second.simplicial_map)
-    plans = []
+    plans: list[tuple[ChainComplexValue, IntegralHomologyExecutionPlan]] = []
     for complex_value in (
         first_chain.source,
         first_chain.target,
@@ -1137,25 +1226,61 @@ def compose_simplicial_homology_maps(
             code="simplicial_set.induced_homology_endpoint_output_budget_exceeded",
             message="combined endpoint homology output exceeds its admitted envelope",
         )
-    # Authenticate the authored coordinates before using them as operands.
-    checked_first = induced_normalized_homology_map(first.simplicial_map)
-    checked_second = induced_normalized_homology_map(second.simplicial_map)
-    if checked_first != first or checked_second != second:
+    def plan_for(complex_value: ChainComplexValue) -> IntegralHomologyExecutionPlan:
+        return next(plan for existing, plan in plans if existing == complex_value)
+
+    endpoint_cache: list[_NormalizedHomologyEndpoint] = []
+    first_prepared = _prepare_induced_normalized_homology_map(
+        first.simplicial_map,
+        first_chain,
+        plan_for(first_chain.source),
+        plan_for(first_chain.target),
+        endpoint_cache,
+    )
+    second_prepared = _prepare_induced_normalized_homology_map(
+        second.simplicial_map,
+        second_chain,
+        plan_for(second_chain.source),
+        plan_for(second_chain.target),
+        endpoint_cache,
+    )
+    if (
+        first_prepared.projection_work + second_prepared.projection_work
+        > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("homology_map",),
+            code="simplicial_set.induced_homology_projection_work_exceeded",
+            message="combined homology-coordinate authentication exceeds its admitted work envelope",
+        )
+    checked_first = _compute_induced_normalized_homology_map(first_prepared)
+    checked_second = _compute_induced_normalized_homology_map(second_prepared)
+    if (
+        checked_first.degree_maps != first.degree_maps
+        or checked_second.degree_maps != second.degree_maps
+    ):
         raise OperationDomainValidationError(
             location=("homology_map",),
             code="simplicial_set.homology_map_claim_mismatch",
             message="homology coordinates must agree with the induced simplicial maps",
         )
+    if checked_first.target != checked_second.source:
+        raise OperationDomainValidationError(
+            location=("second", "source"),
+            code="simplicial_set.homology_map_composition_mismatch",
+            message="the first target homology must equal the second source homology",
+        )
     composite_map = compose_simplicial_maps(
         SimplicialMapCompositionRequest(
-            first=first.simplicial_map, second=second.simplicial_map
+            first=checked_first.simplicial_map,
+            second=checked_second.simplicial_map,
         )
     )
     composition_work = 0
     maximum_input_bits = 0
     maximum_middle_rank = 0
     for first_degree, second_degree in zip(
-        first.degree_maps, second.degree_maps, strict=True
+        checked_first.degree_maps, checked_second.degree_maps, strict=True
     ):
         first_images = (
             *first_degree.free_generator_images,
@@ -1202,10 +1327,10 @@ def compose_simplicial_homology_maps(
             message="homology-coordinate products may exceed the canonical integer digit limit",
         )
     degree_maps: list[NormalizedHomologyDegreeMap] = []
-    for degree, first_degree in enumerate(first.degree_maps):
-        target_group = second.target.homology_groups[degree]
+    for degree, first_degree in enumerate(checked_first.degree_maps):
+        target_group = checked_second.target.homology_groups[degree]
         assert isinstance(target_group, IntegralHomologyGroupValue)
-        second_degree = second.degree_maps[degree]
+        second_degree = checked_second.degree_maps[degree]
         degree_maps.append(
             NormalizedHomologyDegreeMap(
                 degree=degree,
@@ -1221,8 +1346,8 @@ def compose_simplicial_homology_maps(
         )
     return SimplicialHomologyMapValue(
         simplicial_map=composite_map,
-        source=first.source,
-        target=second.target,
+        source=checked_first.source,
+        target=checked_second.target,
         degree_maps=tuple(degree_maps),
     )
 
@@ -1231,6 +1356,7 @@ def normalized_homology(
     simplicial_set: FiniteTruncatedSimplicialSet,
     *,
     _integral_right_inverses: list[list[list[int]]] | None = None,
+    _integral_plan: IntegralHomologyExecutionPlan | None = None,
 ) -> NormalizedHomologyResult:
     """Compute integral normalized homology below the finite prefix top.
 
@@ -1259,14 +1385,28 @@ def normalized_homology(
     # This shared exact kernel computes all group data, including the formal
     # top group of the retained chain prefix. Only degrees with a known incoming
     # simplicial boundary are exposed by this operation.
-    computed = homology_groups(chain, _integral_right_inverses=_integral_right_inverses)
+    if _integral_plan is None:
+        computed = homology_groups(
+            chain, _integral_right_inverses=_integral_right_inverses
+        ).homology_groups
+    else:
+        if _integral_plan.source != chain:
+            raise OperationDomainValidationError(
+                location=("simplicial_set",),
+                code="simplicial_set.normalized_homology_plan_source_mismatch",
+                message="the admitted homology plan does not match the normalized chain complex",
+            )
+        computed = compute_integral_homology(
+            _integral_plan,
+            right_inverses=_integral_right_inverses,
+        )
     nondegenerate_bases: list[tuple[str, ...]] = []
     nondegenerate_bases.extend(normalized.nondegenerate_bases)
     return NormalizedHomologyResult(
         simplicial_set=source,
         nondegenerate_bases=tuple(nondegenerate_bases),
         chain_complex=chain,
-        homology_groups=computed.homology_groups[: source.max_degree],
+        homology_groups=computed[: source.max_degree],
     )
 
 

@@ -59,8 +59,6 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
-MAX_PARI_BASIS_OUTPUT_BYTES = MAX_PARI_BASIS_ALLOCATION_BYTES
-
 BASIS_ID = "level-one-e4-e6-monomials-v1"
 GAMMA0_TWO_BASIS_ID = "gamma0-two-weight-2-4-monomials-v1"
 GAMMA0_THREE_BASIS_ID = "gamma0-three-weight-2-4-6-hypersurface-v1"
@@ -83,6 +81,8 @@ MAX_CHANGE_OF_BASIS_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_ATKIN_LEHNER_MATRIX_ENTRY_DIGITS = 512
 MAX_ATKIN_LEHNER_INTERNAL_DIGITS = 10_000_000
 MAX_ATKIN_LEHNER_INTERNAL_BYTES = 256 * 1024 * 1024
+MAX_PARI_BASIS_OUTPUT_BYTES = MAX_PARI_BASIS_ALLOCATION_BYTES
+MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES = MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES
 
 
 def _hecke_coefficient(

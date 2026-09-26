@@ -112,9 +112,17 @@ def _checked_carrier(
 def _preflight(request: SimplicialMapPreimageRequest) -> None:
     value = request.simplicial_map
     target_inclusion = request.target_subset.inclusion
-    source, target = value.source, value.target
-    selected_target = target_inclusion.source
-    if target_inclusion.target != target:
+    # Native callers can bypass Pydantic with model_construct/_from_kernel.
+    # Re-establish carrier structure before any estimate traverses caller tables.
+    source = _checked_carrier(value.source, location="simplicial_map.source")
+    target = _checked_carrier(value.target, location="simplicial_map.target")
+    selected_target = _checked_carrier(
+        target_inclusion.source, location="target_subset.inclusion.source"
+    )
+    inclusion_target = _checked_carrier(
+        target_inclusion.target, location="target_subset.inclusion.target"
+    )
+    if inclusion_target != target:
         raise OperationDomainValidationError(
             location=("target_subset", "inclusion", "target"),
             code="simplicial_map.preimage_target_mismatch",

@@ -108,6 +108,23 @@ def test_operation_is_published_in_the_owner_manifest() -> None:
     }
 
 
+def test_stale_identity_metadata_does_not_reject_equal_carriers() -> None:
+    simplex = standard_simplex(1, 1)
+    subset = _subset(simplex, ((0,), (0,)))
+    stale = FiniteTruncatedSimplicialSet._from_kernel(
+        **{**simplex.model_dump(), "checked_identities": simplex.checked_identities + 1}
+    )
+    value = TruncatedSimplicialMap(
+        source=simplex,
+        target=stale,
+        maps=tuple(tuple(range(len(level))) for level in simplex.sets),
+    )
+    result = simplicial_map_preimage(
+        SimplicialMapPreimageRequest(simplicial_map=value, target_subset=subset)
+    )
+    assert result.simplicial_map.target.checked_identities == simplex.checked_identities
+
+
 def test_nonnatural_map_is_rejected() -> None:
     simplex = standard_simplex(1, 1)
     subset = _subset(simplex, ((0,), (0,)))

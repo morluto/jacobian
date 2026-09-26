@@ -54,6 +54,16 @@ def _polynomial(
     )
 
 
+def test_native_substitution_rejects_forged_semiring_parent() -> None:
+    source = _polynomial(("x",), (((1,), 1),))
+    forged = source.semiring.model_copy(update={"convention": "BOGUS"})
+    source = source.model_copy(update={"semiring": forged})
+    image = _polynomial(("t",), (((1,), 2),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        tropical_polynomial_substitute(source, ("t",), (image,))
+    assert "declared convention and base" in str(error.value)
+
+
 def _direct_oracle(
     source: TropicalPolynomial,
     target_variables: tuple[str, ...],

@@ -158,6 +158,16 @@ def _admit_polynomial(poly: TropicalPolynomial) -> None:
             message="expected a tropical polynomial",
         )
     if (
+        not isinstance(poly.semiring, TropicalSemiring)
+        or poly.semiring.convention not in ("MIN_PLUS", "MAX_PLUS")
+        or poly.semiring.base not in ("ZZ", "QQ")
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "semiring"),
+            code="tropical.semiring_shape",
+            message="polynomial semiring must have a declared convention and base",
+        )
+    if (
         not isinstance(poly.variables, tuple)
         or len(poly.variables) > 128
         or any(

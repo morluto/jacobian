@@ -6,11 +6,13 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_coordinates_hecke,
     modular_character_coordinates_product,
     modular_character_coordinates_q_expansion,
+    modular_character_coordinates_u_prime,
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterBasis,
     ModularCharacterBasisRequest,
+    ModularCharacterCoordinates,
     ModularCharacterCoordinatesProductRequest,
     ModularCharacterCoordinatesRequest,
     ModularCharacterCoordinatesTransportRequest,
@@ -21,6 +23,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeRequest,
     ModularCharacterQExpansion,
     ModularCharacterTransportedForm,
+    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
     modular_character_coordinates_equal_in_common_space,
@@ -50,6 +53,12 @@ def _hecke_matrix(
     request: ModularCharacterHeckeMatrixRequest,
 ) -> ModularCharacterHeckeMatrix:
     return modular_character_hecke_matrix(request.space, request.index)
+
+
+def _u_prime(
+    request: ModularCharacterUPrimeRequest,
+) -> ModularCharacterCoordinates:
+    return modular_character_coordinates_u_prime(request.form, request.prime)
 
 
 def _product(
@@ -128,6 +137,83 @@ def _character_form_example(coordinate: int = 2) -> dict[str, object]:
     }
 
 
+def _character_u_form_example() -> dict[str, object]:
+    """One serialized generalized-coordinate value in S2(Gamma0(26), chi)."""
+    field = {
+        "domain": "QQ_CYCLOTOMIC",
+        "order": 6,
+        "generator": "CLASS_OF_X",
+    }
+    return {
+        "form": {
+            "space": {
+                "group": "GAMMA0",
+                "level": 26,
+                "weight": 2,
+                "kind": "S",
+                "character": {
+                    "group": {
+                        "modulus": 26,
+                        "unit_residues": [
+                            1,
+                            3,
+                            5,
+                            7,
+                            9,
+                            11,
+                            15,
+                            17,
+                            19,
+                            21,
+                            23,
+                            25,
+                        ],
+                        "character_count": 12,
+                        "invariant_factors": [12],
+                        "generators": [15],
+                        "generator_orders": [12],
+                        "unit_coordinates": [
+                            [0],
+                            [4],
+                            [9],
+                            [11],
+                            [8],
+                            [7],
+                            [1],
+                            [2],
+                            [5],
+                            [3],
+                            [10],
+                            [6],
+                        ],
+                        "exponent": 12,
+                    },
+                    "coordinates": [2],
+                },
+                "coefficient_domain": field,
+            },
+            "basis_id": "gamma0-cyclotomic-character-sturm-rref-v1",
+            "coordinates": [
+                {
+                    "field": field,
+                    "coefficients_ascending": [
+                        {"num": "1", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                },
+                {
+                    "field": field,
+                    "coefficients_ascending": [
+                        {"num": "0", "den": "1"},
+                        {"num": "0", "den": "1"},
+                    ],
+                },
+            ],
+        },
+        "prime": 2,
+    }
+
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="modular_form.character_coordinates.transport.compute",
@@ -163,6 +249,35 @@ TOOLS: MathTools = (
         result_type=ModularCharacterEqualityResult,
         run=_global_equal,
         tags=("modular-forms", "characters", "equality", "exact"),
+    ),
+    MathTool(
+        operation_id="modular_form.character_coordinates.u_prime.apply",
+        title="Apply a bad-prime U operator to a character cusp form",
+        description=(
+            "Apply U_p to generalized coordinates in the represented weight-two "
+            "S(Gamma0(N), chi) spaces over Q(zeta_6), for (N,p) equal to "
+            "(26,2), (26,13), (39,3), or (39,13). These primes divide the "
+            "declared level, so the image remains in the same character space. "
+            "The operation uses a_n(U_p f)=a_(p n)(f), admits exactly "
+            "p*(B-1)+1 source coefficients for target Sturm precision B and "
+            "the exact coefficient envelope before "
+            "PARI basis expansion, then returns same-parent coordinates only "
+            "after exact reconstruction through the target Sturm bound."
+        ),
+        request_type=ModularCharacterUPrimeRequest,
+        result_type=ModularCharacterCoordinates,
+        run=_u_prime,
+        tags=("modular-forms", "characters", "u-operator", "exact"),
+        examples=(
+            OperationExample(
+                name="u2_on_level26_character_form",
+                description=(
+                    "Apply U_2 to the first Sturm-basis form in the represented "
+                    "S2(Gamma0(26), chi) space."
+                ),
+                input=_character_u_form_example(),
+            ),
+        ),
     ),
     MathTool(
         operation_id="modular_form.character_hecke_matrix.compute",

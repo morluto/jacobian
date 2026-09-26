@@ -108,14 +108,14 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:  # noqa: C901
                 "homogeneous curve exponents must be nonnegative integers",
                 ("polynomial", index),
             )
-        if any(exponent > MAX_CURVE_DIVISOR_DEGREE for exponent in term_exponents):
-            raise OperationResourceAdmissionError(
-                location=("polynomial", index),
-                code="plane_curve_divisor.degree_bound",
-                message="the plane-curve degree must be at most 12",
-            )
         coefficient = getattr(term, "coefficient", None)
         if not isinstance(coefficient, CanonicalRational):
+            _domain(
+                "coefficient_type",
+                "curve coefficients must be canonical rationals",
+                ("polynomial", index),
+            )
+        if not _has_rational_components(coefficient):
             _domain(
                 "coefficient_type",
                 "curve coefficients must be canonical rationals",
@@ -157,6 +157,12 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:  # noqa: C901
             "inhomogeneous", "the curve polynomial must be homogeneous", ("polynomial",)
         )
     degree = next(iter(degrees))
+    if degree > MAX_CURVE_DIVISOR_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="plane_curve_divisor.degree_bound",
+            message="the plane-curve degree must be at most 12",
+        )
     if degree == 0:
         _domain("degree_zero", "a nonconstant polynomial is required", ("polynomial",))
     if degree > MAX_CURVE_DIVISOR_DEGREE:
@@ -168,13 +174,17 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:  # noqa: C901
     return degree
 
 
-def _is_canonical_rational(value: object) -> TypeGuard[CanonicalRational]:
-    if not isinstance(value, CanonicalRational):
-        return False
+def _has_rational_components(value: CanonicalRational) -> bool:
     numerator = getattr(value, "num", None)
     denominator = getattr(value, "den", None)
-    if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
+    return type(numerator) is int and type(denominator) is int and denominator > 0
+
+
+def _is_canonical_rational(value: object) -> TypeGuard[CanonicalRational]:
+    if not isinstance(value, CanonicalRational) or not _has_rational_components(value):
         return False
+    numerator = value.num
+    denominator = value.den
     return gcd(abs(numerator), denominator) == 1 and (
         numerator != 0 or denominator == 1
     )
@@ -229,6 +239,12 @@ def _admit_surface_points(surface: BlowupP2Surface) -> int:
             )
         for coordinate_index, coordinate in enumerate(coordinates):
             if not isinstance(coordinate, CanonicalRational):
+                _domain(
+                    "point_scalar",
+                    "point coordinates must be canonical rationals",
+                    ("surface", point_index, coordinate_index),
+                )
+            if not _has_rational_components(coordinate):
                 _domain(
                     "point_scalar",
                     "point coordinates must be canonical rationals",

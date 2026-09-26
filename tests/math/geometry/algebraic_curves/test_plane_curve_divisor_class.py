@@ -138,6 +138,48 @@ def test_operation_manifest_uses_the_plane_curve_divisor_id() -> None:
     )
 
 
+def test_native_nonhomogeneous_high_exponent_is_domain_error_before_degree_budget() -> None:
+    request = _cuspidal_cubic_request()
+    polynomial = RationalPolynomial.model_construct(
+        domain="QQ",
+        variables=("x", "y", "z"),
+        polynomial=SparseRationalPolynomial.model_construct(
+            terms=(
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational(num=1, den=1), exponents=(13, 0, 0)
+                ),
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational(num=1, den=1), exponents=(0, 0, 0)
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        plane_curve_strict_transform_class(
+            polynomial, request.surface, request.projective_coordinate_variables
+        )
+    assert error.value.errors()[0]["type"] == "plane_curve_divisor.inhomogeneous"
+
+
+def test_forged_rational_fields_are_domain_errors_not_helper_exceptions() -> None:
+    request = _cuspidal_cubic_request()
+    polynomial = RationalPolynomial.model_construct(
+        domain="QQ",
+        variables=("x", "y", "z"),
+        polynomial=SparseRationalPolynomial.model_construct(
+            terms=(RationalPolynomialTerm.model_construct(
+                coefficient=CanonicalRational.model_construct(num="bad", den=1),
+                exponents=(1, 0, 0),
+            ),)
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        plane_curve_strict_transform_class(
+            polynomial, request.surface, request.projective_coordinate_variables
+        )
+    assert error.value.errors()[0]["type"] == "plane_curve_divisor.coefficient_type"
+
+
 def test_native_operation_accepts_values_and_rejects_wire_request_model() -> None:
     request = _cuspidal_cubic_request()
     with pytest.raises(OperationDomainValidationError) as error:

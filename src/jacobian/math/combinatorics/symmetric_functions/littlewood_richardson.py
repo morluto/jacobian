@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import TypeVar
+
+from pydantic import BaseModel, ValidationError
 
 from jacobian._execution import request_checkpoint
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     LittlewoodRichardsonCoefficientRequest,
@@ -22,6 +28,21 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     TableauCandidate,
 )
 
+_RequestT = TypeVar("_RequestT", bound=BaseModel)
+
+
+def _admit_native_request(
+    model: type[_RequestT], values: dict[str, object]
+) -> _RequestT:
+    try:
+        return model.model_validate(values)
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code="symmetric_functions.littlewood_richardson.invalid_request",
+            message="native LR arguments must be canonical partitions within the operation envelope",
+        ) from exc
+
 
 def littlewood_richardson_coefficient(
     outer: IntegerPartition,
@@ -36,7 +57,8 @@ def littlewood_richardson_coefficient(
     The search enumerates distinct multiset-word prefixes directly, with a
     complete precomputed upper bound based on the content multinomial.
     """
-    request = LittlewoodRichardsonCoefficientRequest.model_validate(
+    request = _admit_native_request(
+        LittlewoodRichardsonCoefficientRequest,
         {
             "outer": outer.model_dump(mode="python"),
             "inner": inner.model_dump(mode="python"),
@@ -180,7 +202,8 @@ def littlewood_richardson_tableaux(
     serialized growth. Every recursive path corresponds to one distinct
     content-prefix, and every complete path to exactly one skew filling.
     """
-    request = LittlewoodRichardsonTableauxRequest.model_validate(
+    request = _admit_native_request(
+        LittlewoodRichardsonTableauxRequest,
         {
             "outer": outer.model_dump(mode="python"),
             "inner": inner.model_dump(mode="python"),
@@ -219,7 +242,8 @@ def schur_product(
     left: IntegerPartition, right: IntegerPartition
 ) -> SchurProductResult:
     """Return the complete bounded Schur expansion of ``s_left * s_right``."""
-    request = SchurProductRequest.model_validate(
+    request = _admit_native_request(
+        SchurProductRequest,
         {
             "left": left.model_dump(mode="python"),
             "right": right.model_dump(mode="python"),

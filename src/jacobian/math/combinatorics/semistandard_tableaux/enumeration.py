@@ -66,6 +66,8 @@ def _horizontal_strip_predecessors(
     def visit(row: int) -> None:
         if row == allowed_rows:
             predecessor = tuple(chosen)
+            while predecessor and predecessor[-1] == 0:
+                predecessor = predecessor[:-1]
             if predecessor != parts:
                 predecessors.append(predecessor)
             return

@@ -758,8 +758,10 @@ class RationalRelationFiberRequest(StrictModel):
 
     transducer: RationalTransducer
     input_word: tuple[int, ...] = Field(
-        max_length=MAX_FST_WORD_LENGTH,
-        description="The exact input-alphabet word whose output fiber is requested.",
+        description=(
+            "The exact input-alphabet word whose output fiber is requested; "
+            "supported length is determined by the derived fiber work and output bounds."
+        ),
     )
 
 

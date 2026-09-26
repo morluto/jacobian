@@ -502,66 +502,62 @@ def _add_heights(left: int, right: int) -> int:
 
 
 def _admit_prefix_growth(
-    coefficient_heights: list[list[int]],
+    coefficient_values: list[list[Fraction]],
     root: Fraction,
     precision: int,
-) -> int:
-    """Bound every rational coefficient in the Hensel recurrence in advance."""
-    degree = len(coefficient_heights) - 1
-    root_height = _nonzero_height(root)
-    derivative_terms = [
-        coefficient_heights[index][0] + len(str(index)) + (index - 1) * root_height
-        for index in range(1, degree + 1)
-        if coefficient_heights[index][0]
-    ]
-    derivative_height = max(1, _sum_height(derivative_terms))
-    branch_heights = [root_height] + [0] * (precision - 1)
-    largest = max(root_height, derivative_height)
-    if largest > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="local_series.smooth_branch.prefix_growth",
-            message=(
-                "the admitted rational Hensel recurrence exceeds the "
-                f"{MAX_LOCAL_SERIES_COEFFICIENT_DIGITS}-digit coefficient bound"
-            ),
-        )
+) -> tuple[list[Fraction], int]:
+    """Run the bounded recurrence exactly, retaining cancellations in admission."""
+    degree = len(coefficient_values) - 1
+    derivative = sum(
+        (
+            index * coefficient_values[index][0] * root ** (index - 1)
+            for index in range(1, degree + 1)
+        ),
+        Fraction(0),
+    )
+    branch = [Fraction(0)] * precision
+    branch[0] = root
+    largest = max(_fraction_digits(root), _fraction_digits(derivative))
 
-    for order in range(1, precision):
-        value_heights = [0] * (order + 1)
-        for y_degree in range(degree, -1, -1):
-            product_heights = [0] * (order + 1)
-            for exponent in range(order + 1):
-                product_heights[exponent] = _sum_height(
-                    [
-                        value_heights[left] + branch_heights[exponent - left]
-                        if value_heights[left] and branch_heights[exponent - left]
-                        else 0
-                        for left in range(exponent + 1)
-                    ]
-                )
-            value_heights = [
-                _add_heights(
-                    product_heights[exponent], coefficient_heights[y_degree][exponent]
-                )
-                for exponent in range(order + 1)
-            ]
-            largest = max(largest, *value_heights, *product_heights)
-
-        residual_height = value_heights[order]
-        if residual_height:
-            branch_heights[order] = residual_height + derivative_height + 1
-            largest = max(largest, branch_heights[order])
-        if largest > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
+    def admit(value: Fraction) -> None:
+        nonlocal largest
+        digits = _fraction_digits(value)
+        largest = max(largest, digits)
+        if digits > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
             raise OperationResourceAdmissionError(
                 location=("polynomial",),
                 code="local_series.smooth_branch.prefix_growth",
                 message=(
-                    "the admitted rational Hensel recurrence exceeds the "
+                    "the exact rational Hensel recurrence exceeds the "
                     f"{MAX_LOCAL_SERIES_COEFFICIENT_DIGITS}-digit coefficient bound"
                 ),
             )
-    return largest
+
+    if not derivative:
+        # The caller reports the mathematical non-simple-root condition.
+        return branch, largest
+    for order in range(1, precision):
+        values = [Fraction(0)] * (order + 1)
+        for y_degree in range(degree, -1, -1):
+            product = [
+                sum(
+                    (
+                        values[left] * branch[exponent - left]
+                        for left in range(exponent + 1)
+                    ),
+                    Fraction(0),
+                )
+                for exponent in range(order + 1)
+            ]
+            values = [
+                product[exponent] + coefficient_values[y_degree][exponent]
+                for exponent in range(order + 1)
+            ]
+            for value in (*product, *values):
+                admit(value)
+        branch[order] = -values[order] / derivative
+        admit(branch[order])
+    return branch, largest
 
 
 def _admit_prefix_request(
@@ -711,11 +707,9 @@ def smooth_branch_prefix(
 ) -> SmoothBranchPrefixResult:
     """Return the unique rational smooth branch modulo ``t^precision``."""
     source, max_degree, precision, slots, root = _admit_prefix_request(request)
-    coefficient_values, coefficient_heights = _prefix_coefficient_tables(
-        source, max_degree, precision
-    )
+    coefficient_values, _ = _prefix_coefficient_tables(source, max_degree, precision)
+    branch, max_height = _admit_prefix_growth(coefficient_values, root, precision)
 
-    max_height = _admit_prefix_growth(coefficient_heights, root, precision)
     center_digits = _fraction_digits(source.center.as_fraction())
     estimated_output = (
         2048
@@ -746,26 +740,6 @@ def smooth_branch_prefix(
             code="local_series.smooth_branch.not_simple",
             message="the supplied root must be simple: F_y(0,c) must be nonzero",
         )
-
-    branch = [Fraction(0) for _ in range(precision)]
-    branch[0] = root
-    for order in range(1, precision):
-        values = [Fraction(0) for _ in range(order + 1)]
-        for y_degree in range(max_degree, -1, -1):
-            product = [Fraction(0) for _ in range(order + 1)]
-            for exponent in range(order + 1):
-                product[exponent] = sum(
-                    (
-                        values[left] * branch[exponent - left]
-                        for left in range(exponent + 1)
-                    ),
-                    Fraction(0),
-                )
-            values = [
-                product[exponent] + coefficient_values[y_degree][exponent]
-                for exponent in range(order + 1)
-            ]
-        branch[order] = -values[order] / derivative_value
 
     result_series = TruncatedLaurentWindow(
         variable=source.variable,

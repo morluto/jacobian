@@ -111,6 +111,26 @@ def test_smooth_branch_prefix_accepts_exact_requested_source_precision() -> None
     )
 
 
+def test_smooth_branch_prefix_admits_nonlinear_hensel_cancellations() -> None:
+    precision = 8
+    result = smooth_branch_prefix(
+        SmoothBranchPrefixRequest(
+            polynomial=_sqrt_one_plus_t(precision),
+            initial_root=_rational(1),
+            precision=precision,
+        )
+    )
+
+    coefficients = tuple(value.as_fraction() for value in result.series.coefficients)
+    assert _convolution(coefficients, coefficients, precision) == (
+        Fraction(1),
+        Fraction(1),
+        *((Fraction(0),) * (precision - 2)),
+    )
+    assert max(len(str(value.numerator)) for value in coefficients) == 3
+    assert max(len(str(value.denominator)) for value in coefficients) == 4
+
+
 def test_smooth_branch_prefix_accepts_maximum_precision() -> None:
     precision = 32
     source = LocalPolynomialInSeries(

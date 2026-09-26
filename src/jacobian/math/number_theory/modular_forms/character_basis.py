@@ -989,13 +989,14 @@ def modular_character_coordinates_u_prime(
     # reduction; include that kernel's conservative product-height envelope so
     # admission cannot defer a predictable refusal until after PARI expansion.
     product_operand_digits = max(input_digits, basis_digits, matrix_digits)
-    # cyclotomic._admit uses its full Gauss-Jordan/Hadamard bound for
-    # multiplication (not the simpler linear coefficient-growth estimate).
+    # cyclotomic.multiply uses the non-inverse branch of _admit. Match that
+    # kernel bound exactly: the inverse/Hadamard estimate can spuriously reject
+    # valid products, while the linear result estimate alone misses a kernel
+    # refusal after basis expansion.
     degree = field.degree
-    coefficient_bound = 1 + degree * (1 << degree)
-    reduction_digits = len(str(coefficient_bound ** (2 * degree - 2)))
-    entry_digits = degree * product_operand_digits + len(str(degree)) + reduction_digits + 2
-    product_digits = degree * entry_digits + degree * len(str(degree)) + 2
+    product_digits = (
+        product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
+    )
     if (
         product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or linear_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS

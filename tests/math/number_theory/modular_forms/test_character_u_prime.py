@@ -187,13 +187,16 @@ def test_u_prime_rejects_a_prime_outside_the_exact_level_action() -> None:
         modular_character_coordinates_u_prime(_coordinates(space, 0), 3)
 
 
-def test_u_prime_output_bound_is_admitted_before_backend_expansion(monkeypatch) -> None:
+@pytest.mark.parametrize("digits", [43, 255])
+def test_u_prime_output_bound_is_admitted_before_backend_expansion(
+    monkeypatch, digits: int
+) -> None:
     space = _space(2, 26)
     form = _coordinates(space, 0)
     oversized = RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": int("9" * 255), "den": 1},
+            {"num": int("9" * digits), "den": 1},
             {"num": 0, "den": 1},
         ),
     )

@@ -155,6 +155,23 @@ def test_native_apply_revalidates_model_constructed_inclusion() -> None:
         apply_cyclotomic_field_inclusion(forged, _element(4, (0, 1), (1, 1)))
 
 
+def test_native_compose_revalidates_model_constructed_inclusion() -> None:
+    first = CyclotomicFieldInclusion.model_construct(
+        source=RationalCyclotomicField(order=4),
+        target=RationalCyclotomicField(order=6),
+        generator_image=(
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=1, den=1),
+        ),
+    )
+    second = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=6), RationalCyclotomicField(order=12)
+    )
+
+    with pytest.raises(ValueError, match="valid cyclotomic values"):
+        compose_cyclotomic_field_inclusions(first, second)
+
+
 def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:
     source = RationalCyclotomicField(order=3)
     target = RationalCyclotomicField(order=6)

@@ -96,6 +96,16 @@ def _standard_inclusion(
 
 
 def _require_standard_inclusion_image(inclusion: CyclotomicFieldInclusion) -> None:
+    from pydantic import ValidationError
+
+    try:
+        inclusion = CyclotomicFieldInclusion.model_validate(
+            inclusion.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValidationError) as exc:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_value", "the inclusion and element must be valid cyclotomic values"
+        ) from exc
     work = inclusion.source.degree * inclusion.target.degree * inclusion.target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
         raise CyclicRankKernelAdmissionError(

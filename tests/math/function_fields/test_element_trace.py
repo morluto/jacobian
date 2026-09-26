@@ -159,6 +159,23 @@ def test_degree_four_trace_obeys_newton_identity() -> None:
     assert result.trace == _rational(3, (1,))
 
 
+def test_trace_growth_admission_accounts_for_cross_cancellation() -> None:
+    # The coefficient Q/P and coordinate P/Q cancel in Tr((P/Q)y)=-1.
+    # Their unreduced degree sum is 24, above the output degree envelope.
+    p = (1,) + (0,) * 11 + (1,)
+    q = (2,) + (0,) * 11 + (1,)
+    one = _rational(5, (1,))
+    field = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(one, _rational(5, q, p), one),
+    )
+    element = _element(field, (_rational(5, (0,)), _rational(5, p, q)))
+
+    assert function_field_element_trace(element).trace == _rational(5, (4,))
+
+
 def test_trace_of_one_skips_unused_high_power_sums() -> None:
     # The x^12 coefficient would make s_2 exceed the trace envelope, but 1
     # only needs s_0, whose trace is the extension degree modulo 2.

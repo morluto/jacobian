@@ -51,6 +51,7 @@ from jacobian.math.lie_algebras._models import (
     LieSemisimplicityResult,
     LieSubalgebra,
     LieSubalgebraCheckResult,
+    LieSubalgebraResult,
     LieSubalgebraViolationWitness,
     LieSubspace,
     LieUpperCentralSeriesResult,
@@ -132,13 +133,13 @@ def _admit_lie_algebra(
     algebra: FiniteDimensionalLieAlgebra,
 ) -> dict[tuple[int, int], dict[int, Fraction]]:
     """Establish antisymmetry and every basis-triple Jacobi identity."""
-    if not 1 <= len(algebra.basis) <= MAX_LIE_DIMENSION:
+    if len(algebra.basis) > MAX_LIE_DIMENSION:
         raise OperationResourceAdmissionError(
             location=("algebra", "basis"),
             code="lie_algebra.dimension_bound",
             message=(
                 "the Lie algebra dimension must stay within the admitted "
-                f"1..{MAX_LIE_DIMENSION} basis bound"
+                f"0..{MAX_LIE_DIMENSION} basis bound"
             ),
         )
     if len(algebra.structure_constants) > MAX_STRUCTURE_NONZEROS:
@@ -1540,6 +1541,197 @@ def check_subalgebra(
     )
 
 
+def _induced_subalgebra_constants(
+    rows: tuple[tuple[Fraction, ...], ...],
+    table: dict[tuple[int, int], dict[int, Fraction]],
+    ambient_dimension: int,
+) -> tuple[StructureConstant, ...]:
+    """Compute closed brackets in the candidate RREF basis under admitted work."""
+
+    pair_count = len(rows) * (len(rows) - 1) // 2
+    work = pair_count * (ambient_dimension * (ambient_dimension - 1) // 2 + len(table))
+    if work > MAX_SUBALGEBRA_CHECK_WORK:
+        raise OperationResourceAdmissionError(
+            location=("candidate",),
+            code="lie_algebra.subalgebra_work_bound",
+            message="subalgebra construction exceeds its admitted exact work envelope",
+        )
+    pivots = _rref_pivots(rows)
+    constants: list[StructureConstant] = []
+    for left_index, left in enumerate(rows):
+        for right_index in range(left_index + 1, len(rows)):
+            right = rows[right_index]
+            bracket = [Fraction(0)] * ambient_dimension
+            for first in range(ambient_dimension):
+                for second in range(first + 1, ambient_dimension):
+                    factor = left[first] * right[second] - left[second] * right[first]
+                    if factor:
+                        for target, coefficient in table.get(
+                            (first, second), {}
+                        ).items():
+                            bracket[target] += factor * coefficient
+            for target, value in enumerate(bracket):
+                _require_fraction_bound(
+                    value,
+                    label="induced subalgebra bracket coordinate",
+                    location=("bracket", left_index, right_index, target),
+                )
+            if any(_reduce_by_subspace(rows, tuple(bracket))):
+                raise OperationDomainValidationError(
+                    location=("candidate",),
+                    code="lie_algebra.not_a_subalgebra",
+                    message="candidate bracket escapes its span",
+                )
+            constants.extend(
+                _induced_structure_constant(
+                    left_index, right_index, output_index, bracket[pivot]
+                )
+                for output_index, pivot in enumerate(pivots)
+                if bracket[pivot]
+            )
+    return tuple(constants)
+
+
+def _induced_structure_constant(
+    left_index: int,
+    right_index: int,
+    output_index: int,
+    coefficient: Fraction,
+) -> StructureConstant:
+    """Admit the narrower algebra coefficient ceiling before canonicalization."""
+
+    if (
+        decimal_digit_width(coefficient.numerator) > MAX_STRUCTURE_COEFFICIENT_DIGITS
+        or decimal_digit_width(coefficient.denominator)
+        > MAX_STRUCTURE_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=(
+                "induced",
+                "structure_constants",
+                left_index,
+                right_index,
+                output_index,
+            ),
+            code="lie_algebra.subalgebra_result_height_bound",
+            message=(
+                "an induced structure coefficient exceeds the admitted "
+                f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
+            ),
+        )
+    return StructureConstant.model_construct(
+        i=left_index,
+        j=right_index,
+        k=output_index,
+        coefficient=CanonicalRational.from_fraction(coefficient),
+    )
+
+
+def lie_subalgebra(
+    algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
+    candidate: LieSubspace | Mapping[str, Any],
+    subalgebra_basis: tuple[str, ...] | list[str],
+) -> LieSubalgebraResult:
+    """Construct the exact induced structure constants on a closed subspace.
+
+    Candidate rows are the induced basis in their canonical RREF order. Their
+    brackets are computed in the source algebra, checked for closure, and
+    expressed in that basis using its pivot coordinates.
+    """
+
+    algebra_value = _as_algebra(algebra)
+    try:
+        candidate_value, candidate_source = _as_subspace_candidate(candidate)
+    except Exception as error:
+        raise OperationDomainValidationError(
+            location=("candidate",),
+            code="lie_algebra.subspace_shape",
+            message="candidate must be a canonical rational subspace",
+        ) from error
+    _require_candidate_source(
+        candidate_source,
+        algebra_value,
+        location=("candidate",),
+        code="lie_algebra.subalgebra_source",
+        label="candidate",
+    )
+    table = _admit_lie_algebra(algebra_value)
+    if candidate_value.basis != algebra_value.basis:
+        raise OperationDomainValidationError(
+            location=("candidate",),
+            code="lie_algebra.candidate_basis",
+            message="the candidate must use the source algebra's ordered basis",
+        )
+    rows = _subspace_rows(candidate_value)
+    if not isinstance(subalgebra_basis, (tuple, list)) or any(
+        not isinstance(label, str) for label in subalgebra_basis
+    ):
+        raise OperationDomainValidationError(
+            location=("subalgebra_basis",),
+            code="lie_algebra.subalgebra_labels",
+            message="provide one unique basis label per candidate row",
+        )
+    labels = tuple(subalgebra_basis)
+    if len(labels) != len(rows) or len(set(labels)) != len(labels):
+        raise OperationDomainValidationError(
+            location=("subalgebra_basis",),
+            code="lie_algebra.subalgebra_labels",
+            message="provide one unique basis label per candidate row",
+        )
+    from pydantic import TypeAdapter, ValidationError
+
+    from ._models import LieBasisLabel
+
+    try:
+        labels = tuple(
+            TypeAdapter(list[LieBasisLabel]).validate_python(list(labels), strict=True)
+        )
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=("subalgebra_basis",),
+            code="lie_algebra.subalgebra_labels",
+            message="induced basis labels must follow the canonical Lie basis grammar",
+        ) from error
+    for row_index, row in enumerate(rows):
+        for column_index, value in enumerate(row):
+            try:
+                require_bounded_rational(
+                    CanonicalRational.from_fraction(value),
+                    max_digits=MAX_ELEMENT_COEFFICIENT_DIGITS,
+                    label="subspace generator coordinate",
+                )
+            except ValueError as error:
+                raise OperationResourceAdmissionError(
+                    location=("candidate", "generators", row_index, column_index),
+                    code="lie_algebra.subalgebra_input_bound",
+                    message=str(error),
+                ) from error
+    induced_constants = _induced_subalgebra_constants(
+        rows, table, len(algebra_value.basis)
+    )
+    induced = FiniteDimensionalLieAlgebra.model_construct(
+        basis=labels,
+        structure_constants=tuple(
+            sorted(
+                induced_constants,
+                key=lambda constant: (constant.i, constant.j, constant.k),
+            )
+        ),
+    )
+    # Source Jacobi plus the complete bracket-closure check proves that the
+    # restricted bracket satisfies Jacobi. Rechecking all induced triples
+    # would replay that consequence after its defining computation.
+    inclusion = candidate_value.generators
+    subalgebra = LieSubalgebra.model_construct(
+        basis=algebra_value.basis,
+        generators=candidate_value.generators,
+        algebra=algebra_value,
+    )
+    return LieSubalgebraResult._from_kernel(
+        algebra_value, subalgebra, induced, inclusion
+    )
+
+
 def _require_ideal(
     algebra: FiniteDimensionalLieAlgebra, candidate: LieSubspace
 ) -> None:
@@ -1604,7 +1796,7 @@ def lie_quotient(
             code="lie_algebra.quotient_labels",
             message="quotient basis labels must be unique strings",
         )
-    if len(labels) != len(free) or not labels:
+    if len(labels) != len(free):
         raise OperationDomainValidationError(
             location=("quotient_basis",),
             code="lie_algebra.quotient_dimension",

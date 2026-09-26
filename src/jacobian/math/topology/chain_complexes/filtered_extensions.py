@@ -1152,6 +1152,7 @@ def filtered_chain_map_page(
         target_filtration=authored.target_filtration,
         maps=authored.maps,
     )
+    _check_filtered_chain_map_axes(chain_map_request)
     source, target = authored.source, authored.target
     levels = len(authored.source_filtration)
     degree_count = len(source.basis_sizes)
@@ -1486,9 +1487,9 @@ def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -
             (
                 (
                     right_numerator
-                    if Fraction(left).numerator == 1 and left_denominator == 1
+                    if abs(Fraction(left).numerator) == 1 and left_denominator == 1
                     else left_numerator
-                    if Fraction(right).numerator == 1 and right_denominator == 1
+                    if abs(Fraction(right).numerator) == 1 and right_denominator == 1
                     else left_numerator + right_numerator
                 ),
                 1 if denominator_is_one else left_denominator + right_denominator,

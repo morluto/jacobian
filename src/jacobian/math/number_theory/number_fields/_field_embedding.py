@@ -13,7 +13,11 @@ from typing import Self
 from pydantic import ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -29,7 +33,7 @@ from jacobian.math.number_theory.number_fields.values import (
 # advertised but unusable, so the admitted contract stays aligned with the
 # estimate.
 MAX_FIELD_MAP_DEGREE = 6
-MAX_FIELD_MAP_INPUT_DIGITS = 32
+MAX_FIELD_MAP_INPUT_DIGITS = 256
 
 
 def _error(
@@ -201,11 +205,14 @@ def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
     growth = input_digits + request.source.degree * request.target.degree * (
         3 * input_digits + 3
     )
-    if growth > 256:
+    if growth > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("source",),
             code="number_field.embedding.output_bound",
-            message="predicted field-map coordinate growth exceeds the 256-digit exact-value limit",
+            message=(
+                "predicted field-map coordinate growth exceeds the "
+                f"{MAX_CANONICAL_RATIONAL_DIGITS}-digit exact-value limit"
+            ),
         )
     from sympy import Poly, Symbol
 

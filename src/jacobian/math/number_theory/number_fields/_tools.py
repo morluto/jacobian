@@ -486,7 +486,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "The source and target presentations must be irreducible, and the supplied target-field image "
             "of the source generator must satisfy its defining polynomial exactly. Returns the reusable "
             "embedding value and the exact image of one source element. Polynomial and coordinate inputs "
-            "are limited to 32 digits to bound exact coordinate growth."
+            "are limited to 256 digits, with predicted exact coordinate growth bounded by the canonical "
+            "32,768-digit rational envelope."
         ),
         request_type=SimpleNumberFieldEmbeddingRequest,
         result_type=SimpleNumberFieldEmbeddingResult,

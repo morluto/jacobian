@@ -94,6 +94,11 @@ class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
                 "twist_ground_axis",
                 "twisted delta-matroid must preserve the source ground axis",
             )
+        if len(self.twisted.feasible) != len(self.delta_matroid.feasible):
+            raise _validation_error(
+                "twist_family_cardinality",
+                "twisting must preserve the number of feasible sets",
+            )
         return self
 
     @classmethod

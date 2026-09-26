@@ -502,6 +502,18 @@ def test_twist_result_json_rejects_a_different_ground_axis() -> None:
         DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
 
 
+def test_twist_result_json_rejects_changed_feasible_family_cardinality() -> None:
+    import json
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    payload = json.loads(result.model_dump_json())
+    payload["twisted"]["feasible"] = [[], [0]]
+
+    with pytest.raises(ValueError, match="twisting must preserve the number"):
+        DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
+
+
 def test_twist_result_membership_admission_has_exact_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -192,6 +192,9 @@ class FiniteBasisMatroid(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_basis_matroid(self) -> Self:
+        return self._validate_canonical_basis_matroid()
+
+    def _validate_canonical_basis_matroid(self) -> Self:
         if type(self.ground) is not tuple:
             raise _validation_error("ground_type", "ground must be an immutable tuple")
         if type(self.bases) is not tuple or not self.bases:
@@ -260,7 +263,7 @@ class FiniteBasisMatroid(StrictModel):
             )
         _preflight_ground_axis(self.ground)
         _preflight_basis_family(self.bases)
-        self.require_canonical_basis_matroid()
+        self._validate_canonical_basis_matroid()
         maximum_difference = min(self.rank, self.ground_size - self.rank)
         work_bound = len(self.bases) ** 2 * maximum_difference**2
         if work_bound > MAX_FINITE_BASIS_EXCHANGE_CHECKS:

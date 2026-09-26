@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from itertools import combinations
 
 import pytest
@@ -202,6 +203,19 @@ def test_native_forged_oversize_source_is_admitted_before_system_copy(
     )
     with pytest.raises(OperationResourceAdmissionError):
         lower_matroid(source)
+
+
+@pytest.mark.parametrize("operation", [lower_matroid, upper_matroid])
+def test_oversize_ground_axis_is_bounded_before_label_validation(
+    operation: Callable[[FiniteDeltaMatroid], DeltaMatroidExtremalMatroidResult],
+) -> None:
+    source = FiniteDeltaMatroid.model_construct(
+        ground=(object(),) * (delta_operations.MAX_DELTA_MEMBERSHIPS + 2),
+        feasible=((),),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        operation(source)
+    assert exc_info.value.errors()[0]["type"] == "delta_matroid.ground_size_exceeded"
 
 
 def test_output_exposes_complete_bounds() -> None:

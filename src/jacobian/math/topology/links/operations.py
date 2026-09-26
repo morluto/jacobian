@@ -17,7 +17,7 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.values import RationalLaurentPolynomial
 from jacobian.math.topology.links._models import (
     MAX_LINK_BRACKET_CROSSINGS,
-    MAX_LINK_BRACKET_OUTPUT_BYTES,
+    MAX_LINK_BRACKET_OUTPUT_CELLS,
     MAX_LINK_BRACKET_WORK,
     CrossingVisit,
     LinkBracketResult,
@@ -107,6 +107,15 @@ def link_orientation_reverse(
     oriented identity in the current value and therefore cannot be selected.
     """
     admitted = _admit_components(diagram)
+    if not isinstance(component_representatives, tuple) or any(
+        not isinstance(value, str) or not value or len(value) > 64
+        for value in component_representatives
+    ):
+        _reject(
+            "component_representatives",
+            "link_diagram.orientation_reverse.representatives_shape",
+            "component representatives must be a tuple of valid link labels",
+        )
     source_components = link_components(admitted)
     dart_component = {
         dart: component.component_id
@@ -151,11 +160,11 @@ def link_orientation_reverse(
                 "sign": (
                     -crossing.sign
                     if (
-                        dart_component[crossing.half_edges[crossing.over_pair[0]]]
+                        dart_component[crossing.half_edges[min(crossing.over_pair)]]
                         in selected
                     )
                     != (
-                        dart_component[crossing.half_edges[crossing.under_pair[0]]]
+                        dart_component[crossing.half_edges[min(crossing.under_pair)]]
                         in selected
                     )
                     else crossing.sign
@@ -288,9 +297,9 @@ def _admit_bracket(diagram: OrientedLinkDiagram) -> OrientedLinkDiagram:
     delta_power_bound = max(0, 2 * crossing_count + admitted.free_loops - 1)
     polynomial_term_bound = 2 * crossing_count + 4 * delta_power_bound + 1
     # Every state row is bounded by its <=12 binary choices and fixed scalar
-    # fields.  64 KiB covers the source diagram under the label and dart caps.
-    output_bound = state_count * 256 + polynomial_term_bound * 256 + 64 * 1024
-    if output_bound > MAX_LINK_BRACKET_OUTPUT_BYTES:
+    # fields; this counts retained state-row and Laurent-term cells, not bytes.
+    output_cells = state_count * 256 + polynomial_term_bound * 256 + 64 * 1024
+    if output_cells > MAX_LINK_BRACKET_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.bracket.output_bound",
@@ -408,8 +417,8 @@ def link_linking_matrix(diagram: OrientedLinkDiagram) -> LinkingMatrixResult:
     position = {identifier: index for index, identifier in enumerate(ids)}
     matrix = [[Fraction(0) for _ in ids] for _ in ids]
     for crossing in diagram.crossings:
-        over_id = dart_component[crossing.half_edges[crossing.over_pair[0]]]
-        under_id = dart_component[crossing.half_edges[crossing.under_pair[0]]]
+        over_id = dart_component[crossing.half_edges[min(crossing.over_pair)]]
+        under_id = dart_component[crossing.half_edges[min(crossing.under_pair)]]
         if over_id != under_id:
             i, j = position[over_id], position[under_id]
             matrix[i][j] += Fraction(crossing.sign, 2)
@@ -497,8 +506,8 @@ def link_components(diagram: OrientedLinkDiagram) -> LinkComponentsResult:
     for loop in range(diagram.free_loops):
         components.append(
             LinkComponent(
-                component_id=f"free_loop_{loop:03d}",
-                darts=(f"free_loop_{loop:03d}:dart",),
+                component_id=f"~free_loop_{loop:03d}",
+                darts=(f"~free_loop_{loop:03d}:dart",),
                 visits=(),
                 length=1,
             )

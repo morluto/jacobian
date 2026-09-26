@@ -102,9 +102,11 @@ def test_native_discriminant_preserves_the_polynomial_domain() -> None:
 def test_exact_public_api_symbols() -> None:
     expected = (
         "PolynomialExpressionSource",
+        "QuarticCubicResolventResult",
         "RationalDiscreteAntiderivativeResult",
         "RationalLaurentPolynomial",
         "RationalLaurentPolynomialTerm",
+        "compute_quartic_cubic_resolvent",
         "cyclotomic",
         "derivative",
         "discriminant",

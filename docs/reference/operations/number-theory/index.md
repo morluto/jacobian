@@ -12,6 +12,7 @@
 - [Finite-field elliptic subgroup membership](elliptic-curve-subgroup-membership.md)
 - [Finite-field elliptic quadratic twists](elliptic-curve-finite-field-twists.md)
 - [Finite-field elliptic quadratic-twist relation](elliptic-curve-quadratic-twist-relation.md)
+- [Finite-field elliptic twist-class decision](elliptic-curve-finite-field-twist-class.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)

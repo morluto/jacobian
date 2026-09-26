@@ -21,7 +21,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     _point_admit_with_curve,
 )
 from jacobian.math.number_theory.elliptic_curves.point_transport._models import (
-    FiniteFieldPointTransportRequest,
     FiniteFieldPointTransportResult,
 )
 
@@ -29,7 +28,8 @@ MAX_POINT_TRANSPORT_WORK = 2_000_000
 
 
 def transport_point(
-    request: FiniteFieldPointTransportRequest,
+    isomorphism: FiniteFieldIsomorphismResult,
+    point: FiniteFieldEllipticPoint,
 ) -> FiniteFieldPointTransportResult:
     """Apply ``(x,y) -> (u^2*x,u^3*y)`` to one point on an isomorphic model.
 
@@ -40,43 +40,28 @@ def transport_point(
     is re-admitted before applying the coordinate map.
     """
 
-    if not isinstance(request, FiniteFieldPointTransportRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="elliptic_curve.finite_field.point_transport_request_type",
-            message="request must be a finite-field point-transport value",
-        )
-    try:
-        request = FiniteFieldPointTransportRequest.model_validate(
-            request.model_dump(), strict=True
-        )
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="elliptic_curve.finite_field.point_transport_invalid_request",
-            message="request has malformed isomorphism or point-parent data",
-        ) from exc
-    isomorphism = request.isomorphism
     if not isinstance(isomorphism, FiniteFieldIsomorphismResult):
         raise OperationDomainValidationError(
             location=("isomorphism",),
             code="elliptic_curve.finite_field.point_transport_isomorphism_type",
             message="isomorphism must be a finite-field short-model result value",
         )
-    input_bytes = len(
-        rfc8785.dumps(
-            {
-                "isomorphism": isomorphism.model_dump(mode="json"),
-                "point": request.point.model_dump(mode="json"),
-            }
-        )
-    )
-    if 2 * input_bytes + 512 > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
+    if not isinstance(point, FiniteFieldEllipticPoint):
+        raise OperationDomainValidationError(
             location=("point",),
-            code="elliptic_curve.finite_field.point_transport_output_bound",
-            message="point transport result exceeds the canonical output-byte envelope",
+            code="elliptic_curve.finite_field.point_transport_point_type",
+            message="point must be a finite-field elliptic point value",
         )
+    try:
+        isomorphism = FiniteFieldIsomorphismResult.model_validate(
+            isomorphism.model_dump()
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("isomorphism",),
+            code="elliptic_curve.finite_field.point_transport_isomorphism_invalid",
+            message="isomorphism must satisfy its complete result contract",
+        ) from exc
     source = _curve_admit(isomorphism.source)
     target = _curve_admit(isomorphism.target)
     if source.field != target.field:
@@ -99,6 +84,21 @@ def transport_point(
             location=("isomorphism", "source", "field"),
             code="elliptic_curve.finite_field.point_transport_work_bound",
             message="coordinate transport exceeds its finite-field arithmetic envelope",
+        )
+    source_point = _point_admit_with_curve(source, point)
+    input_bytes = len(
+        rfc8785.dumps(
+            {
+                "isomorphism": isomorphism.model_dump(mode="json"),
+                "point": source_point.model_dump(mode="json"),
+            }
+        )
+    )
+    if 2 * input_bytes + 512 > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_transport_output_bound",
+            message="point transport result exceeds the canonical output-byte envelope",
         )
     scaling = isomorphism.scaling
     try:
@@ -145,7 +145,6 @@ def transport_point(
             message="scaling does not transport the source curve coefficients to the target",
         )
 
-    source_point = _point_admit_with_curve(source, request.point)
     if source_point.at_infinity:
         target_point = FiniteFieldEllipticPoint.infinity(target)
     else:

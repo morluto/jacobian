@@ -4,6 +4,7 @@ from fractions import Fraction
 
 import pytest
 import rfc8785
+from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.catalog import Catalog
@@ -124,24 +125,24 @@ def test_subgroup_membership_checks_cancellation_during_closure(
         FiniteFieldElement(presentation=field, coordinates=(1,)),
     )
 
-    class Cancelled(Exception):
+    class CancelledError(Exception):
         pass
 
     checkpoints: list[str] = []
 
     def cancel(message: str) -> None:
         checkpoints.append(message)
-        raise Cancelled
+        raise CancelledError
 
     monkeypatch.setattr(finite_field_module, "request_checkpoint", cancel)
-    with pytest.raises(Cancelled):
+    with pytest.raises(CancelledError):
         finite_field_point_membership_in_generated_subgroup(
             curve, (generator,), generator
         )
     assert checkpoints == ["during finite-field subgroup closure"]
 
 
-def test_subgroup_membership_admits_before_expanding(
+def test_empty_subgroup_membership_presolves_before_hasse_cap(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     field = FiniteFieldPresentation(
@@ -158,12 +159,10 @@ def test_subgroup_membership_admits_before_expanding(
         lambda *_args: pytest.fail("work admission must precede closure expansion"),
     )
 
-    with pytest.raises(OperationResourceAdmissionError) as error:
-        finite_field_point_membership_in_generated_subgroup(curve, (), identity)
-
-    assert error.value.errors()[0]["type"] == (
-        "elliptic_curve.finite_field.subgroup_order_bound"
-    )
+    result = finite_field_point_membership_in_generated_subgroup(curve, (), identity)
+    assert result.generators == ()
+    assert result.candidate == identity
+    assert result.belongs
 
 
 def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
@@ -1023,6 +1022,20 @@ def test_zeta_numerator_matches_independent_f5_and_f25_counts() -> None:
         FiniteFieldZetaFunctionResult.model_validate_json(full_zeta.model_dump_json())
         == full_zeta
     )
+    with pytest.raises(ValidationError):
+        FiniteFieldZetaFunctionResult.model_validate(
+            {
+                **full_zeta.model_dump(),
+                "trace": full_zeta.trace + 1,
+            }
+        )
+    with pytest.raises(ValidationError):
+        FiniteFieldZetaFunctionResult.model_validate(
+            {
+                **full_zeta.model_dump(),
+                "zeta_function": f5.numerator,
+            }
+        )
 
     extension = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
@@ -1145,6 +1158,23 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     assert error.value.errors()[0]["type"] == (
         "finite_field.embedding_generator_not_root"
     )
+
+
+def test_base_change_public_example_is_advertised_and_runs() -> None:
+    operation = Catalog.open().operation(
+        "elliptic_curve.finite_field.base_change.compute"
+    )
+    assert operation is not None
+    assert operation.examples[0].name == "base_change_f5_to_f25"
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, Catalog.open()
+    )
+    assert result.output["curve"]["field"]["modulus_coefficients"] == [
+        "2",
+        "0",
+        "1",
+    ]
+    assert result.output["point"] is None
 
 
 @pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])

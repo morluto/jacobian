@@ -667,7 +667,7 @@ def _zeta_rational_function(q: int, trace: int) -> RationalFunction:
         numerator: int, denominator: int, degree: int
     ) -> RationalPolynomialTerm:
         return RationalPolynomialTerm(
-            coefficient=CanonicalRational(num=numerator, den=denominator),
+            coefficient=CanonicalRational.from_integer_ratio(numerator, denominator),
             exponents=(degree,),
         )
 
@@ -2061,13 +2061,13 @@ def finite_field_zeta_function(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> FiniteFieldZetaFunctionResult:
     """Return the exact rational zeta function from one admitted base count."""
-    numerator = finite_field_zeta_polynomial(curve)
-    q = int(numerator.curve.field.characteristic**numerator.curve.field.degree)
+    count = finite_field_zeta_polynomial(curve)
+    q = int(count.curve.field.characteristic**count.curve.field.degree)
     return FiniteFieldZetaFunctionResult(
-        curve=numerator.curve,
-        cardinality=numerator.cardinality,
-        trace=numerator.trace,
-        zeta_function=_zeta_rational_function(q, numerator.trace),
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=count.trace,
+        zeta_function=_zeta_rational_function(q, count.trace),
     )
 
 
@@ -2159,6 +2159,23 @@ def finite_field_point_membership_in_generated_subgroup(
     admitted_curve = _curve_admit(curve)
     field = admitted_curve.field
     q = field.characteristic**field.degree
+    if not generators:
+        admitted_candidate = _point_admit_with_curve(admitted_curve, candidate)
+        result = FiniteFieldGeneratedSubgroupMembershipResult.model_construct(
+            curve=admitted_curve,
+            generators=(),
+            candidate=admitted_candidate,
+            belongs=admitted_candidate.at_infinity,
+        )
+        if len(rfc8785.dumps(result.model_dump(mode="json"))) > (
+            CanonicalLimits().max_output_bytes
+        ):
+            raise OperationResourceAdmissionError(
+                location=("curve", "candidate"),
+                code="elliptic_curve.finite_field.subgroup_output_bound",
+                message="subgroup membership result exceeds the canonical output-byte envelope",
+            )
+        return result
     maximum_cardinality = q + 1 + isqrt(4 * q)
     if maximum_cardinality > 4096:
         raise OperationResourceAdmissionError(

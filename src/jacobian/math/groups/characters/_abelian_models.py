@@ -55,7 +55,9 @@ class FiniteAbelianCharacterTableResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_shape(self) -> Self:
         if len(self.group.moduli) > MAX_ABELIAN_CHARACTER_TABLE_ORDER.bit_length():
-            raise _error("table_shape", "group rank exceeds the character table envelope")
+            raise _error(
+                "table_shape", "group rank exceeds the character table envelope"
+            )
         count = self.group.order
         if len(self.elements) != count or len(self.rows) != count:
             raise _error(

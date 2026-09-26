@@ -7,10 +7,14 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
+    FiniteCellularSheaf,
     SheafField,
     SheafStalk,
 )
@@ -29,7 +33,9 @@ def _q(value: int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _circle_sheaf(field: SheafField = SheafField.RATIONAL, prime: int | None = None):
+def _circle_sheaf(
+    field: SheafField = SheafField.RATIONAL, prime: int | None = None
+) -> FiniteCellularSheaf:
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
     faces = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
     covers = tuple(
@@ -123,6 +129,65 @@ def test_identity_on_four_disconnected_sections_retains_identity_matrix() -> Non
             (_q(0), _q(0), _q(0), _q(1)),
         ),
     )
+
+
+def _single_vertex_sheaf() -> FiniteCellularSheaf:
+    complex_ = canonical_complex(("a",), (("a",),))
+    result = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(
+            SheafStalk(simplex=face, basis=("x",))
+            for group in complex_.faces_by_dimension
+            for face in group.faces
+        ),
+        (),
+    )
+    assert result.sheaf is not None
+    return result.sheaf
+
+
+def test_induced_map_admits_a_64_digit_integer_image() -> None:
+    sheaf = _single_vertex_sheaf()
+    scale = 10**63
+    components = tuple((face, ((_q(scale),),)) for face in sheaf.canonical_face_order)
+
+    result = cohomology_map(morphism(sheaf, sheaf, components))
+
+    assert result.components == (((_q(scale),),),)
+
+
+def test_induced_map_admits_a_rank_one_quotient_at_the_digit_cap() -> None:
+    sheaf = _single_vertex_sheaf()
+    scale = 10**62
+    components = tuple((face, ((_q(scale),),)) for face in sheaf.canonical_face_order)
+
+    result = cohomology_map(morphism(sheaf, sheaf, components))
+
+    assert result.components == (((_q(scale),),),)
+
+
+def test_induced_map_still_rejects_oversized_rational_quotients() -> None:
+    complex_ = canonical_complex(("a", "b", "c", "d"), (("a",), ("b",), ("c",), ("d",)))
+    sheaf_result = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(
+            SheafStalk(simplex=face, basis=("x",))
+            for group in complex_.faces_by_dimension
+            for face in group.faces
+        ),
+        (),
+    )
+    assert sheaf_result.sheaf is not None
+    sheaf = sheaf_result.sheaf
+    scale = 10**63
+    components = tuple((face, ((_q(scale),),)) for face in sheaf.canonical_face_order)
+
+    with pytest.raises(OperationResourceAdmissionError, match="digit bound"):
+        cohomology_map(morphism(sheaf, sheaf, components))
 
 
 def test_map_into_zero_stalks_preserves_empty_cohomology_axes() -> None:

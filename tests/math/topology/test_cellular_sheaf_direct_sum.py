@@ -9,8 +9,6 @@ from itertools import product
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -25,6 +23,7 @@ from jacobian.math.topology.cellular_sheaves import (
     sheaf_cohomology,
 )
 from jacobian.math.topology.cellular_sheaves._models import CoverRestrictionMatrix
+from jacobian.math.topology.cellular_sheaves._tools import TOOLS as SHEAF_TOOLS
 from jacobian.math.topology.cellular_sheaves.direct_sum import SheafDirectSumRequest
 
 
@@ -131,8 +130,11 @@ def test_direct_sum_doubles_a_stalk_past_public_rank_bound_before_expansion() ->
 
 
 def test_direct_sum_catalog_contract_and_example() -> None:
-    tool = Catalog(BUILTIN_TOOLS).operation("cellular_sheaf.direct_sum.compute")
-    assert tool is not None
+    tool = next(
+        item
+        for item in SHEAF_TOOLS
+        if item.operation_id == "cellular_sheaf.direct_sum.compute"
+    )
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert result.direct_sum.stalks[0].basis == ("L0", "R0")

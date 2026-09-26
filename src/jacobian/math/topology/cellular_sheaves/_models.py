@@ -28,7 +28,6 @@ MAX_SHEAF_STALK_RANK = 8
 MAX_SHEAF_TOTAL_STALK_RANK = 512
 MAX_SHEAF_COVER_MAPS = 512
 MAX_SHEAF_ENTRY_DIGITS = 64
-MAX_SHEAF_SCALAR_JSON_BYTES = 2 * MAX_SHEAF_ENTRY_DIGITS + 32
 MAX_SHEAF_PRIME = 1000003
 MAX_SHEAF_DERIVED_RESTRICTIONS = 2048
 MAX_SHEAF_RESTRICTION_CELLS = 65536
@@ -36,19 +35,19 @@ MAX_SHEAF_DIAMONDS = 65536
 MAX_SHEAF_COHOMOLOGY_CELLS = 65536
 MAX_SHEAF_HODGE_MATRIX_CELLS = 65536
 MAX_SHEAF_HODGE_CUBIC_WORK = 4000000
-MAX_SHEAF_HODGE_OUTPUT_CHARS = 8000000
+MAX_SHEAF_HODGE_RESULT_DIGIT_WORK = 8000000
 MAX_SHEAF_SECTION_ROWS = (
     MAX_SHEAF_SIMPLICES * (MAX_SHEAF_SIMPLICES - 1) // 2 * MAX_SHEAF_STALK_RANK
 )
 MAX_SHEAF_SECTION_MATRIX_CELLS = 65536
 MAX_SHEAF_SECTION_OUTPUT_CELLS = 200000
 MAX_SHEAF_SECTION_WORK = 4000000
-MAX_SHEAF_SECTION_OUTPUT_CHARS = 8000000
-MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS = 34000000
+MAX_SHEAF_SECTION_RESULT_DIGIT_WORK = 8000000
+MAX_SHEAF_SECTION_RESTRICTION_DIGIT_WORK = 34000000
 MAX_SHEAF_MORPHISM_COMPONENT_CELLS = 32768
 MAX_SHEAF_MORPHISM_WORK = 4000000
-MAX_SHEAF_MORPHISM_OUTPUT_CHARS = 8000000
-MAX_SHEAF_RESTRICTION_OUTPUT_CHARS = 8000000
+MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK = 8000000
+MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK = 8000000
 
 BasisLabel = Annotated[
     str,
@@ -69,9 +68,9 @@ def sheaf_scalar_digits(value: SheafScalar) -> int:
     return MAX_SHEAF_ENTRY_DIGITS + 1
 
 
-def sheaf_scalar_json_bound(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
-    """Upper bound typed scalar JSON, including num/den object overhead."""
-    return count * (2 * digits + 32)
+def sheaf_scalar_digit_work(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
+    """Bound exact scalar component digits across a collection of values."""
+    return count * digits
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -637,7 +636,7 @@ class SheafSectionRestriction(StrictModel):
                 "section restriction entries must map the source section basis to the target section basis",
             )
         if (
-            sheaf_scalar_json_bound(
+            sheaf_scalar_digit_work(
                 sum(len(row) for row in self.entries),
                 max(
                     (
@@ -648,11 +647,11 @@ class SheafSectionRestriction(StrictModel):
                     default=1,
                 ),
             )
-            > MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS
+            > MAX_SHEAF_SECTION_RESTRICTION_DIGIT_WORK
         ):
             raise _validation_error(
                 "section_restriction_output",
-                "section restriction scalar values exceed their declared output bound",
+                "section restriction scalar values exceed their declared digit-work bound",
             )
         source_cells = set(self.source.sheaf.canonical_face_order)
         target_cells = set(self.target.sheaf.canonical_face_order)
@@ -992,7 +991,7 @@ __all__ = [
     "MAX_SHEAF_ENTRY_DIGITS",
     "MAX_SHEAF_HODGE_CUBIC_WORK",
     "MAX_SHEAF_HODGE_MATRIX_CELLS",
-    "MAX_SHEAF_HODGE_OUTPUT_CHARS",
+    "MAX_SHEAF_HODGE_RESULT_DIGIT_WORK",
     "MAX_SHEAF_PRIME",
     "MAX_SHEAF_RESTRICTION_CELLS",
     "MAX_SHEAF_SIMPLICES",

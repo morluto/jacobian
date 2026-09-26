@@ -9,8 +9,6 @@ from itertools import product
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
@@ -27,6 +25,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafSectionRestriction,
     SheafSectionSpace,
 )
+from jacobian.math.topology.cellular_sheaves._tools import TOOLS as SHEAF_TOOLS
 
 
 def _q(value: str | int) -> CanonicalRational:
@@ -185,8 +184,12 @@ def test_section_restriction_is_the_exact_inclusion_induced_map() -> None:
 
 
 def test_published_section_restriction_example_runs() -> None:
-    tool = Catalog.open().operation("cellular_sheaf.sections.restrict")
-    assert tool is not None and len(tool.examples) == 1
+    tool = next(
+        item
+        for item in SHEAF_TOOLS
+        if item.operation_id == "cellular_sheaf.sections.restrict"
+    )
+    assert len(tool.examples) == 1
     request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
     result = tool.run(request)
     assert isinstance(result, SheafSectionRestriction)
@@ -275,8 +278,11 @@ def test_full_compatibility_matrix_is_admitted_before_dense_construction() -> No
 
 
 def test_catalog_section_operation_exposes_a_reusable_target_space() -> None:
-    tool = Catalog.open().operation("cellular_sheaf.sections.compute")
-    assert tool is not None
+    tool = next(
+        item
+        for item in SHEAF_TOOLS
+        if item.operation_id == "cellular_sheaf.sections.compute"
+    )
     request = tool.request_type.model_validate({"sheaf": _constant_interval()})
     result = tool.run(request)
     assert isinstance(result, SheafSectionSpace)
@@ -287,5 +293,5 @@ def test_catalog_section_operation_exposes_a_reusable_target_space() -> None:
         ("a", "b"),
     )
     assert any(
-        tool.operation_id == "cellular_sheaf.sections.compute" for tool in BUILTIN_TOOLS
+        tool.operation_id == "cellular_sheaf.sections.compute" for tool in SHEAF_TOOLS
     )

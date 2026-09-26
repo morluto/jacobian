@@ -8,7 +8,6 @@ from itertools import product
 import pytest
 
 import jacobian.math.logic.automata.transducers as transducer_package
-from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.automata.transducers.coaccessibility_witnesses._models import (
     CoaccessibleStatesRequest,
 )

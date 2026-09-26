@@ -23,6 +23,19 @@ def _error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"rational_transducer.restrict_output.{reason}", message)
 
 
+def _output_edge_advances_language(
+    language: DFA, initial: int, label: tuple[int, ...], target: int
+) -> bool:
+    state = initial
+    transitions = {(row.source, row.symbol): row.target for row in language.transitions}
+    for symbol in label:
+        next_state = transitions.get((state, symbol))
+        if next_state is None:
+            return False
+        state = next_state
+    return state == target
+
+
 class RestrictRationalOutputRequest(StrictModel):
     """Restrict a rational relation by a total DFA on its output tape.
 
@@ -87,6 +100,30 @@ class RestrictRationalOutputResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_transports(self) -> Self:
+        source_edges = self.source.edges
+        restricted_edges = self.restricted.edges
+        product_rows = self.product_states
+        for transport in self.edge_sources:
+            restricted_edge = restricted_edges[transport.restricted_edge]
+            source_edge = source_edges[transport.source_edge]
+            source_state = product_rows[restricted_edge.source]
+            target_state = product_rows[restricted_edge.target]
+            if (
+                source_state.transducer_state != source_edge.source
+                or target_state.transducer_state != source_edge.target
+                or restricted_edge.input_label != source_edge.input_label
+                or restricted_edge.output_label != source_edge.output_label
+                or not _output_edge_advances_language(
+                    self.output_language,
+                    source_state.language_state,
+                    source_edge.output_label,
+                    target_state.language_state,
+                )
+            ):
+                raise _error(
+                    "edge_transport_mismatch",
+                    "edge transport must preserve its source edge and product endpoints",
+                )
         if len(self.product_states) != self.restricted.state_count:
             raise _error(
                 "product_state_transport_mismatch",

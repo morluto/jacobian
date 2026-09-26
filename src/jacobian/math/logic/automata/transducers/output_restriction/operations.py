@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 
+from jacobian._execution import execution_deadline, request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -351,7 +352,10 @@ def restrict_rational_output(
     and source-edge coordinates; canonical target edges are materialized after
     exact state, edge, label-cell, and output bounds are known.
     """
+    execution_deadline(60.0)
+    request_checkpoint("before output-restriction admission")
     delta, outgoing, labels = _validate_inputs(relation, language, output_alphabet)
+    request_checkpoint("after output-restriction admission")
     edge_inputs, edge_outputs = labels
 
     work_bound = (
@@ -387,6 +391,7 @@ def restrict_rational_output(
     pairs = list(initial_pairs)
     queue = deque(initial_pairs)
     arc_plan: list[tuple[int, int, int]] = []
+    traversed = 0
     while queue:
         pair = queue.popleft()
         source_id = pair_to_id[pair]
@@ -395,6 +400,9 @@ def restrict_rational_output(
             next_dfa_state = dfa_state
             for symbol in edge_outputs[edge_index]:
                 next_dfa_state = delta[(next_dfa_state, symbol)]
+                traversed += 1
+                if traversed % 256 == 0:
+                    request_checkpoint("during output-restriction product traversal")
             edge = relation.edges[edge_index]
             target_pair = (edge.target, next_dfa_state)
             target_id = pair_to_id.get(target_pair)
@@ -416,6 +424,7 @@ def restrict_rational_output(
                 )
             arc_plan.append((source_id, edge_index, target_id))
 
+    request_checkpoint("after output-restriction product traversal")
     if len(pairs) > MAX_FST_STATES:
         _fail(
             "product_states_exceeded",
@@ -450,6 +459,7 @@ def restrict_rational_output(
         if source_state in accepting_source_states
         and dfa_state in accepting_language_states
     )
+    request_checkpoint("before output-restriction result construction")
     restricted_edges = tuple(
         RationalEdge(
             source=product_source,

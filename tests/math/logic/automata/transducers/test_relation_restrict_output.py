@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.transducers.output_restriction._models import (
@@ -164,6 +165,27 @@ def test_output_restriction_round_trips_and_is_registered() -> None:
     assert len(TOOLS) == 1
     assert TOOLS[0].operation_id == "transducer.relation.restrict_output.compute"
     assert TOOLS[0].run(request) == result
+
+
+def test_decoded_result_rejects_false_in_range_edge_transport() -> None:
+    result = _restrict(
+        RestrictRationalOutputRequest(
+            transducer=_source(),
+            output_language=_output_language(),
+            output_alphabet=FiniteAlphabet(symbols=("x", "y")),
+        )
+    )
+    first, second = result.edge_sources[:2]
+    forged = result.model_copy(
+        update={
+            "edge_sources": (
+                first.model_copy(update={"source_edge": second.source_edge}),
+                *result.edge_sources[1:],
+            )
+        }
+    )
+    with pytest.raises(ValidationError, match="edge_transport_mismatch"):
+        RestrictRationalOutputResult.model_validate(forged.model_dump())
 
 
 def test_output_restriction_rejects_mismatched_alphabet_context() -> None:

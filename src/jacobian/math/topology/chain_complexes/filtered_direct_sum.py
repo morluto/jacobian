@@ -428,6 +428,29 @@ def _preflight_matrices(
 def _preflight(
     left: FilteredChainComplexRequest, right: FilteredChainComplexRequest
 ) -> None:
+    # model_construct/model_copy can forge axis lengths that normal validation
+    # would reject. Check them before the resource estimator indexes by degree.
+    for label, value in (("left", left), ("right", right)):
+        complex_value = value.complex
+        degree_count = len(complex_value.basis_sizes)
+        if len(value.filtration) > MAX_FILTER_LEVELS or any(
+            len(level.subspaces) != degree_count for level in value.filtration
+        ):
+            raise _fail(
+                (label, "filtration"),
+                "filtered_chain_complex.filtration_axis_invalid",
+                "each filtration level must bind every degree in the complex axis",
+            )
+        for level_index, level in enumerate(value.filtration):
+            for degree, (subspace, ambient) in enumerate(
+                zip(level.subspaces, complex_value.basis_sizes, strict=True)
+            ):
+                if any(len(vector) != ambient for vector in subspace.vectors):
+                    raise _fail(
+                        (label, "filtration", level_index, degree),
+                        "filtered_chain_complex.filtration_axis_invalid",
+                        "filtration vectors must match their chain group dimension",
+                    )
     a = left.complex
     b = right.complex
     output_sizes = _require_shared_context(left, right)
@@ -458,10 +481,24 @@ def filtered_direct_sum(
     left_value: FilteredChainComplexRequest,
     right_value: FilteredChainComplexRequest,
 ) -> FilteredDirectSumResult:
+    if (
+        type(left_value) is not FilteredChainComplexRequest
+        or type(right_value) is not FilteredChainComplexRequest
+    ):
+        raise _fail(("request",), "filtered_chain_complex.type_invalid", "expected two filtered chain complexes")
+    try:
+        # Price the combined payload before dumping/rebuilding either nested
+        # filtration. A rejection can then happen without duplicating its scalars.
+        _preflight(left_value, right_value)
+    except OperationDomainValidationError:
+        raise
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise _fail(
+            ("request",), "filtered_chain_complex.structure_invalid", str(exc)
+        ) from exc
     left = _revalidate(left_value, "left")
     right = _revalidate(right_value, "right")
 
-    _preflight(left, right)
     _admit_filtered_semantics(left.complex, left.filtration)
     _admit_filtered_semantics(right.complex, right.filtration)
     a = left.complex

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import pytest
+
 from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.function_fields import (
     FiniteFunctionFieldElement,
     PrimeFieldPolynomial,
@@ -97,10 +100,30 @@ def test_norm_allows_large_irrelevant_required_matrix_entry() -> None:
         characteristic=5,
         variable="x",
         generator="y",
-        defining_polynomial=(_rational(5, (0, 1)), _rational(5, (0,)), x12, _rational(5, (1,))),
+        defining_polynomial=(
+            _rational(5, (0, 1)),
+            _rational(5, (0,)),
+            x12,
+            _rational(5, (1,)),
+        ),
     )
-    y_squared = _element(field, (_rational(5, (0,)), _rational(5, (0,)), _rational(5, (1,))))
+    y_squared = _element(
+        field, (_rational(5, (0,)), _rational(5, (0,)), _rational(5, (1,)))
+    )
     assert function_field_element_norm(y_squared).norm == _rational(5, (0, 0, 1))
+
+
+def test_over_degree_norm_is_rejected_before_public_carrier_construction() -> None:
+    field = _field()
+    x7 = _rational(5, (0,) * 7 + (1,))
+    element = _element(field, (x7, _rational(5, (0,))))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        function_field_element_norm(element)
+    assert (
+        error.value.errors()[0]["type"]
+        == "function_field.norm_coefficient_growth_exceeds_envelope"
+    )
 
 
 def test_generator_norm_and_rational_field_identity() -> None:

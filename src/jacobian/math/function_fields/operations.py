@@ -1133,6 +1133,18 @@ def function_field_element_norm(
                 term if inversions % 2 == 0 else rf_sub(ZERO_RF, term, prime),
                 prime,
             )
+    if (
+        len(norm[0]) - 1 > MAX_POLYNOMIAL_X_DEGREE
+        or len(norm[1]) - 1 > MAX_POLYNOMIAL_X_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
     norm_value = _from_internal_rational_function(norm, prime)
     if (
         norm_value.numerator.degree > MAX_POLYNOMIAL_X_DEGREE

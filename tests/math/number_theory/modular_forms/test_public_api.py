@@ -19,6 +19,7 @@ def test_exact_public_api_symbols() -> None:
         "ModularFormBasis",
         "ModularFormChangeOfBasisFrame",
         "ModularFormCoordinates",
+        "ModularFormEqualityResult",
         "ModularFormFieldQExpansion",
         "ModularFormFramedCoordinates",
         "ModularFormFramedHeckeMatrix",
@@ -26,6 +27,7 @@ def test_exact_public_api_symbols() -> None:
         "ModularFormOperatorImage",
         "ModularFormOperatorImagePrefix",
         "ModularFormSpace",
+        "ModularFormSpaceInclusion",
         "ModularQExpansion",
         "formal_q_series_u_operator",
         "formal_q_series_v_operator",
@@ -41,6 +43,7 @@ def test_exact_public_api_symbols() -> None:
         "modular_form_basis_q_expansions",
         "modular_form_coordinates_add",
         "modular_form_coordinates_atkin_lehner",
+        "modular_form_coordinates_equal",
         "modular_form_coordinates_extend_field",
         "modular_form_coordinates_from_frame",
         "modular_form_coordinates_hecke",
@@ -59,6 +62,7 @@ def test_exact_public_api_symbols() -> None:
         "modular_form_hecke_matrix_in_frame",
         "modular_form_operator_image",
         "modular_form_operator_image_q_expansion",
+        "modular_form_space_inclusion",
         "named_q_expansion",
         "space_dimension",
         "sturm_bound",
@@ -119,7 +123,8 @@ def test_q_series_operator_tools_do_not_claim_modular_space_membership() -> None
     assert "modular_form.coordinates.to_frame.compute" in operations
     assert "modular_form.coordinates.from_frame.compute" in operations
     assert "modular_form.coordinates.transport.compute" in operations
-    assert "modular_form.equal.check" not in operations
+    assert "modular_form.space.inclusion.compute" in operations
+    assert "modular_form.equal.check" in operations
     assert "modular_form.character_coordinates.q_expansion.compute" in operations
     assert "modular_form.character_coordinates.product.compute" in operations
     assert "modular_form.character_hecke_matrix.compute" in operations

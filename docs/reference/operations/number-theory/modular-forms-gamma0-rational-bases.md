@@ -124,11 +124,17 @@ representations and are not implied by these bases.
 
 ## Nested-space coordinate transport
 
+`modular_form.space.inclusion.compute` constructs a reusable
+`ModularFormSpaceInclusion` for the natural map from a trivial-character QQ
+space on `Gamma0(M)` into one on `Gamma0(N)`, when `M` divides `N` and the
+weights agree. It records both spaces. `Gamma0(N)` is a subgroup of `Gamma0(M)`
+under this divisibility condition. The map preserves cusp forms; the full space
+maps to the full space, and the cusp space also embeds in the full space.
+
 `modular_form.coordinates.transport.compute` expresses an exact coordinate-defined
 form in a target space when both are over `QQ`, have trivial character and the
-same weight, and the source level divides the target level. The full space maps
-to the full space; a cuspidal form maps to either the cusp space or full space.
-It computes the source expansion through the target Sturm-determining precision,
+same weight, and the supplied inclusion's source equals the form's space. It
+computes the source expansion through the target Sturm-determining precision,
 then solves uniquely in the target's canonical basis. The returned
 `ModularFormCoordinates` is bound to the exact target space and basis.
 

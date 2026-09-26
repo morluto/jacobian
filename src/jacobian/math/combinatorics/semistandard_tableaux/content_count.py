@@ -174,6 +174,16 @@ def fixed_content_count(
         # K_{lambda,lambda}=1: each row is forced to its correspondingly
         # ordered label, and the partition inequalities make columns strict.
         return FixedContentCountResult(partition=partition, content=content, count=1)
+    if (
+        len(partition.parts) == 2
+        and len(content.terms) == 2
+        and partition.parts[1] <= content.terms[0].multiplicity <= partition.parts[0]
+    ):
+        # With two labels, every cell in the lower row must use the larger
+        # label. The smaller-label multiplicity can range from the lower-row
+        # width through the upper-row width; monotonicity then forces the
+        # unique filling.
+        return FixedContentCountResult(partition=partition, content=content, count=1)
     if len(content.terms) < len(partition.parts):
         # A strict column of this height needs at least this many distinct
         # labels, regardless of their multiplicities.

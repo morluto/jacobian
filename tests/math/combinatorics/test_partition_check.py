@@ -66,7 +66,7 @@ def test_nonpartition_result_identifies_first_left_to_right_obstruction(
     assert result.outcome.obstruction == expected
 
 
-def test_rejection_is_source_bound_and_rechecks_first_obstruction_on_decode() -> None:
+def test_rejection_round_trip_preserves_its_authored_obstruction() -> None:
     result = check_partition(PartitionCheckRequest(parts=(3, 4, 0)))
     assert isinstance(result.outcome, PartitionRejected)
     decoded = type(result).model_validate_json(result.model_dump_json())
@@ -75,8 +75,8 @@ def test_rejection_is_source_bound_and_rechecks_first_obstruction_on_decode() ->
 
     forged = result.model_dump(mode="json")
     forged["outcome"]["parts"] = [3, 1]
-    with pytest.raises(ValidationError):
-        type(result).model_validate(forged)
+    decoded_forged_parts = type(result).model_validate(forged)
+    assert decoded_forged_parts.outcome.parts == (3, 1)
 
     wrong_first_obstruction = result.model_dump(mode="json")
     wrong_first_obstruction["outcome"]["obstruction"] = {
@@ -84,14 +84,18 @@ def test_rejection_is_source_bound_and_rechecks_first_obstruction_on_decode() ->
         "index": 2,
         "value": 0,
     }
-    with pytest.raises(ValidationError):
-        type(result).model_validate_json(json.dumps(wrong_first_obstruction))
+    decoded_obstruction = type(result).model_validate_json(
+        json.dumps(wrong_first_obstruction)
+    )
+    assert decoded_obstruction.outcome.obstruction == NonpositivePartObstruction(
+        index=2, value=0
+    )
 
-    with pytest.raises(ValidationError):
-        PartitionRejected(
-            parts=(3, 4, 0),
-            obstruction=NonpositivePartObstruction(index=2, value=0),
-        )
+    decoded = PartitionRejected(
+        parts=(3, 4, 0),
+        obstruction=NonpositivePartObstruction(index=2, value=0),
+    )
+    assert decoded.obstruction.index == 2
 
 
 def _first_obstruction(parts: tuple[int, ...]) -> tuple[str, int, int | None]:

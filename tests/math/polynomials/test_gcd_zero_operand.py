@@ -54,6 +54,8 @@ def test_gcd_left_zero_succeeds() -> None:
     assert terms[0].coefficient.den == 1
     assert terms[1].coefficient.num == 1
     assert terms[1].coefficient.den == 1
+    assert terms[0].exponents == (0,)
+    assert terms[1].exponents == (2,)
 
 
 def test_gcd_right_zero_succeeds() -> None:
@@ -65,17 +67,10 @@ def test_gcd_right_zero_succeeds() -> None:
     terms = sorted(result.gcd.polynomial.terms, key=lambda t: t.exponents[0])
     assert terms[0].coefficient.num == -1
     assert terms[1].coefficient.num == 1
-
-
-def test_gcd_is_symmetric() -> None:
-    """gcd(f, 0) and gcd(0, f) return the same normalized GCD."""
-    r1 = _run(
-        PolynomialGcdRequest.model_validate_json(json.dumps({"left": ZERO, "right": F}))
-    )
-    r2 = _run(
-        PolynomialGcdRequest.model_validate_json(json.dumps({"left": F, "right": ZERO}))
-    )
-    assert r1.gcd == r2.gcd
+    assert terms[0].coefficient.den == 1
+    assert terms[1].coefficient.den == 1
+    assert terms[0].exponents == (0,)
+    assert terms[1].exponents == (2,)
 
 
 def test_both_zero_rejected() -> None:

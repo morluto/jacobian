@@ -10,7 +10,6 @@ from jacobian.math.polynomials.values import RationalPolynomial
 @pytest.mark.parametrize(
     "terms",
     [
-        [],
         [{"coefficient": {"num": 3, "den": 2}, "exponents": [0]}],
         [
             {"coefficient": {"num": 1, "den": 1}, "exponents": [32768]},

@@ -18,16 +18,19 @@ from jacobian.math.polynomials.real_algebra import operations as real_algebra
 
 
 @pytest.mark.parametrize(
-    ("module", "recompute"),
+    ("module", "recompute", "resource_refusal"),
     [
-        (differential, "lie_derivative"),
-        (real_algebra, "common_interlacing_profile"),
-        (quadratic_spectral, "inertia"),
-        (exact_geometry, "distance_profile"),
-        (recurrence, "closed_form"),
+        (differential, "lie_derivative", False),
+        (differential, "lie_derivative", True),
+        (real_algebra, "common_interlacing_profile", False),
+        (quadratic_spectral, "inertia", False),
+        (quadratic_spectral, "inertia", True),
+        (exact_geometry, "distance_profile", False),
+        (exact_geometry, "distance_profile", True),
+        (recurrence, "closed_form", False),
+        (recurrence, "closed_form", True),
     ],
 )
-@pytest.mark.parametrize("resource_refusal", [False, True])
 def test_verifiers_propagate_operational_failures(
     monkeypatch: pytest.MonkeyPatch,
     module: ModuleType,

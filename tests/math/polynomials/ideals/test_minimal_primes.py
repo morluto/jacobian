@@ -9,6 +9,7 @@ from pydantic import ValidationError
 
 from jacobian._execution import OperationExecutionCancelledError
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.polynomials.ideals import operations
 from jacobian.math.polynomials.ideals._models import (
     MAX_OUTPUT_GENERATORS,
     MAX_OUTPUT_TERMS,
@@ -29,6 +30,11 @@ def _run_minimal_primes(
     request: IdealMinimalPrimesRequest,
 ) -> IdealMinimalPrimesResult:
     return ideal_minimal_primes(request.ideal, resource_budget=request.resource_budget)
+
+
+def _assert_family_admitted(ideal: RationalPolynomialIdeal) -> None:
+    """Exercise the producer-side family-fit gate without launching Singular."""
+    operations._admit_minimal_primes(ideal)
 
 
 _PRODUCER_TARGET = (
@@ -318,7 +324,7 @@ def test_bezout_boundary_family_is_admitted() -> None:
     # source stays admitted.
     request = IdealMinimalPrimesRequest(ideal=_product_ideal(variables, (2,) * 4))
 
-    assert len(request.ideal.generators) == 4
+    _assert_family_admitted(request.ideal)
 
 
 def test_negative_root_certificate_rejects_and_admits_at_the_boundary() -> None:
@@ -353,7 +359,7 @@ def test_negative_root_certificate_rejects_and_admits_at_the_boundary() -> None:
 
     request = IdealMinimalPrimesRequest(ideal=unit_offset_ideal(4))
 
-    assert len(request.ideal.generators) == 4
+    _assert_family_admitted(request.ideal)
 
 
 def test_irreducible_constraint_stays_admitted_below_the_envelope() -> None:
@@ -379,7 +385,7 @@ def test_irreducible_constraint_stays_admitted_below_the_envelope() -> None:
         )
     )
 
-    assert len(request.ideal.generators) == 4
+    _assert_family_admitted(request.ideal)
 
 
 def test_shared_extra_slot_is_not_counted_as_a_forced_constraint() -> None:
@@ -403,7 +409,7 @@ def test_shared_extra_slot_is_not_counted_as_a_forced_constraint() -> None:
         )
     )
 
-    assert len(request.ideal.generators) == 6
+    _assert_family_admitted(request.ideal)
 
 
 def test_coupled_irreducible_constraint_falls_back_to_plain_certification() -> None:
@@ -431,7 +437,7 @@ def test_coupled_irreducible_constraint_falls_back_to_plain_certification() -> N
         )
     )
 
-    assert len(request.ideal.generators) == 6
+    _assert_family_admitted(request.ideal)
 
 
 def test_coupling_generators_remove_infeasible_root_choices() -> None:
@@ -465,7 +471,7 @@ def test_coupling_generators_remove_infeasible_root_choices() -> None:
 
     request = IdealMinimalPrimesRequest(ideal=coupled_ideal(5, 5))
 
-    assert len(request.ideal.generators) == 9
+    _assert_family_admitted(request.ideal)
 
     partially_coupled = coupled_ideal(7, 2)
 
@@ -490,7 +496,7 @@ def test_incompatible_extra_generators_block_certification_entirely() -> None:
         )
     )
 
-    assert len(request.ideal.generators) == 3
+    _assert_family_admitted(request.ideal)
 
 
 def test_pure_power_sources_admit_large_degree_products() -> None:
@@ -508,7 +514,7 @@ def test_pure_power_sources_admit_large_degree_products() -> None:
         _poly(variables, (1, 1, (0, 20))),
     )
     request = IdealMinimalPrimesRequest(ideal=pure_powers)
-    assert len(request.ideal.generators) == 2
+    _assert_family_admitted(request.ideal)
 
     mixed = IdealMinimalPrimesRequest(
         ideal=_ideal(
@@ -517,7 +523,7 @@ def test_pure_power_sources_admit_large_degree_products() -> None:
             _poly(variables, (1, 1, (3, 3)), (-1, 1, (2, 4))),
         )
     )
-    assert len(mixed.ideal.generators) == 3
+    _assert_family_admitted(mixed.ideal)
 
 
 def test_monomial_sources_on_few_active_variables_admit_their_family_bound() -> None:
@@ -528,7 +534,7 @@ def test_monomial_sources_on_few_active_variables_admit_their_family_bound() -> 
         ideal=_ideal(variables, _poly(variables, (1, 1, (0, 3, 2, 14))))
     )
 
-    assert len(request.ideal.generators) == 1
+    _assert_family_admitted(request.ideal)
 
 
 def test_wide_monomial_sources_without_full_pure_powers_are_admitted() -> None:
@@ -551,7 +557,7 @@ def test_wide_monomial_sources_without_full_pure_powers_are_admitted() -> None:
 
     request = IdealMinimalPrimesRequest(ideal=_ideal(variables, *generators))
 
-    assert len(request.ideal.generators) == 7
+    _assert_family_admitted(request.ideal)
 
 
 def test_unit_and_zero_degenerate_sources_admit_their_exact_families() -> None:
@@ -563,12 +569,12 @@ def test_unit_and_zero_degenerate_sources_admit_their_exact_families() -> None:
             *_product_ideal(variables, (2,) * 6).generators,
         )
     )
-    assert len(constant.ideal.generators) == 7
+    _assert_family_admitted(constant.ideal)
 
     dropped = IdealMinimalPrimesRequest(
         ideal=_ideal(("x", "y"), _poly(("x", "y")), _poly(("x", "y"), (1, 1, (1, 1))))
     )
-    assert len(dropped.ideal.generators) == 2
+    _assert_family_admitted(dropped.ideal)
 
 
 def test_request_description_advertises_the_enforced_budgets() -> None:

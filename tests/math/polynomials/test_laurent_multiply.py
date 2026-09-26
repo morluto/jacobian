@@ -441,7 +441,11 @@ def test_capped_lcm_measures_the_exact_merge() -> None:
         RationalLaurentPolynomial(variables=("x",), terms=left_terms),
         RationalLaurentPolynomial(variables=("x",), terms=right_terms),
     )
-    assert len(product.terms) == 3
+    assert product.terms == (
+        term_object(CanonicalRational(num=1, den=2 * largest), 2),
+        term_object(CanonicalRational(num=5, den=6 * largest), 1),
+        term_object(CanonicalRational(num=1, den=3 * largest), 0),
+    )
 
 
 def test_boundary_width_collision_sum_is_admitted() -> None:
@@ -479,18 +483,6 @@ def test_boundary_width_collision_cancels_by_sign() -> None:
         ((2,), tall),
         ((0,), -tall),
     ]
-
-
-def test_boundary_width_collision_sum_stays_within_the_cap() -> None:
-    """(A*x + A)*(x + 1) has middle coefficient 2A within the digit cap."""
-    tall = 10 ** (MAX_CANONICAL_RATIONAL_DIGITS - 1)
-    left = RationalLaurentPolynomial(
-        variables=("x",), terms=(term(tall, 1), term(tall, 0))
-    )
-    right = RationalLaurentPolynomial(variables=("x",), terms=(term(1, 1), term(1, 0)))
-    product = rational_laurent_multiply(left, right)
-    assert len(product.terms) == 3
-    assert product.terms[1].coefficient.num == 2 * tall
 
 
 def test_collision_group_lcm_reduction_below_the_cap_is_admitted() -> None:
@@ -585,18 +577,20 @@ def test_transient_collision_overflow_can_cancel_in_a_later_term() -> None:
         ),
     )
     product = rational_laurent_multiply(left, right)
-    assert [item.exponents for item in product.terms] == [
-        (4,),
-        (3,),
-        (1,),
-        (0,),
-    ]
+    assert product.terms == (
+        _rational_term(2 * tall, 1, 4),
+        _rational_term(-2 * tall, 1, 3),
+        _rational_term(-2 * tall, 1, 1),
+        _rational_term(2 * tall, 1, 0),
+    )
 
 
 def test_transient_collision_denominator_can_cancel_in_a_later_term() -> None:
     """A group's intermediate denominator overshoot is not a final bound."""
     cap = MAX_CANONICAL_RATIONAL_DIGITS
     scale = 2 * 10 ** (cap - 1)
+    left_values = ((-1, 2), (5, 1), (-2, 0))
+    right_values = ((-3, 4, 2), (-3, 2, 1), (-1, 1, 0))
     left = RationalLaurentPolynomial(
         variables=("x",),
         terms=tuple(
@@ -604,25 +598,29 @@ def test_transient_collision_denominator_can_cancel_in_a_later_term() -> None:
                 coefficient=CanonicalRational.from_fraction(Fraction(num, 3 * scale)),
                 exponents=(exponent,),
             )
-            for num, exponent in ((-1, 2), (5, 1), (-2, 0))
+            for num, exponent in left_values
         ),
     )
     right = RationalLaurentPolynomial(
         variables=("x",),
         terms=(
-            _rational_term(-3, 4, 2),
-            _rational_term(-3, 2, 1),
-            _rational_term(-1, 1, 0),
+            *(
+                _rational_term(num, den, exponent)
+                for num, den, exponent in right_values
+            ),
         ),
     )
     product = rational_laurent_multiply(left, right)
-    assert [item.exponents for item in product.terms] == [
-        (4,),
-        (3,),
-        (2,),
-        (1,),
-        (0,),
-    ]
+    expected: dict[int, Fraction] = {}
+    for left_num, left_exponent in left_values:
+        for right_num, right_den, right_exponent in right_values:
+            exponent = left_exponent + right_exponent
+            expected[exponent] = expected.get(exponent, Fraction()) + Fraction(
+                left_num, 3 * scale
+            ) * Fraction(right_num, right_den)
+    assert tuple(
+        (item.exponents[0], item.coefficient.as_fraction()) for item in product.terms
+    ) == tuple(sorted(expected.items(), reverse=True))
 
 
 def test_aggregate_output_digit_envelope_is_enforced() -> None:

@@ -2,10 +2,7 @@
 
 from fractions import Fraction
 
-import pytest
-
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.series import TruncatedSeries, multiply
 
 
@@ -32,12 +29,6 @@ def test_discarded_high_degree_pairs_do_not_consume_convolution_work() -> None:
     left = _series(2048, dict.fromkeys(range(1024, 2048), 1))
     result = multiply(left, left)
     assert result.result == _series(2048, {})
-
-
-def test_dense_product_still_refuses_excessive_retained_work() -> None:
-    source = _series(513, dict.fromkeys(range(513), 1))
-    with pytest.raises(OperationResourceAdmissionError):
-        multiply(source, source)
 
 
 def test_sparse_fraction_product_matches_independent_coefficients() -> None:

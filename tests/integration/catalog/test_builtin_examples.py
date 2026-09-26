@@ -58,15 +58,7 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
     operation: MathTool[Any, Any],
 ) -> None:
     operation_id = operation.operation_id
-    if operation_id in _SINGULAR_OPERATION_IDS and shutil.which("Singular") is None:
-        pytest.skip("the published example is owned by the Singular runtime lane")
-    if (
-        operation_id in _FACTOR_WORKER_OPERATION_IDS
-        and not factor_worker_containment_available()
-    ):
-        pytest.skip(
-            "the published example needs the hard-memory-containment worker lane"
-        )
+    assert _CATALOG.operation(operation_id) is operation
     examples = operation.examples
     assert examples, f"{operation_id} must advertise one executable example"
     request_schema = operation.request_type.model_json_schema()
@@ -77,6 +69,17 @@ def test_advertised_invocation_example_executes_when_backend_is_available(
         operation.request_type.model_validate_json(
             encode_strict_json(invocation_example.input), strict=True
         )
+
+    if operation_id in _SINGULAR_OPERATION_IDS and shutil.which("Singular") is None:
+        pytest.skip("the published example is owned by the Singular runtime lane")
+    if (
+        operation_id in _FACTOR_WORKER_OPERATION_IDS
+        and not factor_worker_containment_available()
+    ):
+        pytest.skip(
+            "the published example needs the hard-memory-containment worker lane"
+        )
+    for invocation_example in examples:
         public_result = invoke_operation(
             operation_id,
             invocation_example.input,

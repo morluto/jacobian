@@ -179,6 +179,21 @@ def test_known_polynomial_is_reconstructed_from_several_nodes() -> None:
     assert result.degree == 5
     assert result.leading_coefficient.as_fraction() == 2
     assert len(result.replay) == result.total_multiplicity == 6
+    coefficients = (
+        Fraction(-4),
+        Fraction(7),
+        Fraction(0),
+        Fraction(-3, 2),
+        Fraction(0),
+        Fraction(2),
+    )
+    for replay in result.replay:
+        assert replay.computed.as_fraction() == _ordinary_derivative(
+            coefficients,
+            replay.node.as_fraction(),
+            replay.derivative_order,
+        )
+        assert replay.computed.as_fraction() == replay.expected.as_fraction()
 
 
 def test_rational_nodes_follow_the_same_exact_contract() -> None:
@@ -195,31 +210,6 @@ def test_rational_nodes_follow_the_same_exact_contract() -> None:
         Fraction(1, 4),
         Fraction(1),
     )
-
-
-def test_replay_establishes_every_defining_derivative_constraint() -> None:
-    coefficients = (
-        Fraction(-4),
-        Fraction(7),
-        Fraction(0),
-        Fraction(-3, 2),
-        Fraction(0),
-        Fraction(2),
-    )
-    table = _table(
-        _jet(-1, (-23, 2), (25, 2)),
-        _jet(0, (-4, 1), (7, 1), (0, 1)),
-        _jet(2, (62, 1)),
-    )
-    result = hermite_interpolation(table)
-
-    for replay in result.replay:
-        assert replay.computed.as_fraction() == _ordinary_derivative(
-            coefficients,
-            replay.node.as_fraction(),
-            replay.derivative_order,
-        )
-        assert replay.computed.as_fraction() == replay.expected.as_fraction()
 
 
 def test_zero_polynomial_retains_ring_and_zero_conventions() -> None:

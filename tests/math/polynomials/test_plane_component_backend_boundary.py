@@ -14,7 +14,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.backends import BackendUnavailableError
-from jacobian.math.polynomials.real_algebra import compute_plane_component_profile
+from jacobian.math.polynomials.real_algebra import (
+    compute_plane_component_profile,
+    verify_plane_component_profile,
+)
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     PlaneComponentProfileComputed,
     PlaneSemialgebraicSet,
@@ -51,6 +54,7 @@ def test_empty_and_whole_plane_resolve_without_qepcad() -> None:
     assert result.outcome.status == "COMPUTED"
     assert isinstance(result.outcome, PlaneComponentProfileComputed)
     assert result.outcome.components == ()
+    assert verify_plane_component_profile(result) is True
 
     whole = PlaneSemialgebraicSet(
         axis=("x", "y"),
@@ -63,11 +67,10 @@ def test_empty_and_whole_plane_resolve_without_qepcad() -> None:
     assert len(whole_result.outcome.components) == 1
 
 
-@pytest.mark.skipif(
-    shutil.which("qepcad") is not None,
-    reason="this refusal path requires the QEPCAD backend to be absent",
-)
-def test_nondegenerate_request_without_qepcad_is_a_typed_refusal() -> None:
+def test_nondegenerate_request_without_qepcad_is_a_typed_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(shutil, "which", lambda _name: None)
     disk = _polynomial(((1, (2, 0)), (1, (0, 2)), (-1, (0, 0))))
     semialgebraic_set = PlaneSemialgebraicSet(
         axis=("x", "y"),

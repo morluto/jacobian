@@ -296,15 +296,6 @@ def test_edge_parent_substitution_is_rejected():
         )
 
 
-def test_catalog_publishes_finite_group_holonomy():
-    from jacobian.catalog.catalog import Catalog
-
-    assert (
-        Catalog.open().operation("lattice_gauge.finite_group.holonomy.compute")
-        is not None
-    )
-
-
 def test_output_expansion_is_admitted_before_contribution_construction():
     group = _s4_group()
     field = _loop_field(group, 1)

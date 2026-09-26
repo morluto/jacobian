@@ -6,6 +6,7 @@ from jacobian.math.geometry.periodic_fans._models import (
     MAX_PERIODIC_COORDINATE_DIGITS,
     MAX_PERIODIC_LATTICE_RANK,
     MAX_PERIODIC_OVERLAP_CANDIDATES,
+    MAX_PERIODIC_POLYGON_VERTICES,
     MAX_PERIODIC_VERTICES,
     PeriodicFanValidationRequest,
     PeriodicFanValidationResult,
@@ -52,9 +53,11 @@ PERIODIC_FAN_VALIDATE_OPERATION = MathTool(
         "Decide whether a bounded finite presentation defines a rational fan "
         "invariant under a full-rank period lattice: the basis is integral and "
         "full rank with an exact index, every maximal cell is a nondegenerate "
-        "simplex in the fundamental parallelotope, every declared overlap is a "
+        "simplex or strictly convex rank-two polygon with at most "
+        f"{MAX_PERIODIC_POLYGON_VERTICES} vertices in the fundamental "
+        "parallelotope, every declared overlap is a "
         "common face, every actual overlap is declared, the cells cover the "
-        "fundamental parallelotope, and unimodularity claims hold under the "
+        "fundamental parallelotope, and simplex unimodularity claims hold under the "
         "integer Smith normal form. On success return the finite quotient "
         "incidence: quotient cells with orbit members and exact translation "
         "stabilizer sublattices, the face-to-orbit map, quotient face relations, "

@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from fractions import Fraction
-from itertools import combinations, permutations, product
-from math import factorial, floor
+from itertools import combinations, product
+from math import factorial, floor, isqrt
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.lattices._lattice_ops import hermite_basis
@@ -21,8 +21,26 @@ from jacobian.math.matrices._flint import integer_smith_normal_form
 # One exact row ``coefficients . x (rel) rhs`` with ``rel`` in ``eq``/``ge``/``gt``.
 _LpRow = tuple[tuple[Fraction, ...], str, Fraction]
 
-MAX_PERIODIC_FM_ROWS = 4_096
+MAX_PERIODIC_FM_GENERATED_ROWS = 65_536
+# The deduplicated tableau cap is the exact square root of the generated-row
+# cap, so every elimination step that starts within the tableau cap pairs at
+# most its square rows and the generated-row bound can never be crossed while
+# computing.  The structural initial-tableau bound ``fm_structural_bound`` is
+# preflighted against this cap during request admission.
+MAX_PERIODIC_FM_ROWS = isqrt(MAX_PERIODIC_FM_GENERATED_ROWS)
 MAX_PERIODIC_TRANSLATION_ENUMERATION = 200_000
+
+
+def fm_structural_bound(rank: int) -> int:
+    """Bound the rows entering any exact feasibility tableau of rank ``rank``.
+
+    Recognition derives every feasibility problem from the cells: barycentric
+    containment uses ``2 * rank + 2`` rows, pairwise nonempty intersection
+    ``3 * rank + 4``, and strict lambda common-face ``3 * rank + 5``; rank-two
+    polygon paths use exact clipping instead of a tableau.
+    """
+
+    return 3 * rank + 5
 
 
 def _reject_budget(message: str) -> None:
@@ -42,11 +60,18 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
     """Decide exact rational feasibility by Fourier--Motzkin elimination.
 
     Equalities are substituted first; remaining variables are eliminated by
-    pairing positive and negative coefficients.  The tableau is deduplicated
-    after every step and bounded by ``MAX_PERIODIC_FM_ROWS``.
+    pairing positive and negative coefficients.  The tableau entering every
+    step is bounded by ``MAX_PERIODIC_FM_ROWS``, whose square is the
+    generated-row cap preflighted at admission, so each step's expansion is
+    bounded before any pairing happens.
     """
 
     for index in range(variables):
+        if len(rows) > MAX_PERIODIC_FM_ROWS:
+            _reject_budget(
+                "exact periodic fan feasibility tableau exceeds "
+                f"{MAX_PERIODIC_FM_ROWS} rows"
+            )
         rows = _substitute_equalities(rows, index)
         positive: list[_LpRow] = []
         negative: list[_LpRow] = []
@@ -77,11 +102,6 @@ def _fm_feasible(rows: list[_LpRow], variables: int) -> bool:
                     )
                 )
         rows = _deduplicate_rows(combined)
-        if len(rows) > MAX_PERIODIC_FM_ROWS:
-            _reject_budget(
-                "exact periodic fan feasibility tableau exceeds "
-                f"{MAX_PERIODIC_FM_ROWS} rows"
-            )
     for coefficients, kind, rhs in rows:
         if all(value == 0 for value in coefficients):
             if kind == "eq":
@@ -253,6 +273,14 @@ def _face_key(
 
 
 def _simplex_volume_numerator(coordinates: tuple[tuple[int, ...], ...]) -> int:
+    if len(coordinates) > 3 and len(coordinates[0]) == 2:
+        return abs(
+            sum(
+                coordinates[index][0] * coordinates[(index + 1) % len(coordinates)][1]
+                - coordinates[(index + 1) % len(coordinates)][0] * coordinates[index][1]
+                for index in range(len(coordinates))
+            )
+        )
     origin = coordinates[0]
     edges = [
         [point[index] - origin[index] for index in range(len(origin))]
@@ -269,7 +297,49 @@ def _affinely_independent(coordinates: tuple[tuple[int, ...], ...]) -> bool:
         [point[index] - origin[index] for index in range(len(origin))]
         for point in coordinates[1:]
     ]
-    return _rank(edges) == len(edges)
+    return _rank(edges) == len(coordinates[0])
+
+
+def _strictly_convex_ccw_polygon(
+    coordinates: tuple[tuple[int, ...], ...],
+) -> bool:
+    """Decide the global supporting-line property of a closed vertex cycle.
+
+    Every directed boundary edge must strictly support the cycle: all other
+    listed vertices lie strictly to its left.  This global condition rules out
+    star-ordered self-intersecting cycles, whose every local turn is positive.
+    """
+
+    if len(coordinates) < 4 or len(coordinates[0]) != 2:
+        return False
+    size = len(coordinates)
+    for index in range(size):
+        start = coordinates[index]
+        end = coordinates[(index + 1) % size]
+        edge_x = end[0] - start[0]
+        edge_y = end[1] - start[1]
+        for offset in range(2, size):
+            point = coordinates[(index + offset) % size]
+            if (edge_x * (point[1] - start[1]) - edge_y * (point[0] - start[0])) <= 0:
+                return False
+    return True
+
+
+def _cell_face_positions(
+    cell: tuple[int, ...], rank: int
+) -> tuple[tuple[int, ...], ...]:
+    if len(cell) == rank + 1:
+        return tuple(
+            positions
+            for size in range(1, len(cell) + 1)
+            for positions in combinations(range(len(cell)), size)
+        )
+    if rank == 2 and len(cell) > 3:
+        size = len(cell)
+        vertices = tuple((index,) for index in range(size))
+        edges = tuple((index, (index + 1) % size) for index in range(size))
+        return vertices + edges + (tuple(range(size)),)
+    raise ArithmeticError("admitted periodic cell has no supported face lattice")
 
 
 def _barycentric_feasible(
@@ -294,10 +364,74 @@ def _point_in_simplex(
     return _barycentric_feasible(point, simplex)
 
 
+_Point2 = tuple[Fraction, Fraction]
+
+
+def _oriented_polygon(points: tuple[tuple[int, ...], ...]) -> tuple[_Point2, ...]:
+    result = tuple((Fraction(x), Fraction(y)) for x, y in points)
+    area2 = sum(
+        result[index][0] * result[(index + 1) % len(result)][1]
+        - result[(index + 1) % len(result)][0] * result[index][1]
+        for index in range(len(result))
+    )
+    return result if area2 > 0 else tuple(reversed(result))
+
+
+def _cross2(origin: _Point2, first: _Point2, second: _Point2) -> Fraction:
+    return (first[0] - origin[0]) * (second[1] - origin[1]) - (first[1] - origin[1]) * (
+        second[0] - origin[0]
+    )
+
+
+def _convex_intersection(
+    first: tuple[tuple[int, ...], ...], second: tuple[tuple[int, ...], ...]
+) -> tuple[_Point2, ...]:
+    """Clip one exact convex polygon by another, retaining degenerate results."""
+
+    subject = list(_oriented_polygon(first))
+    clip = _oriented_polygon(second)
+    for index, start in enumerate(clip):
+        end = clip[(index + 1) % len(clip)]
+        if not subject:
+            break
+        output: list[_Point2] = []
+        previous = subject[-1]
+        previous_side = _cross2(start, end, previous)
+        for current in subject:
+            current_side = _cross2(start, end, current)
+            if (current_side >= 0) != (previous_side >= 0):
+                ratio = previous_side / (previous_side - current_side)
+                output.append(
+                    (
+                        previous[0] + ratio * (current[0] - previous[0]),
+                        previous[1] + ratio * (current[1] - previous[1]),
+                    )
+                )
+            if current_side >= 0:
+                output.append(current)
+            previous, previous_side = current, current_side
+        subject = []
+        for point in output:
+            if point not in subject:
+                subject.append(point)
+    return tuple(subject)
+
+
+def _polygon_edges(
+    points: tuple[tuple[int, ...], ...],
+) -> set[frozenset[tuple[int, ...]]]:
+    return {
+        frozenset((points[index], points[(index + 1) % len(points)]))
+        for index in range(len(points))
+    }
+
+
 def _intersection_nonempty(
     first: tuple[tuple[int, ...], ...],
     second: tuple[tuple[int, ...], ...],
 ) -> bool:
+    if len(first[0]) == 2:
+        return bool(_convex_intersection(first, second))
     variables = len(first) + len(second)
     equalities: list[tuple[tuple[Fraction, ...], Fraction]] = []
     equalities.append(
@@ -373,12 +507,47 @@ def _intersection_is_common_face(
 ) -> bool:
     """Decide whether ``conv(first) cap conv(second)`` is a common face.
 
-    Subsets of a simplex's vertices are in convex position, so the two
-    intersection faces coincide exactly when the collections of vertices each
-    simplex contributes are equal as point sets.  Containment of the whole
-    intersection in that face is then a finite family of exact strict
-    feasibility problems, one per excluded vertex.
+    Every supported maximal cell is a convex polytope with all listed vertices
+    extreme. Its intersection with another such polytope is a common face iff
+    both contribute the same face vertices and the intersection contains no
+    point outside their convex hull. Exact strict feasibility checks the latter.
     """
+
+    if len(first[0]) == 2:
+        if set(first) == set(second):
+            return True
+        intersection = _convex_intersection(first, second)
+        if not intersection:
+            return True
+        if len(intersection) >= 3:
+            area2 = sum(
+                intersection[index][0]
+                * intersection[(index + 1) % len(intersection)][1]
+                - intersection[(index + 1) % len(intersection)][0]
+                * intersection[index][1]
+                for index in range(len(intersection))
+            )
+            if area2 != 0:
+                return False
+        unique = tuple(dict.fromkeys(intersection))
+        integer_points = {
+            tuple(map(int, point))
+            for point in unique
+            if point[0].denominator == 1 and point[1].denominator == 1
+        }
+        first_vertices = set(first)
+        second_vertices = set(second)
+        if len(unique) == 1:
+            if not integer_points:
+                return False
+            point = next(iter(integer_points))
+            return point in first_vertices and point in second_vertices
+        if len(integer_points) != len(unique):
+            return False
+        endpoint1 = min(unique)
+        endpoint2 = max(unique)
+        edge = frozenset((tuple(map(int, endpoint1)), tuple(map(int, endpoint2))))
+        return edge in _polygon_edges(first) and edge in _polygon_edges(second)
 
     first_inside = [
         index for index, point in enumerate(first) if _point_in_simplex(point, second)
@@ -410,30 +579,25 @@ def _translation_stabilizer(
 ) -> tuple[tuple[tuple[int, ...], ...], int, int | None]:
     """Return the ambient-coordinate basis, rank, and index of the stabilizer.
 
-    Only finitely many translations can map a bounded cell to itself, so the
-    search over permutations of the cell's vertices is complete.  A translation
-    contributes only when it is already a period-lattice vector.
+    Only finitely many translations can map a bounded cell to itself. Every
+    such translation maps the first vertex to another vertex, so checking those
+    candidates against the vertex set is complete and quadratic in cell size.
     """
 
     dimension = len(coordinates[0])
     ambient_candidates: list[tuple[int, ...]] = []
     seen: set[tuple[int, ...]] = set()
     base = coordinates[0]
-    for assignment in permutations(range(len(coordinates))):
+    coordinate_set = set(coordinates)
+    for candidate in coordinates:
         translation = tuple(
-            coordinates[assignment[0]][index] - base[index]
-            for index in range(dimension)
+            candidate[index] - base[index] for index in range(dimension)
         )
-        if any(
-            tuple(
-                coordinates[assignment[position]][index] for index in range(dimension)
-            )
-            != tuple(
-                coordinates[position][index] + translation[index]
-                for index in range(dimension)
-            )
-            for position in range(len(coordinates))
-        ):
+        translated = {
+            tuple(point[index] + translation[index] for index in range(dimension))
+            for point in coordinates
+        }
+        if translated != coordinate_set:
             continue
         if translation in seen:
             continue
@@ -609,11 +773,23 @@ def recognize_periodic_fan(  # noqa: C901
         if not _affinely_independent(cell_points):
             return obstruct(
                 "geometry.periodic_fan.cell_degenerate",
-                f"cell {cell_id} is not a nondegenerate {lattice_rank}-simplex",
+                f"cell {cell_id} is not full-dimensional",
+            )
+        if len(cell) > lattice_rank + 1 and not _strictly_convex_ccw_polygon(
+            cell_points
+        ):
+            return obstruct(
+                "geometry.periodic_fan.polygon_not_strictly_convex",
+                f"cell {cell_id} is not a strictly convex counterclockwise polygon",
             )
 
     for cell_id in unimodular_cells:
         cell = cells[cell_id]
+        if len(cell) != lattice_rank + 1:
+            return obstruct(
+                "geometry.periodic_fan.unimodular_cell_not_simplex",
+                f"cell {cell_id} is a nonsimplicial polygon and cannot carry a simplex unimodularity claim",
+            )
         origin = vertices[cell[0]]
         edges = tuple(
             tuple(
@@ -637,6 +813,11 @@ def recognize_periodic_fan(  # noqa: C901
 
     cell_coordinates = [tuple(vertices[index] for index in cell) for cell in cells]
     for first, second, translation in overlap_candidates:
+        if any(
+            value.denominator != 1
+            for value in _lattice_coordinates(translation, basis_inverse)
+        ):
+            continue
         shifted = tuple(
             tuple(point[index] + translation[index] for index in range(lattice_rank))
             for point in cell_coordinates[second]
@@ -665,6 +846,11 @@ def recognize_periodic_fan(  # noqa: C901
                     f"{MAX_PERIODIC_TRANSLATION_ENUMERATION} translations"
                 )
             for translation in product(*ranges):
+                if any(
+                    value.denominator != 1
+                    for value in _lattice_coordinates(translation, basis_inverse)
+                ):
+                    continue
                 shifted = tuple(
                     tuple(
                         point[index] + translation[index]
@@ -735,53 +921,55 @@ def _build_quotient(
     local_face_quotient: dict[tuple[int, tuple[int, ...]], int] = {}
     for cell_id, cell in enumerate(cells):
         coordinates = cell_coordinates[cell_id]
-        for size in range(1, len(cell) + 1):
-            for positions in combinations(range(len(cell)), size):
-                face_coordinates = tuple(
-                    coordinates[position] for position in positions
+        for positions in _cell_face_positions(cell, lattice_rank):
+            face_coordinates = tuple(coordinates[position] for position in positions)
+            key = _face_key(face_coordinates, basis_inverse)
+            quotient_id = face_owner.get(key)
+            if quotient_id is None:
+                quotient_id = len(accumulator)
+                face_owner[key] = quotient_id
+                basis, stabilizer_rank, index = _translation_stabilizer(
+                    face_coordinates, period_basis, basis_inverse
                 )
-                key = _face_key(face_coordinates, basis_inverse)
-                quotient_id = face_owner.get(key)
-                if quotient_id is None:
-                    quotient_id = len(accumulator)
-                    face_owner[key] = quotient_id
-                    basis, rank, index = _translation_stabilizer(
-                        face_coordinates, period_basis, basis_inverse
-                    )
-                    accumulator.append(
-                        _QuotientAccumulator(
-                            cell_id=quotient_id,
-                            dimension=size - 1,
-                            representative_cell=cell_id,
-                            representative_vertices=tuple(
-                                cell[position] for position in positions
-                            ),
-                            member_count=1,
-                            stabilizer_basis=basis,
-                            stabilizer_rank=rank,
-                            stabilizer_index=index,
-                        )
-                    )
-                else:
-                    accumulator[quotient_id].member_count += 1
-                local_face_quotient[(cell_id, positions)] = quotient_id
-                orbit_rows.append(
-                    OrbitRowData(
-                        cell_id=cell_id,
-                        face_positions=positions,
-                        quotient_cell_id=quotient_id,
+                accumulator.append(
+                    _QuotientAccumulator(
+                        cell_id=quotient_id,
+                        dimension=(
+                            lattice_rank
+                            if len(positions) == len(cell)
+                            else len(positions) - 1
+                        ),
+                        representative_cell=cell_id,
+                        representative_vertices=tuple(
+                            cell[position] for position in positions
+                        ),
+                        member_count=1,
+                        stabilizer_basis=basis,
+                        stabilizer_rank=stabilizer_rank,
+                        stabilizer_index=index,
                     )
                 )
+            else:
+                accumulator[quotient_id].member_count += 1
+            local_face_quotient[(cell_id, positions)] = quotient_id
+            orbit_rows.append(
+                OrbitRowData(
+                    cell_id=cell_id,
+                    face_positions=positions,
+                    quotient_cell_id=quotient_id,
+                )
+            )
 
     relations: set[tuple[int, int]] = set()
     for cell_id, cell in enumerate(cells):
-        for size in range(1, len(cell) + 1):
-            for positions in combinations(range(len(cell)), size):
-                sigma = local_face_quotient[(cell_id, positions)]
-                for sub_size in range(1, len(positions) + 1):
-                    for sub in combinations(positions, sub_size):
-                        tau = local_face_quotient[(cell_id, sub)]
-                        relations.add((tau, sigma))
+        faces = _cell_face_positions(cell, lattice_rank)
+        for sigma_positions in faces:
+            sigma = local_face_quotient[(cell_id, sigma_positions)]
+            sigma_set = set(sigma_positions)
+            for tau_positions in faces:
+                if set(tau_positions) <= sigma_set:
+                    tau = local_face_quotient[(cell_id, tau_positions)]
+                    relations.add((tau, sigma))
 
     quotient_cells = tuple(
         QuotientCellData(
@@ -800,11 +988,13 @@ def _build_quotient(
 
 
 __all__ = [
+    "MAX_PERIODIC_FM_GENERATED_ROWS",
     "MAX_PERIODIC_FM_ROWS",
     "MAX_PERIODIC_TRANSLATION_ENUMERATION",
     "OrbitRowData",
     "PeriodicObstruction",
     "QuotientCellData",
     "RecognizedPeriodicFan",
+    "fm_structural_bound",
     "recognize_periodic_fan",
 ]

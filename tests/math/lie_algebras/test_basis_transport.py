@@ -212,6 +212,22 @@ def test_basis_change_revalidates_trusted_model_construct_input() -> None:
     assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
 
 
+def test_malformed_native_basis_change_is_a_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        lie_algebra_change_basis(
+            SL2,
+            ("u", "u", "w"),
+            _matrix(
+                [
+                    [(1, 1), (0, 1), (0, 1)],
+                    [(0, 1), (1, 1), (0, 1)],
+                    [(0, 1), (0, 1), (1, 1)],
+                ]
+            ),
+        )
+    assert exc_info.value.errors()[0]["type"] == "lie_algebra.basis_change_request"
+
+
 def test_singular_basis_change_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="must be invertible"):
         lie_algebra_change_basis(

@@ -6,6 +6,8 @@ from fractions import Fraction
 from math import factorial
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
@@ -164,9 +166,16 @@ def lie_algebra_change_basis(
     source coordinates map to target coordinates by ``P^-1``.
     """
 
-    request = LieBasisChangeRequest.model_validate(
-        {"algebra": _as_algebra(algebra), "basis": basis, "matrix": matrix}
-    )
+    try:
+        request = LieBasisChangeRequest.model_validate(
+            {"algebra": _as_algebra(algebra), "basis": basis, "matrix": matrix}
+        )
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=(),
+            code="lie_algebra.basis_change_request",
+            message="basis-change request is malformed or has incompatible axes",
+        ) from error
     _admit_basis_change(request)
     source = request.algebra
     dimension = len(source.basis)

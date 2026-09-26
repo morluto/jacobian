@@ -19,6 +19,7 @@ def test_public_api_exports_only_canonical_value_and_native_operations() -> None
         "PrimitiveDirichletCharacter",
         "PrincipalDirichletCharacter",
         "character_group",
+        "dirichlet_character_arithmetic_function_twist",
         "dirichlet_character_conductor",
         "dirichlet_character_conjugate",
         "dirichlet_character_fourier_matrix",

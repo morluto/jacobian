@@ -25,6 +25,10 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
+from jacobian.math.number_theory.arithmetic_functions._models import (
+    MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
+    DirichletConvolutionResult,
+)
 from jacobian.math.number_theory.characters._models import (
     MAX_GENERALIZED_BERNOULLI_INDEX,
     DirichletCharacterConductorResult,
@@ -72,6 +76,7 @@ from jacobian.math.number_theory.sequences.core.values import (
 __all__ = [
     "character_group",
     "dirichlet_character",
+    "dirichlet_character_arithmetic_function_twist",
     "dirichlet_character_conductor",
     "dirichlet_character_conjugate",
     "dirichlet_character_fourier_matrix",
@@ -2380,6 +2385,36 @@ def dirichlet_character_sequence_twist(
         field=field,
         values=tuple(output_values),
     )
+
+
+def dirichlet_character_arithmetic_function_twist(
+    function: DirichletConvolutionResult,
+    character: DirichletCharacter,
+) -> FiniteCyclotomicSequence:
+    """Twist a finite arithmetic-function prefix on indices 1 through M."""
+    if not isinstance(function, DirichletConvolutionResult):
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.function_type",
+            message="source must be an exact arithmetic-function prefix value",
+        )
+    if (
+        type(function.values) is not tuple
+        or type(function.length) is not int
+        or function.length != len(function.values)
+        or not 1 <= function.length <= MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH
+    ):
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.source_shape",
+            message="source must be a nonempty exact arithmetic-function prefix",
+        )
+    # The existing sequence operation admits coefficient growth, cyclotomic
+    # degree, work, and result bytes before expanding any character values.
+    sequence = FiniteRationalSequence.model_construct(
+        domain="rational", values=function.values
+    )
+    return dirichlet_character_sequence_twist(sequence, character, index_origin=1)
 
 
 def _compute_generalized_gauss_sum(

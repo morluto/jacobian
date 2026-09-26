@@ -20,6 +20,20 @@ coefficient values as twisting by \(\chi\psi\), after exact transport to a
 common coefficient field. This keeps the original index axis and lets the
 returned sequence feed directly into another twist.
 
+An exact arithmetic-function prefix \(a(1),\ldots,a(M)\) given as a rational
+sequence with `index_origin=1` is the same postcondition, so the arithmetic
+function domain reaches this operation instead of a second declaration. The
+native helper
+`jacobian.math.number_theory.characters.dirichlet_character_arithmetic_function_twist`
+accepts an arithmetic-function value and a canonical character directly and
+delegates to the same bounded kernel. When the full exact functions are
+defined, the transform is compatible with Dirichlet convolution: twisting both
+factors and then convolving equals twisting their convolution. Mathlib records
+this identity as
+[`DirichletCharacter.mul_convolution_distrib`](https://leanprover-community.github.io/mathlib4_docs/Mathlib/NumberTheory/LSeries/Dirichlet.html).
+This finite-prefix coefficientwise transform makes no claim about convergence
+or analytic properties of an associated Dirichlet series.
+
 Admission bounds the source digit total, character value order, cyclotomic
 coefficient growth, coefficient cells, work, and serialized output before
 constructing twisted coefficients. The finite sequence length follows the

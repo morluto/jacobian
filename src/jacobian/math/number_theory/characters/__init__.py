@@ -5,6 +5,7 @@ from jacobian.math.number_theory.characters._models import (
 )
 from jacobian.math.number_theory.characters.operations import (
     character_group,
+    dirichlet_character_arithmetic_function_twist,
     dirichlet_character_conductor,
     dirichlet_character_conjugate,
     dirichlet_character_fourier_matrix,
@@ -56,6 +57,7 @@ __all__ = [
     "PrimitiveDirichletCharacter",
     "PrincipalDirichletCharacter",
     "character_group",
+    "dirichlet_character_arithmetic_function_twist",
     "dirichlet_character_conductor",
     "dirichlet_character_conjugate",
     "dirichlet_character_fourier_matrix",

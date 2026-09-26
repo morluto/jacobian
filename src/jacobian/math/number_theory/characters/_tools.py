@@ -1009,16 +1009,26 @@ TOOLS: MathTools = (
         description=(
             "Return b_(n)=chi(n)*a_(n) in a canonical rational cyclotomic "
             "sequence. Integer and rational sources supply index_origin; an "
-            "existing cyclotomic source retains its authored origin. Repeated "
-            "twists embed into the least common cyclotomic field. Field order, "
-            "lookup work, coefficient growth, and output size are admitted "
-            "before sequence expansion."
+            "existing cyclotomic source retains its authored origin. An exact "
+            "arithmetic-function prefix is the rational index_origin=1 case. "
+            "Repeated twists embed into the least common cyclotomic field. "
+            "Field order, lookup work, coefficient growth, and output size are "
+            "admitted before sequence expansion."
         ),
         request_type=DirichletCharacterSequenceTwistRequest,
         result_type=FiniteCyclotomicSequence,
         run=_compute_sequence_twist,
-        tags=("sequence", "dirichlet-character", "cyclotomic", "exact"),
-        discovery_terms=("Dirichlet character sequence twist",),
+        tags=(
+            "sequence",
+            "dirichlet-character",
+            "cyclotomic",
+            "exact",
+            "arithmetic-function",
+        ),
+        discovery_terms=(
+            "Dirichlet character sequence twist",
+            "arithmetic function character twist",
+        ),
         examples=(
             OperationExample(
                 name="quadratic_mod3_sequence_twist",

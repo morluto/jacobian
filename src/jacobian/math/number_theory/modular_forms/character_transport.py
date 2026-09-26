@@ -78,7 +78,7 @@ def _is_zero(value: RationalCyclotomicElement) -> bool:
 
 def _require_inflation_map(
     inclusion: ModularCharacterSpaceInclusion,
-) -> None:
+) -> ModularCharacterSpaceInclusion:
     if type(inclusion) is not ModularCharacterSpaceInclusion:
         _domain("character transport requires a canonical explicit inclusion value")
     try:
@@ -145,14 +145,14 @@ def _require_inflation_map(
                 code="modular_form.character_inflation_mismatch",
                 message="target character is not the explicit inflation of the source character",
             )
-    return
+    return inclusion
 
 
 def _admit_transport(
     form: ModularFormCoordinates | ModularCharacterCoordinates,
     inclusion: ModularCharacterSpaceInclusion,
 ) -> _AdmittedTransport:
-    _require_inflation_map(inclusion)
+    inclusion = _require_inflation_map(inclusion)
     if type(form) not in (ModularFormCoordinates, ModularCharacterCoordinates):
         _domain("character transport requires a canonical character coordinate form")
     if form.space != inclusion.source_space:
@@ -186,6 +186,7 @@ def _admit_transport(
     else:
         if (
             form.basis_id != "gamma0-cyclotomic-character-sturm-rref-v1"
+            or type(form.coordinates) is not tuple
             or len(form.coordinates) != source_cusp
             or source_space.level == 13
         ):

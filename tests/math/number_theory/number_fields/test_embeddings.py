@@ -25,7 +25,9 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+)
 from jacobian.math.number_theory import number_fields
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
@@ -46,6 +48,9 @@ from jacobian.math.number_theory.number_fields._embedding_protocol import (
 )
 from jacobian.math.number_theory.number_fields._embeddings_worker import (
     compute_embeddings_worker_response,
+)
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    apply_simple_number_field_embedding,
 )
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldEmbeddingsRequest,
@@ -254,25 +259,27 @@ def test_malformed_overlapping_wrong_root_and_wrong_sign_evidence_are_rejected()
     oversized["isolating_rectangle"]["real_lower"]["num"] = "1" * (
         MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS + 1
     )
-    with pytest.raises(
-        ValidationError,
-        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
-    ):
+    with pytest.raises(ValidationError) as record_error:
         ComplexNumberFieldEmbeddingRecord.model_validate_json(json.dumps(oversized))
+    assert (
+        record_error.value.errors()[0]["type"]
+        == "complex_algebraic.isolator_component_bound"
+    )
 
     oversized_component = CanonicalRational(
         num=-1, den=10**MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
     )
-    with pytest.raises(
-        ValidationError,
-        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
-    ):
+    with pytest.raises(ValidationError) as rectangle_error:
         RationalComplexIsolatingRectangle(
             real_lower=oversized_component,
             real_upper=_rational(1),
             imaginary_lower=_rational(-2),
             imaginary_upper=_rational(-1),
         )
+    assert (
+        rectangle_error.value.errors()[0]["type"]
+        == "complex_algebraic.isolator_component_bound"
+    )
 
 
 def test_real_interval_is_bound_to_the_selected_real_root() -> None:
@@ -290,19 +297,17 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
     oversized["isolating_interval"]["lower"]["num"] = "1" * (
         MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS + 1
     )
-    with pytest.raises(
-        ValidationError,
-        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
-    ):
+    with pytest.raises(ValidationError) as record_error:
         RealNumberFieldEmbeddingRecord.model_validate_json(json.dumps(oversized))
+    assert (
+        record_error.value.errors()[0]["type"]
+        == "simple_number_field.isolator_component_bound"
+    )
 
     oversized_component = CanonicalRational(
         num=-1, den=10**MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS
     )
-    with pytest.raises(
-        ValidationError,
-        match=f"{MAX_NUMBER_FIELD_ISOLATOR_COMPONENT_DIGITS:,}-digit bound",
-    ):
+    with pytest.raises(ValidationError) as interval_error:
         RealNumberFieldEmbeddingRecord(
             kind="REAL",
             embedding=negative.embedding,
@@ -312,6 +317,10 @@ def test_real_interval_is_bound_to_the_selected_real_root() -> None:
                 interval_type="OPEN",
             ),
         )
+    assert (
+        interval_error.value.errors()[0]["type"]
+        == "simple_number_field.isolator_component_bound"
+    )
 
 
 @pytest.mark.parametrize(
@@ -444,15 +453,17 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
         ValidationError, match="integer exceeds the decimal digit bound"
     ):
         _field("1", "0", "1" + "0" * MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS)
-    with pytest.raises(
-        ValidationError, match=f"{MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS} digits"
-    ):
+    with pytest.raises(ValidationError) as error:
         SimpleNumberFieldElement.model_validate(
             {
                 "presentation": _field("1", "0").model_dump(mode="json"),
                 "coefficients_ascending": [{"num": "1" * 257, "den": "1"}],
             }
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "simple_number_field.rational_component_bound"
+    )
 
     # Eisenstein at 2: this is a valid 256-digit defining polynomial, but its
     # exact pair-ordering precision is rejected inside the bounded worker after
@@ -461,6 +472,29 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
         embeddings(large_eisenstein)
     assert caught.value.reason == "pair_ordering_precision_bound"
+
+
+def test_field_map_admission_reports_the_target_side() -> None:
+    source = _field("1", "0", "-2")
+    target = _field("1", "0", "0", "0", "0", "0", "0", "-2")
+    with pytest.raises(OperationDomainValidationError) as caught:
+        apply_simple_number_field_embedding(
+            source,
+            target,
+            SimpleNumberFieldElement(
+                presentation=target,
+                coefficients_ascending=tuple(
+                    _rational(0) for _ in range(target.degree)
+                ),
+            ),
+            SimpleNumberFieldElement(
+                presentation=source,
+                coefficients_ascending=tuple(
+                    _rational(0) for _ in range(source.degree)
+                ),
+            ),
+        )
+    assert caught.value.errors()[0]["loc"] == ("target",)
 
 
 def test_real_embedding_rejects_degree_above_its_runtime_carrier_bound() -> None:

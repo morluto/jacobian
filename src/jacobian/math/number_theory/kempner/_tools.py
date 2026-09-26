@@ -2,11 +2,14 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.kempner._models import (
+    KempnerDecimalEnclosure,
+    KempnerDecimalEnclosureRequest,
     KempnerSeriesEnclosure,
     KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner.operations import (
     enclose_kempner_series,
+    enclose_kempner_series_decimal,
 )
 
 
@@ -14,6 +17,14 @@ def _run_enclosure(
     request: KempnerSeriesEnclosureRequest,
 ) -> KempnerSeriesEnclosure:
     return enclose_kempner_series(request.digit_set, request.cutoff)
+
+
+def _run_decimal_enclosure(
+    request: KempnerDecimalEnclosureRequest,
+) -> KempnerDecimalEnclosure:
+    return enclose_kempner_series_decimal(
+        request.digit_set, request.cutoff, request.precision
+    )
 
 
 TOOLS: MathTools = (
@@ -50,6 +61,41 @@ TOOLS: MathTools = (
                 input={
                     "digit_set": {"base": "10", "allowed_digits": ["1"]},
                     "cutoff": "2",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_theory.kempner_series.enclose_decimal",
+        title="Enclose a dense Kempner series at fixed decimal precision",
+        description=(
+            "Return an exact rational interval for the infinite reciprocal "
+            "series of a proper base-b digit family. Each finite reciprocal "
+            "is rounded outward at the requested decimal precision and the "
+            "exact geometric tail bound is added above. Admission bounds "
+            "numerals, prefix visits, stack size, result height, and output "
+            "before traversal."
+        ),
+        request_type=KempnerDecimalEnclosureRequest,
+        result_type=KempnerDecimalEnclosure,
+        run=_run_decimal_enclosure,
+        tags=("number-theory", "kempner", "dense-series", "enclosure", "exact"),
+        discovery_terms=(
+            "dense Kempner series enclosure",
+            "fixed-point reciprocal series interval",
+            "high precision digit-restricted harmonic sum",
+        ),
+        examples=(
+            OperationExample(
+                name="base_four_dense_family",
+                description=(
+                    "Enclose the base-4 family using digits 0, 1, and 2 "
+                    "through four digits at twelve decimal places."
+                ),
+                input={
+                    "digit_set": {"base": "4", "allowed_digits": ["0", "1", "2"]},
+                    "cutoff": "4",
+                    "precision": 12,
                 },
             ),
         ),

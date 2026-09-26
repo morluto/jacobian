@@ -22,12 +22,14 @@ from jacobian.math.free_algebras._models import (
 from jacobian.math.free_algebras.operations import (
     add,
     compare_words,
+    compose_polynomial_homomorphisms,
     concatenate_words,
     groebner_shirshov_through_degree,
     ideal_degree_component,
     ideal_generated_prefix,
     ideal_membership,
     multiply,
+    power_polynomial,
     power_word,
     quotient_normal_word_profile,
     reverse_word,
@@ -39,6 +41,7 @@ from jacobian.math.free_algebras.operations import (
     word_prefixes,
     word_suffixes,
 )
+from jacobian.math.free_algebras.polynomial_subtract.operations import subtract
 
 __all__ = [
     "FreeAlgebraIdeal",
@@ -60,17 +63,20 @@ __all__ = [
     "TruncatedFreeAlgebraQuotientRequest",
     "add",
     "compare_words",
+    "compose_polynomial_homomorphisms",
     "concatenate_words",
     "groebner_shirshov_through_degree",
     "ideal_degree_component",
     "ideal_generated_prefix",
     "ideal_membership",
     "multiply",
+    "power_polynomial",
     "power_word",
     "quotient_normal_word_profile",
     "reverse_word",
     "substitute_polynomial",
     "substitute_word",
+    "subtract",
     "truncated_quotient_algebra",
     "word_factors",
     "word_overlaps",

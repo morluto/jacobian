@@ -11,6 +11,8 @@ from jacobian.math.logic.automata.transducers._models import (
     RationalRelationFiberRequest,
     RationalRelationInverseRequest,
     RationalRelationProjectionRequest,
+    RationalRelationRestrictInputRequest,
+    RationalRelationRestrictInputResult,
     ReachableStatesRequest,
     ReachableStatesResult,
     RelationPathReplayRequest,
@@ -31,6 +33,7 @@ from jacobian.math.logic.automata.transducers.operations import (
     rational_relation_outputs_for_input,
     reachable_state_witnesses,
     replay_rational_path,
+    restrict_rational_input,
     run_subsequential,
     trim_subsequential,
     word_morphism_to_subsequential,
@@ -112,6 +115,20 @@ def compute_relation_projection(
 
 def compute_relation_fiber(request: RationalRelationFiberRequest) -> NFA:
     return rational_relation_outputs_for_input(request.transducer, request.input_word)
+
+
+def compute_relation_restrict_input(
+    request: RationalRelationRestrictInputRequest,
+) -> RationalRelationRestrictInputResult:
+    restricted, product_states, source_edge_indices = restrict_rational_input(
+        request.transducer, request.dfa
+    )
+    return RationalRelationRestrictInputResult._from_kernel(
+        request,
+        restricted=restricted,
+        product_states=product_states,
+        source_edge_indices=source_edge_indices,
+    )
 
 
 _IDENTITY = {
@@ -518,6 +535,62 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 "output_label": [1],
                             }
                         ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.restrict_input.compute",
+        title="Restrict a rational relation by an input language",
+        description=(
+            "Intersect the input tape of a finite rational relation with a total "
+            "DFA language. The reachable product advances the DFA across each "
+            "complete input edge label and preserves the corresponding output "
+            "label and path multiplicity. Exact input alphabet context and "
+            "identity are required; product exploration and result size are "
+            "bounded before result edges are constructed."
+        ),
+        request_type=RationalRelationRestrictInputRequest,
+        result_type=RationalRelationRestrictInputResult,
+        run=compute_relation_restrict_input,
+        tags=("transducer", "rational-relation", "restriction", "exact"),
+        discovery_terms=("input restriction", "relation domain language"),
+        examples=(
+            OperationExample(
+                name="keep_relation_pairs_with_even_input_length",
+                description=(
+                    "Restrict a relation over the one-symbol alphabet to inputs "
+                    "of even length."
+                ),
+                input={
+                    "transducer": {
+                        "input_alphabet_size": 1,
+                        "output_alphabet_size": 1,
+                        "input_alphabet": {"symbols": ["a"]},
+                        "output_alphabet": {"symbols": ["x"]},
+                        "state_count": 1,
+                        "initial_states": [0],
+                        "accepting_states": [0],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 0,
+                                "input_label": [0],
+                                "output_label": [0],
+                            }
+                        ],
+                    },
+                    "dfa": {
+                        "state_count": 2,
+                        "alphabet_size": 1,
+                        "alphabet": {"symbols": ["a"]},
+                        "transitions": [
+                            {"source": 0, "symbol": 0, "target": 1},
+                            {"source": 1, "symbol": 0, "target": 0},
+                        ],
+                        "initial_state": 0,
+                        "accepting_states": [0],
                     },
                 },
             ),

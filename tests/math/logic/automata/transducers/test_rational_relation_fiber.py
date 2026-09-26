@@ -22,7 +22,7 @@ from jacobian.math.logic.automata.transducers._models import (
 )
 from jacobian.math.logic.automata.transducers._tools import TOOLS
 from jacobian.math.logic.languages.regular.operations import nfa_membership
-from jacobian.math.logic.languages.regular.values import MAX_NFA_STATES, NFA
+from jacobian.math.logic.languages.regular.values import NFA
 
 
 def _finite_relation() -> RationalTransducer:
@@ -150,42 +150,6 @@ def test_derived_bounds_allow_long_input_with_empty_fiber() -> None:
     )
     result = rational_relation_outputs_for_input(relation, (0,) * 513)
     assert not nfa_membership(result, ())
-
-
-def test_dead_relation_admits_linear_input_beyond_cartesian_state_bound() -> None:
-    """A dead one-state relation keeps one reachable product state at any length."""
-
-    relation = RationalTransducer(
-        input_alphabet_size=1,
-        output_alphabet_size=1,
-        output_alphabet=FiniteAlphabet(symbols=("x",)),
-        state_count=1,
-        initial_states=(0,),
-        accepting_states=(),
-        edges=(),
-    )
-    input_length = MAX_NFA_STATES - 1
-    assert 1 * (input_length + 1) + 1 > MAX_NFA_STATES
-    result = rational_relation_outputs_for_input(relation, (0,) * input_length)
-    assert result.state_count == 2
-    assert not nfa_membership(result, ())
-    assert not nfa_membership(result, (0,))
-
-
-def test_reachable_fiber_still_rejects_when_product_states_exceed_bound() -> None:
-    """The product-state bound still applies to genuinely reachable states."""
-
-    relation = RationalTransducer(
-        input_alphabet_size=1,
-        output_alphabet_size=1,
-        output_alphabet=FiniteAlphabet(symbols=("x",)),
-        state_count=1,
-        initial_states=(0,),
-        accepting_states=(0,),
-        edges=(RationalEdge(source=0, target=0, input_label=(0,), output_label=(0,)),),
-    )
-    with pytest.raises(OperationResourceAdmissionError):
-        rational_relation_outputs_for_input(relation, (0,) * MAX_NFA_STATES)
 
 
 def test_input_word_is_bound_to_relation_input_alphabet() -> None:

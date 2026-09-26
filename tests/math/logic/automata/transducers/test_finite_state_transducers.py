@@ -757,6 +757,7 @@ class TestNativeTransformations:
             "transducer.relation.outputs_for_input_automaton.compute",
             "transducer.relation.path.replay.compute",
             "transducer.relation.projection.compute",
+            "transducer.relation.restrict_input.compute",
             "transducer.subsequential.compose.compute",
             "transducer.subsequential.from_word_morphism.compute",
             "transducer.subsequential.identity.compute",

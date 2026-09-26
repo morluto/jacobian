@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decks._models import AnonymousGraphCardMultiset
 from jacobian.math.graphs.decks.anonymous_vertex_degree_multiset._models import (
     AnonymousVertexDeckDegreeMultiset,
@@ -33,6 +33,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "reconstruct source degree sequence from graph cards",
             "vertex-deck degree sequence",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="path_three_vertex_deck",
+                description=(
+                    "Recover the source degree multiset (2, 1, 1) from the "
+                    "anonymous vertex deck of a three-vertex path."
+                ),
+                input={
+                    "card_order": 2,
+                    "classes": [
+                        {
+                            "representative": {"vertices": ["v00", "v01"], "edges": []},
+                            "multiplicity": "1",
+                        },
+                        {
+                            "representative": {
+                                "vertices": ["v00", "v01"],
+                                "edges": [["v00", "v01"]],
+                            },
+                            "multiplicity": "2",
+                        },
+                    ],
+                },
+            ),
+        ),
     ),
 )

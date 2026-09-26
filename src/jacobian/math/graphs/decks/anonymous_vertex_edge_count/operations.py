@@ -35,13 +35,15 @@ def _admit_card_class(
         )
     multiplicity = getattr(item, "multiplicity", None)
     graph = getattr(item, "representative", None)
+    vertices = getattr(graph, "vertices", None)
+    edges = getattr(graph, "edges", None)
     if (
         type(multiplicity) is not int
         or multiplicity < 1
         or multiplicity >= 10**12
         or type(graph) is not SimpleUndirectedGraph
-        or type(graph.vertices) is not tuple
-        or type(graph.edges) is not tuple
+        or type(vertices) is not tuple
+        or type(edges) is not tuple
     ):
         raise OperationDomainValidationError(
             location=("deck", "classes", index),
@@ -49,7 +51,7 @@ def _admit_card_class(
             message="deck classes must contain bounded graph representatives and positive multiplicities",
         )
     expected_vertices = tuple(f"v{i:02d}" for i in range(card_order))
-    if len(graph.edges) > pair_count:
+    if len(edges) > pair_count:
         raise OperationDomainValidationError(
             location=("deck", "classes", index),
             code="graph_deck.anonymous_edge_count_representative",
@@ -63,14 +65,14 @@ def _admit_card_class(
         or edge[0] >= edge[1]
         or edge[0] not in expected_vertices
         or edge[1] not in expected_vertices
-        for edge in graph.edges
+        for edge in edges
     )
     if (
-        graph.vertices != expected_vertices
-        or len(graph.edges) > pair_count
+        vertices != expected_vertices
+        or len(edges) > pair_count
         or invalid_edges
-        or len(set(graph.edges)) != len(graph.edges)
-        or tuple(sorted(graph.edges)) != graph.edges
+        or len(set(edges)) != len(edges)
+        or tuple(sorted(edges)) != edges
     ):
         raise OperationDomainValidationError(
             location=("deck", "classes", index),
@@ -98,7 +100,7 @@ def _admit_deck_structure(
         raise OperationResourceAdmissionError(
             location=("deck", "card_order"),
             code="graph_deck.anonymous_edge_count_order_bound",
-            message="exact anonymous vertex-deck edge count supports card orders zero through seven",
+            message="exact anonymous vertex-deck edge count supports card orders zero through eight",
         )
     if type(classes) is not tuple:
         raise OperationDomainValidationError(

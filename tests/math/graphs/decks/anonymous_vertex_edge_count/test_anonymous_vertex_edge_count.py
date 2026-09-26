@@ -123,6 +123,22 @@ def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None
     assert result.source_edge_count == 0
 
 
+@pytest.mark.parametrize("missing", ["vertices", "edges"])
+def test_native_admission_rejects_missing_constructed_graph_fields(
+    missing: str,
+) -> None:
+    fields = {"vertices": ("v00", "v01"), "edges": ()}
+    fields.pop(missing)
+    graph = SimpleUndirectedGraph.model_construct(**fields)
+    item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
+    deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
+
+    with pytest.raises(
+        OperationDomainValidationError, match="bounded graph representatives"
+    ):
+        anonymous_vertex_deck_edge_count(deck)
+
+
 def test_native_admission_rejects_oversized_edge_tuple_before_edge_scan() -> None:
     graph = SimpleUndirectedGraph.model_construct(
         vertices=("v00", "v01"), edges=(("v00", "v01"),) * 100_000

@@ -37,8 +37,9 @@ the direct incidence argument and does not claim that divisibility alone
 proves deck realizability. See [Kelly's 1957 paper](https://doi.org/10.2140/pjm.1957.7.961)
 and the [Bondy–Hemminger reconstruction survey](https://doi.org/10.1002/jgt.3190010306).
 
-The operation admits card order at most seven so that exact canonical-form
-revalidation of all distinct cards stays within the permutation-work bound.
+The operation admits card order at most eight; its edge-count-only admission
+checks the canonical labeled representatives and edge tuples linearly, without
+factorial canonical-form revalidation.
 Order zero is represented by the empty multiset of zero-vertex cards, and
 order one by one empty card; both have edge count zero and no divisor. Order
 two is rejected: its two one-vertex cards are identical whether the source has

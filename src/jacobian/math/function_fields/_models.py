@@ -230,7 +230,7 @@ class HyperellipticAffinePlace(StrictModel):
         if (
             self.residue_field.characteristic != prime
             or self.residue_field.modulus_coefficients != (0, 1)
-            or self.residue_field.generator != "z"
+            or self.residue_field.generator != "a"
         ):
             raise _validation_error(
                 "affine_place_residue_parent",
@@ -250,7 +250,19 @@ class HyperellipticAffinePlaceValuationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_shared_parent(self) -> Self:
-        if self.place.field != self.element.field:
+        from jacobian.math.function_fields.operations import _canonical_field
+
+        try:
+            place_field = FiniteFunctionField.model_validate(self.place.field.model_dump())
+            element_field = FiniteFunctionField.model_validate(
+                self.element.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "affine_valuation_parent_malformed",
+                "the point and function element fields must be valid",
+            ) from error
+        if _canonical_field(place_field) != _canonical_field(element_field):
             raise _validation_error(
                 "affine_valuation_parent_mismatch",
                 "the point and function element must share the exact function field",

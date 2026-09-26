@@ -321,11 +321,19 @@ class RSKWordTraceResult(StrictModel):
                     "algebraic_combinatorics.rsk_trace_prefix_shape",
                     "successive trace shapes must grow by one cell in one row",
                 )
-            previous = previous_lengths + ((0,) if len(lengths) > len(previous_lengths) else ())
-            if any(
-                current != prior and current != prior + 1
-                for prior, current in zip(previous, lengths)
-            ) or sum(current - prior for prior, current in zip(previous, lengths)) != 1:
+            previous = previous_lengths + (
+                (0,) if len(lengths) > len(previous_lengths) else ()
+            )
+            deltas = tuple(
+                current - prior
+                for prior, current in zip(previous, lengths, strict=True)
+            )
+            if (
+                any(delta not in (0, 1) for delta in deltas)
+                or sum(deltas) != 1
+                or deltas[event.added_row] != 1
+                or previous[event.added_row] != event.added_column
+            ):
                 raise PydanticCustomError(
                     "algebraic_combinatorics.rsk_trace_prefix_shape",
                     "successive trace shapes must grow by one cell in one row",
@@ -336,6 +344,23 @@ class RSKWordTraceResult(StrictModel):
                 "algebraic_combinatorics.rsk_trace_final_shape",
                 "the final trace prefix must match the tableau pair shape",
             )
+        rank_by_letter = {
+            letter: rank for rank, letter in enumerate(self.word.alphabet, start=1)
+        }
+        for event in self.insertion_events:
+            carried = rank_by_letter[event.letter]
+            for step in event.bump_path:
+                if step.bumped_entry <= carried:
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_trace_entry_chain",
+                        "each bumped entry must be strictly larger than the carried entry",
+                    )
+                carried = step.bumped_entry
+            if event.added_entry != carried:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_entry_chain",
+                    "the terminal entry must equal the final carried entry",
+                )
         return self
 
     @classmethod

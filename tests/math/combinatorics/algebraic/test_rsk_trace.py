@@ -161,6 +161,29 @@ def test_trace_request_and_operation_have_canonical_convention_and_example() -> 
     assert len(result.insertion_events) == len(request.word.letters)
 
 
+def test_trace_result_deserialization_rejects_impossible_terminal_row() -> None:
+    result = row_insertion_rsk_trace(
+        FiniteWord(alphabet=("a", "c"), letters=("c", "a", "a"))
+    )
+    payload = result.model_dump(mode="python")
+    event = payload["insertion_events"][-1]
+    event["added_row"] = 1
+    event["added_column"] = 0
+    event["bump_path"] = ({"row": 0, "column": 0, "bumped_entry": 2},)
+    with pytest.raises(ValidationError, match="rsk_trace_prefix_shape"):
+        RSKWordTraceResult.model_validate(payload)
+
+
+def test_trace_result_deserialization_rejects_inconsistent_entry_chain() -> None:
+    result = row_insertion_rsk_trace(
+        FiniteWord(alphabet=("a", "b"), letters=("b", "a"))
+    )
+    payload = result.model_dump(mode="python")
+    payload["insertion_events"][0]["added_entry"] = 1
+    with pytest.raises(ValidationError, match="rsk_trace_entry_chain"):
+        RSKWordTraceResult.model_validate(payload)
+
+
 def test_trace_result_deserialization_rejects_missing_source_positions() -> None:
     result = row_insertion_rsk_trace(
         FiniteWord(alphabet=("a", "b"), letters=("b", "a"))

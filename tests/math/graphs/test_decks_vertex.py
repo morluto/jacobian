@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.decks._models import (
+    UnlabelledVertexDeck,
     UnlabelledVertexDeckClass,
     UnlabelledVertexDeckRequest,
     VertexDeckInducedSubgraphCountRequest,
@@ -105,6 +106,19 @@ def test_boundary_edgeless_graph() -> None:
     assert result.vertex_appearances == (2, 2, 2)
     for card in result.cards:
         assert card.card.edges == ()
+
+
+def test_induced_subgraph_count_rejects_malformed_family_carrier() -> None:
+    deck = UnlabelledVertexDeck.model_construct(
+        family=object(),
+        classes=(),
+        card_count=0,
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        vertex_deck_induced_subgraph_count(
+            deck, SimpleUndirectedGraph(vertices=("p",), edges=())
+        )
+    assert error.value.errors()[0]["type"] == "graph_deck.kelly_family_carrier"
 
 
 def test_serialized_family_rejects_forged_card_and_receipt() -> None:

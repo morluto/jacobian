@@ -139,6 +139,24 @@ class TestSubsequentialIdentityOperation:
             "finite_state_transducer.identity_alphabet_bound_exceeded"
         )
 
+    def test_identity_supports_the_empty_alphabet(self) -> None:
+        result = identity_transducer(0, alphabet=FiniteAlphabet(symbols=()))
+        assert result.input_alphabet_size == result.output_alphabet_size == 0
+        assert result.state_count == 1
+        assert result.transitions == ()
+        assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
+
+    def test_identity_rejects_lone_surrogate_alphabet_id_on_native_calls(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as error:
+            identity_transducer(
+                1,
+                alphabet=FiniteAlphabet(symbols=("a",)),
+                alphabet_id="\ud800",
+            )
+        assert error.value.errors()[0]["type"] == (
+            "finite_state_transducer.alphabet_id_not_unicode_scalar"
+        )
+
 
 class TestWordMorphismTransducerConversion:
     def test_conversion_matches_independent_morphism_evaluator(self) -> None:

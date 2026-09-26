@@ -403,11 +403,11 @@ def identity_transducer(
     exact context and identity. The size-only form remains useful for
     request-scoped integer alphabets.
     """
-    if type(alphabet_size) is not int or not 1 <= alphabet_size <= MAX_FST_ALPHABET:
+    if type(alphabet_size) is not int or not 0 <= alphabet_size <= MAX_FST_ALPHABET:
         raise OperationResourceAdmissionError(
             location=("alphabet",),
             code="finite_state_transducer.identity_alphabet_bound_exceeded",
-            message="identity alphabet size must be between 1 and 32",
+            message="identity alphabet size must be between 0 and 32",
         )
     if alphabet is not None:
         if not isinstance(alphabet, FiniteAlphabet):
@@ -426,14 +426,19 @@ def identity_transducer(
                 "alphabet context length must equal alphabet_size",
                 "alphabet",
             )
-    if alphabet_id is not None and (
-        type(alphabet_id) is not str or len(alphabet_id) > MAX_FST_ALPHABET_ID_LENGTH
-    ):
-        _reject(
-            "alphabet_id_too_long",
-            "alphabet identity exceeds its carrier bound",
-            "alphabet_id",
-        )
+    if alphabet_id is not None:
+        if type(alphabet_id) is not str or len(alphabet_id) > MAX_FST_ALPHABET_ID_LENGTH:
+            _reject(
+                "alphabet_id_too_long",
+                "alphabet identity exceeds its carrier bound",
+                "alphabet_id",
+            )
+        if any(0xD800 <= ord(character) <= 0xDFFF for character in alphabet_id):
+            raise OperationDomainValidationError(
+                location=("alphabet_id",),
+                code="finite_state_transducer.alphabet_id_not_unicode_scalar",
+                message="alphabet identity must contain only Unicode scalar values",
+            )
 
     # The identity machine's size is fixed by admitted cardinalities: one
     # state, one transition per input symbol (at most MAX_FST_ALPHABET of

@@ -348,6 +348,12 @@ def vertex_deck_induced_subgraph_count(
             code="graph_deck.kelly_deck_carrier",
             message="deck must be an UnlabelledVertexDeck",
         )
+    if type(deck.family) is not VertexDeletionFamily:
+        raise OperationDomainValidationError(
+            location=("deck", "family"),
+            code="graph_deck.kelly_family_carrier",
+            message="deck must retain a complete source-bound vertex family",
+        )
     if type(pattern) is not SimpleUndirectedGraph:
         raise OperationDomainValidationError(
             location=("pattern",),

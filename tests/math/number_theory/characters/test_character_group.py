@@ -153,6 +153,29 @@ def test_group_model_rejects_structurally_invalid_shapes() -> None:
     assert error.value.errors()[0]["type"] == "dirichlet_character.coordinate_range"
 
 
+@pytest.mark.parametrize(
+    "operation_id",
+    (
+        "dirichlet_character.restrict_modulus.compute",
+        "dirichlet_character.conductor.compute",
+    ),
+)
+def test_character_requests_reject_zero_invariant_factor(operation_id: str) -> None:
+    tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
+    payload = json.loads(json.dumps(tool.examples[0].input))
+    payload["character"]["group"]["invariant_factors"][0] = 0
+
+    with pytest.raises(ValidationError) as error:
+        tool.request_type.model_validate_json(json.dumps(payload))
+
+    assert error.value.errors()[0]["loc"] == (
+        "character",
+        "group",
+        "invariant_factors",
+        0,
+    )
+
+
 def test_modulus_boundary_is_complete_and_next_value_is_rejected() -> None:
     group = character_group(MAX_CHARACTER_GROUP_MODULUS)
 

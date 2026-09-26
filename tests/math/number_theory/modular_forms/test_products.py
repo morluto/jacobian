@@ -5,7 +5,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import (
     BASIS_ID,
@@ -74,6 +77,16 @@ def test_product_preserves_cuspidality_in_the_target_space() -> None:
         Fraction(1),
         Fraction(216),
     )
+
+
+def test_product_admits_summed_weight_before_constructing_target_space() -> None:
+    left = _form(1, 600_000, "M", BASIS_ID, 1)
+    right = _form(1, 600_000, "M", BASIS_ID, 1)
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        modular_form_coordinates_product(left, right)
+
+    assert error.value.errors()[0]["type"] == "modular_form.product_target_weight_bound"
 
 
 def test_product_rejects_target_levels_without_a_supported_exact_basis() -> None:

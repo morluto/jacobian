@@ -40,6 +40,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
     ModularFormBasis,
@@ -1605,9 +1606,16 @@ def modular_form_coordinates_product(
             code="modular_form.product_target_level_unsupported",
             message="form products currently require a target Gamma0 level at most 4",
         )
+    target_weight = left.space.weight + right.space.weight
+    if target_weight > MAX_MODULAR_FORM_WEIGHT:
+        raise OperationResourceAdmissionError(
+            location=("space", "weight"),
+            code="modular_form.product_target_weight_bound",
+            message="product target weight exceeds the admitted modular-form envelope",
+        )
     target_space = ModularFormSpace(
         level=target_level,
-        weight=left.space.weight + right.space.weight,
+        weight=target_weight,
         kind="S" if "S" in (left.space.kind, right.space.kind) else "M",
     )
     precision = sturm_bound(target_space).bound + 1
@@ -3071,6 +3079,12 @@ def modular_form_operator_image(
     """Bind U_p or V_p to an exact level-one form and its Gamma0(p) parent."""
 
     _admit_coordinates(source_form, 1)
+    if source_form.space.level != 1:
+        raise OperationDomainValidationError(
+            location=("source_form", "space", "level"),
+            code="modular_form.operator_image_source_level",
+            message="U_p and V_p operator images currently require level-one sources",
+        )
     if operator not in ("U", "V"):
         raise OperationDomainValidationError(
             location=("operator",),

@@ -145,6 +145,17 @@ def test_minimal_generators_support_positive_graded_configurations_with_negative
     assert result.source_factorizations[3] == (0, 2, 0)
 
 
+def test_oversized_native_label_is_rejected_before_output_encoding() -> None:
+    semigroup = _semigroup(((1,),))
+    configuration = semigroup.configuration.model_copy(
+        update={"generator_labels": ("g" * 2_000_001,)}
+    )
+    oversized = semigroup.model_copy(update={"configuration": configuration})
+
+    with pytest.raises(OperationResourceAdmissionError, match="output-byte envelope"):
+        minimal_generators(oversized)
+
+
 def test_aggregate_work_is_admitted_before_factorization_enumeration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

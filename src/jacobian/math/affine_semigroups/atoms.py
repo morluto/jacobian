@@ -170,11 +170,21 @@ def minimal_generators(
 def _admit_atom_output(semigroup: PositiveAffineSemigroup) -> None:
     """Bound output from source dimensions before factorization enumeration."""
     config = semigroup.configuration
+    labels = (*config.row_labels, *config.generator_labels)
+    # Python character count is a cheap lower bound on UTF-8/JSON output size.
+    # Reject before encoding so a forged native value cannot force an
+    # unbounded temporary allocation on the refusal path.
+    if any(len(label) > MAX_AFFINE_ATOM_OUTPUT_BYTES for label in labels):
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.atom_output",
+            message="minimal-generator result exceeds its output-byte envelope",
+        )
     label_characters = sum(
         len(label.encode("utf-8"))
         + sum(ord(character) < 32 for character in label) * 5
         + sum(character in ('"', "\\") for character in label)
-        for label in (*config.row_labels, *config.generator_labels)
+        for label in labels
     )
     grading_bits = sum(
         value.num.bit_length() + value.den.bit_length() for value in semigroup.grading

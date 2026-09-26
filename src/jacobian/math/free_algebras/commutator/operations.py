@@ -167,21 +167,15 @@ def _preflight(
     right_scaled_digits = max(
         (len(str(abs(value))) for _, value in right_scaled), default=1
     )
-    # With one term pair, distinct uv and vu words each have one contribution;
-    # if they coincide, the signed contributions cancel exactly. For larger
-    # supports use the simple worst-case bound of two contributions per pair.
+    # Intermediate products can be wider than a reduced canonical result; keep
+    # this estimate for work accounting but enforce the digit cap on reduced
+    # accumulated coefficients in the kernel.
     contributions_per_word = 1 if pair_count == 1 else candidate_terms
     numerator_digits = (
         left_scaled_digits
         + right_scaled_digits
         + ceil(log10(contributions_per_word + 1))
     )
-    denominator_digits = len(str(left_common)) + len(str(right_common))
-    if max(numerator_digits, denominator_digits) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
-        _reject_resource(
-            "coefficient_growth",
-            "predicted exact commutator coefficient exceeds the 64-digit bound",
-        )
 
     # Count decimal digit products as a conservative exact-arithmetic work
     # proxy, plus word copying and sorting. The bound precedes convolution.
@@ -224,22 +218,35 @@ def commutator(
 
     left = _admit_polynomial(left, label="left")
     right = _admit_polynomial(right, label="right")
-    left_scaled, right_scaled, left_denominator, right_denominator = _preflight(
-        left, right
-    )
-    denominator = left_denominator * right_denominator
-    values = _commutator_numerators(left_scaled, right_scaled)
+    _preflight(left, right)
+    # Accumulate reduced rational contributions directly. A common product of
+    # operand denominators can exceed the result cap even when factors cancel
+    # (for example (1/N)x and N*y), so admission must bound inputs/work while
+    # the canonical reduced coefficient bound is checked after exact addition.
+    values: dict[tuple[str, ...], Fraction] = {}
+    for left_term in left.terms:
+        for right_term in right.terms:
+            contribution = (
+                left_term.coefficient.as_fraction()
+                * right_term.coefficient.as_fraction()
+            )
+            forward = left_term.word + right_term.word
+            reverse = right_term.word + left_term.word
+            values[forward] = values.get(forward, Fraction(0)) + contribution
+            values[reverse] = values.get(reverse, Fraction(0)) - contribution
     ordered = tuple(
         sorted(
-            (
-                (word, Fraction(numerator, denominator))
-                for word, numerator in values.items()
-                if numerator
-            ),
+            ((word, coefficient) for word, coefficient in values.items() if coefficient),
             key=lambda item: canonical_word_key(left.alphabet, item[0]),
             reverse=True,
         )
     )
+    for _, coefficient in ordered:
+        if max(len(str(abs(coefficient.numerator))), len(str(coefficient.denominator))) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+            _reject_resource(
+                "coefficient_growth",
+                "exact commutator coefficient exceeds the 64-digit bound",
+            )
     polynomial = FreeAlgebraPolynomial.model_construct(
         alphabet=left.alphabet,
         terms=tuple(

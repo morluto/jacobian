@@ -153,6 +153,18 @@ def test_commutator_accepts_dense_self_bracket_before_candidate_bound() -> None:
     assert result.commutator.terms == ()
 
 
+def test_commutator_reduces_cancellable_cross_factor_before_coefficient_cap() -> None:
+    from fractions import Fraction
+
+    n = 10**63 + 7
+    left = _polynomial(((('x',), Fraction(1, n)),))
+    right = _polynomial(((('y',), Fraction(n)),))
+
+    result = commutator(left, right).commutator
+
+    assert _coefficient_map(result) == {("x", "y"): Fraction(1), ("y", "x"): Fraction(-1)}
+
+
 def test_commutator_rejects_candidate_output_before_convolution() -> None:
     dense = _dense_operand()
     distinct = FreeAlgebraPolynomial(

@@ -151,13 +151,11 @@ def fixed_content_count(
         return FixedContentCountResult(partition=partition, content=content, count=1)
     if (
         len(partition.parts) > 1
-        and len(set(partition.parts)) == 1
         and len(content.terms) == len(partition.parts)
-        and tuple(term.multiplicity for term in content.terms)
-        == (partition.parts[0],) * len(partition.parts)
+        and tuple(term.multiplicity for term in content.terms) == partition.parts
     ):
-        # In a rectangle, each column uses all labels once. With exactly one
-        # row-width of each of exactly height labels, every row is forced.
+        # K_{lambda,lambda}=1: each row is forced to its correspondingly
+        # ordered label, and the partition inequalities make columns strict.
         return FixedContentCountResult(partition=partition, content=content, count=1)
     if len(content.terms) < len(partition.parts):
         # A strict column of this height needs at least this many distinct

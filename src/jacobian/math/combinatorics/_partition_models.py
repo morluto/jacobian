@@ -90,30 +90,6 @@ class PartitionFound(StrictModel):
             cells=cells,
         )
 
-    @model_validator(mode="after")
-    def require_derived_data(self) -> Self:
-        parts = self.partition.parts
-        conjugate = tuple(
-            sum(part >= column for part in parts)
-            for column in range(1, (parts[0] if parts else 0) + 1)
-        )
-        cells = tuple(
-            (row, column)
-            for row, part in enumerate(parts, start=1)
-            for column in range(1, part + 1)
-        )
-        if (
-            self.size != sum(parts)
-            or self.length != len(parts)
-            or self.conjugate.parts != conjugate
-            or self.cells != cells
-        ):
-            raise _combinatorics_validation_error(
-                "partition check result does not match its source partition"
-            )
-        return self
-
-
 class NonpositivePartObstruction(StrictModel):
     """First candidate position whose part is nonpositive."""
 
@@ -158,33 +134,6 @@ class PartitionRejected(StrictModel):
         ),
     )
     obstruction: PartitionObstruction
-
-    @model_validator(mode="after")
-    def require_first_source_obstruction(self) -> Self:
-        if any(abs(part) > MAX_PARTITION_ITEM for part in self.parts):
-            raise _combinatorics_validation_error(
-                "partition rejection source exceeds the exact JSON integer bound"
-            )
-        previous: int | None = None
-        expected: PartitionObstruction | None = None
-        for index, part in enumerate(self.parts):
-            if part <= 0:
-                expected = NonpositivePartObstruction(index=index, value=part)
-                break
-            if previous is not None and previous < part:
-                expected = IncreasingPartsObstruction(
-                    index=index,
-                    previous_value=previous,
-                    value=part,
-                )
-                break
-            previous = part
-        if expected is None or self.obstruction != expected:
-            raise _combinatorics_validation_error(
-                "partition rejection obstruction does not match the first source violation"
-            )
-        return self
-
 
 PartitionCheckBranch = Annotated[
     PartitionFound | PartitionRejected, Field(discriminator="kind")

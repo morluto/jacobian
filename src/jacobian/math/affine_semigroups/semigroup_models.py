@@ -110,6 +110,10 @@ class AffineHilbertBasisRequest(StrictModel):
     )
 
 
+class AffineSemigroupNormalityRequest(StrictModel):
+    semigroup: PositiveAffineSemigroup
+
+
 class AffineSemigroupNormalizationRequest(StrictModel):
     semigroup: PositiveAffineSemigroup
 
@@ -125,6 +129,7 @@ __all__ = [
     "AffineHilbertBasisRequest",
     "AffineMembershipRequest",
     "AffineMembershipResult",
+    "AffineSemigroupNormalityRequest",
     "AffineSemigroupNormalization",
     "AffineSemigroupNormalizationRequest",
     "AffineSemigroupRequest",

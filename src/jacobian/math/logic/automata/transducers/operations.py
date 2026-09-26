@@ -36,6 +36,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.finite_alphabet import _reject_lone_surrogate_symbol
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -403,11 +404,11 @@ def identity_transducer(
     exact context and identity. The size-only form remains useful for
     request-scoped integer alphabets.
     """
-    if type(alphabet_size) is not int or not 1 <= alphabet_size <= MAX_FST_ALPHABET:
+    if type(alphabet_size) is not int or not 0 <= alphabet_size <= MAX_FST_ALPHABET:
         raise OperationResourceAdmissionError(
             location=("alphabet",),
             code="finite_state_transducer.identity_alphabet_bound_exceeded",
-            message="identity alphabet size must be between 1 and 32",
+            message="identity alphabet size must be between 0 and 32",
         )
     if alphabet is not None:
         if not isinstance(alphabet, FiniteAlphabet):
@@ -426,6 +427,8 @@ def identity_transducer(
                 "alphabet context length must equal alphabet_size",
                 "alphabet",
             )
+    if alphabet_id is not None and type(alphabet_id) is str:
+        _reject_lone_surrogate_symbol(alphabet_id)
     if alphabet_id is not None and (
         type(alphabet_id) is not str or len(alphabet_id) > MAX_FST_ALPHABET_ID_LENGTH
     ):

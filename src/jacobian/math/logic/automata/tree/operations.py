@@ -8,6 +8,8 @@ from itertools import product
 from math import prod
 from typing import Literal
 
+from pydantic import ValidationError
+
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -407,12 +409,26 @@ def regular_tree_grammar_to_automaton(
 ) -> BottomUpTreeAutomaton:
     """Translate each production to the corresponding bottom-up transition."""
 
-    if not isinstance(grammar, RegularTreeGrammar):
+    if (
+        not isinstance(grammar, RegularTreeGrammar)
+        or type(getattr(grammar, "arity", None)) is not tuple
+        or len(grammar.arity) > MAX_TA_SYMBOLS
+        or type(getattr(grammar, "productions", None)) is not tuple
+        or len(grammar.productions) > MAX_TA_TRANSITIONS
+    ):
         raise OperationDomainValidationError(
             location=("grammar",),
             code="tree_automata.invalid_regular_tree_grammar",
             message="conversion requires a canonical bounded regular tree grammar",
         )
+    try:
+        grammar = RegularTreeGrammar.model_validate(grammar.model_dump(), strict=True)
+    except (ValidationError, TypeError, ValueError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=("grammar",),
+            code="tree_automata.invalid_regular_tree_grammar",
+            message="conversion requires a canonical bounded regular tree grammar",
+        ) from exc
     transition_work = sum(2 + len(rule.children) for rule in grammar.productions)
     production_count = len(grammar.productions)
     sorting_work = (
@@ -1143,7 +1159,7 @@ def nondeterministic_run_counts(
 def _validate_native_tree_automaton(
     automaton: BottomUpTreeAutomaton,
 ) -> BottomUpTreeAutomaton:
-    if type(automaton) is not BottomUpTreeAutomaton:
+    if not isinstance(automaton, BottomUpTreeAutomaton):
         _reject_tree(
             "automaton must be a validated bottom-up tree automaton", resource=False
         )

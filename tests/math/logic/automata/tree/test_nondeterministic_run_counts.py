@@ -11,8 +11,10 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.automata.tree import (
     BottomUpTreeAutomaton,
+    DeterministicBottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
+    complete_deterministic_tree_automaton,
     nondeterministic_run_counts,
 )
 from jacobian.math.logic.automata.tree._models import NondeterministicRunCountsRequest
@@ -97,6 +99,21 @@ def test_run_counts_preserve_ambiguity_and_match_tree_enumeration_oracle() -> No
 
     assert profile == (1, 2, 2)
     assert profile == _enumeration_oracle(automaton, 3)
+
+
+def test_deterministic_and_completed_carriers_compose_with_run_counting() -> None:
+    deterministic = DeterministicBottomUpTreeAutomaton(
+        state_count=1,
+        arity=(0, 1),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=0),
+        ),
+        final_states=(0,),
+    )
+    completed = complete_deterministic_tree_automaton(deterministic).completed
+    assert nondeterministic_run_counts(deterministic, 3) == (1, 1, 1)
+    assert nondeterministic_run_counts(completed, 3) == (1, 1, 1)
 
 
 def test_nullary_empty_transition_and_no_final_state_profiles() -> None:

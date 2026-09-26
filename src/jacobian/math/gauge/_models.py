@@ -381,19 +381,34 @@ class FiniteGroupGaugeField(StrictModel):
 
     @model_validator(mode="after")
     def require_edge_coverage(self) -> Self:
-        order = len(self.group.multiplication)
+        group = getattr(self, "group", None)
+        lattice = getattr(self, "lattice", None)
+        edge_values = getattr(self, "edge_values", None)
+        if (
+            not isinstance(group, FiniteGroupTable)
+            or type(getattr(group, "multiplication", None)) is not tuple
+            or not isinstance(lattice, GaugeLattice)
+            or type(getattr(lattice, "edges", None)) is not tuple
+            or type(edge_values) is not tuple
+        ):
+            raise _validation_error(
+                "finite_group_field_coverage",
+                "finite-group field must retain its table, lattice, and edge values",
+            )
+        order = len(group.multiplication)
         if any(
-            not isinstance(value.value, FiniteGroupTableElement)
-            or value.value.group != self.group
-            or value.value.index >= order
-            for value in self.edge_values
+            not isinstance(getattr(value, "value", None), FiniteGroupTableElement)
+            or getattr(value.value, "group", None) != group
+            or type(getattr(value.value, "index", None)) is not int
+            or not 0 <= getattr(value.value, "index", -1) < order
+            for value in edge_values
         ):
             raise _validation_error(
                 "finite_group_value_parent",
                 "every edge element must use the field's exact table parent",
             )
-        have = tuple(value.edge_id for value in self.edge_values)
-        want = tuple(edge.edge_id for edge in self.lattice.edges)
+        have = tuple(getattr(value, "edge_id", None) for value in edge_values)
+        want = tuple(getattr(edge, "edge_id", None) for edge in lattice.edges)
         if tuple(sorted(have)) != tuple(sorted(set(have))) or set(have) != set(want):
             raise _validation_error(
                 "finite_group_field_coverage",
@@ -608,40 +623,41 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_parent_bindings(self) -> Self:
-        order = (
-            len(self.field.group.multiplication)
-            if isinstance(self.field, FiniteGroupGaugeField)
-            and isinstance(self.field.group, FiniteGroupTable)
-            and type(self.field.group.multiplication) is tuple
-            else 0
-        )
+        field = getattr(self, "field", None)
+        path = getattr(self, "path", None)
+        holonomy = getattr(self, "holonomy", None)
+        contributions = getattr(self, "contributions", None)
+        group = getattr(field, "group", None)
+        table = getattr(group, "multiplication", None)
+        order = len(table) if type(table) is tuple else 0
         if (
-            not isinstance(self.field, FiniteGroupGaugeField)
-            or not isinstance(self.field.lattice, GaugeLattice)
-            or not isinstance(self.field.group, FiniteGroupTable)
-            or type(self.field.group.multiplication) is not tuple
-            or not isinstance(self.path, OrientedGaugePath)
-            or not _has_canonical_path_steps(self.path)
-            or not isinstance(self.holonomy, FiniteGroupTableElement)
-            or self.holonomy.group != self.field.group
-            or type(self.holonomy.index) is not int
-            or not 0 <= self.holonomy.index < order
-            or type(self.contributions) is not tuple
-            or len(self.contributions) != len(self.path.steps)
+            not isinstance(field, FiniteGroupGaugeField)
+            or not isinstance(getattr(field, "lattice", None), GaugeLattice)
+            or not isinstance(group, FiniteGroupTable)
+            or type(table) is not tuple
+            or not isinstance(path, OrientedGaugePath)
+            or not _has_canonical_path_steps(path)
+            or not isinstance(holonomy, FiniteGroupTableElement)
+            or getattr(holonomy, "group", None) != group
+            or type(getattr(holonomy, "index", None)) is not int
+            or not 0 <= getattr(holonomy, "index", -1) < order
+            or type(contributions) is not tuple
+            or len(contributions) != len(path.steps)
         ):
             raise _validation_error(
                 "finite_group_holonomy_parent",
                 "holonomy result carriers must retain one finite-group field parent",
             )
-        for step, contribution in zip(self.path.steps, self.contributions, strict=True):
+        for step, contribution in zip(path.steps, contributions, strict=True):
+            value = getattr(contribution, "value", None)
             if (
                 not isinstance(contribution, FiniteGroupGaugeContribution)
-                or contribution.edge_id != step.edge_id
-                or contribution.forward is not step.forward
-                or not isinstance(contribution.value, FiniteGroupTableElement)
-                or contribution.value.group != self.field.group
-                or type(contribution.value.index) is not int
-                or not 0 <= contribution.value.index < order
+                or getattr(contribution, "edge_id", None) != step.edge_id
+                or getattr(contribution, "forward", None) is not step.forward
+                or not isinstance(value, FiniteGroupTableElement)
+                or getattr(value, "group", None) != group
+                or type(getattr(value, "index", None)) is not int
+                or not 0 <= getattr(value, "index", -1) < order
             ):
                 raise _validation_error(
                     "finite_group_holonomy_contribution_parent",
@@ -725,22 +741,27 @@ class FiniteGroupGaugeTransformResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_binding(self) -> Self:
+        source = getattr(self, "source", None)
+        transformed = getattr(self, "transformed", None)
+        vertex_values = getattr(self, "vertex_values", None)
+        source_lattice = getattr(source, "lattice", None)
+        source_group = getattr(source, "group", None)
         if (
-            not isinstance(self.source, FiniteGroupGaugeField)
-            or not isinstance(self.transformed, FiniteGroupGaugeField)
-            or self.transformed.lattice != self.source.lattice
-            or self.transformed.group != self.source.group
-            or not isinstance(self.vertex_values, tuple)
+            not isinstance(source, FiniteGroupGaugeField)
+            or not isinstance(transformed, FiniteGroupGaugeField)
+            or getattr(transformed, "lattice", None) != source_lattice
+            or getattr(transformed, "group", None) != source_group
+            or type(vertex_values) is not tuple
             or any(
                 not isinstance(entry, FiniteGroupGaugeVertexValue)
-                for entry in self.vertex_values
+                for entry in vertex_values
             )
-            or tuple(entry.vertex for entry in self.vertex_values)
-            != self.source.lattice.vertices
+            or tuple(getattr(entry, "vertex", None) for entry in vertex_values)
+            != getattr(source_lattice, "vertices", None)
             or any(
-                not isinstance(entry.value, FiniteGroupTableElement)
-                or entry.value.group != self.source.group
-                for entry in self.vertex_values
+                not isinstance(getattr(entry, "value", None), FiniteGroupTableElement)
+                or getattr(getattr(entry, "value", None), "group", None) != source_group
+                for entry in vertex_values
             )
         ):
             raise _validation_error(
@@ -1055,29 +1076,44 @@ class GaugeLoopFamilyHolonomies(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:
-        if type(self.loops) is not tuple or any(
-            type(entry) is not GaugeLoopHolonomy
-            or type(entry.path) is not OrientedGaugePath
-            or type(entry.path.steps) is not tuple
-            or any(
-                type(step) is not GaugePathStep
-                or type(step.edge_id) is not str
-                or type(step.forward) is not bool
-                for step in entry.path.steps
-            )
-            or type(entry.holonomy) is not PermutationLabel
-            or type(entry.holonomy.image) is not tuple
-            for entry in self.loops
-        ):
-            raise _validation_error(
-                "loop_family_parent", "loop-family entries must be canonical values"
-            )
         try:
+            if type(self.loops) is not tuple or any(
+                type(entry) is not GaugeLoopHolonomy
+                or type(getattr(entry, "path", None)) is not OrientedGaugePath
+                or type(getattr(getattr(entry, "path", None), "steps", None))
+                is not tuple
+                or any(
+                    type(step) is not GaugePathStep
+                    or type(getattr(step, "edge_id", None)) is not str
+                    or type(getattr(step, "forward", None)) is not bool
+                    for step in getattr(getattr(entry, "path", None), "steps", ())
+                )
+                or type(getattr(entry, "holonomy", None)) is not PermutationLabel
+                or type(getattr(getattr(entry, "holonomy", None), "image", None))
+                is not tuple
+                for entry in self.loops
+            ):
+                raise ValueError("loop-family entries must be canonical values")
             if (
-                type(self.field) is not GaugeField
-                or type(self.field.edge_labels) is not tuple
-                or type(self.field.lattice.vertices) is not tuple
-                or type(self.field.lattice.edges) is not tuple
+                type(getattr(self, "field", None)) is not GaugeField
+                or type(getattr(getattr(self, "field", None), "edge_labels", None))
+                is not tuple
+                or type(
+                    getattr(
+                        getattr(getattr(self, "field", None), "lattice", None),
+                        "vertices",
+                        None,
+                    )
+                )
+                is not tuple
+                or type(
+                    getattr(
+                        getattr(getattr(self, "field", None), "lattice", None),
+                        "edges",
+                        None,
+                    )
+                )
+                is not tuple
             ):
                 raise ValueError("source field is not immutable")
             field = GaugeField.model_validate(self.field.model_dump())

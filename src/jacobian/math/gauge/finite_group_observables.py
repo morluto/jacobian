@@ -39,18 +39,48 @@ class FiniteGroupConjugacyProfile(StrictModel):
     @model_validator(mode="after")
     def require_canonical_summary(self) -> FiniteGroupConjugacyProfile:
         authored = self.loop
-        if (
-            type(authored) is not FiniteGroupGaugeHolonomyResult
-            or type(authored.field.edge_values) is not tuple
-            or type(authored.field.lattice.vertices) is not tuple
-            or type(authored.field.lattice.edges) is not tuple
-            or type(authored.field.group.multiplication) is not tuple
-            or type(authored.field.group.inverse) is not tuple
-            or type(authored.path.steps) is not tuple
-            or type(authored.contributions) is not tuple
-        ):
-            raise ValueError("conjugacy profile must retain a canonical loop")
         try:
+            if (
+                type(authored) is not FiniteGroupGaugeHolonomyResult
+                or type(getattr(getattr(authored, "field", None), "edge_values", None))
+                is not tuple
+                or type(
+                    getattr(
+                        getattr(getattr(authored, "field", None), "lattice", None),
+                        "vertices",
+                        None,
+                    )
+                )
+                is not tuple
+                or type(
+                    getattr(
+                        getattr(getattr(authored, "field", None), "lattice", None),
+                        "edges",
+                        None,
+                    )
+                )
+                is not tuple
+                or type(
+                    getattr(
+                        getattr(getattr(authored, "field", None), "group", None),
+                        "multiplication",
+                        None,
+                    )
+                )
+                is not tuple
+                or type(
+                    getattr(
+                        getattr(getattr(authored, "field", None), "group", None),
+                        "inverse",
+                        None,
+                    )
+                )
+                is not tuple
+                or type(getattr(getattr(authored, "path", None), "steps", None))
+                is not tuple
+                or type(getattr(authored, "contributions", None)) is not tuple
+            ):
+                raise ValueError("conjugacy profile must retain a canonical loop")
             loop = FiniteGroupGaugeHolonomyResult.model_validate(authored.model_dump())
         except (AttributeError, TypeError, ValueError, ValidationError):
             raise ValueError("conjugacy profile must retain a canonical loop") from None
@@ -88,8 +118,10 @@ def finite_group_holonomy_conjugacy_profile(
             code="lattice_gauge.conjugacy.request_type",
             message="expected a typed finite-group holonomy conjugacy request",
         )
-    if not isinstance(request.field, FiniteGroupGaugeField) or not isinstance(
-        request.path, OrientedGaugePath
+    field = getattr(request, "field", None)
+    path = getattr(request, "path", None)
+    if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
+        path, OrientedGaugePath
     ):
         raise OperationDomainValidationError(
             location=("request",),
@@ -98,7 +130,7 @@ def finite_group_holonomy_conjugacy_profile(
         )
     try:
         request = FiniteGroupConjugacyProfileRequest.model_validate(
-            request.model_dump()
+            {"field": field.model_dump(), "path": path.model_dump()}
         )
     except (AttributeError, TypeError, ValueError, ValidationError) as exc:
         raise OperationDomainValidationError(

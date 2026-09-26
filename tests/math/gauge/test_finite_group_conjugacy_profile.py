@@ -227,7 +227,7 @@ def test_profile_value_rejects_open_retained_holonomy():
         start="v",
         end="v",
     )
-    with pytest.raises(ValueError, match="canonical loop"):
+    with pytest.raises(ValidationError, match="finite-group field parent"):
         FiniteGroupConjugacyProfile.model_validate(
             {
                 "loop": mutable_loop,
@@ -268,3 +268,31 @@ def test_conjugacy_profile_is_published_as_one_exact_operation():
 
     tool = Catalog.open().operation("lattice_gauge.holonomy.conjugacy_profile.compute")
     assert tool.result_type is FiniteGroupConjugacyProfile
+
+
+def test_profile_rejects_holonomy_value_missing_nested_fields() -> None:
+    group, elements, index = _s3()
+    loop = _loop(group, index[elements[0]])
+    forged = FiniteGroupGaugeHolonomyResult.model_construct(
+        path=loop.path,
+        holonomy=loop.holonomy,
+        contributions=loop.contributions,
+        start=loop.start,
+        end=loop.end,
+    )
+    with pytest.raises(ValidationError, match="finite-group field parent"):
+        FiniteGroupConjugacyProfile.model_validate(
+            {
+                "loop": forged,
+                "conjugate_indices": [loop.holonomy.index],
+                "class_representative_index": loop.holonomy.index,
+                "class_size": 1,
+            }
+        )
+
+
+def test_conjugacy_profile_rejects_omitted_request_fields() -> None:
+    with pytest.raises(OperationDomainValidationError, match="requires a finite-group"):
+        finite_group_holonomy_conjugacy_profile(
+            FiniteGroupConjugacyProfileRequest.model_construct()
+        )

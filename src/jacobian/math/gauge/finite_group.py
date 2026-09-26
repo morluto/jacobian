@@ -590,19 +590,19 @@ def finite_group_gauge_transform(
             "lattice_gauge.finite_group.transform_request_type",
             "expected a finite-group vertex gauge transform request",
         )
-    field = request.field
+    field = getattr(request, "field", None)
+    group = getattr(field, "group", None)
     if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
-        field.group, FiniteGroupTable
+        group, FiniteGroupTable
     ):
         _reject(
             "request",
             "lattice_gauge.finite_group.transform_request_shape",
             "field must be a typed finite-table gauge field",
         )
-    group = field.group
     table, inverse, _, order = _admit_group(group)
     vertices, edges, edge_values = _admit_field(field, group, order)
-    supplied = request.vertex_values
+    supplied = getattr(request, "vertex_values", None)
     if not isinstance(supplied, tuple) or len(supplied) > 64:
         _reject(
             "vertex_values",
@@ -618,9 +618,9 @@ def finite_group_gauge_transform(
             or not _is_gauge_label(vertex)
             or vertex in frame_by_vertex
             or not isinstance(value, FiniteGroupTableElement)
-            or value.group != group
-            or type(value.index) is not int
-            or not 0 <= value.index < order
+            or getattr(value, "group", None) != group
+            or type(getattr(value, "index", None)) is not int
+            or not 0 <= getattr(value, "index", -1) < order
         ):
             _reject(
                 "vertex_values",

@@ -43,17 +43,16 @@ per-edge products, and repeated parent-table output size before constructing
 the target field. This is a supplied finite action, not a gauge-equivalence
 search or gauge fixing operation.
 
-`lattice_gauge.holonomy.conjugacy_profile.compute` consumes one finite-table
-loop holonomy and returns the complete conjugacy class as sorted indices in its
-retained group parent. The least index is the deterministic class representative;
-class size is derived from the complete orbit. The operation recomputes the
-source path product before using the submitted holonomy, so a stale or mutated
-product cannot define a different class. It admits the group table, quadratic
-conjugation work, source-bound result size, and class-axis size before building
-the orbit. This is a finite-group conjugacy observable; arbitrary characters
-and Wilson traces in general representations remain separate operations.
+`lattice_gauge.holonomy.conjugacy_profile.compute computes the holonomy of
+the supplied field and path, then returns its complete conjugacy class as sorted
+indices in the retained group parent. The least index is the deterministic
+class representative; class size is derived from the complete orbit. It admits
+the group table, quadratic conjugation work, source-bound result size, and
+class-axis size before building the orbit. This is a finite-group conjugacy
+observable; arbitrary characters and Wilson traces in general representations
+remain separate operations.
 
-`lattice_gauge.finite_group.complex.construct.compute` supplies the missing
+lattice_gauge.finite_group.complex.construct.compute` supplies the missing
 source-bound 2-cell carrier for that path operation. Each face stores an
 ordered, closed attaching walk over the exact `GaugeLattice` and retains the
 same `FiniteGroupTable` parent used by finite-group edge fields. The walk is

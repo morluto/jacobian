@@ -1,6 +1,7 @@
 from itertools import permutations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -20,6 +21,7 @@ from jacobian.math.gauge import (
     finite_group_gauge_holonomy,
     finite_group_gauge_transform,
 )
+from jacobian.math.gauge._models import FiniteGroupGaugeTransformResult
 from jacobian.math.groups._table_models import (
     FiniteGroupTable,
     FiniteGroupTableElement,
@@ -290,3 +292,44 @@ def test_repeated_table_output_admission_has_an_exact_boundary():
     assert error.value.errors()[0]["type"] == (
         "lattice_gauge.finite_group.transform_output_bound"
     )
+
+
+def test_native_transform_rejects_forged_request_and_nested_elements() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_group_gauge_transform(FiniteGroupGaugeTransformRequest.model_construct())
+    assert error.value.errors()[0]["type"] == (
+        "lattice_gauge.finite_group.transform_request_shape"
+    )
+
+    _, index, field, frames = _field_and_frames()
+    malformed_values = (
+        FiniteGroupGaugeVertexValue.model_construct(
+            vertex="a",
+            value=FiniteGroupTableElement.model_construct(group=field.group),
+        ),
+        FiniteGroupGaugeVertexValue.model_construct(
+            vertex="a", value=FiniteGroupTableElement.model_construct(index=0)
+        ),
+    )
+    request = _request(field, index, frames)
+    for malformed in malformed_values:
+        request_with_bad_value = request.model_copy(
+            update={"vertex_values": (malformed, *request.vertex_values[1:])}
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            finite_group_gauge_transform(request_with_bad_value)
+        assert error.value.errors()[0]["type"] == (
+            "lattice_gauge.finite_group.transform_vertex_value"
+        )
+
+
+def test_transform_result_rejects_forged_source_parent_before_dereferencing() -> None:
+    _, index, field, frames = _field_and_frames()
+    result = finite_group_gauge_transform(_request(field, index, frames))
+    forged_source = FiniteGroupGaugeField.model_construct(
+        group=field.group, edge_values=field.edge_values
+    )
+    payload = result.model_dump()
+    payload["source"] = forged_source
+    with pytest.raises(ValidationError):
+        FiniteGroupGaugeTransformResult.model_validate(payload)

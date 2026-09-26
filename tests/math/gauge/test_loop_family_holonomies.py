@@ -156,11 +156,7 @@ def test_native_operation_rejects_gauge_carrier_subclasses() -> None:
     with pytest.raises(OperationDomainValidationError):
         loop_family_holonomies(
             field,
-            (
-                DerivedPath.model_construct(
-                    steps=(), basepoint="a"
-                ),
-            ),
+            (DerivedPath.model_construct(steps=(), basepoint="a"),),
         )
 
 
@@ -275,9 +271,7 @@ def test_family_result_validation_keeps_path_relations_structural() -> None:
         field, (_path(("ab", True), ("bc", True), ("ca", True)),)
     )
     payload = valid.model_dump()
-    payload["loops"][0]["path"]["steps"] = payload["loops"][0]["path"][
-        "steps"
-    ][:1]
+    payload["loops"][0]["path"]["steps"] = payload["loops"][0]["path"]["steps"][:1]
 
     decoded = GaugeLoopFamilyHolonomies.model_validate(payload)
 
@@ -323,3 +317,16 @@ def test_work_envelope_is_checked_before_path_replay_or_products(
     assert raised.value.errors()[0]["type"] == (
         "lattice_gauge.loop_family.work_over_envelope"
     )
+
+
+def test_family_result_rejects_loop_missing_path_before_dereferencing() -> None:
+    field = _self_loop_field()
+    valid = loop_family_holonomies(field, (_path(("loop", True)),))
+    malformed = GaugeLoopHolonomy.model_construct(
+        basepoint=valid.loops[0].basepoint,
+        holonomy=valid.loops[0].holonomy,
+    )
+    with pytest.raises(ValueError, match="loop-family source is malformed"):
+        GaugeLoopFamilyHolonomies.model_validate(
+            {"field": field, "loops": (malformed,)}
+        )

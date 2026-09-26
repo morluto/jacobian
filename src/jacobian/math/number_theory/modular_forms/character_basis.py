@@ -825,7 +825,10 @@ def _rref_character_coordinates_hecke(
     scaled_source_digits = input_digits + basis_digits + 2
     term_digits = scaled_source_digits + len(str(index)) + 4
     hecke_digits = divisor_count * term_digits + len(str(divisor_count)) + 2
-    result_digits = hecke_digits + input_digits + 2
+    # The input scalar is incorporated into source_coefficients before applying
+    # Hecke, so the pivot is already the final output coordinate. Do not charge
+    # for a second multiplication that is not performed.
+    result_digits = hecke_digits
     work = (
         source_precision * field.degree * 24
         + sturm_precision * index * field.degree * 12

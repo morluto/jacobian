@@ -129,6 +129,24 @@ def test_character_hecke_scales_nonunit_coordinate_once() -> None:
     )
 
 
+def test_character_hecke_admits_large_coordinate_without_double_charge() -> None:
+    coordinate = RationalCyclotomicElement(
+        field=_FIELD,
+        coefficients_ascending=(
+            {"num": 10**69, "den": 1},
+            {"num": 0, "den": 1},
+        ),
+    )
+    form = _form().model_copy(update={"coordinates": (coordinate,)})
+    result = modular_character_coordinates_hecke(form, 5)
+
+    unit = modular_character_coordinates_hecke(_form(), 5).coordinates[0]
+    assert result.coordinates[0].coefficients_ascending == tuple(
+        type(value)(num=10**69 * value.num, den=value.den)
+        for value in unit.coefficients_ascending
+    )
+
+
 def test_character_hecke_rejects_bad_prime_for_its_exact_level() -> None:
     with pytest.raises(OperationDomainValidationError, match="gcd"):
         modular_character_coordinates_hecke(_form(), 2)

@@ -136,7 +136,10 @@ def test_heldout_run_plan_rejects_invalid_condition() -> None:
         },
         label="run-plan.json",
     )
-    assert any("run-plan.json.runs" in f and "C3" not in f for f in failures)
+    assert any(
+        "run-plan.json.runs.0.condition" in failure and "(literal_error)" in failure
+        for failure in failures
+    )
 
 
 def test_heldout_run_plan_rejects_extra_top_level_field() -> None:

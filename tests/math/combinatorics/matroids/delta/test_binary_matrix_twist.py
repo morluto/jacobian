@@ -152,6 +152,14 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
         )
 
 
+@pytest.mark.parametrize("entry", [True, "1", 1.0])
+def test_wire_matrix_entries_reject_coercible_nonintegers(entry) -> None:
+    payload = {"matrix": {"ground": ["a"], "entries": [[entry]]}}
+
+    with pytest.raises(ValidationError):
+        BinaryMatrixTwistRequest.model_validate_json(json.dumps(payload))
+
+
 def test_zero_matrix_twist_example_composes_through_catalog_dispatch() -> None:
     catalog = Catalog.open()
     operation = catalog.operation("delta_matroid.binary.from_matrix_twist.compute")

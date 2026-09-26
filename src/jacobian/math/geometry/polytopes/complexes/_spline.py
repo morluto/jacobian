@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations, pairwise
-from math import comb, gcd
+from math import comb, gcd, lcm
 from typing import Any, NoReturn
 
 import sympy as sp
@@ -1707,6 +1707,105 @@ def _admit_spline_dimension(
     return complex_value, width, row_bound, rank_work
 
 
+def _spline_profile_divisor_bounds(
+    complex_value: PolytopalComplexClosureResult, smoothness: int
+) -> tuple[tuple[int, int], ...]:
+    """Derive normalized facet-divisor heights before remainder expansion.
+
+    For one divisor ``q = ell ** (r + 1)``, polynomial long division replaces
+    a leading term by at most ``branch_count`` non-leading terms.  Writing all
+    coefficients of the monic divisor over one common denominator gives a
+    source-derived decimal-height bound for every replacement factor.
+    """
+    if smoothness < 0:
+        return ()
+    symbols = tuple(sp.Symbol(axis) for axis in complex_value.space.axes)
+    ambient_dimension = len(symbols)
+    bounds: list[tuple[int, int]] = []
+    for face in complex_value.faces:
+        if len(face.maximal_cell_ids) != 2 or face.dimension != ambient_dimension - 1:
+            continue
+        ell = _linear_form(face, symbols)
+        divisor = sp.Poly(ell.as_expr() ** (smoothness + 1), *symbols, domain=sp.QQ)
+        leading = divisor.LC()
+        ratios = tuple(
+            Fraction(
+                int(coefficient.p) * int(leading.q),
+                int(coefficient.q) * int(leading.p),
+            )
+            for _, coefficient in divisor.terms()[1:]
+        )
+        if not ratios:
+            bounds.append((0, 1))
+            continue
+        denominator = 1
+        for ratio in ratios:
+            denominator = lcm(denominator, ratio.denominator)
+        common_height = max(
+            denominator,
+            *(
+                abs(ratio.numerator) * (denominator // ratio.denominator)
+                for ratio in ratios
+            ),
+        )
+        bounds.append((len(ratios), max(1, decimal_digit_width(common_height))))
+    return tuple(bounds)
+
+
+def _spline_remainder_entry_digit_bound(
+    divisor_bounds: tuple[tuple[int, int], ...],
+    degree: int,
+    smoothness: int,
+) -> int:
+    """Bound every exact coefficient produced by facet remainder reduction."""
+    reduction_depth = max(0, degree - smoothness)
+    if reduction_depth == 0:
+        return 1
+    candidate_bounds = tuple(
+        reduction_depth * (common_height_digits + decimal_digit_width(branch_count)) + 1
+        for branch_count, common_height_digits in divisor_bounds
+        if branch_count
+    )
+    return max((1, *candidate_bounds))
+
+
+def _admit_spline_profile_heights(
+    complex_value: PolytopalComplexClosureResult,
+    smoothness: int,
+    shapes: tuple[tuple[int, int], ...],
+) -> None:
+    """Admit all prefix coefficient growth before building its first matrix."""
+    divisor_bounds = (
+        _spline_profile_divisor_bounds(complex_value, smoothness)
+        if shapes and len(shapes) - 1 > smoothness
+        else ()
+    )
+    aggregate_intermediate_bytes = 0
+    for degree, (width, row_bound) in enumerate(shapes):
+        entry_digits = _spline_remainder_entry_digit_bound(
+            divisor_bounds, degree, smoothness
+        )
+        pivot_size = min(row_bound, width)
+        intermediate_digits = (pivot_size + 1) * (
+            entry_digits + len(str(max(row_bound, width))) + 2
+        )
+        aggregate_intermediate_bytes += (
+            row_bound * width * (2 * intermediate_digits + 16)
+        )
+        if (
+            intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
+            or aggregate_intermediate_bytes > MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES
+        ):
+            raise OperationResourceAdmissionError(
+                location=("max_degree",),
+                code="polytopal_complex.spline_profile_height",
+                message=(
+                    "finite spline profile coefficient growth exceeds its "
+                    "aggregate height or storage envelope"
+                ),
+            )
+
+
 def _spline_dimension_output_upper_bound(
     complex_value: PolytopalComplexClosureResult,
     degree: int,
@@ -1926,10 +2025,12 @@ def spline_dimension_profile(
     complex_value = _admit_complex(request.complex)
     total_cells = 0
     total_rank_work = 0
+    shapes = []
     for degree in range(request.max_degree + 1):
         _, width, row_bound, rank_work = _admit_spline_dimension(
             complex_value, degree, request.smoothness, validate_complex=False
         )
+        shapes.append((width, row_bound))
         total_cells += row_bound * width
         total_rank_work += rank_work
     if total_cells > MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS:
@@ -1944,6 +2045,7 @@ def spline_dimension_profile(
             code="polytopal_complex.spline_profile_work",
             message="finite spline profile ranks exceed the aggregate work envelope",
         )
+    _admit_spline_profile_heights(complex_value, request.smoothness, tuple(shapes))
     # The profile omits the degree-specific matrices. Bound its canonical
     # output from the source and fixed maximum integer widths before computing.
     try:

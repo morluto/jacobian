@@ -14,6 +14,7 @@ from jacobian.math.geometry.polytopes._models import (
 )
 from jacobian.math.geometry.polytopes.complexes import _spline as spline_kernel
 from jacobian.math.geometry.polytopes.complexes._models import (
+    PolytopalComplexClosureResult,
     SplineDimensionProfileRequest,
     SplineDimensionProfileResult,
     SplineDimensionRequest,
@@ -54,6 +55,43 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
             for index, value in enumerate((left, right))
         ),
     )
+
+
+def _high_height_four_complex(
+    scale: int = 10**31,
+) -> PolytopalComplexClosureResult:
+    """Build a three-simplex fan with two steep rational interface forms."""
+    zero = Fraction(0)
+    ridge = (
+        (zero, zero, zero, zero),
+        (zero, zero, Fraction(1), zero),
+        (zero, zero, zero, Fraction(1)),
+    )
+    rays = (
+        (Fraction(1), Fraction(1), zero, zero),
+        (Fraction(scale), Fraction(-1, scale), zero, zero),
+        (Fraction(1, scale), Fraction(-scale), zero, zero),
+        (Fraction(-1), Fraction(-1), zero, zero),
+    )
+    space = RationalCoordinateSpace(axes=("x0", "x1", "x2", "x3"))
+    cells = []
+    for cell_index in range(3):
+        points = (*ridge, rays[cell_index], rays[cell_index + 1])
+        cells.append(
+            RationalVPolytope(
+                space=space,
+                vertices=tuple(
+                    RationalPolytopeVertex(
+                        vertex_id=f"c{cell_index}v{vertex_index}",
+                        coordinates=tuple(
+                            CanonicalRational.from_fraction(value) for value in point
+                        ),
+                    )
+                    for vertex_index, point in enumerate(points)
+                ),
+            )
+        )
+    return polytopal_complex_closure(tuple(cells))
 
 
 def _rank(rows: list[list[Fraction]]) -> int:
@@ -153,6 +191,39 @@ def test_finite_dimension_profile_one_cell_has_no_interface_rows():
     )
     assert result.dimensions == (1, 2, 3)
     assert result.forward_differences == ((1, 2, 3), (1, 1), (0,))
+
+
+def test_profile_accepts_useful_four_dimensional_coefficient_heights() -> None:
+    result = spline_dimension_profile(
+        SplineDimensionProfileRequest(
+            complex=_high_height_four_complex(10**4), max_degree=4, smoothness=3
+        )
+    )
+
+    assert result.dimensions == (1, 5, 15, 35, 72)
+
+
+def test_profile_admits_all_coefficient_growth_before_matrix_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    complex_value = _high_height_four_complex()
+
+    def reject_matrix_expansion(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("profile matrix expansion must follow complete admission")
+
+    monkeypatch.setattr(
+        spline_kernel, "_spline_constraint_rows", reject_matrix_expansion
+    )
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        spline_dimension_profile(
+            SplineDimensionProfileRequest(
+                complex=complex_value, max_degree=4, smoothness=3
+            )
+        )
+
+    assert (
+        exc_info.value.errors()[0]["type"] == "polytopal_complex.spline_profile_height"
+    )
 
 
 def test_one_cell_zero_row_dimension_roundtrips_and_catalog_invokes():

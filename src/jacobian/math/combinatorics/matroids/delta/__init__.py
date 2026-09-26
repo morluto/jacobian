@@ -6,6 +6,10 @@ from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     dual,
     minor,
 )
+from jacobian.math.combinatorics.matroids.delta.interlace import (
+    DistanceInterlaceResult,
+    distance_interlace_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.operations import (
     distance_profile,
     from_feasible_sets,
@@ -25,6 +29,8 @@ __all__ = [
     "binary",
     "binary_matrix_twist",
     "distance_profile",
+    "DistanceInterlaceResult",
+    "distance_interlace_polynomial",
     "dual",
     "from_feasible_sets",
     "minor",

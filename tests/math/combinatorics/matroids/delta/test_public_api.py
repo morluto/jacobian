@@ -12,6 +12,8 @@ def test_public_api_is_small_and_canonical() -> None:
         "binary",
         "binary_matrix_twist",
         "distance_profile",
+        "DistanceInterlaceResult",
+        "distance_interlace_polynomial",
         "dual",
         "from_feasible_sets",
         "minor",

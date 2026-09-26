@@ -73,3 +73,14 @@ ground). The retained result has at most 1,352 matrix, row, membership, and
 twist cells and at most 4,096 aggregate ground-label bytes across its matrix
 and delta-matroid axes. These are mathematical allocation bounds; they are not
 a deployment wire-byte ceiling.
+
+`delta_matroid.distance_interlace_polynomial.compute` returns the exact
+distance histogram and the polynomial
+`Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+`d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
+integers in descending-degree order, using the shared `IntegerPolynomial`
+value. This is the distance specialization in [Brijder and Hoogeboom's
+delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
+with the variable shift fixed as `y = x - 1`. Admission validates the complete
+source and bounds subset-feasible comparisons, output terms, and coefficient
+bit lengths before enumerating subsets.

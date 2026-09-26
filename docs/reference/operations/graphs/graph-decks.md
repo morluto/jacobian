@@ -8,12 +8,16 @@ including isolated vertices.
 `graph.deck.unlabelled.compute` groups edge cards by exact graph isomorphism.
 `graph.deck.vertex.unlabelled.compute` does the same for vertex cards. Both
 return one representative card, its positive multiplicity, and the complete
-source-card index set for each class. Isomorphism classes are determined by
-exact pairwise graph isomorphism, not degree sequences or hashes. Quotienting is
-limited to at most 10 source vertices and a preflighted work bound. The vertex
-quotient currently admits orders through eight; order nine and above exceed its
-exact permutation-canonicalization budget. The edge quotient has its own
-comparison bound.
+source-card index set for each class; the edge quotient's deleted source edges
+are recovered from the card indices on the source edge axis. Isomorphism
+classes are determined by canonicalizing each card to the least adjacency bit
+word over all vertex permutations, a complete invariant rather than a degree
+sequence or hash approximation, so the aggregate exact permutation work is
+preflighted before any canonical form is computed. Quotienting is limited to at
+most 10 source vertices and a preflighted canonicalization work bound. The
+vertex quotient currently admits orders through eight; order nine and above
+exceed its exact permutation-canonicalization budget. The edge quotient
+admits per-card permutation canonicalization over the full source order.
 
 `graph.deck.from_cards.construct` accepts an unordered finite multiset of cards
 of one declared order and stores each exact graph-isomorphism class once with
@@ -31,9 +35,11 @@ the source order in the deck. It reuses the exact induced vertex-subset count
 convention, so each copy means one vertex subset whose induced graph is
 isomorphic to `H`, independent of `H`'s automorphisms. Every such copy survives
 in exactly `n - |V(H)|` cards. The operation sums card contributions weighted
-by deck multiplicity and divides by that exact factor. Its output identifies
-the pattern, deck, each isomorphism-class contribution, weighted total,
-divisor, and quotient.
+by deck multiplicity and divides by that exact factor. It admits deck
+validation, canonicalization, card-count work, and the result's aggregate
+vertex-label echo allocation before reconstructing the quotient or building
+contributions. Its output identifies the pattern, deck, each isomorphism-class
+contribution, weighted total, divisor, and quotient.
 
 This induced operation has its own ID because the existing exact graph count
 owner counts induced vertex subsets. It does not claim the ordinary
@@ -49,7 +55,8 @@ automorphism count, weights by exact deck-class multiplicity, then divides by
 `n - |V(H)|` using Kelly's identity
 `sum_v copies(H, G-v) = (n - |V(H)|) copies(H, G)`: each fixed copy survives
 the cards deleting any vertex outside its chosen vertex set. It returns the same source-bound
-contribution breakdown as the induced operation. Work and output are admitted
+contribution breakdown as the induced operation. Work and the result's label
+echo allocation are admitted
 before deck validation, canonicalization, or assignment enumeration; source
 order is limited to the vertex quotient's exact envelope.
 

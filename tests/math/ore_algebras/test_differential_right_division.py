@@ -102,6 +102,18 @@ def test_right_orientation_differs_from_left_factor_order() -> None:
     )
 
 
+def test_inexpensive_divisions_are_not_rejected_by_ambient_input_ceilings() -> None:
+    fifth_order = _operator((5, [(0, 1)]))
+    divided = differential_operator_right_divide_monic(fifth_order, fifth_order)
+    assert divided.quotient == _operator((0, [(0, 1)]))
+    assert divided.remainder == _operator()
+
+    cubic_coefficient = _operator((0, [(3, 1)]))
+    divided = differential_operator_right_divide_monic(cubic_coefficient, _operator((0, [(0, 1)])))
+    assert divided.quotient == cubic_coefficient
+    assert divided.remainder == _operator()
+
+
 def test_zero_lower_order_and_order_zero_divisors_compose() -> None:
     dividend = _operator((0, [(2, 1)]), (1, [(0, 1)]))
     lower_order_divisor = _operator((2, [(0, 1)]))

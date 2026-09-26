@@ -39,8 +39,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Return the exact quotient Q and remainder R with A=Q*B+R and "
             "order(R)<order(B) in QQ(x)<D>, where D*a=a*D+a'. The bounded "
-            "slice accepts order-at-most-four operators with integer polynomial "
-            "coefficients in ZZ[x] and a monic nonzero divisor."
+            "slice accepts integer-polynomial coefficients in ZZ[x] and a "
+            "monic nonzero divisor, subject to the operation's exact work, "
+            "coefficient-growth, and output bounds."
         ),
         request_type=DifferentialRightDivisionRequest,
         result_type=DifferentialRightDivisionResult,

@@ -26,10 +26,6 @@ from jacobian.math.ore_algebras.operations import (
     _poly_mul,
 )
 
-_MAX_INPUT_ORDER = 4
-_MAX_INPUT_POLYNOMIAL_DEGREE = 2
-_MAX_INPUT_POLYNOMIAL_TERMS = 3
-_MAX_INPUT_SCALAR_DIGITS = 2
 _MAX_WORK = 1_000_000
 _MAX_OUTPUT_BYTES = 1_000_000
 
@@ -72,12 +68,6 @@ def _admit(request: DifferentialRightDivisionRequest) -> tuple[int, int, int]:
 
     operators = (request.dividend, request.divisor)
     for label, operator in zip(("dividend", "divisor"), operators, strict=True):
-        if operator.order > _MAX_INPUT_ORDER:
-            raise OperationResourceAdmissionError(
-                location=(label,),
-                code="ore_algebra.differential_right_division_order",
-                message="right division accepts operator order at most four",
-            )
         for term in operator.terms:
             coefficient = term.coefficient
             if (
@@ -100,30 +90,6 @@ def _admit(request: DifferentialRightDivisionRequest) -> tuple[int, int, int]:
                     code="ore_algebra.differential_right_division_integer_domain",
                     message="right division currently accepts integer polynomial coefficients in ZZ[x]",
                 )
-            if (
-                len(values) > _MAX_INPUT_POLYNOMIAL_TERMS
-                or any(
-                    max(
-                        len(str(abs(value.numerator))),
-                        len(str(value.denominator)),
-                    )
-                    > _MAX_INPUT_SCALAR_DIGITS
-                    for value in values
-                )
-                or any(
-                    poly_term.exponents[0] > _MAX_INPUT_POLYNOMIAL_DEGREE
-                    for poly_term in coefficient.numerator.terms
-                )
-            ):
-                raise OperationResourceAdmissionError(
-                    location=(label, "terms", term.order, "coefficient"),
-                    code="ore_algebra.differential_right_division_coefficient_bound",
-                    message=(
-                        "right division accepts integer polynomial coefficients with degree "
-                        "at most two, three terms, and two-digit rational scalars"
-                    ),
-                )
-
     divisor_leading = _poly_coefficient(request.divisor, request.divisor.order)
     if divisor_leading != {0: Fraction(1)}:
         raise OperationDomainValidationError(
@@ -154,7 +120,8 @@ def _admit(request: DifferentialRightDivisionRequest) -> tuple[int, int, int]:
     # coefficient. Two extra digits cover derivatives and binomial factors.
     result_digits = initial_digits + iterations * (initial_digits + 5)
     work = iterations * 7 * len(request.divisor.terms) * (result_degree + 1) * 8
-    output_terms = 2 * (_MAX_INPUT_ORDER + 1) * (result_degree + 1)
+    output_order = max(request.dividend.order, request.divisor.order)
+    output_terms = 2 * (output_order + 1) * (result_degree + 1)
     result_bytes = encoded_bytes + output_terms * (160 + 2 * result_digits) + 1024
     if (
         result_degree > 64
@@ -229,6 +196,10 @@ def differential_operator_right_divide_monic(
             message="right division requires a typed dividend and nonzero divisor",
         ) from exc
 
+    # Reject out-of-domain requests and establish this operation's own
+    # inexpensive structural bounds before shared canonicalization (which may
+    # perform rational-function GCD work).
+    _admit(request)
     left = _admit_differential_operator(_as_differential_operator(request.dividend))
     right = _admit_differential_operator(_as_differential_operator(request.divisor))
     request = DifferentialRightDivisionRequest.model_construct(

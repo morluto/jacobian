@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from itertools import combinations
+from math import comb
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -694,6 +696,64 @@ class MatrixMinorAssignmentsResult(StrictModel):
     matrix: TropicalMatrix
     sizes: tuple[int, ...]
     minors: tuple[TropicalMinorAssignment, ...] = Field(max_length=256)
+
+    @model_validator(mode="after")
+    def require_source_bound_profiles(self) -> Self:
+        rows, columns = len(self.matrix.row_axis), len(self.matrix.column_axis)
+        if (
+            not self.sizes
+            or any(
+                type(size) is not int
+                or size < 1
+                or size > 8
+                or size > min(rows, columns)
+                for size in self.sizes
+            )
+            or len(set(self.sizes)) != len(self.sizes)
+        ):
+            raise _validation_error(
+                "minor_sizes", "sizes must be distinct valid minor orders"
+            )
+        count = sum(comb(rows, size) * comb(columns, size) for size in self.sizes)
+        if count > 256:
+            raise _validation_error(
+                "minor_profile_coverage", "profile coverage exceeds the result bound"
+            )
+        expected = tuple(
+            (row_indices, column_indices)
+            for size in self.sizes
+            for row_indices in combinations(range(rows), size)
+            for column_indices in combinations(range(columns), size)
+        )
+        if len(expected) != len(self.minors):
+            raise _validation_error(
+                "minor_profile_coverage", "profiles must cover every selected minor"
+            )
+        for (row_indices, column_indices), profile in zip(
+            expected, self.minors, strict=True
+        ):
+            if (profile.row_indices, profile.column_indices) != (
+                row_indices,
+                column_indices,
+            ):
+                raise _validation_error(
+                    "minor_profile_indices",
+                    "profile indices must match source subsets in canonical order",
+                )
+            size = len(row_indices)
+            if (
+                profile.value.semiring != self.matrix.semiring
+                or not profile.permutations
+                or any(
+                    len(permutation) != size or set(permutation) != set(range(size))
+                    for permutation in profile.permutations
+                )
+            ):
+                raise _validation_error(
+                    "minor_profile_shape",
+                    "profile values and permutations must match the source minor",
+                )
+        return self
 
     @classmethod
     def _from_kernel(

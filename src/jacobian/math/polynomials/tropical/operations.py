@@ -1739,6 +1739,12 @@ def tropical_matrix_minor_assignment_profiles(
     determinant; tied optimal bijections are all retained.
     """
     _admit_matrix(matrix)
+    if not isinstance(sizes, tuple) or any(type(size) is not int for size in sizes):
+        raise OperationDomainValidationError(
+            location=("sizes",),
+            code="tropical.minor_sizes",
+            message="minor sizes must be a tuple of native integers",
+        )
     if not sizes or len(set(sizes)) != len(sizes):
         raise OperationDomainValidationError(
             location=("sizes",),
@@ -1798,8 +1804,9 @@ def tropical_matrix_minor_assignment_profiles(
                         if entry.kind != "FINITE":
                             finite = False
                             break
-                        total = _sum_fractions_checked(
-                            total, _finite_value(entry).as_fraction()
+                        term = _finite_value(entry).as_fraction()
+                        total = (
+                            term if total == 0 else _sum_fractions_checked(total, term)
                         )
                     scores.append((permutation, total if finite else None))
 

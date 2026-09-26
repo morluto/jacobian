@@ -6,9 +6,12 @@ from fractions import Fraction
 from math import gcd
 from typing import Literal, cast
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.characters.operations import (
+    dirichlet_character_conjugate,
     require_complete_character_group,
 )
 from jacobian.math.number_theory.characters.values import DirichletCharacter
@@ -24,6 +27,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_GAMMA0_OPERATION_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
     LevelOneModularQExpansion,
+    ModularFormAtkinLehnerTarget,
     ModularFormSpace,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
@@ -74,6 +78,57 @@ def level_one_named_q_expansion(
         space_kind=space_kind,
         normalization=normalization,
         q_expansion=q_expansion,
+    )
+
+
+def modular_form_atkin_lehner_target(
+    space: ModularFormSpace,
+) -> ModularFormAtkinLehnerTarget:
+    """Return the codomain parent of the full Fricke action ``W_N``.
+
+    For integral weight, ``W_N`` preserves the Gamma0 level and changes the
+    Nebentypus to its inverse. This reports only the typed parent correspondence;
+    the normalized coefficient action is not represented here.
+    """
+
+    if not isinstance(space, ModularFormSpace):
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.atkin_lehner_target_space_type",
+            message="space must be an exact modular-form space value",
+        )
+    # Native callers can bypass Pydantic construction with model_construct or
+    # mutate a nested value. Re-validate the complete parent at this boundary,
+    # then translate structural failures into the operation's stable domain error.
+    try:
+        admitted_space = ModularFormSpace.model_validate(
+            space.model_dump(mode="python")
+        )
+    except (ValidationError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.atkin_lehner_target_space_invalid",
+            message="space must be a valid exact modular-form space value",
+        ) from exc
+
+    source_character = admitted_space.character
+    target_character: Literal["TRIVIAL"] | DirichletCharacter = (
+        "TRIVIAL"
+        if source_character == "TRIVIAL"
+        else dirichlet_character_conjugate(source_character)
+    )
+    target_space = ModularFormSpace(
+        group=admitted_space.group,
+        level=admitted_space.level,
+        weight=admitted_space.weight,
+        kind=admitted_space.kind,
+        character=target_character,
+        coefficient_domain=admitted_space.coefficient_domain,
+    )
+    return ModularFormAtkinLehnerTarget(
+        source_space=admitted_space,
+        target_space=target_space,
+        divisor=admitted_space.level,
     )
 
 

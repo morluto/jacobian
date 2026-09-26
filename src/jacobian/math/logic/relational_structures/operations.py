@@ -17,6 +17,7 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_core_computation,
     admit_embedding_search,
     admit_homomorphism_check,
+    admit_homomorphism_composition,
     admit_homomorphism_enumeration,
     admit_homomorphism_search,
     admit_induced_substructure,
@@ -59,6 +60,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
     FiniteRelationSymbol,
+    RelationalHomomorphism,
 )
 
 
@@ -392,11 +394,15 @@ def _check_homomorphism_admitted(
 
     witness: HomomorphismViolationWitness | None = None
     profiles: list[SymbolTransportProfile] = []
+    checked_tuples = 0
     for symbol_index, symbol in enumerate(source.signature):
         source_table = source.relation_tables[symbol_index]
         target_table = target_tables[symbol_index]
         preserved = 0
         for source_tuple in source_table:
+            checked_tuples += 1
+            if checked_tuples % 4_096 == 0:
+                request_checkpoint("during relational homomorphism preservation check")
             image_tuple = tuple(checked_map[coordinate] for coordinate in source_tuple)
             if image_tuple in target_table:
                 preserved += 1
@@ -428,6 +434,107 @@ def _check_homomorphism_admitted(
         carrier_map=checked_map,
         witness=witness,
         symbol_profiles=tuple(profiles),
+    )
+
+
+def homomorphism_identity(
+    structure: FiniteRelationalStructure,
+) -> RelationalHomomorphism:
+    """Return the identity homomorphism of one exact finite structure."""
+
+    source = _admit_structure(structure, "structure")
+    mapping = tuple(range(source.carrier_size))
+    return RelationalHomomorphism._from_kernel(
+        source=source,
+        target=source,
+        mapping=mapping,
+    )
+
+
+def _admit_homomorphism_claim(value: object, field: str) -> RelationalHomomorphism:
+    if not isinstance(value, RelationalHomomorphism):
+        raise OperationDomainValidationError(
+            location=(field,),
+            code="relational.homomorphism.claim_type",
+            message=f"{field} must be a source-bound relational homomorphism",
+        )
+    try:
+        return RelationalHomomorphism.model_validate(value.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=(field,),
+            code="relational.homomorphism.claim_shape",
+            message=(
+                f"{field} must bind a total map to exact structures over "
+                "one shared ranked signature"
+            ),
+        ) from exc
+
+
+def compose_homomorphisms(
+    first: RelationalHomomorphism,
+    second: RelationalHomomorphism,
+) -> RelationalHomomorphism:
+    """Return ``second ∘ first`` after checking both supplied claims.
+
+    The intermediate endpoint must be the exact same canonical structure.
+    Preservation is replayed once for each caller-supplied map after joint
+    admission; compositionality establishes preservation of the output map.
+    """
+
+    admitted_first = _admit_homomorphism_claim(first, "first")
+    admitted_second = _admit_homomorphism_claim(second, "second")
+    admit_homomorphism_composition(admitted_first, admitted_second)
+
+    first_target_tables = tuple(
+        set(table) for table in admitted_first.target.relation_tables
+    )
+    first_check = _check_homomorphism_admitted(
+        admitted_first.source,
+        admitted_first.target,
+        admitted_first.mapping,
+        first_target_tables,
+    )
+    if first_check.status is not HomomorphismStatus.HOMOMORPHISM:
+        witness = first_check.witness
+        assert witness is not None
+        raise OperationDomainValidationError(
+            location=("first",),
+            code="relational.homomorphism.claim_not_preserved",
+            message=(
+                f"first map sends relation {witness.symbol_id} tuple "
+                f"{witness.source_tuple} to absent target tuple "
+                f"{witness.image_tuple}"
+            ),
+        )
+
+    second_target_tables = tuple(
+        set(table) for table in admitted_second.target.relation_tables
+    )
+    second_check = _check_homomorphism_admitted(
+        admitted_second.source,
+        admitted_second.target,
+        admitted_second.mapping,
+        second_target_tables,
+    )
+    if second_check.status is not HomomorphismStatus.HOMOMORPHISM:
+        witness = second_check.witness
+        assert witness is not None
+        raise OperationDomainValidationError(
+            location=("second",),
+            code="relational.homomorphism.claim_not_preserved",
+            message=(
+                f"second map sends relation {witness.symbol_id} tuple "
+                f"{witness.source_tuple} to absent target tuple "
+                f"{witness.image_tuple}"
+            ),
+        )
+
+    mapping = tuple(admitted_second.mapping[image] for image in admitted_first.mapping)
+    return RelationalHomomorphism._from_kernel(
+        source=admitted_first.source,
+        target=admitted_second.target,
+        mapping=mapping,
     )
 
 
@@ -1069,9 +1176,11 @@ def compute_core(
 __all__ = [
     "check_homomorphism",
     "check_polymorphism",
+    "compose_homomorphisms",
     "compute_core",
     "count_homomorphisms",
     "csp_instance_to_source_structure",
+    "homomorphism_identity",
     "induced_substructure",
     "quotient_structure",
     "reduct_structure",

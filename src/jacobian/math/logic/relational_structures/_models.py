@@ -17,6 +17,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
     FiniteRelationalStructure,
+    RelationalHomomorphism,
     RelationSymbolId,
 )
 
@@ -393,6 +394,25 @@ class HomomorphismCheckResult(StrictModel):
             ),
         )
 
+    def to_homomorphism(self) -> RelationalHomomorphism:
+        """Return the canonical composable map for a successful check.
+
+        The kernel already replayed preservation; construction is trusted
+        and replays nothing. The serialized check round-trips through
+        ``model_validate_json`` before this conversion in the covered
+        producer-to-consumer path.
+        """
+
+        if self.status is not HomomorphismStatus.HOMOMORPHISM:
+            raise ValueError(
+                "a NOT_HOMOMORPHISM check retains no composable homomorphism"
+            )
+        return RelationalHomomorphism._from_kernel(
+            source=self.source,
+            target=self.target,
+            mapping=tuple(self.carrier_map),
+        )
+
 
 class InducedRelationProfile(StrictModel):
     symbol_id: RelationSymbolId
@@ -538,6 +558,19 @@ class HomomorphismCheckRequest(StrictModel):
         return self
 
 
+class RelationalHomomorphismIdentityRequest(StrictModel):
+    """Construct the identity homomorphism of one exact structure."""
+
+    structure: FiniteRelationalStructure
+
+
+class RelationalHomomorphismCompositionRequest(StrictModel):
+    """Compose ``second`` after ``first`` over an exact shared structure."""
+
+    first: RelationalHomomorphism
+    second: RelationalHomomorphism
+
+
 class HomomorphismSearchStatus(StrEnum):
     """Closed outcome of one exhaustive homomorphism search."""
 
@@ -638,6 +671,13 @@ class HomomorphismSearchResult(StrictModel):
             candidates_examined=candidates_examined,
             total_candidates=total_candidates,
         )
+
+    def to_homomorphism(self) -> RelationalHomomorphism:
+        """Return the canonical composable map for a FOUND search."""
+
+        if self.status is not HomomorphismSearchStatus.FOUND or self.check is None:
+            raise ValueError("an EXHAUSTED search retains no composable homomorphism")
+        return self.check.to_homomorphism()
 
 
 class HomomorphismSearchRequest(StrictModel):
@@ -830,6 +870,18 @@ class HomomorphismEnumerationResult(StrictModel):
             target=target,
             carrier_maps=carrier_maps,
             total_candidates=total_candidates,
+        )
+
+    def to_homomorphisms(self) -> tuple[RelationalHomomorphism, ...]:
+        """Return every enumerated map as a canonical composable value."""
+
+        return tuple(
+            RelationalHomomorphism._from_kernel(
+                source=self.source,
+                target=self.target,
+                mapping=tuple(carrier_map),
+            )
+            for carrier_map in self.carrier_maps
         )
 
 
@@ -1540,6 +1592,8 @@ __all__ = [
     "InducedRelationProfile",
     "InducedSubstructureRequest",
     "InducedSubstructureResult",
+    "RelationalHomomorphismCompositionRequest",
+    "RelationalHomomorphismIdentityRequest",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",
     "RelationalPolymorphismRelationProfile",

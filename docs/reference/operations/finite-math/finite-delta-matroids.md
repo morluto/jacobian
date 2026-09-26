@@ -52,3 +52,13 @@ with the variable shift fixed as `y = x - 1`; it does not imply any other
 interlace polynomial convention. Admission validates the complete source,
 then bounds `2^|E| * |F|` subset-feasible comparisons, the number of
 output terms, and coefficient bit lengths before enumerating subsets.
+
+`delta_matroid.relabel.compute` renames and reorders the ground axis through a
+bijective `target_to_source` map. Each feasible subset is transported by the
+inverse `source_to_target` map, with its indices sorted in the target axis; the
+result retains both source and target delta-matroids and both maps. The empty
+ground set and identity permutation are valid. The operation bounds ground
+positions, source memberships, target-label bytes, transport work, and result
+allocation before materializing target feasible rows. Relabelling preserves
+symmetric exchange because a bijection preserves symmetric difference and
+membership.

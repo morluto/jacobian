@@ -1001,6 +1001,8 @@ def verify_composition(claim: ComposeResult) -> bool:
 def _minimize_sample_word_count(alphabet_size: int, max_length: int) -> int:
     """Return the number of words of length at most ``max_length``."""
 
+    if alphabet_size == 0:
+        return 1
     if alphabet_size <= 1:
         return max_length + 1
     count = 0

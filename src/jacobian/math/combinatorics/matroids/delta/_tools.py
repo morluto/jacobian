@@ -21,15 +21,15 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     DeltaMatroidMinorRequest,
 )
 from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
+from jacobian.math.combinatorics.matroids.delta.interlace import (
+    DistanceInterlaceRequest,
+    DistanceInterlaceResult,
+    distance_interlace_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.operations import (
     from_feasible_sets,
     twist,
     width,
-)
-from jacobian.math.combinatorics.matroids.delta.relabel import (
-    DeltaMatroidRelabelling,
-    DeltaMatroidRelabelRequest,
-    relabel,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
@@ -112,14 +112,6 @@ def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
         raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
 
 
-def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
-    return relabel(
-        request.delta_matroid,
-        request.target_ground,
-        request.target_to_source,
-    )
-
-
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
         return DeltaMatroidWidthResult._from_kernel(
@@ -137,6 +129,12 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
             code="delta_matroid.source_not_valid",
             message=str(exc),
         ) from exc
+
+
+def _distance_interlace(
+    request: DistanceInterlaceRequest,
+) -> DistanceInterlaceResult:
+    return distance_interlace_polynomial(request.delta_matroid)
 
 
 TOOLS: MathTools = (  # noqa: RUF005
@@ -286,33 +284,31 @@ TOOLS: MathTools = (  # noqa: RUF005
         ),
     ),
     MathTool(
-        operation_id="delta_matroid.relabel.compute",
-        title="Relabel and reorder a finite delta-matroid ground set",
+        operation_id="delta_matroid.distance_interlace_polynomial.compute",
+        title="Compute the subset-distance interlace polynomial",
         description=(
-            "Apply a bijection from the target ground axis to the source axis, "
-            "transport every feasible subset to the target indices, and retain "
-            "both inverse axis maps. The complete source family is checked "
-            "before transport; memberships, ground labels, work, and result "
-            "allocations are bounded."
+            "Return the distance histogram and exact polynomial "
+            "sum over X subset E of (x - 1)^d_D(X), where d_D(X) is the "
+            "minimum symmetric-difference distance from X to a feasible set. "
+            "Admission bounds every subset-to-feasible-set comparison and the "
+            "serialized result before subset enumeration."
         ),
-        request_type=DeltaMatroidRelabelRequest,
-        result_type=DeltaMatroidRelabelling,
-        run=_run_relabel,
-        tags=("delta-matroid", "relabel", "isomorphism", "exact"),
+        request_type=DistanceInterlaceRequest,
+        result_type=DistanceInterlaceResult,
+        run=_distance_interlace,
+        tags=("delta-matroid", "interlace-polynomial", "distance", "exact"),
         examples=(
             OperationExample(
-                name="swap_ground_axis",
+                name="two_element_uniform_distance_interlace",
                 description=(
-                    "Swap the source axes while renaming them; feasible subsets "
-                    "and the inverse coordinate maps are transported exactly."
+                    "For all four subsets feasible, every distance is zero, "
+                    "so the polynomial is 4."
                 ),
                 input={
                     "delta_matroid": {
                         "ground": ["a", "b"],
-                        "feasible": [[], [0], [0, 1]],
-                    },
-                    "target_ground": ["B", "A"],
-                    "target_to_source": [1, 0],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
                 },
             ),
         ),

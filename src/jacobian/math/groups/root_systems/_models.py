@@ -1131,6 +1131,20 @@ class WeylElementInverseRequest(StrictModel):
     element: WeylElement
 
 
+class WeylElementWeightActionRequest(StrictModel):
+    """Apply one Weyl element to an exact weight-lattice value."""
+
+    element: WeylElement
+    weight: WeightLatticeVector
+
+
+class WeylElementRootActionRequest(StrictModel):
+    """Apply one Weyl element to an exact root-lattice value."""
+
+    element: WeylElement
+    vector: RootLatticeVector
+
+
 class WeylBruhatIntervalRequest(StrictModel):
     """Two elements of one finite Weyl group defining a closed interval."""
 

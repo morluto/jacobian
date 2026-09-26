@@ -44,9 +44,32 @@ class RootWeightLatticePresentation(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_embedding(self) -> Self:
-        rank = len(self.datum.cartan_matrix)
+        try:
+            from jacobian.math.groups.root_systems.operations import cartan_datum
+
+            canonical_datum = cartan_datum(self.datum.cartan_matrix)
+            datum_matches = (
+                self.datum.cartan_matrix.simple_root_axis
+                == canonical_datum.cartan_matrix.simple_root_axis
+                and self.datum.symmetrizer == canonical_datum.symmetrizer
+                and self.datum.root_to_weight.entries
+                == canonical_datum.root_to_weight.entries
+                and self.datum.coroot_to_coweight.entries
+                == canonical_datum.coroot_to_coweight.entries
+            )
+        except (AttributeError, TypeError, ValueError) as error:
+            raise _validation_error(
+                "lattice_presentation_datum",
+                "presentation datum must be a canonical finite Cartan datum",
+            ) from error
+        if not datum_matches:
+            raise _validation_error(
+                "lattice_presentation_datum",
+                "presentation datum must retain the canonical Cartan basis maps",
+            )
+        rank = len(canonical_datum.cartan_matrix)
         identity = _identity_matrix(rank)
-        expected_embedding = _transpose(self.datum.root_to_weight.entries)
+        expected_embedding = _transpose(canonical_datum.root_to_weight.entries)
         if (
             self.weight_lattice.ambient_dimension != rank
             or self.weight_lattice.basis.entries != identity

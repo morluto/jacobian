@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
@@ -8,7 +10,6 @@ from jacobian.math.groups.root_systems.lattice_presentations import (
     RootWeightLatticePresentation,
     root_weight_lattice_presentation,
 )
-from jacobian.math.groups.root_systems.lattice_presentations._tools import TOOLS
 from jacobian.math.groups.root_systems.operations import cartan_datum
 from jacobian.math.lattices.operations import compute_sublattice_index
 from jacobian.math.matrices.values import IntegerMatrix
@@ -109,15 +110,19 @@ def test_result_validator_rejects_a_tampered_embedding() -> None:
         RootWeightLatticePresentation.model_validate(payload)
 
 
-def test_catalog_tool_consumes_canonical_cartan_datum() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "root_system.root_weight_lattice_embedding.compute"
+def test_result_validator_revalidates_the_canonical_datum() -> None:
+    presentation = root_weight_lattice_presentation(
+        cartan_datum(CartanMatrix.model_validate(((2, -1), (-1, 2))))
     )
-    datum = cartan_datum(CartanMatrix.model_validate(((2, -1), (-1, 2))))
-    request = tool.request_type.model_validate_json(datum.model_dump_json())
+    payload = presentation.model_dump(mode="json")
+    identity = [["1", "0"], ["0", "1"]]
+    payload["datum"]["root_to_weight"]["entries"] = identity
+    payload["datum"]["coroot_to_coweight"]["entries"] = identity
+    payload["root_lattice"]["basis"]["entries"] = identity
+    payload["root_to_weight_embedding"]["entries"] = identity
 
-    result = tool.run(request)
-
-    assert result == root_weight_lattice_presentation(datum)
+    with pytest.raises(ValueError) as error:
+        RootWeightLatticePresentation.model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == (
+        "root_system.lattice_presentation_datum"
+    )

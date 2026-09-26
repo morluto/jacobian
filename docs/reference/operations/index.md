@@ -15,7 +15,6 @@ that need more context than an operation card:
 - [Geometry](geometry/index.md)
 - [Root-system coroots](groups/root-coroots.md)
 - [Root, coroot, weight, and coweight vectors](groups/root-weight-lattices.md)
-- [Root lattice inside the weight lattice](groups/root-weight-lattice-presentation.md)
 - [Positive-root length profiles](groups/root-length-profiles.md)
 - [Weyl-element orders](groups/weyl-element-order.md)
 - [Weyl Bruhat intervals](groups/weyl-bruhat-interval.md)

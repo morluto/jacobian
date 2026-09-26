@@ -291,6 +291,31 @@ class ModularFormAtkinLehnerTarget(StrictModel):
                 "atkin_lehner_target_parent",
                 "the Fricke target preserves subgroup, level, weight, kind, and coefficient field",
             )
+        source_character = source.character
+        target_character = target.character
+        if source_character == "TRIVIAL":
+            if target_character != "TRIVIAL":
+                raise _validation_error(
+                    "atkin_lehner_target_character",
+                    "the full Fricke target preserves the trivial character",
+                )
+        elif (
+            not isinstance(target_character, DirichletCharacter)
+            or source_character.group != target_character.group
+            or target_character.coordinates
+            != tuple(
+                (-coordinate) % order
+                for coordinate, order in zip(
+                    source_character.coordinates,
+                    source_character.group.generator_orders,
+                    strict=True,
+                )
+            )
+        ):
+            raise _validation_error(
+                "atkin_lehner_target_character",
+                "the full Fricke target uses the inverse source character",
+            )
         return self
 
 

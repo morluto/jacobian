@@ -73,6 +73,15 @@ def test_coordinate_scalar_multiplication_scales_nonunit_coordinates_once() -> N
     assert tuple(value.as_fraction() for value in result.coordinates) == (6, Fraction(9, 2))
 
 
+def test_scalar_admission_is_independent_of_wire_output_ceiling() -> None:
+    # Native exact arithmetic accepts these digits; JSON transport owns its own cap.
+    form = _form((1, 0))
+    scalar = _q(10**5000)
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        modular_form_coordinates_scalar_multiply(form, scalar)
+    assert refusal.value.errors()[0]["type"] == "modular_form.coordinate_scalar_digit_bound"
+
+
 def test_coordinate_addition_rejects_different_complete_parents() -> None:
     left = _form((1, 0))
     different_space = ModularFormCoordinates(

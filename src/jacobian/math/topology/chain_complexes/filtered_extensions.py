@@ -990,7 +990,17 @@ def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:
 def _coefficient_size(value: int | Fraction) -> tuple[int, int]:
     """Return decimal numerator and denominator digit counts without expansion."""
     fraction = value if isinstance(value, Fraction) else Fraction(value)
-    return len(str(abs(fraction.numerator))), len(str(fraction.denominator))
+    def bounded_digits(integer: int) -> int:
+        magnitude = abs(integer)
+        if magnitude.bit_length() > 13_608:
+            raise OperationResourceAdmissionError(
+                location=("maps",),
+                code="filtered_chain_map.coefficient_exceeded",
+                message="an input map coefficient exceeds the exact chain-map coefficient digit limit",
+            )
+        return len(str(magnitude))
+
+    return bounded_digits(fraction.numerator), bounded_digits(fraction.denominator)
 
 
 def _parse_bounded_map(
@@ -1031,6 +1041,12 @@ def _parse_bounded_map(
                         "filtered_chain_map.entry_invalid",
                         "finite-field map entries must be integers",
                     )
+                if prime is not None and not 0 <= value < prime:
+                    raise _fail(
+                        (label, "maps", degree),
+                        "filtered_chain_map.entry_invalid",
+                        "finite-field map entries must be canonical residues",
+                    )
                 numerator_digits, denominator_digits = _coefficient_size(value)
                 if (
                     numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
@@ -1069,9 +1085,9 @@ def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -
             (
                 (
                     right_numerator
-                    if Fraction(left).numerator == 1 and left_denominator == 1
+                    if abs(Fraction(left).numerator) == 1 and left_denominator == 1
                     else left_numerator
-                    if Fraction(right).numerator == 1 and right_denominator == 1
+                    if abs(Fraction(right).numerator) == 1 and right_denominator == 1
                     else left_numerator + right_numerator
                 ),
                 1 if denominator_is_one else left_denominator + right_denominator,

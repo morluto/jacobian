@@ -1,0 +1,32 @@
+# Elliptic curve quadratic twists over finite fields
+
+`elliptic_curve.finite_field.quadratic_twist.compute` takes a nonsingular
+short-Weierstrass curve
+\(E:y^2=x^3+Ax+B\) over a finite field of characteristic greater than three.
+It chooses the first nonsquare `d` in the field's canonical base-p
+power-basis encoding and returns
+\[
+E^{(d)}:y^2=x^3+d^2Ax+d^3B.
+\]
+
+The chosen `d` makes the returned coefficient pair canonical for the declared
+field presentation, and the returned curve always has the negated Frobenius
+trace. For curves with extra automorphisms (`A = 0` or `B = 0`) the twist need
+not be a distinct isomorphism class: over F7 the source `y^2 = x^3 + x`
+selects `d = 3` and returns `y^2 = x^3 + 2x`, and the scaling `u = 2` with
+`u^4 = 2` exhibits an F7-isomorphism back to the source (both traces vanish in
+that case). The result therefore retains that field and composes directly with
+point enumeration, cardinality, extension-count, and the model-isomorphism
+decision operation. The expected independent cardinality relation is
+\[
+#E(\mathbb F_q)+#E^{(d)}(\mathbb F_q)=2(q+1),
+\]
+equivalently the two Frobenius traces are negatives. PARI's reference documents
+the quadratic twist construction in its
+[`elltwist` operation](https://pari.math.u-bordeaux.fr/dochtml/ref/Elliptic_curves.html#elltwist).
+
+The implementation admits fields of order at most 4,096. It bounds the
+worst-case scan and exponentiation work, and the admitted field order bounds
+the returned curve's coordinate digits, before searching for the nonsquare.
+Characteristics two and three, singular cubics, and larger fields are outside
+this operation's contract.

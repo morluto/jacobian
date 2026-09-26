@@ -5,14 +5,20 @@ import itertools
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.dispatch import invoke_operation
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.free_algebras._models import (
+    MAX_FREE_ALGEBRA_WORD_LENGTH,
+    MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
     FreeAlgebraWord,
+    FreeAlgebraWordPairRequest,
+    FreeAlgebraWordPowerRequest,
     FreeAlgebraWordRequest,
     FreeAlgebraWordSubstitution,
 )
+from jacobian.math.free_algebras._tools import TOOLS
 from jacobian.math.free_algebras.operations import (
     compare_words,
     concatenate_words,
@@ -45,15 +51,29 @@ def test_concatenation_is_associative_with_unit_and_returns_offsets() -> None:
     assert result.degree_addition == (2, 1, 3)
 
 
-def test_concatenation_accepts_full_64_letter_value_without_raising_source_bound() -> (
-    None
-):
+def test_concatenation_producer_word_composes_with_non_growing_consumers() -> None:
     source = word(*("a",) * 32)
-    result = concatenate_words(source, source)
-    assert result.product.length == 64
-    assert result.product.letters == source.letters + source.letters
-    with pytest.raises(ValidationError):
-        FreeAlgebraWordRequest(word=word(*("a",) * 33))
+    product = concatenate_words(source, source).product
+    assert product.length == 64
+    assert product.letters == source.letters + source.letters
+    assert reverse_word(product).reverse.letters == ("a",) * 64
+    assert len(word_prefixes(product).splits) == MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1
+    assert len(word_suffixes(product).splits) == MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1
+    assert word_factors(product).factors[-1].letters == ("a",) * 64
+
+
+def test_power_producer_word_composes_with_serialized_reverse_consumer() -> None:
+    # Review thread: reversing the canonical result of a maximal power failed
+    # only because the shared word request applied the 32-letter source bound.
+    power = power_word(word("c"), 64).power
+    assert compare_words(power, power).comparison == 0
+    round_trip = FreeAlgebraWord.model_validate_json(power.model_dump_json())
+    assert round_trip.length == 64
+    request = FreeAlgebraWordRequest(word=round_trip)
+    assert request.word.length == MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+    result = reverse_word(request.word)
+    assert result.reverse.letters == ("c",) * 64
+    assert result.reverse.alphabet == ALPHABET
 
 
 def test_power_zero_and_bounded_output() -> None:
@@ -65,6 +85,24 @@ def test_power_zero_and_bounded_output() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         power_word(value, 33)
     assert error.value.errors()[0]["type"] == "free_algebra.word_power_output_length"
+
+
+def test_growing_operations_keep_32_letter_source_bound() -> None:
+    producer = word(*("a",) * (MAX_FREE_ALGEBRA_WORD_LENGTH + 1))
+    assert producer.length == MAX_FREE_ALGEBRA_WORD_LENGTH + 1
+    # Non-growing consumers admit the 33-letter canonical value.
+    assert FreeAlgebraWordRequest(word=producer).word.length == 33
+    # Growing power and concatenation sources keep the 32-letter expansion bound.
+    with pytest.raises(ValidationError):
+        FreeAlgebraWordPowerRequest(word=producer, exponent=1)
+    with pytest.raises(ValidationError):
+        FreeAlgebraWordPairRequest(left=producer, right=word())
+    with pytest.raises(OperationDomainValidationError) as error:
+        concatenate_words(producer, word())
+    assert error.value.errors()[0]["type"] == "free_algebra.word_source_length"
+    with pytest.raises(OperationDomainValidationError) as error:
+        power_word(producer, 2)
+    assert error.value.errors()[0]["type"] == "free_algebra.word_source_length"
 
 
 def test_reverse_is_involution_and_anti_homomorphism() -> None:
@@ -310,7 +348,6 @@ def test_substitution_composes_and_preflights_64_letter_output() -> None:
 
 
 def test_word_tool_examples_execute_through_catalog() -> None:
-    catalog = Catalog.open()
     operation_ids = (
         "free_word.concatenate.compute",
         "free_word.power.compute",
@@ -323,9 +360,11 @@ def test_word_tool_examples_execute_through_catalog() -> None:
         "free_word.substitute.compute",
     )
     for operation_id in operation_ids:
-        operation = catalog.operation(operation_id)
+        operation = next(tool for tool in TOOLS if tool.operation_id == operation_id)
         assert operation is not None and operation.examples
         for example in operation.examples:
-            result = invoke_operation(operation_id, example.input, catalog)
-            validated = operation.result_type.model_validate(result.output)
-            assert validated.model_dump(mode="json") == result.output
+            request = operation.request_type.model_validate(example.input)
+            result = operation.run(request)
+            assert result.model_dump(
+                mode="json"
+            ) == operation.result_type.model_validate(result).model_dump(mode="json")

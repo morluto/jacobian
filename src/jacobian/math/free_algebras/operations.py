@@ -6,7 +6,6 @@ constructs the canonical result without replaying the computed mathematics.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
@@ -14,33 +13,34 @@ from math import factorial, gcd, lcm
 from typing import Any, Literal, cast
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.free_algebras._kernel import add_sparse, multiply_sparse
 from jacobian.math.free_algebras._models import (
-    MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES,
+    MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_ADDITION_TERMS,
     MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS,
     MAX_FREE_ALGEBRA_GS_COMPOSITIONS,
     MAX_FREE_ALGEBRA_GS_PAIR_CHECKS,
     MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS,
+    MAX_FREE_ALGEBRA_IDEAL_COMPONENT_CELLS,
     MAX_FREE_ALGEBRA_IDEAL_COMPONENT_CONTEXTS,
     MAX_FREE_ALGEBRA_IDEAL_COMPONENT_MATRIX_CELLS,
-    MAX_FREE_ALGEBRA_IDEAL_COMPONENT_SERIALIZED_BYTES,
     MAX_FREE_ALGEBRA_IDEAL_COMPONENT_WORDS,
     MAX_FREE_ALGEBRA_IDEAL_PREFIX_BASIS,
-    MAX_FREE_ALGEBRA_IDEAL_PREFIX_SERIALIZED_BYTES,
+    MAX_FREE_ALGEBRA_IDEAL_PREFIX_CELLS,
     MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS,
     MAX_FREE_ALGEBRA_LETTER_LENGTH,
     MAX_FREE_ALGEBRA_OPERAND_TERMS,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES,
-    MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES,
+    MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_RESULT_TERMS,
     MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
     MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS,
-    MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_BYTES,
+    MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_SUBSTITUTION_WORK,
     MAX_FREE_ALGEBRA_TERM_PAIRS,
     MAX_FREE_ALGEBRA_WORD_LENGTH,
@@ -185,14 +185,22 @@ def _reject_resource(location: tuple[str | int, ...], code: str, message: str) -
 
 
 def _admit_word(value: FreeAlgebraWord, *, label: str) -> FreeAlgebraWord:
+    """Reauthenticate one word within the 64-letter canonical value bound."""
+
     try:
-        admitted = FreeAlgebraWord.model_validate(value.model_dump())
+        return FreeAlgebraWord.model_validate(value.model_dump())
     except Exception as exc:
         raise OperationDomainValidationError(
             location=(label,),
             code="free_algebra.word_shape",
             message="the free-algebra word is not canonical",
         ) from exc
+
+
+def _admit_source_word(value: FreeAlgebraWord, *, label: str) -> FreeAlgebraWord:
+    """Admit one word for a growing operation's 32-letter source bound."""
+
+    admitted = _admit_word(value, label=label)
     if admitted.length > MAX_FREE_ALGEBRA_WORD_LENGTH:
         raise OperationDomainValidationError(
             location=(label, "letters"),
@@ -205,8 +213,8 @@ def _admit_word(value: FreeAlgebraWord, *, label: str) -> FreeAlgebraWord:
 def _admit_word_pair(
     left: FreeAlgebraWord, right: FreeAlgebraWord
 ) -> tuple[FreeAlgebraWord, FreeAlgebraWord]:
-    left_value = _admit_word(left, label="left")
-    right_value = _admit_word(right, label="right")
+    left_value = _admit_source_word(left, label="left")
+    right_value = _admit_source_word(right, label="right")
     if left_value.alphabet != right_value.alphabet:
         raise OperationDomainValidationError(
             location=("right", "alphabet"),
@@ -310,10 +318,10 @@ def _sum_coefficient_digit_bound(
 ) -> int:
     """Bound canonical component digits of a rational sum without adding it."""
 
-    left_num = len(str(abs(left.num)))
-    right_num = len(str(abs(right.num)))
-    left_den = len(str(left.den))
-    right_den = len(str(right.den))
+    left_num = len(format_canonical_integer(abs(left.num)))
+    right_num = len(format_canonical_integer(abs(right.num)))
+    left_den = len(format_canonical_integer(left.den))
+    right_den = len(format_canonical_integer(right.den))
     if left.den == right.den:
         if (left.num < 0) != (right.num < 0):
             numerator_digits = max(left_num, right_num)
@@ -343,20 +351,20 @@ def _admit_add(
         )
 
     for side, polynomial in (("left", left), ("right", right)):
-        if len(polynomial.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+        if len(polynomial.terms) > MAX_FREE_ALGEBRA_ADDITION_TERMS:
             _reject_resource(
                 (side, "terms"),
                 "addition_operand_term_budget",
                 f"{side} operand exceeds the "
-                f"{MAX_FREE_ALGEBRA_OPERAND_TERMS}-term addition budget",
+                f"{MAX_FREE_ALGEBRA_ADDITION_TERMS}-term canonical support bound",
             )
         for index, term in enumerate(polynomial.terms):
-            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            if len(term.word) > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH:
                 _reject_resource(
                     (side, "terms", index, "word"),
                     "addition_operand_word_length_budget",
                     "addition operand words are limited to "
-                    f"{MAX_FREE_ALGEBRA_WORD_LENGTH} letters",
+                    f"{MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH} letters",
                 )
     left_by_word = {term.word: term for term in left.terms}
     right_by_word = {term.word: term for term in right.terms}
@@ -395,30 +403,29 @@ def _admit_add(
             f"{MAX_FREE_ALGEBRA_ADDITION_TERMS}-term bound",
         )
 
-    alphabet_bytes = len(
-        json.dumps(left.alphabet, ensure_ascii=True, separators=(",", ":"))
-    )
-    maximum_word_bytes = max(
+    alphabet_scalars = sum(len(letter) for letter in left.alphabet)
+    maximum_word_scalars = max(
         (
-            len(json.dumps(term.word, ensure_ascii=True, separators=(",", ":")))
+            sum(len(letter) for letter in term.word)
             for term in (*left.terms, *right.terms)
         ),
-        default=2,
+        default=0,
     )
-    # The fixed term allowance covers object keys, brackets, commas, signs,
-    # and JSON quoting. Each output word is drawn unchanged from an input.
-    predicted_output_bytes = (
-        alphabet_bytes
+    # The fixed term allowance covers the term record, coefficient sign and
+    # separator, and word delimiters. Each output word is drawn unchanged
+    # from an input, so the bound counts allocated scalar and digit cells.
+    predicted_output_cells = (
+        alphabet_scalars
         + 64
         + result_term_bound
-        * (64 + maximum_word_bytes + 2 * (predicted_coefficient_digits + 1))
+        * (64 + maximum_word_scalars + 2 * (predicted_coefficient_digits + 1))
     )
-    if predicted_output_bytes > MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES:
+    if predicted_output_cells > MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS:
         _reject_resource(
             ("left", "right"),
-            "addition_output_bytes_budget",
-            "predicted serialized polynomial sum exceeds the "
-            f"{MAX_FREE_ALGEBRA_ADDITION_OUTPUT_BYTES}-byte bound",
+            "addition_output_cells_budget",
+            "predicted polynomial sum exceeds the "
+            f"{MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS}-cell allocation bound",
         )
     return left, right
 
@@ -510,12 +517,9 @@ def _admit_substitution_images(
     image_term_counts: dict[str, int] = {}
     image_word_lengths: dict[str, int] = {}
     image_terms: dict[str, tuple[FreeAlgebraTerm, ...]] = {}
-    maximum_encoded_letter_bytes = max(
-        (
-            len(json.dumps(letter, ensure_ascii=True))
-            for letter in substitution.target_alphabet
-        ),
-        default=2,
+    maximum_letter_scalars = max(
+        (len(letter) for letter in substitution.target_alphabet),
+        default=0,
     )
     for letter, image in zip(
         substitution.source_alphabet,
@@ -544,7 +548,7 @@ def _admit_substitution_images(
         image_terms,
         image_term_counts,
         image_word_lengths,
-        maximum_encoded_letter_bytes,
+        maximum_letter_scalars,
     )
 
 
@@ -554,7 +558,7 @@ def _preflight_substitution_expansion(
     image_terms: dict[str, tuple[FreeAlgebraTerm, ...]],
     image_term_counts: dict[str, int],
     image_word_lengths: dict[str, int],
-    maximum_encoded_letter_bytes: int,
+    maximum_letter_scalars: int,
 ) -> None:
     """Admit expansion, coefficient, work, and result envelopes up front."""
 
@@ -625,16 +629,17 @@ def _preflight_substitution_expansion(
             "substitution_coefficient_growth",
             "predicted exact coefficient growth exceeds the 64-digit limit",
         )
-    output_byte_bound = expansion_count * (
+    output_cell_bound = expansion_count * (
         128
-        + maximum_output_word_length * (maximum_encoded_letter_bytes + 4)
-        + 2 * MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+        + maximum_output_word_length * (maximum_letter_scalars + 4)
+        + 2 * (MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS + 1)
     )
-    if output_byte_bound > MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_BYTES:
+    if output_cell_bound > MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS:
         _reject_resource(
             ("polynomial",),
-            "substitution_output_bytes",
-            "predicted canonical output exceeds the 2 MB limit",
+            "substitution_output_cells",
+            "predicted canonical output exceeds the admitted "
+            f"{MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS}-cell allocation bound",
         )
 
 
@@ -706,7 +711,7 @@ def substitute_polynomial(
             "substitution_operand_term_budget",
             "source polynomial exceeds the 64-term substitution budget",
         )
-    images, counts, lengths, encoded_letter_bytes = _admit_substitution_images(
+    images, counts, lengths, letter_scalars = _admit_substitution_images(
         canonical_substitution
     )
     _preflight_substitution_expansion(
@@ -715,7 +720,7 @@ def substitute_polynomial(
         images,
         counts,
         lengths,
-        encoded_letter_bytes,
+        letter_scalars,
     )
     return _expand_polynomial_substitution(canonical_substitution, source, images)
 
@@ -750,7 +755,7 @@ def concatenate_words(
 def power_word(word: FreeAlgebraWord, exponent: int) -> FreeAlgebraWordPowerResult:
     """Return an admitted nonnegative concatenation power of a source word."""
 
-    value = _admit_word(word, label="word")
+    value = _admit_source_word(word, label="word")
     if (
         not isinstance(exponent, int)
         or isinstance(exponent, bool)
@@ -795,7 +800,14 @@ def compare_words(
 ) -> FreeAlgebraWordCompareResult:
     """Compare words in the algebra's degree-lexicographic monomial order."""
 
-    left_value, right_value = _admit_word_pair(left, right)
+    left_value = _admit_word(left, label="left")
+    right_value = _admit_word(right, label="right")
+    if left_value.alphabet != right_value.alphabet:
+        raise OperationDomainValidationError(
+            location=("right", "alphabet"),
+            code="free_algebra.word_alphabet_mismatch",
+            message="both words must use the same ordered generator alphabet",
+        )
     degree_comparison = cast(
         Literal[-1, 0, 1],
         (left_value.length > right_value.length)
@@ -916,7 +928,12 @@ def word_factors(word: FreeAlgebraWord) -> FreeAlgebraWordFactorsResult:
         for end in range(start, value.length + 1):
             factor = value.letters[start:end]
             positions_by_factor.setdefault(factor, []).append(start)
-    assert len(positions_by_factor) <= distinct_upper_bound
+    if len(positions_by_factor) > distinct_upper_bound:
+        _reject_resource(
+            ("word", "letters"),
+            "factor_distinct_count",
+            "distinct factors exceed the admitted output bound",
+        )
     factors = tuple(
         FreeAlgebraWordFactorOccurrences(letters=letters, positions=tuple(positions))
         for letters, positions in positions_by_factor.items()
@@ -1023,7 +1040,7 @@ def substitute_word(
             code="free_algebra.substitution_shape",
             message="the word substitution is not canonical",
         ) from exc
-    word_value = _admit_word(word, label="word")
+    word_value = _admit_source_word(word, label="word")
     if word_value.alphabet != substitution_value.source_alphabet:
         raise OperationDomainValidationError(
             location=("word", "alphabet"),
@@ -1207,7 +1224,7 @@ def ideal_generated_prefix(
         )
     predicted_basis = 0
     predicted_terms = 0
-    predicted_bytes = 0
+    predicted_cells = 0
     for generator in value.generators:
         generator_degree = max((len(term.word) for term in generator.terms), default=0)
         if generator_degree > degree:
@@ -1223,12 +1240,12 @@ def ideal_generated_prefix(
         predicted_terms += contexts * generator_terms
         # This is intentionally source-derived and conservative: every term
         # carries a coefficient and a word, plus the enclosing basis record.
-        term_bytes = (
+        term_cells = (
             2 * MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
             + degree * (MAX_FREE_ALGEBRA_LETTER_LENGTH + 8)
             + 128
         )
-        predicted_bytes += contexts * (generator_terms * term_bytes + 128)
+        predicted_cells += contexts * (generator_terms * term_cells + 128)
         if any(
             canonical_rational_component_digits(term.coefficient)
             > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
@@ -1251,11 +1268,11 @@ def ideal_generated_prefix(
             code="free_algebra.ideal_prefix_terms",
             message="ideal prefix aggregate terms exceed the admitted envelope",
         )
-    if predicted_bytes > MAX_FREE_ALGEBRA_IDEAL_PREFIX_SERIALIZED_BYTES:
+    if predicted_cells > MAX_FREE_ALGEBRA_IDEAL_PREFIX_CELLS:
         raise OperationResourceAdmissionError(
             location=("degree",),
-            code="free_algebra.ideal_prefix_serialized_size",
-            message="ideal prefix serialized aggregate exceeds the admitted envelope",
+            code="free_algebra.ideal_prefix_cells",
+            message="ideal prefix aggregate cells exceed the admitted envelope",
         )
     basis = _ideal_prefix(value, degree)
     return FreeAlgebraIdealPrefixResult.model_construct(
@@ -1364,30 +1381,24 @@ def _admit_component_resources(
                 f"{MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS}-digit result envelope"
             ),
         )
-    max_letter_json_bytes = max(
-        (len(json.dumps(letter, ensure_ascii=True)) for letter in alphabet), default=0
-    )
-    term_bytes = (
+    max_letter_scalars = max((len(letter) for letter in alphabet), default=0)
+    term_cells = (
         2 * MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
-        + degree * (max_letter_json_bytes + 8)
+        + degree * (max_letter_scalars + 8)
         + 128
     )
-    basis_bytes = rank_bound * ambient_dimension * term_bytes + 256
-    source_bytes = 256 + sum(
-        len(json.dumps(letter, ensure_ascii=True)) for letter in alphabet
-    )
+    basis_cells = rank_bound * ambient_dimension * term_cells + 256
+    source_cells = 256 + sum(len(letter) for letter in alphabet)
     for generator in value.generators:
-        source_bytes += 128
+        source_cells += 128
         for term in generator.terms:
-            source_bytes += 256 + sum(
-                len(json.dumps(letter, ensure_ascii=True)) + 2 for letter in term.word
-            )
-    result_bytes = basis_bytes + source_bytes
-    if result_bytes > MAX_FREE_ALGEBRA_IDEAL_COMPONENT_SERIALIZED_BYTES:
+            source_cells += 256 + sum(len(letter) + 2 for letter in term.word)
+    result_cells = basis_cells + source_cells
+    if result_cells > MAX_FREE_ALGEBRA_IDEAL_COMPONENT_CELLS:
         raise OperationResourceAdmissionError(
             location=("degree",),
-            code="free_algebra.component_serialized_size",
-            message="ideal component basis exceeds its admitted serialized-size bound",
+            code="free_algebra.component_cells",
+            message="ideal component basis exceeds its admitted cell-allocation bound",
         )
     return ambient_dimension
 
@@ -1685,14 +1696,6 @@ def _gs_prefix_generators(
 
     basis: list[FreeAlgebraPolynomial] = []
     for index, generator in enumerate(ideal.generators):
-        if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
-            len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH for term in generator.terms
-        ):
-            raise OperationResourceAdmissionError(
-                location=("ideal", "generators", index),
-                code="free_algebra.gs_generator_budget",
-                message="GS generator expansion exceeds the admitted envelope",
-            )
         if not generator.terms:
             continue
         generator_degree = len(generator.terms[0].word)
@@ -1703,6 +1706,15 @@ def _gs_prefix_generators(
                 message="degree-bounded GS completion requires homogeneous generators",
             )
         if generator_degree <= degree:
+            if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
+                len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH
+                for term in generator.terms
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("ideal", "generators", index),
+                    code="free_algebra.gs_generator_budget",
+                    message="GS generator expansion exceeds the admitted envelope",
+                )
             basis.append(generator)
     return basis
 
@@ -1853,7 +1865,7 @@ def ideal_membership(
 
 
 def _admit_quotient_profile(ideal: FreeAlgebraIdeal, degree: int) -> None:
-    """Preflight word enumeration and conservative serialized output size."""
+    """Preflight word enumeration and the conservative output allocation."""
 
     alphabet_size = len(ideal.alphabet)
     candidate_count = sum(alphabet_size**length for length in range(degree + 1))
@@ -1863,30 +1875,34 @@ def _admit_quotient_profile(ideal: FreeAlgebraIdeal, degree: int) -> None:
             "quotient_profile_search_budget",
             "quotient profile word search exceeds its admitted candidate budget",
         )
-    source_bytes = len(
-        json.dumps(
-            ideal.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":")
-        )
-    )
-    max_letter_bytes = max(
-        (len(json.dumps(letter, ensure_ascii=True)) for letter in ideal.alphabet),
-        default=2,
-    )
-    all_words_bytes = sum(
-        alphabet_size**length * (length * (max_letter_bytes + 1) + 32)
+    # The result echoes the ideal carrier, so bound its stored scalar and
+    # digit cells alongside the enumerated words and leading-word list.
+    source_cells = sum(len(letter) for letter in ideal.alphabet)
+    for generator in ideal.generators:
+        source_cells += 128
+        for term in generator.terms:
+            source_cells += (
+                128
+                + sum(len(letter) + 2 for letter in term.word)
+                + 2 * (MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS + 1)
+            )
+    max_letter_scalars = max((len(letter) for letter in ideal.alphabet), default=0)
+    all_words_cells = sum(
+        alphabet_size**length * (length * (max_letter_scalars + 1) + 32)
         for length in range(degree + 1)
     )
-    leading_words_bytes = MAX_FREE_ALGEBRA_RESULT_TERMS * (
-        degree * (max_letter_bytes + 1) + 32
+    # Leading words are distinct enumerated candidates of degree at most
+    # ``degree``, so ``candidate_count`` (not the polynomial result-term limit)
+    # bounds their cardinality.
+    leading_words_cells = candidate_count * (degree * (max_letter_scalars + 1) + 32)
+    output_cells = (
+        source_cells + all_words_cells + leading_words_cells + 512 * (degree + 1)
     )
-    output_bound = (
-        source_bytes + all_words_bytes + leading_words_bytes + 512 * (degree + 1)
-    )
-    if output_bound > MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES:
+    if output_cells > MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS:
         _reject_resource(
             ("degree",),
             "quotient_profile_output_budget",
-            "quotient profile exceeds its conservative serialized-output bound",
+            "quotient profile exceeds its admitted allocation-cell bound",
         )
 
 

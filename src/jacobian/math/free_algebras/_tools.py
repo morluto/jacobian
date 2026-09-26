@@ -262,7 +262,7 @@ TOOLS = (
             "ordered polynomial; distinct words such as xy and yx stay "
             "distinct. Each operand is limited to 64 terms of word length at "
             "most 32. Admission bounds the 128-term worst-case support, "
-            "coefficient growth, and a 2 MB serialized result before "
+            "coefficient growth, and a 150,000-cell output allocation before "
             "aggregation."
         ),
         request_type=FreeAlgebraPolynomialAddRequest,
@@ -375,7 +375,7 @@ TOOLS = (
     MathTool(
         operation_id="free_word.reverse.compute",
         title="Reverse a free-algebra word",
-        description="Reverse the ordered generator sequence while preserving its alphabet. Reversal is involutive and reverses product order.",
+        description="Reverse the ordered generator sequence while preserving its alphabet. Accepts canonical words up to 64 letters. Reversal is involutive and reverses product order.",
         request_type=FreeAlgebraWordRequest,
         result_type=FreeAlgebraWordReverseResult,
         run=_run_word_reverse,
@@ -392,7 +392,7 @@ TOOLS = (
     MathTool(
         operation_id="free_word.prefixes.compute",
         title="Return all prefixes with reconstruction suffixes",
-        description="Return every prefix of a source word, including empty and whole, with its complementary suffix so each split reconstructs the source word.",
+        description="Return every prefix of a word of up to 64 canonical letters, including empty and whole, with its complementary suffix so each split reconstructs the source word.",
         request_type=FreeAlgebraWordRequest,
         result_type=FreeAlgebraWordPrefixesResult,
         run=_run_word_prefixes,
@@ -413,7 +413,7 @@ TOOLS = (
     MathTool(
         operation_id="free_word.suffixes.compute",
         title="Return all suffixes with reconstruction prefixes",
-        description="Return every suffix of a source word, including empty and whole, with its complementary prefix so each split reconstructs the source word.",
+        description="Return every suffix of a word of up to 64 canonical letters, including empty and whole, with its complementary prefix so each split reconstructs the source word.",
         request_type=FreeAlgebraWordRequest,
         result_type=FreeAlgebraWordSuffixesResult,
         run=_run_word_suffixes,
@@ -458,7 +458,7 @@ TOOLS = (
     MathTool(
         operation_id="free_word.factors.compute",
         title="Enumerate contiguous free-word factors",
-        description="Return each distinct contiguous factor once with every source start position, including the empty factor at every boundary. Preflight at most 561 occurrences and bounded aggregate factor-letter cells before enumeration.",
+        description="Return each distinct contiguous factor once with every source start position, including the empty factor at every boundary. Words carry up to 64 canonical letters. Preflight at most 2145 occurrences and bounded aggregate factor-letter cells before enumeration.",
         request_type=FreeAlgebraWordRequest,
         result_type=FreeAlgebraWordFactorsResult,
         run=_run_word_factors,
@@ -540,7 +540,7 @@ TOOLS = (
             "unital QQ-algebra homomorphism between free associative algebras. "
             "Source and target ordered alphabets are explicit, and a generator "
             "may map to zero. Expansion count, word length, exact coefficient "
-            "growth, work, support, and serialized output are admitted before "
+            "growth, work, support, and output allocation are admitted before "
             "word-by-word expansion."
         ),
         request_type=FreeAlgebraPolynomialSubstitutionRequest,
@@ -737,7 +737,7 @@ TOOLS = (
             "ideal I in QQ<X>. This direct finite linear-algebra computation "
             "does not depend on Groebner-Shirshov completion. It admits at most "
             "128 ambient words, 256 context multiples, 32768 matrix cells, "
-            "64-digit exact basis coefficients, and a 2 MB serialized result."
+            "64-digit exact basis coefficients, and a 150,000-cell result allocation."
         ),
         request_type=FreeAlgebraIdealDegreeComponentRequest,
         result_type=FreeAlgebraIdealDegreeComponentResult,

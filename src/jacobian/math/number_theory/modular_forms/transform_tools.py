@@ -67,8 +67,8 @@ TOOLS: MathTools = (
         operation_id="modular_form.space.sturm_bound.compute",
         title="Compute a Gamma0 Sturm bound",
         description=(
-            "Return the exact bounded Sturm integer for any represented "
-            "Gamma0 space over QQ or its declared rational cyclotomic "
+            "Return the exact bounded Sturm integer for represented Gamma0 "
+            "spaces of level at most 10,000 over QQ or their declared rational cyclotomic "
             "coefficient field. The bound depends on level and weight; "
             "the exact character and coefficient parent remain attached. "
             "This operation does not compare forms."

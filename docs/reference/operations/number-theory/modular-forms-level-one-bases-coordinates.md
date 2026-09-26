@@ -41,7 +41,7 @@ Other levels and cusp subspaces outside the stated basis families remain
 unsupported by these rational basis and coordinate operations.
 
 The public Sturm operation has a wider, parent-only contract than the basis
-operations: for any represented `Gamma0(N)` space over `QQ` or its declared
+operations: for represented `Gamma0(N)` spaces of level at most 10,000 over `QQ` or their declared
 rational cyclotomic coefficient field, it returns
 `floor(k [SL2(Z):Gamma0(N)] / 12)` and retains the exact character and field in
 the result. The formula does not depend on the character or coefficient field;

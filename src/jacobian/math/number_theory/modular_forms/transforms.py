@@ -437,6 +437,18 @@ def _sturm_space(space: object) -> ModularFormSpace:
     raw_character = getattr(space, "character", None)
     if isinstance(raw_character, DirichletCharacter):
         raw_group = getattr(raw_character, "group", None)
+        raw_axes = (
+            getattr(raw_group, "invariant_factors", None),
+            getattr(raw_group, "generators", None),
+            getattr(raw_group, "generator_orders", None),
+            getattr(raw_character, "coordinates", None),
+        )
+        if any(type(axis) is not tuple or len(axis) > 32 for axis in raw_axes):
+            raise OperationResourceAdmissionError(
+                location=("space", "character"),
+                code="modular_form.character_group_bound",
+                message="character group axes exceed the bounded Sturm parent envelope",
+            )
         raw_units = getattr(raw_group, "unit_residues", None)
         raw_coordinates = getattr(raw_group, "unit_coordinates", None)
         if type(raw_units) is not tuple or type(raw_coordinates) is not tuple:

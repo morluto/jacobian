@@ -153,6 +153,7 @@ def distance_profile(
     A mask's bit ``i`` records whether ground index ``i`` is present. The
     profile is complete over all masks and counts every nearest feasible set.
     """
+    request_checkpoint("before delta-matroid distance profile")
 
     try:
         if not isinstance(delta_matroid, FiniteDeltaMatroid):

@@ -128,6 +128,20 @@ def test_profile_rejects_inconsistent_histogram_and_coerced_integers() -> None:
             PublicDeltaMatroidDistanceProfile.model_validate(malformed)
 
 
+def test_profile_binds_nearest_counts_and_zero_masks_to_source() -> None:
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((),))
+    for distances, counts in (((1, 0), (1, 1)), ((0, 1), (2, 1))):
+        with pytest.raises(ValueError):
+            PublicDeltaMatroidDistanceProfile.model_validate(
+                {
+                    "delta_matroid": source.model_dump(),
+                    "distance_by_mask": distances,
+                    "nearest_feasible_count_by_mask": counts,
+                    "distance_histogram": (1, 1),
+                }
+            )
+
+
 def test_empty_ground_profile_and_json_round_trip() -> None:
     source = FiniteDeltaMatroid(ground=(), feasible=((),))
     result = _distance_profile(DeltaMatroidDistanceProfileRequest(delta_matroid=source))

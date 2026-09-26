@@ -88,6 +88,14 @@ def test_every_small_symmetric_matrix_and_twist_matches_independent_oracle() -> 
                 assert actual == expected
 
 
+@pytest.mark.parametrize("bad", [True, 1.0])
+def test_binary_matrix_rejects_coercible_non_integer_entries(bad: object) -> None:
+    with pytest.raises(ValidationError):
+        BinarySymmetricMatrix.model_validate(
+            {"ground": ["e0"], "entries": [[bad]]}
+        )
+
+
 def test_eight_axis_identity_matrix_reaches_the_admitted_output_boundary() -> None:
     size = 8
     matrix = BinarySymmetricMatrix(

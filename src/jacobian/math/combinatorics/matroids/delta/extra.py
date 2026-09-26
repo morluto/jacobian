@@ -64,7 +64,10 @@ class DeltaMatroidMinorResult(StrictModel):
     minor: FiniteDeltaMatroid
 
 
-BinaryMatrixRow = Annotated[tuple[int, ...], Field(max_length=MAX_BINARY_GROUND)]
+BinaryMatrixEntry = Annotated[StrictInt, Field(ge=0, le=1)]
+BinaryMatrixRow = Annotated[
+    tuple[BinaryMatrixEntry, ...], Field(max_length=MAX_BINARY_GROUND)
+]
 
 
 class BinarySymmetricMatrix(StrictModel):

@@ -2,11 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Self
-
-from pydantic import model_validator
-from pydantic_core import PydanticCustomError
-
 from jacobian._models import StrictModel
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.affine_semigroups.semigroup import AffineConfiguration
@@ -20,69 +15,6 @@ class AffineGroupLattice(StrictModel):
 
     configuration: AffineConfiguration
     lattice: IntegerLattice
-    basis_generator_coordinates: IntegerMatrix
-    generator_lattice_coordinates: IntegerMatrix
-
-    @model_validator(mode="after")
-    def _binding_shape(self) -> Self:
-        if self.lattice.ambient_dimension != self.configuration.rows:
-            raise PydanticCustomError(
-                "affine_semigroup.group_lattice_shape",
-                "group lattice ambient dimension must match configuration rows",
-            )
-        rank = self.lattice.basis.row_count
-        generators = tuple(
-            tuple(
-                self.configuration.entries[row][column]
-                for row in range(self.configuration.rows)
-            )
-            for column in range(self.configuration.columns)
-        )
-        basis = self.lattice.basis.entries
-        if (
-            self.basis_generator_coordinates.row_count != rank
-            or self.basis_generator_coordinates.column_count
-            != self.configuration.columns
-            or self.generator_lattice_coordinates.row_count
-            != self.configuration.columns
-            or self.generator_lattice_coordinates.column_count != rank
-        ):
-            raise PydanticCustomError(
-                "affine_semigroup.group_lattice_coordinates_shape",
-                "lattice transport matrices must match generator and basis axes",
-            )
-        for i in range(rank):
-            if (
-                tuple(
-                    sum(
-                        self.basis_generator_coordinates.entries[i][j]
-                        * generators[j][k]
-                        for j in range(self.configuration.columns)
-                    )
-                    for k in range(self.configuration.rows)
-                )
-                != basis[i]
-            ):
-                raise PydanticCustomError(
-                    "affine_semigroup.group_lattice_source_inclusion",
-                    "every returned basis vector must be an integer combination of source generators",
-                )
-        for i, generator in enumerate(generators):
-            if (
-                tuple(
-                    sum(
-                        self.generator_lattice_coordinates.entries[i][j] * basis[j][k]
-                        for j in range(rank)
-                    )
-                    for k in range(self.configuration.rows)
-                )
-                != generator
-            ):
-                raise PydanticCustomError(
-                    "affine_semigroup.group_lattice_generator_inclusion",
-                    "every source generator must be an integer combination of the returned basis",
-                )
-        return self
 
 
 def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLattice:
@@ -105,12 +37,11 @@ def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLatt
             message="configuration is malformed",
         ) from exc
 
-    # Rows of A^T are the source generators. HNF preserves their integer span.
     generators = [
         [config.entries[row][column] for row in range(config.rows)]
         for column in range(config.columns)
     ]
-    basis, transformation = hermite_normal_form(generators)
+    basis, _ = hermite_normal_form(generators)
     basis_rows = tuple(
         row_values
         for row_values in (
@@ -125,30 +56,7 @@ def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLatt
         entries=basis_rows,
     )
     lattice = IntegerLattice(ambient_dimension=config.rows, basis=basis_matrix)
-    rank = len(basis_rows)
-    inverse = transformation.inv()
-    basis_source_coordinates = IntegerMatrix(
-        row_count=rank,
-        column_count=config.columns,
-        entries=tuple(
-            tuple(int(transformation[row, column]) for column in range(config.columns))
-            for row in range(rank)
-        ),
-    )
-    generator_basis_coordinates = IntegerMatrix(
-        row_count=config.columns,
-        column_count=rank,
-        entries=tuple(
-            tuple(int(inverse[row, column]) for column in range(rank))
-            for row in range(config.columns)
-        ),
-    )
-    return AffineGroupLattice(
-        configuration=config,
-        lattice=lattice,
-        basis_generator_coordinates=basis_source_coordinates,
-        generator_lattice_coordinates=generator_basis_coordinates,
-    )
+    return AffineGroupLattice(configuration=config, lattice=lattice)
 
 
 __all__ = ["AffineGroupLattice", "compute_group_lattice"]

@@ -37,6 +37,7 @@ from jacobian.math.affine_semigroups.operations import (
 )
 from jacobian.math.affine_semigroups.semigroup import (
     AffineConfiguration,
+    AffineFactorization,
     AffineFiber,
     AffineFiberGraph,
     AffineHilbertBasis,
@@ -44,6 +45,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     PositiveAffineSemigroup,
     PositiveGradingResult,
     construct,
+    evaluate_factorization,
     fiber,
     fiber_graph,
     hilbert_basis,
@@ -53,6 +55,7 @@ from jacobian.math.affine_semigroups.semigroup import (
 
 __all__ = [
     "AffineConfiguration",
+    "AffineFactorization",
     "AffineFiber",
     "AffineFiberGraph",
     "AffineGroupLattice",
@@ -71,6 +74,7 @@ __all__ = [
     "PositiveGradingResult",
     "compute_group_lattice",
     "construct",
+    "evaluate_factorization",
     "fiber",
     "fiber_graph",
     "fundamental_holes",

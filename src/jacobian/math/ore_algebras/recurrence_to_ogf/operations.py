@@ -132,7 +132,7 @@ def _canonical_request(
 def _admit_transform(
     request: RecurrenceOGFEquationRequest,
     operator: ShiftOreOperator,
-) -> tuple[list[tuple[int, _Poly]], int]:
+) -> tuple[list[tuple[int, _Poly]], int, dict[tuple[int, int], Fraction]]:
     """Bound output shape, coefficient height, work, and bytes before expansion."""
     polynomials: list[tuple[int, _Poly]] = []
     maximum_degree = 0
@@ -164,9 +164,6 @@ def _admit_transform(
             code="ore_algebra.recurrence_ogf_differential_order",
             message="the recurrence coefficient degree exceeds the differential-operator order bound",
         )
-    # Boundary forcing has degree at most r-1 independently of coefficient
-    # degree; the operator term degree is r-i+deg(q_i).
-    maximum_output_degree = max(maximum_output_degree, max(operator.order - 1, 0))
     if maximum_output_degree > MAX_SHIFT_COEFFICIENT_DEGREE:
         raise OperationResourceAdmissionError(
             location=("recurrence", "terms"),
@@ -180,8 +177,7 @@ def _admit_transform(
             message="recurrence to OGF conversion exceeds its admitted exact-arithmetic work",
         )
     values = [value.as_fraction() for value in request.initial_coefficients.values]
-    scalar_values = [*input_scalars, *values]
-    denominator_bits = sum(value.denominator.bit_length() for value in scalar_values)
+    denominator_bits = sum(value.denominator.bit_length() for value in input_scalars)
     numerator_bits = max(
         (abs(value.numerator).bit_length() for value in input_scalars), default=1
     )
@@ -189,16 +185,19 @@ def _admit_transform(
     # annihilated by q_i(-i), or canceled by its rational denominator, contributes
     # no output coefficient and must not consume the carrier's numerator budget.
     boundary_product_bits = 1
+    boundary_degree = -1
+    boundary_evaluations: dict[tuple[int, int], Fraction] = {}
+    boundary_degree = -1
     for shift, polynomial in polynomials:
         for index in range(shift):
             evaluation = _evaluate_polynomial(polynomial, index - shift)
+            boundary_evaluations[(shift, index)] = evaluation
             if evaluation:
                 product = values[index] * evaluation
                 if product:
-                    boundary_product_bits = max(
-                        boundary_product_bits,
-                        abs(product.numerator).bit_length(),
-                    )
+                    boundary_degree = max(boundary_degree, operator.order - shift + index)
+                    boundary_product_bits = max(boundary_product_bits, abs(product.numerator).bit_length())
+                    denominator_bits += product.denominator.bit_length()
     # Evaluating a degree-d polynomial at integer points of magnitude at most r
     # adds at most d*ceil(log2(r+1)) bits. The shift order alone does not imply
     # coefficient growth (e.g. a_(n+r)=0 has unit coefficients throughout).
@@ -210,6 +209,8 @@ def _admit_transform(
         + 8 * maximum_degree
         + evaluation_growth_bits
     )
+    # Only nonzero boundary products contribute output monomials.
+    maximum_output_degree = max(maximum_output_degree, boundary_degree)
     output_digits = _digits_for_bit_bound(growth_bits)
     if output_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
         raise OperationResourceAdmissionError(
@@ -228,7 +229,7 @@ def _admit_transform(
             code="ore_algebra.recurrence_ogf_output_bytes",
             message="the OGF differential equation exceeds its serialized output bound",
         )
-    return polynomials, maximum_degree
+    return polynomials, maximum_degree, boundary_evaluations
 
 
 def _expand_equation(
@@ -236,6 +237,7 @@ def _expand_equation(
     initial_values: tuple[Fraction, ...],
     shift_order: int,
     maximum_degree: int,
+    boundary_evaluations: dict[tuple[int, int], Fraction],
 ) -> tuple[DifferentialOreOperator, RationalFunction]:
     """Expand q_i(Theta-i), where Theta=xD, plus its initial polynomial."""
     stirling: list[list[int]] = [[1]]
@@ -266,9 +268,7 @@ def _expand_equation(
                     if not target[degree]:
                         del target[degree]
         for index in range(shift):
-            contribution = initial_values[index] * _evaluate_polynomial(
-                polynomial, index - shift
-            )
+            contribution = initial_values[index] * boundary_evaluations[(shift, index)]
             if contribution:
                 degree = shift_order - shift + index
                 forcing[degree] = forcing.get(degree, Fraction(0)) + contribution
@@ -304,12 +304,13 @@ def polynomial_recurrence_to_ogf_equation(
     assert analytic convergence.
     """
     request, operator = _canonical_request(recurrence, initial_coefficients)
-    polynomials, maximum_degree = _admit_transform(request, operator)
+    polynomials, maximum_degree, boundary_evaluations = _admit_transform(request, operator)
     differential_operator, forcing = _expand_equation(
         polynomials,
         tuple(value.as_fraction() for value in request.initial_coefficients.values),
         operator.order,
         maximum_degree,
+        boundary_evaluations,
     )
     return RecurrenceOGFEquation._from_kernel(
         operator,

@@ -6,7 +6,12 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from jacobian._execution import BackendFailureReason, OperationBackendError
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationWorkLedger,
+    request_checkpoint,
+)
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -38,6 +43,13 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.languages.regular.values import (
+    MAX_NFA_OUTPUT_BYTES,
+    MAX_NFA_STATES,
+    MAX_NFA_TRANSITIONS,
+    NFA,
+    NFATransition,
+)
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -67,6 +79,7 @@ __all__ = [
     "identity_transducer",
     "invert_rational",
     "minimize_subsequential",
+    "project_rational_relation",
     "reachable_state_witnesses",
     "reachable_states",
     "replay_rational_path",
@@ -83,6 +96,9 @@ MAX_MINIMIZE_SAMPLE_WORDS = 20000
 MAX_MORPHISM_TRANSITION_CELLS = 32 * 512
 MAX_MORPHISM_TRANSDUCER_BYTES = 128 * 1024
 MAX_FST_IDENTITY_RESULT_BYTES = 64 * 1024
+MAX_RATIONAL_PROJECTION_WORK = 4_000_000
+MAX_RATIONAL_FIBER_WORK = 25_000_000
+MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES = 128_000_000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -872,6 +888,455 @@ def invert_rational(
             )
             for e in transducer.edges
         ),
+    )
+
+
+def project_rational_relation(
+    transducer: RationalTransducer,
+    tape: Literal["input", "output"],
+) -> NFA:
+    """Return the regular projection of a finite rational relation.
+
+    Every accepting transducer path contributes its selected tape word.  The
+    result remains nondeterministic: distinct paths and multiple words on the
+    other tape are not collapsed by pretending the relation is a function.
+    Empty edge labels become epsilon transitions, and multi-symbol labels are
+    expanded into paths with fresh intermediate states.
+    """
+    transducer = _admit_rational_transducer(transducer)
+    if tape not in ("input", "output"):
+        _reject("projection_tape", "tape must be 'input' or 'output'", "tape")
+
+    is_input = tape == "input"
+    alphabet_size = (
+        transducer.input_alphabet_size if is_input else transducer.output_alphabet_size
+    )
+    alphabet_id = (
+        transducer.input_alphabet_id if is_input else transducer.output_alphabet_id
+    )
+    alphabet = transducer.input_alphabet if is_input else transducer.output_alphabet
+    alphabet_context_bytes = 128
+    if alphabet is not None:
+        alphabet_context_bytes += sum(
+            6 * len(symbol) + 2 for symbol in alphabet.symbols
+        )
+    if alphabet_id is not None:
+        alphabet_context_bytes += 6 * len(alphabet_id) + 2
+    labels = tuple(
+        edge.input_label if is_input else edge.output_label for edge in transducer.edges
+    )
+    label_cells = sum(map(len, labels))
+    bridge_count = (
+        len(transducer.initial_states) if len(transducer.initial_states) > 1 else 0
+    )
+    state_count = transducer.state_count + (1 if bridge_count else 0)
+    transition_count = bridge_count
+    for label in labels:
+        if label:
+            state_count += len(label) - 1
+            transition_count += len(label)
+        else:
+            transition_count += 1
+
+    # Account for the canonical value, each expanded state/edge, source labels,
+    # and the construction passes before allocating the result lists.
+    work_bound = (
+        transducer.state_count
+        + len(transducer.edges)
+        + label_cells
+        + state_count
+        + transition_count
+    )
+    output_bytes_bound = (
+        state_count * 32
+        + transition_count * 128
+        + label_cells * 8
+        + alphabet_context_bytes
+        + 1024
+    )
+    if (
+        state_count > MAX_NFA_STATES
+        or transition_count > MAX_NFA_TRANSITIONS
+        or work_bound > MAX_RATIONAL_PROJECTION_WORK
+        or output_bytes_bound > MAX_NFA_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "tape"),
+            code="finite_state_transducer.relation_projection_bound_exceeded",
+            message="rational relation projection exceeds its NFA expansion bound",
+        )
+
+    initial_state = (
+        transducer.state_count if bridge_count else transducer.initial_states[0]
+    )
+    next_state = transducer.state_count + (1 if bridge_count else 0)
+    transitions: list[NFATransition] = []
+    if bridge_count:
+        for source in transducer.initial_states:
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=initial_state,
+                    symbol=None,
+                    target=source,
+                )
+            )
+
+    for edge_index, (edge, label) in enumerate(
+        zip(transducer.edges, labels, strict=True)
+    ):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation projection expansion")
+        if not label:
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=edge.source,
+                    symbol=None,
+                    target=edge.target,
+                )
+            )
+            continue
+        source = edge.source
+        for index, symbol in enumerate(label):
+            target = edge.target if index == len(label) - 1 else next_state
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=source,
+                    symbol=symbol,
+                    target=target,
+                )
+            )
+            if target == next_state:
+                next_state += 1
+            source = target
+
+    request_checkpoint("before rational relation projection result construction")
+    return NFA(
+        state_count=state_count,
+        alphabet_size=alphabet_size,
+        alphabet_id=alphabet_id,
+        alphabet=alphabet,
+        transitions=tuple(transitions),
+        initial_state=initial_state,
+        accepting_states=tuple(sorted(transducer.accepting_states)),
+    )
+
+
+def _matching_positions(word: tuple[int, ...], pattern: tuple[int, ...]) -> bytearray:
+    """Return matching offsets as a compact bitset using linear-time KMP."""
+
+    bitset_bytes = (len(word) + 8) // 8
+    if not pattern:
+        starts = bytearray([0xFF]) * bitset_bytes
+        valid_bits_in_last_byte = (len(word) + 1) % 8
+        if valid_bits_in_last_byte:
+            starts[-1] &= (1 << valid_bits_in_last_byte) - 1
+        return starts
+    prefix = [0] * len(pattern)
+    matched = 0
+    for index in range(1, len(pattern)):
+        while matched and pattern[index] != pattern[matched]:
+            matched = prefix[matched - 1]
+        if pattern[index] == pattern[matched]:
+            matched += 1
+        prefix[index] = matched
+    starts = bytearray(bitset_bytes)
+    matched = 0
+    for index, symbol in enumerate(word):
+        while matched and symbol != pattern[matched]:
+            matched = prefix[matched - 1]
+        if symbol == pattern[matched]:
+            matched += 1
+        if matched == len(pattern):
+            start = index - len(pattern) + 1
+            starts[start >> 3] |= 1 << (start & 7)
+            matched = prefix[matched - 1]
+    return starts
+
+
+def rational_relation_outputs_for_input(
+    transducer: RationalTransducer, input_word: tuple[int, ...]
+) -> NFA:
+    """Return an epsilon-NFA for the exact output fiber at ``input_word``.
+
+    Product states pair a transducer state with the consumed input position.
+    A transducer edge is available only where its full input label matches;
+    its output label is expanded into NFA edges. Input-epsilon cycles therefore
+    remain cycles, including output-producing cycles that represent infinite
+    fibers. The result is never an enumerated or determinized language.
+    """
+
+    transducer = _admit_rational_transducer(transducer)
+    _validate_rational_fiber_input(transducer, input_word)
+    matching, work_bound = _admit_rational_fiber(transducer, input_word)
+    return _build_rational_fiber(transducer, input_word, matching, work_bound)
+
+
+def _validate_rational_fiber_input(
+    transducer: RationalTransducer, input_word: tuple[int, ...]
+) -> None:
+    if transducer.output_alphabet is None:
+        _reject(
+            "relation_fiber_output_parent_missing",
+            "the output alphabet must be explicit so the returned NFA has a parent",
+            "transducer",
+            "output_alphabet",
+        )
+    if type(input_word) is not tuple or any(
+        type(symbol) is not int or not 0 <= symbol < transducer.input_alphabet_size
+        for symbol in input_word
+    ):
+        _reject(
+            "relation_fiber_input_word",
+            "input_word must be bounded and use the transducer input alphabet",
+            "input_word",
+        )
+
+
+def _reachable_fiber_bounds(
+    transducer: RationalTransducer,
+    matching_by_label: dict[tuple[int, ...], bytearray],
+    outgoing: list[list[RationalEdge]],
+) -> tuple[int, int, int, int]:
+    """Measure eligible fiber growth from reachable product states only.
+
+    Returns ``(reachable_pairs, eligible_edge_positions, output_transition_bound,
+    output_intermediate_bound)``. The Cartesian product
+    ``state_count * (word_length + 1)`` is only an upper bound, so a dead
+    relation whose consumed positions never advance stays cheap even when the
+    Cartesian bound alone would exceed the NFA state limit.
+    """
+
+    reachable_pairs = 0
+    eligible_edge_positions = 0
+    output_transition_bound = 0
+    output_intermediate_bound = 0
+    seen_pairs: set[tuple[int, int]] = set()
+    pending: deque[tuple[int, int]] = deque()
+    for initial_state in transducer.initial_states:
+        pair = (initial_state, 0)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            pending.append(pair)
+    while pending:
+        if reachable_pairs % 4096 == 0:
+            request_checkpoint("during rational relation reachability admission")
+        state, position = pending.popleft()
+        reachable_pairs += 1
+        if reachable_pairs > MAX_NFA_STATES:
+            raise OperationResourceAdmissionError(
+                location=("transducer", "input_word"),
+                code="finite_state_transducer.relation_fiber_bound_exceeded",
+                message=(
+                    "rational relation output fiber exceeds its product, work, "
+                    "intermediate-allocation, or NFA output bound"
+                ),
+            )
+        for edge in outgoing[state]:
+            match_bits = matching_by_label[edge.input_label]
+            if not match_bits[position >> 3] & (1 << (position & 7)):
+                continue
+            eligible_edge_positions += 1
+            output_length = len(edge.output_label)
+            output_transition_bound += max(1, output_length)
+            output_intermediate_bound += max(0, output_length - 1)
+            target = (edge.target, position + len(edge.input_label))
+            if target not in seen_pairs:
+                seen_pairs.add(target)
+                pending.append(target)
+    return (
+        reachable_pairs,
+        eligible_edge_positions,
+        output_transition_bound,
+        output_intermediate_bound,
+    )
+
+
+def _admit_rational_fiber(
+    transducer: RationalTransducer, input_word: tuple[int, ...]
+) -> tuple[dict[tuple[int, ...], bytearray], int]:
+    request_checkpoint("before rational relation fiber admission")
+    word_length = len(input_word)
+    patterns = {edge.input_label for edge in transducer.edges}
+    match_work_bound = sum(
+        2 * len(pattern) + 2 * word_length for pattern in patterns
+    ) + sum(len(edge.input_label) for edge in transducer.edges)
+    match_position_bound = sum(
+        word_length + 1 if not pattern else max(0, word_length - len(pattern) + 1)
+        for pattern in patterns
+    )
+    candidate_edge_bound = len(transducer.edges) * (word_length + 1)
+    match_work_bound += match_position_bound * 8
+    if (
+        match_work_bound + candidate_edge_bound > MAX_RATIONAL_FIBER_WORK
+        or len(patterns) * 256 > MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "input_word"),
+            code="finite_state_transducer.relation_fiber_work_bound_exceeded",
+            message="rational relation fiber matching exceeds its admitted work bound",
+        )
+
+    matching_by_label: dict[tuple[int, ...], bytearray] = {}
+    for pattern_index, pattern in enumerate(patterns):
+        if pattern_index % 64 == 0:
+            request_checkpoint("during rational relation input-label matching")
+        matching_by_label[pattern] = _matching_positions(input_word, pattern)
+
+    outgoing: list[list[RationalEdge]] = [[] for _ in range(transducer.state_count)]
+    for edge in transducer.edges:
+        outgoing[edge.source].append(edge)
+
+    (
+        reachable_pairs,
+        eligible_edge_positions,
+        output_transition_bound,
+        output_intermediate_bound,
+    ) = _reachable_fiber_bounds(transducer, matching_by_label, outgoing)
+    state_bound = 1 + reachable_pairs + output_intermediate_bound
+    bridge_count = len(transducer.initial_states)
+    transition_bound = output_transition_bound + bridge_count
+    work_bound = (
+        match_work_bound
+        + candidate_edge_bound
+        + eligible_edge_positions
+        + output_transition_bound
+        + state_bound
+        + transition_bound
+    )
+    alphabet_context_bytes = 128
+    if transducer.output_alphabet is not None:
+        alphabet_context_bytes += sum(
+            6 * len(symbol) + 2 for symbol in transducer.output_alphabet.symbols
+        )
+    if transducer.output_alphabet_id is not None:
+        alphabet_context_bytes += 6 * len(transducer.output_alphabet_id) + 2
+    output_bytes_bound = (
+        state_bound * 32 + transition_bound * 128 + alphabet_context_bytes + 1024
+    )
+    intermediate_bytes_bound = (
+        reachable_pairs * 192
+        + candidate_edge_bound * 8
+        + len(patterns) * 256
+        + output_intermediate_bound * 64
+        + transition_bound * 256
+    )
+    if (
+        state_bound > MAX_NFA_STATES
+        or transition_bound > MAX_NFA_TRANSITIONS
+        or work_bound > MAX_RATIONAL_FIBER_WORK
+        or output_bytes_bound > MAX_NFA_OUTPUT_BYTES
+        or intermediate_bytes_bound > MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "input_word"),
+            code="finite_state_transducer.relation_fiber_bound_exceeded",
+            message=(
+                "rational relation output fiber exceeds its product, work, "
+                "intermediate-allocation, or NFA output bound"
+            ),
+        )
+    request_checkpoint("after rational relation fiber admission")
+    return matching_by_label, work_bound
+
+
+def _build_rational_fiber(
+    transducer: RationalTransducer,
+    input_word: tuple[int, ...],
+    matching_by_label: dict[tuple[int, ...], bytearray],
+    work_bound: int,
+) -> NFA:
+    word_length = len(input_word)
+    ledger = OperationWorkLedger(work_bound)
+    outgoing: list[list[RationalEdge]] = [[] for _ in range(transducer.state_count)]
+    for edge_index, edge in enumerate(transducer.edges):
+        if edge_index % 256 == 0:
+            request_checkpoint("preparing rational relation fiber expansion")
+        outgoing[edge.source].append(edge)
+
+    pairs: list[tuple[int, int]] = []
+    pair_ids: dict[tuple[int, int], int] = {}
+    queue: deque[tuple[int, int]] = deque()
+
+    def discover(pair: tuple[int, int]) -> int:
+        existing = pair_ids.get(pair)
+        if existing is not None:
+            return existing
+        state_id = len(pairs) + 1
+        pair_ids[pair] = state_id
+        pairs.append(pair)
+        queue.append(pair)
+        return state_id
+
+    transitions: list[NFATransition] = []
+    for initial_index, state in enumerate(transducer.initial_states):
+        if initial_index % 256 == 0:
+            request_checkpoint("initializing rational relation fiber expansion")
+        target = discover((state, 0))
+        transitions.append(
+            NFATransition(
+                transition_id=len(transitions), source=0, symbol=None, target=target
+            )
+        )
+    accepting: set[int] = set()
+    processed_pairs = 0
+    while queue:
+        if processed_pairs % 64 == 0:
+            request_checkpoint("during rational relation fiber product exploration")
+        processed_pairs += 1
+        state, position = queue.popleft()
+        source_id = pair_ids[(state, position)]
+        if position == word_length and state in transducer.accepting_states:
+            accepting.add(source_id)
+        for edge in outgoing[state]:
+            ledger.charge()
+            match_bits = matching_by_label[edge.input_label]
+            if not match_bits[position >> 3] & (1 << (position & 7)):
+                continue
+            next_position = position + len(edge.input_label)
+            target_id = discover((edge.target, next_position))
+            if not edge.output_label:
+                transitions.append(
+                    NFATransition(
+                        transition_id=len(transitions),
+                        source=source_id,
+                        symbol=None,
+                        target=target_id,
+                    )
+                )
+                ledger.charge()
+                continue
+            current_id = source_id
+            for index, symbol in enumerate(edge.output_label):
+                last = index == len(edge.output_label) - 1
+                next_id = target_id if last else len(pairs) + 1
+                if not last:
+                    pairs.append((-1, -1))
+                transitions.append(
+                    NFATransition(
+                        transition_id=len(transitions),
+                        source=current_id,
+                        symbol=symbol,
+                        target=next_id,
+                    )
+                )
+                current_id = next_id
+                ledger.charge()
+    request_checkpoint("before rational relation fiber result construction")
+    result_transitions = tuple(transitions)
+    request_checkpoint("after rational relation fiber transition materialization")
+    result_accepting = tuple(sorted(accepting))
+    request_checkpoint("after rational relation fiber accepting-state construction")
+    return NFA(
+        state_count=1 + len(pairs),
+        alphabet_size=transducer.output_alphabet_size,
+        alphabet_id=transducer.output_alphabet_id,
+        alphabet=transducer.output_alphabet,
+        transitions=result_transitions,
+        initial_state=0,
+        accepting_states=result_accepting,
     )
 
 

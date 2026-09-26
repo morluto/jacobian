@@ -14,6 +14,7 @@ import rfc8785
 from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
@@ -31,6 +32,12 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldPresentation,
 )
 from jacobian.math.groups.abelian._models import AbelianPresentation
+from jacobian.math.polynomials._models import IntegerPolynomial
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -591,6 +598,85 @@ class FiniteFieldCardinalityResult(StrictModel):
     frobenius_polynomial: tuple[int, int, int]
 
 
+class FiniteFieldZetaPolynomialResult(StrictModel):
+    """Numerator of the zeta function of one finite-field elliptic curve.
+
+    ``numerator`` is the dense integral polynomial ``1 - a*T + q*T^2``;
+    ``IntegerPolynomial`` stores coefficients in descending degree order.
+    The curve and count fields retain the source context and state the exact
+    relation from which the numerator was obtained.
+    """
+
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    numerator: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_numerator_identity(self) -> Self:
+        q = int(self.curve.field.characteristic**self.curve.field.degree)
+        if self.trace != q + 1 - self.cardinality or self.numerator.coefficients != (
+            q,
+            -self.trace,
+            1,
+        ):
+            raise _validation_error(
+                "zeta_polynomial_identity",
+                "zeta numerator must be 1 - trace*T + q*T^2 for the exact curve count",
+            )
+        return self
+
+
+def _zeta_rational_function(q: int, trace: int) -> RationalFunction:
+    """Build the normalized QQ(T) form of the finite-field zeta function."""
+
+    def rational_term(
+        numerator: int, denominator: int, degree: int
+    ) -> RationalPolynomialTerm:
+        return RationalPolynomialTerm(
+            coefficient=CanonicalRational.from_integer_ratio(numerator, denominator),
+            exponents=(degree,),
+        )
+
+    numerator_terms = [rational_term(1, 1, 2)]
+    if trace:
+        numerator_terms.append(rational_term(-trace, q, 1))
+    numerator_terms.append(rational_term(1, q, 0))
+    denominator_terms = (
+        rational_term(1, 1, 2),
+        rational_term(-(q + 1), q, 1),
+        rational_term(1, q, 0),
+    )
+    return RationalFunction._from_kernel(
+        variables=("T",),
+        numerator=SparseRationalPolynomial(terms=tuple(numerator_terms)),
+        denominator=SparseRationalPolynomial(terms=denominator_terms),
+    )
+
+
+class FiniteFieldZetaFunctionResult(StrictModel):
+    """The exact elliptic zeta function bound to its finite-field curve."""
+
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    zeta_function: RationalFunction
+
+    @model_validator(mode="after")
+    def require_curve_identity(self) -> Self:
+        q = int(self.curve.field.characteristic**self.curve.field.degree)
+        if self.trace != q + 1 - self.cardinality:
+            raise _validation_error(
+                "zeta_function_identity", "trace must match the exact curve cardinality"
+            )
+        if self.zeta_function != _zeta_rational_function(q, self.trace):
+            raise _validation_error(
+                "zeta_function_identity",
+                "zeta function must be the canonical function for the exact curve count",
+            )
+        return self
+
+
 class FiniteFieldGroupStructureResult(StrictModel):
     """Invariant factors with one curve-bound generator for each factor."""
 
@@ -737,7 +823,7 @@ def _admit_extension_count_growth(
         raise OperationResourceAdmissionError(
             location=("curve", "field"),
             code="elliptic_curve.finite_field.enumeration_bound",
-            message="extension counts require exhaustive base-field order at most 4096",
+            message="quadratic-character point counting requires base-field order at most 4096",
         )
     character_sum_work = q * curve.field.degree**2 * (8 + 2 * q.bit_length())
     if character_sum_work > MAX_FROBENIUS_CHARACTER_SUM_WORK:
@@ -1788,6 +1874,37 @@ def finite_field_cardinality(
     return _cardinality_from_points(curve, points, q)
 
 
+def finite_field_zeta_polynomial(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldZetaPolynomialResult:
+    """Return ``1 - a*T + q*T^2`` from one admitted exact base-field count."""
+    curve = _curve_admit(curve)
+    q = _admit_extension_count_growth(curve, 1)
+    count = _cardinality_from_character_sum(curve, q)
+    return FiniteFieldZetaPolynomialResult(
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=count.trace,
+        numerator=IntegerPolynomial(
+            coefficients=(q, -count.trace, 1),
+        ),
+    )
+
+
+def finite_field_zeta_function(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldZetaFunctionResult:
+    """Return the exact rational zeta function from one admitted base count."""
+    count = finite_field_zeta_polynomial(curve)
+    q = int(count.curve.field.characteristic**count.curve.field.degree)
+    return FiniteFieldZetaFunctionResult.model_construct(
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=count.trace,
+        zeta_function=_zeta_rational_function(q, count.trace),
+    )
+
+
 def finite_field_group_structure(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> FiniteFieldGroupStructureResult:
@@ -1881,6 +1998,8 @@ __all__ = [
     "FiniteFieldPointSet",
     "FiniteFieldScalarRequest",
     "FiniteFieldShortWeierstrassCurve",
+    "FiniteFieldZetaFunctionResult",
+    "FiniteFieldZetaPolynomialResult",
     "finite_field_cardinality",
     "finite_field_curve_base_change",
     "finite_field_discriminant",
@@ -1895,5 +2014,7 @@ __all__ = [
     "finite_field_point_scalar",
     "finite_field_points",
     "finite_field_quadratic_twist",
+    "finite_field_zeta_function",
+    "finite_field_zeta_polynomial",
     "require_discriminant_admission",
 ]

@@ -1,8 +1,10 @@
 import json
 import math
+from fractions import Fraction
 
 import pytest
 import rfc8785
+from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.catalog import Catalog
@@ -21,6 +23,7 @@ from jacobian.math.number_theory.elliptic_curves import (
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
     FiniteFieldShortWeierstrassCurve,
+    FiniteFieldZetaFunctionResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
     finite_field_discriminant,
@@ -35,7 +38,10 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_zeta_function,
+    finite_field_zeta_polynomial,
 )
+from jacobian.math.polynomials.values import require_canonical_rational_function
 
 
 def test_finite_field_group_identities_and_cardinality() -> None:
@@ -755,6 +761,112 @@ def test_point_enumeration_over_directly_presented_extension_field() -> None:
         assert finite_field_point_scalar(curve, point, 27).point.at_infinity
 
 
+def test_zeta_numerator_matches_independent_f5_and_f25_counts() -> None:
+    base = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    base_curve = FiniteFieldShortWeierstrassCurve(
+        field=base,
+        coefficient_a=FiniteFieldElement(presentation=base, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=base, coordinates=(1,)),
+    )
+    # Direct enumeration by the defining equation, independent of the
+    # character-sum kernel used by finite_field_zeta_polynomial.
+    f5_count = 1 + sum(
+        pow(y, 2, 5) == (pow(x, 3, 5) + x + 1) % 5 for x in range(5) for y in range(5)
+    )
+    f5 = finite_field_zeta_polynomial(base_curve)
+    assert f5_count == f5.cardinality == 9
+    assert f5.trace == -3
+    assert f5.numerator.coefficients == (5, 3, 1)
+
+    full_zeta = finite_field_zeta_function(base_curve)
+    assert full_zeta.curve == base_curve
+    assert full_zeta.cardinality == f5_count
+    assert full_zeta.trace == -3
+    assert full_zeta.zeta_function.variables == ("T",)
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in full_zeta.zeta_function.numerator.terms
+    } == {2: 1, 1: Fraction(3, 5), 0: Fraction(1, 5)}
+    assert {
+        term.exponents[0]: term.coefficient.as_fraction()
+        for term in full_zeta.zeta_function.denominator.terms
+    } == {2: 1, 1: Fraction(-6, 5), 0: Fraction(1, 5)}
+    assert require_canonical_rational_function(full_zeta.zeta_function) == (
+        full_zeta.zeta_function
+    )
+    assert (
+        FiniteFieldZetaFunctionResult.model_validate_json(full_zeta.model_dump_json())
+        == full_zeta
+    )
+    with pytest.raises(ValidationError):
+        FiniteFieldZetaFunctionResult.model_validate(
+            {
+                **full_zeta.model_dump(),
+                "trace": full_zeta.trace + 1,
+            }
+        )
+    with pytest.raises(ValidationError):
+        FiniteFieldZetaFunctionResult.model_validate(
+            {
+                **full_zeta.model_dump(),
+                "zeta_function": f5.numerator,
+            }
+        )
+
+    extension = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
+    )
+    extension_curve = FiniteFieldShortWeierstrassCurve(
+        field=extension,
+        coefficient_a=FiniteFieldElement(presentation=extension, coordinates=(1, 0)),
+        coefficient_b=FiniteFieldElement(presentation=extension, coordinates=(1, 0)),
+    )
+
+    def f25_multiply(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        # b^2 = 3 for the declared modulus b^2 + 2.
+        return (
+            (left[0] * right[0] + 3 * left[1] * right[1]) % 5,
+            (left[0] * right[1] + left[1] * right[0]) % 5,
+        )
+
+    def f25_add(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        return ((left[0] + right[0]) % 5, (left[1] + right[1]) % 5)
+
+    one = (1, 0)
+    direct_f25_count = 1
+    for x0 in range(5):
+        for x1 in range(5):
+            x = (x0, x1)
+            rhs = f25_add(f25_add(f25_multiply(f25_multiply(x, x), x), x), one)
+            for y0 in range(5):
+                for y1 in range(5):
+                    y = (y0, y1)
+                    direct_f25_count += f25_multiply(y, y) == rhs
+    f25 = finite_field_zeta_polynomial(extension_curve)
+    assert direct_f25_count == f25.cardinality == 27
+    assert f25.trace == -1
+    assert f25.numerator.coefficients == (25, 1, 1)
+
+    # The zeta numerator's trace predicts the quadratic extension count,
+    # independently matched above by F25 point enumeration.
+    q, linear, _constant = f5.numerator.coefficients
+    a = -linear
+    assert direct_f25_count == q**2 + 1 - (a**2 - 2 * q)
+
+
+def test_zeta_polynomial_is_publicly_discoverable_and_exact() -> None:
+    tool = Catalog.open().operation(
+        "elliptic_curve.finite_field.zeta_polynomial.compute"
+    )
+    assert tool is not None
+    result = invoke_operation(tool.operation_id, tool.examples[0].input, Catalog.open())
+    assert result.output["cardinality"] == 9
+    assert result.output["trace"] == -3
+    assert result.output["numerator"]["coefficients"] == ["5", "3", "1"]
+
+
 def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     base = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"
@@ -913,3 +1025,20 @@ def test_native_point_consumer_rejects_forged_coordinate_axis() -> None:
     assert error.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.point_coordinates"
     )
+
+
+def test_zeta_character_sum_bound_has_accurate_diagnostic() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=4099, modulus_coefficients=(0, 1), generator="a"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(0,)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_zeta_polynomial(curve)
+    diagnostic = error.value.errors()[0]
+    assert diagnostic["type"] == "elliptic_curve.finite_field.enumeration_bound"
+    assert "quadratic-character point counting" in diagnostic["msg"]
+    assert "extension counts" not in diagnostic["msg"]

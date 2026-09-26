@@ -12,9 +12,10 @@ def test_exact_public_api_symbols() -> None:
         "BiwordRSKPair",
         "EndpointProfileEntry",
         "EndpointProfileResult",
+        "FinitePermutation",
         "NonnegativeIntegerMatrix",
         "PartitionDominanceResult",
-        "PlacticEquivalenceRequest",
+        "PermutationRSKPair",
         "PlacticEquivalenceResult",
         "RSKBumpStep",
         "RSKInsertionEvent",
@@ -36,6 +37,7 @@ def test_exact_public_api_symbols() -> None:
         "hook_lengths",
         "inverse_biword",
         "inverse_matrix",
+        "inverse_permutation_rsk",
         "inverse_row_insertion_rsk",
         "inverse_row_insertion_rsk_trace",
         "knuth_moves",
@@ -44,6 +46,7 @@ def test_exact_public_api_symbols() -> None:
         "matrix_biword",
         "normalize_biword",
         "partition_dominance",
+        "permutation_rsk",
         "plactic_equivalence",
         "plactic_normal_form",
         "row_insertion_rsk",
@@ -52,7 +55,6 @@ def test_exact_public_api_symbols() -> None:
         "semistandard_young_tableaux_count",
         "standard_young_tableaux_count",
         "tableau_row_reading_word",
-        "verify_rsk",
     )
     assert tuple(algebraic_combinatorics.__all__) == expected
     assert len(algebraic_combinatorics.__all__) == len(

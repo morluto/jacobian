@@ -576,6 +576,43 @@ class ModuleKoszulHomology(StrictModel):
         return self
 
 
+class ModuleKoszulHomologyMapRequest(StrictModel):
+    """A supplied module-induced Koszul chain map whose homology map is wanted."""
+
+    chain_map: ModuleKoszulChainMap
+
+
+class ModuleKoszulHomologyMap(StrictModel):
+    """The induced exact matrices in the canonical retained homology bases."""
+
+    chain_map: ModuleKoszulChainMap
+    source_homology: ModuleKoszulHomology
+    target_homology: ModuleKoszulHomology
+    # Rows are target homology coordinates, columns are source coordinates.
+    degree_maps: tuple[tuple[tuple[CanonicalRational, ...], ...], ...]
+
+    @model_validator(mode="after")
+    def map_axes(self) -> Self:
+        if (
+            self.source_homology.complex != self.chain_map.source_complex
+            or self.target_homology.complex != self.chain_map.target_complex
+            or len(self.degree_maps) != len(self.chain_map.degree_maps)
+        ):
+            raise _err(
+                "homology_map_binding",
+                "homology maps must retain their chain-map complexes",
+            )
+        for degree, matrix in enumerate(self.degree_maps):
+            if len(matrix) != self.target_homology.dimensions[degree] or any(
+                len(row) != self.source_homology.dimensions[degree] for row in matrix
+            ):
+                raise _err(
+                    "homology_map_axes",
+                    "induced matrices must use canonical homology axes",
+                )
+        return self
+
+
 class ModuleKoszulExactnessProfile(StrictModel):
     """Positive-degree exactness data for one retained Koszul complex."""
 

@@ -149,3 +149,26 @@ map must check the relations it relies on. Current bounds are sequence length
 estimated exact work units, and 8 MiB estimated output. Coefficient growth in
 module-linearity, algebra-action, and chain-square checks is bounded before
 exact arithmetic. The coefficient domain remains `QQ`.
+
+`homological.koszul.homology_map.compute` consumes this typed chain map and
+reconstructs it from its retained module map, rechecking module-linearity and
+every chain square before using it. The operation computes exact homology for
+both complexes and applies each chain matrix to the source homology basis. It
+then expresses each image in the target's boundary-plus-homology basis and
+returns the homology coordinates. Matrices use target homology classes as rows
+and source classes as columns; the result retains both full homology values so
+those coordinates are interpretable after serialization. This is the ordinary
+functorial map `ker(d)/im(d) -> ker(d')/im(d')` induced by a chain map; see the
+[Stacks Project definition and functoriality of homology](https://stacks.math.columbia.edu/tag/010V).
+
+The initial induced-map envelope caps the combined source and target chain-basis
+count at 8, each reconstructed differential or degree-map rational component at
+8 decimal digits, the exact quotient-coordinate work estimate at `2^40`, and
+the aggregate retained homology and induced-map output at 8 MiB. These estimates
+are computed from the complexes rebuilt from the retained modules and sequence,
+after the supplied chain map is reconstructed and checked, and before either
+homology elimination or quotient-coordinate expansion. This smaller bound
+reflects the additional exact quotient-coordinate solve; standalone
+construction and homology keep their larger envelopes. As with the other
+decoded Koszul values, shape checks alone do not authenticate producer history:
+this operation explicitly checks the module and chain-map relations it uses.

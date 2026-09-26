@@ -666,23 +666,16 @@ def _admit_homology_rank_work(value: ModuleKoszulComplex) -> None:
         )
 
 
-def module_koszul_homology(
-    complex_value: ModuleKoszulComplex | Mapping[str, Any],
+def _module_koszul_homology_admitted(
+    value: ModuleKoszulComplex,
 ) -> ModuleKoszulHomology:
-    try:
-        value = (
-            complex_value
-            if isinstance(complex_value, ModuleKoszulComplex)
-            else ModuleKoszulComplex.model_validate(complex_value)
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("complex",),
-            code="koszul.module.complex_shape",
-            message="the supplied module Koszul complex is not canonical",
-        ) from exc
-    value = _admit_complex(value)
-    _require_square_zero(value)
+    """Compute homology for an already admitted canonical complex.
+
+    The public entry point revalidates caller-authored values before reaching
+    this kernel. Internal consumers that already established admission while
+    constructing the canonical differentials call it directly, so the
+    operation does not replay semantic admission and exact square-zero work.
+    """
     cycles: list[int] = []
     boundaries: list[int] = []
     dimensions: list[int] = []
@@ -725,6 +718,26 @@ def module_koszul_homology(
         boundary_dimensions=tuple(boundaries),
         degrees=tuple(degrees),
     )
+
+
+def module_koszul_homology(
+    complex_value: ModuleKoszulComplex | Mapping[str, Any],
+) -> ModuleKoszulHomology:
+    try:
+        value = (
+            complex_value
+            if isinstance(complex_value, ModuleKoszulComplex)
+            else ModuleKoszulComplex.model_validate(complex_value)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="koszul.module.complex_shape",
+            message="the supplied module Koszul complex is not canonical",
+        ) from exc
+    value = _admit_complex(value)
+    _require_square_zero(value)
+    return _module_koszul_homology_admitted(value)
 
 
 def module_koszul_exactness_profile(

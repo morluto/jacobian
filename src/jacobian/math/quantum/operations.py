@@ -1707,9 +1707,16 @@ def stabilizer_erasure_correctability(
             "quantum.stabilizer.not_a_check_space",
             "erasure correctability requires a typed check space",
         )
-    register = _admit_register(check_space.qubit_register, "check_space")
+    supplied_register = getattr(check_space, "qubit_register", None)
+    supplied_basis = getattr(check_space, "basis", None)
+    if supplied_register is None or supplied_basis is None:
+        _reject(
+            "check_space",
+            "quantum.stabilizer.invalid_basis",
+            "check-space register and basis are required",
+        )
+    register = _admit_register(supplied_register, "check_space")
     n = len(register.qubit_ids)
-    supplied_basis = check_space.basis
     if not isinstance(supplied_basis, tuple) or len(supplied_basis) > MAX_CHECK_ROWS:
         _reject(
             "check_space",
@@ -1730,8 +1737,9 @@ def stabilizer_erasure_correctability(
     if (
         not isinstance(erased, tuple)
         or len(erased) > n
+        or any(type(qid) is not str for qid in erased)
         or len(set(erased)) != len(erased)
-        or any(type(qid) is not str or qid not in register.qubit_ids for qid in erased)
+        or any(qid not in register.qubit_ids for qid in erased)
     ):
         _reject(
             "erased_qubit_ids",

@@ -132,6 +132,21 @@ def test_erasure_request_rejects_duplicate_or_foreign_axes() -> None:
         )
 
 
+def test_forged_native_request_fields_are_rejected_without_helper_errors() -> None:
+    value = _value(2, ())
+    for request in (
+        StabilizerErasureCorrectabilityRequest.model_construct(erased_qubit_ids=()),
+        StabilizerErasureCorrectabilityRequest.model_construct(
+            check_space=CheckSpaceValue.model_construct(), erased_qubit_ids=()
+        ),
+        StabilizerErasureCorrectabilityRequest.model_construct(
+            check_space=value, erased_qubit_ids=({},)
+        ),
+    ):
+        with pytest.raises(ValueError):
+            stabilizer_erasure_correctability(request)
+
+
 def test_nonisotropic_check_space_is_rejected() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     x = PhaseFreeQubitPauli(register=register, x_bits=(1,), z_bits=(0,))

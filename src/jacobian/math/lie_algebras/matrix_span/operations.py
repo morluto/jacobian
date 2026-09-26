@@ -202,7 +202,7 @@ def lie_algebra_from_matrix_span(
                         coefficient=CanonicalRational.from_fraction(coefficient),
                     )
                 )
-    algebra = FiniteDimensionalLieAlgebra(
+    algebra = FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels, structure_constants=tuple(constants)
     )
     return LieMatrixSpanRealization(algebra=algebra, matrix_basis=request.matrices)

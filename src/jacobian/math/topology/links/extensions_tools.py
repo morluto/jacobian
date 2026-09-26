@@ -4,6 +4,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
+    BlackboardGraphRequest,
     BraidClosureResult,
     BraidPermutationResult,
     BraidProductRequest,
@@ -13,10 +14,15 @@ from jacobian.math.topology.links._extensions_models import (
     ConwayPolynomialResult,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkBlackboardGraph,
     LinkCrossingProfileRequest,
     LinkCrossingProfileResult,
     LinkDeterminantRequest,
     LinkDeterminantResult,
+    LinkDisjointUnionRequest,
+    LinkDisjointUnionResult,
+    LinkSignatureRequest,
+    LinkSignatureResult,
     LinkStateCirclesRequest,
     LinkStateCirclesResult,
     SeifertCircleRequest,
@@ -30,11 +36,14 @@ from jacobian.math.topology.links.extensions import (
     braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
+    link_blackboard_graph,
     link_conway_polynomial,
     link_crossing_profile,
     link_determinant,
+    link_disjoint_union,
     link_goeritz_data,
     link_seifert_circles,
+    link_signature,
     link_state_circles,
     wirtinger_presentation,
 )
@@ -75,15 +84,27 @@ def _state_circles(request: LinkStateCirclesRequest) -> LinkStateCirclesResult:
 
 
 def _goeritz(request: GoeritzDataRequest) -> GoeritzDataResult:
-    return link_goeritz_data(request.diagram)
+    return link_goeritz_data(request.blackboard_graph)
+
+
+def _blackboard_graph(request: BlackboardGraphRequest) -> LinkBlackboardGraph:
+    return link_blackboard_graph(request.diagram)
 
 
 def _determinant(request: LinkDeterminantRequest) -> LinkDeterminantResult:
     return link_determinant(request.diagram)
 
 
+def _disjoint_union(request: LinkDisjointUnionRequest) -> LinkDisjointUnionResult:
+    return link_disjoint_union(request.diagrams)
+
+
 def _seifert(request: SeifertCircleRequest) -> SeifertCircleResult:
     return link_seifert_circles(request.diagram)
+
+
+def _signature(request: LinkSignatureRequest) -> LinkSignatureResult:
+    return link_signature(request.diagram)
 
 
 def _wirtinger(
@@ -101,8 +122,62 @@ _SIGMA_ONE_CUBED = {
     ],
 }
 
+_POSITIVE_HOPF_DIAGRAM = {
+    "crossings": [
+        {
+            "crossing_id": crossing_id,
+            "half_edges": [
+                f"{crossing_id}:dart_0",
+                f"{crossing_id}:dart_3",
+                f"{crossing_id}:dart_2",
+                f"{crossing_id}:dart_1",
+            ],
+            "over_pair": [0, 2],
+            "under_pair": [1, 3],
+            "sign": 1,
+        }
+        for crossing_id in ("crossing_000", "crossing_001")
+    ],
+    "arcs": [
+        {"tail": "crossing_000:dart_2", "head": "crossing_001:dart_1"},
+        {"tail": "crossing_000:dart_3", "head": "crossing_001:dart_0"},
+        {"tail": "crossing_001:dart_2", "head": "crossing_000:dart_1"},
+        {"tail": "crossing_001:dart_3", "head": "crossing_000:dart_0"},
+    ],
+    "free_loops": 0,
+}
+
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="link_diagram.disjoint_union.compute",
+        title="Form a tagged disjoint union of link diagrams",
+        description=(
+            "Combine one to 64 classical oriented link diagrams by relabelling "
+            "their crossings and darts into disjoint source-indexed axes. Return "
+            "complete crossing, dart, arc, and crossing-free loop transport. "
+            "The total union is admitted before construction at 64 crossings, "
+            "64 free loops, and an estimated 8 MiB serialized output."
+        ),
+        request_type=LinkDisjointUnionRequest,
+        result_type=LinkDisjointUnionResult,
+        run=_disjoint_union,
+        tags=("link-diagram", "disjoint-union", "exact"),
+        discovery_terms=(
+            "disjoint union of link diagrams",
+            "combine classical link diagrams",
+        ),
+        examples=(
+            OperationExample(
+                name="disjoint_union_of_unlinked_unknots",
+                description=(
+                    "Combine two crossing-free unknots and preserve their separate "
+                    "source identities as two free-loop targets."
+                ),
+                input={"diagrams": [{"free_loops": 1}, {"free_loops": 1}]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="link_diagram.state_circles.compute",
         title="Compute the circles of a complete smoothing state",
@@ -278,13 +353,47 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="link_diagram.blackboard_graph.compute",
+        title="Construct a link diagram's signed checkerboard graph",
+        description=(
+            "Return the signed Tait graph by coloring the face of least boundary "
+            "dart shaded and alternating colors across projection arcs. Each shaded "
+            "region is a vertex; each crossing is an edge joining its shaded corner "
+            "regions. Its Tait sign is +1 exactly when those corners are the "
+            "overpassing pair. Retain all checkerboard region boundaries and "
+            "crossing-to-edge identities, including loops and parallel edges. "
+            "Connected nonempty crossing projections are admitted through 64 "
+            "crossings; the value does not decide diagram or link equivalence."
+        ),
+        request_type=BlackboardGraphRequest,
+        result_type=LinkBlackboardGraph,
+        run=_blackboard_graph,
+        tags=("link-diagram", "Tait-graph", "checkerboard", "exact"),
+        discovery_terms=(
+            "link diagram Tait graph",
+            "signed checkerboard graph",
+            "black graph of link diagram",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_hopf_tait_graph",
+                description=(
+                    "Construct the signed two-vertex Tait graph of the positive "
+                    "Hopf diagram; its crossing projection must be connected."
+                ),
+                input={"diagram": _POSITIVE_HOPF_DIAGRAM},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="link_diagram.goeritz_matrix.compute",
         title="Construct a link diagram's Goeritz matrix",
         description=(
             "Enumerate the planar projection regions, choose the checkerboard "
             "shading containing the least boundary dart, assign incidence +1 "
-            "when the shaded corners are the overpassing pair and -1 otherwise, "
-            "and delete the last shaded region from the signed Laplacian. Return "
+            "(the Tait sign) when the shaded corners are the overpassing pair "
+            "and -1 otherwise. Delete the last shaded region from the signed "
+            "Laplacian, then return "
             "that exact reduced integral Goeritz matrix and its absolute "
             "determinant. This slice requires a connected "
             "nonempty projection with at most 32 crossings; it does not claim a "
@@ -354,6 +463,39 @@ TOOLS: MathTools = (
                         ],
                     }
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.signature.compute",
+        title="Compute an oriented link diagram's signature",
+        description=(
+            "Return the exact Gordon-Litherland link signature from a reduced "
+            "Goeritz matrix and its type-II correction. A crossing is type II "
+            "when its checked oriented crossing sign times the Tait incidence "
+            "(+1 when the shaded corners are the overpassing pair) is -1. "
+            "Exact rational inertia determines the matrix signature. The bounded "
+            "contract accepts crossing-free unlinks and connected crossing "
+            "projections with at most 32 crossings; it does not decide link "
+            "equivalence."
+        ),
+        request_type=LinkSignatureRequest,
+        result_type=LinkSignatureResult,
+        run=_signature,
+        tags=("link-diagram", "signature", "Goeritz", "exact"),
+        discovery_terms=(
+            "oriented link signature",
+            "Gordon-Litherland signature",
+            "signature from Goeritz matrix",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_hopf_link_signature",
+                description=(
+                    "Compute the exact signature of the positive Hopf link; "
+                    "the bounded projection has two crossings."
+                ),
+                input={"diagram": _POSITIVE_HOPF_DIAGRAM},
             ),
         ),
     ),

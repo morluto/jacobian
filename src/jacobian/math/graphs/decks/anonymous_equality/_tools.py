@@ -13,7 +13,9 @@ from jacobian.math.graphs.decks.anonymous_equality.operations import (
 
 
 def _run(request: AnonymousDeckEqualityRequest) -> AnonymousDeckEqualityResult:
-    return anonymous_deck_equality(request)
+    return anonymous_deck_equality(
+        getattr(request, "left", None), getattr(request, "right", None)
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

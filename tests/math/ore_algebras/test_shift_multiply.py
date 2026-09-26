@@ -274,6 +274,25 @@ class TestShiftMultiplyAdmission:
         with pytest.raises(OperationResourceAdmissionError, match="coefficient-digit"):
             shift_operator_multiply(left, right)
 
+    def test_left_coefficient_height_is_rejected_before_ledger(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from jacobian.math.ore_algebras import operations
+
+        left = _op(((20, _rf(((10**63, 0),))),))
+        right = _op(((0, _rf(((10**63, 15),))),))
+
+        def fail_ledger_construction(*args: object, **kwargs: object) -> object:
+            raise AssertionError("ledger construction must follow height admission")
+
+        monkeypatch.setattr(
+            operations.ShiftMultiplyLedgerRow,
+            "model_construct",
+            fail_ledger_construction,
+        )
+        with pytest.raises(OperationResourceAdmissionError, match="coefficient-digit"):
+            shift_operator_multiply(left, right)
+
     def test_exact_littlewood_self_product_at_128_digits_is_admitted(self) -> None:
         signs = "--++--+-+-++-++--+--+-++++++-+-+++-----++---+-+-++---------+-+--"
         assert len(signs) == 64

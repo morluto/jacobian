@@ -283,8 +283,17 @@ def _admit_shift_product_degree_bounds(
             result_exponent = left_term.exponent + right_term.exponent
             # A shift by i expands p(n+i); for degree d and coefficient
             # height h, each binomial contribution is bounded by h+i*d bits.
-            # Preflight this before _plan_shift_product_cells materializes it.
-            for degree, height in (
+            # Multiplication by the left coefficient adds its height. Preflight
+            # before _plan_shift_product_cells materializes the shifted product.
+            left_numerator_height = max(
+                (abs(v.numerator).bit_length() for v in left_numerator.values()),
+                default=0,
+            )
+            left_denominator_height = max(
+                (abs(v.numerator).bit_length() for v in left_denominator.values()),
+                default=0,
+            )
+            for degree, right_height, left_height in (
                 (
                     right_numerator_degree,
                     max(
@@ -294,6 +303,7 @@ def _admit_shift_product_degree_bounds(
                         ),
                         default=0,
                     ),
+                    left_numerator_height,
                 ),
                 (
                     right_denominator_degree,
@@ -304,10 +314,11 @@ def _admit_shift_product_degree_bounds(
                         ),
                         default=0,
                     ),
+                    left_denominator_height,
                 ),
             ):
                 if (
-                    height + left_term.exponent * degree
+                    right_height + left_term.exponent * degree + left_height
                     > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS * 4
                 ):
                     raise OperationResourceAdmissionError(

@@ -112,11 +112,9 @@ def test_declared_petal_query_finds_complete_sunflower_family() -> None:
 
 
 def test_r3_sunflower_is_not_a_second_catalog_operation() -> None:
-    ids = {
-        descriptor.operation_id for descriptor in Catalog.open().snapshot().operations
-    }
-    assert "set_system.sunflower_triple_hypergraph.construct" not in ids
-    assert "set_system.sunflower_family.construct" in ids
+    catalog = Catalog.open()
+    assert catalog.operation("set_system.sunflower_triple_hypergraph.construct") is None
+    assert catalog.operation("set_system.sunflower_family.construct") is not None
 
 
 def test_discovery_cursor_is_bound_to_search_mode() -> None:

@@ -2,7 +2,16 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.topology.cubical_complexes._models import (
+    MAX_CELLS,
+    MAX_CUBICAL_BITMAP_RESULT_SIZE,
+    MAX_CUBICAL_BITMAP_SIDE,
+)
 from jacobian.math.topology.cubical_complexes.extensions import *
+
+
+def _bitmap_to_complex(r: Any) -> Any:
+    return bitmap_to_complex(r)
 
 
 def _boundary(r: Any) -> Any:
@@ -19,6 +28,33 @@ def _triangulate(r: Any) -> Any:
 
 _SQUARE = {"cells": [{"intervals": [[0, 1], [0, 1]]}]}
 TOOLS = (
+    MathTool(
+        operation_id="topology.cubical_complex.from_binary_bitmap_2d.compute",
+        title="Construct a cubical complex from a 2D binary bitmap",
+        description=(
+            "Treat each true bitmap pixel as its closed unit square ([c,c+1] "
+            "in the column axis, [r,r+1] in the downward-increasing row axis), "
+            "then return the complete cubical face closure. Rows and columns "
+            f"are each bounded to {MAX_CUBICAL_BITMAP_SIDE}, foreground pixels "
+            f"to {MAX_CELLS}, and the conservative result encoding to "
+            f"{MAX_CUBICAL_BITMAP_RESULT_SIZE} bytes. All-background bitmaps "
+            "are rejected because the current CubicalComplex type is nonempty."
+        ),
+        request_type=CubicalBitmapRequest,
+        result_type=CubicalBitmapResult,
+        run=_bitmap_to_complex,
+        tags=("topology", "cubical", "bitmap", "exact"),
+        examples=(
+            OperationExample(
+                name="one_foreground_pixel",
+                description=(
+                    "Convert a 1-by-1 bitmap whose sole true pixel is the closed "
+                    "unit square on the (column, row) lattice axes."
+                ),
+                input={"pixels": [[True]]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="cubical.boundary.compute",
         title="Compute the signed cubical boundary",
@@ -61,17 +97,23 @@ TOOLS = (
         ),
     ),
     MathTool(
-        operation_id="cubical.triangulation.compute",
-        title="Triangulate finite cubical cells",
-        description="Return the deterministic staircase triangulation of each source cube and its ambient lattice-point axis.",
+        operation_id="topology.cubical_complex.standard_triangulation.compute",
+        title="Triangulate a cubical complex",
+        description=(
+            "Return the canonical finite simplicial complex from the "
+            "Freudenthal staircase triangulation of every maximal source cube. "
+            "The result retains exact lattice coordinates for each simplicial "
+            "vertex and the target simplex family for each source cube. Input "
+            "and output growth are bounded before triangulation expansion."
+        ),
         request_type=CubicalTriangulationRequest,
         result_type=CubicalTriangulationResult,
         run=_triangulate,
         tags=("topology", "cubical", "triangulation", "exact"),
         examples=(
             OperationExample(
-                name="square_staircase",
-                description="Triangulate one unit square by its two staircase triangles; source intervals must be unit lattice intervals.",
+                name="square_freudenthal_triangulation",
+                description="Triangulate one unit square into its two canonical path triangles and return a composable finite simplicial complex.",
                 input=_SQUARE,
             ),
         ),

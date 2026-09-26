@@ -17,6 +17,9 @@ from jacobian.math.topology.discrete_morse._kernel import (
     compute_integer_morse_complex as _compute_integer_morse_complex,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
+    compute_minimum_matching as _compute_minimum_matching,
+)
+from jacobian.math.topology.discrete_morse._kernel import (
     compute_morse_complex as _compute_morse_complex,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
@@ -27,6 +30,7 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathsResult,
     IntegerMorseComplexResult,
     MatchingPair,
+    MinimumMorseMatchingResult,
     MorseChainContractionResult,
     MorseComplexResult,
 )
@@ -97,6 +101,15 @@ def compute_integer_morse_complex(
     return _compute_integer_morse_complex(complex_, pairs)
 
 
+def compute_minimum_matching(
+    complex_: FiniteSimplicialComplex,
+) -> MinimumMorseMatchingResult:
+    """Return an exact acyclic matching minimizing the total critical cells."""
+
+    require_canonical_complex_admission(complex_)
+    return _compute_minimum_matching(complex_)
+
+
 def compute_chain_contraction(
     complex_: FiniteSimplicialComplex,
     pairs: tuple[MatchingPair, ...],
@@ -110,6 +123,7 @@ __all__ = [
     "compute_chain_contraction",
     "compute_gradient_paths",
     "compute_integer_morse_complex",
+    "compute_minimum_matching",
     "compute_morse_complex",
     "construct_matching",
 ]

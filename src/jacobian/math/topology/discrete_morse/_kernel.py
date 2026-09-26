@@ -43,6 +43,7 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathStep,
     IntegerMorseComplexResult,
     MatchingPair,
+    MinimumMorseMatchingResult,
     MorseBoundaryEntry,
     MorseComplexResult,
     MorseGradientStepKind,
@@ -53,6 +54,8 @@ from jacobian.math.topology.discrete_morse._models import (
 _WHITE, _GRAY, _BLACK = 0, 1, 2
 _DOWN = MorseGradientStepKind.DOWN
 _UP = MorseGradientStepKind.UP
+MAX_MINIMUM_MORSE_WORK = 20_000_000
+MAX_MINIMUM_MORSE_OUTPUT_CELLS = 8_000_000
 
 
 def _resource(
@@ -297,14 +300,7 @@ def construct_matching(
         for face in group:
             index_of[face] = len(flat)
             flat.append(face)
-    adjacency: list[list[int]] = [[] for _ in flat]
-    for face, coface in covers:
-        if matched.get(face) == coface:
-            adjacency[index_of[face]].append(index_of[coface])
-        else:
-            adjacency[index_of[coface]].append(index_of[face])
-
-    traversal = _iterative_cycle_or_order(cell_count, tuple(adjacency))
+    traversal = _matching_cycle_or_order(cell_count, covers, matched, index_of)
     if isinstance(traversal, _DirectedCycle):
         return DiscreteMorseMatchingResult._from_kernel(
             outcome=MorseMatchingOutcome.CYCLIC_MATCHING,
@@ -329,6 +325,163 @@ def construct_matching(
         fault=None,
         fault_message=None,
         fault_pair_index=None,
+    )
+
+
+def _matching_cycle_or_order(
+    cell_count: int,
+    covers: list[tuple[Simplex, Simplex]],
+    matched: dict[Simplex, Simplex],
+    index_of: dict[Simplex, int],
+) -> _DirectedTraversal:
+    """Classify one matching using the directed-Hasse convention above."""
+
+    adjacency: list[list[int]] = [[] for _ in range(cell_count)]
+    for face, coface in covers:
+        if matched.get(face) == coface:
+            adjacency[index_of[face]].append(index_of[coface])
+        else:
+            adjacency[index_of[coface]].append(index_of[face])
+    return _iterative_cycle_or_order(cell_count, tuple(adjacency))
+
+
+def _minimum_matching_node_bound(
+    covers: list[tuple[Simplex, Simplex]], node_ceiling: int
+) -> int | None:
+    """Count the nodes of the disjointness-pruned minimum-matching search.
+
+    The search includes a cover only when both of its cells are still
+    unmatched, so the reachable states are the partial matchings of the cover
+    relation rather than all ``2**E`` subsets.  This returns the exact node
+    count when it is at most ``node_ceiling`` and ``None`` when the pruned
+    decision tree has more nodes.  The caller proves the cover count is small
+    enough that this recursion stays shallow before calling it.
+    """
+
+    nodes = 0
+    limit = node_ceiling + 1
+
+    def visit(position: int, used: set[Simplex]) -> None:
+        nonlocal nodes
+        if nodes >= limit:
+            return
+        nodes += 1
+        if nodes >= limit or position == len(covers):
+            return
+        face, coface = covers[position]
+        if face not in used and coface not in used:
+            used.add(face)
+            used.add(coface)
+            visit(position + 1, used)
+            used.discard(face)
+            used.discard(coface)
+        if nodes >= limit:
+            return
+        visit(position + 1, used)
+
+    visit(0, set())
+    return nodes if nodes <= node_ceiling else None
+
+
+def compute_minimum_matching(
+    complex_: FiniteSimplicialComplex,
+) -> MinimumMorseMatchingResult:
+    """Exhaustively maximize matched pairs under a pre-admitted work bound."""
+
+    cells = _closure_cells(complex_)
+    covers = _cover_relations(cells)
+    cell_count = _admit_envelope(cells, (), covers)
+    # A matching is a set of disjoint cover pairs, so the search tree branches
+    # only on covers disjoint from the cells already matched.  Every node and
+    # leaf takes at most linear work in the source cells and cover edges, and
+    # the all-skip path plus each single-cover include path gives the sound
+    # lower bound (E + 1)(E + 2) / 2 on the node count.  Rejecting on that
+    # cheap bound first keeps the exact count below shallow recursion for every
+    # admitted complex.  The exact count below is a conservative bound: the
+    # include-first search with an incumbent adds pruning, never more nodes.
+    per_node = cell_count + len(covers) + 1
+    cover_count = len(covers)
+    node_lower_bound = (cover_count + 1) * (cover_count + 2) // 2
+    if node_lower_bound * per_node > MAX_MINIMUM_MORSE_WORK:
+        raise _resource(
+            "minimum_matching.admission.search_work",
+            "complete disjointness-pruned minimum-matching search exceeds the "
+            f"{MAX_MINIMUM_MORSE_WORK}-unit work envelope",
+            ("complex",),
+        )
+    node_bound = _minimum_matching_node_bound(
+        covers, MAX_MINIMUM_MORSE_WORK // per_node
+    )
+    if node_bound is None:
+        raise _resource(
+            "minimum_matching.admission.search_work",
+            "complete disjointness-pruned minimum-matching search exceeds the "
+            f"{MAX_MINIMUM_MORSE_WORK}-unit work envelope",
+            ("complex",),
+        )
+    output_bytes_bound = (
+        4096
+        + 5 * cell_count * (complex_.dimension + 1) * 40
+        + 5 * cell_count * 64
+        + len(complex_.vertices) * 40
+    )
+    if output_bytes_bound > MAX_MINIMUM_MORSE_OUTPUT_CELLS:
+        raise _resource(
+            "minimum_matching.admission.output_bytes",
+            f"minimum-matching result has a conservative output bound of "
+            f"{output_bytes_bound} bytes, above the "
+            f"{MAX_MINIMUM_MORSE_OUTPUT_CELLS}-unit output envelope",
+            ("complex",),
+        )
+
+    flat = tuple(face for group in cells for face in group)
+    index_of = {face: position for position, face in enumerate(flat)}
+    best_pairs: tuple[MatchingPair, ...] = ()
+    best_order = _matching_cycle_or_order(cell_count, covers, {}, index_of)
+    if not isinstance(best_order, _TopologicalOrder):
+        raise RuntimeError("the empty matching must be acyclic")
+    selected: list[MatchingPair] = []
+    used: set[Simplex] = set()
+
+    def search(position: int) -> None:
+        nonlocal best_pairs, best_order
+        if len(selected) + len(covers) - position <= len(best_pairs):
+            return
+        if position == len(covers):
+            matched = {pair.face: pair.coface for pair in selected}
+            traversal = _matching_cycle_or_order(cell_count, covers, matched, index_of)
+            if isinstance(traversal, _TopologicalOrder):
+                best_pairs = tuple(selected)
+                best_order = traversal
+            return
+
+        face, coface = covers[position]
+        if face not in used and coface not in used:
+            selected.append(MatchingPair(face=face, coface=coface))
+            used.update((face, coface))
+            search(position + 1)
+            used.remove(face)
+            used.remove(coface)
+            selected.pop()
+        search(position + 1)
+
+    search(0)
+    best_used = {cell for pair in best_pairs for cell in (pair.face, pair.coface)}
+    matching = DiscreteMorseMatchingResult._from_kernel(
+        outcome=MorseMatchingOutcome.ACYCLIC_MATCHING,
+        complex=complex_,
+        pairs=best_pairs,
+        critical_profile=_critical_profile(complex_, cells, best_used),
+        topological_order=tuple(flat[node] for node in best_order.nodes),
+        hasse_edges=len(covers),
+        closed_v_path=(),
+        fault=None,
+        fault_message=None,
+        fault_pair_index=None,
+    )
+    return MinimumMorseMatchingResult._from_kernel(
+        matching=matching,
+        minimum_critical_cell_count=cell_count - 2 * len(best_pairs),
     )
 
 

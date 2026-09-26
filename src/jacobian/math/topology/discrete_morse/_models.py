@@ -296,6 +296,39 @@ class DiscreteMorseMatchingResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class MinimumMorseMatchingRequest(StrictModel):
+    """Request a minimum-total-critical-cell acyclic matching."""
+
+    complex: SimplicialComplexRequest
+
+
+class MinimumMorseMatchingResult(StrictModel):
+    """An acyclic matching attaining the minimum total critical-cell count."""
+
+    matching: DiscreteMorseMatchingResult
+    minimum_critical_cell_count: StrictInt = Field(ge=0, le=MAX_MORSE_CELLS)
+
+    @model_validator(mode="after")
+    def require_matching_objective(self) -> Self:
+        profile = self.matching.critical_profile
+        if (
+            self.matching.outcome is not MorseMatchingOutcome.ACYCLIC_MATCHING
+            or profile is None
+            or sum(profile.counts_by_dimension) != self.minimum_critical_cell_count
+        ):
+            raise _validation_error(
+                "minimum_result_objective_mismatch",
+                "the minimum critical-cell count must equal an acyclic matching profile",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build after the exact search established the optimum."""
+
+        return cls.model_construct(**values)
+
+
 def _require_canonical_cell(cell: Simplex, reason: str) -> None:
     if len(set(cell)) != len(cell) or tuple(sorted(cell)) != cell:
         raise _validation_error(reason, "cells must be canonical vertex subsets")

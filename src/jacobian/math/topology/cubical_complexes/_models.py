@@ -580,6 +580,23 @@ class CubicalBitmapResult(StrictModel):
                 "bitmap_pixel_map_incomplete",
                 "pixel map cells must equal the complex's full set of unit squares",
             )
+        expected_cells = {
+            CubicalCell(intervals=face)
+            for entry in self.pixel_to_cell
+            for face in product(
+                *(
+                    ((lower, lower), (lower, upper), (upper, upper))
+                    if upper > lower
+                    else ((lower, lower),)
+                    for lower, upper in entry.cell.intervals
+                )
+            )
+        }
+        if set(self.complex.cells) != expected_cells:
+            raise _validation_error(
+                "bitmap_face_closure_incomplete",
+                "the bitmap complex must contain exactly the faces of its foreground pixels",
+            )
         if any(
             a < 0 or b > bound
             for cell in self.complex.cells

@@ -255,7 +255,10 @@ class DeltaMatroidExtremalMatroidResult(StrictModel):
                 }
             _preflight_basis_family(raw_matroid.get("bases"))
             ground = raw_matroid.get("ground")
-            if isinstance(ground, (list, tuple)) and len(ground) > MAX_FINITE_BASIS_GROUND_SIZE:
+            if (
+                isinstance(ground, (list, tuple))
+                and len(ground) > MAX_FINITE_BASIS_GROUND_SIZE
+            ):
                 raise _validation_error(
                     "matroid_ground_bound", "result ground axis exceeds its limit"
                 )

@@ -1176,7 +1176,7 @@ def character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
             "request must contain one table-bound ordinary character",
             ("request",),
         )
-    element = request.character
+    element = getattr(request, "character", None)
     if not isinstance(element, CharacterRingElement):
         raise _invalid(
             "groups.characters.kernel_input_type",

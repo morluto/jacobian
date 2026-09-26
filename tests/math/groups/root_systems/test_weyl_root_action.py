@@ -81,7 +81,10 @@ def test_element_action_matches_independent_simple_reflection_formula(
         request.model_dump_json()
     )
     decoded_result = RootLatticeVector.model_validate_json(result.model_dump_json())
-    assert weyl_element_act_on_root(decoded_request.element, decoded_request.vector) == decoded_result
+    assert (
+        weyl_element_act_on_root(decoded_request.element, decoded_request.vector)
+        == decoded_result
+    )
 
 
 def test_identity_composition_and_inverse_obey_the_action_law() -> None:
@@ -171,12 +174,16 @@ def test_caller_constructed_vector_with_noncanonical_cartan_axis_is_rejected() -
         root_to_weight=datum.root_to_weight,
         coroot_to_coweight=datum.coroot_to_coweight,
     )
-    vector = RootLatticeVector.model_construct(datum=malformed_datum, coordinates=(1, 0))
+    vector = RootLatticeVector.model_construct(
+        datum=malformed_datum, coordinates=(1, 0)
+    )
     request = WeylElementRootActionRequest.model_construct(
         element=weyl_element_from_word(_A2, ()), vector=vector
     )
 
-    with pytest.raises(OperationDomainValidationError, match="canonical ordered Cartan axis"):
+    with pytest.raises(
+        OperationDomainValidationError, match="canonical ordered Cartan axis"
+    ):
         weyl_element_act_on_root(request.element, request.vector)
 
 

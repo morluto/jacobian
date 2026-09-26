@@ -1143,6 +1143,8 @@ class WeylElementRootActionRequest(StrictModel):
 
     element: WeylElement
     vector: RootLatticeVector
+
+
 class WeylBruhatIntervalRequest(StrictModel):
     """Two elements of one finite Weyl group defining a closed interval."""
 

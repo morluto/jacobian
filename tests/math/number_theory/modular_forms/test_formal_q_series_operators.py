@@ -142,11 +142,11 @@ def test_formal_results_roundtrip_and_compose_with_series_arithmetic() -> None:
 
 
 def test_catalog_requests_are_formal_and_return_only_truncated_series() -> None:
-    from jacobian.catalog.catalog import Catalog
+    from jacobian.math.number_theory.modular_forms._tools import TOOLS
 
-    catalog = Catalog.open()
-    u = catalog.operation("modular_form.formal_q_series.u_operator.compute")
-    v = catalog.operation("modular_form.formal_q_series.v_operator.compute")
+    tools = {tool.operation_id: tool for tool in TOOLS}
+    u = tools["modular_form.formal_q_series.u_operator.compute"]
+    v = tools["modular_form.formal_q_series.v_operator.compute"]
     assert u is not None and v is not None
 
     u_result = u.run(

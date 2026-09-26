@@ -32,8 +32,8 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.relabel import (
-    DeltaMatroidRelabelRequest,
     DeltaMatroidRelabelling,
+    DeltaMatroidRelabelRequest,
     relabel,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (

@@ -117,7 +117,10 @@ def _admit_graver_search(entries: tuple[int, ...]) -> tuple[int, int]:
                 entries[index] * value
                 for index, value in zip(free_axes, values, strict=True)
             )
-            if residual % entries[pivot] == 0 and abs(residual // entries[pivot]) <= bound:
+            if (
+                residual % entries[pivot] == 0
+                and abs(residual // entries[pivot]) <= bound
+            ):
                 candidate_states += 1
     if 2 * kernel_states + candidate_states * candidate_states > MAX_GRAVER_WORK:
         raise OperationResourceAdmissionError(

@@ -1404,7 +1404,6 @@ def _integer_inverse(
         pivot = next((row for row in range(column, rank) if work[row][column]), None)
         if pivot is None:
             raise OperationDomainValidationError(
-
                 code="root_system.noninvertible_weyl_action",
                 message="a Weyl action matrix must be invertible",
             )
@@ -1455,7 +1454,6 @@ def _admit_weyl_element_value(
         )
         if image not in root_set:
             raise OperationDomainValidationError(
-
                 location=(location, "root_action"),
                 code="root_system.action_not_root_automorphism",
                 message="root action must permute the root system",

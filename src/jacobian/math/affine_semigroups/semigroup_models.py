@@ -31,9 +31,7 @@ def _hilbert_configuration_json_schema() -> JsonSchemaValue:
     properties["row_labels"].update(minItems=2, maxItems=2)
     properties["generator_labels"].update(minItems=1, maxItems=MAX_AFFINE_GENERATORS)
     properties["entries"].update(minItems=2, maxItems=2)
-    properties["entries"]["items"].update(
-        minItems=1, maxItems=MAX_AFFINE_GENERATORS
-    )
+    properties["entries"]["items"].update(minItems=1, maxItems=MAX_AFFINE_GENERATORS)
     schema["description"] = (
         "Affine configuration with exactly two labelled rows and 1..10 generators."
     )
@@ -72,13 +70,15 @@ class AffineFactorizationRequest(StrictModel):
     """Evaluate one nonnegative coefficient vector in its semigroup parent."""
 
     semigroup: PositiveAffineSemigroup
-    coordinates: tuple[Annotated[ExactInteger, Field(ge=0, max_length=32)], ...] = Field(
-        max_length=MAX_AFFINE_GENERATORS,
-        description=(
-            "Nonnegative exact integers on the generator axis. The owner "
-            "admits the axis, sign, digit, arithmetic-work, and output bounds "
-            "before evaluating the matrix product."
-        ),
+    coordinates: tuple[Annotated[ExactInteger, Field(ge=0, max_length=32)], ...] = (
+        Field(
+            max_length=MAX_AFFINE_GENERATORS,
+            description=(
+                "Nonnegative exact integers on the generator axis. The owner "
+                "admits the axis, sign, digit, arithmetic-work, and output bounds "
+                "before evaluating the matrix product."
+            ),
+        )
     )
 
 

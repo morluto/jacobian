@@ -112,7 +112,9 @@ def _admit(
             ("complex",),
         )
     if not isinstance(request.basis, tuple):
-        _domain("basis_invalid", "basis identifiers must be an ordered tuple", ("basis",))
+        _domain(
+            "basis_invalid", "basis identifiers must be an ordered tuple", ("basis",)
+        )
     if len(request.basis) > MAX_SHEAF_STALK_RANK:
         _resource(
             "basis_rank_bound",

@@ -611,21 +611,23 @@ def finite_group_gauge_transform(
         )
     frame_by_vertex: dict[str, int] = {}
     for entry in supplied:
+        vertex = getattr(entry, "vertex", None)
+        value = getattr(entry, "value", None)
         if (
             not isinstance(entry, FiniteGroupGaugeVertexValue)
-            or not _is_gauge_label(entry.vertex)
-            or entry.vertex in frame_by_vertex
-            or not isinstance(entry.value, FiniteGroupTableElement)
-            or entry.value.group != group
-            or type(entry.value.index) is not int
-            or not 0 <= entry.value.index < order
+            or not _is_gauge_label(vertex)
+            or vertex in frame_by_vertex
+            or not isinstance(value, FiniteGroupTableElement)
+            or value.group != group
+            or type(value.index) is not int
+            or not 0 <= value.index < order
         ):
             _reject(
                 "vertex_values",
                 "lattice_gauge.finite_group.transform_vertex_value",
                 "every frame must be a unique element of the field's group",
             )
-        frame_by_vertex[entry.vertex] = entry.value.index
+        frame_by_vertex[vertex] = value.index
     if set(frame_by_vertex) != set(vertices) or len(frame_by_vertex) != len(supplied):
         _reject(
             "vertex_values",

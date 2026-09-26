@@ -214,6 +214,26 @@ def test_vertex_frames_must_bind_to_the_field_parent_and_cover_vertices():
     )
 
 
+def test_native_transform_rejects_forged_frame_values():
+    _, index, field, frames = _field_and_frames()
+    request = _request(field, index, frames)
+    forged_values = (
+        FiniteGroupGaugeVertexValue.model_construct(vertex="a", value=None),
+        FiniteGroupGaugeVertexValue.model_construct(
+            value=request.vertex_values[0].value
+        ),
+    )
+    for forged in forged_values:
+        malformed = request.model_copy(
+            update={"vertex_values": (forged, *request.vertex_values[1:])}
+        )
+        with pytest.raises(OperationDomainValidationError) as error:
+            finite_group_gauge_transform(malformed)
+        assert error.value.errors()[0]["type"] == (
+            "lattice_gauge.finite_group.transform_vertex_value"
+        )
+
+
 def test_manifest_example_executes():
     tool = Catalog.open().operation(
         "lattice_gauge.finite_group.gauge_transform.compute"

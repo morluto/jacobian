@@ -521,7 +521,16 @@ def _tree_automaton_minimization_partition(
                             )
                             combos_since_checkpoint = 0
             refined_by_signature.setdefault(tuple(signature), []).append(state)
-        blocks = sorted(refined_by_signature.values(), key=min)
+        # The synthetic -1 sink is not a caller state. Its block must be
+        # ordered by its least real representative (or last if sink-only),
+        # matching the canonical quotient axis and result decoder.
+        blocks = sorted(
+            refined_by_signature.values(),
+            key=lambda block: min(
+                (state for state in block if state >= 0),
+                default=automaton.state_count,
+            ),
+        )
         refined = {
             state: block_id for block_id, block in enumerate(blocks) for state in block
         }

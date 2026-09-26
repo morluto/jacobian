@@ -96,6 +96,27 @@ def test_minimize_merges_equivalent_reachable_states_and_drops_unreachable() -> 
     assert round_trip.model_dump() == result.model_dump()
 
 
+def test_sink_equivalent_block_uses_real_state_order_and_roundtrips() -> None:
+    machine = DeterministicBottomUpTreeAutomaton(
+        state_count=2,
+        arity=(0, 0),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(), target_state=1),
+        ),
+        final_states=(0,),
+    )
+    result = minimize_tree_automaton(machine)
+    assert result.new_to_old == (0, 1)
+    assert result.old_to_new == (0, 1)
+    assert run_tree_automaton(result.minimized, RankedTree(symbol=0)) == {0}
+    assert run_tree_automaton(result.minimized, RankedTree(symbol=1)) == {1}
+    assert (
+        TreeAutomatonMinimizeResult.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
 def test_minimize_preserves_partial_undefined_transitions() -> None:
     source = DeterministicBottomUpTreeAutomaton(
         state_count=2,

@@ -128,7 +128,9 @@ def cyclotomic_field_inclusion(
         target, RationalCyclotomicField
     ):
         raise OperationDomainValidationError(
-            location=("source",) if not isinstance(source, RationalCyclotomicField) else ("target",),
+            location=("source",)
+            if not isinstance(source, RationalCyclotomicField)
+            else ("target",),
             code="matrix.cyclic.inclusion_parent_type",
             message="source and target must be cyclotomic field values",
         )
@@ -153,7 +155,9 @@ def compose_cyclotomic_field_inclusions(
         second, CyclotomicFieldInclusion
     ):
         raise OperationDomainValidationError(
-            location=("first",) if not isinstance(first, CyclotomicFieldInclusion) else ("second",),
+            location=("first",)
+            if not isinstance(first, CyclotomicFieldInclusion)
+            else ("second",),
             code="matrix.cyclic.inclusion_type",
             message="both values must be cyclotomic field inclusions",
         )
@@ -184,7 +188,9 @@ def apply_cyclotomic_field_inclusion(
         element, RationalCyclotomicElement
     ):
         raise OperationDomainValidationError(
-            location=("inclusion",) if not isinstance(inclusion, CyclotomicFieldInclusion) else ("element",),
+            location=("inclusion",)
+            if not isinstance(inclusion, CyclotomicFieldInclusion)
+            else ("element",),
             code="matrix.cyclic.element_map_type",
             message="mapping requires a cyclotomic inclusion and element",
         )
@@ -241,7 +247,10 @@ def apply_cyclotomic_field_inclusion(
         )
     denominator_digits = _decimal_digits(denominator)
     scaled_numerator = max(
-        (abs(value.numerator) * (denominator // value.denominator) for value in coordinates),
+        (
+            abs(value.numerator) * (denominator // value.denominator)
+            for value in coordinates
+        ),
         default=0,
     )
     numerator_bound = Fraction(scaled_numerator) * source_degree * row_norm

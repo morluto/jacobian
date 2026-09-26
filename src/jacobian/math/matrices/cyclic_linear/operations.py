@@ -137,6 +137,19 @@ def apply_cyclotomic_field_inclusion(
     element: RationalCyclotomicElement,
 ) -> RationalCyclotomicElement:
     """Map an exact element along its canonical standard cyclotomic inclusion."""
+    from pydantic import ValidationError
+
+    try:
+        inclusion = CyclotomicFieldInclusion.model_validate(
+            inclusion.model_dump(mode="python"), strict=True
+        )
+        element = RationalCyclotomicElement.model_validate(
+            element.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValidationError) as exc:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_value", "the inclusion and element must be valid cyclotomic values"
+        ) from exc
     if element.field != inclusion.source:
         raise CyclicRankKernelAdmissionError(
             "inclusion_parent",

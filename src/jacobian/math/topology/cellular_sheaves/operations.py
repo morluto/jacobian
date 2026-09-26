@@ -16,6 +16,10 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafCohomologyResult,
     SheafField,
     SheafStalk,
+    SheafSubcomplexResult,
+)
+from jacobian.math.topology.cellular_sheaves.subcomplex import (
+    restrict_to_subcomplex as _restrict_to_subcomplex,
 )
 
 
@@ -47,4 +51,11 @@ def sheaf_cohomology(sheaf: FiniteCellularSheaf) -> SheafCohomologyResult:
     return _sheaf_cohomology(sheaf)
 
 
-__all__ = ["from_cover_maps", "sheaf_cohomology"]
+def restrict_to_subcomplex(
+    sheaf: FiniteCellularSheaf, subcomplex: FiniteSimplicialComplex
+) -> SheafSubcomplexResult:
+    """Restrict a sheaf to an actually included subcomplex."""
+    return _restrict_to_subcomplex(sheaf, subcomplex)
+
+
+__all__ = ["from_cover_maps", "restrict_to_subcomplex", "sheaf_cohomology"]

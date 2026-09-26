@@ -730,34 +730,43 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
             ("sheaf",),
         )
     restriction_digit_work = 0
-    for restriction_index, restriction in enumerate(
-        (*sheaf.cover_restrictions, *sheaf.derived_restrictions)
+    for field_name, restrictions in (
+        ("cover_restrictions", sheaf.cover_restrictions),
+        ("derived_restrictions", sheaf.derived_restrictions),
     ):
-        for row_index, row in enumerate(restriction.entries):
-            for column_index, scalar in enumerate(row):
-                digits = sheaf_scalar_digits(scalar)
-                if digits > MAX_SHEAF_ENTRY_DIGITS:
-                    raise _resource(
-                        "cohomology.scalar_digits",
-                        "restriction coefficients exceed the "
-                        f"{MAX_SHEAF_ENTRY_DIGITS}-digit cochain envelope",
-                        (
-                            "sheaf",
-                            "restrictions",
-                            restriction_index,
-                            "entries",
-                            row_index,
-                            column_index,
-                        ),
+        for restriction_index, restriction in enumerate(restrictions):
+            for row_index, row in enumerate(restriction.entries):
+                for column_index, scalar in enumerate(row):
+                    digits = sheaf_scalar_digits(scalar)
+                    location = (
+                        "sheaf",
+                        field_name,
+                        restriction_index,
+                        "entries",
+                        row_index,
+                        column_index,
                     )
-                restriction_digit_work += digits
-                if restriction_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
-                    raise _resource(
-                        "cohomology.scalar_digit_work",
-                        "the source restriction diagram exceeds the "
-                        f"{MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK}-digit work envelope",
-                        ("sheaf", "restrictions", restriction_index),
-                    )
+                    # Cover maps are the coefficients expanded into coboundaries;
+                    # derived entries are already-computed source data and may
+                    # legitimately exceed this per-coefficient arithmetic cap.
+                    if (
+                        field_name == "cover_restrictions"
+                        and digits > MAX_SHEAF_ENTRY_DIGITS
+                    ):
+                        raise _resource(
+                            "cohomology.scalar_digits",
+                            "restriction coefficients exceed the "
+                            f"{MAX_SHEAF_ENTRY_DIGITS}-digit cochain envelope",
+                            location,
+                        )
+                    restriction_digit_work += digits
+                    if restriction_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
+                        raise _resource(
+                            "cohomology.scalar_digit_work",
+                            "the source restriction diagram exceeds the "
+                            f"{MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK}-digit work envelope",
+                            ("sheaf", field_name, restriction_index),
+                        )
     for index, stalk in enumerate(sheaf.stalks):
         if len(stalk.basis) > MAX_SHEAF_STALK_RANK:
             raise _resource(

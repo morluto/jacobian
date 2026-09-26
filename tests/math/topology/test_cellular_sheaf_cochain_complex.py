@@ -95,9 +95,13 @@ def test_cochain_admission_rejects_oversized_source_scalar_before_parsing() -> N
     try:
         sheaf_cochain_complex(oversized)
     except OperationResourceAdmissionError as exc:
-        assert (
-            exc.errors()[0]["type"]
-            == "topology.cellular_sheaf.cohomology.scalar_digits"
+        error = exc.errors()[0]
+        assert error["type"] == "topology.cellular_sheaf.cohomology.scalar_digits"
+        assert error["loc"][:4] == (
+            "sheaf",
+            "cover_restrictions",
+            0,
+            "entries",
         )
     else:
         raise AssertionError("oversized source scalar was not admitted before assembly")

@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.finite_categories._models import FiniteCategoryNerve
 from jacobian.math.finite_categories.values import (
-    MAX_CATEGORY_IDENTIFIER_CHARACTERS,
     CategoryIdentifier,
     FiniteCategory,
     MorphismSpec,
@@ -145,7 +144,16 @@ def _admit(category: FiniteCategory, degree: int) -> None:
         for identifier in row
     )
     identifier_occurrences = sum(sizes) * (2 * degree + 3)
-    identifier_chars += identifier_occurrences * MAX_CATEGORY_IDENTIFIER_CHARACTERS
+    identifiers = [*category.objects]
+    identifiers.extend(
+        identifier
+        for morphism in category.morphisms
+        for identifier in (morphism.morphism_id, morphism.source, morphism.target)
+    )
+    identifiers.extend(identifier for row in category.identities for identifier in row)
+    identifiers.extend(identifier for row in category.composition for identifier in row)
+    max_identifier_chars = max(map(_identifier_character_count, identifiers), default=0)
+    identifier_chars += identifier_occurrences * max_identifier_chars
     if (
         identifier_chars * 6
         + 1024 * (len(category.objects) + len(category.morphisms) + sum(sizes))

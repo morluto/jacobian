@@ -221,6 +221,13 @@ def test_nested_category_identifiers_are_counted_by_encoded_leaf_size() -> None:
     assert error.value.errors()[0]["type"] == "finite_category.nerve_identifier_budget"
 
 
+def test_short_identifiers_at_simplex_boundary_are_not_over_admitted() -> None:
+    # The 32-object discrete nerve has 32 simplices in each degree; short
+    # labels yield a small payload even at degree two.
+    nerve = nerve_prefix(_discrete_category(32), 2)
+    assert tuple(map(len, nerve.simplicial_set.sets)) == (32, 32, 32)
+
+
 def test_degree_zero_nerve_admits_the_per_degree_simplex_bound() -> None:
     # N_0 of a 33-object discrete category is 33 vertices, above the
     # 32-simplex per-degree bound; admission must reject before expansion.

@@ -10,15 +10,13 @@ from typing import Any, Self
 from pydantic import Field, model_validator
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology.cellular_sheaves._kernel import (
-    Scalar,
     _admit_field,
     _cochain_nullspace,
     _cochain_rref,
@@ -29,13 +27,13 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_ENTRY_DIGITS,
     MAX_SHEAF_MORPHISM_COMPONENT_CELLS,
-    MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK,
+    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
     MAX_SHEAF_MORPHISM_WORK,
     MAX_SHEAF_RESTRICTION_CELLS,
     MAX_SHEAF_SECTION_MATRIX_CELLS,
     MAX_SHEAF_SECTION_OUTPUT_CELLS,
-    MAX_SHEAF_SECTION_RESTRICTION_DIGIT_WORK,
-    MAX_SHEAF_SECTION_RESULT_DIGIT_WORK,
+    MAX_SHEAF_SECTION_OUTPUT_CHARS,
+    MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS,
     MAX_SHEAF_SECTION_WORK,
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
@@ -50,12 +48,10 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafSectionSpace,
     SheafStalk,
     _require_field_scalars,
-    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
+    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.subcomplex import restrict_to_subcomplex
-
-RestrictionKey = tuple[Simplex, Simplex]
 
 
 class SheafSectionsRequest(StrictModel):
@@ -186,6 +182,7 @@ class SheafCochainMapResult(StrictModel):
         ):
             raise ValueError("cochain map parents must bind every source simplex")
 
+        coordinate_chars = 0
         for stalks in (source.stalks, target.stalks):
             total_rank = 0
             for stalk in stalks:
@@ -193,6 +190,10 @@ class SheafCochainMapResult(StrictModel):
                 if rank > MAX_SHEAF_STALK_RANK:
                     raise ValueError("cochain map stalk rank exceeds its bound")
                 total_rank += rank
+                simplex_chars = sum(2 + len(vertex) for vertex in stalk.simplex)
+                coordinate_chars += sum(
+                    64 + simplex_chars + len(label) for label in stalk.basis
+                )
             if total_rank > MAX_SHEAF_TOTAL_STALK_RANK:
                 raise ValueError("cochain map total stalk rank exceeds its bound")
         degree_dimensions = tuple(
@@ -207,8 +208,26 @@ class SheafCochainMapResult(StrictModel):
         )
         if cell_count > MAX_SHEAF_SECTION_MATRIX_CELLS:
             raise ValueError("cochain map matrices exceed their cell bound")
+        morphism_component_cells = sum(
+            len(source_stalks[face].basis) * len(target_stalks[face].basis)
+            for faces in degree_faces
+            for face in faces
+        )
+        morphism_face_chars = sum(
+            64 + sum(2 + len(vertex) for vertex in face)
+            for faces in degree_faces
+            for face in faces
+        )
         # Include both coordinate-axis payloads, component simplex keys, and
         # fixed object/array syntax before materializing expected coordinates.
+        output_chars = (
+            sheaf_scalar_json_bound(cell_count + morphism_component_cells)
+            + coordinate_chars
+            + morphism_face_chars
+            + 256
+        )
+        if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+            raise ValueError("cochain map axes and matrices exceed their output bound")
 
         expected_faces = tuple(face for faces in degree_faces for face in faces)
         if tuple(key for key, _matrix in self.morphism.components) != expected_faces:
@@ -392,15 +411,21 @@ def _admit_section_plan(sheaf: FiniteCellularSheaf) -> _SectionPlan:
 def _parse_section_restrictions(
     plan: _SectionPlan,
 ) -> tuple[
-    dict[RestrictionKey, tuple[tuple[Scalar, ...], ...]],
+    dict[tuple[tuple[str, ...], tuple[str, ...]], tuple[tuple[object, ...], ...]],
+    int,
+    int,
     int,
 ]:
-    parsed: dict[RestrictionKey, tuple[tuple[Scalar, ...], ...]] = {}
+    parsed: dict[
+        tuple[tuple[str, ...], tuple[str, ...]], tuple[tuple[object, ...], ...]
+    ] = {}
     max_input_digits = 1
+    max_input_chars = 1
+    input_chars = 0
     for key, restriction in plan.restriction_for.items():
-        matrix: list[tuple[Scalar, ...]] = []
+        matrix: list[tuple[object, ...]] = []
         for row in restriction.entries:
-            parsed_row: list[Scalar] = []
+            parsed_row: list[object] = []
             for entry in row:
                 digits = sheaf_scalar_digits(entry)
                 if digits > MAX_SHEAF_ENTRY_DIGITS:
@@ -409,6 +434,8 @@ def _parse_section_restrictions(
                         f"a restriction coefficient exceeds {MAX_SHEAF_ENTRY_DIGITS} decimal digits",
                     )
                 max_input_digits = max(max_input_digits, digits)
+                input_chars += sheaf_scalar_json_bound(1, digits)
+                max_input_chars = max(max_input_chars, 2 * digits + 32)
                 try:
                     parsed_row.append(plan.field.parse(entry))
                 except (ValueError, ZeroDivisionError, OverflowError) as exc:
@@ -418,39 +445,46 @@ def _parse_section_restrictions(
                     ) from exc
             matrix.append(tuple(parsed_row))
         parsed[key] = tuple(matrix)
-    return parsed, max_input_digits
+    return parsed, input_chars, max_input_chars, max_input_digits
 
 
-def _require_section_height_bound(plan: _SectionPlan, max_input_digits: int) -> int:
+def _require_section_height_bound(
+    plan: _SectionPlan, input_chars: int, max_input_chars: int, max_input_digits: int
+) -> int:
     pivot_bound = min(plan.row_count, plan.ambient_dimension)
     if plan.sheaf.coefficient_field.value == "QQ":
         # Each equation row has at most one source-stalk block (rank <= 8)
         # and one target coordinate. Clearing those row denominators and
         # applying Hadamard's determinant bound bounds every RREF/nullspace
         # coordinate by the corresponding minors before exact elimination.
-        max_result_scalar_digits = (
+        max_result_scalar_chars = (
             2 * (MAX_SHEAF_STALK_RANK + 1) * max_input_digits + 2
         ) * pivot_bound + 1
     else:
-        max_result_scalar_digits = len(str(plan.sheaf.prime))
-    result_digit_work = (
-        plan.matrix_cells * max_input_digits
-        + 2 * plan.ambient_dimension * plan.ambient_dimension * max_result_scalar_digits
+        max_result_scalar_chars = len(str(plan.sheaf.prime))
+    growth_output_chars = (
+        input_chars
+        + plan.matrix_cells * max_input_chars
+        + 2 * plan.ambient_dimension * plan.ambient_dimension * max_result_scalar_chars
+        + plan.row_count
+        * (2 * max((len(".".join(cell)) for cell in plan.cells), default=1) + 64)
     )
-    if result_digit_work > MAX_SHEAF_SECTION_RESULT_DIGIT_WORK:
+    if growth_output_chars > MAX_SHEAF_SECTION_OUTPUT_CHARS:
         raise _section_resource(
             "intermediate_height_bound",
-            "the determinant-based scalar-height bound exceeds the section digit-work envelope",
+            "the determinant-based exact output bound exceeds the section output envelope",
         )
-    return max_result_scalar_digits
+    return max_result_scalar_chars
 
 
 def _section_matrix_and_axes(
     plan: _SectionPlan,
-    parsed: dict[RestrictionKey, tuple[tuple[Scalar, ...], ...]],
+    parsed: dict[
+        tuple[tuple[str, ...], tuple[str, ...]], tuple[tuple[object, ...], ...]
+    ],
 ) -> tuple[
     tuple[SheafCochainCoordinate, ...],
-    list[list[Scalar]],
+    list[list[object]],
     tuple[SheafSectionCompatibilityAxis, ...],
     dict[tuple[tuple[str, ...], str], int],
 ]:
@@ -465,7 +499,7 @@ def _section_matrix_and_axes(
 
     zero = plan.field.zero()
     one = plan.field.one()
-    scalar_rows: list[list[Scalar]] = []
+    scalar_rows: list[list[object]] = []
     row_axes: list[SheafSectionCompatibilityAxis] = []
     for source, target in plan.pairs:
         restriction_matrix = parsed[(source, target)]
@@ -491,7 +525,7 @@ def _section_matrix_and_axes(
 def _section_evaluations(
     plan: _SectionPlan,
     offsets: dict[tuple[tuple[str, ...], str], int],
-    section_vectors: list[list[Scalar]],
+    section_vectors: list[list[object]],
     section_basis: tuple[str, ...],
 ) -> tuple[SheafSectionEvaluation, ...]:
     evaluations: list[SheafSectionEvaluation] = []
@@ -519,8 +553,12 @@ def _section_evaluations(
 def sections(sheaf: FiniteCellularSheaf) -> SheafSectionSpace:
     """Return the exact kernel of all stalk-compatibility equations."""
     plan = _admit_section_plan(sheaf)
-    parsed, max_input_digits = _parse_section_restrictions(plan)
-    result_scalar_digits = _require_section_height_bound(plan, max_input_digits)
+    parsed, input_chars, max_input_chars, max_input_digits = (
+        _parse_section_restrictions(plan)
+    )
+    result_scalar_digits = _require_section_height_bound(
+        plan, input_chars, max_input_chars, max_input_digits
+    )
     ambient_basis, scalar_rows, row_axes, offsets = _section_matrix_and_axes(
         plan, parsed
     )
@@ -555,11 +593,11 @@ def sections(sheaf: FiniteCellularSheaf) -> SheafSectionSpace:
         if plan.sheaf.coefficient_field.value != "QQ"
         else result_scalar_digits
     )
-    result_digit_work = sheaf_scalar_digit_work(scalar_count, scalar_digits)
-    if result_digit_work > MAX_SHEAF_SECTION_RESULT_DIGIT_WORK:
+    serialized_chars = sheaf_scalar_json_bound(scalar_count, scalar_digits)
+    if serialized_chars > MAX_SHEAF_SECTION_OUTPUT_CHARS:
         raise _section_resource(
-            "result_digit_work_bound",
-            f"section-space exact scalar values exceed {MAX_SHEAF_SECTION_RESULT_DIGIT_WORK} digits of work",
+            "output_chars_bound",
+            f"section-space exact scalar output exceeds {MAX_SHEAF_SECTION_OUTPUT_CHARS} characters",
         )
 
     return SheafSectionSpace._from_kernel(
@@ -625,7 +663,7 @@ def restrict_sections(
             "restriction_work_bound",
             "exact section restriction coordinate work exceeds its bound",
         )
-    max_basis_scalar_digits = max(
+    max_basis_scalar_chars = max(
         (
             sheaf_scalar_digits(value)
             for space in (source, target)
@@ -635,27 +673,30 @@ def restrict_sections(
         default=1,
     )
     if source.sheaf.coefficient_field.value == "QQ":
-        map_scalar_digits = (
+        map_scalar_chars = (
             2
             * (
-                target.dimension * max_basis_scalar_digits
+                target.dimension * max_basis_scalar_chars
                 + len(str(factorial(target.dimension)))
             )
             + 3
         )
     else:
-        map_scalar_digits = len(str(source.sheaf.prime))
-    result_digit_work = output_cells * map_scalar_digits
-    if result_digit_work > MAX_SHEAF_SECTION_RESTRICTION_DIGIT_WORK:
+        map_scalar_chars = len(str(source.sheaf.prime))
+    output_bound = (
+        len(source.model_dump_json())
+        + len(target.model_dump_json())
+        + output_cells * map_scalar_chars
+    )
+    if output_bound > MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS:
         raise _section_resource(
-            "restriction_digit_work_bound",
-            "induced section-map coefficients exceed the admitted digit-work bound",
+            "restriction_output_bound",
+            "source, target, and induced section map exceed the aggregate result bound",
         )
-    restriction_columns: list[list[Scalar]] = []
-    for restricted_values in restricted_columns:
+    columns: list[list[object]] = []
+    for restricted in restricted_columns:
         augmented = [
-            [*row, value]
-            for row, value in zip(target_rows, restricted_values, strict=True)
+            [*row, value] for row, value in zip(target_rows, restricted, strict=True)
         ]
         reduced, pivots = _cochain_rref(field, augmented)
         width = target.dimension + 1
@@ -669,12 +710,9 @@ def restrict_sections(
         for row_index, pivot in enumerate(pivots):
             if pivot < target.dimension:
                 coordinates[pivot] = reduced[row_index][width - 1]
-        restriction_columns.append(coordinates)
+        columns.append(coordinates)
     matrix = tuple(
-        tuple(
-            field.typed(restriction_columns[column][row])
-            for column in range(len(restriction_columns))
-        )
+        tuple(field.typed(columns[column][row]) for column in range(len(columns)))
         for row in range(target.dimension)
     )
     return SheafSectionRestriction._from_kernel(
@@ -723,10 +761,18 @@ def _scan_morphism_scalar_text(
     components: tuple[Component, ...],
 ) -> tuple[int, int]:
     field = _admit_field(source.coefficient_field, source.prime)
-    total_input_digits = 0
+    total_chars = 0
     max_digits = 1
     for _key, matrix in components:
+        if not isinstance(matrix, (tuple, list)):
+            raise _section_domain(
+                "morphism.scalar_invalid", "component matrices must be row sequences"
+            )
         for row in matrix:
+            if not isinstance(row, (tuple, list)):
+                raise _section_domain(
+                    "morphism.scalar_invalid", "component matrix rows must be sequences"
+                )
             for value in row:
                 if not isinstance(value, CanonicalRational) and type(value) is not int:
                     raise _section_domain(
@@ -746,7 +792,7 @@ def _scan_morphism_scalar_text(
                         "morphism.coefficient_digits_bound",
                         f"a component coefficient exceeds {MAX_SHEAF_ENTRY_DIGITS} digits",
                     )
-                total_input_digits += digits
+                total_chars += sheaf_scalar_json_bound(1, digits)
                 max_digits = max(max_digits, digits)
     for parent in (source, target):
         for restriction in (*parent.cover_restrictions, *parent.derived_restrictions):
@@ -773,16 +819,16 @@ def _scan_morphism_scalar_text(
                             "morphism.coefficient_digits_bound",
                             f"a restriction coefficient exceeds {MAX_SHEAF_ENTRY_DIGITS} digits",
                         )
-                    total_input_digits += digits
+                    total_chars += sheaf_scalar_json_bound(1, digits)
                     max_digits = max(max_digits, digits)
-    return total_input_digits, max_digits
+    return total_chars, max_digits
 
 
 def _admit_morphism_resources(
     source: FiniteCellularSheaf,
     target: FiniteCellularSheaf,
     components: tuple[Component, ...],
-) -> dict[RestrictionKey, SheafRestriction]:
+) -> tuple[dict[tuple[tuple[str, ...], tuple[str, ...]], SheafRestriction], int, int]:
     axis = source.canonical_face_order
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
@@ -811,7 +857,7 @@ def _admit_morphism_resources(
         f_a, f_b = len(source_stalks[a].basis), len(source_stalks[b].basis)
         g_a, g_b = len(target_stalks[a].basis), len(target_stalks[b].basis)
         square_work += g_b * f_a * (g_a + f_b)
-    total_input_digits, max_input_digits = _scan_morphism_scalar_text(
+    total_input_chars, max_input_digits = _scan_morphism_scalar_text(
         source, target, components
     )
     if square_work > MAX_SHEAF_MORPHISM_WORK:
@@ -822,14 +868,14 @@ def _admit_morphism_resources(
         MAX_SHEAF_STALK_RANK + 1
     )
     if (
-        total_input_digits + square_work * scalar_growth
-        > MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK
+        total_input_chars + square_work * scalar_growth
+        > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
     ):
         raise _section_resource(
-            "morphism.digit_work_bound",
-            "worst-case exact naturality arithmetic exceeds its admitted digit-work envelope",
+            "morphism.output_chars_bound",
+            "worst-case exact naturality arithmetic exceeds its output envelope",
         )
-    return target_cover
+    return target_cover, max_input_digits, square_work
 
 
 def _admit_component_matrix(
@@ -915,7 +961,7 @@ def morphism(
         )
     _complete_diagram(source, role="source")
     _complete_diagram(target, role="target")
-    target_cover = _admit_morphism_resources(source, target, components)
+    target_cover, _, _ = _admit_morphism_resources(source, target, components)
     p = source_field.prime
     source_axis = source.canonical_face_order
     normalized_keys = tuple(
@@ -994,43 +1040,22 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
     the source and target diagrams and establishes the naturality squares
     before assembling the direct-sum stalk maps in each cochain degree.
     """
-    if not isinstance(morphism_value, SheafMorphismResult):
+    if type(morphism_value) is not SheafMorphismResult:
         raise _section_domain(
             "cochain_map_morphism_type",
-            "the cochain map input must be a cellular-sheaf morphism result",
+            "an induced cochain map requires a sheaf morphism result",
         )
-    try:
-        morphism_value = SheafMorphismResult.model_validate(morphism_value.model_dump())
-    except (AttributeError, TypeError, ValueError) as error:
+    fields = object.__getattribute__(morphism_value, "__dict__")
+    if not isinstance(fields.get("source"), FiniteCellularSheaf) or not isinstance(
+        fields.get("target"), FiniteCellularSheaf
+    ):
         raise _section_domain(
-            "cochain_map_morphism_invalid", "the cellular-sheaf morphism is malformed"
-        ) from error
-    source = morphism_value.source
-    target = morphism_value.target
-    if source.complex != target.complex:
-        raise _section_domain(
-            "cochain_map_parent_mismatch",
-            "the induced cochain map requires the same source complex",
+            "cochain_map_morphism_parent",
+            "a sheaf morphism must contain source and target cellular sheaves",
         )
-    # Compute matrix dimensions and complete output envelope before naturality
-    # checking, which scans every restriction and exact scalar.
-    source_stalks = {item.simplex: item for item in source.stalks}
-    target_stalks = {item.simplex: item for item in target.stalks}
-    degree_faces = tuple(group.faces for group in source.complex.faces_by_dimension)
-    preflight_dimensions = tuple(
-        (
-            sum(len(source_stalks[face].basis) for face in faces),
-            sum(len(target_stalks[face].basis) for face in faces),
-        )
-        for faces in degree_faces
+    checked = morphism(
+        morphism_value.source, morphism_value.target, morphism_value.components
     )
-    matrix_cells = sum(a * b for a, b in preflight_dimensions)
-    if matrix_cells > MAX_SHEAF_SECTION_MATRIX_CELLS:
-        raise _section_resource(
-            "cochain_map_cells_bound",
-            "the induced degreewise cochain matrices exceed their cell bound",
-        )
-    checked = morphism(source, target, morphism_value.components)
     if not checked.natural:
         raise _section_domain(
             "cochain_map_non_natural",
@@ -1038,9 +1063,15 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
         )
     source = checked.source
     target = checked.target
+    if source.complex != target.complex:
+        raise _section_domain(
+            "cochain_map_parent_mismatch",
+            "the induced cochain map requires the same source complex",
+        )
     source_stalks = {item.simplex: item for item in source.stalks}
     target_stalks = {item.simplex: item for item in target.stalks}
     by_simplex = dict(checked.components)
+    degree_faces = tuple(group.faces for group in source.complex.faces_by_dimension)
     source_bases: list[tuple[SheafCochainCoordinate, ...]] = []
     target_bases: list[tuple[SheafCochainCoordinate, ...]] = []
     dimensions: list[tuple[int, int]] = []
@@ -1058,7 +1089,21 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
         source_bases.append(source_basis)
         target_bases.append(target_basis)
         dimensions.append((len(source_basis), len(target_basis)))
-    request_checkpoint("before cochain map result construction")
+    matrix_cells = sum(source_dim * target_dim for source_dim, target_dim in dimensions)
+    if matrix_cells > MAX_SHEAF_SECTION_MATRIX_CELLS:
+        raise _section_resource(
+            "cochain_map_cells_bound",
+            "the induced degreewise cochain matrices exceed their cell bound",
+        )
+    scalar_count = matrix_cells + sum(
+        len(row) for _face, matrix in checked.components for row in matrix
+    )
+    output_chars = sheaf_scalar_json_bound(scalar_count)
+    if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+        raise _section_resource(
+            "cochain_map_output_bound",
+            "the induced degreewise cochain matrices exceed their output bound",
+        )
     zero: SheafScalar = (
         CanonicalRational.from_fraction(Fraction(0))
         if source.coefficient_field.value == "QQ"
@@ -1136,25 +1181,25 @@ def compose_morphisms(
         ),
         default=1,
     )
-    scalar_digit_work = sheaf_scalar_digit_work(
+    scalar_chars_bound = sheaf_scalar_json_bound(
         output_cells,
         (2 * MAX_SHEAF_STALK_RANK * max_input_digits + 8) * MAX_SHEAF_STALK_RANK,
     )
     if (
         total_work > MAX_SHEAF_MORPHISM_WORK
-        or scalar_digit_work > MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK
+        or scalar_chars_bound > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
     ):
         raise _section_resource(
             "morphism.compose_bound",
             "composite component arithmetic exceeds its admitted work or output bound",
         )
     composed: list[Component] = []
+    output_chars = 0
     for simplex in first.source.canonical_face_order:
         left = tuple(tuple(field.parse(x) for x in row) for row in by_first[simplex])
         right = tuple(tuple(field.parse(x) for x in row) for row in by_second[simplex])
         source_rank = source_stalks[simplex]
         final_rank = final_stalks[simplex]
-        matrix: tuple[tuple[Scalar, ...], ...]
         if final_rank == 0:
             matrix = ()
         elif source_rank == 0:
@@ -1167,7 +1212,19 @@ def compose_morphisms(
         else:
             matrix = field.matmul(right, left)
         rendered = field.render(matrix)
+        output_chars += sheaf_scalar_json_bound(
+            sum(len(row) for row in rendered),
+            max(
+                (sheaf_scalar_digits(value) for row in rendered for value in row),
+                default=1,
+            ),
+        )
         composed.append((simplex, rendered))
+    if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+        raise _section_resource(
+            "morphism.compose_bound",
+            "composite component arithmetic exceeds its admitted bound",
+        )
     return SheafMorphismResult(
         source=first.source,
         target=second.target,

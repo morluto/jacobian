@@ -22,6 +22,9 @@ from jacobian.math.topology.cellular_sheaves.operations import (
     restrict_to_subcomplex,
     sheaf_cohomology,
 )
+from jacobian.math.topology.cellular_sheaves.morphism_kernel_tools import (
+    TOOLS as MORPHISM_KERNEL_TOOLS,
+)
 
 __all__ = ["TOOLS"]
 
@@ -110,6 +113,7 @@ def _identity_cover_maps() -> list[dict[str, object]]:
 
 
 TOOLS: MathTools = (
+    *MORPHISM_KERNEL_TOOLS,
     *COHOMOLOGY_MAP_TOOLS,
     *EXTENSION_TOOLS,
     MathTool(

@@ -48,6 +48,9 @@ MAX_SHEAF_MORPHISM_COMPONENT_CELLS = 32768
 MAX_SHEAF_MORPHISM_WORK = 4000000
 MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK = 8000000
 MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK = 8000000
+MAX_SHEAF_MORPHISM_OUTPUT_CHARS = 8000000
+MAX_SHEAF_SECTION_OUTPUT_CHARS = 8000000
+MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS = 8000000
 
 BasisLabel = Annotated[
     str,
@@ -71,6 +74,13 @@ def sheaf_scalar_digits(value: SheafScalar) -> int:
 def sheaf_scalar_digit_work(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
     """Bound exact scalar component digits across a collection of values."""
     return count * digits
+
+
+def sheaf_scalar_json_bound(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
+    """Conservative JSON character bound for exact scalar collections."""
+    # Canonical rational JSON carries numerator and denominator as separate
+    # decimal strings plus object keys, quotes, and punctuation. Bound both.
+    return count * (2 * digits + 32)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -992,8 +1002,11 @@ __all__ = [
     "MAX_SHEAF_HODGE_CUBIC_WORK",
     "MAX_SHEAF_HODGE_MATRIX_CELLS",
     "MAX_SHEAF_HODGE_RESULT_DIGIT_WORK",
+    "MAX_SHEAF_MORPHISM_OUTPUT_CHARS",
     "MAX_SHEAF_PRIME",
     "MAX_SHEAF_RESTRICTION_CELLS",
+    "MAX_SHEAF_SECTION_OUTPUT_CHARS",
+    "MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS",
     "MAX_SHEAF_SIMPLICES",
     "MAX_SHEAF_STALK_RANK",
     "MAX_SHEAF_TOTAL_STALK_RANK",
@@ -1016,4 +1029,5 @@ __all__ = [
     "SheafOutcome",
     "SheafRestriction",
     "SheafStalk",
+    "sheaf_scalar_json_bound",
 ]

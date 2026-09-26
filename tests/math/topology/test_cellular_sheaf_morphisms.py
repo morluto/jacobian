@@ -28,6 +28,7 @@ from jacobian.math.topology.cellular_sheaves import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
+    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismComposeRequest,
@@ -198,6 +199,19 @@ def test_natural_morphism_induces_axis_bound_cochain_matrices() -> None:
         if tool.operation_id == "cellular_sheaf.morphism.cochain_map"
     )
     assert tool.run(request) == result
+
+
+def test_cochain_map_rejects_malformed_native_morphism_before_dereference() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        cochain_map(object())  # type: ignore[arg-type]
+    malformed = SheafMorphismResult.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        cochain_map(malformed)
+
+
+def test_rational_json_bound_accounts_for_both_decimal_components() -> None:
+    # Rational wire scalars serialize numerator and denominator separately.
+    assert sheaf_scalar_json_bound(1, 64) >= 2 * 64 + 20
 
 
 def test_cochain_map_consumer_rechecks_serialized_naturality_claim() -> None:

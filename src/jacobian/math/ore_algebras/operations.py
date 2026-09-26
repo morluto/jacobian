@@ -595,13 +595,20 @@ def _derivative_rf_bound(
         def denominator_profile(poly: _Poly) -> tuple[int, int]:
             common = lcm(*(coefficient.denominator for coefficient in poly.values()))
             return _bounded_integer_digits(common), max(
-                (_bounded_integer_digits(abs(value.numerator)) for value in poly.values()),
+                (
+                    _bounded_integer_digits(abs(value.numerator))
+                    for value in poly.values()
+                ),
                 default=1,
             )
 
         numerator_denominator_digits, numerator_digits = denominator_profile(numerator)
-        denominator_denominator_digits, denominator_digits = denominator_profile(denominator)
-        collision_digits = _bounded_integer_digits(min(len(numerator), len(denominator)))
+        denominator_denominator_digits, denominator_digits = denominator_profile(
+            denominator
+        )
+        collision_digits = _bounded_integer_digits(
+            min(len(numerator), len(denominator))
+        )
         common_product_denominator = (
             numerator_denominator_digits + denominator_denominator_digits
         )
@@ -812,9 +819,7 @@ def differential_operator_apply(
             (
                 0,
                 _rf_bound(term.coefficient),
-                _derivative_rf_bound(
-                    function_bound, term.order, source=function_value
-                ),
+                _derivative_rf_bound(function_bound, term.order, source=function_value),
                 0,
             )
             for term in operator_value.terms

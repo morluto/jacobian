@@ -100,7 +100,10 @@ def _admit_deck_structure(
         raise OperationResourceAdmissionError(
             location=("deck", "card_order"),
             code="graph_deck.anonymous_edge_count_order_bound",
-            message="exact anonymous vertex-deck edge count supports card orders zero through eight",
+            message=(
+                "exact anonymous vertex-deck edge count supports card orders "
+                f"zero through {MAX_ANONYMOUS_VERTEX_DECK_ORDER - 1}"
+            ),
         )
     if type(classes) is not tuple:
         raise OperationDomainValidationError(

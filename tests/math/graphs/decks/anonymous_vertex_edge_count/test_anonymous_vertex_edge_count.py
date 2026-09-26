@@ -123,6 +123,22 @@ def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None
     assert result.source_edge_count == 0
 
 
+def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=tuple(f"v{index:02d}" for index in range(10)), edges=()
+    )
+    deck = AnonymousGraphCardMultiset(
+        card_order=10,
+        classes=(AnonymousGraphCardClass(representative=graph, multiplicity=11),),
+    )
+
+    result = anonymous_vertex_deck_edge_count(deck)
+
+    assert result.source_order == 11
+    assert result.card_edge_total == 0
+    assert result.source_edge_count == 0
+
+
 @pytest.mark.parametrize("missing", ["vertices", "edges"])
 def test_native_admission_rejects_missing_constructed_graph_fields(
     missing: str,

@@ -9,7 +9,7 @@ from jacobian.math.function_fields._models import (
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
-from jacobian.math.function_fields.operations import function_field_place_uniformizer
+from jacobian.math.function_fields import function_field_place_uniformizer
 
 
 def _field(p: int = 5) -> FiniteFunctionField:

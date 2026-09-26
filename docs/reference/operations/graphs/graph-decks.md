@@ -13,10 +13,10 @@ are recovered from the card indices on the source edge axis. Isomorphism
 classes are determined by canonicalizing each card to the least adjacency bit
 word over all vertex permutations, a complete invariant rather than a degree
 sequence or hash approximation, so the aggregate exact permutation work is
-preflighted before any canonical form is computed. Quotienting is limited to at
-most 10 source vertices and a preflighted canonicalization work bound. The
-vertex quotient currently admits orders through eight; order nine and above
-exceed its exact permutation-canonicalization budget. The edge quotient
+preflighted before any canonical form is computed. Quotienting is limited by
+preflighted canonicalization work bounds. The vertex quotient admits source
+orders through seven, including the work needed to self-compare its result;
+larger orders exceed the exact permutation budget. The edge quotient
 admits per-card permutation canonicalization over the full source order.
 
 `graph.deck.vertex.induced_subgraph_count.compute` reconstructs the number of

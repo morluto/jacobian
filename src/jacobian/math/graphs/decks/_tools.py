@@ -265,8 +265,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Group complete source-bound vertex-deletion cards by exact graph "
             "isomorphism, retaining a representative, exact multiplicity, and "
-            "source-card indices. Admits at most 10 source vertices and "
-            "2000000 exact permutation canonicalization work units."
+            "source-card indices. Admits source order through 7 under a "
+            "2000000-unit exact permutation canonicalization and "
+            "self-comparison envelope."
         ),
         request_type=UnlabelledVertexDeckRequest,
         result_type=UnlabelledVertexDeck,

@@ -405,7 +405,8 @@ class VertexDeckAnonymousMultisetRequest(StrictModel):
             "all cards and aligned receipts. The operation forgets source labels "
             "after authenticating the family and returns its anonymous graph-card "
             "multiset; source order is limited by the exact permutation work "
-            "envelope (n * (n-1)! * (1 + (n-1) + binom(n-1, 2)) <= 2,000,000)."
+            "envelope, including self-comparison closure: 2*n*(n-1)!* "
+            "((n-1) + 2*binom(n-1, 2)) <= 2,000,000 (n <= 7)."
         ),
     )
 
@@ -425,6 +426,11 @@ class VertexDeckAnonymousMultisetRequest(StrictModel):
         if not isinstance(vertices, (tuple, list)):
             return value
         source_order = len(vertices)
+        if source_order > MAX_UNLABELLED_DECK_VERTICES + 1:
+            raise _validation_error(
+                "anonymous_source_order",
+                "source order exceeds the cheap structural envelope of 11 vertices",
+            )
         return value
 
 
@@ -590,8 +596,9 @@ class UnlabelledVertexDeckRequest(StrictModel):
 
     deck: VertexDeletionFamily = Field(
         description=(
-            "A complete vertex-deletion family with at most 10 source vertices; "
-            "exact permutation canonicalization is bounded by 2000000 work units."
+            "A complete vertex-deletion family admitted through source order 7; "
+            "exact permutation canonicalization and self-comparison are each "
+            "bounded by 2000000 work units."
         )
     )
 

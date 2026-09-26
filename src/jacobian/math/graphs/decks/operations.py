@@ -277,14 +277,14 @@ def vertex_deck_anonymous_multiset(
     # Equality canonicalizes both operands, so ensure even self-comparison is
     # admitted for every producer result, including the maximal class count.
     equality_work = 2 * _anonymous_canonicalization_work(card_order, card_count)
-    output_bytes = card_count * (64 + 16 * comb(card_order, 2))
+    output_units = card_count * (64 + 16 * comb(card_order, 2))
     if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK or equality_work > MAX_ANONYMOUS_DECK_EQUALITY_WORK:
         raise OperationResourceAdmissionError(
             location=("family",),
             code="graph_deck.anonymous_source_work_bound",
             message="anonymous vertex-deck result cannot be compared within the exact work bound",
         )
-    if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
+    if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
         raise OperationResourceAdmissionError(
             location=("family",),
             code="graph_deck.anonymous_source_output_bound",

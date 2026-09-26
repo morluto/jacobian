@@ -112,12 +112,8 @@ def test_anonymous_result_composes_with_global_deck_equality() -> None:
         )
 
     left, same, other = map(anonymous, (left_graph, relabelled, different))
-    assert anonymous_deck_equality(
-        AnonymousDeckEqualityRequest(left=left, right=same)
-    ).equal
-    assert not anonymous_deck_equality(
-        AnonymousDeckEqualityRequest(left=left, right=other)
-    ).equal
+    assert anonymous_deck_equality(left, same).equal
+    assert not anonymous_deck_equality(left, other).equal
 
 
 def test_source_family_replay_rejects_forged_card_before_canonicalizing() -> None:
@@ -143,6 +139,8 @@ def test_canonicalization_bound_is_checked_before_source_family_replay() -> None
 
 
 def test_raw_request_keeps_semantic_admission_in_operation_path() -> None:
+    # Nine vertices exceed the factorial work envelope but fit the cheap raw
+    # carrier cap; malformed nested data is parsed before operation admission.
     with pytest.raises(ValidationError, match="cards"):
         VertexDeckAnonymousMultisetRequest.model_validate(
             {
@@ -155,6 +153,33 @@ def test_raw_request_keeps_semantic_admission_in_operation_path() -> None:
                 }
             }
         )
+
+
+def test_raw_request_rejects_order_beyond_carrier_cap_before_nested_parsing() -> None:
+    with pytest.raises(ValidationError, match="11 vertices"):
+        VertexDeckAnonymousMultisetRequest.model_validate(
+            {
+                "family": {
+                    "source": {
+                        "vertices": [f"v{i}" for i in range(12)],
+                        "edges": [],
+                    },
+                    "cards": "malformed nested cards",
+                }
+            }
+        )
+
+
+def test_max_admitted_source_order_composes_with_equality() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=tuple("abcdefg"),
+        edges=(),
+    )
+    result = vertex_deck_anonymous_multiset(
+        VertexDeckAnonymousMultisetRequest(family=vertex_deletion_family(graph))
+    )
+    comparison = anonymous_deck_equality(result, result)
+    assert comparison.equal
 
 
 def test_operation_is_published_with_typed_output_and_equality_example() -> None:

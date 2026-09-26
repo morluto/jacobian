@@ -39,83 +39,44 @@ def _plan(paths: list[str], *, event: str = "pull_request") -> TestPlan:
     return plan
 
 
-def test_model_change_selects_its_math_owner_and_public_contract_evidence() -> None:
-    plan = _plan(["src/jacobian/math/combinatorics/codes/general/_models.py"])
+@pytest.mark.parametrize(
+    ("path", "math_tests"),
+    [
+        (
+            "src/jacobian/math/combinatorics/codes/general/_models.py",
+            "tests/math/combinatorics/codes/general",
+        ),
+        ("src/jacobian/math/logic/_cnf.py", "tests/math/logic"),
+        ("src/jacobian/math/topology/_pseudomanifold.py", "tests/math/topology"),
+        ("src/jacobian/math/topology/_structural.py", "tests/math/topology"),
+        (
+            "src/jacobian/math/number_theory/prime_affine_forms/_interval.py",
+            "tests/math/number_theory/prime_affine_forms",
+        ),
+        ("src/jacobian/math/logic/_sat.py", "tests/math/logic"),
+        ("src/jacobian/math/logic/_smt.py", "tests/math/logic"),
+        (
+            "src/jacobian/math/combinatorics/codes/general/_dual_operations.py",
+            "tests/math/combinatorics/codes/general",
+        ),
+        (
+            "src/jacobian/math/number_theory/numerical_semigroups/operations.py",
+            "tests/math/number_theory/numerical_semigroups",
+        ),
+    ],
+)
+def test_public_math_change_selects_owner_and_catalog_evidence(
+    path: str, math_tests: str
+) -> None:
+    plan = _plan([path])
 
     assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/combinatorics/codes/general",)
+    assert plan.math_tests == (math_tests,)
     assert plan.run_catalog is True
     assert plan.run_catalog_examples is True
     assert plan.run_scale is False
     assert plan.python_lanes == ()
     assert plan.boundary_lanes == ()
-
-
-def test_canonical_cnf_contract_change_selects_public_contract_evidence() -> None:
-    plan = _plan(["src/jacobian/math/logic/_cnf.py"])
-
-    assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/logic",)
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
-
-
-def test_pseudomanifold_contract_change_selects_public_contract_evidence() -> None:
-    plan = _plan(["src/jacobian/math/topology/_pseudomanifold.py"])
-
-    assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/topology",)
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
-
-
-def test_structural_topology_contract_change_selects_public_contract_evidence() -> None:
-    plan = _plan(["src/jacobian/math/topology/_structural.py"])
-
-    assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/topology",)
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
-
-
-def test_prime_affine_interval_contract_change_selects_public_contract_evidence() -> (
-    None
-):
-    plan = _plan(["src/jacobian/math/number_theory/prime_affine_forms/_interval.py"])
-
-    assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/number_theory/prime_affine_forms",)
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
-
-
-@pytest.mark.parametrize("filename", ["_sat.py", "_smt.py"])
-def test_logic_solver_contract_change_selects_public_contract_evidence(
-    filename: str,
-) -> None:
-    plan = _plan([f"src/jacobian/math/logic/{filename}"])
-
-    assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/logic",)
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
-
-
-def test_public_operation_kernel_selects_catalog_examples() -> None:
-    plan = _plan(["src/jacobian/math/combinatorics/codes/general/_dual_operations.py"])
-
-    assert plan.run_math is True
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
-
-
-def test_numerical_semigroup_operations_select_catalog_examples() -> None:
-    plan = _plan(["src/jacobian/math/number_theory/numerical_semigroups/operations.py"])
-
-    assert plan.run_math is True
-    assert plan.math_tests == ("tests/math/number_theory/numerical_semigroups",)
-    assert plan.run_catalog is True
-    assert plan.run_catalog_examples is True
 
 
 def test_nested_math_owner_selects_its_top_level_test_root() -> None:

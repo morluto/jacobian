@@ -26,3 +26,5 @@ that need more context than an operation card:
 - [Petri-net reversal](petri-net-reversal.md)
 - [Petri-net state equation](petri-net-state-equation.md)
 - [Petri-net target marking reachability](petri-net-target-reachability.md)
+- [Petri-net reachable dead markings](petri-net-reachable-dead-markings.md)
+- [Petri-net terminal SCC profiles](petri-net-terminal-scc-profile.md)

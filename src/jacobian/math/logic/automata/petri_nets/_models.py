@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -13,6 +13,7 @@ from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
     MAX_PETRI_PLACES,
     MAX_PETRI_TRANSITIONS,
+    MAX_REACHABILITY_FIRING_RECORDS,
     MAX_REACHABILITY_STATES,
     FiringSequence,
     Marking,
@@ -25,19 +26,24 @@ from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_SIPHON_TRAP_WORK = 20_000_000
 MAX_SIPHON_TRAP_PLACES = 20
-MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES = 4_000_000
+MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES = 4_000_000
 MAX_FIRING_SEQUENCE_LENGTH = 1024
 MAX_CONCURRENT_STEP_OCCURRENCES = 1000
 MAX_STATE_EQUATION_OCCURRENCES = 1000
 MAX_STATE_EQUATION_TARGET_ABS = 64_001_000
-MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
     MAX_PETRI_TRANSITIONS * (MAX_PETRI_TRANSITIONS - 1) // 2
 )
-MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_COMMUTATION_PROFILE_WORK = 100_000
-MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES = 10 * 1024 * 1024
-MAX_PUMPING_WITNESS_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_TERMINAL_SCC_PROFILE_WORK = 1_000_000
+MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
+TerminalSCCStateIndices = Annotated[
+    tuple[int, ...],
+    Field(min_length=1, max_length=MAX_REACHABILITY_STATES),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -166,7 +172,7 @@ class MarkingConflictProfileResult(StrictModel):
             enabled_count=len(enabled),
             pair_count=pair_bound,
         )
-        if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        if output_bound > MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES:
             raise _validation_error(
                 "conflict_profile_output",
                 "marking conflict profile exceeds the serialized result bound",
@@ -265,54 +271,6 @@ def _marking_conflict_profile_output_bound(
     # the extra byte accounts for array separators. The fixed allowance covers
     # object keys, array delimiters, and the empty source fields.
     return source_bytes + 512 + enabled_count * 4 + pair_count * 10
-
-
-def _firing_sequence_replay_output_bound(
-    net: PetriNet, marking: Marking, sequence_length: int
-) -> int:
-    """Bound the retained replay ledger before any prefix marking is built."""
-
-    net_bytes = len(net.model_dump_json().encode("utf-8"))
-    source_marking_bytes = len(marking.model_dump_json().encode("utf-8"))
-    # Every produced marking follows the parent convention of the source
-    # marking and can widen each token spelling to four decimal digits
-    # (MAX_PETRI_MARKING is 1000). A parent-bound source marking already
-    # serializes the whole net, so retained prefixes cost this same width.
-    derived_marking_bytes = source_marking_bytes + 3 * net.place_count
-    prefix_bytes = sequence_length * derived_marking_bytes
-    # Sequence entries use at most two digits, Parikh and deficit entries at
-    # most five, and the blocked residual the admitted signed envelope.
-    numeric_bytes = 10 * (
-        1 + sequence_length + net.transition_count + 2 * net.place_count
-    )
-    return (
-        net_bytes
-        + source_marking_bytes
-        + derived_marking_bytes
-        + prefix_bytes
-        + numeric_bytes
-        + 1024
-    )
-
-
-def _pumping_witness_output_bound(
-    net: PetriNet, marking: Marking, sequence_length: int
-) -> int:
-    """Bound the outer pumping result on top of its embedded replay ledger."""
-
-    net_bytes = len(net.model_dump_json().encode("utf-8"))
-    source_marking_bytes = len(marking.model_dump_json().encode("utf-8"))
-    ledger_bytes = _firing_sequence_replay_output_bound(net, marking, sequence_length)
-    # The outer result re-serializes net, marking, and sequence beside the
-    # embedded replay and adds one bounded growth vector.
-    return (
-        ledger_bytes
-        + net_bytes
-        + source_marking_bytes
-        + 4 * sequence_length
-        + 6 * net.place_count
-        + 1024
-    )
 
 
 class FireTransitionRequest(StrictModel):
@@ -610,8 +568,10 @@ class ReachabilityResult(StrictModel):
     net: PetriNet
     initial_marking: Marking
     max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    states: tuple[PetriMarkingState, ...]
-    edges: tuple[PetriReachabilityEdge, ...]
+    states: tuple[PetriMarkingState, ...] = Field(max_length=MAX_REACHABILITY_STATES)
+    edges: tuple[PetriReachabilityEdge, ...] = Field(
+        max_length=MAX_REACHABILITY_FIRING_RECORDS
+    )
     truncated: bool
 
     @model_validator(mode="after")
@@ -646,7 +606,110 @@ class ReachabilityResult(StrictModel):
         return self
 
 
-MarkingReachabilityLimit = Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"]
+class ReachableDeadMarkingsRequest(StrictModel):
+    """List dead markings found in the bounded reachability exploration."""
+
+    net: PetriNet
+    initial_marking: Marking
+    max_states: int = Field(default=10000, ge=1, le=MAX_REACHABILITY_STATES)
+
+    @model_validator(mode="after")
+    def require_valid_marking_size(self) -> Self:
+        _require_marking_parent(self.net, self.initial_marking)
+        if len(self.initial_marking.tokens) != self.net.place_count:
+            raise _validation_error(
+                "marking_length", "marking length must match place_count"
+            )
+        return self
+
+
+class ReachableDeadMarkingsResult(StrictModel):
+    """Dead markings among discovered states, with exploration truncation."""
+
+    net: PetriNet
+    initial_marking: Marking
+    max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
+    dead_markings: tuple[tuple[int, ...], ...] = Field(
+        max_length=MAX_REACHABILITY_STATES
+    )
+    truncated: bool
+
+    @model_validator(mode="after")
+    def require_canonical_profile(self) -> Self:
+        _require_result_marking(self.net, self.initial_marking)
+        if any(len(marking) != self.net.place_count for marking in self.dead_markings):
+            raise _validation_error(
+                "dead_marking_axis", "dead markings must match the net place axis"
+            )
+        if len(self.dead_markings) > self.max_states:
+            raise _validation_error(
+                "dead_marking_count", "dead-marking count exceeds explored states"
+            )
+        if self.dead_markings != tuple(sorted(set(self.dead_markings))):
+            raise _validation_error(
+                "dead_markings", "dead markings must be sorted and unique"
+            )
+        if any(
+            type(token) is not int or not 0 <= token <= MAX_PETRI_MARKING
+            for marking in self.dead_markings
+            for token in marking
+        ):
+            raise _validation_error(
+                "dead_marking_token", "dead-marking tokens exceed the marking bound"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build an admitted bounded profile without replaying enabledness."""
+
+        return cls.model_construct(**values)
+
+
+class ReachabilityTerminalSCCProfileRequest(StrictModel):
+    """Find sink strongly connected components in one represented graph."""
+
+    source_graph: ReachabilityResult
+
+
+class ReachabilityTerminalSCCProfileResult(StrictModel):
+    """Terminal SCCs of the exact represented reachability graph.
+
+    When ``source_graph.truncated`` is true, terminality is only a property of
+    the represented partial graph and says nothing about omitted successors.
+    """
+
+    source_graph: ReachabilityResult
+    terminal_components: tuple[TerminalSCCStateIndices, ...] = Field(
+        max_length=MAX_REACHABILITY_STATES
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_components(self) -> Self:
+        state_count = len(self.source_graph.states)
+        components = self.terminal_components
+        if any(
+            not component
+            or component != tuple(sorted(set(component)))
+            or any(not 0 <= state < state_count for state in component)
+            for component in components
+        ):
+            raise _validation_error(
+                "terminal_scc_components",
+                "terminal SCCs must be nonempty canonical subsets of source states",
+            )
+        if components != tuple(sorted(components, key=lambda component: component[0])):
+            raise _validation_error(
+                "terminal_scc_order",
+                "terminal SCCs must be ordered by least state index",
+            )
+        if len({state for component in components for state in component}) != sum(
+            len(component) for component in components
+        ):
+            raise _validation_error(
+                "terminal_scc_overlap", "terminal SCCs must be pairwise disjoint"
+            )
+        return self
 
 
 class MarkingReachabilityRequest(StrictModel):
@@ -681,7 +744,9 @@ class MarkingReachabilityResult(StrictModel):
     status: Literal["REACHABLE", "UNREACHABLE", "INCOMPLETE"]
     sequence: FiringSequence | None = None
     explored_state_count: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    incomplete_reasons: tuple[MarkingReachabilityLimit, ...] = ()
+    incomplete_reasons: tuple[
+        Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"], ...
+    ] = ()
 
     @model_validator(mode="after")
     def require_result_shape(self) -> Self:
@@ -829,7 +894,7 @@ class PlaceSetSupportResult(StrictModel):
         ):
             values = getattr(self, name)
             if values != tuple(sorted(set(values))) or any(
-                not 0 <= transition < self.net.transition_count for transition in values
+                transition >= self.net.transition_count for transition in values
             ):
                 raise _validation_error(
                     "transition_axis",
@@ -1203,7 +1268,7 @@ class MarkingCommutationProfileResult(StrictModel):
             )
         if (
             _marking_commutation_profile_output_bound(first.net, first.marking)
-            > MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES
+            > MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES
         ):
             raise _validation_error(
                 "commutation_profile_output",
@@ -1292,11 +1357,10 @@ class PetriInvariantsResult(PetriInvariantsRequest):
 __all__ = [
     "MAX_CONCURRENT_STEP_OCCURRENCES",
     "MAX_FIRING_SEQUENCE_LENGTH",
-    "MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES",
-    "MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES",
+    "MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES",
     "MAX_MARKING_COMMUTATION_PROFILE_WORK",
-    "MAX_PUMPING_WITNESS_MATERIALIZED_BYTES",
-    "MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES",
+    "MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES",
+    "MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES",
     "MAX_SIPHON_TRAP_WORK",
     "MAX_STATE_EQUATION_OCCURRENCES",
     "MAX_STATE_EQUATION_TARGET_ABS",
@@ -1325,6 +1389,8 @@ __all__ = [
     "PlaceSetSupportResult",
     "ReachabilityRequest",
     "ReachabilityResult",
+    "ReachableDeadMarkingsRequest",
+    "ReachableDeadMarkingsResult",
     "SiphonTrapFamilyRequest",
     "SiphonTrapFamilyResult",
     "SiphonTrapRequest",

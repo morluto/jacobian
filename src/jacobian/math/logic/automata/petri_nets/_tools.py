@@ -33,6 +33,10 @@ from jacobian.math.logic.automata.petri_nets._models import (
     PumpingWitnessResult,
     ReachabilityRequest,
     ReachabilityResult,
+    ReachabilityTerminalSCCProfileRequest,
+    ReachabilityTerminalSCCProfileResult,
+    ReachableDeadMarkingsRequest,
+    ReachableDeadMarkingsResult,
     SiphonTrapFamilyRequest,
     SiphonTrapFamilyResult,
     SiphonTrapRequest,
@@ -53,6 +57,8 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
+    reachability_terminal_scc_profile,
+    reachable_dead_markings,
     replay_firing_sequence,
     reverse_petri_net,
     siphon_trap,
@@ -102,6 +108,20 @@ def compute_state_equation(request: StateEquationRequest) -> StateEquationResult
 
 def compute_reachability(request: ReachabilityRequest) -> ReachabilityResult:
     return reachability_graph(request.net, request.initial_marking, request.max_states)
+
+
+def compute_reachable_dead_markings(
+    request: ReachableDeadMarkingsRequest,
+) -> ReachableDeadMarkingsResult:
+    return reachable_dead_markings(
+        request.net, request.initial_marking, request.max_states
+    )
+
+
+def compute_reachability_terminal_scc_profile(
+    request: ReachabilityTerminalSCCProfileRequest,
+) -> ReachabilityTerminalSCCProfileResult:
+    return reachability_terminal_scc_profile(request.source_graph)
 
 
 def compute_marking_reachability(
@@ -428,6 +448,82 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "net": _NET["net"],
                     "initial_marking": {"tokens": [1, 0]},
                     "max_states": 100,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.reachable_dead_markings.compute",
+        title="Find bounded reachable dead markings of a Petri net",
+        description=(
+            "Explore the bounded reachable state space and list discovered "
+            "markings with no enabled transition. The deadness test uses "
+            "transition enabledness, so omitted edges at an exploration limit "
+            "cannot create false dead markings. `truncated` reports whether "
+            "the list covers the entire reachable set."
+        ),
+        request_type=ReachableDeadMarkingsRequest,
+        result_type=ReachableDeadMarkingsResult,
+        run=compute_reachable_dead_markings,
+        tags=("petri-net", "reachability", "dead-marking", "exact"),
+        discovery_terms=("reachable dead markings", "Petri net deadlock markings"),
+        examples=(
+            OperationExample(
+                name="one_token_consumed_to_dead_marking",
+                description="The sole firing reaches the empty, dead marking.",
+                input={
+                    "net": {
+                        "place_count": 1,
+                        "transition_count": 1,
+                        "pre": [[1]],
+                        "post": [[0]],
+                    },
+                    "initial_marking": {"tokens": [1]},
+                    "max_states": 8,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.reachability.terminal_scc_profile.compute",
+        title="Profile terminal components of a bounded Petri reachability graph",
+        description=(
+            "Return the sink strongly connected components of the supplied exact "
+            "reachability graph as state-index sets. If its exploration was "
+            "truncated, terminality applies only to the represented partial graph "
+            "and says nothing about omitted successors or full-net recurrence."
+        ),
+        request_type=ReachabilityTerminalSCCProfileRequest,
+        result_type=ReachabilityTerminalSCCProfileResult,
+        run=compute_reachability_terminal_scc_profile,
+        tags=("petri-net", "reachability", "strongly-connected-components", "exact"),
+        discovery_terms=("terminal SCC", "sink strongly connected components"),
+        examples=(
+            OperationExample(
+                name="one_state_recurrent_self_loop",
+                description="A complete one-state graph with one self-loop is terminal.",
+                input={
+                    "source_graph": {
+                        "net": {
+                            "place_count": 1,
+                            "transition_count": 1,
+                            "pre": [[1]],
+                            "post": [[1]],
+                        },
+                        "initial_marking": {"tokens": [1]},
+                        "max_states": 8,
+                        "states": [
+                            {
+                                "state_index": 0,
+                                "place_axis": [0],
+                                "marking": {"tokens": [1]},
+                            }
+                        ],
+                        "edges": [
+                            {"source_state": 0, "transition": 0, "target_state": 0}
+                        ],
+                        "truncated": False,
+                    }
                 },
             ),
         ),

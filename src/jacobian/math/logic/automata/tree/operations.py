@@ -41,6 +41,7 @@ from jacobian.math.logic.automata.tree.values import (
     TreeAutomatonTransition,
     TreeStateChartEntry,
     _build_reachable_state_profile,
+    _ground_reachable_states,
     _reject_tree,
     accepted_tree_count_work_bound,
     nondeterministic_run_counts_work_bound,
@@ -1079,6 +1080,9 @@ def nondeterministic_run_counts(
         not transition.child_states for transition in automaton.transitions
     ):
         return (0,) * max_size
+    reachable = _ground_reachable_states(automaton)
+    if not any(state in reachable for state in automaton.final_states):
+        return (0,) * max_size
     return _nondeterministic_run_counts_admitted(automaton, max_size)
 
 
@@ -1100,8 +1104,13 @@ def _validate_native_tree_automaton(
 def _nondeterministic_run_counts_admitted(
     automaton: BottomUpTreeAutomaton, max_size: int
 ) -> tuple[int, ...]:
+    reachable = _ground_reachable_states(automaton)
     by_key: dict[tuple[int, tuple[int, ...]], list[int]] = defaultdict(list)
     for transition in automaton.transitions:
+        if any(child not in reachable for child in transition.child_states):
+            continue
+        if transition.target_state not in reachable:
+            continue
         by_key[(transition.symbol, transition.child_states)].append(
             transition.target_state
         )

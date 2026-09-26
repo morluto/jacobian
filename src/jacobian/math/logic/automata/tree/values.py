@@ -513,6 +513,32 @@ def accepted_tree_count_work_bound(
     return work
 
 
+def _ground_reachable_states(automaton: BottomUpTreeAutomaton) -> set[int]:
+    """Return states reachable by some finite ground tree.
+
+    Least fixed point: nullary targets are reachable, and a transition
+    target becomes reachable once all of its child states are reachable.
+    Groups mentioning an unreachable child can never fire on any ground
+    tree, so pricing and execution must eliminate them first.
+    """
+
+    reachable: set[int] = {
+        transition.target_state
+        for transition in automaton.transitions
+        if not transition.child_states
+    }
+    changed = True
+    while changed:
+        changed = False
+        for transition in automaton.transitions:
+            if transition.target_state in reachable:
+                continue
+            if all(child in reachable for child in transition.child_states):
+                reachable.add(transition.target_state)
+                changed = True
+    return reachable
+
+
 def nondeterministic_run_counts_work_bound(
     automaton: BottomUpTreeAutomaton, max_size: int
 ) -> int:
@@ -532,6 +558,10 @@ def nondeterministic_run_counts_work_bound(
     if not automaton.final_states or not any(
         not transition.child_states for transition in automaton.transitions
     ):
+        return 0
+
+    reachable = _ground_reachable_states(automaton)
+    if not any(state in reachable for state in automaton.final_states):
         return 0
 
     # An ordered tree shape has at most 4**n possibilities, each node has at
@@ -554,9 +584,19 @@ def nondeterministic_run_counts_work_bound(
 
     groups: dict[tuple[int, tuple[int, ...]], int] = {}
     for transition in automaton.transitions:
+        if any(child not in reachable for child in transition.child_states):
+            continue
+        if transition.target_state not in reachable:
+            continue
         key = (transition.symbol, transition.child_states)
         groups[key] = groups.get(key, 0) + 1
 
+    reachable_transition_count = sum(
+        1
+        for transition in automaton.transitions
+        if all(child in reachable for child in transition.child_states)
+        and transition.target_state in reachable
+    )
     width = max_size + 1
     work = (
         sum(
@@ -565,7 +605,7 @@ def nondeterministic_run_counts_work_bound(
             + (2 * width * width * width * max(0, len(child_states) - 2))
             for _, child_states in groups
         )
-        + len(automaton.transitions) * width
+        + reachable_transition_count * width
         + automaton.state_count * width
     )
     if work > MAX_TREE_AUTOMATON_WORK:

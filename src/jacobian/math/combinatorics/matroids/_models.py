@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Any, Literal, Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -29,6 +30,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 MAX_WEIGHT_DIGITS = 12
 """Schema-visible cap on decimal digits of one matroid weight entry."""
+
+MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS = 1024
+"""Maximum decimal digits admitted for private integral split intermediates."""
 
 MAX_GROUND_AXIS_CODEPOINTS = 65_536
 """Allocation cap on the Unicode codepoints of one retained ground axis."""
@@ -571,6 +575,313 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
         return self
 
 
+class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
+    """Compute a maximum-weight common independent set of two matroids."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute one exact maximum-weight common independent set of "
+                "two linear matroids over the same prime field and labelled "
+                "ground axis. The input weights are exact integers."
+            ),
+            "admission_limits": {
+                "max_ground_elements": MAX_GROUND_SIZE,
+                "max_representation_rows": MAX_REPRESENTATION_ROWS,
+                "max_weight_digits": MAX_WEIGHT_DIGITS,
+                "max_dual_intermediate_digits": MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
+                "max_aggregate_exact_work": 50_000_000,
+                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
+                "work_includes": [
+                    "rank-oracle exchange-circuit construction",
+                    "reachable-set, tight-edge, and dual-slack scans",
+                    "integral weight-split intermediate arithmetic",
+                    "one bounded source-field primality check",
+                    "selected-matrix copies and residue validation",
+                    "final common-set feasibility ranks",
+                    "source-bound result serialization",
+                ],
+            },
+        }
+    )
+
+    first: LinearMatroid
+    second: LinearMatroid
+    weight_function: MatroidWeightFunction
+
+    @model_validator(mode="after")
+    def require_optimizer_axes(self) -> Self:
+        if (
+            self.first.matrix.prime != self.second.matrix.prime
+            or self.first.ground_axis != self.second.ground_axis
+            or self.weight_function.ground_axis != self.first.ground_axis
+        ):
+            raise _validation_error(
+                "weighted_intersection.ground",
+                "sources and objective must share one labelled ground and field",
+            )
+        return self
+
+
+class MatroidWeightedIntersectionOptimizationResult(StrictModel):
+    """One exact source-bound maximum-weight common independent set."""
+
+    first: LinearMatroid
+    second: LinearMatroid
+    weight_function: MatroidWeightFunction
+    common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
+    total_weight: StrictInt
+
+    @model_validator(mode="after")
+    def require_result_context(self) -> Self:
+        request = MatroidWeightedIntersectionOptimizationRequest(
+            first=self.first,
+            second=self.second,
+            weight_function=self.weight_function,
+        )
+        n = request.first.ground_size
+        if self.common_independent != tuple(
+            sorted(set(self.common_independent))
+        ) or any(not 0 <= index < n for index in self.common_independent):
+            raise _validation_error(
+                "weighted_intersection.common_set",
+                "candidate indices must be sorted, distinct, and in range",
+            )
+        expected_weight = sum(
+            self.weight_function.values[index] for index in self.common_independent
+        )
+        if self.total_weight != expected_weight:
+            raise _validation_error(
+                "weighted_intersection.objective",
+                "candidate total must equal its exact source weight",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        request: MatroidWeightedIntersectionOptimizationRequest,
+        common_independent: tuple[int, ...],
+        total_weight: int,
+    ) -> Self:
+        return cls.model_construct(
+            first=request.first,
+            second=request.second,
+            weight_function=request.weight_function,
+            common_independent=common_independent,
+            total_weight=total_weight,
+        )
+
+
+class MatroidRankMultiplier(StrictModel):
+    """A positive integer multiplier on one matroid rank inequality."""
+
+    subset: tuple[StrictInt, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description="A nonempty, sorted subset in the source ground axis.",
+    )
+    multiplier: StrictInt = Field(
+        gt=0,
+        description="Positive integer coefficient; terms with zero coefficient are omitted.",
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_subset(self) -> Self:
+        if self.subset != tuple(sorted(set(self.subset))):
+            raise _validation_error(
+                "rank_dual.subset",
+                "rank multiplier subsets must be sorted and contain no duplicates",
+            )
+        return self
+
+
+class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
+    """Check rank-inequality dual multipliers for a common independent set."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Check a supplied primal common independent set and sparse exact "
+                "dual multipliers on the two matroids' rank inequalities. The "
+                "operation recomputes only the listed exact ranks, verifies the "
+                "elementwise dual cover and equality of primal and dual values, "
+                "and does not search for an optimum or construct the multipliers. "
+                "Each rank-term family is a nested chain: nonempty, sorted, "
+                "unique subsets ordered by increasing size then lexicographically, "
+                "with each subset contained in the next. The combined count of "
+                "both families is at most twice the ground size."
+            ),
+            "admission_limits": {
+                "max_ground_elements": MAX_GROUND_SIZE,
+                "max_representation_rows": MAX_REPRESENTATION_ROWS,
+                "max_weight_digits": MAX_WEIGHT_DIGITS,
+                "max_total_rank_terms": 2 * MAX_GROUND_SIZE,
+                "max_aggregate_rank_work": 50_000_000,
+                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
+                "work_includes": [
+                    "both candidate feasibility ranks",
+                    "each supplied rank-inequality rank",
+                    "elementwise dual cover and objective checks",
+                    "one bounded source-field primality check",
+                    "source-bound certificate result serialization",
+                ],
+            },
+        }
+    )
+
+    first: LinearMatroid
+    second: LinearMatroid
+    weight_function: MatroidWeightFunction
+    common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
+    first_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "Nested chain of first-source rank-inequality multipliers: nonempty, "
+            "sorted, unique subsets ordered by increasing size then "
+            "lexicographically, each contained in the next."
+        ),
+    )
+    second_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
+        max_length=MAX_GROUND_SIZE,
+        description=(
+            "Nested chain of second-source rank-inequality multipliers with the "
+            "same ordering and containment rules as first_rank_terms."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_certificate_axes(self) -> Self:
+        if (
+            self.first.matrix.prime != self.second.matrix.prime
+            or self.first.ground_axis != self.second.ground_axis
+            or self.weight_function.ground_axis != self.first.ground_axis
+        ):
+            raise _validation_error(
+                "rank_dual.ground",
+                "sources and objective must share one labelled ground and field",
+            )
+        n = self.first.ground_size
+        if self.common_independent != tuple(
+            sorted(set(self.common_independent))
+        ) or any(not 0 <= index < n for index in self.common_independent):
+            raise _validation_error(
+                "rank_dual.common_set",
+                "candidate indices must be sorted, distinct, and in range",
+            )
+        terms = self.first_rank_terms + self.second_rank_terms
+        if len(terms) > 2 * n:
+            raise _validation_error(
+                "rank_dual.term_count",
+                "the two rank-multiplier families may contain at most twice the ground size",
+            )
+        coefficient_bound = max(1, n) * 10**MAX_WEIGHT_DIGITS
+        if any(term.multiplier >= coefficient_bound for term in terms):
+            raise _validation_error(
+                "rank_dual.multiplier_bound",
+                "rank multipliers exceed the coefficient bound derived from the ground and weight limits",
+            )
+        for family in (self.first_rank_terms, self.second_rank_terms):
+            subsets = tuple(term.subset for term in family)
+            ordered_subsets = tuple(
+                sorted(set(subsets), key=lambda item: (len(item), item))
+            )
+            if subsets != ordered_subsets:
+                raise _validation_error(
+                    "rank_dual.term_order",
+                    "each rank-multiplier family must be ordered by subset size and lexicographic indices",
+                )
+            if any(
+                not term.subset or any(not 0 <= index < n for index in term.subset)
+                for term in family
+            ):
+                raise _validation_error(
+                    "rank_dual.subset_range",
+                    "rank multiplier subsets must be nonempty and within the source ground",
+                )
+            if any(not set(left).issubset(right) for left, right in pairwise(subsets)):
+                raise _validation_error(
+                    "rank_dual.chain",
+                    "each source rank-multiplier family must be a nested chain",
+                )
+        return self
+
+
+class MatroidWeightedIntersectionRankCertificateResult(StrictModel):
+    """A source-bound common-independent optimum with its rank-dual witness."""
+
+    first: LinearMatroid
+    second: LinearMatroid
+    weight_function: MatroidWeightFunction
+    common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
+    first_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
+        max_length=MAX_GROUND_SIZE
+    )
+    second_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
+        max_length=MAX_GROUND_SIZE
+    )
+    total_weight: StrictInt
+    first_split: MatroidWeightFunction
+    second_split: MatroidWeightFunction
+
+    @model_validator(mode="after")
+    def require_result_context(self) -> Self:
+        request = MatroidWeightedIntersectionRankCertificateRequest(
+            first=self.first,
+            second=self.second,
+            weight_function=self.weight_function,
+            common_independent=self.common_independent,
+            first_rank_terms=self.first_rank_terms,
+            second_rank_terms=self.second_rank_terms,
+        )
+        if self.total_weight != sum(
+            self.weight_function.values[index] for index in self.common_independent
+        ):
+            raise _validation_error(
+                "rank_dual.objective",
+                "candidate total must equal its exact source weight",
+            )
+        if (
+            self.first_split.ground_axis != request.first.ground_axis
+            or self.second_split.ground_axis != request.first.ground_axis
+            or tuple(
+                a + b
+                for a, b in zip(
+                    self.first_split.values,
+                    self.second_split.values,
+                    strict=True,
+                )
+            )
+            != self.weight_function.values
+        ):
+            raise _validation_error(
+                "rank_dual.split",
+                "derived integral split must use the source ground and sum to the objective",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        request: MatroidWeightedIntersectionRankCertificateRequest,
+        total_weight: int,
+        first_split: MatroidWeightFunction,
+        second_split: MatroidWeightFunction,
+    ) -> Self:
+        return cls.model_construct(
+            first=request.first,
+            second=request.second,
+            weight_function=request.weight_function,
+            common_independent=request.common_independent,
+            first_rank_terms=request.first_rank_terms,
+            second_rank_terms=request.second_rank_terms,
+            total_weight=total_weight,
+            first_split=first_split,
+            second_split=second_split,
+        )
+
+
 class MatroidWeightedIntersectionResult(StrictModel):
     """A source-bound optimum with a checked integral weight-splitting witness."""
 
@@ -986,8 +1297,13 @@ __all__ = [
     "MatroidClosureResult",
     "MatroidCommonBasisRequest",
     "MatroidCommonBasisResult",
+    "MatroidRankMultiplier",
     "MatroidWeightFunction",
     "MatroidWeightedIntersectionCertificateRequest",
+    "MatroidWeightedIntersectionOptimizationRequest",
+    "MatroidWeightedIntersectionOptimizationResult",
+    "MatroidWeightedIntersectionRankCertificateRequest",
+    "MatroidWeightedIntersectionRankCertificateResult",
     "MatroidWeightedIntersectionResult",
     "MaximumWeightBasisRequest",
     "MaximumWeightBasisResult",

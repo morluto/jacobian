@@ -24,11 +24,13 @@ greatest-divisor postcondition in the ambient `QQ(x)<D>` ring, not just in the
 constant-coefficient subring. Order-zero and zero inputs use the field-unit
 convention; the zero-zero pair returns zero.
 
-The operation preflights order, coefficient type, rational scalar height, and
-the output scalar carrier before rational arithmetic. With input scalar height
-`h`, every computed rational scalar has at most `5h+2` decimal digits. The
-accepted input limit is 20 digits, below the shared 128-digit rational
-coefficient carrier. No CAS backend is needed for this closed-form slice.
+The operation admits input rational components through 64 decimal digits and
+checks every constructed result coefficient against the same 64-digit
+differential-operator envelope. It preflights order, coefficient type, scalar
+height, and closed-form output growth before rational arithmetic. The shared
+rational-function carrier is wider, at 128 digits; this operation deliberately
+returns values that fit the narrower differential-operator contract. No CAS
+backend is needed for this closed-form slice.
 
 Higher-order inputs and nonconstant `QQ(x)` coefficients are rejected as
 outside this operation's current exact domain. They need an admitted Ore

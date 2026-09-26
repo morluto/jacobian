@@ -150,6 +150,73 @@ class RSKTableauPair(StrictModel):
         return self
 
 
+class RSKBumpStep(StrictModel):
+    """One row replacement during ordinary word row insertion."""
+
+    row: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    column: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    bumped_entry: StrictInt = Field(ge=1, le=MAX_ALPHABET_SIZE)
+
+
+class RSKInsertionEvent(StrictModel):
+    """One source letter's bump path and new terminal cell, with zero-based cells."""
+
+    position: StrictInt = Field(ge=1, le=MAX_RSK_WORD_LENGTH)
+    letter: Symbol
+    bump_path: tuple[RSKBumpStep, ...] = Field(max_length=MAX_RSK_WORD_LENGTH)
+    added_row: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    added_column: StrictInt = Field(ge=0, le=MAX_RSK_WORD_LENGTH - 1)
+    added_entry: StrictInt = Field(ge=1, le=MAX_ALPHABET_SIZE)
+    row_lengths: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_RSK_WORD_LENGTH
+    )
+
+    @model_validator(mode="after")
+    def require_contiguous_row_path(self) -> Self:
+        if tuple(step.row for step in self.bump_path) != tuple(
+            range(len(self.bump_path))
+        ) or self.added_row != len(self.bump_path):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_row_path",
+                "bump steps must visit consecutive rows from zero and end below them",
+            )
+        if len(self.bump_path) > self.position - 1:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_path_too_long",
+                "an insertion cannot bump more cells than the preceding word length",
+            )
+        if self.added_row >= self.position or self.added_column >= self.position:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_cell_out_of_range",
+                "an insertion cell must lie within its prefix's cell bound",
+            )
+        if (
+            sum(self.row_lengths) != self.position
+            or any(length <= 0 for length in self.row_lengths)
+            or any(
+                self.row_lengths[index] < self.row_lengths[index + 1]
+                for index in range(len(self.row_lengths) - 1)
+            )
+            or self.added_row >= len(self.row_lengths)
+            or self.row_lengths[self.added_row] != self.added_column + 1
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_shape",
+                "each event must retain partition row lengths after insertion",
+            )
+        if any(
+            step.column >= self.position
+            or step.row >= len(self.row_lengths)
+            or self.row_lengths[step.row] <= step.column
+            for step in self.bump_path
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_cell_out_of_range",
+                "a bump cell must lie within its prefix's cell bound",
+            )
+        return self
+
+
 __all__ = [
     "MAX_RSK_ALPHABET_RANK_DIGITS",
     "MAX_RSK_ROW_SEARCH_COMPARISONS",
@@ -157,6 +224,8 @@ __all__ = [
     "MAX_RSK_WORD_PAYLOAD_SCALARS",
     "FinitePermutation",
     "PermutationRSKPair",
+    "RSKBumpStep",
     "RSKConvention",
+    "RSKInsertionEvent",
     "RSKTableauPair",
 ]

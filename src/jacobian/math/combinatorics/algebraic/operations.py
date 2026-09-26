@@ -28,6 +28,7 @@ from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
+    RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     SkewLittlewoodRichardsonCheckResult,
@@ -46,6 +47,9 @@ from jacobian.math.combinatorics.algebraic._rsk import (
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
+    row_insertion_rsk_trace as _row_insertion_rsk_trace,
 )
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ALPHABET_RANK_DIGITS,
@@ -97,6 +101,7 @@ __all__ = [
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
+    "row_insertion_rsk_trace",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
     "tableau_row_reading_word",
@@ -524,6 +529,11 @@ def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     return _inverse_row_insertion_rsk(pair)
 
 
+def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
+    """Return word RSK with its complete ordinary insertion bump path."""
+    return _row_insertion_rsk_trace(word)
+
+
 def permutation_rsk(permutation: object) -> PermutationRSKPair:
     """Compute the canonical standard-tableau image of a finite permutation."""
 
@@ -640,21 +650,13 @@ def knuth_moves(word: FiniteWord) -> tuple[KnuthNeighbor, ...]:
 def plactic_normal_form(word: FiniteWord) -> PlacticNormalFormResult:
     """Return the canonical bottom-to-top row-reading word of the RSK tableau."""
 
-    try:
-        word = FiniteWord.model_validate(word.model_dump(mode="python"))
-    except (AttributeError, TypeError, ValidationError) as exc:
-        raise OperationDomainValidationError(
-            location=("word",),
-            code="algebraic_combinatorics.plactic_normal_form_word",
-            message="plactic normal form requires a canonical finite word",
-        ) from exc
     pair = _row_insertion_rsk(word)
     normal_letters = tuple(
         pair.alphabet[entry - 1]
         for row in reversed(pair.insertion_tableau.rows)
         for entry in row
     )
-    return PlacticNormalFormResult.model_construct(
+    return PlacticNormalFormResult(
         source_word=word,
         insertion_tableau=pair.insertion_tableau,
         normal_form=FiniteWord(alphabet=pair.alphabet, letters=normal_letters),

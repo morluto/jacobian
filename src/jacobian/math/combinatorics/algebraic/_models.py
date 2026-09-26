@@ -17,6 +17,7 @@ from jacobian.math.combinatorics.algebraic.values import (
     FinitePermutation,
     PermutationRSKPair,
     RSKConvention,
+    RSKInsertionEvent,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -33,6 +34,8 @@ from jacobian.math.logic.languages.words.values import FiniteWord, Symbol
 # kernel and produces two N-cell tableaux, so the canonical tableau cell
 # budget derives the permutation envelope.
 MAX_RSK_PERMUTATION_LENGTH = MAX_RSK_WORD_LENGTH
+MAX_RSK_TRACE_RESULT_BYTES = 8_000_000
+MAX_RSK_TRACE_WORK = 2_000_000
 
 _POSITIVE_EXACT_INTEGER_SCHEMA = {
     "type": "string",
@@ -244,6 +247,142 @@ class RSKInverseWordRequest(StrictModel):
 
     pair: RSKTableauPair
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
+class RSKWordTraceRequest(StrictModel):
+    """Trace every insertion in one bounded ordinary row-insertion word RSK.
+
+    The trace includes at most ``n(n-1)/2`` bump steps. Admission bounds the
+    exact row-search work and a conservative serialized result estimate
+    before constructing any tableaux or ledger rows.
+    """
+
+    word: FiniteWord = Field(
+        description=(
+            "A finite word over an explicit ordered alphabet; letters are "
+            "ranked by their positions in that alphabet. The complete trace "
+            "must fit the operation's pre-admitted work and output bounds."
+        )
+    )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
+class RSKWordTraceResult(StrictModel):
+    """Source-bound final RSK pair and one insertion event per source letter."""
+
+    word: FiniteWord
+    tableau_pair: RSKTableauPair
+    insertion_events: tuple[RSKInsertionEvent, ...] = Field(
+        max_length=MAX_RSK_WORD_LENGTH
+    )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_trace_source_alignment(self) -> Self:
+        if self.tableau_pair.alphabet != self.word.alphabet:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_alphabet_mismatch",
+                "the final tableau pair must retain the source word alphabet",
+            )
+        if self.tableau_pair.convention != self.convention:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_convention_mismatch",
+                "the trace and final tableau pair must use the same convention",
+            )
+        if len(self.insertion_events) != len(self.word.letters) or tuple(
+            event.position for event in self.insertion_events
+        ) != tuple(range(1, len(self.word.letters) + 1)):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_event_positions",
+                "the trace must contain one event for each source position in order",
+            )
+        if any(
+            event.letter != self.word.letters[event.position - 1]
+            for event in self.insertion_events
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_letter_mismatch",
+                "each event must retain the letter at its source position",
+            )
+        bump_bound = sum(
+            min(prefix_length, len(self.word.alphabet))
+            for prefix_length in range(len(self.word.letters))
+        )
+        if sum(len(event.bump_path) for event in self.insertion_events) > bump_bound:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_total_bumps",
+                "the total bump path exceeds the alphabet-height bound",
+            )
+        previous_lengths: tuple[int, ...] = ()
+        for event in self.insertion_events:
+            lengths = event.row_lengths
+            if len(lengths) not in (len(previous_lengths), len(previous_lengths) + 1):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_prefix_shape",
+                    "successive trace shapes must grow by one cell in one row",
+                )
+            previous = previous_lengths + (
+                (0,) if len(lengths) > len(previous_lengths) else ()
+            )
+            deltas = tuple(
+                current - prior
+                for prior, current in zip(previous, lengths, strict=True)
+            )
+            if (
+                any(delta not in (0, 1) for delta in deltas)
+                or sum(deltas) != 1
+                or deltas[event.added_row] != 1
+                or previous[event.added_row] != event.added_column
+            ):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_prefix_shape",
+                    "successive trace shapes must grow by one cell in one row",
+                )
+            previous_lengths = lengths
+        if previous_lengths != self.tableau_pair.shape.parts:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_final_shape",
+                "the final trace prefix must match the tableau pair shape",
+            )
+        rank_by_letter = {
+            letter: rank for rank, letter in enumerate(self.word.alphabet, start=1)
+        }
+        alphabet_size = len(self.word.alphabet)
+        for event in self.insertion_events:
+            carried = rank_by_letter[event.letter]
+            for step in event.bump_path:
+                if not 1 <= step.bumped_entry <= alphabet_size:
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_trace_entry_chain",
+                        "bumped entries must be ranks in the retained alphabet",
+                    )
+                if step.bumped_entry <= carried:
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_trace_entry_chain",
+                        "each bumped entry must be strictly larger than the carried entry",
+                    )
+                carried = step.bumped_entry
+            if not 1 <= event.added_entry <= alphabet_size or event.added_entry != carried:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_entry_chain",
+                    "the terminal entry must equal the final carried entry",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RSKWordTraceRequest,
+        tableau_pair: RSKTableauPair,
+        insertion_events: tuple[RSKInsertionEvent, ...],
+    ) -> Self:
+        """Build the result after one admitted traced insertion pass."""
+        return cls.model_construct(
+            word=request.word,
+            tableau_pair=tableau_pair,
+            insertion_events=insertion_events,
+            convention=request.convention,
+        )
 
 
 MAX_LIS_WORD_LENGTH = MAX_RSK_WORD_LENGTH
@@ -690,6 +829,8 @@ __all__ = [
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
     "RSKWordRequest",
+    "RSKWordTraceRequest",
+    "RSKWordTraceResult",
     "SemistandardTableauCheckRequest",
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountRequest",

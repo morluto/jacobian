@@ -29,6 +29,8 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKInverseWordRequest,
     RSKPermutationRequest,
     RSKWordRequest,
+    RSKWordTraceRequest,
+    RSKWordTraceResult,
     SemistandardTableauCheckRequest,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountRequest,
@@ -134,6 +136,10 @@ def rsk_permutation(request: RSKPermutationRequest) -> PermutationRSKPair:
 
 def rsk_word(request: RSKWordRequest) -> RSKTableauPair:
     return native.row_insertion_rsk(request.word)
+
+
+def rsk_word_trace(request: RSKWordTraceRequest) -> RSKWordTraceResult:
+    return native.row_insertion_rsk_trace(request.word)
 
 
 def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
@@ -300,6 +306,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "word": {
                         "alphabet": ["a", "b", "c", "d"],
                         "letters": ["c", "c", "b", "d", "a"],
+                    },
+                    "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.word.trace.compute",
+        title="Trace ordinary row-insertion RSK for an ordered word",
+        description=(
+            "Return the final RSK pair and one exact insertion event for every "
+            "letter of a bounded ordered word. Each event records the zero-based "
+            "cells and entries bumped, plus the terminal added cell and entry "
+            "under ROW_INSERTION_RSK_V1. Complete trace work and output are "
+            "admitted before insertion."
+        ),
+        request_type=RSKWordTraceRequest,
+        result_type=RSKWordTraceResult,
+        run=rsk_word_trace,
+        tags=("combinatorics", "rsk", "words", "trace", "exact"),
+        discovery_terms=(
+            "RSK insertion trace",
+            "row bumping path",
+            "Robinson-Schensted bumping ledger",
+        ),
+        examples=(
+            OperationExample(
+                name="reverse_word_bumping_trace",
+                description=(
+                    "Trace each insertion for (c,b,a), returning its bump path; "
+                    "the alphabet is explicitly ordered a<b<c."
+                ),
+                input={
+                    "word": {
+                        "alphabet": ["a", "b", "c"],
+                        "letters": ["c", "b", "a"],
                     },
                     "convention": "ROW_INSERTION_RSK_V1",
                 },

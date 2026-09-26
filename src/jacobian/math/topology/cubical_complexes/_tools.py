@@ -9,7 +9,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes._filtered_models import MAX_FILTER_LEVELS
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_CHAIN_CELLS,
-    MAX_CUBICAL_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_PRODUCT_RESULT_SIZE,
     MAX_DIM,
     MAX_LOWER_STAR_CELLS,
     MAX_LOWER_STAR_VERTICES,
@@ -58,11 +58,11 @@ def _face_closure(request: FaceClosureRequest) -> FaceClosureResult:
 
 
 def _closed_star(request: CubicalClosedStarRequest) -> CubicalClosedStarResult:
-    return closed_star(request)
+    return closed_star(request.cells, request.cell)
 
 
 def _face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
-    return face_poset(request)
+    return face_poset(request.cells)
 
 
 def _chain_complex(request: CubicalChainComplexRequest) -> CubicalChainComplexResult:
@@ -78,13 +78,13 @@ def _skeleton(request: CubicalSkeletonRequest) -> CubicalSkeletonResult:
 
 
 def _lower_star(request: CubicalLowerStarRequest) -> FilteredCubicalComplex:
-    return lower_star_from_vertices(request)
+    return lower_star_from_vertices(request.cells, request.vertex_values, request.prime)
 
 
 def _top_cell_filtration(
     request: CubicalTopCellFiltrationRequest,
 ) -> Any:
-    return from_top_cell_values(request)
+    return from_top_cell_values(request.cells, request.top_cell_values, request.prime)
 
 
 def _one_skeleton(request: CubicalComplexRequest) -> CubicalOneSkeletonResult:
@@ -340,7 +340,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             f"{MAX_CUBICAL_CHAIN_CELLS} cells and ambient dimension "
             f"{MAX_DIM}."
             f" Estimated result encoding is bounded to "
-            f"{MAX_CUBICAL_PRODUCT_RESULT_BYTES} bytes."
+            f"{MAX_CUBICAL_PRODUCT_RESULT_SIZE} bytes."
         ),
         request_type=CubicalProductRequest,
         result_type=CubicalProductResult,

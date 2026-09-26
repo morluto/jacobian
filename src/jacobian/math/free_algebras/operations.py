@@ -148,7 +148,10 @@ def _admit_polynomial(
 
 
 def _admit_product(
-    left: FreeAlgebraPolynomial, right: FreeAlgebraPolynomial
+    left: FreeAlgebraPolynomial,
+    right: FreeAlgebraPolynomial,
+    *,
+    operand_term_limit: int = MAX_FREE_ALGEBRA_OPERAND_TERMS,
 ) -> tuple[FreeAlgebraPolynomial, FreeAlgebraPolynomial]:
     """Admit one product request before any word-pair expansion.
 
@@ -172,12 +175,12 @@ def _admit_product(
 
     max_operand_digits = 0
     for side, polynomial in (("left", left), ("right", right)):
-        if len(polynomial.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+        if len(polynomial.terms) > operand_term_limit:
             _reject_resource(
                 (side, "terms"),
                 "operand_term_budget",
                 f"{side} operand exceeds the "
-                f"{MAX_FREE_ALGEBRA_OPERAND_TERMS}-term multiplication budget",
+                f"{operand_term_limit}-term multiplication budget",
             )
         for index, term in enumerate(polynomial.terms):
             if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
@@ -201,13 +204,34 @@ def _admit_product(
             "product term pairs exceed the "
             f"{MAX_FREE_ALGEBRA_TERM_PAIRS}-pair multiplication budget",
         )
-    # Distinct product words are a subset of the term pairs, so this bounds
-    # the result term count before product expansion.
-    if term_pair_count > MAX_FREE_ALGEBRA_RESULT_TERMS:
+    # Encode each word in base |alphabet|+1. Every generator receives a
+    # nonzero digit, so the pair (length, code) identifies concatenations
+    # exactly without allocating the concatenated result words.
+    base = len(left.alphabet) + 1
+    letter_code = {letter: index + 1 for index, letter in enumerate(left.alphabet)}
+    left_codes = tuple(
+        _word_code(term.word, letter_code, base) for term in left.terms
+    )
+    right_codes = tuple(
+        _word_code(term.word, letter_code, base) for term in right.terms
+    )
+    right_place_values = tuple(base**len(term.word) for term in right.terms)
+    product_support = {
+        (
+            len(left_term.word) + len(right_term.word),
+            left_code * right_place + right_code,
+        )
+        for left_term, left_code in zip(left.terms, left_codes, strict=True)
+        for right_term, right_code, right_place in zip(
+            right.terms, right_codes, right_place_values, strict=True
+        )
+    }
+    distinct_product_words = len(product_support)
+    if distinct_product_words > MAX_FREE_ALGEBRA_RESULT_TERMS:
         _reject_resource(
             ("left", "terms"),
             "result_term_budget",
-            "product can exceed the "
+            "product support exceeds the "
             f"{MAX_FREE_ALGEBRA_RESULT_TERMS}-term result budget",
         )
 
@@ -224,7 +248,7 @@ def _admit_product(
         (len(term.word) for term in left.terms), default=0
     ) + max((len(term.word) for term in right.terms), default=0)
     maximum_letter_scalars = max((len(letter) for letter in left.alphabet), default=0)
-    output_cell_bound = term_pair_count * (
+    output_cell_bound = distinct_product_words * (
         128
         + maximum_output_word_length * (maximum_letter_scalars + 4)
         + 2 * (predicted_coefficient_digits + 1)
@@ -237,6 +261,15 @@ def _admit_product(
             f"{MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS}-cell allocation bound",
         )
     return left, right
+
+
+def _word_code(
+    word: tuple[str, ...], letter_code: dict[str, int], base: int
+) -> int:
+    code = 0
+    for letter in word:
+        code = code * base + letter_code[letter]
+    return code
 
 
 def _sum_coefficient_digit_bound(
@@ -380,6 +413,18 @@ def multiply(
     )
 
 
+def _multiply_for_power(
+    left: FreeAlgebraPolynomial, right: FreeAlgebraPolynomial
+) -> FreeAlgebraPolynomial:
+    left, right = _admit_product(
+        left,
+        right,
+        operand_term_limit=MAX_FREE_ALGEBRA_RESULT_TERMS,
+    )
+    product, _ledger = multiply_sparse(left, right)
+    return product
+
+
 def power_polynomial(
     polynomial: FreeAlgebraPolynomial, exponent: int
 ) -> FreeAlgebraPolynomial:
@@ -416,10 +461,12 @@ def power_polynomial(
     remaining = exponent
     while remaining:
         if remaining & 1:
-            result = factor if result is None else multiply(result, factor).product
+            result = (
+                factor if result is None else _multiply_for_power(result, factor)
+            )
         remaining >>= 1
         if remaining:
-            factor = multiply(factor, factor).product
+            factor = _multiply_for_power(factor, factor)
     return unit if result is None else result
 
 

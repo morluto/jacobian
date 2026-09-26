@@ -18,7 +18,7 @@ from jacobian.math.free_algebras._models import (
     canonical_word_key,
 )
 from jacobian.math.free_algebras._tools import TOOLS
-from jacobian.math.free_algebras.operations import power_polynomial
+from jacobian.math.free_algebras.operations import multiply, power_polynomial
 
 OPERATION_ID = "free_algebra.polynomial.power.compute"
 
@@ -77,6 +77,22 @@ def test_binary_power_keeps_noncommuting_words_distinct() -> None:
     assert _coefficients(cubed)[("x", "y", "x")] == 1
     assert _coefficients(cubed)[("y", "x", "x")] == 1
     assert ("x", "y", "x") != ("y", "x", "x")
+
+
+def test_power_nine_keeps_internal_products_above_public_operand_limit() -> None:
+    polynomial = _polynomial(("x", "y"), {("x",): 1, ("y",): 1})
+    result = power_polynomial(polynomial, 9)
+    assert len(result.terms) == 512
+
+
+def test_product_allocation_admits_colliding_word_support() -> None:
+    letter = "x" * 64
+    polynomial = _polynomial(
+        (letter,),
+        {(letter,) * exponent: 1 for exponent in range(33)},
+    )
+    result = multiply(polynomial, polynomial).product
+    assert len(result.terms) == 65
 
 
 def _matrix_add(left, right):

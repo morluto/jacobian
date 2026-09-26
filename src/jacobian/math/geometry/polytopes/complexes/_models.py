@@ -21,9 +21,9 @@ from __future__ import annotations
 
 from itertools import pairwise
 from math import comb
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -672,10 +672,16 @@ class SplineDimensionProfileResult(StrictModel):
     complex: PolytopalComplexClosureResult
     max_degree: int = Field(ge=0, le=12)
     smoothness: int = Field(ge=-1, le=4)
-    dimensions: tuple[int, ...] = Field(min_length=1, max_length=13)
-    forward_differences: tuple[tuple[int, ...], ...] = Field(
+    dimensions: tuple[Annotated[StrictInt, Field(ge=0, le=4096)], ...] = Field(
         min_length=1, max_length=13
     )
+    forward_differences: tuple[
+        Annotated[
+            tuple[Annotated[StrictInt, Field(ge=-4096, le=4096)], ...],
+            Field(max_length=13),
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=13)
 
     @model_validator(mode="after")
     def require_finite_difference_profile(self) -> Self:
@@ -709,7 +715,7 @@ class SplineEvaluationRequest(StrictModel):
 
     complex: PolytopalComplexClosureResult
     degree: int = Field(ge=0, le=12)
-    smoothness: int = Field(ge=0, le=4)
+    smoothness: int = Field(ge=-1, le=4)
     basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
     point: ComplexPoint
 
@@ -719,7 +725,7 @@ class SplineEvaluationResult(StrictModel):
 
     complex: PolytopalComplexClosureResult
     degree: int = Field(ge=0, le=12)
-    smoothness: int = Field(ge=0, le=4)
+    smoothness: int = Field(ge=-1, le=4)
     basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
     point: ComplexPoint
     containing_cell_ids: tuple[str, ...] = Field(max_length=MAX_COMPLEX_CELLS)

@@ -21,7 +21,7 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_FILTER_AMBIENT_DIMENSION,
     MAX_FILTER_LEVELS,
-    FilteredChainComplexRequest,
+    FilteredChainComplex,
 )
 from jacobian.math.topology.chain_complexes.values import ChainComplexValue
 
@@ -32,20 +32,26 @@ MAX_FACE_CELLS = 3**MAX_DIM
 
 MAX_CUBICAL_CHAIN_GROUP = 64
 MAX_CUBICAL_CHAIN_CELLS = 16384
-MAX_CUBICAL_PRODUCT_RESULT_BYTES = 8 * 1024 * 1024
+MAX_CUBICAL_PRODUCT_RESULT_SIZE = 8 * 1024 * 1024
 MAX_CUBICAL_BITMAP_SIDE = 256
 MAX_CUBICAL_BITMAP_PIXELS = MAX_CUBICAL_BITMAP_SIDE**2
-MAX_CUBICAL_BITMAP_RESULT_BYTES = 8 * 1024 * 1024
+MAX_CUBICAL_BITMAP_RESULT_SIZE = 8 * 1024 * 1024
 MAX_CUBICAL_GRAPH_VERTICES = 1024
 MAX_CUBICAL_GRAPH_EDGES = 65_536
 MAX_CUBICAL_GRAPH_WORK = 2_000_000
-MAX_CUBICAL_GRAPH_RESULT_BYTES = 10 * 1024 * 1024
+MAX_CUBICAL_GRAPH_RESULT_SIZE = 10 * 1024 * 1024
 MAX_CUBICAL_GRAPH_COORDINATE_DIGITS = 1024
 MAX_CUBICAL_FACE_POSET_CANDIDATES = MAX_POSET_ELEMENTS * 3**3
 MAX_CUBICAL_FACE_POSET_COVER_CANDIDATES = MAX_POSET_ELEMENTS * 6
 MAX_CUBICAL_FACE_POSET_COORDINATE_DIGITS = 1024
-MAX_CUBICAL_FACE_POSET_RESULT_BYTES = 8 * 1024 * 1024
-MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES = 8 * 1024 * 1024
+MAX_CUBICAL_FACE_POSET_RESULT_SIZE = 8 * 1024 * 1024
+MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE = 8 * 1024 * 1024
+MAX_CUBICAL_SKELETON_COORDINATE_DIGITS = 1024
+# Intrinsic representation-size envelope for the retained skeleton result, which
+# holds both the full face closure and its filtered subcomplex. Cell count and
+# coordinate width are admitted separately, but only their product bounds the
+# retained scalars; see skeleton()'s combined check.
+MAX_CUBICAL_SKELETON_RESULT_SIZE = 8 * 1024 * 1024
 MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS = 64
 MAX_CUBICAL_CLOSED_STAR_WORK = 2_000_000
 MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK = 8_000_000
@@ -60,7 +66,7 @@ MAX_LOWER_STAR_VERTICES = 256
 MAX_LOWER_STAR_INCIDENCES = 1024
 MAX_LOWER_STAR_COORDINATE_DIGITS = 64
 MAX_LOWER_STAR_VALUE_DIGITS = 128
-MAX_LOWER_STAR_RESULT_BYTES = 8 * 1024 * 1024
+MAX_LOWER_STAR_RESULT_SIZE = 8 * 1024 * 1024
 MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES = 131072
 
 
@@ -808,7 +814,7 @@ class FilteredCubicalComplex(StrictModel):
     critical_values: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_FILTER_LEVELS
     )
-    filtered_chain_complex: FilteredChainComplexRequest
+    filtered_chain_complex: FilteredChainComplex
 
     @model_validator(mode="after")
     def require_filtered_chain_axes(self) -> Self:
@@ -917,7 +923,7 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
     critical_values: tuple[CanonicalRational, ...] = Field(
         min_length=1, max_length=MAX_FILTER_LEVELS
     )
-    filtered_chain_complex: FilteredChainComplexRequest
+    filtered_chain_complex: FilteredChainComplex
 
     @model_validator(mode="after")
     def require_top_cell_axes(self) -> Self:
@@ -1020,25 +1026,25 @@ class CubicalChainComplexResult(StrictModel):
 __all__ = [
     "MAX_CELLS",
     "MAX_CUBICAL_BITMAP_PIXELS",
-    "MAX_CUBICAL_BITMAP_RESULT_BYTES",
+    "MAX_CUBICAL_BITMAP_RESULT_SIZE",
     "MAX_CUBICAL_BITMAP_SIDE",
     "MAX_CUBICAL_CHAIN_CELLS",
     "MAX_CUBICAL_CHAIN_GROUP",
     "MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS",
-    "MAX_CUBICAL_CLOSED_STAR_RESULT_BYTES",
+    "MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE",
     "MAX_CUBICAL_CLOSED_STAR_WORK",
     "MAX_CUBICAL_FACE_POSET_CANDIDATES",
     "MAX_CUBICAL_FACE_POSET_COORDINATE_DIGITS",
     "MAX_CUBICAL_FACE_POSET_COVER_CANDIDATES",
-    "MAX_CUBICAL_FACE_POSET_RESULT_BYTES",
+    "MAX_CUBICAL_FACE_POSET_RESULT_SIZE",
     "MAX_CUBICAL_PRIME",
-    "MAX_CUBICAL_PRODUCT_RESULT_BYTES",
+    "MAX_CUBICAL_PRODUCT_RESULT_SIZE",
     "MAX_DIM",
     "MAX_LOWER_STAR_CELLS",
     "MAX_LOWER_STAR_COORDINATE_DIGITS",
     "MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES",
     "MAX_LOWER_STAR_INCIDENCES",
-    "MAX_LOWER_STAR_RESULT_BYTES",
+    "MAX_LOWER_STAR_RESULT_SIZE",
     "MAX_LOWER_STAR_VALUE_DIGITS",
     "MAX_LOWER_STAR_VERTICES",
     "MAX_TRIANGULATION_CELL_SIMPLICES",

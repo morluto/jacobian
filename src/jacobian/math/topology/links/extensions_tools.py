@@ -4,6 +4,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidPermutationResult,
     BraidProductRequest,
@@ -17,6 +18,7 @@ from jacobian.math.topology.links._extensions_models import (
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links.extensions import (
+    braid_artin_action,
     braid_closure,
     braid_inverse,
     braid_multiply,
@@ -30,6 +32,10 @@ from jacobian.math.topology.links.extensions import (
 
 def _braid_permutation(request: BraidWordRequest) -> BraidPermutationResult:
     return braid_permutation(request.word)
+
+
+def _braid_artin_action(request: BraidWordRequest) -> BraidArtinActionResult:
+    return braid_artin_action(request.word)
 
 
 def _braid_closure(request: BraidWordRequest) -> BraidClosureResult:
@@ -73,6 +79,37 @@ _SIGMA_ONE_CUBED = {
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="braid.word.artin_action.compute",
+        title="Apply a braid word to its strand free group",
+        description=(
+            "Return the exact Artin automorphism of the free group on the braid "
+            "strands. The declared convention sends sigma_i to x_i -> "
+            "x_i*x_(i+1)*x_i^-1 and x_(i+1) -> x_i; negative letters use its "
+            "inverse, and letters act successively from left to right. Images are "
+            "freely reduced. The admitted output is limited to 128 letters per "
+            "image and 100000 cumulative substitution letters."
+        ),
+        request_type=BraidWordRequest,
+        result_type=BraidArtinActionResult,
+        run=_braid_artin_action,
+        tags=("braid", "Artin-action", "free-group", "exact"),
+        discovery_terms=(
+            "braid action on free group",
+            "Artin representation of braid group",
+            "automorphism induced by braid word",
+        ),
+        examples=(
+            OperationExample(
+                name="trefoil_braid_artin_action",
+                description=(
+                    "Apply sigma_1 cubed to the rank-two free group; the positive "
+                    "generator convention and its threefold iterate are explicit."
+                ),
+                input={"word": _SIGMA_ONE_CUBED},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="link_diagram.alexander_polynomial.compute",
         title="Compute a knot diagram's Alexander polynomial",

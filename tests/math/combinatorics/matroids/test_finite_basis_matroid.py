@@ -63,7 +63,7 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
         (("a", "b"), ((0,), (0,)), "basis_family_canonical"),
         (("a", "a"), ((0,),), "ground_duplicate"),
         (("a",), ((True,),), "basis_index"),
-        (("a",), (), "at least 1 item"),
+        (("a",), (), "basis_family_empty"),
     ],
 )
 def test_rejects_noncanonical_or_nonmatroid_basis_families(

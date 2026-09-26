@@ -10,25 +10,63 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from itertools import combinations, pairwise
+from math import comb
 from typing import Any, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidationError, model_validator
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.polynomials._models import IntegerPolynomial
+from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_VARIABLES,
+    PolynomialVariable,
+    RationalPolynomial,
+    RationalPolynomialIdeal,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
 from jacobian.math.topology._models import (
     MAX_TOPOLOGY_DIMENSION,
+    MAX_TOPOLOGY_FACES,
     MAX_TOPOLOGY_FACETS,
     MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     Simplex,
     SimplicialComplexRequest,
     VertexLabel,
+    _require_request_complex,
     _validation_error,
     canonical_complex,
+    face_closure,
 )
 from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
     require_complex_admission,
     run_topology_admission,
+)
+
+MAX_FACE_ENUMERATOR_CANDIDATES = MAX_TOPOLOGY_FACETS * (
+    (1 << (MAX_TOPOLOGY_DIMENSION + 1)) - 1
+)
+
+MAX_MINIMAL_NONFACE_CANDIDATES = 1 << 14
+MAX_MINIMAL_NONFACE_WORK = 430_000
+MAX_MINIMAL_NONFACES = 4_096
+MAX_MINIMAL_NONFACE_RESULT_CELLS = 2_500_000
+MAX_STANLEY_REISNER_GENERATORS = 64
+MAX_STANLEY_REISNER_RESULT_CELLS = 2_500_000
+MAX_VERTEX_LABEL_BYTES = 32
+MAX_CANONICAL_COMPLEX_CELLS = (
+    (MAX_TOPOLOGY_FACES + MAX_TOPOLOGY_FACETS)
+    * (MAX_TOPOLOGY_DIMENSION + 1)
+    * (MAX_VERTEX_LABEL_BYTES + 3)
+    + MAX_TOPOLOGY_VERTICES * (MAX_VERTEX_LABEL_BYTES + 3)
+    + 8_192
 )
 
 
@@ -39,6 +77,36 @@ def _all_nonempty_faces(facets: tuple[Simplex, ...]) -> set[Simplex]:
         for size in range(1, len(canonical) + 1):
             faces.update(combinations(canonical, size))
     return faces
+
+
+def _bounded_face_closure(
+    facets: tuple[Simplex, ...], *, max_faces: int
+) -> tuple[tuple[Simplex, ...], ...]:
+    """Build a face closure while enforcing its unique-face cap incrementally."""
+    faces_by_dimension: list[set[Simplex]] = [
+        set() for _ in range(MAX_TOPOLOGY_DIMENSION + 1)
+    ]
+    face_count = 0
+    for facet in facets:
+        canonical = tuple(sorted(facet))
+        for size in range(1, len(canonical) + 1):
+            dimension_faces = faces_by_dimension[size - 1]
+            for face in combinations(canonical, size):
+                if face in dimension_faces:
+                    continue
+                if face_count == max_faces:
+                    raise OperationResourceAdmissionError(
+                        location=("complex",),
+                        code="topology.face_enumerator.admission.output_faces",
+                        message=(
+                            "the face closure exceeds the "
+                            f"{max_faces}-face output envelope"
+                        ),
+                    )
+                dimension_faces.add(face)
+                face_count += 1
+    highest = max(index for index, values in enumerate(faces_by_dimension) if values)
+    return tuple(tuple(sorted(values)) for values in faces_by_dimension[: highest + 1])
 
 
 def _maximal_faces(faces: Iterable[Simplex]) -> tuple[tuple[str, ...], ...]:
@@ -169,12 +237,105 @@ class FVectorRequest(StrictModel):
     complex: SimplicialComplexRequest
 
 
+class FaceEnumeratorRequest(StrictModel):
+    """Request the polynomial counting all faces by cardinality."""
+
+    complex: SimplicialComplexRequest
+
+
+class MinimalNonfacesRequest(StrictModel):
+    """Request the inclusion-minimal nonfaces of one canonical complex."""
+
+    complex: FiniteSimplicialComplex = Field(
+        description=(
+            "Canonical finite complex on at most 14 vertices; powerset and "
+            "result-byte admission use the full source vertex domain."
+        )
+    )
+
+
+class MinimalNonfacesResult(StrictModel):
+    """Source-bound canonical antichain of minimal nonfaces."""
+
+    source: FiniteSimplicialComplex
+    minimal_nonfaces: tuple[Simplex, ...] = Field(max_length=MAX_MINIMAL_NONFACES)
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteSimplicialComplex,
+        minimal_nonfaces: tuple[Simplex, ...],
+    ) -> Self:
+        """Build an admitted exact antichain without replaying its search."""
+        return cls.model_construct(source=source, minimal_nonfaces=minimal_nonfaces)
+
+
+class VertexVariableBinding(StrictModel):
+    """One source vertex and its collision-free polynomial variable."""
+
+    vertex: VertexLabel
+    variable: PolynomialVariable
+
+
+class StanleyReisnerIdealRequest(StrictModel):
+    """Construct the squarefree monomial ideal of one finite complex."""
+
+    complex: FiniteSimplicialComplex
+
+
+class StanleyReisnerIdealResult(StrictModel):
+    """The polynomial ideal together with its exact ordered vertex binding."""
+
+    source: FiniteSimplicialComplex
+    ideal: RationalPolynomialIdeal
+    vertex_variables: tuple[VertexVariableBinding, ...] = Field(
+        max_length=MAX_POLYNOMIAL_VARIABLES
+    )
+
+
 class FVectorResult(StrictModel):
-    """The f-vector and h-vector of a simplicial complex."""
+    """The f-vector ``(f_-1, f_0, ..., f_d)`` and its h-vector."""
 
     f_vector: tuple[int, ...]
     h_vector: tuple[int, ...]
     euler_characteristic: int
+    dimension: int
+
+
+class InducedSubcomplexRequest(StrictModel):
+    """Select a nonempty vertex subset and take its induced subcomplex."""
+
+    complex: FiniteSimplicialComplex
+    selected_vertices: tuple[VertexLabel, ...] = Field(
+        min_length=1,
+        max_length=MAX_TOPOLOGY_VERTICES,
+        description="Distinct vertices to retain; the empty vertex set is outside the canonical complex contract.",
+    )
+
+
+class InducedFaceImage(StrictModel):
+    source_face: Simplex
+    induced_face: Simplex | None
+
+
+class InducedSubcomplexResult(StrictModel):
+    complex: FiniteSimplicialComplex
+    selected_vertices: tuple[VertexLabel, ...]
+    induced_complex: FiniteSimplicialComplex
+    face_images: tuple[InducedFaceImage, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class GVectorResult(StrictModel):
+    """The initial h-differences through the conventional midpoint."""
+
+    f_vector: tuple[int, ...]
+    h_vector: tuple[int, ...]
+    g_vector: tuple[int, ...]
     dimension: int
 
 
@@ -623,10 +784,11 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
 
     all_simplices = _all_nonempty_faces(request.complex.facets)
     dimension = max(len(simplex) - 1 for simplex in all_simplices)
-    f_vector = tuple(
+    face_counts = tuple(
         sum(len(simplex) == degree + 1 for simplex in all_simplices)
         for degree in range(dimension + 1)
     )
+    f_vector = (1, *face_counts)
     from math import comb
 
     ring_dimension = dimension + 1
@@ -634,7 +796,7 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
         sum(
             (-1) ** (degree - index)
             * comb(ring_dimension - index, degree - index)
-            * (1 if index == 0 else f_vector[index - 1])
+            * f_vector[index]
             for index in range(degree + 1)
         )
         for degree in range(ring_dimension + 1)
@@ -643,9 +805,363 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
         f_vector=f_vector,
         h_vector=h_vector,
         euler_characteristic=sum(
-            (-1) ** degree * count for degree, count in enumerate(f_vector)
+            (-1) ** degree * count for degree, count in enumerate(face_counts)
         ),
         dimension=dimension,
+    )
+
+
+def compute_face_enumerator(request: FaceEnumeratorRequest) -> IntegerPolynomial:
+    """Return ``sum_{face in K} t**|face|`` as a canonical ZZ[x] value.
+
+    The empty face contributes the constant term one. Candidate subface
+    generation is admitted from the bounded facet presentation before closure
+    expansion; unique output faces are then admitted incrementally as they are
+    inserted into the face closure.
+    """
+    canonical_facets = run_topology_admission(
+        lambda: _require_request_complex(
+            request.complex.vertices, request.complex.facets, check_closure=False
+        ),
+        location=("complex",),
+    )
+    if any(len(facet) > MAX_TOPOLOGY_DIMENSION + 1 for facet in canonical_facets):
+        raise OperationResourceAdmissionError(
+            location=("complex", "facets"),
+            code="topology.face_enumerator.admission.dimension",
+            message=(
+                "face-enumerator facets exceed the "
+                f"{MAX_TOPOLOGY_DIMENSION + 1}-vertex dimension bound"
+            ),
+        )
+    candidates = sum((1 << len(facet)) - 1 for facet in canonical_facets)
+    if candidates > MAX_FACE_ENUMERATOR_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.face_enumerator.admission.face_candidates",
+            message=(
+                f"face-enumerator input admits {candidates} subface candidates, "
+                f"above the {MAX_FACE_ENUMERATOR_CANDIDATES}-candidate envelope"
+            ),
+        )
+    closure = _bounded_face_closure(canonical_facets, max_faces=MAX_TOPOLOGY_FACES)
+    return IntegerPolynomial(coefficients=(*reversed(tuple(map(len, closure))), 1))
+
+
+def compute_g_vector(request: FVectorRequest) -> GVectorResult:
+    """Compute ``g_0=1`` and ``g_i=h_i-h_(i-1)`` through the midpoint.
+
+    This is only the conventional initial-difference transform. It does not
+    assert that the complex is a sphere, a manifold, or that the entries are
+    nonnegative.
+    """
+    result = compute_f_vector(request)
+    last_index = (result.dimension + 1) // 2
+    g_vector = (
+        1,
+        *(
+            result.h_vector[index] - result.h_vector[index - 1]
+            for index in range(1, last_index + 1)
+        ),
+    )
+    return GVectorResult(
+        f_vector=result.f_vector,
+        h_vector=result.h_vector,
+        g_vector=g_vector,
+        dimension=result.dimension,
+    )
+
+
+def _minimal_nonface_work(vertex_count: int, facets: tuple[Simplex, ...]) -> int:
+    candidate_count = 1 << vertex_count
+    candidate_mask_work = vertex_count * (1 << (vertex_count - 1))
+    immediate_subface_checks = vertex_count * (1 << (vertex_count - 1))
+    face_candidate_work = sum((1 << len(facet)) - 1 for facet in facets)
+    facet_validation_work = (
+        len(facets) * (len(facets) - 1) // 2 * (MAX_TOPOLOGY_DIMENSION + 1)
+    )
+    face_mask_work = MAX_TOPOLOGY_FACES * (MAX_TOPOLOGY_DIMENSION + 1)
+    output_label_work = (
+        min(
+            MAX_MINIMAL_NONFACES,
+            comb(vertex_count, vertex_count // 2),
+        )
+        * vertex_count
+    )
+    return (
+        candidate_count
+        + candidate_mask_work
+        + immediate_subface_checks
+        + face_candidate_work
+        + facet_validation_work
+        + face_mask_work
+        + output_label_work
+    )
+
+
+def _minimal_nonface_result_cells_bound(source: FiniteSimplicialComplex) -> int:
+    vertex_count = len(source.vertices)
+    width_bound = min(
+        MAX_MINIMAL_NONFACES,
+        comb(vertex_count, vertex_count // 2),
+    )
+    return (
+        (MAX_TOPOLOGY_FACES + MAX_TOPOLOGY_FACETS) * (MAX_TOPOLOGY_DIMENSION + 1)
+        + width_bound * (vertex_count + 2)
+        + MAX_TOPOLOGY_VERTICES
+    )
+
+
+def _preflight_minimal_nonfaces(
+    request: MinimalNonfacesRequest,
+) -> FiniteSimplicialComplex:
+    if not isinstance(request, MinimalNonfacesRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="topology.minimal_nonfaces.request_type",
+            message="request must be a minimal-nonfaces request",
+        )
+    source = getattr(request, "complex", None)
+    if not isinstance(source, FiniteSimplicialComplex):
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.minimal_nonfaces.source_type",
+            message="source must be a canonical finite simplicial complex",
+        )
+    vertices = getattr(source, "vertices", None)
+    if type(vertices) is not tuple or not vertices:
+        raise OperationDomainValidationError(
+            location=("complex", "vertices"),
+            code="topology.minimal_nonfaces.empty_source_unsupported",
+            message=(
+                "the canonical complex carrier requires at least one vertex; "
+                "void and zero-vertex complexes are not represented"
+            ),
+        )
+    vertex_count = len(vertices)
+    candidate_count = 1 << vertex_count
+    if candidate_count > MAX_MINIMAL_NONFACE_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("complex", "vertices"),
+            code="topology.minimal_nonfaces.powerset_over_envelope",
+            message=(
+                f"the {candidate_count}-subset powerset exceeds the admitted "
+                f"{MAX_MINIMAL_NONFACE_CANDIDATES}-candidate envelope"
+            ),
+        )
+    facets = getattr(source, "maximal_simplices", None)
+    if (
+        type(facets) is not tuple
+        or not 1 <= len(facets) <= MAX_TOPOLOGY_FACETS
+        or any(
+            type(facet) is not tuple
+            or not 1 <= len(facet) <= MAX_TOPOLOGY_DIMENSION + 1
+            for facet in facets
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("complex", "maximal_simplices"),
+            code="topology.minimal_nonfaces.source_shape",
+            message="source facets are outside the canonical complex shape",
+        )
+    estimated_work = _minimal_nonface_work(vertex_count, facets)
+    if estimated_work > MAX_MINIMAL_NONFACE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.minimal_nonfaces.work_over_envelope",
+            message=(
+                f"minimal-nonface work estimate {estimated_work} exceeds "
+                f"the {MAX_MINIMAL_NONFACE_WORK}-step envelope"
+            ),
+        )
+    try:
+        validated_source = FiniteSimplicialComplex.model_validate(
+            source.model_dump(mode="python")
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.minimal_nonfaces.source_invalid",
+            message="source is not a valid canonical finite complex",
+        ) from exc
+    result_cells_bound = _minimal_nonface_result_cells_bound(validated_source)
+    if result_cells_bound > MAX_MINIMAL_NONFACE_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.minimal_nonfaces.output_over_envelope",
+            message=(
+                f"source-bound antichain output estimate {result_cells_bound} "
+                f"cells exceeds the {MAX_MINIMAL_NONFACE_RESULT_CELLS}-cell envelope"
+            ),
+        )
+    return validated_source
+
+
+def _admitted_nonempty_face_masks(
+    source: FiniteSimplicialComplex,
+) -> frozenset[int]:
+    try:
+        closure = face_closure(source.maximal_simplices)
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.minimal_nonfaces.source_invalid",
+            message="source facets do not define a canonical finite complex",
+        ) from exc
+    stored_closure = tuple(tuple(item.faces) for item in source.faces_by_dimension)
+    if (
+        closure != stored_closure
+        or source.f_vector != tuple(map(len, closure))
+        or source.closure_size != sum(map(len, closure))
+        or sum(map(len, closure)) > MAX_TOPOLOGY_FACES
+    ):
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.minimal_nonfaces.source_closure",
+            message="source face closure is incomplete or inconsistent",
+        )
+    vertex_index = {vertex: index for index, vertex in enumerate(source.vertices)}
+    return frozenset(
+        sum(1 << vertex_index[vertex] for vertex in face)
+        for dimension_faces in closure
+        for face in dimension_faces
+    )
+
+
+def _minimal_nonface_positions(
+    source: FiniteSimplicialComplex,
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate minimal nonfaces by their positions on the ordered vertex axis."""
+
+    face_masks = _admitted_nonempty_face_masks(source)
+    minimal_nonfaces: list[tuple[int, ...]] = []
+    for size in range(2, len(source.vertices) + 1):
+        for positions in combinations(range(len(source.vertices)), size):
+            mask = sum(1 << position for position in positions)
+            if mask not in face_masks and all(
+                mask ^ (1 << position) in face_masks for position in positions
+            ):
+                minimal_nonfaces.append(positions)
+    if len(minimal_nonfaces) > MAX_MINIMAL_NONFACES:
+        raise OperationResourceAdmissionError(
+            location=("minimal_nonfaces",),
+            code="topology.minimal_nonfaces.output_over_envelope",
+            message=(
+                f"antichain has {len(minimal_nonfaces)} members, exceeding "
+                f"the {MAX_MINIMAL_NONFACES}-member envelope"
+            ),
+        )
+    return tuple(minimal_nonfaces)
+
+
+def compute_minimal_nonfaces(
+    request: MinimalNonfacesRequest,
+) -> MinimalNonfacesResult:
+    """Enumerate the canonical minimal-nonface antichain of one complex."""
+    source = _preflight_minimal_nonfaces(request)
+    minimal_nonfaces = tuple(
+        tuple(source.vertices[position] for position in positions)
+        for positions in _minimal_nonface_positions(source)
+    )
+    return MinimalNonfacesResult._from_kernel(
+        source=source, minimal_nonfaces=minimal_nonfaces
+    )
+
+
+def compute_stanley_reisner_ideal(
+    request: StanleyReisnerIdealRequest,
+) -> StanleyReisnerIdealResult:
+    """Construct the exact squarefree monomial ideal generated by minimal nonfaces."""
+
+    if not isinstance(request, StanleyReisnerIdealRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="topology.stanley_reisner.request_type",
+            message="request must be a Stanley-Reisner ideal request",
+        )
+    if not isinstance(request.complex, FiniteSimplicialComplex):
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.stanley_reisner.source_type",
+            message="source must be a canonical finite simplicial complex",
+        )
+    if len(request.complex.vertices) > MAX_POLYNOMIAL_VARIABLES:
+        raise OperationResourceAdmissionError(
+            location=("complex", "vertices"),
+            code="topology.stanley_reisner.variable_bound",
+            message=(
+                "the polynomial ideal carrier admits at most "
+                f"{MAX_POLYNOMIAL_VARIABLES} ordered vertex variables"
+            ),
+        )
+    source = _preflight_minimal_nonfaces(
+        MinimalNonfacesRequest(complex=request.complex)
+    )
+    vertex_count = len(source.vertices)
+    minimal_nonfaces = _minimal_nonface_positions(source)
+    if len(minimal_nonfaces) > MAX_STANLEY_REISNER_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.stanley_reisner.generator_bound",
+            message=(
+                f"the {len(minimal_nonfaces)} minimal nonfaces exceed the "
+                f"{MAX_STANLEY_REISNER_GENERATORS}-generator polynomial ideal bound"
+            ),
+        )
+
+    # The exact source complex and at most 64 eight-variable sparse terms fit
+    # below this conservative canonical JSON envelope before polynomial values
+    # are materialized.
+    estimated_output_cells = _minimal_nonface_result_cells_bound(source) + 64_000
+    if estimated_output_cells > MAX_STANLEY_REISNER_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.stanley_reisner.output_bound",
+            message=(
+                f"conservative result estimate {estimated_output_cells} exceeds "
+                f"the {MAX_STANLEY_REISNER_RESULT_CELLS}-cell envelope"
+            ),
+        )
+
+    variables = tuple(f"v{index}" for index in range(vertex_count))
+    exponents = tuple(
+        sorted(
+            (
+                tuple(int(index in positions) for index in range(vertex_count))
+                for positions in minimal_nonfaces
+            ),
+            reverse=True,
+        )
+    )
+    one = CanonicalRational(num=1, den=1)
+    if exponents:
+        generators = tuple(
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=(RationalPolynomialTerm(coefficient=one, exponents=power),)
+                ),
+            )
+            for power in exponents
+        )
+    else:
+        # The canonical polynomial representation uses the zero polynomial as
+        # a singleton generator for the zero ideal, avoiding a second ideal type.
+        generators = (
+            RationalPolynomial(
+                variables=variables,
+                polynomial=SparseRationalPolynomial(terms=()),
+            ),
+        )
+    ideal = RationalPolynomialIdeal(variables=variables, generators=generators)
+    bindings = tuple(
+        VertexVariableBinding(vertex=vertex, variable=variable)
+        for vertex, variable in zip(source.vertices, variables, strict=True)
+    )
+    return StanleyReisnerIdealResult(
+        source=source,
+        ideal=ideal,
+        vertex_variables=bindings,
     )
 
 
@@ -713,6 +1229,76 @@ def compute_vertex_deletion(request: VertexDeletionRequest) -> VertexDeletionRes
         remaining_vertices=vertices,
         remaining_facets=facets,
         remaining_complex=canonical_complex(vertices, facets),
+    )
+
+
+def compute_induced_subcomplex(
+    request: InducedSubcomplexRequest,
+) -> InducedSubcomplexResult:
+    source = request.complex
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(source), location=("complex",)
+    )
+
+    def admit_vertices() -> tuple[str, ...]:
+        facet_vertices = tuple(
+            sorted({vertex for facet in source.maximal_simplices for vertex in facet})
+        )
+        if facet_vertices != source.vertices:
+            raise ValueError("source vertices do not match its maximal simplices")
+        if _maximal_faces(source.maximal_simplices) != source.maximal_simplices:
+            raise ValueError("source maximal simplices are not canonical")
+        if source.dimension != max(
+            len(facet) - 1 for facet in source.maximal_simplices
+        ):
+            raise ValueError("source dimension does not match its maximal simplices")
+        if any(
+            item.dimension != dimension
+            for dimension, item in enumerate(source.faces_by_dimension)
+        ):
+            raise ValueError("source face table dimensions are not canonical")
+        source_face_count = sum(
+            len(dimension.faces) for dimension in source.faces_by_dimension
+        )
+        if source_face_count != source.closure_size:
+            raise ValueError("source closure_size does not match its face table")
+        if source_face_count > MAX_TOPOLOGY_FACES:
+            raise ValueError("source face closure exceeds the induced-subcomplex bound")
+        if len(set(request.selected_vertices)) != len(request.selected_vertices):
+            raise ValueError("selected_vertices must be distinct")
+        selected = tuple(sorted(request.selected_vertices))
+        if not set(selected).issubset(source.vertices):
+            raise ValueError("selected_vertices must belong to the source complex")
+        return selected
+
+    selected = run_topology_admission(admit_vertices, location=("selected_vertices",))
+    selected_set = set(selected)
+    source_faces = tuple(
+        face for dimension in source.faces_by_dimension for face in dimension.faces
+    )
+    retained = tuple(face for face in source_faces if set(face).issubset(selected_set))
+    facets = _maximal_faces(
+        tuple(vertex for vertex in facet if vertex in selected_set)
+        for facet in source.maximal_simplices
+        if any(vertex in selected_set for vertex in facet)
+    )
+    groups = tuple(
+        tuple(face for face in retained if len(face) == dimension + 1)
+        for dimension in range(max(map(len, facets)))
+    )
+    induced = canonical_complex(selected, facets, closure=groups)
+    images = tuple(
+        InducedFaceImage(
+            source_face=face,
+            induced_face=face if set(face).issubset(selected_set) else None,
+        )
+        for face in source_faces
+    )
+    return InducedSubcomplexResult._from_kernel(
+        complex=source,
+        selected_vertices=selected,
+        induced_complex=induced,
+        face_images=images,
     )
 
 
@@ -944,6 +1530,11 @@ __all__ = [
     "ElementaryCollapseResult",
     "FVectorRequest",
     "FVectorResult",
+    "FaceEnumeratorRequest",
+    "GVectorResult",
+    "InducedFaceImage",
+    "InducedSubcomplexRequest",
+    "InducedSubcomplexResult",
     "JoinRequest",
     "JoinResult",
     "LinkRequest",
@@ -959,6 +1550,9 @@ __all__ = [
     "compute_cone",
     "compute_elementary_collapse",
     "compute_f_vector",
+    "compute_face_enumerator",
+    "compute_g_vector",
+    "compute_induced_subcomplex",
     "compute_join",
     "compute_link",
     "compute_skeleton",

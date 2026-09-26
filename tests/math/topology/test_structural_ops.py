@@ -1,14 +1,17 @@
 """Tests for structural simplicial complex operations (#1850)."""
 
+from itertools import pairwise
 from typing import TypedDict
 
 import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import (
-    MAX_BARYCENTRIC_SOURCE_FACES,
     BarycentricSubdivisionRequest,
     BarycentricSubdivisionResult,
     FiniteSimplicialComplex,
@@ -241,7 +244,7 @@ class TestJoin:
 
 
 class TestBarycentricSubdivision:
-    def test_owner_rejects_subdivision_beyond_its_result_envelope(self) -> None:
+    def test_owner_rejects_too_many_maximal_source_face_chains(self) -> None:
         request = BarycentricSubdivisionRequest(
             complex=_complex(
                 {"vertices": tuple("abcdef"), "facets": (tuple("abcdef"),)}
@@ -249,7 +252,8 @@ class TestBarycentricSubdivision:
         )
 
         with pytest.raises(
-            ValueError, match=f"at most {MAX_BARYCENTRIC_SOURCE_FACES} faces"
+            OperationResourceAdmissionError,
+            match="more than 128 subdivision facets",
         ):
             compute_barycentric_subdivision(request)
 
@@ -270,6 +274,54 @@ class TestBarycentricSubdivision:
         assert result.num_new_vertices == 7
         # Subdivision of a triangle has 6 maximal simplices (each is a chain)
         assert len(result.subdivision_facets) == 6
+
+    def test_subdivision_accepts_more_than_31_isolated_vertices(self) -> None:
+        vertices = tuple(f"p{i:02}" for i in range(32))
+        request = BarycentricSubdivisionRequest(
+            complex=_complex(
+                {
+                    "vertices": vertices,
+                    "facets": tuple((vertex,) for vertex in vertices),
+                }
+            )
+        )
+        result = compute_barycentric_subdivision(request)
+
+        assert result.num_new_vertices == 32
+        assert result.subdivision_facets == tuple(
+            sorted((f"bv{index}",) for index in range(32))
+        )
+        assert result.subdivision_facet_face_chains == tuple(
+            ((vertices[int(facet[0][2:])],),) for facet in result.subdivision_facets
+        )
+        assert result.subdivision_complex == canonical_complex(
+            tuple(f"bv{index}" for index in range(32)),
+            tuple((f"bv{index}",) for index in range(32)),
+        )
+
+    def test_every_subdivision_facet_maps_to_one_strict_source_chain(self) -> None:
+        result = compute_barycentric_subdivision(
+            BarycentricSubdivisionRequest(complex=_complex(TRIANGLE))
+        )
+        assert len(result.subdivision_facet_face_chains) == len(
+            result.subdivision_facets
+        )
+        vertex_to_face = dict(
+            zip(
+                result.subdivision_vertices,
+                result.subdivision_vertex_faces,
+                strict=True,
+            )
+        )
+        for facet, chain in zip(
+            result.subdivision_facets,
+            result.subdivision_facet_face_chains,
+            strict=True,
+        ):
+            assert tuple(sorted(vertex_to_face[vertex] for vertex in facet)) == tuple(
+                sorted(chain)
+            )
+            assert all(set(lower) < set(upper) for lower, upper in pairwise(chain))
 
     def test_result_retains_source_and_roundtrips(self) -> None:
         request = BarycentricSubdivisionRequest(complex=_complex(CIRCLE))
@@ -893,20 +945,21 @@ class TestResultDomainMirrorsRequest:
                 ),
             )
 
-    def test_subdivision_result_does_not_repeat_request_admission(self) -> None:
+    def test_subdivision_result_roundtrips_above_old_source_face_cap(self) -> None:
         result = compute_barycentric_subdivision(
-            BarycentricSubdivisionRequest(complex=_complex(CIRCLE))
+            BarycentricSubdivisionRequest(
+                complex=_complex(
+                    {
+                        "vertices": tuple(f"p{i:02}" for i in range(32)),
+                        "facets": tuple((f"p{i:02}",) for i in range(32)),
+                    }
+                )
+            )
         )
-        payload = result.model_dump()
-        simplex4_plus_point: ComplexWire = {
-            "vertices": ["v0", "v1", "v2", "v3", "v4", "p"],
-            "facets": [["v0", "v1", "v2", "v3", "v4"], ["p"]],
-        }
-        payload["complex"] = canonical_complex(
-            tuple(simplex4_plus_point["vertices"]),
-            tuple(tuple(facet) for facet in simplex4_plus_point["facets"]),
-        ).model_dump()
-        assert BarycentricSubdivisionResult.model_validate(payload)
+        assert len(result.subdivision_vertex_faces) == 32
+        assert (
+            BarycentricSubdivisionResult.model_validate(result.model_dump()) == result
+        )
 
     def test_subdivision_roundtrip_still_admitted(self) -> None:
         result = compute_barycentric_subdivision(

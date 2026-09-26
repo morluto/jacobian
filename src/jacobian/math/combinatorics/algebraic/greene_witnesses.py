@@ -188,11 +188,11 @@ def compute_greene_witnesses(
 ) -> GreeneWitnessResult:
     """Return disjoint weak-increasing and strict-decreasing Greene witnesses."""
 
-    if isinstance(word, GreeneWitnessRequest) and k is None:
-        request = word
-    else:
-        request = GreeneWitnessRequest(word=word, k=k)
     try:
+        if isinstance(word, GreeneWitnessRequest) and k is None:
+            request = word
+        else:
+            request = GreeneWitnessRequest.model_validate({"word": word, "k": k})
         request = GreeneWitnessRequest.model_validate(request.model_dump(mode="python"))
     except Exception as exc:
         raise OperationDomainValidationError(

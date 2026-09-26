@@ -1,7 +1,10 @@
 """Algebraic combinatorics operations."""
 
 from jacobian.math.combinatorics.algebraic._models import (
+    LongestDecreasingSubsequenceResult,
+    LongestIncreasingSubsequenceResult,
     PartitionDominanceResult,
+    PlacticNormalFormResult,
     PlacticEquivalenceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
@@ -9,6 +12,7 @@ from jacobian.math.combinatorics.algebraic._models import (
 )
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
+    GreeneWitnessResult,
     BiwordRSKPair,
     NonnegativeIntegerMatrix,
 )
@@ -64,10 +68,14 @@ __all__ = [
     "EndpointProfileEntry",
     "EndpointProfileResult",
     "FinitePermutation",
+    "GreeneWitnessResult",
+    "LongestDecreasingSubsequenceResult",
+    "LongestIncreasingSubsequenceResult",
     "NonnegativeIntegerMatrix",
     "PartitionDominanceResult",
     "PermutationRSKPair",
     "PlacticEquivalenceResult",
+    "PlacticNormalFormResult",
     "RSKTableauPair",
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountResult",

@@ -6,6 +6,7 @@ from jacobian.math.lie_algebras.operations import (
     lie_adjoint,
     lie_adjoint_matrices,
     lie_adjoint_representation,
+    lie_algebra_is_semisimple,
     lie_bracket,
     lie_center,
     lie_derived_series,
@@ -17,6 +18,7 @@ from jacobian.math.lie_algebras.operations import (
     lie_killing_form_radical,
     lie_lower_central_series,
     lie_quotient,
+    lie_subalgebra,
     lie_subalgebra_centralizer,
     lie_upper_central_series,
 )
@@ -27,6 +29,7 @@ __all__ = [
     "lie_adjoint",
     "lie_adjoint_matrices",
     "lie_adjoint_representation",
+    "lie_algebra_is_semisimple",
     "lie_bracket",
     "lie_center",
     "lie_derived_series",
@@ -38,6 +41,7 @@ __all__ = [
     "lie_killing_form_radical",
     "lie_lower_central_series",
     "lie_quotient",
+    "lie_subalgebra",
     "lie_subalgebra_centralizer",
     "lie_upper_central_series",
 ]

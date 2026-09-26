@@ -74,9 +74,8 @@ class FiniteDimensionalLieAlgebra(StrictModel):
     """One finite-dimensional Lie algebra over QQ by ordered structure constants."""
 
     basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
-        description="Ordered basis axis; row order is a transport convention.",
+        description="Ordered basis axis; row order is a transport convention",
     )
     structure_constants: tuple[StructureConstant, ...] = Field(
         min_length=0,
@@ -118,10 +117,19 @@ class FiniteDimensionalLieAlgebra(StrictModel):
 
 
 class LieAlgebraElement(StrictModel):
-    """One exact vector with its source basis axis."""
+    """One exact vector with its source basis axis.
 
-    basis: tuple[LieBasisLabel, ...] = Field(min_length=1, max_length=MAX_LIE_DIMENSION)
-    coordinates: tuple[CanonicalRational, ...] = Field(min_length=1)
+    The zero algebra admits the unique zero vector: an empty basis axis with
+    no coordinates.
+    """
+
+    basis: tuple[LieBasisLabel, ...] = Field(
+        max_length=MAX_LIE_DIMENSION,
+        description="The source basis axis; empty only for the zero algebra.",
+    )
+    coordinates: tuple[CanonicalRational, ...] = Field(
+        description="Coordinates on the source basis axis, empty only for the zero algebra."
+    )
 
     @model_validator(mode="after")
     def require_basis_coordinates_shape(self) -> Self:
@@ -148,9 +156,11 @@ class LieSubspace(StrictModel):
     """
 
     basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
-        description="The ambient ordered basis axis the rows are coordinatized in.",
+        description=(
+            "The ambient ordered basis axis the rows are coordinatized in; "
+            "the zero algebra retains an empty axis."
+        ),
     )
     generators: RationalMatrix = Field(
         description=(
@@ -375,11 +385,11 @@ class LieDirectSumRequest(StrictModel):
     left: FiniteDimensionalLieAlgebra
     right: FiniteDimensionalLieAlgebra
     basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=2,
         max_length=MAX_LIE_DIMENSION,
         description=(
             "Unique output labels in left-block then right-block order; their count "
-            "must equal the sum of the two source dimensions."
+            "must equal the sum of the two source dimensions, including an "
+            "empty direct sum of two zero algebras."
         ),
     )
 
@@ -469,14 +479,23 @@ class LieKillingRadicalResult(StrictModel):
         return cls.model_construct(killing_result=killing_result, radical=radical)
 
 
+class LieSemisimplicityResult(StrictModel):
+    """Cartan's semisimplicity decision, bound to its source algebra."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    is_semisimple: StrictBool
+
+
 class LieAdjointRepresentationResult(StrictModel):
     """Adjoint matrices in the exact order of the retained source basis."""
 
     algebra: FiniteDimensionalLieAlgebra
     matrices: tuple[RationalMatrix, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
-        description="One exact adjoint matrix per source basis element, in order.",
+        description=(
+            "One exact adjoint matrix per source basis element, in order; the "
+            "zero algebra retains an empty family."
+        ),
     )
 
     @model_validator(mode="after")
@@ -641,6 +660,78 @@ class LieSubalgebraRequest(StrictModel):
         return self
 
 
+class LieSubalgebraConstructionRequest(StrictModel):
+    """One source algebra, closed subspace, and ordered induced basis labels."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    candidate: LieIdeal | LieSubalgebra | LieSubspace
+    subalgebra_basis: tuple[LieBasisLabel, ...] = Field(
+        max_length=MAX_LIE_DIMENSION,
+        description="Labels for candidate RREF rows in their existing order.",
+    )
+
+    @model_validator(mode="after")
+    def require_candidate_binding_and_dimension(self) -> Self:
+        if self.candidate.basis != self.algebra.basis or (
+            isinstance(self.candidate, (LieIdeal, LieSubalgebra))
+            and self.candidate.algebra != self.algebra
+        ):
+            raise _validation_error(
+                "subalgebra_binding",
+                "the candidate must use the source algebra's ordered basis",
+            )
+        if len(self.subalgebra_basis) != self.candidate.generators.row_count:
+            raise _validation_error(
+                "subalgebra_dimension",
+                "the induced basis labels must match the candidate dimension",
+            )
+        if len(set(self.subalgebra_basis)) != len(self.subalgebra_basis):
+            raise _validation_error(
+                "subalgebra_labels", "induced basis labels must be unique"
+            )
+        return self
+
+
+class LieSubalgebraResult(StrictModel):
+    """An induced structure-constant algebra and its inclusion coordinates."""
+
+    algebra: FiniteDimensionalLieAlgebra
+    subspace: LieSubalgebra
+    induced: FiniteDimensionalLieAlgebra
+    inclusion: RationalMatrix
+
+    @model_validator(mode="after")
+    def require_induced_shape(self) -> Self:
+        dimension = self.subspace.generators.row_count
+        if (
+            self.subspace.algebra != self.algebra
+            or len(self.induced.basis) != dimension
+            or self.inclusion.row_count != dimension
+            or self.inclusion.column_count != len(self.algebra.basis)
+            or self.inclusion.entries != self.subspace.generators.entries
+        ):
+            raise _validation_error(
+                "subalgebra_result_shape",
+                "the induced algebra and inclusion must retain the exact source subspace basis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        algebra: FiniteDimensionalLieAlgebra,
+        subspace: LieSubalgebra,
+        induced: FiniteDimensionalLieAlgebra,
+        inclusion: RationalMatrix,
+    ) -> Self:
+        return cls.model_construct(
+            algebra=algebra,
+            subspace=subspace,
+            induced=induced,
+            inclusion=inclusion,
+        )
+
+
 class IdealViolationWitness(StrictModel):
     """The first basis bracket escaping the candidate subspace."""
 
@@ -772,12 +863,12 @@ class LieQuotientRequest(StrictModel):
         )
     )
     quotient_basis: tuple[LieBasisLabel, ...] = Field(
-        min_length=1,
         max_length=MAX_LIE_DIMENSION,
         description=(
             "Fresh ordered labels for the quotient basis, one per free "
             "column of the ideal RREF in increasing order; the count must "
-            "equal the algebra dimension minus the ideal dimension."
+            "equal the algebra dimension minus the ideal dimension, so an "
+            "empty quotient by the whole algebra retains no labels."
         ),
     )
 

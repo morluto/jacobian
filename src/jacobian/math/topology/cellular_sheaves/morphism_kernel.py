@@ -265,8 +265,6 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
             "component_structure",
             "morphism components must be keyed (simplex, matrix) pairs",
         )
-    _readmit_parent_sheaf(source, role="source")
-    _readmit_parent_sheaf(target, role="target")
     field = _admit_field(source.coefficient_field, source.prime)
     target_field = _admit_field(target.coefficient_field, target.prime)
     if (
@@ -278,8 +276,6 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
             "parent_mismatch",
             "sheaf morphisms require one complex and coefficient field",
         )
-    _admit_section_plan(source)
-    _admit_section_plan(target)
     # Authored Pydantic models can bypass validation via model_construct/model_copy;
     # reject malformed pair structure before the shared scalar/resource scan.
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
@@ -353,6 +349,12 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
             "output_bound",
             "kernel basis, restrictions, and inclusion exceed their output envelope",
         )
+
+    # Reconstruct the parent diagrams only after the combined admission above;
+    # reconstruction itself expands exact matrices and must be included in the
+    # same resource envelope as kernel construction.
+    _readmit_parent_sheaf(source, role="source")
+    _readmit_parent_sheaf(target, role="target")
 
     # Reconstruct both complete parent functors only after the combined input,
     # arithmetic, and output envelope has been admitted.

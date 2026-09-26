@@ -764,7 +764,15 @@ def _scan_morphism_scalar_text(
     total_chars = 0
     max_digits = 1
     for _key, matrix in components:
+        if not isinstance(matrix, (tuple, list)):
+            raise _section_domain(
+                "morphism.scalar_invalid", "component matrices must be row sequences"
+            )
         for row in matrix:
+            if not isinstance(row, (tuple, list)):
+                raise _section_domain(
+                    "morphism.scalar_invalid", "component matrix rows must be sequences"
+                )
             for value in row:
                 if not isinstance(value, CanonicalRational) and type(value) is not int:
                     raise _section_domain(
@@ -951,8 +959,6 @@ def morphism(
             code="cellular_sheaf.morphism.parent_mismatch",
             message="sheaf morphisms require one complex and coefficient field",
         )
-    _admit_section_plan(source)
-    _admit_section_plan(target)
     _complete_diagram(source, role="source")
     _complete_diagram(target, role="target")
     target_cover, _, _ = _admit_morphism_resources(source, target, components)

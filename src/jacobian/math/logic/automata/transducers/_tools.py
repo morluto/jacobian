@@ -8,7 +8,11 @@ from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeRequest,
     MinimizeResult,
+    RationalRelationFiberRequest,
     RationalRelationInverseRequest,
+    RationalRelationProjectionRequest,
+    RationalRelationRestrictInputRequest,
+    RationalRelationRestrictInputResult,
     ReachableStatesRequest,
     ReachableStatesResult,
     RelationPathReplayRequest,
@@ -25,8 +29,11 @@ from jacobian.math.logic.automata.transducers.operations import (
     identity_transducer,
     invert_rational,
     minimize_subsequential,
+    project_rational_relation,
+    rational_relation_outputs_for_input,
     reachable_state_witnesses,
     replay_rational_path,
+    restrict_rational_input,
     run_subsequential,
     trim_subsequential,
     word_morphism_to_subsequential,
@@ -35,6 +42,7 @@ from jacobian.math.logic.automata.transducers.values import (
     RationalTransducer,
     SubsequentialTransducer,
 )
+from jacobian.math.logic.languages.regular.values import NFA
 
 
 def compute_run(request: SubseqRunRequest) -> SubseqRunResult:
@@ -97,6 +105,30 @@ def compute_relation_inverse(
     request: RationalRelationInverseRequest,
 ) -> RationalTransducer:
     return invert_rational(request.transducer)
+
+
+def compute_relation_projection(
+    request: RationalRelationProjectionRequest,
+) -> NFA:
+    return project_rational_relation(request.transducer, request.tape)
+
+
+def compute_relation_fiber(request: RationalRelationFiberRequest) -> NFA:
+    return rational_relation_outputs_for_input(request.transducer, request.input_word)
+
+
+def compute_relation_restrict_input(
+    request: RationalRelationRestrictInputRequest,
+) -> RationalRelationRestrictInputResult:
+    restricted, product_states, source_edge_indices = restrict_rational_input(
+        request.transducer, request.dfa
+    )
+    return RationalRelationRestrictInputResult._from_kernel(
+        request,
+        restricted=restricted,
+        product_states=product_states,
+        source_edge_indices=source_edge_indices,
+    )
 
 
 _IDENTITY = {
@@ -382,6 +414,61 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="transducer.relation.projection.compute",
+        title="Project a finite rational relation to one tape",
+        description=(
+            "Return an epsilon-NFA accepting exactly the selected tape words "
+            "that occur on accepting paths. The relation may be nondeterministic: "
+            "different accepting paths and output choices remain possible. "
+            "Multi-symbol labels expand to paths and empty labels to epsilon "
+            "edges. Alphabet symbols, explicit parent, and optional identity "
+            "are preserved; result expansion is admitted before construction."
+        ),
+        request_type=RationalRelationProjectionRequest,
+        result_type=NFA,
+        run=compute_relation_projection,
+        tags=("transducer", "rational-relation", "projection", "exact"),
+        examples=(
+            OperationExample(
+                name="project_relation_output",
+                description=(
+                    "Project accepting pairs (a,xy) and (ba,x) to their output "
+                    "language {xy,x}."
+                ),
+                input={
+                    "tape": "output",
+                    "transducer": {
+                        "input_alphabet_size": 2,
+                        "output_alphabet_size": 2,
+                        "state_count": 3,
+                        "initial_states": [0],
+                        "accepting_states": [2],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 2,
+                                "input_label": [0],
+                                "output_label": [0, 1],
+                            },
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "input_label": [1],
+                                "output_label": [0],
+                            },
+                            {
+                                "source": 1,
+                                "target": 2,
+                                "input_label": [0],
+                                "output_label": [],
+                            },
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="transducer.relation.path.replay.compute",
         title="Replay a rational-relation path",
         description="Replay one candidate edge-index path from an explicitly selected "
@@ -398,6 +485,113 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "transducer": _RELATION,
                     "initial_state": 0,
                     "edge_path": [0, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.outputs_for_input_automaton.compute",
+        title="Represent a rational-relation output fiber",
+        description=(
+            "Fix one input word and return an epsilon-NFA accepting exactly all "
+            "outputs on accepting paths with that input. Input labels are matched "
+            "as complete words; empty input labels preserve epsilon-input cycles. "
+            "The result retains output alphabet context and represents infinite "
+            "fibers as automata rather than enumerating words. Product, matching, "
+            "intermediate, transition, work, and output bounds are admitted before "
+            "NFA construction."
+        ),
+        request_type=RationalRelationFiberRequest,
+        result_type=NFA,
+        run=compute_relation_fiber,
+        tags=("transducer", "rational-relation", "fiber", "exact"),
+        discovery_terms=(
+            "fixed input outputs",
+            "output fiber",
+            "rational relation section",
+        ),
+        examples=(
+            OperationExample(
+                name="finite_output_fiber",
+                description=(
+                    "With an explicit output alphabet, the accepted input word "
+                    "(0) has the sole output (1)."
+                ),
+                input={
+                    "input_word": [0],
+                    "transducer": {
+                        "input_alphabet_size": 2,
+                        "output_alphabet_size": 2,
+                        "input_alphabet": {"symbols": ["a", "b"]},
+                        "output_alphabet": {"symbols": ["x", "y"]},
+                        "state_count": 2,
+                        "initial_states": [0],
+                        "accepting_states": [1],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "input_label": [0],
+                                "output_label": [1],
+                            }
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.restrict_input.compute",
+        title="Restrict a rational relation by an input language",
+        description=(
+            "Intersect the input tape of a finite rational relation with a total "
+            "DFA language. The reachable product advances the DFA across each "
+            "complete input edge label and preserves the corresponding output "
+            "label and path multiplicity. Exact input alphabet context and "
+            "identity are required; product exploration and result size are "
+            "bounded before result edges are constructed."
+        ),
+        request_type=RationalRelationRestrictInputRequest,
+        result_type=RationalRelationRestrictInputResult,
+        run=compute_relation_restrict_input,
+        tags=("transducer", "rational-relation", "restriction", "exact"),
+        discovery_terms=("input restriction", "relation domain language"),
+        examples=(
+            OperationExample(
+                name="keep_relation_pairs_with_even_input_length",
+                description=(
+                    "Restrict a relation over the one-symbol alphabet to inputs "
+                    "of even length."
+                ),
+                input={
+                    "transducer": {
+                        "input_alphabet_size": 1,
+                        "output_alphabet_size": 1,
+                        "input_alphabet": {"symbols": ["a"]},
+                        "output_alphabet": {"symbols": ["x"]},
+                        "state_count": 1,
+                        "initial_states": [0],
+                        "accepting_states": [0],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 0,
+                                "input_label": [0],
+                                "output_label": [0],
+                            }
+                        ],
+                    },
+                    "dfa": {
+                        "state_count": 2,
+                        "alphabet_size": 1,
+                        "alphabet": {"symbols": ["a"]},
+                        "transitions": [
+                            {"source": 0, "symbol": 0, "target": 1},
+                            {"source": 1, "symbol": 0, "target": 0},
+                        ],
+                        "initial_state": 0,
+                        "accepting_states": [0],
+                    },
                 },
             ),
         ),

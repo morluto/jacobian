@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import BeforeValidator, Field, model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -18,7 +18,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
-from jacobian.math.logic.finite_alphabet import _reject_lone_surrogate_symbol
+from jacobian.math.logic.languages.regular.values import DFA
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -43,11 +43,7 @@ class SubseqIdentityRequest(StrictModel):
     """Construct the identity function on one exact ordered alphabet."""
 
     alphabet: FiniteAlphabet
-    alphabet_id: Annotated[
-        str | None,
-        BeforeValidator(_reject_lone_surrogate_symbol),
-        Field(max_length=MAX_FST_ALPHABET_ID_LENGTH),
-    ] = None
+    alphabet_id: str | None = Field(default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH)
 
 
 class WordMorphismToSubseqRequest(StrictModel):
@@ -184,9 +180,8 @@ class SubseqRunResult(SubseqRunRequest):
     @classmethod
     def _from_kernel(
         cls,
+        request: SubseqRunRequest,
         *,
-        transducer: SubsequentialTransducer,
-        word: tuple[int, ...],
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
         output: tuple[int, ...],
         final_state: int,
@@ -203,8 +198,8 @@ class SubseqRunResult(SubseqRunRequest):
         """Construct a run outcome emitted by the trusted owner-local kernel."""
 
         return cls.model_construct(
-            transducer=transducer,
-            word=word,
+            transducer=request.transducer,
+            word=request.word,
             status=status,
             output=output,
             final_state=final_state,
@@ -294,7 +289,7 @@ class ReachableStateWitness(StrictModel):
     output_word: tuple[int, ...] = Field(
         max_length=MAX_FST_STATES * MAX_FST_WORD_LENGTH
     )
-    state_trace: tuple[int, ...] = Field(min_length=1, max_length=MAX_FST_STATES)
+    state_trace: tuple[int, ...] = Field(max_length=MAX_FST_STATES)
 
 
 class ReachableStatesResult(ReachableStatesRequest):
@@ -319,8 +314,7 @@ class ReachableStatesResult(ReachableStatesRequest):
             )
         for row in self.witnesses:
             if (
-                not row.state_trace
-                or row.state >= self.transducer.state_count
+                row.state >= self.transducer.state_count
                 or row.state_trace[0] != self.transducer.initial_state
                 or row.state_trace[-1] != row.state
                 or len(row.state_trace) != len(row.input_word) + 1
@@ -358,11 +352,11 @@ class ReachableStatesResult(ReachableStatesRequest):
     @classmethod
     def _from_kernel(
         cls,
+        request: ReachableStatesRequest,
         *,
-        transducer: SubsequentialTransducer,
         witnesses: tuple[ReachableStateWitness, ...],
     ) -> Self:
-        return cls.model_construct(transducer=transducer, witnesses=witnesses)
+        return cls.model_construct(transducer=request.transducer, witnesses=witnesses)
 
 
 class TrimResult(TrimRequest):
@@ -694,9 +688,7 @@ class MinimizeResult(MinimizeRequest):
 
     def _require_sample_agreement(self) -> None:
         alphabet = self.transducer.input_alphabet_size
-        if alphabet == 0:
-            expected_words = 1  # Only the empty word exists over the empty alphabet.
-        elif alphabet == 1:
+        if alphabet <= 1:
             expected_words = self.sample_max_length + 1
         else:
             expected_words = sum(
@@ -752,6 +744,90 @@ class RationalRelationInverseRequest(StrictModel):
     """Reverse the input/output coordinates of one finite rational relation."""
 
     transducer: RationalTransducer
+
+
+class RationalRelationProjectionRequest(StrictModel):
+    """Project one tape of a finite rational relation to a regular language."""
+
+    transducer: RationalTransducer
+    tape: Literal["input", "output"]
+
+
+class RationalRelationFiberRequest(StrictModel):
+    """Fix one input word and represent all related output words as an NFA."""
+
+    transducer: RationalTransducer
+    input_word: tuple[int, ...] = Field(
+        description=(
+            "The exact input-alphabet word whose output fiber is requested; "
+            "supported length is determined by the derived fiber work and output bounds."
+        ),
+    )
+
+
+class RationalRelationRestrictInputRequest(StrictModel):
+    """Keep relation pairs whose input belongs to one exact DFA language."""
+
+    transducer: RationalTransducer
+    dfa: DFA
+
+
+class RationalRelationRestrictInputResult(StrictModel):
+    """Input-restricted relation and explicit product-axis transport."""
+
+    transducer: RationalTransducer
+    dfa: DFA
+    restricted: RationalTransducer
+    product_states: tuple[tuple[int, int], ...] = Field(max_length=MAX_FST_STATES)
+    source_edge_indices: tuple[int, ...] = Field(max_length=4096)
+
+    @model_validator(mode="after")
+    def require_product_transport_shape(self) -> Self:
+        if len(self.product_states) != self.restricted.state_count:
+            raise _validation_error(
+                "restriction_state_transport_shape",
+                "product-state transport must cover each restricted state",
+            )
+        if len(set(self.product_states)) != len(self.product_states):
+            raise _validation_error(
+                "restriction_state_transport_duplicate",
+                "product-state transport entries must be distinct",
+            )
+        if any(
+            not 0 <= source < self.transducer.state_count
+            or not 0 <= dfa_state < self.dfa.state_count
+            for source, dfa_state in self.product_states
+        ):
+            raise _validation_error(
+                "restriction_state_transport_range",
+                "product-state transport references an undeclared source state",
+            )
+        if len(self.source_edge_indices) != len(self.restricted.edges) or any(
+            not 0 <= source < len(self.transducer.edges)
+            for source in self.source_edge_indices
+        ):
+            raise _validation_error(
+                "restriction_edge_transport_shape",
+                "edge transport must identify one source edge per result edge",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RationalRelationRestrictInputRequest,
+        *,
+        restricted: RationalTransducer,
+        product_states: tuple[tuple[int, int], ...],
+        source_edge_indices: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            transducer=request.transducer,
+            dfa=request.dfa,
+            restricted=restricted,
+            product_states=product_states,
+            source_edge_indices=source_edge_indices,
+        )
 
 
 class RelationPathReplayResult(RelationPathReplayRequest):
@@ -825,7 +901,11 @@ __all__ = [
     "ComposeResult",
     "MinimizeRequest",
     "MinimizeResult",
+    "RationalRelationFiberRequest",
     "RationalRelationInverseRequest",
+    "RationalRelationProjectionRequest",
+    "RationalRelationRestrictInputRequest",
+    "RationalRelationRestrictInputResult",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
     "StatePairDistinguishability",

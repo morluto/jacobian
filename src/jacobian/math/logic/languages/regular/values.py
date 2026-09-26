@@ -9,6 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding, ExactInteger
 from jacobian._models import StrictModel
+from jacobian.math.logic.finite_alphabet import (
+    MAX_FINITE_ALPHABET_SIZE,
+    FiniteAlphabet,
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -16,8 +20,9 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 MAX_DFA_STATES = 64
-MAX_DFA_ALPHABET = 32
+MAX_DFA_ALPHABET = MAX_FINITE_ALPHABET_SIZE
 MAX_DFA_TRANSITIONS = 4096
+MAX_DFA_ALPHABET_ID_LENGTH = 128
 # Equivalence explores a reachable subset of the Cartesian product. These
 # bounds are derived from the carrier limits so admission can account for the
 # whole product before allocating BFS state.
@@ -29,6 +34,21 @@ MAX_DFA_EQUIVALENCE_WORK = 2_000_000
 MAX_DFA_EQUIVALENCE_INTERMEDIATE_ALLOCATION = 4_000_000
 MAX_DFA_EQUIVALENCE_OUTPUT_ALLOCATION = 100_000
 MAX_DFA_EQUIVALENCE_WITNESS_LENGTH = MAX_DFA_EQUIVALENCE_PRODUCT_STATES - 1
+MAX_DFA_PREIMAGE_PRODUCT_STATES = MAX_DFA_STATES
+MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS = (
+    MAX_DFA_PREIMAGE_PRODUCT_STATES * MAX_DFA_ALPHABET
+)
+MAX_DFA_PREIMAGE_WORK = 2_000_000
+MAX_DFA_PREIMAGE_OUTPUT_BYTES = 2_000_000
+# A finite NFA has a bounded semantic state/edge carrier. Image construction
+# applies tighter aggregate work and allocation admission before expansion.
+MAX_NFA_STATES = 100_000
+MAX_NFA_TRANSITIONS = 300_000
+MAX_NFA_OUTPUT_BYTES = 20_000_000
+MAX_NFA_MEMBERSHIP_WORK = 4_000_000
+MAX_SUBSEQUENTIAL_IMAGE_WORK = 25_000_000
+MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES = 128_000_000
+MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES = MAX_NFA_OUTPUT_BYTES
 MAX_DFA_EQUIVALENCE_TRACE_ROWS = 2 * MAX_DFA_EQUIVALENCE_PRODUCT_STATES
 MAX_WORD_LENGTH = 1000
 # Raw JSON integers remain exactly interoperable through this exponent. FLINT
@@ -66,14 +86,18 @@ class DFATransition(StrictModel):
 
 
 class DFA(StrictModel):
-    """One total deterministic finite automaton over an integer alphabet.
+    """One total deterministic finite automaton over an ordered alphabet axis.
 
     A valid DFA declares exactly one transition for every ``(state, symbol)``
     pair so that simulation and word counting share one consistent semantics.
+    ``alphabet`` and ``alphabet_id`` optionally attach stable symbol meaning to
+    the integer coordinates. Cross-domain operations require that context.
     """
 
     state_count: int = Field(ge=1, le=MAX_DFA_STATES)
     alphabet_size: int = Field(ge=0, le=MAX_DFA_ALPHABET)
+    alphabet_id: str | None = Field(default=None, max_length=MAX_DFA_ALPHABET_ID_LENGTH)
+    alphabet: FiniteAlphabet | None = None
     transitions: tuple[DFATransition, ...] = Field(
         min_length=0,
         max_length=MAX_DFA_TRANSITIONS,
@@ -86,6 +110,14 @@ class DFA(StrictModel):
 
     @model_validator(mode="after")
     def require_total_deterministic_dfa(self) -> Self:
+        if (
+            self.alphabet is not None
+            and len(self.alphabet.symbols) != self.alphabet_size
+        ):
+            raise _validation_error(
+                "alphabet_context_size_mismatch",
+                "the explicit alphabet context must match alphabet_size",
+            )
         if not 0 <= self.initial_state < self.state_count:
             raise _validation_error(
                 "initial_state_out_of_range",
@@ -131,6 +163,92 @@ class DFA(StrictModel):
                 "DFA must be total: expected one transition for every "
                 f"state-symbol pair ({expected}), got {len(seen)}",
             )
+        return self
+
+
+class NFATransition(StrictModel):
+    """One NFA edge; ``symbol=None`` denotes an epsilon transition."""
+
+    transition_id: int = Field(ge=0, le=MAX_NFA_TRANSITIONS - 1)
+    source: int = Field(ge=0, le=MAX_NFA_STATES - 1)
+    symbol: int | None = Field(
+        description="An output-alphabet symbol index, or null for epsilon.",
+    )
+    target: int = Field(ge=0, le=MAX_NFA_STATES - 1)
+
+
+class NFA(StrictModel):
+    """A finite nondeterministic automaton with explicit epsilon semantics.
+
+    States and symbols are zero-based. Transition IDs form a canonical ordered
+    edge axis; parallel edges are retained. ``alphabet`` and ``alphabet_id``
+    attach the meaning and identity of the symbol coordinates.
+    """
+
+    state_count: int = Field(ge=1, le=MAX_NFA_STATES)
+    alphabet_size: int = Field(ge=0, le=MAX_DFA_ALPHABET)
+    alphabet_id: str | None = Field(default=None, max_length=MAX_DFA_ALPHABET_ID_LENGTH)
+    alphabet: FiniteAlphabet | None = None
+    transitions: tuple[NFATransition, ...] = Field(
+        max_length=MAX_NFA_TRANSITIONS,
+        description=(
+            "Ordered edge axis with contiguous transition_id values; a null symbol "
+            "is an epsilon edge."
+        ),
+    )
+    initial_state: int = Field(ge=0, le=MAX_NFA_STATES - 1)
+    accepting_states: tuple[int, ...] = Field(
+        max_length=MAX_NFA_STATES,
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_nfa(self) -> Self:
+        if (
+            self.alphabet is not None
+            and len(self.alphabet.symbols) != self.alphabet_size
+        ):
+            raise _validation_error(
+                "nfa_alphabet_context_size_mismatch",
+                "the explicit alphabet context must match alphabet_size",
+            )
+        if not 0 <= self.initial_state < self.state_count:
+            raise _validation_error(
+                "nfa_initial_state_out_of_range",
+                "initial_state must be in 0..state_count-1",
+            )
+        if any(not 0 <= state < self.state_count for state in self.accepting_states):
+            raise _validation_error(
+                "nfa_accepting_state_out_of_range",
+                "accepting states must be in 0..state_count-1",
+            )
+        if len(set(self.accepting_states)) != len(self.accepting_states):
+            raise _validation_error(
+                "nfa_accepting_states_not_unique",
+                "accepting states must be unique",
+            )
+        if tuple(edge.transition_id for edge in self.transitions) != tuple(
+            range(len(self.transitions))
+        ):
+            raise _validation_error(
+                "nfa_transition_axis_not_contiguous",
+                "transition_id values must be the contiguous zero-based axis in tuple order",
+            )
+        for edge in self.transitions:
+            if not 0 <= edge.source < self.state_count:
+                raise _validation_error(
+                    "nfa_transition_source_out_of_range",
+                    "transition source must be in 0..state_count-1",
+                )
+            if not 0 <= edge.target < self.state_count:
+                raise _validation_error(
+                    "nfa_transition_target_out_of_range",
+                    "transition target must be in 0..state_count-1",
+                )
+            if edge.symbol is not None and not 0 <= edge.symbol < self.alphabet_size:
+                raise _validation_error(
+                    "nfa_transition_symbol_out_of_range",
+                    "transition symbol must be in 0..alphabet_size-1 or null for epsilon",
+                )
         return self
 
 
@@ -319,9 +437,11 @@ class TransitionParikhProfile(StrictModel):
 
 __all__ = [
     "DFA",
+    "NFA",
     "AutomatonTransition",
     "DFATransition",
     "FiniteLabeledAutomaton",
+    "NFATransition",
     "TransitionParikhCell",
     "TransitionParikhProfile",
 ]

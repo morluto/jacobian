@@ -19,15 +19,8 @@ MAX_FST_ALPHABET = MAX_FINITE_ALPHABET_SIZE
 MAX_FST_WORD_LENGTH = 512
 MAX_FST_EDGES = 4096
 MAX_FST_RESULT_WORD_LENGTH = 4096
-# Aggregate cells materialized into the cumulative/transition output rows of
-# one run result before expansion. The admitted word/output envelope bounds
-# this structurally at about 1,054,720 cells; the allocation bound guards the
-# preflight itself, independently of any transport encoding.
-MAX_FST_RUN_RESULT_OUTPUT_CELLS = 1_100_000
-# Aggregate output cells materialized into shortest-path witness words. With
-# at most MAX_FST_STATES states and MAX_FST_WORD_LENGTH output per transition,
-# the carrier bounds this structurally at 2,064,384 cells.
-MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS = 2_100_000
+MAX_FST_RUN_RESULT_BYTES = 8 * 1024 * 1024
+MAX_FST_REACHABLE_RESULT_BYTES = 8 * 1024 * 1024
 MAX_FST_ALPHABET_SYMBOL_LENGTH = MAX_FINITE_ALPHABET_SYMBOL_LENGTH
 MAX_FST_ALPHABET_ID_LENGTH = 128
 
@@ -167,8 +160,8 @@ class SubsequentialTransducer(StrictModel):
     is defined along the path and the final state has a final output.
     """
 
-    input_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
-    output_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
+    input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
     input_alphabet_id: str | None = Field(
         default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
     )
@@ -279,10 +272,14 @@ class RationalTransducer(StrictModel):
     has finite input and output label words; ``(u, v)`` both empty is forbidden.
     """
 
-    input_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
-    output_alphabet_size: int = Field(ge=0, le=MAX_FST_ALPHABET)
-    input_alphabet_id: str | None = Field(default=None)
-    output_alphabet_id: str | None = Field(default=None)
+    input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
+    input_alphabet_id: str | None = Field(
+        default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
+    )
+    output_alphabet_id: str | None = Field(
+        default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
+    )
     input_alphabet: FiniteAlphabet | None = None
     output_alphabet: FiniteAlphabet | None = None
     state_count: int = Field(ge=1, le=MAX_FST_STATES)
@@ -340,9 +337,9 @@ class RationalTransducer(StrictModel):
 __all__ = [
     "MAX_FST_ALPHABET",
     "MAX_FST_EDGES",
-    "MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS",
+    "MAX_FST_REACHABLE_RESULT_BYTES",
     "MAX_FST_RESULT_WORD_LENGTH",
-    "MAX_FST_RUN_RESULT_OUTPUT_CELLS",
+    "MAX_FST_RUN_RESULT_BYTES",
     "MAX_FST_STATES",
     "MAX_FST_WORD_LENGTH",
     "FiniteAlphabet",

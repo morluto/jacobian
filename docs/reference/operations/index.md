@@ -29,6 +29,7 @@ that need more context than an operation card:
 - [Weyl-group Poincare polynomials](groups/weyl-poincare-polynomial.md)
 - [Standard parabolic Weyl subgroups](groups/weyl-parabolic.md)
 - [Regular languages](regular-languages.md)
+- [Finite-state transducers](finite-state-transducers.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)

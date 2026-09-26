@@ -1520,7 +1520,9 @@ def modular_form_space_inclusion(
     if issue is not None:
         reason, message = issue
         location = ("source_space",)
-        if reason == "inclusion_weight" or reason == "inclusion_level":
+        if reason.startswith("inclusion_target_") or reason in (
+            "inclusion_weight", "inclusion_level"
+        ):
             location = ("target_space",)
         raise OperationDomainValidationError(
             location=location,
@@ -1564,6 +1566,21 @@ def modular_form_coordinates_transport(
             message="inclusion must contain its map kind, source space, and target space",
         )
     source_space = form.space
+    for endpoint_name, endpoint in (
+        ("source_space", inclusion.source_space),
+        ("target_space", inclusion.target_space),
+    ):
+        if any(
+            not hasattr(endpoint, field)
+            for field in (
+                "group", "character", "coefficient_domain", "level", "weight", "kind"
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("inclusion", endpoint_name),
+                code="modular_form.transport_inclusion_space_incomplete",
+                message="inclusion spaces must contain all required fields",
+            )
     issue = natural_gamma0_inclusion_issue(
         inclusion.map_kind, inclusion.source_space, inclusion.target_space
     )

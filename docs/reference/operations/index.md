@@ -37,3 +37,5 @@ that need more context than an operation card:
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 - [Finite relational binary-relation transpose](relational-binary-relation-transpose.md)
 - [Finite relational disjoint union](relational-disjoint-union.md)
+- [Complete finite CSP solution enumeration](csp-solution-enumeration.md)
+- [Finite relational homomorphism maps](relational-homomorphism-maps.md)

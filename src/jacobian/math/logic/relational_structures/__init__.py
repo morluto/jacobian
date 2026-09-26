@@ -30,11 +30,14 @@ from jacobian.math.logic.relational_structures._models import (
 from jacobian.math.logic.relational_structures.operations import (
     check_homomorphism,
     check_polymorphism,
+    compose_homomorphisms,
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
     disjoint_union_structure,
+    enumerate_csp_solutions,
     enumerate_homomorphisms,
+    homomorphism_identity,
     induced_substructure,
     profile_csp_assignment,
     quotient_structure,
@@ -46,6 +49,8 @@ from jacobian.math.logic.relational_structures.operations import (
 from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
+    RelationalCarrierMap,
+    RelationalHomomorphism,
 )
 
 # The authoritative native surface: every export accepts domain values
@@ -71,6 +76,8 @@ __all__ = [
     "InducedRelationProfile",
     "InducedSubstructureResult",
     "RelationalDisjointUnionResult",
+    "RelationalCarrierMap",
+    "RelationalHomomorphism",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",
     "RelationalPolymorphismRelationProfile",
@@ -81,11 +88,14 @@ __all__ = [
     "SymbolTransportProfile",
     "check_homomorphism",
     "check_polymorphism",
+    "compose_homomorphisms",
     "compute_core",
     "count_homomorphisms",
     "csp_instance_to_source_structure",
     "disjoint_union_structure",
+    "enumerate_csp_solutions",
     "enumerate_homomorphisms",
+    "homomorphism_identity",
     "induced_substructure",
     "profile_csp_assignment",
     "quotient_structure",

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from itertools import product
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -17,11 +17,14 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
     FiniteRelationalStructure,
+    RelationalHomomorphism,
     RelationSymbolId,
 )
 
 MAX_CSP_CONSTRAINTS = 4_096
 MAX_CSP_SCOPE_ENTRIES = 16_384
+MAX_CSP_SOLUTION_ASSIGNMENTS = 65_536
+MAX_CSP_SOLUTION_LABELS = 1_048_576
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -438,6 +441,25 @@ class HomomorphismCheckResult(StrictModel):
             ),
         )
 
+    def to_homomorphism(self) -> RelationalHomomorphism:
+        """Return the canonical composable map for a successful check.
+
+        The kernel already replayed preservation; construction is trusted
+        and replays nothing. The serialized check round-trips through
+        ``model_validate_json`` before this conversion in the covered
+        producer-to-consumer path.
+        """
+
+        if self.status is not HomomorphismStatus.HOMOMORPHISM:
+            raise ValueError(
+                "a NOT_HOMOMORPHISM check retains no composable homomorphism"
+            )
+        return RelationalHomomorphism._from_kernel(
+            source=self.source,
+            target=self.target,
+            mapping=tuple(self.carrier_map),
+        )
+
 
 class InducedRelationProfile(StrictModel):
     symbol_id: RelationSymbolId
@@ -583,6 +605,19 @@ class HomomorphismCheckRequest(StrictModel):
         return self
 
 
+class RelationalHomomorphismIdentityRequest(StrictModel):
+    """Construct the identity homomorphism of one exact structure."""
+
+    structure: FiniteRelationalStructure
+
+
+class RelationalHomomorphismCompositionRequest(StrictModel):
+    """Compose ``second`` after ``first`` over an exact shared structure."""
+
+    first: RelationalHomomorphism
+    second: RelationalHomomorphism
+
+
 class HomomorphismSearchStatus(StrEnum):
     """Closed outcome of one exhaustive homomorphism search."""
 
@@ -683,6 +718,13 @@ class HomomorphismSearchResult(StrictModel):
             candidates_examined=candidates_examined,
             total_candidates=total_candidates,
         )
+
+    def to_homomorphism(self) -> RelationalHomomorphism:
+        """Return the canonical composable map for a FOUND search."""
+
+        if self.status is not HomomorphismSearchStatus.FOUND or self.check is None:
+            raise ValueError("an EXHAUSTED search retains no composable homomorphism")
+        return self.check.to_homomorphism()
 
 
 class HomomorphismSearchRequest(StrictModel):
@@ -877,6 +919,18 @@ class HomomorphismEnumerationResult(StrictModel):
             total_candidates=total_candidates,
         )
 
+    def to_homomorphisms(self) -> tuple[RelationalHomomorphism, ...]:
+        """Return every enumerated map as a canonical composable value."""
+
+        return tuple(
+            RelationalHomomorphism._from_kernel(
+                source=self.source,
+                target=self.target,
+                mapping=tuple(carrier_map),
+            )
+            for carrier_map in self.carrier_maps
+        )
+
 
 class FiniteCspConstraint(StrictModel):
     """One named constraint occurrence over a finite template."""
@@ -1029,6 +1083,81 @@ class CspAssignmentProfile(StrictModel):
                 "assignment_status", "status must agree with all constraint evaluations"
             )
         return self
+
+
+class CspSolutions(StrictModel):
+    """The complete lexicographically ordered solution family of one CSP.
+
+    Assignments use the variable axis and labels of the retained template.
+    The instance keeps named constraint occurrences and their provenance,
+    including occurrences that deduplicate in its canonical source structure.
+    """
+
+    instance: FiniteCspInstance
+    assignments: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...
+    ] = Field(max_length=MAX_CSP_SOLUTION_ASSIGNMENTS)
+    total_candidates: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_assignment_family_shape(self) -> Self:
+        expected = (
+            1
+            if self.instance.variable_count == 0
+            else (
+                0
+                if self.instance.template.carrier_size == 0
+                else self.instance.template.carrier_size**self.instance.variable_count
+            )
+        )
+        if self.total_candidates != expected:
+            raise _validation_error(
+                "solutions.candidate_count",
+                "total_candidates must be the complete assignment-space size",
+            )
+        if len(self.assignments) > expected:
+            raise _validation_error(
+                "solutions.assignment_count",
+                "the solution family cannot exceed the complete assignment space",
+            )
+        if sum(map(len, self.assignments)) > MAX_CSP_SOLUTION_LABELS:
+            raise _validation_error(
+                "solutions.output_bound",
+                "the retained assignment labels exceed the output envelope",
+            )
+        previous: tuple[int, ...] | None = None
+        for assignment in self.assignments:
+            if len(assignment) != self.instance.variable_count or any(
+                not 0 <= value < self.instance.template.carrier_size
+                for value in assignment
+            ):
+                raise _validation_error(
+                    "solutions.assignment_shape",
+                    "each assignment must be total and template-valued",
+                )
+            if previous is not None and assignment <= previous:
+                raise _validation_error(
+                    "solutions.order",
+                    "assignments must be unique and lexicographically ordered",
+                )
+            previous = assignment
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        instance: FiniteCspInstance,
+        assignments: tuple[tuple[int, ...], ...],
+        total_candidates: int,
+    ) -> Self:
+        """Build after the admitted exhaustive search without replaying it."""
+
+        return cls.model_construct(
+            instance=instance,
+            assignments=assignments,
+            total_candidates=total_candidates,
+        )
 
 
 class HomomorphismCoreRequest(StrictModel):
@@ -1585,6 +1714,8 @@ __all__ = [
     "InducedRelationProfile",
     "InducedSubstructureRequest",
     "InducedSubstructureResult",
+    "RelationalHomomorphismCompositionRequest",
+    "RelationalHomomorphismIdentityRequest",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",
     "RelationalPolymorphismRelationProfile",

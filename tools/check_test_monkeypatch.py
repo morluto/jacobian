@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import ast
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -137,6 +138,19 @@ def _bodies_raise(node: ast.AST) -> bool:
     return any(isinstance(descendant, ast.Raise) for descendant in ast.walk(node))
 
 
+def _contains_assertion_evidence(node: ast.AST) -> bool:
+    for descendant in ast.walk(node):
+        if isinstance(descendant, (ast.Assert, ast.Raise)):
+            return True
+        if isinstance(descendant, (ast.With, ast.AsyncWith)) and any(
+            isinstance(item.context_expr, ast.Call)
+            and _call_name(item.context_expr.func) == "raises"
+            for item in descendant.items
+        ):
+            return True
+    return False
+
+
 def _sentinel_replacement_raises(
     calls: tuple[ast.Call, ...], callables: dict[str, ast.AST]
 ) -> bool:
@@ -166,7 +180,10 @@ def _sentinel_replacement_raises(
 def _has_assertion_evidence(
     function: ast.FunctionDef | ast.AsyncFunctionDef,
     calls: tuple[ast.Call, ...],
+    module_helpers: Mapping[str, ast.AST],
 ) -> bool:
+    local_helpers = dict(module_helpers)
+    local_helpers.update(_local_callables(function))
     for node in ast.walk(function):
         if isinstance(node, ast.Assert):
             return True
@@ -174,10 +191,13 @@ def _has_assertion_evidence(
             name = _call_name(node.func)
             if name is None:
                 continue
-            if name.startswith(_ASSERTION_HELPER_PREFIXES) or any(
+            is_assertion_helper = name.startswith(_ASSERTION_HELPER_PREFIXES) or any(
                 token in name for token in _ASSERTION_HELPER_SUBSTRINGS
-            ):
-                return True
+            )
+            if is_assertion_helper:
+                helper = local_helpers.get(name)
+                if helper is None or _contains_assertion_evidence(helper):
+                    return True
     return _sentinel_replacement_raises(calls, _local_callables(function))
 
 
@@ -205,6 +225,11 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
     except (OSError, SyntaxError):
         return ()
     lines = source.splitlines()
+    module_helpers = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
     violations: list[Violation] = []
     for function in _test_functions(tree):
         calls = _monkeypatch_calls(function)
@@ -212,7 +237,7 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
             continue
         if _waived(lines, function):
             continue
-        if _has_assertion_evidence(function, calls):
+        if _has_assertion_evidence(function, calls, module_helpers):
             continue
         violations.append(
             Violation(

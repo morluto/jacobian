@@ -101,7 +101,9 @@ class RegularTreeGrammar(StrictModel):
                     "grammar_rank_mismatch",
                     "production child count must match its ranked symbol",
                 )
-            if any(child >= self.nonterminal_count for child in production.children):
+            if any(
+                not 0 <= child < self.nonterminal_count for child in production.children
+            ):
                 raise _validation_error(
                     "grammar_child_out_of_range",
                     "production children must be declared nonterminals",

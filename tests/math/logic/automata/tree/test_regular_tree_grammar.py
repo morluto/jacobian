@@ -128,6 +128,24 @@ def test_native_conversion_revalidates_forged_grammar_before_building_rows() -> 
     )
 
 
+def test_native_conversion_rejects_negative_child_state_as_domain_error() -> None:
+    forged = RegularTreeGrammar.model_construct(
+        nonterminal_count=1,
+        arity=(0, 2),
+        start_nonterminal=0,
+        productions=(
+            RegularTreeProduction.model_construct(
+                nonterminal=0, symbol=1, children=(-1, 0)
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        regular_tree_grammar_to_automaton(forged)
+    assert error.value.errors()[0]["type"] == (
+        "tree_automata.invalid_regular_tree_grammar"
+    )
+
+
 def test_production_input_order_is_transport_only() -> None:
     grammar = _grammar()
     raw = grammar.model_dump()

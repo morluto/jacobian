@@ -56,9 +56,7 @@ def _apply_word(
 
 
 def _act(element: WeylElement, vector: RootLatticeVector) -> RootLatticeVector:
-    return weyl_element_act_on_root(
-        WeylElementRootActionRequest(element=element, vector=vector)
-    )
+    return weyl_element_act_on_root(element, vector)
 
 
 @pytest.mark.parametrize(
@@ -75,7 +73,7 @@ def test_element_action_matches_independent_simple_reflection_formula(
     source = root_lattice_vector(cartan, coordinates)
     request = WeylElementRootActionRequest(element=element, vector=source)
 
-    result = weyl_element_act_on_root(request)
+    result = weyl_element_act_on_root(request.element, request.vector)
 
     assert result.coordinates == _apply_word(coordinates, cartan, word)
     assert result.datum == _datum(cartan)
@@ -83,7 +81,7 @@ def test_element_action_matches_independent_simple_reflection_formula(
         request.model_dump_json()
     )
     decoded_result = RootLatticeVector.model_validate_json(result.model_dump_json())
-    assert weyl_element_act_on_root(decoded_request) == decoded_result
+    assert weyl_element_act_on_root(decoded_request.element, decoded_request.vector) == decoded_result
 
 
 def test_identity_composition_and_inverse_obey_the_action_law() -> None:
@@ -107,7 +105,7 @@ def test_same_rank_different_ordered_cartan_parent_is_rejected() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="same ordered Cartan datum"
     ):
-        weyl_element_act_on_root(request)
+        weyl_element_act_on_root(request.element, request.vector)
 
 
 def test_non_weyl_root_system_automorphism_is_rejected() -> None:
@@ -124,7 +122,7 @@ def test_non_weyl_root_system_automorphism_is_rejected() -> None:
         vector=root_lattice_vector(_A2, (1, 0)),
     )
     with pytest.raises(OperationDomainValidationError):
-        weyl_element_act_on_root(request)
+        weyl_element_act_on_root(request.element, request.vector)
 
 
 def test_carrier_boundary_and_cancellation_are_admitted_before_result_creation() -> (
@@ -155,7 +153,7 @@ def test_oversized_caller_constructed_vector_is_resource_rejected() -> None:
         element=weyl_element_from_word(_A2, ()), vector=vector
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        weyl_element_act_on_root(request)
+        weyl_element_act_on_root(request.element, request.vector)
     assert (
         error.value.errors()[0]["type"]
         == "root_system.lattice_coordinates_over_envelope"
@@ -179,7 +177,7 @@ def test_caller_constructed_vector_with_noncanonical_cartan_axis_is_rejected() -
     )
 
     with pytest.raises(OperationDomainValidationError, match="canonical ordered Cartan axis"):
-        weyl_element_act_on_root(request)
+        weyl_element_act_on_root(request.element, request.vector)
 
 
 def test_caller_constructed_vector_with_wrong_axis_length_is_rejected() -> None:
@@ -191,7 +189,7 @@ def test_caller_constructed_vector_with_wrong_axis_length_is_rejected() -> None:
         OperationDomainValidationError,
         match="root-lattice coordinates must be a bounded integer tuple",
     ):
-        weyl_element_act_on_root(request)
+        weyl_element_act_on_root(request.element, request.vector)
 
 
 def test_public_catalog_operation_returns_the_canonical_vector_value() -> None:

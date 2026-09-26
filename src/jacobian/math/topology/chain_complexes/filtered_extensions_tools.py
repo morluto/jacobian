@@ -107,8 +107,9 @@ TOOLS = (
             "For a filtration-preserving chain map, compute its exact E0 map "
             "in the quotient bases of the source and target associated-graded "
             "complexes. The result retains both original complexes and "
-            "filtrations, and the induced maps are checked against the E0 "
-            "differentials."
+            "filtrations and the selected source and target quotient "
+            "representatives as the explicit matrix axes, and the induced maps "
+            "are checked against the E0 differentials."
         ),
         request_type=FilteredChainMapRequest,
         result_type=FilteredChainMapPageZeroResult,

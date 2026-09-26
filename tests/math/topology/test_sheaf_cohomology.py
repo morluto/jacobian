@@ -180,6 +180,17 @@ class TestKnownAnswer:
         assert cohomology.cochain_dimensions == (1, 0)
         assert _bettis(cohomology) == [1, 0]
 
+    def test_empty_sheaf_has_zero_global_sections(self) -> None:
+        empty = canonical_complex((), ())
+        sheaf = _constant_sheaf(empty)
+        from jacobian.math.topology.cellular_sheaves import sections
+
+        result = sections(sheaf)
+        assert result.dimension == 0
+        assert result.basis_coordinates == ()
+        assert result.cochain_dimension == 0
+        assert type(result).model_validate_json(result.model_dump_json()) == result
+
     def test_zero_stalks_give_zero_cohomology(self) -> None:
         request = FromCoverMapsRequest(
             complex=_INTERVAL,

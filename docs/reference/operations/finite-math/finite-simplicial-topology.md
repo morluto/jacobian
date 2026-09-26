@@ -30,8 +30,12 @@ operation does not create a durable complex, certificate record, or checker
 session.
 
 The `f_vector` operation uses the convention `(f_-1, f_0, ..., f_d)`, with
-`f_-1 = 1` for the empty face. It also returns the corresponding `h`-vector and
-Euler characteristic. The `g_vector` operation returns `g_0 = 1` and
+`f_-1 = 1` for the empty face. For `{∅}`, its nonempty-face `f_vector` is
+`()`, its dimension is `-1`, and its empty face stays implicit. The operation
+also returns the corresponding `h`-vector and Euler characteristic. Reduced
+simplicial homology includes `H̃_-1({∅}) = Z` and zero degree-zero homology;
+unreduced degree-zero homology is zero. The `g_vector` operation returns
+`g_0 = 1` and
 `g_i = h_i - h_(i-1)` through `i = floor((d+1)/2)`, along with the exact
 f- and h-vectors it uses. These are finite transforms of face counts; neither
 operation asserts that the complex is a sphere or manifold, or that g-vector
@@ -65,12 +69,19 @@ chain construction to any admitted `FinitePoset`, retaining the exact element
 labels on the output vertex axis. See the [order-complex contract](../topology/order-complex.md)
 for its exact face, dimension, maximal-chain, work, and output bounds.
 
-`induced_subcomplex.compute` selects a nonempty subset of the canonical
+`induced_subcomplex.compute` selects any subset (possibly empty) of the canonical
 vertex axis and returns the full subcomplex whose faces are exactly the source
 faces contained in that subset. Its face-image table maps retained faces to
 the same vertex tuple and marks every removed source face with `null`. The
-empty selection is excluded because the canonical finite-complex type has no
-void-complex value.
+empty selection returns the canonical zero-vertex complex `{∅}`, represented
+by empty nonempty-face axes and dimension `-1`.
+
+The `link` and `star` operations accept the implicit empty face as well as
+nonempty faces. Its link and closed star are both the source complex. The
+result carries the exact canonical target complex; in particular, the link of
+a maximal face is the zero-vertex complex `{∅}`. `link_is_empty` identifies
+that canonical value; Jacobian's finite-complex carrier does not represent the
+void complex.
 
 ## Minimal nonfaces
 
@@ -92,11 +103,11 @@ nonfaces are precisely the squarefree generators used to define the
 Stanley–Reisner ideal, but this operation returns subsets and does not construct
 a polynomial ring or ideal.
 
-The canonical carrier requires at least one vertex and one nonempty maximal
-simplex, and stores no empty simplex. It therefore represents neither the
-void complex nor the zero-vertex complex `{∅}`. Those values are rejected by
-the existing carrier rather than assigned a new convention here. On the
-represented domain, a full simplex has an empty minimal-nonface antichain.
+The canonical carrier stores nonempty faces only. The zero-vertex complex
+`{∅}` uses empty vertex, facet, and face axes, `f_vector = ()`, and dimension
+`-1`; its empty face remains implicit. The void complex, which has no faces
+including the empty face, is not represented. On the represented domain, a
+full simplex has an empty minimal-nonface antichain.
 
 The cardinality bound follows from Sperner's theorem: an antichain of subsets
 of an `n`-element set has at most `binom(n, floor(n/2))` members ([MIT OCW

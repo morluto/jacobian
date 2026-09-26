@@ -105,7 +105,10 @@ def _bounded_face_closure(
                     )
                 dimension_faces.add(face)
                 face_count += 1
-    highest = max(index for index, values in enumerate(faces_by_dimension) if values)
+    populated = [index for index, values in enumerate(faces_by_dimension) if values]
+    if not populated:
+        return ()
+    highest = max(populated)
     return tuple(tuple(sorted(values)) for values in faces_by_dimension[: highest + 1])
 
 
@@ -125,6 +128,12 @@ def _maximal_faces(faces: Iterable[Simplex]) -> tuple[tuple[str, ...], ...]:
 def join_maximal_facets(
     facets_a: tuple[Simplex, ...], facets_b: tuple[Simplex, ...]
 ) -> tuple[tuple[str, ...], ...]:
+    # The carrier stores only nonempty facets; an empty facet axis represents
+    # the complex {∅}, whose join identity is the implicit singleton facet.
+    if not facets_a:
+        return facets_b or ((),)
+    if not facets_b:
+        return facets_a
     return _maximal_faces(
         tuple(sorted(set(facet_a) | set(facet_b)))
         for facet_a in facets_a
@@ -172,9 +181,15 @@ def _require_complex_matches_facets(
     vertices_message: str,
 ) -> None:
     if not facets:
-        if complex_value is not None:
+        if complex_value is not None and (
+            complex_value.vertices
+            or complex_value.maximal_simplices
+            or complex_value.faces_by_dimension
+            or complex_value.dimension != -1
+        ):
             raise _validation_error(
-                "topology.require_complex_matches_facets_1", empty_message
+                "topology.require_complex_matches_facets_1",
+                "empty result must use the canonical empty complex",
             )
         return
     if complex_value is None:
@@ -199,6 +214,9 @@ def _require_simplex_in_complex(
     simplex_set = set(simplex)
     if len(simplex_set) != len(simplex):
         raise ValueError("simplex vertices must be distinct")
+    # The empty simplex is implicit even in the canonical {∅} value.
+    if not simplex_set:
+        return
     if not simplex_set.issubset(complex_.vertices):
         raise ValueError("simplex vertices must be in the complex")
     if not any(simplex_set.issubset(facet) for facet in complex_.facets):
@@ -213,8 +231,6 @@ def _require_deletion(
         raise ValueError("vertices_to_delete must be distinct")
     if not deleted.issubset(complex_.vertices):
         raise ValueError("vertices_to_delete must be in the complex")
-    if all(frozenset(facet).issubset(deleted) for facet in complex_.facets):
-        raise ValueError("deletion must leave at least one simplex")
 
 
 def _require_collapse(
@@ -304,13 +320,13 @@ class FVectorResult(StrictModel):
 
 
 class InducedSubcomplexRequest(StrictModel):
-    """Select a nonempty vertex subset and take its induced subcomplex."""
+    """Select a vertex subset and take its induced subcomplex."""
 
     complex: FiniteSimplicialComplex
     selected_vertices: tuple[VertexLabel, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_VERTICES,
-        description="Distinct vertices to retain; the empty vertex set is outside the canonical complex contract.",
+        description="Distinct vertices to retain; an empty selection returns {∅}.",
     )
 
 
@@ -340,41 +356,75 @@ class GVectorResult(StrictModel):
 
 
 class LinkRequest(StrictModel):
-    """Request the link of a simplex in a simplicial complex."""
+    """Request the link of a face, including the implicit empty face."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
-    )
+    simplex: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
 
 
 class LinkResult(StrictModel):
-    """The maximal facets of the link of a simplex."""
+    """The exact link value and its source face context."""
 
+    complex: SimplicialComplexRequest
     simplex: tuple[str, ...]
     link_facets: tuple[tuple[str, ...], ...]
     link_is_empty: bool
+    link_complex: FiniteSimplicialComplex
+
+    @model_validator(mode="after")
+    def require_structural_link(self) -> Self:
+        target = frozenset(self.simplex)
+        expected_facets = _maximal_faces(
+            tuple(sorted(frozenset(facet) - target))
+            for facet in self.complex.facets
+            if target.issubset(facet) and frozenset(facet) - target
+        )
+        if self.link_facets != expected_facets:
+            raise _validation_error(
+                "topology.require_link_binding_4",
+                "link_facets must be the link determined by complex and simplex",
+            )
+        if tuple(sorted(self.link_complex.maximal_simplices)) != tuple(
+            sorted(tuple(sorted(facet)) for facet in self.link_facets)
+        ):
+            raise _validation_error(
+                "topology.require_link_binding_1",
+                "link_complex maximal simplices must match link_facets",
+            )
+        if set(self.link_complex.vertices) != {
+            vertex for facet in self.link_facets for vertex in facet
+        }:
+            raise _validation_error(
+                "topology.require_link_binding_2",
+                "link_complex vertices must match link_facets",
+            )
+        if self.link_is_empty != (self.link_complex.dimension == -1):
+            raise _validation_error(
+                "topology.require_link_binding_3",
+                "link_is_empty must identify the canonical {∅} link",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
 
 
 class StarRequest(StrictModel):
-    """Request the closed star of a simplex in a simplicial complex."""
+    """Request the closed star of a face, including the empty face."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
-    )
+    simplex: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
 
 
 class StarResult(StrictModel):
-    """The closed star produced for a simplex."""
+    """The exact closed-star value and its source face context."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[str, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
-    )
+    simplex: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
     star_facets: tuple[tuple[str, ...], ...]
     star_is_empty: bool
-    star_complex: FiniteSimplicialComplex | None = None
+    star_complex: FiniteSimplicialComplex
 
     @model_validator(mode="after")
     def require_structural_star(self) -> Self:
@@ -383,36 +433,25 @@ class StarResult(StrictModel):
                 "topology.require_star_binding_1",
                 "star simplex vertices must be distinct",
             )
-        if self.star_is_empty != (not self.star_facets):
+        if self.star_is_empty != (self.star_complex.dimension == -1):
             raise _validation_error(
                 "topology.require_star_binding_2",
-                "star_is_empty must match whether star_facets is empty",
+                "star_is_empty must identify the canonical {∅} star",
             )
-        if self.star_is_empty:
-            if self.star_complex is not None:
-                raise _validation_error(
-                    "topology.require_star_binding_3", "empty star must have no complex"
-                )
-        else:
-            if self.star_complex is None:
-                raise _validation_error(
-                    "topology.require_star_binding_4",
-                    "non-empty star requires star_complex",
-                )
-            if tuple(sorted(self.star_complex.maximal_simplices)) != tuple(
-                sorted(tuple(sorted(facet)) for facet in self.star_facets)
-            ):
-                raise _validation_error(
-                    "topology.require_star_binding_5",
-                    "star_complex maximal simplices must match star_facets",
-                )
-            if set(self.star_complex.vertices) != {
-                vertex for facet in self.star_facets for vertex in facet
-            }:
-                raise _validation_error(
-                    "topology.require_star_binding_6",
-                    "star_complex vertices must match star_facets",
-                )
+        if tuple(sorted(self.star_complex.maximal_simplices)) != tuple(
+            sorted(tuple(sorted(facet)) for facet in self.star_facets)
+        ):
+            raise _validation_error(
+                "topology.require_star_binding_5",
+                "star_complex maximal simplices must match star_facets",
+            )
+        if set(self.star_complex.vertices) != {
+            vertex for facet in self.star_facets for vertex in facet
+        }:
+            raise _validation_error(
+                "topology.require_star_binding_6",
+                "star_complex vertices must match star_facets",
+            )
         return self
 
     @classmethod
@@ -423,16 +462,14 @@ class StarResult(StrictModel):
 class VertexDeletionRequest(StrictModel):
     """Delete a vertex subset from a simplicial complex.
 
-    The deletion must leave at least one simplex on the remaining vertices;
-    deleting every vertex is rejected because the empty complex has no
-    canonical value.
+    Deleting all vertices returns the zero-vertex complex ``{∅}``.
     """
 
     complex: SimplicialComplexRequest
     vertices_to_delete: tuple[VertexLabel, ...] = Field(
         min_length=1,
         max_length=MAX_TOPOLOGY_VERTICES,
-        description="Vertex subset to remove. The deletion must leave at least one simplex on the remaining vertices: deleting every vertex is rejected because the empty complex has no canonical value.",
+        description="Vertex subset to remove; deleting all vertices returns {∅}.",
     )
 
 
@@ -495,36 +532,24 @@ class SkeletonResult(StrictModel):
     k: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
     skeleton_facets: tuple[tuple[str, ...], ...]
     skeleton_vertices: tuple[str, ...]
-    skeleton_complex: FiniteSimplicialComplex | None = None
+    skeleton_complex: FiniteSimplicialComplex
 
     @model_validator(mode="after")
     def require_structural_skeleton(self) -> Self:
-        if not self.skeleton_facets:
-            if self.skeleton_complex is not None:
-                raise _validation_error(
-                    "topology.require_skeleton_canonical_1",
-                    "empty skeleton must have no complex",
-                )
-        else:
-            if self.skeleton_complex is None:
-                raise _validation_error(
-                    "topology.require_skeleton_canonical_2",
-                    "non-empty skeleton requires skeleton_complex",
-                )
-            if tuple(sorted(self.skeleton_complex.maximal_simplices)) != tuple(
-                sorted(tuple(sorted(facet)) for facet in self.skeleton_facets)
-            ):
-                raise _validation_error(
-                    "topology.require_skeleton_canonical_3",
-                    "skeleton_complex maximal simplices must match skeleton_facets",
-                )
-            if tuple(sorted(self.skeleton_complex.vertices)) != tuple(
-                sorted(self.skeleton_vertices)
-            ):
-                raise _validation_error(
-                    "topology.require_skeleton_canonical_4",
-                    "skeleton_complex vertices must match skeleton_vertices",
-                )
+        if tuple(sorted(self.skeleton_complex.maximal_simplices)) != tuple(
+            sorted(tuple(sorted(facet)) for facet in self.skeleton_facets)
+        ):
+            raise _validation_error(
+                "topology.require_skeleton_canonical_3",
+                "skeleton_complex maximal simplices must match skeleton_facets",
+            )
+        if tuple(sorted(self.skeleton_complex.vertices)) != tuple(
+            sorted(self.skeleton_vertices)
+        ):
+            raise _validation_error(
+                "topology.require_skeleton_canonical_4",
+                "skeleton_complex vertices must match skeleton_vertices",
+            )
         return self
 
     @classmethod
@@ -546,7 +571,9 @@ def _require_join_admission(
             "topology.require_join_admission_2",
             f"join would span {len(vertices_a | vertices_b)} vertices, above the {MAX_TOPOLOGY_VERTICES}-vertex canonical bound",
         )
-    width = max(map(len, complex_a.facets)) + max(map(len, complex_b.facets))
+    width = max(map(len, complex_a.facets), default=0) + max(
+        map(len, complex_b.facets), default=0
+    )
     if width > MAX_TOPOLOGY_DIMENSION + 1:
         raise _validation_error(
             "topology.require_join_admission_3",
@@ -575,7 +602,7 @@ class JoinResult(StrictModel):
     join_vertices: tuple[str, ...]
     join_facets: tuple[tuple[str, ...], ...]
     join_dimension: int
-    join_complex: FiniteSimplicialComplex | None = None
+    join_complex: FiniteSimplicialComplex
 
     @model_validator(mode="after")
     def require_structural_join(self) -> Self:
@@ -606,8 +633,8 @@ class JoinResult(StrictModel):
 class ConeFaceTransport(StrictModel):
     """One source face and its cone face obtained by adding the apex."""
 
-    source_face: tuple[str, ...] = Field(min_length=1)
-    cone_face: tuple[str, ...] = Field(min_length=2)
+    source_face: tuple[str, ...] = Field(min_length=0)
+    cone_face: tuple[str, ...] = Field(min_length=1)
 
     @model_validator(mode="after")
     def require_structural_transport(self) -> Self:
@@ -702,7 +729,11 @@ def _require_cone_admission(
             "topology.require_cone_admission_2",
             f"cone would span {len(vertices)} vertices, above the {MAX_TOPOLOGY_VERTICES}-vertex canonical bound",
         )
-    facets = tuple(tuple(sorted(set(facet) | {apex})) for facet in complex_.facets)
+    facets = (
+        tuple(tuple(sorted(set(facet) | {apex})) for facet in complex_.facets)
+        if complex_.facets
+        else ((apex,),)
+    )
     width = max(len(facet) for facet in facets)
     if width > MAX_TOPOLOGY_DIMENSION + 1:
         raise _validation_error(
@@ -783,7 +814,7 @@ def compute_f_vector(request: FVectorRequest) -> FVectorResult:
     require_complex_admission(request.complex)
 
     all_simplices = _all_nonempty_faces(request.complex.facets)
-    dimension = max(len(simplex) - 1 for simplex in all_simplices)
+    dimension = max((len(simplex) - 1 for simplex in all_simplices), default=-1)
     face_counts = tuple(
         sum(len(simplex) == degree + 1 for simplex in all_simplices)
         for degree in range(dimension + 1)
@@ -874,8 +905,12 @@ def compute_g_vector(request: FVectorRequest) -> GVectorResult:
 
 def _minimal_nonface_work(vertex_count: int, facets: tuple[Simplex, ...]) -> int:
     candidate_count = 1 << vertex_count
-    candidate_mask_work = vertex_count * (1 << (vertex_count - 1))
-    immediate_subface_checks = vertex_count * (1 << (vertex_count - 1))
+    candidate_mask_work = (
+        0 if vertex_count == 0 else vertex_count * (1 << (vertex_count - 1))
+    )
+    immediate_subface_checks = (
+        0 if vertex_count == 0 else vertex_count * (1 << (vertex_count - 1))
+    )
     face_candidate_work = sum((1 << len(facet)) - 1 for facet in facets)
     facet_validation_work = (
         len(facets) * (len(facets) - 1) // 2 * (MAX_TOPOLOGY_DIMENSION + 1)
@@ -929,14 +964,11 @@ def _preflight_minimal_nonfaces(
             message="source must be a canonical finite simplicial complex",
         )
     vertices = getattr(source, "vertices", None)
-    if type(vertices) is not tuple or not vertices:
+    if type(vertices) is not tuple:
         raise OperationDomainValidationError(
             location=("complex", "vertices"),
-            code="topology.minimal_nonfaces.empty_source_unsupported",
-            message=(
-                "the canonical complex carrier requires at least one vertex; "
-                "void and zero-vertex complexes are not represented"
-            ),
+            code="topology.minimal_nonfaces.source_shape",
+            message="source vertex axis is outside the canonical complex shape",
         )
     vertex_count = len(vertices)
     candidate_count = 1 << vertex_count
@@ -952,7 +984,8 @@ def _preflight_minimal_nonfaces(
     facets = getattr(source, "maximal_simplices", None)
     if (
         type(facets) is not tuple
-        or not 1 <= len(facets) <= MAX_TOPOLOGY_FACETS
+        or len(facets) > MAX_TOPOLOGY_FACETS
+        or (bool(vertices) != bool(facets))
         or any(
             type(facet) is not tuple
             or not 1 <= len(facet) <= MAX_TOPOLOGY_DIMENSION + 1
@@ -1134,6 +1167,14 @@ def compute_stanley_reisner_ideal(
         )
     )
     one = CanonicalRational(num=1, den=1)
+    if vertex_count == 0:
+        # The empty polynomial ring has the zero ideal; its zero polynomial is
+        # represented with the existing rational-function ambient-value carrier.
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.stanley_reisner.empty_axis",
+            message="the polynomial ideal carrier requires at least one vertex variable",
+        )
     if exponents:
         generators = tuple(
             RationalPolynomial(
@@ -1177,8 +1218,14 @@ def compute_link(request: LinkRequest) -> LinkResult:
         for facet in request.complex.facets
         if target.issubset(facet) and frozenset(facet) - target
     )
-    return LinkResult(
-        simplex=request.simplex, link_facets=facets, link_is_empty=not facets
+    vertices = tuple(sorted({vertex for facet in facets for vertex in facet}))
+    link_complex = canonical_complex(vertices, facets)
+    return LinkResult._from_kernel(
+        complex=request.complex,
+        simplex=request.simplex,
+        link_facets=facets,
+        link_is_empty=link_complex.dimension == -1,
+        link_complex=link_complex,
     )
 
 
@@ -1206,7 +1253,7 @@ def compute_star(request: StarRequest) -> StarResult:
         simplex=request.simplex,
         star_facets=facets,
         star_is_empty=not facets,
-        star_complex=canonical_complex(vertices, facets) if facets else None,
+        star_complex=canonical_complex(vertices, facets),
     )
 
 
@@ -1249,7 +1296,7 @@ def compute_induced_subcomplex(
         if _maximal_faces(source.maximal_simplices) != source.maximal_simplices:
             raise ValueError("source maximal simplices are not canonical")
         if source.dimension != max(
-            len(facet) - 1 for facet in source.maximal_simplices
+            (len(facet) - 1 for facet in source.maximal_simplices), default=-1
         ):
             raise ValueError("source dimension does not match its maximal simplices")
         if any(
@@ -1284,7 +1331,7 @@ def compute_induced_subcomplex(
     )
     groups = tuple(
         tuple(face for face in retained if len(face) == dimension + 1)
-        for dimension in range(max(map(len, facets)))
+        for dimension in range(max(map(len, facets), default=0))
     )
     induced = canonical_complex(selected, facets, closure=groups)
     images = tuple(
@@ -1315,7 +1362,7 @@ def compute_skeleton(request: SkeletonRequest) -> SkeletonResult:
         k=request.k,
         skeleton_facets=facets,
         skeleton_vertices=vertices,
-        skeleton_complex=canonical_complex(vertices, facets) if facets else None,
+        skeleton_complex=canonical_complex(vertices, facets),
     )
 
 
@@ -1330,14 +1377,14 @@ def compute_join(request: JoinRequest) -> JoinResult:
     vertices = tuple(
         sorted(set(request.complex_a.vertices) | set(request.complex_b.vertices))
     )
-    dimension = max((len(facet) - 1 for facet in facets), default=0)
+    dimension = max((len(facet) - 1 for facet in facets), default=-1)
     return JoinResult._from_kernel(
         complex_a=request.complex_a,
         complex_b=request.complex_b,
         join_vertices=vertices,
-        join_facets=facets,
+        join_facets=facets if vertices else (),
         join_dimension=dimension,
-        join_complex=canonical_complex(vertices, facets) if facets else None,
+        join_complex=canonical_complex(vertices, facets if vertices else ()),
     )
 
 
@@ -1349,11 +1396,14 @@ def compute_cone(request: ConeRequest) -> ConeResult:
     )
     vertices = tuple(sorted(set(request.complex.vertices) | {request.apex}))
     cone_complex = canonical_complex(vertices, facets)
+    source_faces = sorted(_all_nonempty_faces(request.complex.facets))
+    if not source_faces:
+        source_faces = [()]
     transport = tuple(
         ConeFaceTransport(
             source_face=face, cone_face=tuple(sorted(set(face) | {request.apex}))
         )
-        for face in sorted(_all_nonempty_faces(request.complex.facets))
+        for face in source_faces
     )
     return ConeResult._from_kernel(
         complex=request.complex,

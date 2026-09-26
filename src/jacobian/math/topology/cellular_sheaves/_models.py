@@ -405,10 +405,10 @@ class SheafCohomologyResult(StrictModel):
     """
 
     sheaf: FiniteCellularSheaf
-    cochain_dimensions: tuple[StrictInt, ...] = Field(min_length=1)
-    cochain_bases: tuple[tuple[SheafCochainCoordinate, ...], ...] = Field(min_length=1)
+    cochain_dimensions: tuple[StrictInt, ...] = Field(min_length=0)
+    cochain_bases: tuple[tuple[SheafCochainCoordinate, ...], ...] = Field(min_length=0)
     coboundary_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(default=())
-    groups: tuple[SheafCohomologyGroup, ...] = Field(min_length=1)
+    groups: tuple[SheafCohomologyGroup, ...] = Field(min_length=0)
     euler_characteristic_stalk: StrictInt
     euler_characteristic_cohomology: StrictInt
     differential_squared_zero: tuple[SheafCoboundaryLedgerEntry, ...] = Field(
@@ -447,7 +447,7 @@ class SheafCohomologyResult(StrictModel):
                         "cochain_coordinate_face_invalid",
                         "every cochain coordinate must name a face of its degree",
                     )
-        if len(self.coboundary_matrices) != dimension:
+        if len(self.coboundary_matrices) != max(0, dimension):
             raise _validation_error(
                 "coboundary_count_mismatch",
                 "there must be one coboundary matrix per adjacent degree pair",

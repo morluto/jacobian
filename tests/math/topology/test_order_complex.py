@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from itertools import combinations, pairwise
 
 import pytest
@@ -13,9 +14,24 @@ from jacobian.math.combinatorics.posets.core._models import (
     ReflexivePairPolicy,
     RelationInterpretation,
 )
-from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
-from jacobian.math.topology._models import SimplicialComplexRequest
-from jacobian.math.topology.operations import barycentric_subdivision
+from jacobian.math.combinatorics.posets.core.operations import (
+    materialize_finite_poset,
+    verify_finite_poset,
+)
+from jacobian.math.topology._models import (
+    ChainCoefficientRing,
+    ChainComplexResult,
+    HomologyConvention,
+    SimplicialComplexRequest,
+    canonical_complex,
+)
+from jacobian.math.topology._structural import FVectorRequest, compute_f_vector
+from jacobian.math.topology.operations import (
+    barycentric_subdivision,
+    chain_complex,
+    homology,
+    integral_homology,
+)
 from jacobian.math.topology.release import (
     FacePosetRequest,
     FacePosetResult,
@@ -35,12 +51,6 @@ def _poset(elements: tuple[str, ...], covers: tuple[tuple[str, str], ...]):
         RelationInterpretation.COVER_EDGES,
         ReflexivePairPolicy.FORBIDDEN,
     )
-
-
-def test_order_complex_rejects_non_request_native_arguments() -> None:
-    for invalid in ({"poset": _poset(("a",), ())}, _poset(("a",), ())):
-        with pytest.raises(OperationDomainValidationError, match="OrderComplexRequest"):
-            order_complex(invalid)  # type: ignore[arg-type]
 
 
 def test_order_complex_matches_all_pairwise_comparable_subsets() -> None:
@@ -85,8 +95,144 @@ def test_antichain_singleton_and_empty_poset_contract() -> None:
     assert singleton.maximal_chains == (("x",),)
 
     empty = _poset((), ())
-    with pytest.raises(OperationDomainValidationError, match="empty poset"):
-        order_complex(OrderComplexRequest(poset=empty))
+    empty_result = order_complex(OrderComplexRequest(poset=empty))
+    assert empty_result.complex.vertices == ()
+    assert empty_result.complex.maximal_simplices == ()
+    assert empty_result.complex.faces_by_dimension == ()
+    assert empty_result.complex.f_vector == ()
+    assert empty_result.complex.dimension == -1
+    assert empty_result.complex.closure_size == 0
+    assert empty_result.maximal_chains == ()
+
+
+def test_empty_order_complex_json_composes_with_downstream_consumers() -> None:
+    encoded = order_complex(
+        OrderComplexRequest(poset=_poset((), ()))
+    ).model_dump_json()
+    decoded = OrderComplexResult.model_validate_json(encoded)
+
+    graph = one_skeleton(
+        OneSkeletonRequest.model_validate_json(
+            OneSkeletonRequest(complex=decoded.complex).model_dump_json()
+        )
+    )
+    subdivision = barycentric_subdivision(decoded.complex)
+    assert graph.graph.vertex_count == 0
+    assert graph.graph.edges == ()
+    assert graph.vertex_labels == ()
+    assert subdivision.subdivision_complex is not None
+    assert subdivision.subdivision_complex == decoded.complex
+    assert subdivision.original_dimension == -1
+    assert compute_f_vector(FVectorRequest(complex={"vertices": (), "facets": ()})).f_vector == (1,)
+
+    face_result = FacePosetResult.model_validate_json(
+        face_poset(
+            FacePosetRequest(
+                complex=SimplicialComplexRequest(vertices=(), facets=())
+            )
+        ).model_dump_json()
+    )
+    assert face_result.faces == ()
+    assert face_result.poset is not None
+    assert face_result.order_complex.dimension == -1
+
+
+def test_empty_complex_composes_through_simplicial_chains_and_homology() -> None:
+    complex_ = order_complex(OrderComplexRequest(poset=_poset((), ()))).complex
+    reduced_chain = chain_complex(
+        complex_,
+        ChainCoefficientRing.PRIME_FIELD,
+        2,
+        HomologyConvention.REDUCED,
+    )
+    decoded_chain = ChainComplexResult.model_validate_json(
+        reduced_chain.model_dump_json()
+    )
+    assert decoded_chain.canonical_value.basis_sizes == (1, 0)
+    assert decoded_chain.canonical_value.degree_min == -1
+
+    reduced_homology = homology(complex_, 2, HomologyConvention.REDUCED)
+    assert reduced_homology.dimension_range == (-1, 0)
+    assert tuple(group.betti_number for group in reduced_homology.groups) == (1, 0)
+    assert type(reduced_homology).model_validate_json(
+        reduced_homology.model_dump_json()
+    ) == reduced_homology
+
+    ordinary_homology = homology(complex_, 2, HomologyConvention.UNREDUCED)
+    assert ordinary_homology.dimension_range == (0, 0)
+    assert ordinary_homology.groups[0].betti_number == 0
+    assert type(ordinary_homology).model_validate_json(
+        ordinary_homology.model_dump_json()
+    ) == ordinary_homology
+
+    integral = integral_homology(complex_, HomologyConvention.REDUCED)
+    assert integral.homology.homology_groups[0].degree == -1
+    assert integral.homology.homology_groups[0].free_rank == 1
+    assert type(integral).model_validate_json(integral.model_dump_json()) == integral
+
+
+def test_order_complex_result_rejects_forged_axis_bindings() -> None:
+    result = order_complex(OrderComplexRequest(poset=_poset(("a",), ())))
+    forged = result.model_dump()
+    forged["vertex_elements"] = ()
+    with pytest.raises(ValueError, match="vertex_elements"):
+        OrderComplexResult.model_validate(forged)
+
+    forged = result.model_dump()
+    forged["complex"].update(
+        vertices=[],
+        maximal_simplices=[],
+        faces_by_dimension=[],
+        dimension=-1,
+        f_vector=[],
+        closure_size=0,
+    )
+    with pytest.raises(ValueError, match="complex vertices"):
+        OrderComplexResult.model_validate(forged)
+    with pytest.raises(ValueError, match="complex vertices"):
+        OrderComplexResult.model_validate_json(json.dumps(forged))
+
+
+def test_order_complex_result_rejects_reversed_and_incomparable_chains() -> None:
+    comparable = order_complex(OrderComplexRequest(poset=_poset(("a", "b"), (("a", "b"),))))
+    forged = comparable.model_dump()
+    forged["maximal_chains"] = [["b", "a"]]
+    with pytest.raises(ValueError, match="cover relations"):
+        OrderComplexResult.model_validate_json(json.dumps(forged))
+
+    antichain = order_complex(OrderComplexRequest(poset=_poset(("a", "b"), ())))
+    forged = antichain.model_dump()
+    forged["maximal_chains"] = [["a", "b"]]
+    forged["complex"] = canonical_complex(("a", "b"), (("a", "b"),)).model_dump()
+    with pytest.raises(ValueError, match="cover relations"):
+        OrderComplexResult.model_validate(forged)
+
+
+def test_order_complex_result_rejects_coordinated_forged_poset_covers() -> None:
+    result = order_complex(
+        OrderComplexRequest(poset=_poset(("a", "b"), (("a", "b"),)))
+    )
+    forged = result.model_dump()
+    forged["poset"]["cover_relations"] = [{"lower": "b", "upper": "a"}]
+    forged["maximal_chains"] = [["b", "a"]]
+    decoded_poset = type(result.poset).model_validate(forged["poset"])
+    assert not verify_finite_poset(decoded_poset)
+    with pytest.raises(ValueError, match="canonical finite poset"):
+        OrderComplexResult.model_validate_json(json.dumps(forged))
+
+
+def test_face_poset_result_rejects_forged_positional_labels() -> None:
+    result = face_poset(
+        FacePosetRequest(
+            complex=SimplicialComplexRequest(vertices=("a",), facets=(("a",),))
+        )
+    )
+    forged = result.model_dump()
+    forged["face_element_labels"] = ["wrong"]
+    with pytest.raises(ValueError, match="face-element labels"):
+        FacePosetResult.model_validate(forged)
+    with pytest.raises(ValueError, match="face-element labels"):
+        FacePosetResult.model_validate_json(json.dumps(forged))
 
 
 def test_order_complex_json_composes_with_one_skeleton() -> None:
@@ -221,3 +367,15 @@ def test_order_complex_rechecks_caller_supplied_poset_claims() -> None:
 
     with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
         order_complex(OrderComplexRequest(poset=malformed))
+
+
+def test_face_poset_without_poset_rejects_relations_not_bound_to_order_complex() -> None:
+    result = face_poset(
+        FacePosetRequest(
+            complex=SimplicialComplexRequest(vertices=("a", "b"), facets=(("a", "b"),))
+        )
+    ).model_copy(update={"poset": None})
+    forged = result.model_dump()
+    forged["order_relations"] = [[0, 1]]
+    with pytest.raises(ValueError, match="order-complex edges"):
+        FacePosetResult.model_validate_json(json.dumps(forged))

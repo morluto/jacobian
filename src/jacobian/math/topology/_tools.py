@@ -406,9 +406,8 @@ _vertex_deletion_tool = MathTool(
     description=(
         "Delete a vertex subset from a finite simplicial complex and return "
         "the induced subcomplex on the remaining vertices: every face "
-        "disjoint from the deleted set, given by its maximal facets. The "
-        "deletion must leave at least one simplex on the remaining "
-        "vertices; deleting every vertex is out of contract."
+        "disjoint from the deleted set, given by its maximal facets. "
+        "Deleting every vertex returns the canonical zero-vertex complex {∅}."
     ),
     request_type=VertexDeletionRequest,
     result_type=VertexDeletionResult,
@@ -418,7 +417,7 @@ _vertex_deletion_tool = MathTool(
         OperationExample(
             name="delete_vertex_from_triangle",
             description="Delete one vertex from a triangle, leaving the opposite edge; "
-            "the deletion must leave at least one simplex.",
+            "deleting every vertex returns the canonical zero-vertex complex {∅}.",
             input={
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
@@ -434,8 +433,8 @@ _induced_subcomplex_tool = MathTool(
     operation_id="topology.simplicial_complex.induced_subcomplex.compute",
     title="Compute an induced subcomplex on selected vertices",
     description=(
-        "Take the full subcomplex on a nonempty selected vertex subset of a "
-        "canonical finite simplicial complex. Return its exact face closure "
+        "Take the full subcomplex on any selected vertex subset, including the empty "
+        "subset, of a canonical finite simplicial complex. Return its exact face closure "
         "and the image or deletion status of every source face."
     ),
     request_type=InducedSubcomplexRequest,

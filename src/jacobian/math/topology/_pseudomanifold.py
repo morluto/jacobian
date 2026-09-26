@@ -30,7 +30,7 @@ def pseudomanifold_decision(facets: tuple[Simplex, ...]) -> _PseudomanifoldDecis
     """Return the exact codimension-one incidence decision for ``facets``."""
 
     facet_sets = [frozenset(facet) for facet in facets]
-    dimension = max((len(facet) - 1 for facet in facet_sets), default=0)
+    dimension = max((len(facet) - 1 for facet in facet_sets), default=-1)
     num_facets = len(facet_sets)
     is_pure = all(len(facet) - 1 == dimension for facet in facet_sets)
     if not is_pure:

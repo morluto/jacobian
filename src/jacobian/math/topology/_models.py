@@ -88,7 +88,10 @@ def face_closure(facets: tuple[Simplex, ...]) -> tuple[tuple[Simplex, ...], ...]
     for facet in facets:
         for size in range(1, len(facet) + 1):
             faces[size - 1].update(combinations(facet, size))
-    highest = max(index for index, values in enumerate(faces) if values)
+    populated = [index for index, values in enumerate(faces) if values]
+    if not populated:
+        return ()
+    highest = max(populated)
     return tuple(tuple(sorted(values)) for values in faces[: highest + 1])
 
 
@@ -195,11 +198,11 @@ class SimplicialComplexRequest(StrictModel):
     """
 
     vertices: tuple[VertexLabel, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_VERTICES,
     )
     facets: tuple[Simplex, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_FACETS,
     )
 
@@ -265,26 +268,30 @@ class FacesInDimension(StrictModel):
 
 
 class FiniteSimplicialComplex(StrictModel):
-    """Canonical non-empty faces of one finite abstract simplicial complex."""
+    """Canonical non-empty faces of one finite abstract simplicial complex.
+
+    The empty complex ``{∅}`` is represented by empty axes and dimension -1;
+    the empty face is implicit in every value.
+    """
 
     vertices: tuple[VertexLabel, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_VERTICES,
     )
     maximal_simplices: tuple[Simplex, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_FACETS,
     )
     faces_by_dimension: tuple[FacesInDimension, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
-    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
     f_vector: tuple[StrictInt, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
-    closure_size: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_FACES)
+    closure_size: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_FACES)
     orientation_convention: Literal["LEXICOGRAPHIC_VERTEX_ORDER"] = (
         "LEXICOGRAPHIC_VERTEX_ORDER"
     )
@@ -306,6 +313,19 @@ class FiniteSimplicialComplex(StrictModel):
                 "maximal simplices must be canonical",
             )
         expected_f_vector = tuple(len(item.faces) for item in self.faces_by_dimension)
+        if not self.vertices:
+            if (
+                self.maximal_simplices
+                or self.faces_by_dimension
+                or self.f_vector
+                or self.dimension != -1
+                or self.closure_size != 0
+            ):
+                raise _validation_error(
+                    "topology.require_complete_canonical_complex_3",
+                    "the empty complex has empty non-empty-face axes and dimension -1",
+                )
+            return self
         if (
             self.dimension != len(self.faces_by_dimension) - 1
             or self.f_vector != expected_f_vector
@@ -355,9 +375,9 @@ def _require_canonical_conversion_bounds(
     )
 
     sizes = (
-        (1, *complex_.f_vector)
+        ((1, *complex_.f_vector) if complex_.dimension >= 0 else (1, 0))
         if convention is HomologyConvention.REDUCED
-        else complex_.f_vector
+        else (complex_.f_vector if complex_.dimension >= 0 else (0,))
     )
     if any(size > MAX_BASIS_SIZE for size in sizes):
         raise _validation_error(
@@ -385,7 +405,7 @@ class ChainComplexRequest(StrictModel):
 class SimplexBasis(StrictModel):
     dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
     simplices: tuple[Simplex, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_CHAIN_GROUP,
     )
 
@@ -400,7 +420,7 @@ class SparseBoundaryMatrix(StrictModel):
     source_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
     target_dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION - 1)
     rows: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
-    columns: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_CHAIN_GROUP)
+    columns: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     entries: tuple[SparseMatrixEntry, ...] = Field(
         default=(),
         max_length=(MAX_TOPOLOGY_DIMENSION + 1) * MAX_TOPOLOGY_CHAIN_GROUP,
@@ -474,11 +494,11 @@ class ChainComplexResult(StrictModel):
     prime: StrictInt | None = Field(default=None, ge=2, le=MAX_TOPOLOGY_PRIME)
     convention: HomologyConvention
     simplex_bases: tuple[SimplexBasis, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
     boundary_matrices: tuple[SparseBoundaryMatrix, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_DIMENSION + 1,
     )
     augmentation: SparseBoundaryMatrix | None = None
@@ -494,7 +514,23 @@ class ChainComplexResult(StrictModel):
             self.coefficient_ring, self.prime
         )
         dimensions = tuple(item.dimension for item in self.simplex_bases)
-        if dimensions != tuple(range(len(self.simplex_bases))):
+        expected_bases = self.complex.faces_by_dimension
+        if expected_bases:
+            if dimensions != tuple(item.dimension for item in expected_bases) or tuple(
+                item.simplices for item in self.simplex_bases
+            ) != tuple(item.faces for item in expected_bases):
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_6",
+                    "simplex bases must equal the retained complex face axes",
+                )
+        elif dimensions != (0,) or self.simplex_bases[0].simplices != ():
+            raise _validation_error(
+                "topology.require_coherent_chain_contract_6",
+                "the empty complex has exactly one empty degree-zero basis",
+            )
+        if not self.simplex_bases or dimensions != tuple(
+            range(len(self.simplex_bases))
+        ):
             raise _validation_error(
                 "topology.require_coherent_chain_contract_1",
                 "simplex bases must cover contiguous dimensions",
@@ -506,6 +542,21 @@ class ChainComplexResult(StrictModel):
                 "topology.require_coherent_chain_contract_2",
                 "boundary matrices must align with simplex bases",
             )
+        for matrix in self.boundary_matrices:
+            degree = matrix.source_dimension
+            expected_rows = (
+                len(self.simplex_bases[degree - 1].simplices) if degree else 0
+            )
+            expected_columns = len(self.simplex_bases[degree].simplices)
+            if (
+                matrix.target_dimension != degree - 1
+                or matrix.rows != expected_rows
+                or matrix.columns != expected_columns
+            ):
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_7",
+                    "boundary matrix rows and columns must match adjacent simplex bases",
+                )
         for matrix in self.boundary_matrices:
             if any(entry.value not in allowed_values for entry in matrix.entries):
                 raise _validation_error(
@@ -589,14 +640,14 @@ class BarycentricSubdivisionResult(StrictModel):
     """A barycentric subdivision with source-face and source-chain provenance."""
 
     original_vertices: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_VERTICES)
-    original_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    original_dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
     subdivision_vertices: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
     subdivision_facets: tuple[tuple[str, ...], ...] = Field(
         max_length=MAX_TOPOLOGY_FACETS
     )
     num_new_vertices: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_FACES)
     complex: FiniteSimplicialComplex
-    subdivision_complex: FiniteSimplicialComplex | None = None
+    subdivision_complex: FiniteSimplicialComplex
     subdivision_vertex_faces: tuple[Simplex, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
     subdivision_facet_face_chains: tuple[tuple[Simplex, ...], ...] = Field(
         max_length=MAX_TOPOLOGY_FACETS
@@ -612,17 +663,17 @@ class BarycentricSubdivisionResult(StrictModel):
         self._require_source_face_axis()
         self._require_facet_chain_provenance()
         if not self.subdivision_facets:
-            if self.subdivision_complex is not None:
+            if (
+                self.subdivision_complex.vertices
+                or self.subdivision_complex.maximal_simplices
+                or self.subdivision_complex.faces_by_dimension
+                or self.subdivision_complex.dimension != -1
+            ):
                 raise _validation_error(
                     "topology.require_subdivision_canonical_2",
-                    "empty subdivision must have no complex",
+                    "empty subdivision must use the canonical empty complex",
                 )
         else:
-            if self.subdivision_complex is None:
-                raise _validation_error(
-                    "topology.require_subdivision_canonical_3",
-                    "non-empty subdivision requires subdivision_complex",
-                )
             if tuple(sorted(self.subdivision_complex.maximal_simplices)) != tuple(
                 sorted(tuple(sorted(f)) for f in self.subdivision_facets)
             ):

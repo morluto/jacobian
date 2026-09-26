@@ -27,6 +27,7 @@ from jacobian.math.topology._pseudomanifold import (
 from jacobian.math.topology._structural import (
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
+    InducedSubcomplexRequest,
     JoinRequest,
     JoinResult,
     SkeletonRequest,
@@ -36,6 +37,7 @@ from jacobian.math.topology._structural import (
     VertexDeletionRequest,
     VertexDeletionResult,
     compute_elementary_collapse,
+    compute_induced_subcomplex,
     compute_join,
     compute_skeleton,
     compute_star,
@@ -90,6 +92,24 @@ class TestStar:
         result = compute_star(StarRequest(complex=_complex(CIRCLE), simplex=("a",)))
         assert result.star_facets == (("a", "b"), ("a", "c"))
 
+    def test_star_of_empty_face_is_the_source_complex(self) -> None:
+        request = StarRequest(complex=_complex(CIRCLE), simplex=())
+        result = compute_star(request)
+        assert set(result.star_facets) == set(request.complex.facets)
+        assert result.star_complex == canonical_complex(
+            request.complex.vertices, request.complex.facets
+        )
+        assert result.star_complex.dimension == 1
+
+    def test_star_of_empty_face_in_empty_complex_keeps_empty_face(self) -> None:
+        result = compute_star(
+            StarRequest(complex=_complex({"vertices": [], "facets": []}), simplex=())
+        )
+        assert result.star_is_empty
+        assert result.star_complex.dimension == -1
+        assert result.star_complex.maximal_simplices == ()
+        assert StarResult.model_validate(result.model_dump()) == result
+
     def test_star_not_a_face(self) -> None:
         with pytest.raises(ValueError):
             compute_star(
@@ -113,6 +133,23 @@ class TestStar:
             star_complex=canonical_complex(("a", "b"), (("a", "b"),)),
         )
         assert StarResult.model_validate(result.model_dump()) == result
+
+
+def test_empty_induced_subcomplex_and_skeleton_use_canonical_carrier() -> None:
+    source = canonical_complex(("a",), (("a",),))
+    induced = compute_induced_subcomplex(
+        InducedSubcomplexRequest(complex=source, selected_vertices=())
+    )
+    assert induced.induced_complex.dimension == -1
+    assert induced.induced_complex.vertices == ()
+    assert induced.induced_complex.faces_by_dimension == ()
+    assert induced.face_images[0].induced_face is None
+
+    empty_skeleton = compute_skeleton(
+        SkeletonRequest(complex={"vertices": (), "facets": ()}, k=0)
+    )
+    assert empty_skeleton.skeleton_complex.dimension == -1
+    assert empty_skeleton.skeleton_complex.vertices == ()
 
 
 class TestVertexDeletion:
@@ -140,26 +177,21 @@ class TestVertexDeletion:
                 )
             )
 
-    def test_delete_all_vertices_rejected(self) -> None:
-        """A deletion whose induced subcomplex is empty is out of contract;
-        the canonical complex value cannot represent the empty complex."""
-        with pytest.raises(ValueError):
-            compute_vertex_deletion(
-                VertexDeletionRequest(
-                    complex=_complex({"vertices": ["a"], "facets": [["a"]]}),
-                    vertices_to_delete=("a",),
-                )
+    def test_delete_all_vertices_returns_canonical_empty_complex(self) -> None:
+        result = compute_vertex_deletion(
+            VertexDeletionRequest(
+                complex=_complex({"vertices": ["a"], "facets": [["a"]]}),
+                vertices_to_delete=("a",),
             )
+        )
+        assert result.remaining_complex.dimension == -1
+        assert result.remaining_complex.vertices == ()
+        assert result.remaining_complex.faces_by_dimension == ()
 
-    def test_nonempty_residual_precondition_is_schema_visible(self) -> None:
-        """The reviewer counterexample: deleting 'a' from the singleton {a}
-        satisfies the generated field schema, so the nonempty-residual
-        restriction must be stated in the published schema guidance rather
-        than discovered only through a failed invocation."""
+    def test_deletion_schema_describes_empty_value(self) -> None:
         schema = VertexDeletionRequest.model_json_schema()
         field_schema = schema["properties"]["vertices_to_delete"]
-        assert "at least one simplex" in field_schema["description"]
-        assert "empty complex" in field_schema["description"]
+        assert "returns {∅}" in field_schema["description"]
 
     def test_deletion_discovery_metadata_states_precondition(self) -> None:
         tool = next(
@@ -167,9 +199,10 @@ class TestVertexDeletion:
             for t in TOOLS
             if t.operation_id == "topology.simplicial_complex.deletion.compute"
         )
-        assert "leave at least one simplex" in tool.description
+        assert "returns the canonical zero-vertex complex {∅}" in tool.description
         assert all(
-            "at least one simplex" in example.description for example in tool.examples
+            "returns the canonical zero-vertex complex {∅}" in example.description
+            for example in tool.examples
         )
 
     def test_delete_leaving_single_vertex_admitted(self) -> None:
@@ -215,6 +248,18 @@ class TestSkeleton:
 
 
 class TestJoin:
+    def test_empty_complex_is_the_join_unit(self) -> None:
+        empty = SimplicialComplexRequest(vertices=(), facets=())
+        point = SimplicialComplexRequest(vertices=("p",), facets=(("p",),))
+        left = compute_join(JoinRequest(complex_a=empty, complex_b=point))
+        right = compute_join(JoinRequest(complex_a=point, complex_b=empty))
+        both = compute_join(JoinRequest(complex_a=empty, complex_b=empty))
+        assert left.join_complex == canonical_complex(("p",), (("p",),))
+        assert right.join_complex == left.join_complex
+        assert both.join_complex.dimension == -1
+        assert both.join_complex.vertices == ()
+        assert JoinResult.model_validate_json(both.model_dump_json()) == both
+
     def test_join_two_points(self) -> None:
         point_a = {"vertices": ["a"], "facets": [["a"]]}
         point_b = {"vertices": ["b"], "facets": [["b"]]}
@@ -919,17 +964,9 @@ class TestResultStructuralParsing:
 class TestResultDomainMirrorsRequest:
     """Serialized results must satisfy the request's own admission domain."""
 
-    def test_star_result_empty_simplex_rejected(self) -> None:
-        """No accepted invocation can request the star of the empty face, so
-        a serialized result cannot authenticate it either."""
-        with pytest.raises(ValidationError):
-            StarResult(
-                complex=_complex(EDGE),
-                simplex=(),
-                star_facets=(("a", "b"),),
-                star_is_empty=False,
-                star_complex=canonical_complex(("a", "b"), (("a", "b"),)),
-            )
+    def test_star_result_empty_simplex_roundtrips(self) -> None:
+        result = compute_star(StarRequest(complex=_complex(EDGE), simplex=()))
+        assert StarResult.model_validate(result.model_dump()) == result
 
     def test_deletion_result_empty_deleted_vertices_rejected(self) -> None:
         """An identity transformation is not a deletion result: the request

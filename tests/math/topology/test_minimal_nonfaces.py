@@ -5,11 +5,9 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
 import jacobian.math.topology._structural as structural
 from jacobian.catalog.models import (
-    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import (
@@ -149,27 +147,17 @@ def test_work_and_output_are_preflighted_before_face_closure(
     assert expected_code in raised.value.errors()[0]["type"]
 
 
-@pytest.mark.parametrize("facets", [(), ((),)])
-def test_void_and_zero_vertex_values_are_rejected_by_existing_carrier(facets) -> None:
-    malformed = FiniteSimplicialComplex.model_construct(
-        vertices=(),
-        maximal_simplices=facets,
-        faces_by_dimension=(),
-        dimension=-1,
-        f_vector=(),
-        closure_size=0,
-    )
-    request = MinimalNonfacesRequest.model_construct(complex=malformed)
-    with pytest.raises(OperationDomainValidationError) as raised:
-        compute_minimal_nonfaces(request)
-    assert (
-        raised.value.errors()[0]["type"]
-        == "topology.minimal_nonfaces.empty_source_unsupported"
-    )
+def test_empty_complex_has_no_minimal_nonfaces_and_composes_through_json() -> None:
+    source = _complex((), ())
+    result = compute_minimal_nonfaces(MinimalNonfacesRequest(complex=source))
+    decoded = MinimalNonfacesResult.model_validate_json(result.model_dump_json())
+    assert decoded.source == source
+    assert decoded.minimal_nonfaces == ()
 
 
-def test_zero_vertex_presentation_is_not_a_valid_canonical_request() -> None:
-    with pytest.raises(ValidationError):
-        SimplicialComplexRequest.model_validate({"vertices": [], "facets": []})
-    with pytest.raises(ValidationError):
-        SimplicialComplexRequest.model_validate({"vertices": [], "facets": [[]]})
+def test_zero_vertex_presentation_is_valid_but_empty_facet_is_not() -> None:
+    empty = SimplicialComplexRequest.model_validate({"vertices": [], "facets": []})
+    assert empty.vertices == ()
+    assert empty.facets == ()
+    with pytest.raises(ValueError):
+        canonicalize((), ((),))

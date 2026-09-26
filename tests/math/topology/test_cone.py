@@ -48,6 +48,14 @@ class TestKnownAnswer:
 
 
 class TestBoundaryDegenerate:
+    def test_cone_of_zero_vertex_complex_is_a_point(self) -> None:
+        result = compute_cone(_request([], []))
+        assert result.cone_facets == (("cone_apex",),)
+        assert result.cone_complex.dimension == 0
+        assert result.source_face_transport[0].source_face == ()
+        assert result.source_face_transport[0].cone_face == ("cone_apex",)
+        assert ConeResult.model_validate_json(result.model_dump_json()) == result
+
     def test_cone_over_empty_looking_singleton(self) -> None:
         result = compute_cone(_request(["x"], [["x"]]))
         assert len(result.source_face_transport) == 1

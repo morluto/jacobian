@@ -55,8 +55,8 @@ class SimplicialCohomologyRequest(StrictModel):
 class CohomologyGroupResult(StrictModel):
     """Exact cochain data and quotient basis in one cohomological degree."""
 
-    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
-    cochain_dimension: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_CHAIN_GROUP)
+    dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
+    cochain_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     outgoing_coboundary_rank: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     cocycle_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     incoming_coboundary_rank: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
@@ -137,12 +137,18 @@ class SimplicialCohomologyResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_dimension_range(self) -> Self:
         dimensions = tuple(group.dimension for group in self.groups)
-        if dimensions != tuple(range(len(self.groups))):
+        empty_reduced = (
+            self.complex.dimension == -1
+            and self.convention is HomologyConvention.REDUCED
+        )
+        expected_dimensions = (-1,) if empty_reduced else tuple(range(len(self.groups)))
+        expected_range = (-1, -1) if empty_reduced else (0, len(self.groups) - 1)
+        if dimensions != expected_dimensions:
             raise _validation_error(
                 "topology.require_cohomology_range_2",
                 "cohomology groups must cover contiguous dimensions",
             )
-        if self.dimension_range != (0, len(self.groups) - 1):
+        if self.dimension_range != expected_range:
             raise _validation_error(
                 "topology.require_cohomology_range_3",
                 "dimension_range does not cover every returned group",
@@ -305,6 +311,46 @@ def simplicial_cohomology(  # noqa: C901
     require_simplicial_cohomology_admission(complex_, prime, convention)
 
     dimension = complex_.dimension
+    if dimension == -1:
+        if convention is HomologyConvention.UNREDUCED:
+            group = CohomologyGroupResult._from_kernel(
+                dimension=0,
+                cochain_dimension=0,
+                outgoing_coboundary_rank=0,
+                cocycle_dimension=0,
+                incoming_coboundary_rank=0,
+                betti_number=0,
+                cocycle_basis=(),
+                coboundary_basis=(),
+                cohomology_basis=(),
+                quotient_span_rank=0,
+            )
+            return SimplicialCohomologyResult.model_construct(
+                complex=complex_,
+                prime=prime,
+                convention=convention,
+                dimension_range=(0, 0),
+                groups=(group,),
+            )
+        group = CohomologyGroupResult._from_kernel(
+            dimension=-1,
+            cochain_dimension=1,
+            outgoing_coboundary_rank=0,
+            cocycle_dimension=1,
+            incoming_coboundary_rank=0,
+            betti_number=1,
+            cocycle_basis=(ModularVector(coefficients=(1,)),),
+            coboundary_basis=(),
+            cohomology_basis=(ModularVector(coefficients=(1,)),),
+            quotient_span_rank=1,
+        )
+        return SimplicialCohomologyResult.model_construct(
+            complex=complex_,
+            prime=prime,
+            convention=convention,
+            dimension_range=(-1, -1),
+            groups=(group,),
+        )
     cochain_sizes = list(complex_.f_vector)
     boundaries = [
         _dense_boundary(complex_, degree, prime=prime)

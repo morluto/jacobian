@@ -67,6 +67,21 @@ def test_trivial_character_fricke_target_is_same_parent() -> None:
     assert result.target_space == source
 
 
+def test_native_operation_rejects_constructed_invalid_space_structurally() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    malformed = ModularFormSpace.model_construct(
+        level=True, weight=4, kind="M", character="TRIVIAL", coefficient_domain="QQ"
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_form_atkin_lehner_target(malformed)
+    assert error.value.errors()[0]["loc"] == ("space",)
+    assert (
+        error.value.errors()[0]["type"]
+        == "modular_form.atkin_lehner_target_space_invalid"
+    )
+
+
 def test_catalog_declares_full_fricke_target_operation() -> None:
     tool = next(
         tool

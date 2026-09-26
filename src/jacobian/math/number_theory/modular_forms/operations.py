@@ -6,6 +6,8 @@ from fractions import Fraction
 from math import gcd
 from typing import Literal, cast
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.characters.operations import (
@@ -95,18 +97,32 @@ def modular_form_atkin_lehner_target(
             code="modular_form.atkin_lehner_target_space_type",
             message="space must be an exact modular-form space value",
         )
+    # Native callers can bypass Pydantic construction with model_construct or
+    # mutate a nested value. Re-validate the complete parent at this boundary,
+    # then translate structural failures into the operation's stable domain error.
+    try:
+        admitted_space = ModularFormSpace.model_validate(
+            space.model_dump(mode="python")
+        )
+    except (ValidationError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.atkin_lehner_target_space_invalid",
+            message="space must be a valid exact modular-form space value",
+        ) from exc
+
     target_character = (
         "TRIVIAL"
-        if space.character == "TRIVIAL"
-        else dirichlet_character_conjugate(space.character)
+        if admitted_space.character == "TRIVIAL"
+        else dirichlet_character_conjugate(admitted_space.character)
     )
     target_space = ModularFormSpace(
-        group=space.group,
-        level=space.level,
-        weight=space.weight,
-        kind=space.kind,
+        group=admitted_space.group,
+        level=admitted_space.level,
+        weight=admitted_space.weight,
+        kind=admitted_space.kind,
         character=target_character,
-        coefficient_domain=space.coefficient_domain,
+        coefficient_domain=admitted_space.coefficient_domain,
     )
     return ModularFormAtkinLehnerTarget(
         source_space=space,

@@ -27,8 +27,7 @@ _MAX_WORK_UNITS = 32
 
 def _operator(coefficients: dict[int, Fraction]) -> DifferentialOreOperator:
     if any(
-        _digits(value) > MAX_SHIFT_COEFFICIENT_DIGITS
-        for value in coefficients.values()
+        _digits(value) > MAX_SHIFT_COEFFICIENT_DIGITS for value in coefficients.values()
     ):
         raise OperationResourceAdmissionError(
             location=("result",),

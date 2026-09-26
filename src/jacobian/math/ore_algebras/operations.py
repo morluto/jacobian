@@ -562,9 +562,7 @@ def _poly_product_coefficient_digits(left: _Poly, right: _Poly) -> int:
     collision_count = min(len(left), len(right))
     addition_digits = len(str(collision_count)) if collision_count > 1 else 0
     numerator_digits = (
-        denominator_digits
-        + max(0, left_height + right_height)
-        + addition_digits
+        denominator_digits + max(0, left_height + right_height) + addition_digits
     )
     return max(denominator_digits, numerator_digits)
 
@@ -645,9 +643,7 @@ def _admit_differential_result_bounds(
         # Each numerator summand uses that denominator with its own denominator
         # removed, so the total component height is bounded by the sum of the
         # contribution heights plus the digits needed to add the summands.
-        coefficient_digits = sum(value[2] for value in values) + len(
-            str(len(values))
-        )
+        coefficient_digits = sum(value[2] for value in values) + len(str(len(values)))
         if (
             max(numerator_degree, denominator_degree)
             > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT
@@ -832,9 +828,7 @@ def differential_operator_multiply(
     # Admit derivative degrees and sparse work before constructing derivative
     # coefficients; their exact coefficient supports then make convolution
     # growth admission collision-aware.
-    _admit_differential_result_bounds(
-        static_bounds, check_coefficient_digits=False
-    )
+    _admit_differential_result_bounds(static_bounds, check_coefficient_digits=False)
     if any(
         derivative_bound[2] > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
         for _, _, _, derivative_bound in planned
@@ -847,9 +841,7 @@ def differential_operator_multiply(
     derivative_cache: dict[tuple[int, int], tuple[_Poly, _Poly]] = {}
     for second in right_value.terms:
         derivative = _decode_rf(second.coefficient)
-        maximum_order = max(
-            (first.order for first in left_value.terms), default=0
-        )
+        maximum_order = max((first.order for first in left_value.terms), default=0)
         derivative_cache[(second.order, 0)] = derivative
         for derivative_order in range(1, maximum_order + 1):
             request_checkpoint("during differential product derivative admission")

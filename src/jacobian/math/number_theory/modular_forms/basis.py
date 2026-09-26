@@ -1134,7 +1134,9 @@ def modular_form_coordinates_to_frame(
             code="modular_form.frame_wrong_space",
             message="canonical coordinates must use the frame's exact space and source basis",
         )
-    _, canonical = _admit_coordinates(form, 1, admitted_plan=plan)
+    _, canonical = _admit_coordinates(
+        form, 1, admitted_plan=plan, materialize_pari=False
+    )
     _admit_change_of_basis_arithmetic(plan.dimension, matrix, canonical)
     framed = _solve_frame_matrix(matrix, canonical)
     return ModularFormFramedCoordinates.model_construct(
@@ -1443,13 +1445,16 @@ def modular_form_coordinates_transport(
     # Admitting the source at the target's determining precision also proves
     # the source representation can supply every target comparison term.
     source_plan = _admit_basis(source_space, target_precision, materialize_pari=False)
-    target_plan = _admit_basis(target_space, target_precision, materialize_pari=False)
     _, source_coordinates = _admit_coordinates(
         form,
         target_precision,
         admitted_plan=source_plan,
         materialize_pari=False,
+        check_expansion_growth=source_space != target_space,
     )
+    if source_space == target_space:
+        return form
+    target_plan = _admit_basis(target_space, target_precision, materialize_pari=False)
 
     total_work = source_plan.work + target_plan.work
     solve_work = target_precision * (
@@ -1502,8 +1507,6 @@ def modular_form_coordinates_transport(
             message="transport coordinates exceed the exact output-byte envelope",
         )
 
-    if source_space == target_space:
-        return form
     request_checkpoint("before modular-form transport basis materialization")
     source_plan = (
         _materialize_pari_basis(source_plan)

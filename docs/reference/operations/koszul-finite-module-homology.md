@@ -129,3 +129,23 @@ the original complex and its degree shift. The shifted summand has differential
 `-d`, as required by the homological shift convention. The operation checks
 both chain-map identities and the direct-sum splitting on every basis vector.
 The extended sequence remains within the finite-module length limit.
+
+`homological.koszul.module_map.compute` takes an exact matrix from a based
+finite module `M` to another `N` over the same algebra, with rows indexed by
+the target basis and columns by the source basis. It checks the module-map
+equations `phi A_i = B_i phi` for every algebra basis action, then returns the
+source and target complexes on the same ordered sequence and the induced map
+`id_(wedge^k) tensor phi` in each degree. The producer checks each chain square
+`d_N phi_k = phi_(k-1) d_M`; the operation admits the aggregate wedge maps,
+action checks, differential products, and serialized result before expanding
+them. This is the finite exact form of the usual functoriality of Koszul
+complexes in the coefficient module; see [Hochster's commutative algebra lecture notes](https://dept.math.lsa.umich.edu/~hochster/615W12/615W12.pdf) and the [Stacks Project's functoriality lemma for Koszul complexes](https://stacks.math.columbia.edu/tag/0621).
+
+The returned value binds both complexes and the original module map. Its JSON
+decoder checks axes and parent bindings but does not repeat the module-linearity
+or chain-square computation. A future consumer of a caller-supplied decoded
+map must check the relations it relies on. Current bounds are sequence length
+6, module dimensions 8, at most 4,096 aggregate degree-map cells, 2,000,000
+estimated exact work units, and 8 MiB estimated output. Coefficient growth in
+module-linearity, algebra-action, and chain-square checks is bounded before
+exact arithmetic. The coefficient domain remains `QQ`.

@@ -168,7 +168,7 @@ def test_transform_output_bound_rejects_before_rebuilding(monkeypatch):
         raise AssertionError("complex expansion ran before transform admission")
 
     monkeypatch.setattr(operations, "_build_module_koszul_complex", build_must_not_run)
-    monkeypatch.setattr(operations, "MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_CELLS", 1)
+    monkeypatch.setattr(operations, "MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES", 1)
     with pytest.raises(OperationResourceAdmissionError) as caught:
         module_koszul_sequence_permute(
             ModuleKoszulSequencePermutationRequest(complex=source, new_to_old=(1, 0))
@@ -289,7 +289,7 @@ def test_contraction_budget_rejects_before_inverse_or_complex_rebuild(monkeypatc
     monkeypatch.setattr(
         operations, "_build_module_koszul_complex", arithmetic_must_not_run
     )
-    monkeypatch.setattr(operations, "MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_CELLS", 1)
+    monkeypatch.setattr(operations, "MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_BYTES", 1)
     with pytest.raises(OperationResourceAdmissionError) as caught:
         module_koszul_unit_contract(
             ModuleKoszulUnitContractionRequest(complex=source, unit_index=0)

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import Any, Self
+from math import comb
+from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -89,6 +90,118 @@ class ModuleKoszulRequest(StrictModel):
             raise _err(
                 "sequence_shape", "sequence coordinates must use the algebra basis"
             )
+        return self
+
+
+class ModuleKoszulMapRequest(StrictModel):
+    """An exact algebra-linear map between modules on the same sequence."""
+
+    algebra: FiniteCommutativeAlgebra
+    source: BasedFiniteModule
+    target: BasedFiniteModule
+    sequence: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        max_length=MAX_MODULE_SEQUENCE_LENGTH
+    )
+    # Rows are target coordinates, columns are source coordinates.
+    map_matrix: tuple[tuple[CanonicalRational, ...], ...]
+
+    @model_validator(mode="after")
+    def map_axes(self) -> Self:
+        rows, columns = len(self.target.basis), len(self.source.basis)
+        if (
+            self.source.algebra != self.algebra
+            or self.target.algebra != self.algebra
+            or len(self.map_matrix) != rows
+            or any(len(row) != columns for row in self.map_matrix)
+            or any(len(element) != len(self.algebra.basis) for element in self.sequence)
+        ):
+            raise _err(
+                "map_axes",
+                "module map, algebra, and sequence must use their declared axes",
+            )
+        return self
+
+
+class ModuleChainMapMatrix(StrictModel):
+    """A sparse exact matrix on one pair of module-wedge axes."""
+
+    row_count: int = Field(ge=0)
+    column_count: int = Field(ge=0)
+    entries: tuple[tuple[int, int, CanonicalRational], ...] = ()
+
+    @model_validator(mode="after")
+    def entry_shape(self) -> Self:
+        keys = tuple((row, column) for row, column, _ in self.entries)
+        if (
+            keys != tuple(sorted(set(keys)))
+            or any(
+                row < 0
+                or row >= self.row_count
+                or column < 0
+                or column >= self.column_count
+                for row, column, _ in self.entries
+            )
+            or any(value.num == 0 for _, _, value in self.entries)
+        ):
+            raise _err(
+                "chain_map_entries", "chain-map entries must be sorted and in range"
+            )
+        return self
+
+
+class ModuleKoszulChainMap(StrictModel):
+    """The Koszul chain map induced by a supplied module homomorphism.
+
+    Decoding checks only axes. A future consumer that relies on this map must
+    check module-linearity and the chain-map relation against the retained
+    complexes; the producer establishes both before returning it.
+    """
+
+    algebra: FiniteCommutativeAlgebra
+    source: BasedFiniteModule
+    target: BasedFiniteModule
+    sequence: tuple[tuple[CanonicalRational, ...], ...]
+    module_map: tuple[tuple[CanonicalRational, ...], ...]
+    source_complex: ModuleKoszulComplex
+    target_complex: ModuleKoszulComplex
+    degree_maps: tuple[ModuleChainMapMatrix, ...]
+
+    @model_validator(mode="after")
+    def map_axes(self) -> Self:
+        if (
+            self.source.algebra != self.algebra
+            or self.target.algebra != self.algebra
+            or self.source_complex.algebra != self.algebra
+            or self.target_complex.algebra != self.algebra
+            or self.source_complex.module != self.source
+            or self.target_complex.module != self.target
+            or self.source_complex.sequence != self.sequence
+            or self.target_complex.sequence != self.sequence
+            or len(self.module_map) != len(self.target.basis)
+            or any(len(row) != len(self.source.basis) for row in self.module_map)
+            or len(self.degree_maps) != len(self.sequence) + 1
+        ):
+            raise _err(
+                "chain_map_binding", "chain map must retain compatible source axes"
+            )
+        if any(len(element) != len(self.algebra.basis) for element in self.sequence):
+            raise _err(
+                "chain_map_axes", "sequence coordinates must use the algebra basis"
+            )
+        for degree, matrix in enumerate(self.degree_maps):
+            wedge_size = comb(len(self.sequence), degree)
+            expected_source = len(self.source.basis) * wedge_size
+            expected_target = len(self.target.basis) * wedge_size
+            if (
+                matrix.row_count != expected_target
+                or matrix.column_count != expected_source
+                or self.source_complex.basis_sizes[degree] != expected_source
+                or self.target_complex.basis_sizes[degree] != expected_target
+            ):
+                raise _err(
+                    "chain_map_axes",
+                    "degree maps must match canonical module-wedge axes",
+                )
         return self
 
 
@@ -401,7 +514,7 @@ class ModuleKoszulDGA(StrictModel):
         return self
 
     @classmethod
-    def _from_kernel(cls, **values: Any) -> Self:
+    def _from_kernel(cls, **values) -> Self:
         """Construct an admitted DGA without replaying its product table."""
         return cls.model_construct(**values)
 

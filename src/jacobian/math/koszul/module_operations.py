@@ -20,7 +20,9 @@ from jacobian.catalog.models import (
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
+    ModuleChainMapMatrix,
     ModuleDifferential,
+    ModuleKoszulChainMap,
     ModuleKoszulComplex,
     ModuleKoszulDifferentialRequest,
     ModuleKoszulDifferentialValue,
@@ -30,6 +32,7 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulHomology,
     ModuleKoszulHomologyDegree,
     ModuleKoszulHomologyRequest,
+    ModuleKoszulMapRequest,
     ModuleKoszulRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
@@ -42,13 +45,16 @@ from jacobian.math.koszul.module_models import (
 
 MAX_KOSZUL_HOMOLOGY_COEFFICIENT_DIGITS = 128
 MAX_KOSZUL_HOMOLOGY_WORK = 1 << 40
-MAX_KOSZUL_HOMOLOGY_OUTPUT_CELLS = 8 * 1024 * 1024
+MAX_KOSZUL_HOMOLOGY_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_SEQUENCE_TRANSFORM_WORK = 2_000_000
-MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_CELLS = 8 * 1024 * 1024
+MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_UNIT_CONTRACTION_WORK = 2_000_000
-MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_CELLS = 8 * 1024 * 1024
+MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_KOSZUL_ZERO_EXTENSION_WORK = 2_000_000
-MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_CELLS = 8 * 1024 * 1024
+MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_MODULE_MAP_WORK = 2_000_000
+MAX_KOSZUL_MODULE_MAP_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_MODULE_MAP_CELLS = 4_096
 _MAX_KOSZUL_HOMOLOGY_COEFFICIENT = 10**MAX_KOSZUL_HOMOLOGY_COEFFICIENT_DIGITS
 
 
@@ -153,10 +159,10 @@ def _extend_basis(
                     left - factor * right
                     for left, right in zip(vector, echelon[pivot], strict=True)
                 ]
-        new_pivot = next((index for index, value in enumerate(vector) if value), None)
-        if new_pivot is not None:
-            scale = vector[new_pivot]
-            echelon[new_pivot] = [value / scale for value in vector]
+        pivot = next((index for index, value in enumerate(vector) if value), None)
+        if pivot is not None:
+            scale = vector[pivot]
+            echelon[pivot] = [value / scale for value in vector]
     appended: list[list[Fraction]] = []
     for source in candidates:
         vector = source[:]
@@ -167,10 +173,10 @@ def _extend_basis(
                     left - factor * right
                     for left, right in zip(vector, echelon[pivot], strict=True)
                 ]
-        new_pivot = next((index for index, value in enumerate(vector) if value), None)
-        if new_pivot is not None:
-            scale = vector[new_pivot]
-            echelon[new_pivot] = [value / scale for value in vector]
+        pivot = next((index for index, value in enumerate(vector) if value), None)
+        if pivot is not None:
+            scale = vector[pivot]
+            echelon[pivot] = [value / scale for value in vector]
             appended.append(source)
         if len(echelon) == width:
             break
@@ -316,6 +322,8 @@ def module_koszul_complex(
 
 def _build_module_koszul_complex(
     value: ModuleKoszulRequest,
+    *,
+    check_square: bool = True,
 ) -> ModuleKoszulComplex:
     """Build from an already parsed and admitted request."""
     sequence_length = len(value.sequence)
@@ -352,20 +360,21 @@ def _build_module_koszul_complex(
                 entries=tuple(sorted(entries, key=lambda entry: (entry[0], entry[1]))),
             )
         )
-    for index in range(1, len(differentials)):
-        outer = _dense(differentials[index - 1])
-        inner = _dense(differentials[index])
-        for row in range(len(outer)):
-            for column in range(len(inner[0]) if inner else 0):
-                if sum(
-                    outer[row][middle] * inner[middle][column]
-                    for middle in range(len(inner))
-                ):
-                    raise OperationDomainValidationError(
-                        location=("sequence",),
-                        code="koszul.module.differential_square",
-                        message="module Koszul differential does not square to zero",
-                    )
+    if check_square:
+        for index in range(1, len(differentials)):
+            outer = _dense(differentials[index - 1])
+            inner = _dense(differentials[index])
+            for row in range(len(outer)):
+                for column in range(len(inner[0]) if inner else 0):
+                    if sum(
+                        outer[row][middle] * inner[middle][column]
+                        for middle in range(len(inner))
+                    ):
+                        raise OperationDomainValidationError(
+                            location=("sequence",),
+                            code="koszul.module.differential_square",
+                            message="module Koszul differential does not square to zero",
+                        )
     return ModuleKoszulComplex.model_construct(
         algebra=value.algebra,
         module=value.module,
@@ -534,22 +543,19 @@ def _admit_homology_output(value: ModuleKoszulComplex) -> None:
         *value.module.algebra.basis,
         *value.module.basis,
     )
-    label_cells = sum(len(label) for label in labels)
-    # Materialization cells, not transport bytes: each rational contributes its
-    # two coefficient slots (digits already counted in digit_count), each sparse
-    # entry contributes row/column/value cells, each representative scalar
-    # contributes its coefficient digits plus slots, and labels contribute their
-    # characters. A small constant covers the fixed result structure.
-    output_cells = (
+    escaped_label_bytes = sum(12 * len(label) for label in labels)
+    # Each rational needs its JSON keys/quotes, each sparse cell needs row,
+    # column and list syntax, and the remaining fixed object/list structure is
+    # covered by 4096 bytes. String labels are conservatively JSON-escaped.
+    output_bytes = (
         digit_count
-        + 2 * rational_count
-        + 3 * entry_count
-        + representative_scalars * (basis_coefficient_digits + 2)
-        + label_cells
-        + len(labels)
-        + 64
+        + 32 * rational_count
+        + 24 * entry_count
+        + representative_scalars * (2 * basis_coefficient_digits + 48)
+        + escaped_label_bytes
+        + 16_384
     )
-    if output_cells > MAX_KOSZUL_HOMOLOGY_OUTPUT_CELLS:
+    if output_bytes > MAX_KOSZUL_HOMOLOGY_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="koszul.module.homology_output_budget",
@@ -1015,17 +1021,17 @@ def _admit_sequence_permutation(
         *complex_value.module.algebra.basis,
         *complex_value.module.basis,
     )
-    label_cells = sum(len(label) for label in labels) * 2
-    output_cells = (
-        rational_items * (maximum_digits + 2)
-        + 2 * differential_entry_bound * 3
-        + map_entry_bound * 3
-        + label_cells
-        + 64
+    label_bytes = sum(12 * len(label) for label in labels) * 2
+    output_bytes = (
+        rational_items * (2 * maximum_digits + 48)
+        + 2 * differential_entry_bound * 48
+        + map_entry_bound * 48
+        + label_bytes
+        + 8_192
     )
     if (
         work_bound > MAX_KOSZUL_SEQUENCE_TRANSFORM_WORK
-        or output_cells > MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_CELLS
+        or output_bytes > MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("complex",),
@@ -1202,16 +1208,16 @@ def _admit_unit_contraction(
         *complex_value.module.algebra.basis,
         *complex_value.module.basis,
     )
-    label_cells = 2 * sum(len(label) + 1 for label in labels)
-    output_cells = (
-        returned_rational_items * (expanded_digit_bound + 2)
-        + 3 * (source_entries + homotopy_entries)
-        + label_cells
-        + 64
+    label_bytes = 2 * sum(6 * len(label) + 4 for label in labels)
+    output_bytes = (
+        returned_rational_items * (2 * expanded_digit_bound + 48)
+        + 48 * (source_entries + homotopy_entries)
+        + label_bytes
+        + 8_192
     )
     if (
         work > MAX_KOSZUL_UNIT_CONTRACTION_WORK
-        or output_cells > MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_CELLS
+        or output_bytes > MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("complex",),
@@ -1237,16 +1243,11 @@ def _algebra_inverse(
     dimension = len(table)
     # Replace the multiplication-by-basis columns with multiplication by the
     # requested element: L_element * inverse = 1.
-    if algebra.unit is None:
-        return None
     matrix = [
         [
             sum(
-                (
-                    _f(element[basis]) * table[basis][column][row]
-                    for basis in range(dimension)
-                ),
-                Fraction(0),
+                _f(element[basis]) * table[basis][column][row]
+                for basis in range(dimension)
             )
             for column in range(dimension)
         ]
@@ -1272,12 +1273,9 @@ def _algebra_inverse(
     inverse = [matrix[row][-1] for row in range(dimension)]
     product = [
         sum(
-            (
-                _f(element[left]) * inverse[right] * table[left][right][target]
-                for left in range(dimension)
-                for right in range(dimension)
-            ),
-            Fraction(0),
+            _f(element[left]) * inverse[right] * table[left][right][target]
+            for left in range(dimension)
+            for right in range(dimension)
         )
         for target in range(dimension)
     ]
@@ -1491,18 +1489,18 @@ def module_koszul_append_zero(  # noqa: C901
         *source.module.algebra.basis,
         *source.module.basis,
     )
-    label_cells = 2 * sum(len(label) + 1 for label in labels)
-    output_cells = (
+    label_bytes = 2 * sum(6 * len(label) + 4 for label in labels)
+    output_bound = (
         (source_rational_items + target_rational_items + map_entry_bound)
-        * (differential_digit_bound + 2)
-        + 3 * (source_entries + target_entry_bound + map_entry_bound)
-        + label_cells
-        + 64
+        * (2 * differential_digit_bound + 48)
+        + 48 * (source_entries + target_entry_bound + map_entry_bound)
+        + label_bytes
+        + 8_192
     )
     work_bound = semantic_work + build_work + 8 * map_entry_bound + 4 * target_total
     if (
         work_bound > MAX_KOSZUL_ZERO_EXTENSION_WORK
-        or output_cells > MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_CELLS
+        or output_bound > MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("complex",),
@@ -1730,19 +1728,19 @@ def module_koszul_append_zero(  # noqa: C901
         )
 
     for degree in range(1, source_length + 1):
-        source_columns = _sparse_columns(admitted.differentials[degree - 1])
-        target_columns = _sparse_columns(target.differentials[degree])
+        source_d = _sparse_columns(admitted.differentials[degree - 1])
+        target_d = _sparse_columns(target.differentials[degree])
         shifted_upper = _sparse_columns(shifted_inclusions[degree])
         shifted_lower = _sparse_columns(shifted_inclusions[degree - 1])
         for column in range(admitted.basis_sizes[degree]):
             basis = {column: Fraction(1)}
             lhs = _apply_sparse_columns(
-                target_columns, _apply_sparse_columns(shifted_upper, basis)
+                target_d, _apply_sparse_columns(shifted_upper, basis)
             )
             rhs = {
                 index: -coefficient
                 for index, coefficient in _apply_sparse_columns(
-                    shifted_lower, _apply_sparse_columns(source_columns, basis)
+                    shifted_lower, _apply_sparse_columns(source_d, basis)
                 ).items()
             }
             if lhs != rhs:
@@ -1753,22 +1751,21 @@ def module_koszul_append_zero(  # noqa: C901
                 )
 
     for target_degree in range(1, source_length + 2):
-        target_columns = _sparse_columns(target.differentials[target_degree - 1])
-        lhs_composed = _compose_sparse_maps(
-            _sparse_columns(shifted_projections[target_degree - 1]), target_columns
+        target_d = _sparse_columns(target.differentials[target_degree - 1])
+        lhs = _compose_sparse_maps(
+            _sparse_columns(shifted_projections[target_degree - 1]), target_d
         )
         if target_degree > 1:
-            source_columns = _sparse_columns(admitted.differentials[target_degree - 2])
-            rhs_tuple = tuple(
+            source_d = _sparse_columns(admitted.differentials[target_degree - 2])
+            rhs = tuple(
                 (row, column, -coefficient)
                 for row, column, coefficient in _compose_sparse_maps(
-                    source_columns,
-                    _sparse_columns(shifted_projections[target_degree]),
+                    source_d, _sparse_columns(shifted_projections[target_degree])
                 )
             )
         else:
-            rhs_tuple = ()
-        if lhs_composed != rhs_tuple:
+            rhs = ()
+        if lhs != rhs:
             raise OperationDomainValidationError(
                 location=("shifted_projections", str(target_degree)),
                 code="koszul.module.zero_extension_chain_map",
@@ -1789,13 +1786,13 @@ def module_koszul_append_zero(  # noqa: C901
                     )
                 )
             if target_degree > 0:
-                shifted_image = _apply_sparse_columns(
+                shifted = _apply_sparse_columns(
                     _sparse_columns(shifted_inclusions[target_degree - 1]),
                     _apply_sparse_columns(
                         _sparse_columns(shifted_projections[target_degree]), basis
                     ),
                 )
-                for row, coefficient in shifted_image.items():
+                for row, coefficient in shifted.items():
                     image[row] = image.get(row, Fraction(0)) + coefficient
             image = {
                 row: coefficient for row, coefficient in image.items() if coefficient
@@ -1962,11 +1959,8 @@ def module_koszul_quotient(
     def quotient_coordinates(vector: list[Fraction]) -> list[Fraction]:
         coordinates = [
             sum(
-                (
-                    inverse_basis[row][column] * vector[column]
-                    for column in range(source_dimension)
-                ),
-                Fraction(0),
+                inverse_basis[row][column] * vector[column]
+                for column in range(source_dimension)
             )
             for row in range(source_dimension)
         ]
@@ -1984,8 +1978,8 @@ def module_koszul_quotient(
         for target in range(quotient_dimension)
     ]
     quotient_actions: list[tuple[tuple[CanonicalRational, ...], ...]] = []
-    for module_action in value.module.action:
-        source_action = [[_f(entry) for entry in row] for row in module_action]
+    for action in value.module.action:
+        source_action = [[_f(entry) for entry in row] for row in action]
         induced = [
             [Fraction(0) for _ in range(quotient_dimension)]
             for _ in range(quotient_dimension)
@@ -1993,11 +1987,8 @@ def module_koszul_quotient(
         for source_coordinate, representative in enumerate(quotient_representatives):
             image = [
                 sum(
-                    (
-                        source_action[row][column] * representative[column]
-                        for column in range(source_dimension)
-                    ),
-                    Fraction(0),
+                    source_action[row][column] * representative[column]
+                    for column in range(source_dimension)
                 )
                 for row in range(source_dimension)
             ]
@@ -2294,4 +2285,264 @@ def module_koszul_differential(
         source_wedges=source_wedges,
         target_wedges=target_wedges,
         differential=differential,
+    )
+
+
+def module_koszul_map(
+    request: ModuleKoszulMapRequest | Mapping[str, Any],
+) -> ModuleKoszulChainMap:
+    """Induce a degreewise chain map from one exact module homomorphism.
+
+    Both module actions and every chain-map square are checked in the
+    operation. Returned values retain the source map and both complexes.
+    """
+    try:
+        payload = (
+            request.model_dump()
+            if isinstance(request, ModuleKoszulMapRequest)
+            else request
+        )
+        value = ModuleKoszulMapRequest.model_validate(payload)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="koszul.module.map_request",
+            message="the module map request is not canonical",
+        ) from exc
+
+    source_dimension = len(value.source.basis)
+    target_dimension = len(value.target.basis)
+    algebra_dimension = len(value.algebra.basis)
+    length = len(value.sequence)
+    wedge_total = 1 << length
+    map_cells = source_dimension * target_dimension * wedge_total
+    differential_terms = (
+        length * (1 << max(0, length - 1)) * (source_dimension**2 + target_dimension**2)
+    )
+    action_check_work = (
+        algebra_dimension
+        * source_dimension
+        * target_dimension
+        * (source_dimension + target_dimension)
+    )
+    source_validation_work = (
+        2 * algebra_dimension**4
+        + algebra_dimension**2 * (source_dimension**3 + target_dimension**3)
+        + 3 * algebra_dimension**3 * (source_dimension**2 + target_dimension**2)
+    )
+    estimated_work = (
+        map_cells
+        + differential_terms * (algebra_dimension + source_dimension + target_dimension)
+        + action_check_work
+        + source_validation_work
+    )
+    input_bytes = len(value.model_dump_json().encode("utf-8"))
+    algebra_action_coefficients = tuple(_algebra_rationals(value.algebra)) + tuple(
+        item
+        for action in (value.source.action, value.target.action)
+        for matrix in action
+        for row in matrix
+        for item in row
+    )
+    algebra_action_digits = max(
+        (
+            canonical_rational_component_digits(item)
+            for item in algebra_action_coefficients
+        ),
+        default=1,
+    )
+    sequence_digits = max(
+        (
+            canonical_rational_component_digits(item)
+            for element in value.sequence
+            for item in element
+        ),
+        default=1,
+    )
+    action_digits = (
+        2 * algebra_dimension * algebra_action_digits
+        + algebra_dimension.bit_length()
+        + 2
+    )
+    differential_digits = (
+        algebra_dimension * (action_digits + sequence_digits)
+        + algebra_dimension.bit_length()
+        + 2
+    )
+    map_digits = max(
+        (
+            canonical_rational_component_digits(item)
+            for row in value.map_matrix
+            for item in row
+        ),
+        default=1,
+    )
+    linearity_intermediate_digits = (
+        2
+        * max(source_dimension, target_dimension)
+        * (map_digits + algebra_action_digits)
+        + max(source_dimension, target_dimension).bit_length()
+        + 2
+    )
+    chain_intermediate_digits = (
+        2 * max(source_dimension, target_dimension) * (map_digits + differential_digits)
+        + max(source_dimension, target_dimension).bit_length()
+        + 2
+    )
+    algebra_intermediate_digits = (
+        2 * algebra_dimension * algebra_action_digits
+        + algebra_dimension.bit_length()
+        + 2
+    )
+    module_action_intermediate_digits = (
+        2
+        * algebra_dimension
+        * (2 * algebra_dimension * algebra_action_digits + algebra_action_digits)
+        + 2 * algebra_dimension * algebra_dimension.bit_length()
+        + algebra_dimension.bit_length()
+        + 2
+    )
+    estimated_output_bytes = (
+        5 * input_bytes
+        + map_cells * (2 * map_digits + 64)
+        + differential_terms * (2 * differential_digits + 64)
+        + 4096
+    )
+    if (
+        map_cells > MAX_KOSZUL_MODULE_MAP_CELLS
+        or estimated_work > MAX_KOSZUL_MODULE_MAP_WORK
+        or estimated_output_bytes > MAX_KOSZUL_MODULE_MAP_OUTPUT_BYTES
+        or linearity_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or chain_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or algebra_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or module_action_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("sequence",),
+            code="koszul.module.map_budget",
+            message=(
+                "the module-induced chain map exceeds its admitted work, "
+                "intermediate-growth, or output bound"
+            ),
+        )
+
+    _admit(value.source, value.sequence)
+    _admit(value.target, value.sequence)
+    phi = [[_f(item) for item in row] for row in value.map_matrix]
+    # A module homomorphism must intertwine the action of every algebra basis
+    # element. Checking basis actions suffices by linearity.
+    for algebra_index in range(algebra_dimension):
+        source_action = [
+            [_f(item) for item in row] for row in value.source.action[algebra_index]
+        ]
+        target_action = [
+            [_f(item) for item in row] for row in value.target.action[algebra_index]
+        ]
+        left = [
+            [
+                sum(
+                    phi[row][middle] * source_action[middle][column]
+                    for middle in range(source_dimension)
+                )
+                for column in range(source_dimension)
+            ]
+            for row in range(target_dimension)
+        ]
+        right = [
+            [
+                sum(
+                    target_action[row][middle] * phi[middle][column]
+                    for middle in range(target_dimension)
+                )
+                for column in range(source_dimension)
+            ]
+            for row in range(target_dimension)
+        ]
+        if left != right:
+            raise OperationDomainValidationError(
+                location=("map_matrix",),
+                code="koszul.module.map_not_linear",
+                message="the supplied linear map does not commute with the algebra action",
+            )
+
+    source_request = ModuleKoszulRequest(
+        algebra=value.algebra, module=value.source, sequence=value.sequence
+    )
+    target_request = ModuleKoszulRequest(
+        algebra=value.algebra, module=value.target, sequence=value.sequence
+    )
+    # `_admit` proves the algebra is commutative and each action respects its
+    # multiplication table. These laws imply d^2=0, so skip the redundant
+    # dense square replay for these freshly constructed complexes.
+    source_request = _as_request(source_request)
+    target_request = _as_request(target_request)
+    source_complex = _build_module_koszul_complex(source_request, check_square=False)
+    target_complex = _build_module_koszul_complex(target_request, check_square=False)
+    degree_maps: list[ModuleChainMapMatrix] = []
+    for degree in range(length + 1):
+        wedge_count = comb(length, degree)
+        rows = target_dimension * wedge_count
+        columns = source_dimension * wedge_count
+        entries = tuple(
+            (
+                wedge * target_dimension + target_index,
+                wedge * source_dimension + source_index,
+                CanonicalRational.from_fraction(phi[target_index][source_index]),
+            )
+            for wedge in range(wedge_count)
+            for target_index in range(target_dimension)
+            for source_index in range(source_dimension)
+            if phi[target_index][source_index]
+        )
+        degree_maps.append(
+            ModuleChainMapMatrix(row_count=rows, column_count=columns, entries=entries)
+        )
+
+    def sparse(
+        matrix: ModuleDifferential | ModuleChainMapMatrix,
+    ) -> dict[tuple[int, int], Fraction]:
+        return {
+            (row, column): _f(coefficient)
+            for row, column, coefficient in matrix.entries
+        }
+
+    def compose(
+        left: ModuleDifferential | ModuleChainMapMatrix,
+        right: ModuleDifferential | ModuleChainMapMatrix,
+    ) -> dict[tuple[int, int], Fraction]:
+        right_by_row: dict[int, list[tuple[int, Fraction]]] = {}
+        for (row, column), coefficient in sparse(right).items():
+            right_by_row.setdefault(row, []).append((column, coefficient))
+        result: dict[tuple[int, int], Fraction] = {}
+        for (row, middle), coefficient in sparse(left).items():
+            for column, right_coefficient in right_by_row.get(middle, ()):
+                key = (row, column)
+                result[key] = (
+                    result.get(key, Fraction(0)) + coefficient * right_coefficient
+                )
+        return {key: coefficient for key, coefficient in result.items() if coefficient}
+
+    for degree in range(1, length + 1):
+        target_then_map = compose(
+            target_complex.differentials[degree - 1], degree_maps[degree]
+        )
+        map_then_source = compose(
+            degree_maps[degree - 1], source_complex.differentials[degree - 1]
+        )
+        if target_then_map != map_then_source:
+            raise OperationDomainValidationError(
+                location=("map_matrix",),
+                code="koszul.module.map_chain_relation",
+                message="the induced degree maps do not commute with the Koszul differentials",
+            )
+
+    return ModuleKoszulChainMap(
+        algebra=value.algebra,
+        source=value.source,
+        target=value.target,
+        sequence=value.sequence,
+        module_map=value.map_matrix,
+        source_complex=source_complex,
+        target_complex=target_complex,
+        degree_maps=tuple(degree_maps),
     )

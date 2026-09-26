@@ -145,7 +145,7 @@ def test_zero_extension_admission_precedes_reconstruction(monkeypatch):
         raise AssertionError("complex reconstruction ran before output admission")
 
     monkeypatch.setattr(operations, "_build_module_koszul_complex", must_not_build)
-    monkeypatch.setattr(operations, "MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_CELLS", 1)
+    monkeypatch.setattr(operations, "MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_BYTES", 1)
     with pytest.raises(OperationResourceAdmissionError) as caught:
         module_koszul_append_zero(ModuleKoszulZeroExtensionRequest(complex=source))
     assert caught.value.errors()[0]["type"] == "koszul.module.zero_extension_budget"

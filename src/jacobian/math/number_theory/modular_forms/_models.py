@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -116,6 +116,19 @@ class ModularFormCoordinatesTransportRequest(StrictModel):
 
     form: ModularFormCoordinates
     inclusion: ModularFormSpaceInclusion
+
+
+class ModularFormEqualityRequest(StrictModel):
+    """Compare two complete exact modular-form coordinate values."""
+
+    left: ModularFormCoordinates
+    right: ModularFormCoordinates
+
+
+class ModularFormEqualityResult(StrictModel):
+    """Exact equality outcome for two canonical modular-form values."""
+
+    equal: StrictBool
 
 
 class ModularFormSpaceInclusionRequest(StrictModel):
@@ -353,6 +366,8 @@ __all__ = [
     "LevelOneNamedQExpansionRequest",
     "ModularCharacterSpaceInclusionRequest",
     "ModularFormBasisRequest",
+    "ModularFormEqualityRequest",
+    "ModularFormEqualityResult",
     "ModularFormCoordinatesHeckeRequest",
     "ModularFormCoordinatesQExpansionRequest",
     "ModularFormCoordinatesU2Request",

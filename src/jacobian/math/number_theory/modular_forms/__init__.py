@@ -4,6 +4,7 @@ from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,
     modular_form_coordinates_atkin_lehner,
+    modular_form_coordinates_equal,
     modular_form_coordinates_from_frame,
     modular_form_coordinates_hecke,
     modular_form_coordinates_product,
@@ -45,6 +46,7 @@ from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
     modular_form_field_coordinates_q_expansion,
 )
+from jacobian.math.number_theory.modular_forms._models import ModularFormEqualityResult
 from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
     modular_form_character_space_inclusion,
@@ -85,6 +87,7 @@ __all__ = [
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
+    "ModularFormEqualityResult",
     "ModularFormFieldQExpansion",
     "ModularFormFramedCoordinates",
     "ModularFormFramedHeckeMatrix",
@@ -107,6 +110,7 @@ __all__ = [
     "modular_form_basis_q_expansions",
     "modular_form_character_space_inclusion",
     "modular_form_coordinates_atkin_lehner",
+    "modular_form_coordinates_equal",
     "modular_form_coordinates_extend_field",
     "modular_form_coordinates_from_frame",
     "modular_form_coordinates_hecke",

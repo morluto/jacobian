@@ -336,12 +336,11 @@ def natural_gamma0_inclusion_issue(
         return "inclusion_kind_tag", "inclusion map kind is not canonical"
     if type(source) is not ModularFormSpace or type(target) is not ModularFormSpace:
         return "inclusion_space_type", "inclusion parents must be exact modular spaces"
-    if any(
-        not hasattr(space, field)
-        for space in (source, target)
-        for field in ("group", "character", "coefficient_domain", "level", "weight", "kind")
-    ):
-        return "inclusion_space_incomplete", "inclusion spaces must contain all required fields"
+    required = ("group", "character", "coefficient_domain", "level", "weight", "kind")
+    if any(not hasattr(source, field) for field in required):
+        return "inclusion_source_incomplete", "source space must contain all required fields"
+    if any(not hasattr(target, field) for field in required):
+        return "inclusion_target_incomplete", "target space must contain all required fields"
     if (
         source.group != "GAMMA0"
         or target.group != "GAMMA0"

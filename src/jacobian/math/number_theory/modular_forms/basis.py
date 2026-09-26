@@ -20,9 +20,9 @@ from jacobian.math.number_theory.modular_forms._models import (
 from jacobian.math.number_theory.modular_forms.kernel import expected_coefficients
 from jacobian.math.number_theory.modular_forms.operations import space_dimension
 from jacobian.math.number_theory.modular_forms.pari_backend import (
+    MAX_PARI_BASIS_ALLOCATION_BYTES,
     MAX_PARI_BASIS_DIMENSION,
     MAX_PARI_BASIS_LEVEL,
-    MAX_PARI_BASIS_ALLOCATION_BYTES,
     MAX_PARI_BASIS_PRECISION,
     MAX_PARI_BASIS_WEIGHT,
     MAX_PARI_BASIS_WORK,
@@ -39,6 +39,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
     ModularFormBasis,
@@ -79,6 +80,8 @@ MAX_CHANGE_OF_BASIS_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_ATKIN_LEHNER_MATRIX_ENTRY_DIGITS = 512
 MAX_ATKIN_LEHNER_INTERNAL_DIGITS = 10_000_000
 MAX_ATKIN_LEHNER_INTERNAL_BYTES = 256 * 1024 * 1024
+MAX_PARI_BASIS_OUTPUT_BYTES = MAX_PARI_BASIS_ALLOCATION_BYTES
+MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES = 8 * 1024 * 1024
 
 
 def _hecke_coefficient(
@@ -903,7 +906,8 @@ def _frame_admission(
             code="modular_form.frame_type",
             message="frame must be a typed modular-form change-of-basis value",
         )
-    plan = _admit_basis(frame.space, 1)
+    frame_precision = sturm_bound(frame.space).bound + 1 if frame.space.level > 4 else 1
+    plan = _admit_basis(frame.space, frame_precision, materialize_pari=False)
     if (
         type(frame.source_labels) is not tuple
         or type(frame.labels) is not tuple
@@ -1230,8 +1234,13 @@ def _admit_coordinates(
             code="modular_form.coordinates_basis",
             message="form coordinates use an unsupported basis convention",
         )
+    plan_precision = (
+        max(precision, sturm_bound(form.space).bound + 1)
+        if form.basis_id == PARI_STURM_RREF_BASIS_ID
+        else precision
+    )
     plan = (
-        _admit_basis(form.space, precision, materialize_pari=False)
+        _admit_basis(form.space, plan_precision, materialize_pari=False)
         if admitted_plan is None
         else admitted_plan
     )
@@ -1520,7 +1529,10 @@ def modular_form_space_inclusion(
     if issue is not None:
         reason, message = issue
         location = ("source_space",)
-        if reason == "inclusion_weight" or reason == "inclusion_level":
+        if reason.startswith("inclusion_target_") or reason in (
+            "inclusion_weight",
+            "inclusion_level",
+        ):
             location = ("target_space",)
         raise OperationDomainValidationError(
             location=location,
@@ -1564,6 +1576,26 @@ def modular_form_coordinates_transport(
             message="inclusion must contain its map kind, source space, and target space",
         )
     source_space = form.space
+    for endpoint_name, endpoint in (
+        ("source_space", inclusion.source_space),
+        ("target_space", inclusion.target_space),
+    ):
+        if any(
+            not hasattr(endpoint, field)
+            for field in (
+                "group",
+                "character",
+                "coefficient_domain",
+                "level",
+                "weight",
+                "kind",
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("inclusion", endpoint_name),
+                code="modular_form.transport_inclusion_space_incomplete",
+                message="inclusion spaces must contain all required fields",
+            )
     issue = natural_gamma0_inclusion_issue(
         inclusion.map_kind, inclusion.source_space, inclusion.target_space
     )
@@ -1746,9 +1778,16 @@ def modular_form_coordinates_product(
             code="modular_form.product_target_level_unsupported",
             message="form products currently require a target Gamma0 level at most 4",
         )
+    target_weight = left.space.weight + right.space.weight
+    if target_weight > MAX_MODULAR_FORM_WEIGHT:
+        raise OperationResourceAdmissionError(
+            location=("space", "weight"),
+            code="modular_form.product_target_weight_bound",
+            message="product target weight exceeds the modular-form weight envelope",
+        )
     target_space = ModularFormSpace(
         level=target_level,
-        weight=left.space.weight + right.space.weight,
+        weight=target_weight,
         kind="S" if "S" in (left.space.kind, right.space.kind) else "M",
     )
     precision = sturm_bound(target_space).bound + 1
@@ -2313,7 +2352,7 @@ def modular_form_coordinates_atkin_lehner(
         precision,
         basis_vectors,
         admitted_work=total_work,
-        admitted_output_bytes=basis_input_bytes + matrix_output_bytes,
+        admitted_allocation_bytes=basis_input_bytes + matrix_output_bytes,
     )
     output_coordinates = tuple(
         sum(
@@ -2399,7 +2438,7 @@ def modular_form_hecke_matrix(
             code="modular_form.hecke_matrix_source_bound",
             message="Hecke matrix requires basis coefficients beyond the admitted source order",
         )
-    plan = _admit_basis(space, source_order)
+    plan = _admit_basis(space, source_order, materialize_pari=False)
     term_count = 2 * isqrt(index) + 1
     work = (
         plan.dimension * precision * index
@@ -2455,6 +2494,8 @@ def modular_form_hecke_matrix(
             message="Hecke matrix exact entries exceed the bounded output envelope",
         )
 
+    if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        plan = _materialize_pari_basis(plan)
     basis_vectors = _basis_coefficients(plan)
     columns = []
     for vector in basis_vectors:

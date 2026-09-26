@@ -601,6 +601,33 @@ def test_twist_polynomial_accepts_ground_and_state_cardinality_boundary() -> Non
     assert result.polynomial.coefficients == (4_096,)
 
 
+def test_twist_polynomial_ignores_recognition_label_envelope() -> None:
+    # Labels do not enter the mask sweep, so the recognition operation's
+    # 2,048-byte cap must not narrow this operation's advertised domain.
+    label = "a" * 2_049
+    source = FiniteDeltaMatroid(ground=(label,), feasible=((),))
+
+    result = twist_polynomial(source)
+
+    assert result.ground == (label,)
+    assert result.coefficients_by_width == (2, 0)
+    assert result.polynomial.coefficients == (2,)
+
+
+def test_twist_polynomial_result_rejects_duplicate_ground_labels() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+    result = twist_polynomial(source)
+    payload = result.model_dump(mode="json")
+    payload["ground"] = ["a", "a"]
+
+    with pytest.raises(ValidationError, match="ground labels must be unique"):
+        type(result).model_validate_json(json.dumps(payload))
+
+
 def test_twist_polynomial_result_rejects_inconsistent_wire_claims() -> None:
     import json
 

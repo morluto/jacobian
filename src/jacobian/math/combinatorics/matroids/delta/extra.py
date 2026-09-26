@@ -140,7 +140,9 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
                 f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. "
                 f"The result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
                 "histogram entries and coefficients with at most "
-                f"{MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS} decimal digits."
+                f"{MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS} decimal digits. "
+                "The recognition operation's 2,048-byte label envelope does "
+                "not apply: labels do not affect the mask sweep."
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_TWIST_POLYNOMIAL_GROUND,
@@ -179,6 +181,11 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
 
     @model_validator(mode="after")
     def complete_width_axis(self) -> Self:
+        if len(set(self.ground)) != len(self.ground):
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_ground",
+                "delta-matroid ground labels must be unique",
+            )
         if len(self.coefficients_by_width) != len(self.ground) + 1 or any(
             type(coefficient) is not int or coefficient < 0
             for coefficient in self.coefficients_by_width

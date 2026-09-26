@@ -295,7 +295,8 @@ TOOLS: MathTools = (  # noqa: RUF005
             f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. The "
             f"result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
             f"histogram entries and {MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS}-digit "
-            "coefficients."
+            "coefficients; labels do not affect the mask sweep, so the "
+            "recognition operation's label cap does not apply."
         ),
         request_type=DeltaMatroidTwistPolynomialRequest,
         result_type=DeltaMatroidTwistPolynomialResult,

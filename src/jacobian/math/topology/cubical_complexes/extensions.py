@@ -19,6 +19,7 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     Simplex,
     VertexLabel,
+    face_closure,
 )
 from jacobian.math.topology._models import (
     canonical_complex as canonical_simplicial_complex,
@@ -266,6 +267,12 @@ def _require_valid_triangulation_transport(
             raise ValueError("cell simplex maps are absent from the target complex")
     if tuple(sorted(expected_facets)) != result.simplicial_complex.maximal_simplices:
         raise ValueError("target facets do not equal the mapped source subdivisions")
+    expected_closure = face_closure(tuple(sorted(expected_facets)))
+    actual_closure = tuple(
+        group.faces for group in result.simplicial_complex.faces_by_dimension
+    )
+    if actual_closure != expected_closure:
+        raise ValueError("target faces do not equal the mapped subdivisions' closure")
 
 
 def _maximal_cubical_cells(cells: tuple[CubicalCell, ...]) -> tuple[CubicalCell, ...]:

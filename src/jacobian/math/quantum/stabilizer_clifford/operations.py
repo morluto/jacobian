@@ -18,9 +18,6 @@ from jacobian.math.quantum._models import (
     QubitRegister,
 )
 from jacobian.math.quantum.operations import stabilizer_group_from_generators
-from jacobian.math.quantum.stabilizer_clifford._models import (
-    StabilizerCliffordTransportRequest,
-)
 
 MAX_STABILIZER_CLIFFORD_WORK = 1_000_000
 MAX_STABILIZER_CLIFFORD_RESULT_BYTES = 65_536
@@ -88,7 +85,7 @@ def _transport_pauli(
 
 
 def conjugate_stabilizer_group(
-    request: StabilizerCliffordTransportRequest,
+    group: ExactStabilizerGroup, gate: str, qubits: tuple[str, ...]
 ) -> ExactStabilizerGroup:
     """Return the exact group ``U S U†`` for one H, S, or directed CNOT gate.
 
@@ -100,13 +97,6 @@ def conjugate_stabilizer_group(
     canonical one: equal subgroups may serialize with different generator
     order, so callers must not use serialization as group identity.
     """
-    if not isinstance(request, StabilizerCliffordTransportRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer_clifford.invalid_request",
-            "request must contain a typed group and one elementary gate",
-        )
-    group = getattr(request, "group", None)
     if not isinstance(group, ExactStabilizerGroup):
         _reject(
             "group",
@@ -155,7 +145,7 @@ def conjugate_stabilizer_group(
             "quantum.stabilizer_clifford.invalid_group",
             "group generators must be exact Paulis on the identical register",
         )
-    gate_field: object = getattr(request, "gate", None)
+    gate_field: object = gate
     if gate_field not in ("H", "S", "CNOT"):
         _reject(
             "gate",
@@ -164,7 +154,7 @@ def conjugate_stabilizer_group(
         )
     gate = gate_field
     arity = 2 if gate == "CNOT" else 1
-    axes_field: object = getattr(request, "qubits", None)
+    axes_field: object = qubits
     if type(axes_field) is not tuple:
         _reject(
             "qubits",

@@ -9,6 +9,11 @@ from jacobian.math.quantum.stabilizer_clifford.operations import (
     conjugate_stabilizer_group,
 )
 
+
+def _run_transport(request: StabilizerCliffordTransportRequest) -> ExactStabilizerGroup:
+    return conjugate_stabilizer_group(request.group, request.gate, request.qubits)
+
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="quantum.stabilizer.clifford_gate.conjugate.compute",
@@ -20,7 +25,7 @@ TOOLS: MathTools = (
         ),
         request_type=StabilizerCliffordTransportRequest,
         result_type=ExactStabilizerGroup,
-        run=conjugate_stabilizer_group,
+        run=_run_transport,
         tags=("quantum", "stabilizer", "clifford", "conjugation", "exact"),
         examples=(
             OperationExample(

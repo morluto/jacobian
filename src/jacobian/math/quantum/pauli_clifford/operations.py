@@ -32,15 +32,18 @@ def conjugate_pauli(
     The phase update follows the published operator convention ``Y=iXZ``.
     Complexity is linear in the register width, including structural admission.
     """
-    if not isinstance(pauli, ExactQubitPauli) or not isinstance(
-        getattr(pauli, "phase_free", None), PhaseFreeQubitPauli
-    ):
+    phase_free = (
+        getattr(pauli, "phase_free", None)
+        if isinstance(pauli, ExactQubitPauli)
+        else None
+    )
+    if not isinstance(phase_free, PhaseFreeQubitPauli):
         _reject(
             "pauli",
             "quantum.pauli_clifford.invalid_pauli",
             "input must be an exact qubit Pauli",
         )
-    register = pauli.register
+    register = getattr(phase_free, "qubit_register", None)
     if not isinstance(register, QubitRegister):
         _reject(
             "pauli",
@@ -48,8 +51,8 @@ def conjugate_pauli(
             "Pauli register must be a typed qubit register",
         )
     ids = getattr(register, "qubit_ids", None)
-    x_bits = getattr(pauli.phase_free, "x_bits", None)
-    z_bits = getattr(pauli.phase_free, "z_bits", None)
+    x_bits = getattr(phase_free, "x_bits", None)
+    z_bits = getattr(phase_free, "z_bits", None)
     width = len(ids) if isinstance(ids, tuple) else 0
     if (
         type(ids) is not tuple
@@ -67,8 +70,8 @@ def conjugate_pauli(
         or len(x_bits) != width
         or len(z_bits) != width
         or any(type(bit) is not int or bit not in (0, 1) for bit in (*x_bits, *z_bits))
-        or type(pauli.phase) is not int
-        or not 0 <= pauli.phase <= 3
+        or type(getattr(pauli, "phase", None)) is not int
+        or not 0 <= getattr(pauli, "phase", -1) <= 3
     ):
         _reject(
             "pauli",

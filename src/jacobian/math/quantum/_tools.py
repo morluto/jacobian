@@ -29,8 +29,12 @@ from jacobian.math.quantum._models import (
     StabilizerCodeRequest,
     StabilizerCodeValue,
     StabilizerDistanceResult,
+    StabilizerErasureCorrectabilityRequest,
+    StabilizerErasureCorrectabilityResult,
     StabilizerErrorEquivalenceRequest,
     StabilizerErrorEquivalenceResult,
+    StabilizerStatePauliMeasurementRequest,
+    StabilizerStatePauliMeasurementResult,
     StabilizerSyndromeRequest,
     StabilizerSyndromeResult,
 )
@@ -46,11 +50,13 @@ from jacobian.math.quantum.operations import (
     pauli_pairing,
     pauli_to_labels,
     stabilizer_code_compute,
+    stabilizer_erasure_correctability,
     stabilizer_error_equivalence,
     stabilizer_exact_distance,
     stabilizer_group_from_generators,
     stabilizer_logical_frame,
     stabilizer_normalizer,
+    stabilizer_state_measure_pauli,
     stabilizer_syndrome,
 )
 
@@ -62,7 +68,7 @@ def _run_canonicalize_check_space(
 
 
 def _run_css_check_space(request: CSSCheckSpaceRequest) -> CSSCheckSpaceResult:
-    return css_check_space(request.qubit_register, request.x_checks, request.z_checks)
+    return css_check_space(request)
 
 
 def _run_css_logical_frame(value: CSSCheckSpaceValue) -> CSSLogicalPauliFrame:
@@ -75,6 +81,12 @@ def _run_css_distance(value: CSSCheckSpaceValue) -> CSSDistanceResult:
 
 def _run_stabilizer_distance(value: CheckSpaceValue) -> StabilizerDistanceResult:
     return stabilizer_exact_distance(value)
+
+
+def _run_erasure_correctability(
+    request: StabilizerErasureCorrectabilityRequest,
+) -> StabilizerErasureCorrectabilityResult:
+    return stabilizer_erasure_correctability(request)
 
 
 def _run_logical_frame(value: CheckSpaceValue) -> LogicalPauliFrame:
@@ -97,7 +109,7 @@ def _run_pairing(request: PauliPairingRequest) -> PauliPairingResult:
 def _run_family_commutation(
     request: PauliFamilyCommutationRequest,
 ) -> PauliFamilyCommutationResult:
-    return pauli_family_commutation_matrix(request.family)
+    return pauli_family_commutation_matrix(request)
 
 
 def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:
@@ -105,14 +117,11 @@ def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:
 
 
 def _run_from_labels(request: PauliFromLabelsRequest) -> PauliFromLabelsResult:
-    return PauliFromLabelsResult(
-        source=request,
-        pauli=pauli_from_labels(request.qubit_register, request.labels, request.phase),
-    )
+    return pauli_from_labels(request)
 
 
 def _run_to_labels(request: PauliToLabelsRequest) -> PauliToLabelsResult:
-    return pauli_to_labels(request.pauli)
+    return pauli_to_labels(request)
 
 
 def _run_syndrome(
@@ -190,6 +199,60 @@ TOOLS = (
                         ],
                     },
                     "generator_eigenvalues": [1, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quantum.stabilizer_state.measure_pauli.compute",
+        title="Measure an exact Pauli on a pure stabilizer state",
+        description=(
+            "Measure one register-bound Hermitian Pauli on a pure stabilizer "
+            "state. Return either its deterministic eigenvalue and exact signed "
+            "generator relation, or both equiprobable +/-1 outcomes with each "
+            "post-measurement pure stabilizer state and probability 1/2. The "
+            "operation stores no trajectory or random sample."
+        ),
+        request_type=StabilizerStatePauliMeasurementRequest,
+        result_type=StabilizerStatePauliMeasurementResult,
+        run=stabilizer_state_measure_pauli,
+        tags=("quantum", "stabilizer", "measurement", "pauli", "exact"),
+        discovery_terms=(
+            "Pauli measurement on stabilizer state",
+            "deterministic stabilizer measurement outcome",
+            "random stabilizer measurement branches",
+        ),
+        examples=(
+            OperationExample(
+                name="measure_x_on_zero_state",
+                description=(
+                    "Measuring X on the +1 eigenstate of Z gives both exact "
+                    "outcomes with probability one half."
+                ),
+                input={
+                    "state": {
+                        "group": {
+                            "register": {"qubit_ids": ["q0"]},
+                            "generators": [
+                                {
+                                    "phase_free": {
+                                        "register": {"qubit_ids": ["q0"]},
+                                        "x_bits": [0],
+                                        "z_bits": [1],
+                                    },
+                                    "phase": 0,
+                                }
+                            ],
+                        }
+                    },
+                    "observable": {
+                        "phase_free": {
+                            "register": {"qubit_ids": ["q0"]},
+                            "x_bits": [1],
+                            "z_bits": [0],
+                        },
+                        "phase": 0,
+                    },
                 },
             ),
         ),
@@ -360,6 +423,46 @@ TOOLS = (
                             "z_bits": [1, 0],
                         }
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quantum.stabilizer.erasure_correctability.compute",
+        title="Check exact stabilizer erasure correctability",
+        description=(
+            "Decide whether a supplied qubit erasure set supports any nontrivial "
+            "logical Pauli. An uncorrectable result includes an exact supported "
+            "normalizer representative outside the stabilizer space."
+        ),
+        request_type=StabilizerErasureCorrectabilityRequest,
+        result_type=StabilizerErasureCorrectabilityResult,
+        run=_run_erasure_correctability,
+        tags=("quantum", "stabilizer", "erasure", "correctability", "exact"),
+        examples=(
+            OperationExample(
+                name="single_qubit_erasure_of_repetition_code",
+                description=(
+                    "The three-qubit phase-flip repetition checks cannot correct "
+                    "erasure of q0 because logical X on q0 has support there."
+                ),
+                input={
+                    "check_space": {
+                        "register": {"qubit_ids": ["q0", "q1", "q2"]},
+                        "basis": [
+                            {
+                                "register": {"qubit_ids": ["q0", "q1", "q2"]},
+                                "x_bits": [1, 1, 0],
+                                "z_bits": [0, 0, 0],
+                            },
+                            {
+                                "register": {"qubit_ids": ["q0", "q1", "q2"]},
+                                "x_bits": [0, 1, 1],
+                                "z_bits": [0, 0, 0],
+                            },
+                        ],
+                    },
+                    "erased_qubit_ids": ["q0"],
                 },
             ),
         ),

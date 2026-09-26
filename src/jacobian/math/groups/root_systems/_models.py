@@ -1136,6 +1136,8 @@ class WeylElementWeightActionRequest(StrictModel):
 
     element: WeylElement
     weight: WeightLatticeVector
+
+
 class WeylBruhatIntervalRequest(StrictModel):
     """Two elements of one finite Weyl group defining a closed interval."""
 

@@ -225,6 +225,8 @@ def _run_weyl_element_weight_action(
     request: WeylElementWeightActionRequest,
 ) -> WeightLatticeVector:
     return weyl_element_act_on_weight(request)
+
+
 def _run_weyl_bruhat_interval(
     request: WeylBruhatIntervalRequest,
 ) -> WeylBruhatIntervalResult:

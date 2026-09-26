@@ -12,7 +12,8 @@ source bracket exactly, verifies the bracket lies in the candidate span, and
 uses RREF pivot coordinates to recover those coefficients. The output basis
 follows candidate row order; labels name these induced basis vectors.
 
-The operation establishes the source and induced Jacobi identities and bounds
-dimension, rational heights, closure work, and output. A subspace that is not
-closed returns a domain error. The current Lie-algebra carrier requires a
-nonempty basis, so the zero subalgebra has no induced algebra representation.
+The operation admits source Jacobi and bounds dimension, rational heights,
+closure work, and output. Source Jacobi and the complete bracket-closure check
+prove the induced algebra's Jacobi identity. A subspace that is not closed
+returns a domain error. The current Lie-algebra carrier requires a nonempty
+basis, so the zero subalgebra has no induced algebra representation.

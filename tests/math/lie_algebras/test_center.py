@@ -5,12 +5,14 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieAlgebraElement,
     LieAlgebraRequest,
     LieCenterResult,
+    StructureConstant,
 )
 from jacobian.math.lie_algebras.operations import (
     lie_bracket,
@@ -30,6 +32,23 @@ def _algebra(
                 for i, j, k, value in constants
             ],
         }
+    )
+
+
+def _unchecked_algebra(
+    basis: tuple[str, ...], constants: tuple[tuple[int, int, int, int], ...]
+) -> FiniteDimensionalLieAlgebra:
+    return FiniteDimensionalLieAlgebra.model_construct(
+        basis=basis,
+        structure_constants=tuple(
+            StructureConstant.model_construct(
+                i=i,
+                j=j,
+                k=k,
+                coefficient=CanonicalRational.model_construct(num=value, den=1),
+            )
+            for i, j, k, value in constants
+        ),
     )
 
 
@@ -65,7 +84,9 @@ GL2 = _algebra(
 )
 AFFINE = _algebra(("a", "b"), ((0, 1, 1, 1),))
 LINE = _algebra(("t",), ())
-JACOBI_VIOLATOR = _algebra(("e", "f", "h"), ((0, 1, 2, 1), (0, 2, 0, 1), (1, 2, 0, 1)))
+JACOBI_VIOLATOR = _unchecked_algebra(
+    ("e", "f", "h"), ((0, 1, 2, 1), (0, 2, 0, 1), (1, 2, 0, 1))
+)
 
 
 class TestCenterKnownAnswers:

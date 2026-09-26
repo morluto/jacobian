@@ -29,7 +29,11 @@ from jacobian.math.lie_algebras.basis_transport._models import (
     LieBasisChangeRequest,
     LieBasisChangeResult,
 )
-from jacobian.math.lie_algebras.operations import _admit_lie_algebra, _bracket_table
+from jacobian.math.lie_algebras.operations import (
+    _admit_lie_algebra,
+    _as_algebra,
+    _bracket_table,
+)
 from jacobian.math.matrices.values import (
     RationalMatrix,
     rational_matrix_from_fractions,
@@ -161,7 +165,7 @@ def lie_algebra_change_basis(
     """
 
     request = LieBasisChangeRequest.model_validate(
-        {"algebra": algebra, "basis": basis, "matrix": matrix}
+        {"algebra": _as_algebra(algebra), "basis": basis, "matrix": matrix}
     )
     _admit_basis_change(request)
     source = request.algebra
@@ -210,8 +214,8 @@ def lie_algebra_change_basis(
                 constants.append(
                     StructureConstant(i=i, j=j, k=k, coefficient=canonical)
                 )
-    target = FiniteDimensionalLieAlgebra.model_validate(
-        {"basis": request.basis, "structure_constants": constants}
+    target = FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
+        basis=request.basis, structure_constants=tuple(constants)
     )
     return LieBasisChangeResult._from_kernel(
         source,

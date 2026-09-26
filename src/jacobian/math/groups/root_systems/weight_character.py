@@ -29,6 +29,19 @@ MAX_CHARACTER_WORK = 50_000_000
 MAX_CHARACTER_OUTPUT_DIGITS = 64_000
 
 
+def _type_a_dimension(partition: tuple[int, ...]) -> int:
+    """Return the Weyl dimension from the exact type-A product formula."""
+    numerator = denominator = 1
+    for i in range(len(partition)):
+        for j in range(i + 1, len(partition)):
+            numerator *= partition[i] - partition[j] + j - i
+            denominator *= j - i
+    dimension, remainder = divmod(numerator, denominator)
+    if remainder:
+        raise RuntimeError("type-A Weyl dimension was not integral")
+    return dimension
+
+
 def _compositions(total: int, slots: int) -> Iterator[tuple[int, ...]]:
     """Yield weak compositions in lexicographic order."""
     if slots == 1:
@@ -128,7 +141,13 @@ def highest_weight_character(
     intermediate_bits_bound = (
         dimension_bits_bound + (4 * root_count * max(total, 1) ** 2 + 1).bit_length()
     )
-    output_bound = state_bound * (
+    # The Weyl dimension bounds the number of retained weights (each has
+    # positive integral multiplicity). Unlike the scanned-composition envelope,
+    # it therefore gives a useful conservative wire-size estimate for sparse
+    # characters such as exterior powers. Compute it using the type-A Weyl
+    # product before candidate expansion.
+    dimension = _type_a_dimension(partition)
+    output_bound = dimension * (
         128 + rank * ((total + 1).bit_length() + 2) + intermediate_bits_bound // 3 + 4
     )
     if (

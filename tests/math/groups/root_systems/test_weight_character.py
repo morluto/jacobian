@@ -89,6 +89,19 @@ def test_hand_tables(
     assert result.weight_axis == tuple(range(len(highest)))
 
 
+def test_sparse_high_rank_character_admits_output_by_retained_weight_bound() -> None:
+    # The seventh exterior power of the defining A7 representation has only
+    # eight weights. The full weak-composition scan envelope is much larger
+    # and must not be mistaken for retained output size.
+    a7 = tuple(
+        tuple(2 if i == j else -1 if abs(i - j) == 1 else 0 for j in range(7))
+        for i in range(7)
+    )
+    character = highest_weight_character(a7, (0, 0, 0, 0, 0, 0, 1))
+    assert len(character.terms) == 8
+    assert all(term.multiplicity == 1 for term in character.terms)
+
+
 @pytest.mark.parametrize(("cartan", "highest"), ((A2, (2, 1)), (A3, (1, 1, 0))))
 def test_character_has_weyl_symmetry_and_dimension(
     cartan: tuple[tuple[int, ...], ...], highest: tuple[int, ...]

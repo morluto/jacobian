@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import permutations, product
 from math import factorial, isqrt
 
-from jacobian._exact import canonical_rational_component_digits
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -24,8 +24,81 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    QuadraticCrossTerm,
     RationalQuadraticForm,
 )
+
+
+def _require_bounded_form_structure(form: RationalQuadraticForm) -> None:
+    """Bound forged nested values before model serialization or validation."""
+    if not isinstance(form, RationalQuadraticForm):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.theta_invalid_form",
+            message="theta coefficients require a rational quadratic form",
+        )
+    axis = getattr(form, "axis", None)
+    diagonal = getattr(form, "diagonal_coefficients", None)
+    crosses = getattr(form, "cross_terms", None)
+    max_support = MAX_THETA_PREFIX_DIMENSION * (MAX_THETA_PREFIX_DIMENSION + 1) // 2
+    if (
+        getattr(form, "domain", None) != "QQ"
+        or type(axis) is not tuple
+        or len(axis) > MAX_THETA_PREFIX_DIMENSION
+        or type(diagonal) is not tuple
+        or len(diagonal) != len(axis)
+        or type(crosses) is not tuple
+        or len(crosses) > max_support
+        or any(type(label) is not str or not 1 <= len(label) <= 64 for label in axis)
+    ):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.theta_invalid_form",
+            message="theta form shape exceeds its bounded canonical structure",
+        )
+    coefficients = list(diagonal)
+    for term in crosses:
+        if not isinstance(term, QuadraticCrossTerm):
+            raise OperationDomainValidationError(
+                location=("form", "cross_terms"),
+                code="quadratic_form.theta_invalid_form",
+                message="theta cross terms must be canonical bounded values",
+            )
+        left = getattr(term, "left", None)
+        right = getattr(term, "right", None)
+        if (
+            type(left) is not int
+            or type(right) is not int
+            or not (0 <= left < right < len(axis))
+        ):
+            raise OperationDomainValidationError(
+                location=("form", "cross_terms"),
+                code="quadratic_form.theta_invalid_form",
+                message="theta cross-term indices must lie in the form axis",
+            )
+        coefficients.append(getattr(term, "coefficient", None))
+    for coefficient in coefficients:
+        if not isinstance(coefficient, CanonicalRational):
+            raise OperationDomainValidationError(
+                location=("form",),
+                code="quadratic_form.theta_invalid_form",
+                message="theta coefficients must be canonical rational values",
+            )
+        numerator = getattr(coefficient, "num", None)
+        denominator = getattr(coefficient, "den", None)
+        if (
+            type(numerator) is not int
+            or type(denominator) is not int
+            or denominator <= 0
+            or max(abs(numerator).bit_length(), denominator.bit_length())
+            > 3 * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+        ):
+            raise OperationDomainValidationError(
+                location=("form",),
+                code="quadratic_form.theta_invalid_form",
+                message="theta coefficient components exceed the bounded integer form",
+            )
 
 
 def _determinant(rows: tuple[tuple[int, ...], ...]) -> int:
@@ -279,12 +352,7 @@ def theta_selected_coefficients(
     indices: tuple[int, ...],
 ) -> ThetaSelectedCoefficientsResult:
     """Return only requested r_Q(n), without constructing intervening terms."""
-    if not isinstance(form, RationalQuadraticForm):
-        raise OperationDomainValidationError(
-            location=("form",),
-            code="quadratic_form.theta_invalid_form",
-            message="selected theta coefficients require a rational quadratic form",
-        )
+    _require_bounded_form_structure(form)
     if (
         type(indices) is not tuple
         or not 1 <= len(indices) <= MAX_THETA_SELECTED_INDICES
@@ -298,20 +366,6 @@ def theta_selected_coefficients(
             location=("indices",),
             code="quadratic_form.theta_invalid_selected_indices",
             message="selected theta indices must be bounded and strictly increasing",
-        )
-    if not (
-        isinstance(form.axis, tuple)
-        and isinstance(form.diagonal_coefficients, tuple)
-        and isinstance(form.cross_terms, tuple)
-        and len(form.axis) <= MAX_THETA_PREFIX_DIMENSION
-        and len(form.diagonal_coefficients) == len(form.axis)
-        and len(form.cross_terms)
-        <= MAX_THETA_PREFIX_DIMENSION * (MAX_THETA_PREFIX_DIMENSION + 1) // 2
-    ):
-        raise OperationDomainValidationError(
-            location=("form",),
-            code="quadratic_form.theta_invalid_form",
-            message="selected theta coefficients require a bounded canonical form",
         )
     try:
         form = RationalQuadraticForm.model_validate(form.model_dump(), strict=True)

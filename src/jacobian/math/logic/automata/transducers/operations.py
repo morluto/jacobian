@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from typing import Literal, cast
 
 from jacobian._execution import BackendFailureReason, OperationBackendError
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,13 +15,20 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeResult,
+    ReachableStatesResult,
+    ReachableStateWitness,
     StatePairDistinguishability,
     SubseqRunResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
+    MAX_FST_ALPHABET,
+    MAX_FST_ALPHABET_ID_LENGTH,
+    MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS,
     MAX_FST_RESULT_WORD_LENGTH,
+    MAX_FST_RUN_RESULT_OUTPUT_CELLS,
     MAX_FST_STATES,
     MAX_FST_WORD_LENGTH,
+    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     SubseqFinalOutput,
@@ -28,6 +36,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.languages.words.values import WordMorphism
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +65,7 @@ __all__ = [
     "identity_transducer",
     "invert_rational",
     "minimize_subsequential",
+    "reachable_state_witnesses",
     "reachable_states",
     "replay_rational_path",
     "run_subsequential",
@@ -63,10 +73,13 @@ __all__ = [
     "verify_composition",
     "verify_minimization",
     "verify_subsequential_run",
+    "word_morphism_to_subsequential",
 ]
 
 
 MAX_MINIMIZE_SAMPLE_WORDS = 20000
+MAX_MORPHISM_TRANSITION_CELLS = 32 * 512
+MAX_MORPHISM_TRANSDUCER_BYTES = 128 * 1024
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -115,6 +128,94 @@ def _admit_rational_transducer(transducer: object) -> RationalTransducer:
         ) from exc
 
 
+def _admit_word_morphism(morphism: object) -> WordMorphism:
+    if not isinstance(morphism, WordMorphism):
+        _reject("word_morphism_type", "morphism must be a WordMorphism", "morphism")
+    value = cast(WordMorphism, morphism)
+    try:
+        return WordMorphism.model_validate(value.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("morphism",),
+            code="finite_state_transducer.carrier_shape",
+            message="morphism must satisfy its complete canonical carrier shape",
+        ) from exc
+
+
+def word_morphism_to_subsequential(
+    morphism: WordMorphism,
+) -> SubsequentialTransducer:
+    """Represent a bounded word morphism as a one-state total transducer.
+
+    Each source symbol labels one self-loop carrying that symbol's image.
+    The one state is final with empty output, so empty images remain defined
+    empty transition outputs rather than missing transitions.
+    """
+    morphism = _admit_word_morphism(morphism)
+    source_size = len(morphism.source_alphabet)
+    target_size = len(morphism.target_alphabet)
+    if source_size > 32 or target_size > 32:
+        raise OperationResourceAdmissionError(
+            location=("morphism",),
+            code="finite_state_transducer.morphism_alphabet_bound_exceeded",
+            message="source and target alphabets must each have at most 32 symbols",
+        )
+    if any(len(image) > 512 for image in morphism.images):
+        raise OperationResourceAdmissionError(
+            location=("morphism", "images"),
+            code="finite_state_transducer.morphism_image_bound_exceeded",
+            message="each morphism image must fit one transition output (512 symbols)",
+        )
+    mapped_cells = sum(len(image) for image in morphism.images)
+    if mapped_cells > MAX_MORPHISM_TRANSITION_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("morphism", "images"),
+            code="finite_state_transducer.morphism_transition_cells_exceeded",
+            message="aggregate mapped image cells exceed the transition bound",
+        )
+    # No transition output has been expanded to index rows yet. Every target
+    # index is at most 31; the estimate covers indices, commas, transition
+    # records, alphabets, and fixed machine fields.
+    alphabet_bytes = len(
+        encode_strict_json(
+            {
+                "source": list(morphism.source_alphabet),
+                "target": list(morphism.target_alphabet),
+            }
+        )
+    )
+    projected_bytes = alphabet_bytes + 4 * mapped_cells + 512 * source_size + 4096
+    if projected_bytes > MAX_MORPHISM_TRANSDUCER_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("morphism",),
+            code="finite_state_transducer.morphism_result_bytes_exceeded",
+            message="canonical transducer output may exceed the byte bound",
+        )
+
+    target_index = {
+        symbol: index for index, symbol in enumerate(morphism.target_alphabet)
+    }
+    transitions = tuple(
+        SubseqTransition(
+            source=0,
+            input_symbol=input_index,
+            target=0,
+            output=tuple(target_index[symbol] for symbol in image),
+        )
+        for input_index, image in enumerate(morphism.images)
+    )
+    return SubsequentialTransducer(
+        input_alphabet_size=source_size,
+        output_alphabet_size=target_size,
+        state_count=1,
+        initial_state=0,
+        transitions=transitions,
+        final_outputs=(SubseqFinalOutput(state=0, output=()),),
+        input_alphabet=FiniteAlphabet(symbols=morphism.source_alphabet),
+        output_alphabet=FiniteAlphabet(symbols=morphism.target_alphabet),
+    )
+
+
 def _admit_word(word: object, *, field: str) -> tuple[int, ...]:
     if type(word) is not tuple or any(type(symbol) is not int for symbol in word):
         _reject("word_shape", "word must be a tuple of exact integers", field)
@@ -139,16 +240,13 @@ def _final_output_map(
 def run_subsequential(
     transducer: SubsequentialTransducer,
     word: tuple[int, ...],
-) -> tuple[
-    Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
-    tuple[int, ...],
-    int,
-    int | None,
-    tuple[int, ...],
-]:
+) -> SubseqRunResult:
     """Run a subsequential transducer on ``word``.
 
-    Returns ``(status, output, final_state, undefined_position, partial_output)``.
+    Returns status and output data followed by exact prefix traces.  ``state_trace``
+    includes the initial state; each remaining state follows one consumed input
+    symbol.  ``cumulative_outputs`` starts with the empty prefix output and then
+    records transition outputs after each consumed symbol, before final output.
 
     ``status`` is one of ``"OUTPUT"``, ``"UNDEFINED_TRANSITION"``, or
     ``"NONFINAL_DOMAIN_STATE"``.
@@ -176,43 +274,173 @@ def run_subsequential(
             "subsequential output may exceed the result word bound",
             "word",
         )
+    prefix_output_cells = sum(
+        min(prefix_length * transition_bound, MAX_FST_RESULT_WORD_LENGTH)
+        for prefix_length in range(len(word) + 1)
+    )
+    transition_output_cells = min(
+        len(word) * transition_bound, MAX_FST_RESULT_WORD_LENGTH
+    )
+    # The echoed transducer and word are bounded by the admitted carrier
+    # (edge, transition-output, and word-length cardinalities). The trace is
+    # the only kernel-expanded allocation: cumulative rows repeat prefix
+    # outputs, so bound their aggregate cells before any expansion begins.
+    if prefix_output_cells + transition_output_cells > MAX_FST_RUN_RESULT_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "word"),
+            code="finite_state_transducer.run_result_bytes_exceeded",
+            message="the exact run trace may exceed the canonical result cell bound",
+        )
+
+    def result(
+        status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
+        *,
+        output: tuple[int, ...],
+        final_state: int,
+        undefined_position: int | None,
+        partial_output: tuple[int, ...],
+        state_trace: tuple[int, ...],
+        transition_outputs: tuple[tuple[int, ...], ...],
+        cumulative_outputs: tuple[tuple[int, ...], ...],
+        final_output: tuple[int, ...],
+        obstruction_position: int | None,
+        obstruction_state: int | None,
+        obstruction_symbol: int | None,
+    ) -> SubseqRunResult:
+        return SubseqRunResult._from_kernel(
+            transducer=transducer,
+            word=word,
+            status=status,
+            output=output,
+            final_state=final_state,
+            undefined_position=undefined_position,
+            partial_output=partial_output,
+            state_trace=state_trace,
+            transition_outputs=transition_outputs,
+            cumulative_outputs=cumulative_outputs,
+            final_output=final_output,
+            obstruction_position=obstruction_position,
+            obstruction_state=obstruction_state,
+            obstruction_symbol=obstruction_symbol,
+        )
+
     transitions = _transition_map(transducer)
     finals = _final_output_map(transducer)
     state = transducer.initial_state
     accumulated: list[int] = []
+    state_trace = [state]
+    transition_outputs: list[tuple[int, ...]] = []
+    cumulative_outputs: list[tuple[int, ...]] = [()]
     for pos, symbol in enumerate(word):
         key = (state, symbol)
         if key not in transitions:
-            return (
+            return result(
                 "UNDEFINED_TRANSITION",
-                (),
-                state,
-                pos,
-                tuple(accumulated),
+                output=(),
+                final_state=state,
+                undefined_position=pos,
+                partial_output=tuple(accumulated),
+                state_trace=tuple(state_trace),
+                transition_outputs=tuple(transition_outputs),
+                cumulative_outputs=tuple(cumulative_outputs),
+                final_output=(),
+                obstruction_position=pos,
+                obstruction_state=state,
+                obstruction_symbol=symbol,
             )
         target, output = transitions[key]
         accumulated.extend(output)
         if len(accumulated) > MAX_FST_RESULT_WORD_LENGTH:
             raise RuntimeError("admitted subsequential output exceeded its bound")
+        transition_outputs.append(output)
         state = target
+        state_trace.append(state)
+        cumulative_outputs.append(tuple(accumulated))
     if state not in finals:
-        return (
+        return result(
             "NONFINAL_DOMAIN_STATE",
-            (),
-            state,
-            None,
-            tuple(accumulated),
+            output=(),
+            final_state=state,
+            undefined_position=None,
+            partial_output=tuple(accumulated),
+            state_trace=tuple(state_trace),
+            transition_outputs=tuple(transition_outputs),
+            cumulative_outputs=tuple(cumulative_outputs),
+            final_output=(),
+            obstruction_position=len(word),
+            obstruction_state=state,
+            obstruction_symbol=None,
         )
     final_word = finals[state]
     accumulated.extend(final_word)
     if len(accumulated) > MAX_FST_RESULT_WORD_LENGTH:
         raise RuntimeError("admitted subsequential output exceeded its bound")
-    return ("OUTPUT", tuple(accumulated), state, None, ())
+    return result(
+        "OUTPUT",
+        output=tuple(accumulated),
+        final_state=state,
+        undefined_position=None,
+        partial_output=(),
+        state_trace=tuple(state_trace),
+        transition_outputs=tuple(transition_outputs),
+        cumulative_outputs=tuple(cumulative_outputs),
+        final_output=final_word,
+        obstruction_position=None,
+        obstruction_state=None,
+        obstruction_symbol=None,
+    )
 
 
-def identity_transducer(alphabet_size: int) -> SubsequentialTransducer:
-    """Return the identity subsequential transducer on one alphabet."""
+def identity_transducer(
+    alphabet_size: int,
+    *,
+    alphabet: FiniteAlphabet | None = None,
+    alphabet_id: str | None = None,
+) -> SubsequentialTransducer:
+    """Return the identity subsequential transducer on one alphabet.
 
+    When a structural alphabet context is supplied, both sides retain that
+    exact context and identity. The size-only form remains useful for
+    request-scoped integer alphabets.
+    """
+    if type(alphabet_size) is not int or not 0 <= alphabet_size <= MAX_FST_ALPHABET:
+        raise OperationResourceAdmissionError(
+            location=("alphabet",),
+            code="finite_state_transducer.identity_alphabet_bound_exceeded",
+            message="identity alphabet size must be between 0 and 32",
+        )
+    if alphabet is not None:
+        if not isinstance(alphabet, FiniteAlphabet):
+            _reject("alphabet_type", "alphabet must be a FiniteAlphabet", "alphabet")
+        try:
+            alphabet = FiniteAlphabet.model_validate(alphabet.model_dump(), strict=True)
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("alphabet",),
+                code="finite_state_transducer.alphabet_carrier_shape",
+                message="alphabet must satisfy its canonical carrier shape",
+            ) from exc
+        if len(alphabet.symbols) != alphabet_size:
+            _reject(
+                "alphabet_size_mismatch",
+                "alphabet context length must equal alphabet_size",
+                "alphabet",
+            )
+    if alphabet_id is not None and (
+        type(alphabet_id) is not str or len(alphabet_id) > MAX_FST_ALPHABET_ID_LENGTH
+    ):
+        _reject(
+            "alphabet_id_too_long",
+            "alphabet identity exceeds its carrier bound",
+            "alphabet_id",
+        )
+
+    # The identity machine's size is fixed by admitted cardinalities: one
+    # state, one transition per input symbol (at most MAX_FST_ALPHABET of
+    # them), each carrying a single-symbol output, and one empty final
+    # output. The validated FiniteAlphabet carrier bounds each symbol string,
+    # so the canonical result is allocation-bounded without further
+    # admission.
     transitions = tuple(
         SubseqTransition(
             source=0,
@@ -229,6 +457,10 @@ def identity_transducer(alphabet_size: int) -> SubsequentialTransducer:
         initial_state=0,
         transitions=transitions,
         final_outputs=(SubseqFinalOutput(state=0, output=()),),
+        input_alphabet_id=alphabet_id,
+        output_alphabet_id=alphabet_id,
+        input_alphabet=alphabet,
+        output_alphabet=alphabet,
     )
 
 
@@ -251,6 +483,83 @@ def reachable_states(
                 visited.add(target)
                 queue.append(target)
     return visited
+
+
+def reachable_state_witnesses(
+    transducer: SubsequentialTransducer,
+) -> ReachableStatesResult:
+    """Return one shortest, lexicographically first path to each reachable state.
+
+    A witness output concatenates transition outputs along its input path;
+    final outputs are excluded because this describes a prefix reaching a
+    state, whether or not that state is final.
+    """
+    admitted = _admit_transducer(transducer)
+    max_transition_output = max(
+        (len(transition.output) for transition in admitted.transitions), default=0
+    )
+    max_path_output = max(0, admitted.state_count - 1) * max_transition_output
+    max_output_cells = admitted.state_count * max_path_output
+    # Every witness path is simple, so aggregate output cells are bounded by
+    # the state count times the longest path output. The carrier already
+    # bounds transition-output length; check the aggregate allocation bound
+    # before materializing any witness list.
+    if max_output_cells > MAX_FST_REACHABLE_WITNESS_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("transducer",),
+            code="finite_state_transducer.reachable_result_bytes_exceeded",
+            message="shortest-path witness output may exceed the canonical cell bound",
+        )
+
+    transitions = _transition_map(admitted)
+    # Sorted symbol expansion makes the first BFS path to any state the
+    # lexicographically first among all shortest input words.
+    adjacency: dict[int, list[tuple[int, int, tuple[int, ...]]]] = {}
+    for (source, symbol), (target, output) in transitions.items():
+        adjacency.setdefault(source, []).append((symbol, target, output))
+    for row in adjacency.values():
+        row.sort(key=lambda item: item[0])
+
+    parent: dict[int, tuple[int, int, tuple[int, ...]] | None] = {
+        admitted.initial_state: None
+    }
+    queue: deque[int] = deque([admitted.initial_state])
+    while queue:
+        source = queue.popleft()
+        for symbol, target, output in adjacency.get(source, ()):
+            if target not in parent:
+                parent[target] = (source, symbol, output)
+                queue.append(target)
+
+    witnesses = []
+    for state in sorted(parent):
+        symbols: list[int] = []
+        output_words: list[tuple[int, ...]] = []
+        trace = [state]
+        current = state
+        while True:
+            predecessor = parent[current]
+            if predecessor is None:
+                break
+            previous, symbol, output = predecessor
+            symbols.append(symbol)
+            output_words.append(output)
+            current = previous
+            trace.append(current)
+        symbols.reverse()
+        output_words.reverse()
+        trace.reverse()
+        witnesses.append(
+            ReachableStateWitness(
+                state=state,
+                input_word=tuple(symbols),
+                output_word=tuple(symbol for word in output_words for symbol in word),
+                state_trace=tuple(trace),
+            )
+        )
+    return ReachableStatesResult._from_kernel(
+        transducer=admitted, witnesses=tuple(witnesses)
+    )
 
 
 def coaccessible_states(
@@ -673,13 +982,7 @@ def verify_subsequential_run(claim: SubseqRunResult) -> bool:
 
     try:
         expected = run_subsequential(claim.transducer, claim.word)
-        return expected == (
-            claim.status,
-            claim.output,
-            claim.final_state,
-            claim.undefined_position,
-            claim.partial_output,
-        )
+        return expected == claim
     except (TypeError, ValueError, OperationDomainValidationError):
         return False
 
@@ -1224,15 +1527,15 @@ def minimize_subsequential(
     )
     sample_words = _iter_sample_words(transducer.input_alphabet_size, sample_max_length)
     for word in sample_words:
-        source_status, source_output, _, _, _ = run_subsequential(transducer, word)
-        minimized_status, minimized_output, _, _, _ = run_subsequential(minimized, word)
+        source_run = run_subsequential(transducer, word)
+        minimized_run = run_subsequential(minimized, word)
         # The shipped trim/run semantics preserve the realized partial
         # function: definedness with equal output words. Distinct failure
         # modes (undefined transition vs nonfinal state) both mean the word
         # is outside the domain.
-        if (source_status == "OUTPUT", source_output) != (
-            minimized_status == "OUTPUT",
-            minimized_output,
+        if (source_run.status == "OUTPUT", source_run.output) != (
+            minimized_run.status == "OUTPUT",
+            minimized_run.output,
         ):
             raise RuntimeError("minimized transducer disagrees with its source")
     old_to_new = tuple(

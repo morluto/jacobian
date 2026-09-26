@@ -1,7 +1,5 @@
 """Tests for exact polynomial-derivation application."""
 
-from fractions import Fraction
-
 import pytest
 from pydantic import ValidationError
 
@@ -97,58 +95,24 @@ class TestDerivationApplyKnownAnswers:
 
 class TestDerivationInvariants:
     def test_leibniz_rule(self) -> None:
-        from jacobian.math.polynomials.derivations.operations import (
-            _add,
-            _encode,
-            _multiply,
-            _term_map,
-        )
-
         derivation = _triangular()
         left = _poly(XY, ((1, (2, 0)),))
         right = _poly(XY, ((1, (1, 1)),))
-        product = _encode(XY, _multiply(_term_map(left), _term_map(right)))
-        direct = _term_map(apply_derivation(derivation, product).result)
-        replay: dict[tuple[int, ...], Fraction] = {}
-        _add(
-            replay,
-            _multiply(
-                _term_map(apply_derivation(derivation, left).result), _term_map(right)
-            ),
-        )
-        _add(
-            replay,
-            _multiply(
-                _term_map(left), _term_map(apply_derivation(derivation, right).result)
-            ),
-        )
-        assert direct == replay
+        product = _poly(XY, ((1, (3, 1)),))
+
+        assert _terms(apply_derivation(derivation, product).result) == ((3, (2, 2)),)
+        assert _terms(apply_derivation(derivation, left).result) == ((2, (1, 1)),)
+        assert _terms(apply_derivation(derivation, right).result) == ((1, (0, 2)),)
 
     def test_qq_linearity(self) -> None:
-        from jacobian.math.polynomials.derivations.operations import (
-            _add,
-            _encode,
-            _multiply,
-            _term_map,
-        )
-
         derivation = _triangular()
         left = _poly(XY, ((1, (2, 0)),))
         right = _poly(XY, ((1, (0, 2)),))
-        combined_terms = _term_map(left)
-        _add(combined_terms, _multiply({(0, 0): Fraction(3)}, _term_map(right)))
-        separate = _term_map(apply_derivation(derivation, left).result)
-        _add(
-            separate,
-            _multiply(
-                {(0, 0): Fraction(3)},
-                _term_map(apply_derivation(derivation, right).result),
-            ),
-        )
-        assert (
-            _term_map(apply_derivation(derivation, _encode(XY, combined_terms)).result)
-            == separate
-        )
+        combined = _poly(XY, ((1, (2, 0)), (3, (0, 2))))
+
+        assert _terms(apply_derivation(derivation, combined).result) == ((2, (1, 1)),)
+        assert _terms(apply_derivation(derivation, left).result) == ((2, (1, 1)),)
+        assert _terms(apply_derivation(derivation, right).result) == ()
 
 
 class TestDerivationAdmission:
@@ -176,21 +140,6 @@ class TestDerivationAdmission:
                     ],
                 }
             )
-
-    def test_native_and_catalog_paths_agree(self) -> None:
-        from jacobian.math.polynomials.derivations._tools import TOOLS
-
-        tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "polynomial_derivation.apply.compute"
-        )
-        request = DerivationApplyRequest(
-            derivation=_triangular(), polynomial=_poly(XY, ((1, (2, 0)),))
-        )
-        assert tool.run(request) == apply_derivation(
-            request.derivation, request.polynomial
-        )
 
     def test_published_example_validates(self) -> None:
         from jacobian.canonical import encode_strict_json

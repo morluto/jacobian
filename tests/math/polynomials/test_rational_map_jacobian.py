@@ -115,8 +115,21 @@ def test_many_sparse_rows_and_eight_axis_support() -> None:
     )
     result = jacobian_matrix(source)
     assert len(result.entries) == 1024
-    assert result.entries[0] == result.entries[-1]
-    assert result.entries[0][0].numerator.terms[0].coefficient.num == 64
+    for row in result.entries:
+        assert len(row) == len(axes)
+        for differentiated_axis, entry in enumerate(row):
+            assert len(entry.numerator.terms) == 1
+            numerator = entry.numerator.terms[0]
+            expected_exponents = tuple(
+                63 if axis == differentiated_axis else 64
+                for axis in range(len(axes))
+            )
+            assert numerator.exponents == expected_exponents
+            assert numerator.coefficient.as_fraction() == 64
+            assert len(entry.denominator.terms) == 1
+            denominator = entry.denominator.terms[0]
+            assert denominator.exponents == (0,) * len(axes)
+            assert denominator.coefficient.as_fraction() == 1
 
 
 def test_aggregate_output_allocation_rejects_whole_map() -> None:

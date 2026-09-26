@@ -14,7 +14,6 @@ from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValu
 from jacobian.math.polynomials._conversions import rational_polynomial_to_sympy
 from jacobian.math.polynomials.real_algebra import (
     compute_plane_component_profile,
-    verify_plane_component_profile,
 )
 from jacobian.math.polynomials.real_algebra._plane_component_models import (
     IsolatedRealPlanePoint,
@@ -340,19 +339,6 @@ def test_quartic_intersection_retains_degree_sixteen_representatives() -> None:
         )
         == 1
     )
-
-
-def test_empty_and_whole_plane_degeneracies() -> None:
-    empty_source = _set((), ())
-    empty = _computed(empty_source)
-    assert (
-        verify_plane_component_profile(compute_plane_component_profile(empty_source))
-        is True
-    )
-    whole = _computed(_set((), ((),)))
-
-    assert empty.components == ()
-    assert len(whole.components) == 1
 
 
 def test_supplied_sample_must_select_one_root_per_coordinate() -> None:

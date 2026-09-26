@@ -129,15 +129,6 @@ def test_native_vector_operations_reject_malformed_fields_at_admission() -> None
         divergence((x, y, x))
 
 
-def test_gradient_returns_composable_polynomials() -> None:
-    source = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
-    result = _run_gradient(ScalarFieldRequest(polynomial=source))
-    assert result.components == (
-        _polynomial(("x", "y"), {(1, 0): 2}),
-        _polynomial(("x", "y"), {(0, 1): 2}),
-    )
-
-
 def test_gradient_admits_sparse_inactive_axes_beyond_dense_proxy() -> None:
     """A vector result retains only the axes on which each monomial survives."""
 
@@ -164,7 +155,13 @@ def test_gradient_admits_sparse_inactive_axes_beyond_dense_proxy() -> None:
     assert verify_gradient(VectorResult.model_validate_json(native.model_dump_json()))
 
 
-def test_gradient_termwise_oracle_covers_mixed_axis_support() -> None:
+def test_gradient_exact_and_termwise_oracles_cover_simple_and_mixed_support() -> None:
+    simple = _polynomial(("x", "y"), {(2, 0): 1, (0, 2): 1})
+    assert _run_gradient(ScalarFieldRequest(polynomial=simple)).components == (
+        _polynomial(("x", "y"), {(1, 0): 2}),
+        _polynomial(("x", "y"), {(0, 1): 2}),
+    )
+
     source = _polynomial(
         ("x", "y", "z"),
         {

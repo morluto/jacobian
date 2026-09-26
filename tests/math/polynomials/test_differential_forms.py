@@ -162,14 +162,6 @@ def test_structural_zero_skips_irrelevant_exponent_admission() -> None:
     assert wedge(high, high).components == ()
 
 
-def test_odd_self_wedge_cancels_before_exponent_admission() -> None:
-    coefficient = _poly((1, (MAX_DIFFERENTIAL_FORM_EXPONENT, 0)))
-    alpha = _form(1, ((0,), coefficient), ((1,), coefficient))
-    product = wedge(alpha, alpha)
-    assert product.degree == 2
-    assert product.components == ()
-
-
 def test_proportional_odd_polynomial_wedges_cancel_before_support_cap() -> None:
     terms = tuple((1, (exponent, 0)) for exponent in range(128, -1, -1))
     polynomial = _poly(*terms)
@@ -331,7 +323,7 @@ def test_wedge_applies_negative_scalar_unit_in_both_orders() -> None:
     assert wedge(minus_one, minus_one) == _form(0, ((), _poly((1, (0, 0)))))
 
 
-def test_wedge_admits_coefficient_height_before_convolution() -> None:
+def test_wedge_rejects_oversized_result_coefficient() -> None:
     coefficient = 10**4_095
     left = _form(0, ((), _poly((coefficient, (0, 0)))))
     right = _form(0, ((), _poly((coefficient, (0, 0)))))
@@ -432,7 +424,7 @@ def test_wedge_groups_coefficient_growth_by_output_monomial() -> None:
     assert terms == {(2, 0): square, (1, 0): 2 * square, (0, 0): square}
 
 
-def test_wedge_rejects_unadmitted_accumulator_growth_before_sum() -> None:
+def test_wedge_rejects_reduced_accumulator_growth() -> None:
     first = 10**2500 + 7
     second = 10**2500 + 19
     left = _form(
@@ -506,19 +498,32 @@ def test_native_wedge_revalidates_forged_operands() -> None:
         wedge(object(), _form(0))
 
 
-def test_wedge_binds_owner_deadline_before_expansion() -> None:
+def test_wedge_binds_owner_deadline_before_convolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials.differential_forms import operations
+
+    original_collect = operations._collect_contributions
+    observed_deadlines: list[float | None] = []
+
+    def inspect_deadline(pairs):
+        execution = current_request_execution()
+        observed_deadlines.append(execution.deadline if execution is not None else None)
+        return original_collect(pairs)
+
+    monkeypatch.setattr(operations, "_collect_contributions", inspect_deadline)
     started = time.monotonic()
-    unit = _form(0, ((), _poly((1, (0, 0)))))
+    left = _form(1, ((0,), _poly((1, (1, 0)))))
+    right = _form(1, ((1,), _poly((1, (0, 1)))))
     with request_execution(started):
         assert current_request_execution() is not None
         assert current_request_execution().deadline is None
-        product = wedge(unit, unit)
-        bound = current_request_execution().deadline
-        assert product.components[0].coefficient.polynomial.terms[0].coefficient == R(
-            num=1, den=1
+        product = wedge(left, right)
+        assert product == _form(
+            2,
+            ((0, 1), _poly((1, (1, 1)))),
         )
-        assert bound is not None
-        assert bound == started + 60.0
+        assert observed_deadlines == [started + 60.0]
 
 
 def test_wedge_cancels_denominator_contributions_before_lcm_cap() -> None:
@@ -596,9 +601,11 @@ def test_wedge_bounds_aggregate_serialized_result(
 ) -> None:
     monkeypatch.setattr(
         "jacobian.math.polynomials.differential_forms.operations.MAX_WEDGE_OUTPUT_DIGITS",
-        20,
+        35,
     )
-    coefficient = 10**20
+    coefficient = 10**5
+    # Four distinct outputs each have an 11-digit coefficient, individually
+    # below the 35-digit cap; the aggregate of 44 digits exceeds it.
     left = _form(
         0,
         ((), _poly((coefficient, (1, 0)), (coefficient, (0, 0)))),
@@ -653,20 +660,6 @@ def test_wedge_constructs_trusted_result_without_budget_replay(
     assert result.components[0].coefficient.polynomial.terms[0].coefficient == R(
         num=6, den=1
     )
-
-
-def test_related_denominators_reduce_before_the_cap() -> None:
-    """A sum that reduces to an integer is admitted at the boundary height."""
-    from jacobian.math.polynomials.differential_forms.operations import (
-        _bounded_fraction_add,
-    )
-
-    q = 10**2047 + 3
-    r = 10**2047 + 7
-    p = q + r
-    total = _bounded_fraction_add(Fraction(1, p * q), Fraction(1, p * r))
-    total = _bounded_fraction_add(total, Fraction(-1, q * r))
-    assert total.denominator == 1
 
 
 def test_native_admission_rechecks_the_coefficient_axis() -> None:

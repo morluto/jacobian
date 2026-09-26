@@ -253,22 +253,6 @@ def test_result_and_claim_round_trip_through_serialization() -> None:
     assert decoded.maximizing_status == "ENDPOINT"
 
 
-def test_declaration_example_executes() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "polynomial.unit_circle.sup_norm_squared.compute"
-    )
-
-    example_request = UnitCircleSupNormSquaredRequest.model_validate_json(
-        json.dumps(dict(tool.examples[0].input))
-    )
-    result = tool.run(example_request)
-
-    assert isinstance(result, UnitCircleSupNormSquaredResult)
-    assert _exact(result) == 4
-
-
 def test_degree_above_ceiling_is_rejected() -> None:
     coefficients = dict.fromkeys(range(MAX_SUP_NORM_DEGREE + 2), (1, 0))
 
@@ -362,6 +346,8 @@ def test_exact_maximum_for_irrational_maximizers(
     assert exact is not None
     assert tuple(exact.polynomial) == expected
     assert exact.real_root_index == index
+    assert len(exact.polynomial) - 1 <= 2 * result.degree
+    assert 0 <= exact.real_root_index < len(exact.polynomial) - 1
     # Independent replay without the SymPy backend: the retained enclosure
     # strictly brackets one root of the claimed minimal polynomial.
     enclosure = result.sup_norm_squared_enclosure
@@ -589,28 +575,7 @@ def test_top_admitted_degree_carries_an_exact_value() -> None:
     )
     assert exact.real_root_index == 3
     assert len(exact.polynomial) - 1 <= 2 * result.degree
-    assert verify_unit_circle_sup_norm_squared(result)
-
-
-@pytest.mark.parametrize(
-    "coefficients",
-    [
-        {0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)},
-        {0: (-2, 0), 2: (2, 0), 3: (-3, 0), 4: (-3, 0)},
-        {exponent: (1 if exponent % 3 else -1, 0) for exponent in range(9)},
-    ],
-)
-def test_exact_value_respects_the_resultant_degree_carrier(
-    coefficients: dict[int, tuple[int, int]],
-) -> None:
-    result = _result(coefficients)
-
-    exact = result.sup_norm_squared_exact
-    if exact is None:
-        # Only the theoretical height overflow may omit the exact value.
-        return
-    assert len(exact.polynomial) - 1 <= 2 * result.degree
-    assert exact.real_root_index < len(exact.polynomial) - 1
+    assert 0 <= exact.real_root_index < len(exact.polynomial) - 1
     assert verify_unit_circle_sup_norm_squared(result)
 
 

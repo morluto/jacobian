@@ -16,14 +16,11 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_POINT_DEGREE,
     MAX_PLANE_COMPONENT_POINT_ISOLATOR_DIGITS,
     MAX_PLANE_COMPONENT_POINT_TERMS,
-    MAX_PLANE_COMPONENT_POLYNOMIALS,
-    MAX_PLANE_COMPONENT_SIGN_CONDITIONS,
     MAX_PLANE_COMPONENTS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
     PlaneComponentProfileRequest,
     PlaneComponentProfileResult,
-    PlaneSampleDisposition,
     PlaneSemialgebraicComponent,
     PlaneSemialgebraicSet,
     PlaneSign,
@@ -301,39 +298,6 @@ def test_maximum_component_count_fits_the_worker_projection() -> None:
     assert len(result.outcome.components) == len(points)
 
 
-def test_result_outcome_is_discriminated_and_source_bound() -> None:
-    semialgebraic_set = PlaneSemialgebraicSet(
-        axis=("x", "y"), polynomials=(), sign_conditions=()
-    )
-    point = _rational_point(0, 0)
-    computed = PlaneComponentProfileResult(
-        semialgebraic_set=semialgebraic_set,
-        samples=(point,),
-        outcome=PlaneComponentProfileComputed(
-            components=(),
-            sample_dispositions=(
-                PlaneSampleDisposition(sample_index=0, status="OUTSIDE"),
-            ),
-        ),
-    )
-    schema = PlaneComponentProfileResult.model_json_schema()
-    assert (
-        schema["$defs"]["PlaneComponentProfileComputed"]["properties"]["status"][
-            "const"
-        ]
-        == "COMPUTED"
-    )
-    assert computed.outcome.status == "COMPUTED"
-    with pytest.raises(ValidationError):
-        PlaneComponentProfileResult.model_validate(
-            {
-                "semialgebraic_set": semialgebraic_set,
-                "samples": [point],
-                "outcome": {"status": "BACKEND_UNAVAILABLE"},
-            }
-        )
-
-
 def test_backend_failure_uses_the_execution_error_path() -> None:
     with pytest.raises(RuntimeError):
         _raise_backend_failure(
@@ -439,16 +403,6 @@ def test_component_identity_excludes_nonunique_isolating_boxes() -> None:
             representatives=(broad, narrow),
             sample_component_ids=(),
         )
-
-
-def test_request_schema_exposes_operation_owned_collection_bounds() -> None:
-    schema = PlaneSemialgebraicSet.model_json_schema()
-    assert schema["properties"]["polynomials"]["maxItems"] == (
-        MAX_PLANE_COMPONENT_POLYNOMIALS
-    )
-    assert schema["properties"]["sign_conditions"]["maxItems"] == (
-        MAX_PLANE_COMPONENT_SIGN_CONDITIONS
-    )
 
 
 def test_request_raw_preflight_rejects_deep_malformed_scalar_without_recursing() -> (

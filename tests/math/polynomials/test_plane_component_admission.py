@@ -39,6 +39,7 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_TOTAL_DEGREE,
     MAX_PLANE_COMPONENT_TOTAL_TERMS,
     MAX_PLANE_COMPONENTS,
+    MAX_PLANE_COMPONENT_SIGN_CONDITIONS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
     PlaneComponentProfileRequest,
@@ -266,9 +267,16 @@ def test_degree_and_coefficient_height_boundaries_are_inclusive() -> None:
 
 def test_request_schema_exposes_the_runtime_polynomial_envelope() -> None:
     schema = PlaneComponentProfileRequest.model_json_schema()
-    polynomial = schema["properties"]["semialgebraic_set"]["properties"]["polynomials"][
-        "items"
-    ]
+    semialgebraic_set_schema = schema["properties"]["semialgebraic_set"]
+    assert (
+        semialgebraic_set_schema["properties"]["polynomials"]["maxItems"]
+        == MAX_PLANE_COMPONENT_POLYNOMIALS
+    )
+    assert (
+        semialgebraic_set_schema["properties"]["sign_conditions"]["maxItems"]
+        == MAX_PLANE_COMPONENT_SIGN_CONDITIONS
+    )
+    polynomial = semialgebraic_set_schema["properties"]["polynomials"]["items"]
     terms = polynomial["properties"]["polynomial"]["properties"]["terms"]
     term = terms["items"]
     exponents = term["properties"]["exponents"]
@@ -316,21 +324,26 @@ def test_request_schema_exposes_the_runtime_polynomial_envelope() -> None:
 
 def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
     schema = PlaneComponentProfileResult.model_json_schema()
+    computed_schema = schema["$defs"]["PlaneComponentProfileComputed"]
+    assert computed_schema["properties"]["status"]["const"] == "COMPUTED"
     polynomial = schema["properties"]["semialgebraic_set"]["properties"]["polynomials"][
         "items"
     ]
     terms = polynomial["properties"]["polynomial"]["properties"]["terms"]
     assert terms["maxItems"] == MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL
 
-    result = PlaneComponentProfileResult(
-        semialgebraic_set=PlaneSemialgebraicSet(
-            axis=("x", "y"),
-            polynomials=(_polynomial(((1, (1, 0)),)),),
-            sign_conditions=(),
-        ),
+    semialgebraic_set = PlaneSemialgebraicSet(
+        axis=("x", "y"),
+        polynomials=(_polynomial(((1, (1, 0)),)),),
+        sign_conditions=(),
+    )
+    result_model = PlaneComponentProfileResult(
+        semialgebraic_set=semialgebraic_set,
         samples=(),
         outcome=PlaneComponentProfileComputed(components=(), sample_dispositions=()),
-    ).model_dump(mode="json")
+    )
+    assert result_model.outcome.status == "COMPUTED"
+    result = result_model.model_dump(mode="json")
     result["semialgebraic_set"]["polynomials"][0]["polynomial"]["terms"].extend(
         {
             "coefficient": {"num": "1", "den": "1"},
@@ -340,6 +353,18 @@ def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
     )
     with pytest.raises(ValidationError):
         PlaneComponentProfileResult.model_validate(result)
+
+    unknown_status = result_model.model_dump(mode="json")
+    unknown_status["outcome"] = {"status": "BACKEND_UNAVAILABLE"}
+    with pytest.raises(ValidationError):
+        PlaneComponentProfileResult.model_validate(unknown_status)
+
+    with pytest.raises(ValidationError, match="one disposition per supplied sample"):
+        PlaneComponentProfileResult(
+            semialgebraic_set=semialgebraic_set,
+            samples=(_sample(0),),
+            outcome=PlaneComponentProfileComputed(components=(), sample_dispositions=()),
+        )
 
 
 def test_term_and_total_term_boundaries_reject_before_backend_execution() -> None:

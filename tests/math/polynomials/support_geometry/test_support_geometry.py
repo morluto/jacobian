@@ -137,6 +137,7 @@ class TestSupport:
             InitialFormRequest(polynomial=source, weight=(1, 2))
         )
         decoded = PolynomialFaceData.model_validate_json(genuine.model_dump_json())
+        assert decoded == genuine
         assert verify_polynomial_face_data(decoded)
         forged = genuine.model_copy(
             update={"initial_form": _polynomial((_term(1, [0, 0]),), VARS)}
@@ -388,18 +389,32 @@ class TestSupport:
         )
 
     def test_verifiers_accept_zero_variable_constant_round_trip(self) -> None:
-        source = _polynomial((_term(1, []),), ())
+        source = _polynomial((_term(5, []),), ())
         profile = weight_profile(source, ())
         face = initial_form(source, ())
 
+        assert profile.weight == ()
+        assert profile.minimum_weight == 0
+        assert profile.minimizing_exponents == ((),)
+        assert profile.weight_layers == ((0, ((),)),)
+        assert profile.polynomial.variables == ()
+        assert face.weight == ()
+        assert face.polynomial.variables == ()
+        assert face.initial_form.variables == ()
+        assert len(face.initial_form.polynomial.terms) == 1
+        face_term = face.initial_form.polynomial.terms[0]
+        assert (face_term.coefficient.num, face_term.coefficient.den) == (5, 1)
+        assert face_term.exponents == ()
         assert verify_polynomial_weight_profile(profile)
         assert verify_polynomial_face_data(face)
-        assert verify_polynomial_weight_profile(
-            PolynomialWeightProfile.model_validate_json(profile.model_dump_json())
+        restored_profile = PolynomialWeightProfile.model_validate_json(
+            profile.model_dump_json()
         )
-        assert verify_polynomial_face_data(
-            PolynomialFaceData.model_validate_json(face.model_dump_json())
-        )
+        restored_face = PolynomialFaceData.model_validate_json(face.model_dump_json())
+        assert restored_profile == profile
+        assert restored_face == face
+        assert verify_polynomial_weight_profile(restored_profile)
+        assert verify_polynomial_face_data(restored_face)
 
     def test_verifiers_accept_monic_polynomial_subtype(self) -> None:
         from jacobian._exact import CanonicalRational
@@ -496,6 +511,7 @@ class TestSupport:
         )
         assert not result.is_zero
         assert result.term_count == 3
+        assert result.exponents == ((2, 0), (1, 1), (0, 2))
         assert result.coordinate_min == (0, 0)
         assert result.coordinate_max == (2, 2)
         assert result.total_degree_min == 2
@@ -506,15 +522,20 @@ class TestSupport:
         result = compute_support(SupportRequest(polynomial=source))
         assert result.is_zero
         assert result.term_count == 0
+        assert result.total_degree_min is None
+        assert result.total_degree_max is None
         assert result.polynomial is source
         assert result.polynomial.domain == "QQ"
         assert result.polynomial.variables == VARS
 
-    def test_accepts_canonical_polynomial_value(self) -> None:
-        """A serialized producer result validates unchanged as request input."""
-        request = SupportRequest(polynomial=_polynomial(_XY_TERMS, VARS))
-        revalidated = SupportRequest.model_validate(request.model_dump())
-        assert revalidated.polynomial == request.polynomial
+        empty_axis_zero = _polynomial((), ())
+        empty_axis_result = compute_support(
+            SupportRequest(polynomial=empty_axis_zero)
+        )
+        assert empty_axis_result.is_zero
+        assert empty_axis_result.exponents == ()
+        assert empty_axis_result.polynomial is empty_axis_zero
+        assert empty_axis_result.polynomial.variables == ()
 
     def test_result_retains_source_for_json_composition(self) -> None:
         """Support output carries one canonical source into another operation."""
@@ -662,6 +683,8 @@ class TestWeightProfile:
 
         # There should be one weight layer (all at weight 2)
         assert len(result.weight_layers) == 1
+        assert result.minimizing_exponents == ((0, 2), (1, 1), (2, 0))
+        assert result.weight_layers == ((2, ((0, 2), (1, 1), (2, 0))),)
 
     def test_weight_profile_nonuniform(self) -> None:
         result = compute_weight_profile(
@@ -697,11 +720,12 @@ class TestWeightProfile:
 
 class TestInitialForm:
     def test_initial_form_uniform(self) -> None:
+        source = _polynomial(_XY_TERMS, VARS)
         result = compute_initial_form(
-            InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=(1, 1))
+            InitialFormRequest(polynomial=source, weight=(1, 1))
         )
         # All terms at min weight 2, so initial form is the whole polynomial
-        assert len(result.initial_form.polynomial.terms) == 3
+        assert result.initial_form == source
 
     def test_initial_form_nonuniform(self) -> None:
         result = compute_initial_form(
@@ -722,18 +746,6 @@ class TestInitialForm:
         term = result.initial_form.polynomial.terms[0]
         assert tuple(term.exponents) == (0, 2)
         assert term.coefficient.num == 5
-
-    def test_initial_form_binds_to_canonical_value(self) -> None:
-        """The result round-trips as a canonical value."""
-        from jacobian.math.polynomials.support_geometry.values import (
-            PolynomialFaceData,
-        )
-
-        result = compute_initial_form(
-            InitialFormRequest(polynomial=_polynomial(_XY_TERMS, VARS), weight=(1, 0))
-        )
-        revalidated = PolynomialFaceData.model_validate(result.model_dump())
-        assert revalidated.initial_form.variables == VARS
 
     def test_initial_form_composes_as_polynomial_input(self) -> None:
         """The returned canonical value feeds another request unchanged."""
@@ -798,13 +810,6 @@ class TestNewtonInvariants:
                 all_support_exponents=((2, 0), (1, 1)),
             )
 
-    def test_empty_support_has_no_degree_extrema(self) -> None:
-
-        result = compute_support(SupportRequest(polynomial=_polynomial((), VARS)))
-        assert result.is_zero
-        assert result.total_degree_min is None
-        assert result.total_degree_max is None
-
 
 class TestNativeSurface:
     def test_domain_value_kernels(self) -> None:
@@ -817,8 +822,11 @@ class TestNativeSurface:
         polynomial = _polynomial(_XY_TERMS, VARS)
         support = exponent_support(polynomial)
         assert support.term_count == 3
+        assert support.exponents == ((2, 0), (1, 1), (0, 2))
         polytope = newton_polytope(polynomial)
-        assert polytope.vertices is not None
+        assert set(polytope.vertices) == {(2, 0), (0, 2)}
+        assert polytope.nonextreme == ((1, 1),)
+        assert polytope.affine_dimension == 1
 
     def test_native_weighted_functions_keep_domain_validation(self) -> None:
         """Native weighted calls reject the zero polynomial and mismatched
@@ -1241,11 +1249,6 @@ class TestSupportValueInvariants:
                     }
                 )
 
-    def test_constant_polynomial_retains_empty_variable_axis(self) -> None:
-        polynomial = _polynomial((), ())
-        assert polynomial.variables == ()
-        assert polynomial.polynomial.terms == ()
-
     def test_duplicate_newton_points_rejected(self) -> None:
         """Retained vertices, nonextreme points, and support are sets of
         distinct exponents; duplicates would make the tuple fields
@@ -1276,33 +1279,3 @@ class TestSupportValueInvariants:
                     "all_support_exponents": [[0], [0]],
                 }
             )
-
-
-class TestConstantAxisComposition:
-    def test_empty_weight_for_a_zero_variable_polynomial(self) -> None:
-        """A constant with no variables accepts the empty weight vector."""
-        polynomial = RationalPolynomial.model_validate(
-            {
-                "variables": [],
-                "polynomial": {
-                    "terms": [{"coefficient": {"num": 5, "den": 1}, "exponents": []}]
-                },
-            }
-        )
-        request = WeightProfileRequest(polynomial=polynomial, weight=())
-        result = compute_weight_profile(request)
-        restored = type(result).model_validate_json(result.model_dump_json())
-        assert restored == result
-
-    def test_empty_weight_for_an_initial_form(self) -> None:
-        polynomial = RationalPolynomial.model_validate(
-            {
-                "variables": [],
-                "polynomial": {
-                    "terms": [{"coefficient": {"num": 5, "den": 1}, "exponents": []}]
-                },
-            }
-        )
-        request = InitialFormRequest(polynomial=polynomial, weight=())
-        result = compute_initial_form(request)
-        assert result is not None

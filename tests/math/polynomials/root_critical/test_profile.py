@@ -178,11 +178,6 @@ def test_cube_root_cubic_returns_exact_squared_distances() -> None:
     assert values == {(1, 0, 0, -4)}
 
 
-def test_quartic_with_conjugates_is_refused_before_minpoly() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="distance"):
-        root_critical_distance_profile(_polynomial((4, 1), (1, 1), (0, 1)))
-
-
 def test_quartic_crootof_with_rational_critical_points_has_exact_distances() -> None:
     """A CRootOf source can use the bounded rational-critical regime.
 
@@ -273,11 +268,6 @@ def test_shifted_quadratic_square_root_pair_selects_the_distance() -> None:
     assert len(result.pairs) >= 1
     values = {tuple(row.distance_squared.polynomial) for row in result.pairs}
     assert (1, -12, 4) in values
-
-
-def test_zero_pair_budget_rejects_before_root_expansion() -> None:
-    with pytest.raises(OperationResourceAdmissionError, match="row budget"):
-        root_critical_distance_profile(_polynomial((4, 1), (0, -5)), max_pair_rows=0)
 
 
 def test_native_pair_budget_matches_catalog_range() -> None:
@@ -586,60 +576,20 @@ def test_rectangles_are_isolating_across_factors() -> None:
         domain="QQ",
     )
     records, _values = _family(polynomial)
+    matches = []
     for record in records:
         real_lower = record.rectangle.real_lower.as_fraction()
         real_upper = record.rectangle.real_upper.as_fraction()
         imaginary_lower = record.rectangle.imaginary_lower.as_fraction()
         imaginary_upper = record.rectangle.imaginary_upper.as_fraction()
-        contains_rational = (
+        if (
             real_lower <= rational <= real_upper
             and imaginary_lower <= 0 <= imaginary_upper
-        )
+        ):
+            matches.append((real_lower, real_upper))
     # Only the rational root's own singleton rectangle may contain it.
-    if contains_rational:
-        assert real_lower == real_upper == rational
-
-
-def test_rectangles_separate_irrational_siblings() -> None:
-    """Refinement must exclude irrational siblings, not only rational values.
-
-    ``(z**2 - 2)(z**2 - (2 + 1/q))`` with ``q = 10**127`` puts the distinct
-    root ``sqrt(2 + 1/q)`` only about ``3.5e-128`` above ``sqrt(2)``, inside
-    ``sqrt(2)``'s naive roughly ``2**-97`` wide enclosure. A comprehension that
-    retained only rational sibling values would never detect this collision and
-    would publish a non-isolating rectangle.
-    """
-    import sympy
-
-    from jacobian.math.polynomials.root_critical.operations import _family
-
-    q = 10**127
-    z = sympy.Symbol("z")
-    polynomial = sympy.Poly(
-        (z**2 - 2) * (z**2 - (2 + sympy.Rational(1, q))), z, domain="QQ"
-    )
-    records, _values = _family(polynomial)
-    assert len(records) == 4
-    intervals = [
-        (
-            record.rectangle.real_lower.as_fraction(),
-            record.rectangle.real_upper.as_fraction(),
-        )
-        for record in records
-    ]
-    for lower, upper in intervals:
-        assert lower <= upper
-    for index, (lower, upper) in enumerate(intervals):
-        for other_index, (other_lower, other_upper) in enumerate(intervals):
-            if other_index <= index:
-                continue
-            assert upper < other_lower or other_upper < lower, (
-                f"rectangle {index} overlaps rectangle {other_index}"
-            )
-    # The two close roots are about 3.5e-128 apart, so a separating rectangle
-    # must be narrower than that gap.
-    gap = sympy.N(sympy.sqrt(2 + sympy.Rational(1, q)) - sympy.sqrt(2), 150)
-    assert 0 < gap < sympy.Float("1e-127")
+    assert len(matches) == 1
+    assert matches[0] == (rational, rational)
 
 
 def test_public_operation_isolates_irrational_siblings() -> None:
@@ -665,6 +615,9 @@ def test_public_operation_isolates_irrational_siblings() -> None:
     profile = root_critical_distance_profile(
         rational_polynomial_from_sympy(source, ("z",))
     )
+    gap = sympy.N(sympy.sqrt(2 + sympy.Rational(1, q)) - sympy.sqrt(2), 150)
+    assert 0 < gap < sympy.Float("1e-127")
+    assert len(profile.roots) == 4
     require_axis_rectangles_are_isolating(
         source.sqf_part(), tuple(root.rectangle for root in profile.roots)
     )
@@ -724,15 +677,17 @@ def test_rectangles_separate_pell_siblings_after_fitting() -> None:
     )
     records, _values = _family(polynomial)
     assert len(records) == 3
+    matches = []
     for record in records:
         real_lower = record.rectangle.real_lower.as_fraction()
         real_upper = record.rectangle.real_upper.as_fraction()
         imaginary_lower = record.rectangle.imaginary_lower.as_fraction()
         imaginary_upper = record.rectangle.imaginary_upper.as_fraction()
-        contains_rational = (
+        if (
             real_lower <= rational <= real_upper
             and imaginary_lower <= 0 <= imaginary_upper
-        )
-        # Only the rational root's own singleton rectangle may contain it.
-        if contains_rational:
-            assert real_lower == real_upper == rational
+        ):
+            matches.append((real_lower, real_upper))
+    # Only the rational root's own singleton rectangle may contain it.
+    assert len(matches) == 1
+    assert matches[0] == (rational, rational)

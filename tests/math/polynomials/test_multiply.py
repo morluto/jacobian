@@ -31,8 +31,10 @@ def test_multiply_x_plus_1() -> None:
     result = rational_polynomial_multiply(request)
     # Result should be x^2 + 2x + 1
     terms = result.polynomial.terms
-    # Check we have 3 terms
-    assert len(terms) == 3
+    assert [
+        (term.exponents, term.coefficient.num, term.coefficient.den)
+        for term in terms
+    ] == [((2,), 1, 1), ((1,), 2, 1), ((0,), 1, 1)]
 
 
 def test_rejects_product_support_budget() -> None:

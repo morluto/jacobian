@@ -77,12 +77,16 @@ def test_additive_identity_absorbs_on_both_sides() -> None:
         semiring = _semiring(convention)
         finite = _finite(semiring, Fraction(-7, 3))
         zero = _infinite(semiring)
-        for left, right in ((finite, zero), (zero, finite)):
+        for left, right, branch, infinity_case in (
+            (finite, zero, "LEFT", "RIGHT_INFINITE"),
+            (zero, finite, "RIGHT", "LEFT_INFINITE"),
+        ):
             result = compute_scalar_add(
                 ScalarAddRequest(semiring=semiring, left=left, right=right)
             )
             assert result.result == finite
-            assert result.infinity_case in ("LEFT_INFINITE", "RIGHT_INFINITE")
+            assert result.branch == branch
+            assert result.infinity_case == infinity_case
 
     semiring = _semiring("MIN_PLUS")
     both = compute_scalar_add(

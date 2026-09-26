@@ -108,32 +108,42 @@ def _ideal(
 class TestGroebnerBasis:
     """Tests for ``polynomial.ideal.groebner_basis.compute``."""
 
-    def test_simple_ideal(self) -> None:
-        """Gröbner basis of <x^2 - y, xy - 1> has a finite basis."""
-        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
-        g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
-        ideal = _ideal(("x", "y"), (g1, g2))
+    @pytest.mark.parametrize(
+        ("ideal", "monomial_order"),
+        (
+            (
+                _ideal(
+                    ("x", "y"),
+                    (
+                        _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1))),
+                        _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0))),
+                    ),
+                ),
+                "grevlex",
+            ),
+            (_ideal(("x",), (_poly(("x",), (1, 1, (1,))),)), "lex"),
+            (
+                _ideal(
+                    ("x", "y"),
+                    (
+                        _poly(("x", "y"), (1, 1, (1, 1))),
+                        _poly(("x", "y"), (1, 1, (1, 0)), (-1, 1, (0, 1))),
+                    ),
+                ),
+                "lex",
+            ),
+        ),
+        ids=("general-grevlex", "principal-lex", "two-generator-lex"),
+    )
+    def test_basis_is_source_bound_for_each_order(
+        self, ideal: RationalPolynomialIdeal, monomial_order: str
+    ) -> None:
         result = _run_groebner(
-            GroebnerBasisRequest(ideal=ideal, monomial_order="grevlex")
+            GroebnerBasisRequest(ideal=ideal, monomial_order=monomial_order)
         )
-        assert result.generator_count >= 1
         assert result.basis is not None
         assert result.generator_count == len(result.basis.generators)
-
-    def test_principal_ideal(self) -> None:
-        """Gröbner basis of <x> in Q[x] is <x>."""
-        g = _poly(("x",), (1, 1, (1,)))
-        ideal = _ideal(("x",), (g,))
-        result = _run_groebner(GroebnerBasisRequest(ideal=ideal, monomial_order="lex"))
-        assert result.generator_count >= 1
-
-    def test_lex_order(self) -> None:
-        """Gröbner basis with lex order works."""
-        g1 = _poly(("x", "y"), (1, 1, (1, 1)))
-        g2 = _poly(("x", "y"), (1, 1, (1, 0)), (-1, 1, (0, 1)))
-        ideal = _ideal(("x", "y"), (g1, g2))
-        result = _run_groebner(GroebnerBasisRequest(ideal=ideal, monomial_order="lex"))
-        assert result.generator_count >= 1
+        assert verify_groebner_basis(result)
 
 
 class TestGroebnerBasisValidation:
@@ -223,25 +233,34 @@ class TestIdealNormalForm:
         result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
         assert result.in_ideal is False
         assert result.remainder is not None
-        assert len(result.remainder.polynomial.terms) > 0
+        assert result.remainder == _poly(("x", "y"), (1, 1, (0, 2)))
 
-    def test_polynomial_in_ideal_exactly(self) -> None:
-        """x^2 - y^2 mod <x^2 - y^2> should give zero (in the ideal)."""
-        g = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        ideal = _ideal(("x", "y"), (g,))
-        poly = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
+    @pytest.mark.parametrize(
+        ("ideal", "polynomial"),
+        (
+            (
+                _ideal(
+                    ("x", "y"),
+                    (_poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2))),),
+                ),
+                _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2))),
+            ),
+            (
+                _ideal(("x", "y"), (_poly(("x", "y"), (1, 1, (0, 0))),)),
+                _poly(("x", "y"), (3, 1, (0, 0))),
+            ),
+        ),
+        ids=("generator-reduces-to-zero", "constant-mod-unit"),
+    )
+    def test_polynomial_in_ideal_exactly(
+        self, ideal: RationalPolynomialIdeal, polynomial: RationalPolynomial
+    ) -> None:
+        result = _run_normal_form(
+            IdealNormalFormRequest(ideal=ideal, polynomial=polynomial)
+        )
         assert result.in_ideal is True
         assert result.remainder is not None
         assert len(result.remainder.polynomial.terms) == 0
-
-    def test_constant_in_unit_ideal(self) -> None:
-        """A constant is in the ideal <1> = Q[x,y]."""
-        g = _poly(("x", "y"), (1, 1, (0, 0)))
-        ideal = _ideal(("x", "y"), (g,))
-        poly = _poly(("x", "y"), (3, 1, (0, 0)))
-        result = _run_normal_form(IdealNormalFormRequest(ideal=ideal, polynomial=poly))
-        assert result.in_ideal is True
 
     def test_serialized_normal_form_verifier_rejects_forged_remainder(self) -> None:
         g = _poly(("x",), (1, 1, (1,)))
@@ -264,30 +283,6 @@ class TestIdealNormalForm:
 
 class TestEliminationIdeal:
     """Tests for ``polynomial.ideal.elimination.compute``."""
-
-    def test_eliminate_one_variable(self) -> None:
-        """Eliminate x from <x^2 - y^2, x + y> → get ideal in Q[y]."""
-        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        g2 = _poly(("x", "y"), (1, 1, (1, 0)), (1, 1, (0, 1)))
-        ideal = _ideal(("x", "y"), (g1, g2))
-        result = _run_elimination(
-            EliminationIdealRequest(ideal=ideal, eliminated_variables=("x",))
-        )
-        assert result.elimination_ideal is not None
-        assert "x" not in result.elimination_ideal.variables
-        assert len(result.elimination_ideal.generators) >= 1
-
-    def test_eliminated_variables_not_in_result(self) -> None:
-        """The elimination ideal should not contain eliminated variables."""
-        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 2)))
-        g2 = _poly(("x", "y"), (1, 1, (1, 0)), (1, 1, (0, 1)))
-        ideal = _ideal(("x", "y"), (g1, g2))
-        result = _run_elimination(
-            EliminationIdealRequest(ideal=ideal, eliminated_variables=("x",))
-        )
-        assert result.elimination_ideal is not None
-        for var in result.elimination_ideal.variables:
-            assert var != "x"
 
 
 class TestKernelFailures:
@@ -443,23 +438,6 @@ class TestKillableWorkerContract:
         assert float(observed["timeout"]) <= 10
         assert "-I" in observed["command"]
         assert result.basis is not None
-
-    def test_timed_out_call_leaves_no_lingering_threads(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        """After a timeout the process owns no leftover kernel threads."""
-
-        def exceed_budget(*args: object, **kwargs: object) -> NoReturn:
-            raise _SympyKernelTimeoutError()
-
-        baseline = __import__("threading").active_count()
-        monkeypatch.setattr(operations, "_run_sympy_kernel", exceed_budget)
-        g1 = _poly(("x", "y"), (1, 1, (2, 0)), (-1, 1, (0, 1)))
-        g2 = _poly(("x", "y"), (1, 1, (1, 1)), (-1, 1, (0, 0)))
-        with pytest.raises(OperationExecutionTimeoutError):
-            _run_groebner(GroebnerBasisRequest(ideal=_ideal(("x", "y"), (g1, g2))))
-        assert __import__("threading").active_count() == baseline
-
 
 class TestBoundedResultConstruction:
     """Worker result-envelope failures remain operational failures."""

@@ -29,5 +29,12 @@ def test_gradient_native_mcp_and_serialized_component_composition() -> None:
                 },
             )
             assert not repeated.is_error
+            assert repeated.structured_content is not None
+            repeated_request = tool.request_type.model_validate_json(
+                json.dumps({"function": output["partial_derivatives"][0]})
+            )
+            assert repeated.structured_content["output"] == tool.run(
+                repeated_request
+            ).model_dump(mode="json")
 
     asyncio.run(scenario())

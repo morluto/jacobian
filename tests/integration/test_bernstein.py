@@ -184,7 +184,7 @@ def test_invalid_or_unbounded_requests_reject_before_expansion(mutation: str) ->
         invoke_operation(ID, payload, Catalog.open())
 
 
-def test_large_degree_elevation_uses_axis_maps_not_a_dense_global_matrix() -> None:
+def test_large_degree_elevation_accepts_an_exact_4097_coefficient_tensor() -> None:
     payload = _fixture()
     payload["multidegree"] = [4096, 0]
     payload["polynomial"]["polynomial"]["terms"] = [
@@ -425,6 +425,7 @@ def test_restriction_handles_a_realistic_dense_289_entry_tensor() -> None:
     child = _box_model([((1, 3), (2, 3)), ((1, 5), (4, 5))])
     restricted = restrict_bernstein(parent, child)
     direct = bernstein_coefficients(parent.polynomial, child, parent.multidegree)
+    assert len(restricted.coefficients) == 289
     assert restricted.coefficients == direct.coefficients
 
 
@@ -491,6 +492,15 @@ def test_native_restriction_reuses_the_trusted_tensor(
     )
     restricted = operations.restrict_bernstein(parent, child)
     assert restricted.polynomial == parent.polynomial
+    assert restricted.box == child
+    assert tuple(value.as_fraction() for value in restricted.coefficients) == (
+        Fraction(44, 45),
+        Fraction(71, 45),
+        Fraction(83, 90),
+        Fraction(137, 90),
+        Fraction(44, 45),
+        Fraction(71, 45),
+    )
 
 
 def test_copies_and_serialized_tensors_cross_the_recognition_boundary(

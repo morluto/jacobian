@@ -25,6 +25,9 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeMatrix,
     ModularCharacterQExpansion,
 )
+from jacobian.math.number_theory.modular_forms.character_dimensions import (
+    character_space_dimensions,
+)
 from jacobian.math.number_theory.modular_forms.pari_backend import (
     MAX_PARI_BASIS_PRECISION,
     _pari_character_request,
@@ -85,8 +88,7 @@ def _require_space(
         or getattr(character, "group", None) is None
     ):
         _domain(
-            "this exact basis currently supports S2(Gamma0(13), chi) for an "
-            "even order-6 character over Q(zeta_6)"
+            "this character-form operation supports S2(Gamma0(13), chi) over Q(zeta_6)"
         )
     field = raw_field
     coordinates = getattr(character, "coordinates", None)
@@ -100,6 +102,99 @@ def _require_space(
     # The adapter repeats these claim checks before it builds its worker payload.
     character_request = _pari_character_request(space)
     return space, field, character_request
+
+
+def _require_basis_space(
+    space: ModularFormSpace,
+) -> tuple[ModularFormSpace, RationalCyclotomicField, dict[str, object]]:
+    """Admit the exact level-13 character and its explicit level inflations."""
+    if type(space) is not ModularFormSpace:
+        _domain("character basis requires a canonical modular-form space")
+    group_name = getattr(space, "group", None)
+    level = getattr(space, "level", None)
+    weight = getattr(space, "weight", None)
+    kind = getattr(space, "kind", None)
+    field = getattr(space, "coefficient_domain", None)
+    character = getattr(space, "character", None)
+    if (
+        group_name != "GAMMA0"
+        or type(level) is not int
+        or level not in (13, 26, 39)
+        or type(weight) is not int
+        or weight != 2
+        or kind not in ("M", "S")
+        or type(field) is not RationalCyclotomicField
+        or field.domain != "QQ_CYCLOTOMIC"
+        or type(field.order) is not int
+        or field.order != 6
+        or field.generator != "CLASS_OF_X"
+        or type(character) is not DirichletCharacter
+        or getattr(getattr(character, "group", None), "modulus", None) != level
+    ):
+        _domain(
+            "character basis supports weight-two order-six character spaces at levels 13, 26, and 39 over Q(zeta_6)"
+        )
+    request = _pari_character_request(space)
+    return space, field, request
+
+
+def _character_sturm_precision(space: ModularFormSpace) -> int:
+    level = space.level
+    index = level
+    for prime in (2, 3, 13):
+        if level % prime == 0:
+            index = index * (prime + 1) // prime
+    return (space.weight * index) // 12 + 1
+
+
+def _is_zero(value: RationalCyclotomicElement) -> bool:
+    return all(
+        int(coefficient.num) == 0 for coefficient in value.coefficients_ascending
+    )
+
+
+def _rref_character_prefix(
+    vectors: tuple[tuple[tuple[Fraction, ...], ...], ...],
+    field: RationalCyclotomicField,
+    precision: int,
+) -> tuple[tuple[RationalCyclotomicElement, ...], ...]:
+    """Canonical row frame of the backend subspace over its declared field."""
+    rows = [
+        [_coefficient(field, term) for term in vector[:precision]] for vector in vectors
+    ]
+    pivot_row = 0
+    for column in range(precision):
+        pivot = next(
+            (
+                row
+                for row in range(pivot_row, len(rows))
+                if not _is_zero(rows[row][column])
+            ),
+            None,
+        )
+        if pivot is None:
+            continue
+        rows[pivot_row], rows[pivot] = rows[pivot], rows[pivot_row]
+        pivot_value = rows[pivot_row][column]
+        rows[pivot_row] = [
+            cyclotomic.divide(value, pivot_value) for value in rows[pivot_row]
+        ]
+        for row in range(len(rows)):
+            if row == pivot_row:
+                continue
+            scale = rows[row][column]
+            if _is_zero(scale):
+                continue
+            rows[row] = [
+                cyclotomic.subtract(value, cyclotomic.multiply(scale, pivot_value))
+                for value, pivot_value in zip(rows[row], rows[pivot_row], strict=True)
+            ]
+        pivot_row += 1
+        if pivot_row == len(rows):
+            break
+    if pivot_row != len(rows):
+        raise RuntimeError("PARI character basis is dependent through the Sturm bound")
+    return tuple(tuple(row) for row in rows)
 
 
 def _coefficient(
@@ -118,7 +213,7 @@ def modular_character_basis_q_expansions(
     space: ModularFormSpace,
 ) -> ModularCharacterBasis:
     """Construct the exact Sturm-determining q-prefix basis for the admitted space."""
-    space, field, character_request = _require_space(space)
+    space, field, character_request = _require_basis_space(space)
     return _character_basis_from_admission(space, field, character_request)
 
 
@@ -128,24 +223,22 @@ def _character_basis_from_admission(
     character_request: dict[str, object],
 ) -> ModularCharacterBasis:
     """Construct the basis after source and character admission has completed."""
-    # The Cohen-Oesterle formula gives dimension 1 for coordinate 2 modulo 13;
-    # coordinate 10 is its Galois conjugate. Quer, Thm. 2.3, gives the
-    # independent Gamma0 character dimension formula.
-    # Admission is complete before entering PARI or constructing coefficients.
-    precision = _STURM_PRECISION
-    work = precision * 14 * 2 + precision * field.degree * 16
+    # Quer, Thm. 2.3, gives the exact independent dimension formula for this
+    # bounded character family. Admission is complete before entering PARI.
+    cusp_dimension, full_dimension = character_space_dimensions(
+        space.level, space.weight, space.character, field
+    )
+    dimension = cusp_dimension if space.kind == "S" else full_dimension
+    precision = _character_sturm_precision(space)
+    work = precision * max(1, dimension) ** 2 * field.degree * 16
+    if field.degree != 2 or precision > MAX_PARI_BASIS_PRECISION or dimension > 32:
+        _domain(
+            "the admitted character basis exceeds its field, precision, or dimension bound"
+        )
+    # Reserve the complete value-type coefficient envelope before materializing
+    # the backend basis and the cyclotomic RREF output.
+    normalized_digits = MAX_CYCLIC_FIELD_ELEMENT_DIGITS
     if field.degree != 2:
-        _domain("the admitted order-6 coefficient field must have degree 2")
-    # This line is a normalized weight-2 newform because the admitted cusp
-    # space is one-dimensional. Its Hecke coefficients are algebraic integers.
-    # For n <= 2, Deligne gives |a_n^sigma| <= 2*sqrt(2) in both embeddings.
-    # Write a_n = u + v*zeta_6 with integers u,v. Subtracting conjugates and
-    # using |zeta_6-zeta_6_bar|=sqrt(3) gives |v| <= 4*sqrt(2)/sqrt(3) < 3.27,
-    # hence |v| <= 3. Then |u| <= 2*sqrt(2)+3 < 5.83, hence |u| <= 5.
-    # Thus every power-basis coordinate through q^2 has one decimal digit.
-    # The isolated worker enforces that output bound before framing the response.
-    normalized_digits = _MAX_NORMALIZED_COORDINATE_DIGITS
-    if field.degree != 2 or normalized_digits > 256:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.character_basis_height_admission",
@@ -161,37 +254,44 @@ def _character_basis_from_admission(
 
     # The adapter canonicalizes character coordinates once; the isolated PARI
     # worker independently compares that character on every unit residue.
+    # A q-Sturm elimination can clear at most a dimension-by-degree pivot
+    # minor. Admit that exact intermediate envelope before the backend runs;
+    # canonical result values retain the separate 256-digit coefficient cap.
+    intermediate_digits = 2 * (dimension * field.degree) ** 2 * 30 + 128
+    if intermediate_digits > 100_000 or work * precision > 5_000_000:
+        raise OperationResourceAdmissionError(
+            location=("space",),
+            code="modular_form.character_basis_height_admission",
+            message="cyclotomic Sturm row reduction exceeds its exact intermediate envelope",
+        )
     raw_basis = pari_character_basis(
         space,
         precision,
-        _DIMENSION,
+        dimension,
         character_request=character_request,
     )
-    if len(raw_basis) != _DIMENSION:
+    if len(raw_basis) != dimension:
         raise RuntimeError("PARI returned a character basis of the wrong dimension")
-
-    vector = raw_basis[0]
-    pivot = next((i for i, term in enumerate(vector) if any(term)), None)
-    if pivot is None or pivot >= _STURM_PRECISION:
-        raise RuntimeError("PARI character basis has no Sturm-visible pivot")
-    normalized = tuple(_coefficient(field, term) for term in vector)
-    pivot_value = normalized[pivot]
-    one = _coefficient(field, (Fraction(1),) + (Fraction(0),) * (field.degree - 1))
-    if pivot != 1 or pivot_value != one:
-        raise RuntimeError("character basis normalization failed exact pivot check")
-
-    expansion = ModularCharacterQExpansion(
-        space=space,
-        basis_id=CHARACTER_BASIS_ID,
-        coefficients=normalized,
+    normalized = _rref_character_prefix(raw_basis, field, precision)
+    basis_id = (
+        CHARACTER_BASIS_ID
+        if space.level == 13 and space.kind == "S"
+        else "gamma0-cyclotomic-character-sturm-rref-v1"
+    )
+    elements = tuple(
+        ModularCharacterBasisElement(
+            label=f"q^{next(index for index, coefficient in enumerate(vector) if not _is_zero(coefficient))}",
+            expansion=ModularCharacterQExpansion(
+                space=space, basis_id=basis_id, coefficients=vector
+            ),
+        )
+        for vector in normalized
     )
     return ModularCharacterBasis(
         space=space,
-        basis_id=CHARACTER_BASIS_ID,
+        basis_id=basis_id,
         precision=precision,
-        elements=(
-            ModularCharacterBasisElement(label=f"q^{pivot}", expansion=expansion),
-        ),
+        elements=elements,
     )
 
 

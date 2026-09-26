@@ -71,3 +71,9 @@ maps), and 903,524 total reserved work units, including two 250,000-candidate
 source-exchange passes for admission and recognition. Source exchange checks and
 relabelling work are admitted before target feasible rows are materialized. Relabelling preserves the symmetric-exchange axiom because
 a bijection preserves symmetric difference and membership.
+
+`delta_matroid.distance_interlace_polynomial.compute` returns the exact
+distance histogram and `Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+`d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
+integers in descending-degree order. Admission bounds subset-feasible
+comparisons, output terms, and coefficient bit lengths before enumeration.

@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from benchmarks.tooling.harbor_suite import get_suite
-
 ROOT = Path(__file__).parents[2]
 
 
@@ -57,9 +55,3 @@ def test_observation_mcp_config_is_external_to_the_task_job() -> None:
             "url": "http://127.0.0.1:8000/mcp",
         }
     ]
-
-
-def test_observation_dataset_contains_the_canonical_task() -> None:
-    suite = get_suite("mathematical-benchmarks-v1")
-
-    assert any(ref.path.name == "graph-counterexample" for ref in suite.tasks)

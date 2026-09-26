@@ -2,6 +2,7 @@ import json
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -161,6 +162,24 @@ def test_oversized_caller_constructed_vector_is_resource_rejected() -> None:
         error.value.errors()[0]["type"]
         == "root_system.lattice_coordinates_over_envelope"
     )
+
+
+@pytest.mark.parametrize("num, den", [(True, 1), (1, True)])
+def test_caller_constructed_vector_with_malformed_symmetrizer_is_rejected(num, den):
+    datum = _datum(_A2)
+    malformed = FiniteCartanDatum.model_construct(
+        cartan_matrix=datum.cartan_matrix,
+        symmetrizer=(
+            CanonicalRational.model_construct(num=num, den=den),
+            datum.symmetrizer[1],
+        ),
+        root_to_weight=datum.root_to_weight,
+        coroot_to_coweight=datum.coroot_to_coweight,
+    )
+    vector = RootLatticeVector.model_construct(datum=malformed, coordinates=(1, 0))
+    with pytest.raises(OperationDomainValidationError) as error:
+        weyl_element_act_on_root(weyl_element_from_word(_A2, ()), vector)
+    assert error.value.errors()[0]["type"] == "root_system.invalid_lattice_vector_datum"
 
 
 def test_caller_constructed_vector_with_noncanonical_cartan_axis_is_rejected() -> None:

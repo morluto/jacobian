@@ -271,7 +271,12 @@ def _canonical_weight(
         or not _integer_matrix_children_are_bounded(coroot_to_coweight)
         or not isinstance(symmetrizer, tuple)
         or len(symmetrizer) != len(weight_cartan)
-        or any(not isinstance(value, CanonicalRational) for value in symmetrizer)
+        or any(
+            type(value) is not CanonicalRational
+            or type(value.num) is not int
+            or type(value.den) is not int
+            for value in symmetrizer
+        )
         or not isinstance(coordinates_value, tuple)
         or len(coordinates_value) != len(weight_cartan)
         or any(type(value) is not int for value in coordinates_value)

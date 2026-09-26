@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from math import factorial
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -156,8 +157,16 @@ def _canonical_vector(
     # the complete nested parent before comparing it with the action's parent.
     try:
         datum_rank = len(datum_cartan)
+        symmetrizer = datum.symmetrizer
         if (
-            type(datum_cartan) is not CartanMatrix
+            not isinstance(symmetrizer, tuple)
+            or any(
+                type(value.num) is not int or type(value.den) is not int
+                for value in symmetrizer
+                if type(value) is CanonicalRational
+            )
+            or any(type(value) is not CanonicalRational for value in symmetrizer)
+            or type(datum_cartan) is not CartanMatrix
             or datum_cartan.simple_root_axis != tuple(range(datum_rank))
             or type(datum_cartan.matrix) is not IntegerMatrix
             or datum_cartan.matrix.domain != "ZZ"

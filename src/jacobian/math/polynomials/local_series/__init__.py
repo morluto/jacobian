@@ -30,6 +30,11 @@ from jacobian.math.polynomials.local_series.newton_polygon import (
     newton_edge_characteristic_polynomial,
     newton_edge_characteristic_roots,
 )
+from jacobian.math.polynomials.local_series.newton_transform import (
+    NewtonTransformRequest,
+    NewtonTransformResult,
+    newton_transform,
+)
 from jacobian.math.polynomials.local_series.operations import (
     add,
     add_puiseux,
@@ -83,6 +88,8 @@ __all__ = [
     "NewtonEdgeCharacteristicTerm",
     "NewtonPolygonEdge",
     "NewtonPolygonPoint",
+    "NewtonTransformRequest",
+    "NewtonTransformResult",
     "NonzeroValuation",
     "PuiseuxContactPair",
     "PuiseuxContactProfile",
@@ -115,6 +122,7 @@ __all__ = [
     "multiply_puiseux",
     "newton_edge_characteristic_polynomial",
     "newton_edge_characteristic_roots",
+    "newton_transform",
     "power",
     "principal_part",
     "puiseux_contact_profile",

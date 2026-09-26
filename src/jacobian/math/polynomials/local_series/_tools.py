@@ -46,6 +46,11 @@ from .newton_polygon import (
     newton_edge_characteristic_polynomial,
     newton_edge_characteristic_roots,
 )
+from .newton_transform import (
+    NewtonTransformRequest,
+    NewtonTransformResult,
+    newton_transform,
+)
 from .operations import (
     add_puiseux,
     differentiate_puiseux,
@@ -344,6 +349,65 @@ TOOLS: MathTools = (
                         ],
                     },
                     "edge_index": 0,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.polynomial.newton_transform.compute",
+        title="Apply one exact Newton edge transform",
+        description=(
+            "Apply the selected Newton edge substitution at a caller-supplied "
+            "simple rational characteristic root, retaining exact truncated "
+            "coefficient windows and the source-bound edge."
+        ),
+        request_type=NewtonTransformRequest,
+        result_type=NewtonTransformResult,
+        run=newton_transform,
+        tags=("local-series", "polynomial", "newton-polygon", "exact"),
+        examples=(
+            OperationExample(
+                name="simple_rational_edge_root",
+                description=(
+                    "For y^2 - t^2(1+t), substituting y=t(1+z) and "
+                    "dividing by t^2 gives z^2 + 2z - t."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t", "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 2, "precision": 4,
+                                    "coefficients": [
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "-1", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t", "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0, "precision": 4,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "edge_index": 0,
+                    "initial_root": {"num": "1", "den": "1"},
                 },
             ),
         ),

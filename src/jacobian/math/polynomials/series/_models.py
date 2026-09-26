@@ -192,7 +192,7 @@ def _binary_decimal_digits(bits: int) -> int:
     return (bits * 30_103) // 100_000 + 1
 
 
-_RESULT_BOUND_CAP = 10**MAX_RESULT_RATIONAL_DIGITS
+_RESULT_BOUND_CAP: int = 10**MAX_RESULT_RATIONAL_DIGITS
 
 
 def _result_bound_product(left: int, right: int) -> int:

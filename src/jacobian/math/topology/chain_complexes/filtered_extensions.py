@@ -1005,6 +1005,12 @@ def _parse_bounded_map(
     cells = 0
     chars = 0
     parsed: list[list[list[int | Fraction]]] = []
+    if len(request.target.basis_sizes) != len(request.source.basis_sizes):
+        raise _fail(
+            (label, "target", "basis_sizes"),
+            "filtered_chain_map.shape_invalid",
+            "source and target must have matching chain-degree axes",
+        )
     for degree, matrix in enumerate(request.maps):
         rows = request.target.basis_sizes[degree]
         columns = request.source.basis_sizes[degree]
@@ -1019,6 +1025,12 @@ def _parse_bounded_map(
         for row in matrix:
             parsed_row = []
             for value in row:
+                if prime is not None and type(value) is not int:
+                    raise _fail(
+                        (label, "maps", degree),
+                        "filtered_chain_map.entry_invalid",
+                        "finite-field map entries must be integers",
+                    )
                 numerator_digits, denominator_digits = _coefficient_size(value)
                 if (
                     numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
@@ -1055,7 +1067,13 @@ def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -
         )
         term_sizes.append(
             (
-                left_numerator + right_numerator,
+                (
+                    right_numerator
+                    if Fraction(left).numerator == 1 and left_denominator == 1
+                    else left_numerator
+                    if Fraction(right).numerator == 1 and right_denominator == 1
+                    else left_numerator + right_numerator
+                ),
                 1 if denominator_is_one else left_denominator + right_denominator,
                 denominator_is_one,
             )
@@ -1068,7 +1086,7 @@ def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -
     numerator_digits = max(
         numerator + denominator_digits - term_denominator
         for numerator, term_denominator, _denominator_is_one in term_sizes
-    ) + len(str(len(terms)))
+    ) + (len(str(len(terms))) if len(terms) > 1 else 0)
     if (
         numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
         or denominator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS

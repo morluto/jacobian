@@ -87,6 +87,11 @@ class DifferentialOperatorApplyResult(DifferentialOperatorApplyRequest):
         Kernel-produced results use ``_from_kernel`` so parsing does not repeat
         the defining computation.
         """
+        if self.output.variables != self.polynomial.variables:
+            raise _validation_error(
+                "output_axis_mismatch",
+                "output polynomial must use the same ordered variable axis as the source",
+            )
         if self.is_zero != (not self.output.polynomial.terms):
             raise _validation_error(
                 "zero_flag_mismatch", "is_zero must match the exact output polynomial"

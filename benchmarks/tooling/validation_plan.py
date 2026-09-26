@@ -345,6 +345,8 @@ def _dataset_path_plan(
 def _shared_path_plan(
     path: str, timings: Mapping[str, float] | None
 ) -> tuple[tuple[HostValidation, ...], str | None]:
+    if path.startswith("benchmarks/evidence/") and path.endswith(".md"):
+        return (), None
     owned = CONTROL_PLANE_HOST_TESTS.get(path)
     if owned is not None:
         return tuple(

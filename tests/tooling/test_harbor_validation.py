@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import dataclasses
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -10,7 +11,6 @@ from benchmarks.tooling.harbor_suite import (
     validate_task_topology,
     validate_task_visibility,
 )
-from tools.command_runner import ToolCommandResult, ToolCommandStatus
 
 from tests.tooling.harbor_suite_support import (
     _make_suite_with_task,
@@ -114,62 +114,27 @@ def test_validate_task_topology_forbids_raw_interpreter_caches(tmp_path: Path) -
 
 
 @pytest.mark.usefixtures("synthetic_harbor_root")
-def test_validate_task_topology_ignores_gitignored_interpreter_caches(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_validate_task_topology_uses_git_ignore_status_for_interpreter_caches(
+    tmp_path: Path,
 ) -> None:
-    import benchmarks.tooling.harbor_suite as harbor_suite
-
-    monkeypatch.setattr(
-        harbor_suite,
-        "run_operator_command",
-        lambda *_args, **_kwargs: ToolCommandResult(
-            status=ToolCommandStatus.EXITED,
-            exit_code=0,
-            stdout=b"",
-            stderr=b"",
-        ),
-    )
+    subprocess.run(["git", "init", "--quiet"], cwd=tmp_path, check=True)
+    (tmp_path / ".gitignore").write_text("__pycache__/\n", encoding="utf-8")
     suite, task = _make_suite_with_task(tmp_path)
     cache = task / "tests" / "__pycache__"
     cache.mkdir()
-    (cache / "verifier.cpython-312.pyc").write_bytes(b"cache")
+    cache_file = cache / "verifier.cpython-312.pyc"
+    cache_file.write_bytes(b"cache")
 
     assert validate_task_topology(suite, task) == []
-
-
-@pytest.mark.usefixtures("synthetic_harbor_root")
-def test_validate_task_topology_rejects_tracked_interpreter_caches(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import benchmarks.tooling.harbor_suite as harbor_suite
-
-    commands: list[list[str]] = []
-
-    def check_ignore(
-        command: str, arguments: tuple[str, ...], **_kwargs: object
-    ) -> ToolCommandResult:
-        commands.append([command, *arguments])
-        return ToolCommandResult(
-            status=ToolCommandStatus.EXITED,
-            exit_code=1,
-            stdout=b"",
-            stderr=b"",
-        )
-
-    monkeypatch.setattr(harbor_suite, "run_operator_command", check_ignore)
-    suite, task = _make_suite_with_task(tmp_path)
-    cache = task / "tests" / "__pycache__"
-    cache.mkdir()
-    (cache / "verifier.cpython-312.pyc").write_bytes(b"cache")
+    subprocess.run(
+        ["git", "add", "--force", "--", cache_file.relative_to(tmp_path).as_posix()],
+        cwd=tmp_path,
+        check=True,
+    )
 
     failures = validate_task_topology(suite, task)
 
     assert any("raw interpreter cache is forbidden" in failure for failure in failures)
-    assert commands
-    assert all(
-        command[:3] == ["git", "check-ignore", "--quiet"] for command in commands
-    )
-    assert all("--no-index" not in command for command in commands)
 
 
 @pytest.mark.usefixtures("synthetic_harbor_root")

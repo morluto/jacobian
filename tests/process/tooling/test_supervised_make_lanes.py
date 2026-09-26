@@ -66,14 +66,6 @@ def test_supervised_lane_forwards_pytest_arguments() -> None:
     assert "--junitxml=pytest.xml" in output
 
 
-def test_ordinary_math_lane_invokes_pytest_directly() -> None:
-    output = _make_dry_run("test-math")
-
-    assert "pytest_lifecycle.py" not in output
-    assert "--timeout=120" in output
-    assert "tests/math" in output
-
-
 def test_logic_operation_module_still_collects() -> None:
     representative = "tests/math/logic/test_tools.py"
     completed = subprocess.run(

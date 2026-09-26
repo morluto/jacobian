@@ -172,6 +172,25 @@ def test_face_orbit_value_rejects_incomplete_endpoint_map_ledger() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("field", "value"),
+    (("lattice_translation", (0,)), ("holonomy_element", 1)),
+)
+def test_face_orbit_value_rejects_labels_outside_retained_extension(
+    field: str, value: object
+) -> None:
+    result = _compute(klein=False)
+    entry = result.boundary_1_to_0[0].model_copy(update={field: value})
+    forged = result.model_copy(
+        update={"boundary_1_to_0": (entry, *result.boundary_1_to_0[1:])}
+    )
+
+    with pytest.raises(ValidationError):
+        BieberbachFaceOrbitComplex.model_validate(
+            forged.model_dump(mode="python", warnings=False), strict=True
+        )
+
+
 def test_face_orbit_operation_is_discoverable_and_recomputes_source() -> None:
     tool = next(
         item

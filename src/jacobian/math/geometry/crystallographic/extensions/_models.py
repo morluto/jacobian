@@ -570,6 +570,9 @@ class BieberbachFaceOrbitComplex(StrictModel):
                 "face_orbit_source",
                 "face-orbit source, complete endpoint maps, orbit partition, edge representatives, or augmented ZZ chain axes are inconsistent",
             )
+        rank = len(self.source.source.affine_realization.source.action_matrices[0])
+        group_order = len(self.source.source.affine_realization.source.multiplication_table)
+        boundary_entries = (*self.boundary_1_to_0, *self.boundary_2_to_1)
         if any(
             entry.source_cell_index >= len(self.edge_orbit_representatives)
             or entry.target_cell_index >= len(self.vertex_orbits)
@@ -578,6 +581,10 @@ class BieberbachFaceOrbitComplex(StrictModel):
             entry.source_cell_index != 0
             or entry.target_cell_index >= len(self.edge_orbit_representatives)
             for entry in self.boundary_2_to_1
+        ) or any(
+            len(entry.lattice_translation) != rank
+            or entry.holonomy_element >= group_order
+            for entry in boundary_entries
         ):
             raise _error(
                 "face_orbit_boundary_axis",

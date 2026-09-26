@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
+from typing import Any
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.tree import (
     AcceptedTreeHeightProfileRequest,
     BottomUpTreeAutomaton,
@@ -46,7 +51,7 @@ def _oracle(automaton: BottomUpTreeAutomaton, max_height: int) -> tuple[int, ...
     cumulative: list[tuple[Tree, int]] = []
     profile = []
     for height in range(max_height + 1):
-        new_trees = []
+        new_trees: list[Tree] = []
         if height == 0:
             new_trees.extend(
                 (symbol, ()) for symbol, rank in enumerate(automaton.arity) if rank == 0
@@ -117,6 +122,19 @@ def test_height_zero_counts_only_nullary_symbols() -> None:
     assert accepted_tree_height_profile(automaton, 0) == (0,)
 
 
+def test_no_nullary_symbols_short_circuit_transition_work() -> None:
+    automaton = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=2,
+        arity=(12,),
+        transitions=tuple(
+            TreeAutomatonTransition(symbol=0, child_states=children, target_state=0)
+            for children in product(range(2), repeat=12)
+        ),
+        final_states=(0,),
+    )
+    assert accepted_tree_height_profile(automaton, 100) == (0,) * 101
+
+
 def test_empty_final_set_has_zero_profile_without_integer_growth() -> None:
     automaton = CompleteDeterministicBottomUpTreeAutomaton(
         state_count=1,
@@ -142,3 +160,17 @@ def test_integer_growth_is_admitted_before_recurrence() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="all-trees upper bound"):
         accepted_tree_height_profile(automaton, 19)
+
+
+def test_out_of_range_height_is_a_resource_refusal() -> None:
+    automaton = _fixture()
+    for invalid in (-1, 101):
+        with pytest.raises(OperationResourceAdmissionError):
+            accepted_tree_height_profile(automaton, invalid)
+
+
+@pytest.mark.parametrize("invalid", [False, True, 3.0, Fraction(3, 1), None])
+def test_non_integer_height_is_a_domain_error(invalid: Any) -> None:
+    automaton = _fixture()
+    with pytest.raises(OperationDomainValidationError, match="integer"):
+        accepted_tree_height_profile(automaton, invalid)

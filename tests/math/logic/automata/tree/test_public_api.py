@@ -8,6 +8,8 @@ from jacobian.math.logic.automata import tree as tree_automata
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the tree_automata public API."""
     expected = (
+        "AcceptedTreeHeightProfileRequest",
+        "AcceptedTreeHeightProfileResult",
         "BottomUpTreeAutomaton",
         "CompleteDeterministicBottomUpTreeAutomaton",
         "DeterministicBottomUpTreeAutomaton",
@@ -28,6 +30,7 @@ def test_exact_public_api_symbols() -> None:
         "TreeAutomatonMinimizeResult",
         "TreeAutomatonTransition",
         "accepted_tree_count",
+        "accepted_tree_height_profile",
         "boolean_product_tree_automata",
         "complement_tree_automaton",
         "complete_deterministic_tree_automaton",

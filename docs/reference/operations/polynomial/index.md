@@ -1,5 +1,64 @@
 # Polynomial operations
 
+## Tropical Newton polygon
+
+`tropical.polynomial.univariate_newton_polygon.compute` returns the exact
+coefficient-lifted lower hull for min-plus or upper hull for max-plus, bound to
+the source formal polynomial. Each edge retains every source term on that
+face, its exact coefficient slope, the corresponding finite tropical root,
+and the horizontal-length multiplicity. The empty and constant polynomials
+have no edges; a monomial does not acquire an artificial root at infinity.
+
+The operation accepts one variable and at most 512 terms with exact `ZZ` or
+`QQ` coefficients. It admits a conservative intermediate and serialized-result
+bound before constructing rational hull geometry. It does not claim a
+multivariate regular subdivision or a tropical hypersurface/system.
+
+## Formal tropical polynomial powers
+
+`tropical.polynomial.power.compute` computes nonnegative formal powers up to
+exponent 16 by exact sparse convolution. The typed result is the canonical
+formal exponent/coefficient map; it does not remove functionally inessential
+terms or return a piecewise-linear normal form. Intermediate support,
+exponent, scalar-growth, total-work, and output-size bounds are admitted before
+coefficient multiplication; the serialized result estimate must fit the 10 MiB
+canonical output limit. See [exact tropical operations](../tropical-algebra.md)
+for the full contract.
+
+## Bivariate regular subdivision
+
+`tropical.polynomial.bivariate_regular_subdivision.compute` lifts each support
+exponent to its exact rational coefficient height, selects the lower lifted
+facets for min-plus or upper lifted facets for max-plus, and projects those
+faces to the exponent plane. The result reuses the exact face-closed
+polytopal-complex value and retains source-term incidences for every lifted
+face and every projected face, including ties on shared boundaries.
+
+This first slice requires a full-dimensional Newton polygon, at most ten
+monomials, and coefficient components of at most 32 digits. A rank-two lift
+with affine coefficient heights is represented as the single unsubdivided
+Newton polygon. Output and work are admitted before exact hull conversion. The
+operation processes one polynomial and does not intersect hypersurfaces or
+compute a tropical-system variety.
+
+## Bivariate tropical hypersurface
+
+`tropical.polynomial.bivariate_hypersurface.compute` returns the complete
+corner locus of one bivariate tropical polynomial. Each cell carries exact
+rational halfspace inequalities and a point/ray/lineality presentation, its
+active source terms, the dual regular-subdivision face, incidence, and the
+lattice length of its dual edge when the cell is one-dimensional. Min-plus
+and max-plus use their respective lower and upper coefficient lifts. The
+operation preflights a planar face-count bound, all cell-conversion work, and
+the aggregate output before constructing the lifted hull or any cell rays.
+It does not intersect multiple polynomials or solve a tropical system.
+
+## Tropical algebra
+
+See [exact tropical operations](../tropical-algebra.md) for the typed contracts and admitted boundaries.
+
+# Polynomial operations
+
 ## Rational polynomial ideals
 
 `polynomial.ideal.containment.decide` decides the directed relation

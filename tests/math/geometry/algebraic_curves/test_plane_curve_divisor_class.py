@@ -203,6 +203,73 @@ def test_native_operation_accepts_the_full_point_cardinality_bound() -> None:
     assert result.multiplicities == (1,) * 16
 
 
+def test_native_operation_classifies_forged_large_rationals_as_resource_limits() -> (
+    None
+):
+    request = _cuspidal_cubic_request()
+    huge = 10**5000
+    forged_coefficient = RationalPolynomial.model_construct(
+        domain="QQ",
+        variables=("x", "y", "z"),
+        polynomial=SparseRationalPolynomial.model_construct(
+            terms=(
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational.model_construct(num=huge, den=1),
+                    exponents=(1, 0, 0),
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as coefficient_error:
+        plane_curve_strict_transform_class(
+            forged_coefficient,
+            request.surface,
+            ("x", "y", "z"),
+        )
+    assert (
+        coefficient_error.value.errors()[0]["type"]
+        == "plane_curve_divisor.coefficient_bound"
+    )
+
+    point = BlowupPoint.model_construct(
+        label="large",
+        point=RationalProjectivePoint.model_construct(
+            coordinates=(
+                CanonicalRational.model_construct(num=huge, den=1),
+                CanonicalRational.model_construct(num=0, den=1),
+                CanonicalRational.model_construct(num=1, den=1),
+            )
+        ),
+    )
+    surface = BlowupP2Surface.model_construct(points=(point,))
+    with pytest.raises(OperationResourceAdmissionError) as point_error:
+        plane_curve_strict_transform_class(
+            request.polynomial,
+            surface,
+            request.projective_coordinate_variables,
+        )
+    assert point_error.value.errors()[0]["type"] == "plane_curve_divisor.point_height"
+
+
+def test_nonzero_constant_is_rejected_as_not_a_curve() -> None:
+    request = _cuspidal_cubic_request()
+    constant = RationalPolynomial.model_construct(
+        domain="QQ",
+        variables=("x", "y", "z"),
+        polynomial=SparseRationalPolynomial.model_construct(
+            terms=(
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational(num=1, den=1),
+                    exponents=(0, 0, 0),
+                ),
+            )
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        plane_curve_strict_transform_class(constant, request.surface, ("x", "y", "z"))
+    assert error.value.errors()[0]["type"] == "plane_curve_divisor.degree_zero"
+
+
 def test_native_operation_rejects_point_count_before_computation() -> None:
     request = _cuspidal_cubic_request()
     point = BlowupPoint.model_construct(

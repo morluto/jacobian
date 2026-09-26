@@ -52,7 +52,7 @@ def _domain(reason: str, message: str, location: tuple[str | int, ...]) -> NoRet
     )
 
 
-def _admit_polynomial(polynomial: RationalPolynomial) -> int:
+def _admit_polynomial(polynomial: RationalPolynomial) -> int:  # noqa: C901
     if not isinstance(polynomial, RationalPolynomial):
         _domain(
             "polynomial_type",
@@ -115,6 +115,21 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:
                 message="the plane-curve degree must be at most 12",
             )
         coefficient = getattr(term, "coefficient", None)
+        if not isinstance(coefficient, CanonicalRational):
+            _domain(
+                "coefficient_type",
+                "curve coefficients must be canonical rationals",
+                ("polynomial", index),
+            )
+        if (
+            _rational_component_digits(coefficient)
+            > MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("polynomial", index),
+                code="plane_curve_divisor.coefficient_bound",
+                message="curve coefficients are limited to 32 decimal digits",
+            )
         if not _is_canonical_rational(coefficient):
             _domain(
                 "coefficient_type",
@@ -126,15 +141,6 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:
                 "zero_term",
                 "zero polynomial terms must be omitted",
                 ("polynomial", index),
-            )
-        if (
-            _rational_component_digits(coefficient)
-            > MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
-        ):
-            raise OperationResourceAdmissionError(
-                location=("polynomial", index),
-                code="plane_curve_divisor.coefficient_bound",
-                message="curve coefficients are limited to 32 decimal digits",
             )
     exponents = tuple(term.exponents for term in sparse.terms)
     if exponents != tuple(sorted(exponents, reverse=True)) or len(
@@ -151,7 +157,9 @@ def _admit_polynomial(polynomial: RationalPolynomial) -> int:
             "inhomogeneous", "the curve polynomial must be homogeneous", ("polynomial",)
         )
     degree = next(iter(degrees))
-    if not 1 <= degree <= MAX_CURVE_DIVISOR_DEGREE:
+    if degree == 0:
+        _domain("degree_zero", "a nonconstant polynomial is required", ("polynomial",))
+    if degree > MAX_CURVE_DIVISOR_DEGREE:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
             code="plane_curve_divisor.degree_bound",
@@ -166,11 +174,6 @@ def _is_canonical_rational(value: object) -> TypeGuard[CanonicalRational]:
     numerator = getattr(value, "num", None)
     denominator = getattr(value, "den", None)
     if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
-        return False
-    # Bound forged native integers before Euclidean work. Exact digit
-    # formatting below is likewise guarded before reaching FLINT.
-    limit = 10**MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
-    if abs(numerator) >= limit or denominator >= limit:
         return False
     return gcd(abs(numerator), denominator) == 1 and (
         numerator != 0 or denominator == 1
@@ -231,17 +234,17 @@ def _admit_surface_points(surface: BlowupP2Surface) -> int:
                     "point coordinates must be canonical rationals",
                     ("surface", point_index, coordinate_index),
                 )
-            if not _is_canonical_rational(coordinate):
-                _domain(
-                    "point_scalar",
-                    "point coordinates must be canonical rationals",
-                    ("surface", point_index, coordinate_index),
-                )
             if _rational_component_digits(coordinate) > MAX_CURVE_DIVISOR_POINT_DIGITS:
                 raise OperationResourceAdmissionError(
                     location=("surface", point_index, coordinate_index),
                     code="plane_curve_divisor.point_height",
                     message="projective point components are limited to 16 decimal digits",
+                )
+            if not _is_canonical_rational(coordinate):
+                _domain(
+                    "point_scalar",
+                    "point coordinates must be canonical rationals",
+                    ("surface", point_index, coordinate_index),
                 )
         if all(coordinate.as_fraction() == 0 for coordinate in coordinates):
             _domain(

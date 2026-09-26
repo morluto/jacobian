@@ -1,5 +1,6 @@
 """Public declaration of exact bounded character-valued basis construction."""
 
+import json
 from itertools import product
 from math import gcd
 
@@ -144,7 +145,9 @@ def _character_form_example(coordinate: int = 2) -> dict[str, object]:
 
 
 def _transport_example_values():
-    source_form = ModularFormCoordinates.model_validate(_character_form_example(1))
+    source_form = ModularFormCoordinates.model_validate_json(
+        json.dumps(_character_form_example(2))
+    )
     source_character = source_form.space.character
     target_group = character_group(26)
     target_character = None

@@ -42,6 +42,10 @@ class FiniteGroupConjugacyProfile(StrictModel):
             loop = FiniteGroupGaugeHolonomyResult.model_validate(self.loop.model_dump())
         except (AttributeError, TypeError, ValueError, ValidationError):
             raise ValueError("conjugacy profile must retain a canonical loop") from None
+        if loop.start != loop.end or (
+            loop.path.basepoint is not None and loop.path.basepoint != loop.start
+        ):
+            raise ValueError("conjugacy profile must retain a closed based loop")
         indices = self.conjugate_indices
         order = len(loop.field.group.multiplication)
         if (
@@ -91,11 +95,13 @@ def finite_group_holonomy_conjugacy_profile(
     loop = finite_group_gauge_holonomy(
         FiniteGroupGaugeHolonomyRequest(field=request.field, path=request.path)
     )
-    if loop.start != loop.end:
+    if loop.start != loop.end or (
+        loop.path.basepoint is not None and loop.path.basepoint != loop.start
+    ):
         raise OperationDomainValidationError(
             location=("path",),
             code="lattice_gauge.conjugacy.open_path",
-            message="conjugacy observables require a closed based loop",
+            message="conjugacy observables require a closed based loop with matching basepoint",
         )
     group = loop.field.group
     table, inverse = group.multiplication, group.inverse

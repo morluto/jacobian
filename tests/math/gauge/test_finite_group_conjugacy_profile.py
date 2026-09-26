@@ -9,6 +9,7 @@ from jacobian.math.gauge import (
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
+    FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
@@ -144,6 +145,39 @@ def test_conjugacy_profile_rejects_open_path():
     with pytest.raises(OperationDomainValidationError, match="closed based loop"):
         finite_group_holonomy_conjugacy_profile(
             FiniteGroupConjugacyProfileRequest(field=field, path=open_path)
+        )
+
+
+def test_profile_rejects_authored_mismatched_basepoint():
+    group, _, index = _s3()
+    loop = _loop(group, index[(1, 0, 2)])
+    request = FiniteGroupConjugacyProfileRequest(
+        field=loop.field,
+        path=OrientedGaugePath(steps=loop.path.steps, basepoint="other"),
+    )
+    with pytest.raises(OperationDomainValidationError, match="closed based loop"):
+        finite_group_holonomy_conjugacy_profile(request)
+
+
+def test_profile_value_rejects_open_retained_holonomy():
+    group, _, index = _s3()
+    loop = _loop(group, index[(1, 0, 2)])
+    open_loop = FiniteGroupGaugeHolonomyResult.model_construct(
+        field=loop.field,
+        path=loop.path,
+        holonomy=loop.holonomy,
+        contributions=loop.contributions,
+        start=loop.start,
+        end="different",
+    )
+    with pytest.raises(ValueError, match="closed based loop"):
+        FiniteGroupConjugacyProfile.model_validate(
+            {
+                "loop": open_loop.model_dump(),
+                "conjugate_indices": [index[(1, 0, 2)]],
+                "class_representative_index": index[(1, 0, 2)],
+                "class_size": 1,
+            }
         )
 
 

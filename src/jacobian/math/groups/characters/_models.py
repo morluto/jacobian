@@ -714,6 +714,51 @@ class CharacterTensorProductRequest(StrictModel):
     right: CharacterRingElement
 
 
+class CharacterLambdaSquareRequest(StrictModel):
+    """Compute one second lambda operation on a table-bound virtual character."""
+
+    character: CharacterRingElement
+
+
+class CharacterSymmetricSquareRequest(CharacterLambdaSquareRequest):
+    """Compute the second symmetric power of a virtual character."""
+
+
+class CharacterExteriorSquareRequest(CharacterLambdaSquareRequest):
+    """Compute the second exterior power of a virtual character."""
+
+
+class CharacterKernelRequest(StrictModel):
+    """Compute the kernel subgroup of an ordinary finite-group character."""
+
+    character: CharacterRingElement
+
+
+class CharacterKernel(StrictModel):
+    """A computed character kernel retained inside its ambient group."""
+
+    ambient_group: PermutationGroup
+    subgroup: PermutationGroup
+
+    @model_validator(mode="after")
+    def require_same_action_domain(self) -> Self:
+        if self.subgroup.degree != self.ambient_group.degree:
+            raise _validation_error(
+                "kernel_domain",
+                "kernel subgroup and ambient group must share an action domain",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        ambient_group: PermutationGroup,
+        subgroup: PermutationGroup,
+    ) -> Self:
+        return cls.model_construct(ambient_group=ambient_group, subgroup=subgroup)
+
+
 class CharacterRingDecompositionResult(StrictModel):
     """Virtual-character coordinates of one class function in a complete table."""
 
@@ -836,15 +881,19 @@ __all__ = [
     "MAX_GROUP_ORDER",
     "MAX_INNER_PRODUCT_WORK",
     "MAX_VALUE_COEFFICIENT_DIGITS",
+    "CharacterExteriorSquareRequest",
+    "CharacterKernel",
+    "CharacterKernelRequest",
     "CharacterRingDecompositionRequest",
     "CharacterRingDecompositionResult",
     "CharacterRingElement",
     "CharacterRow",
+    "CharacterSymmetricSquareRequest",
     "CharacterTableRequest",
     "CharacterTableResult",
-    "CharacterTensorProductRequest",
     "CharacterTensorDecompositionRequest",
     "CharacterTensorDecompositionResult",
+    "CharacterTensorProductRequest",
     "ClassAxis",
     "ClassContribution",
     "ClassFunctionConjugateRequest",

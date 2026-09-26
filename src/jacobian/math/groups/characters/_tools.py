@@ -4,9 +4,13 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
+    CharacterExteriorSquareRequest,
+    CharacterKernel,
+    CharacterKernelRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
+    CharacterSymmetricSquareRequest,
     CharacterTableRequest,
     CharacterTableResult,
     CharacterTensorDecompositionRequest,
@@ -45,6 +49,9 @@ from jacobian.math.groups.characters.operations import (
     restrict_cyclic_character,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_exterior_square,
+    character_kernel,
+    character_symmetric_square,
     character_tensor_product,
     class_function_character_decomposition,
 )
@@ -70,6 +77,22 @@ def _run_character_tensor_product(
     request: CharacterTensorProductRequest,
 ) -> CharacterRingElement:
     return character_tensor_product(request)
+
+
+def _run_character_symmetric_square(
+    request: CharacterSymmetricSquareRequest,
+) -> CharacterRingElement:
+    return character_symmetric_square(request)
+
+
+def _run_character_exterior_square(
+    request: CharacterExteriorSquareRequest,
+) -> CharacterRingElement:
+    return character_exterior_square(request)
+
+
+def _run_character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
+    return character_kernel(request)
 
 
 def _run_tensor_decomposition(
@@ -620,6 +643,92 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "left": _s3_ring_element([0, 0, 1]),
                     "right": _s3_ring_element([0, 0, 1]),
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.symmetric_square.compute",
+        title="Compute a finite-group character's second symmetric power",
+        description=(
+            "Apply Sym^2(x) = (x tensor x + psi^2(x))/2 to one exact, "
+            "table-bound virtual character. The canonical table is rebuilt "
+            "from its concrete group, and the class squaring map is derived "
+            "from that complete partition. Supported groups are trivial, "
+            "cyclic of order at most 60, and S3; signed virtual coordinates "
+            "are accepted when the result has exact integral coordinates."
+        ),
+        request_type=CharacterSymmetricSquareRequest,
+        result_type=CharacterRingElement,
+        run=_run_character_symmetric_square,
+        tags=("finite-group", "character", "symmetric-power", "exact"),
+        discovery_terms=(
+            "symmetric square of a finite group character",
+            "second symmetric power virtual character",
+            "symmetric square representation ring",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_symmetric_square",
+                description="Sym^2 of the standard S3 representation is 1 plus standard.",
+                input={"character": _s3_ring_element([0, 0, 1])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.exterior_square.compute",
+        title="Compute a finite-group character's second exterior power",
+        description=(
+            "Apply Lambda^2(x) = (x tensor x - psi^2(x))/2 to one exact, "
+            "table-bound virtual character. The canonical table is rebuilt "
+            "from its concrete group, and the class squaring map is derived "
+            "from that complete partition. Supported groups are trivial, "
+            "cyclic of order at most 60, and S3; signed virtual coordinates "
+            "are accepted when the result has exact integral coordinates."
+        ),
+        request_type=CharacterExteriorSquareRequest,
+        result_type=CharacterRingElement,
+        run=_run_character_exterior_square,
+        tags=("finite-group", "character", "exterior-power", "exact"),
+        discovery_terms=(
+            "exterior square of a finite group character",
+            "second exterior power virtual character",
+            "exterior square representation ring",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_exterior_square",
+                description="Lambda^2 of the standard S3 representation is sign.",
+                input={"character": _s3_ring_element([0, 0, 1])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.kernel.compute",
+        title="Compute the kernel of a bounded ordinary character",
+        description=(
+            "Return the subgroup on which an exact ordinary character has "
+            "value equal to its degree. Input coordinates must be nonnegative "
+            "in the canonical irreducible basis, and the canonical character "
+            "table is rebuilt from its concrete group. The exact cyclotomic "
+            "trace equality is equivalent to identity action. Supported "
+            "groups are trivial, S3, and cyclic groups of order n satisfying "
+            "n^2*phi(n) <= 100000, the canonical table cell bound. The "
+            "result retains both the ambient group and its kernel subgroup."
+        ),
+        request_type=CharacterKernelRequest,
+        result_type=CharacterKernel,
+        run=_run_character_kernel,
+        tags=("finite-group", "character", "kernel", "exact"),
+        discovery_terms=(
+            "kernel subgroup of a finite group character",
+            "normal subgroup where a representation acts trivially",
+            "character kernel from exact irreducible multiplicities",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_sign_character_kernel",
+                description="The sign character of S3 has kernel A3.",
+                input={"character": _s3_ring_element([0, 1, 0])},
             ),
         ),
     ),

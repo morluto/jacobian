@@ -8,6 +8,7 @@ from fractions import Fraction
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -33,10 +34,14 @@ from jacobian.math.groups.characters._models import (
     MAX_CYCLOTOMIC_ORDER,
     MAX_GROUP_ORDER,
     MAX_VALUE_COEFFICIENT_DIGITS,
+    CharacterExteriorSquareRequest,
+    CharacterKernel,
+    CharacterKernelRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
     CharacterRow,
+    CharacterSymmetricSquareRequest,
     CharacterTableResult,
     CharacterTensorProductRequest,
     ConjugacyClassPartition,
@@ -56,6 +61,8 @@ MAX_CHARACTER_RING_DECOMPOSITION_WORK = 50_000_000
 MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES = 10_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES = 10_000_000
+MAX_CHARACTER_KERNEL_WORK = 50_000_000
+MAX_CHARACTER_KERNEL_OUTPUT_BYTES = 1_000_000
 
 
 def _invalid(
@@ -674,6 +681,7 @@ def _admit_tensor_arithmetic(
     source: PermutationGroup,
     source_work: int,
     concrete_order: int,
+    additional_work: int = 0,
 ) -> tuple[int, int, int]:
     """Admit table expansion, product, pairings, reconstruction, and output."""
     # Before authenticating the table, its claimed class count and order may
@@ -723,6 +731,7 @@ def _admit_tensor_arithmetic(
         + order * order * dimension * table_digits**2
         + rows * classes * dimension * table_digits**2
         + source_work
+        + additional_work
     )
     if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
         raise OperationResourceAdmissionError(
@@ -751,6 +760,73 @@ def _admit_tensor_arithmetic(
             message="tensor-product result exceeds the exact output envelope",
         )
     return order, classes, dimension
+
+
+def _admit_lambda_square_arithmetic(
+    element: CharacterRingElement,
+    table: CharacterTableResult,
+    source_work: int,
+) -> None:
+    """Price the square algorithm from its authenticated table dimensions."""
+    order = table.axis.cyclotomic_order
+    classes = len(table.axis.class_sizes)
+    rows = len(table.rows)
+    dimension = euler_phi(order)
+    coefficient_digits = max(
+        1,
+        *(len(str(abs(value))) for value in element.irreducible_multiplicities),
+    )
+    table_digits = max(
+        1,
+        *(
+            max(len(str(abs(value.num))), len(str(value.den)))
+            for row in table.rows
+            for class_value in row.values
+            for value in class_value.coefficients
+        ),
+    )
+    expanded_digits = coefficient_digits + table_digits + len(str(rows))
+    product_digits = 2 * expanded_digits + dimension + 3
+    result_digits = product_digits + table_digits + len(str(order))
+    # The operation expands the input and reconstructed result once each,
+    # multiplies/adds cyclotomic values classwise, then computes all exact
+    # character inner products. Each field operation is quadratic in phi(order).
+    work = (
+        3 * rows * classes * dimension * expanded_digits**2
+        + 8 * classes * dimension * dimension * product_digits**2
+        + rows
+        * classes
+        * (2 * dimension * dimension + 6 * dimension)
+        * result_digits**2
+        + order * order * max(1, len(element.table.partition.source.generators))
+        + source_work
+    )
+    if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.lambda_square_work_exceeds_envelope",
+            message="symmetric or exterior square exceeds its exact work envelope",
+        )
+    if result_digits > MAX_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.lambda_square_output_height",
+            message="square coordinates exceed the exact coefficient envelope",
+        )
+    output_bytes = (
+        rows * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 32)
+        + MAX_CHARACTER_TABLE_CELLS * 40
+        + 65_536
+    )
+    if (
+        output_bytes > MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.lambda_square_output_exceeds_envelope",
+            message="square result exceeds the exact output envelope",
+        )
 
 
 def character_tensor_product(
@@ -843,10 +919,328 @@ def character_tensor_product(
     return decomposed
 
 
+def _character_lambda_square(
+    request: CharacterSymmetricSquareRequest | CharacterExteriorSquareRequest,
+    *,
+    adams_sign: int,
+) -> CharacterRingElement:
+    """Compute (x tensor x +/- psi^2(x))/2 in one admitted table basis."""
+    if not isinstance(
+        request, (CharacterSymmetricSquareRequest, CharacterExteriorSquareRequest)
+    ):
+        raise _invalid(
+            "groups.characters.lambda_square_request_type",
+            "request must contain one table-bound virtual character",
+            ("request",),
+        )
+    element = getattr(request, "character", None)
+    if not isinstance(element, CharacterRingElement):
+        raise _invalid(
+            "groups.characters.lambda_square_input_type",
+            "input must be a table-bound virtual character",
+            ("character",),
+        )
+    _admit_ring_element_shape(element, "character")
+    source = element.table.partition.source
+    actual_order, source_work = _admit_source_group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("character", "table", "partition", "source"),
+            code="groups.characters.lambda_square_group_order_exceeds_envelope",
+            message="symmetric and exterior squares admit group order at most 60",
+        )
+    # The group closure is bounded before canonical table reconstruction. The
+    # lambda-square envelope then uses the authenticated row and class counts,
+    # instead of charging as if both were the full group order.
+    raw_classes = group_conjugacy_classes(
+        source.degree, [list(generator) for generator in source.generators]
+    )
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(g) for g in cls) for cls in raw_classes)
+    )
+    table = character_table(partition)
+    if element.table != table:
+        raise _invalid(
+            "groups.characters.lambda_square_noncanonical_table",
+            "input must retain the exact canonical character table for its group",
+            ("character", "table"),
+        )
+    _admit_lambda_square_arithmetic(element, table, source_work)
+    order = table.axis.cyclotomic_order
+    classes = len(table.axis.class_sizes)
+    dimension = euler_phi(order)
+
+    # Expand only after admission and table authentication. The class map is
+    # derived from the complete canonical partition, so no caller-supplied
+    # power-map claims enter the exact operation.
+    def expand(value: CharacterRingElement) -> tuple[tuple[Fraction, ...], ...]:
+        result: list[tuple[Fraction, ...]] = []
+        for class_index in range(classes):
+            coefficients = [Fraction(0) for _ in range(dimension)]
+            for multiplicity, row in zip(
+                value.irreducible_multiplicities, table.rows, strict=True
+            ):
+                for power, coefficient in enumerate(
+                    row.values[class_index].coefficients
+                ):
+                    coefficients[power] += multiplicity * coefficient.as_fraction()
+            result.append(tuple(coefficients))
+        return tuple(result)
+
+    values = expand(element)
+    elements_by_class = {
+        tuple(group_element): class_index
+        for class_index, conjugacy_class in enumerate(table.partition.classes)
+        for group_element in conjugacy_class
+    }
+
+    def square(permutation: tuple[int, ...]) -> tuple[int, ...]:
+        return tuple(
+            permutation[permutation[index]] for index in range(len(permutation))
+        )
+
+    class_square_map = tuple(
+        elements_by_class[square(tuple(conjugacy_class[0]))]
+        for conjugacy_class in table.partition.classes
+    )
+    square_values = []
+    for class_index, class_value in enumerate(values):
+        tensor_square = multiply_values(order, class_value, class_value)
+        adams_square = values[class_square_map[class_index]]
+        signed_adams = scale_value(
+            order,
+            Fraction(adams_sign),
+            adams_square,
+        )
+        numerator = add_values(order, tensor_square, signed_adams)
+        square_values.append(scale_value(order, Fraction(1, 2), numerator))
+
+    square_function = FiniteClassFunction._from_kernel(
+        axis=table.axis,
+        values=tuple(_make_value(order, value) for value in square_values),
+    )
+    result = _coordinates_on_authenticated_table(square_function, table)
+    if expand(result) != tuple(square_values):
+        raise _invalid(
+            "groups.characters.lambda_square_reconstruction",
+            "irreducible coordinates failed exact lambda-square reconstruction",
+            ("request",),
+        )
+    return result
+
+
+def character_symmetric_square(
+    request: CharacterSymmetricSquareRequest,
+) -> CharacterRingElement:
+    """Return the exact second symmetric-power virtual character."""
+    return _character_lambda_square(request, adams_sign=1)
+
+
+def character_exterior_square(
+    request: CharacterExteriorSquareRequest,
+) -> CharacterRingElement:
+    """Return the exact second exterior-power virtual character."""
+    return _character_lambda_square(request, adams_sign=-1)
+
+
+def _admit_character_kernel(
+    element: CharacterRingElement,
+    source: PermutationGroup,
+    actual_order: int,
+    source_work: int,
+) -> None:
+    """Admit character arithmetic, source enumeration, and returned groups."""
+    coordinate_digits = max(
+        1, *(len(str(abs(value))) for value in element.irreducible_multiplicities)
+    )
+    # A canonical irreducible value is a sum of at most sqrt(|G|) roots of
+    # unity. This bound is independent of an untrusted serialized table.
+    table_digits_bound = len(str(actual_order)) + 2
+    kernel_work = (
+        actual_order**2
+        * euler_phi(actual_order)
+        * coordinate_digits
+        * table_digits_bound
+        + actual_order**2 * source.degree * max(1, len(source.generators))
+        + actual_order**3 * source.degree
+        + MAX_CHARACTER_TABLE_CELLS
+        + source_work
+    )
+    if kernel_work > MAX_CHARACTER_KERNEL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.kernel_work_exceeds_envelope",
+            message="canonical-table validation and kernel generation exceed the work envelope",
+        )
+    generator_count_bound = max(1, actual_order.bit_length())
+    output_bytes = (
+        2_048 + (len(source.generators) + generator_count_bound) * source.degree * 24
+    )
+    if (
+        output_bytes > MAX_CHARACTER_KERNEL_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("character",),
+            code="groups.characters.kernel_output_exceeds_envelope",
+            message="ambient group and kernel generators exceed the output envelope",
+        )
+
+
+def _character_values_for_kernel(
+    element: CharacterRingElement, table: CharacterTableResult
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Expand an authenticated ordinary character on its exact class axis."""
+    field_order = table.axis.cyclotomic_order
+    class_count = len(table.partition.classes)
+    phi_dimension = euler_phi(field_order)
+    class_values: list[tuple[Fraction, ...]] = []
+    for class_index in range(class_count):
+        coefficients = [Fraction(0) for _ in range(phi_dimension)]
+        for multiplicity, row in zip(
+            element.irreducible_multiplicities, table.rows, strict=True
+        ):
+            for power, value in enumerate(row.values[class_index].coefficients):
+                coefficients[power] += multiplicity * value.as_fraction()
+        class_values.append(tuple(coefficients))
+
+    identity = tuple(range(table.partition.source.degree))
+    identity_class = next(
+        index
+        for index, conjugacy_class in enumerate(table.partition.classes)
+        if identity in conjugacy_class
+    )
+    degree_value = class_values[identity_class]
+    identity_degree = degree_value[0]
+    if identity_degree.denominator != 1 or any(degree_value[1:]):
+        raise _invalid(
+            "groups.characters.kernel_invalid_degree",
+            "canonical character has a nonintegral degree",
+            ("character",),
+        )
+    return tuple(class_values)
+
+
+def _permutation_compose(
+    left: tuple[int, ...], right: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Compose two permutations in image-list form."""
+    return tuple(left[right[index]] for index in range(len(left)))
+
+
+def _permutation_group_generated_by(
+    source: PermutationGroup,
+    subgroup_elements: set[tuple[int, ...]],
+) -> PermutationGroup:
+    """Return a deterministic generating set for an admitted subgroup."""
+    identity = tuple(range(source.degree))
+
+    def compose(left: tuple[int, ...], right: tuple[int, ...]) -> tuple[int, ...]:
+        return _permutation_compose(left, right)
+
+    def generated(generators: tuple[tuple[int, ...], ...]) -> set[tuple[int, ...]]:
+        members = {identity}
+        pending = [identity]
+        while pending:
+            current = pending.pop()
+            for generator in generators:
+                candidate = compose(current, generator)
+                if candidate not in members:
+                    members.add(candidate)
+                    pending.append(candidate)
+        return members
+
+    if identity not in subgroup_elements:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    generators: list[tuple[int, ...]] = []
+    members = {identity}
+    for candidate in sorted(subgroup_elements):
+        if candidate not in members:
+            generators.append(candidate)
+            members = generated(tuple(generators))
+    if members != subgroup_elements:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    if not generators:
+        generators = [identity]
+    return PermutationGroup(degree=source.degree, generators=tuple(generators))
+
+
+def character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
+    """Return the exact kernel of a supported ordinary virtual-table character.
+
+    The accepted coordinates must be nonnegative, so they describe an actual
+    finite-dimensional representation. For a finite-dimensional unitary
+    representation, ``chi(g) == chi(1)`` exactly iff every eigenvalue of
+    ``rho(g)`` is 1, hence iff ``g`` is in the kernel.
+    """
+    if not isinstance(request, CharacterKernelRequest):
+        raise _invalid(
+            "groups.characters.kernel_request_type",
+            "request must contain one table-bound ordinary character",
+            ("request",),
+        )
+    element = getattr(request, "character", None)
+    if not isinstance(element, CharacterRingElement):
+        raise _invalid(
+            "groups.characters.kernel_input_type",
+            "input must be a table-bound ordinary character",
+            ("character",),
+        )
+    _admit_ring_element_shape(element, "character")
+    if any(multiplicity < 0 for multiplicity in element.irreducible_multiplicities):
+        raise _invalid(
+            "groups.characters.kernel_requires_ordinary_character",
+            "kernel is defined here only for nonnegative irreducible multiplicities",
+            ("character", "irreducible_multiplicities"),
+        )
+    source = element.table.partition.source
+    actual_order, source_work = _admit_source_group_order(source)
+    if actual_order > MAX_CYCLOTOMIC_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("character", "table", "partition", "source"),
+            code="groups.characters.kernel_group_order_exceeds_envelope",
+            message="character kernels admit groups of order at most 60",
+        )
+    _admit_character_kernel(element, source, actual_order, source_work)
+    raw_classes = group_conjugacy_classes(
+        source.degree, [list(generator) for generator in source.generators]
+    )
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(g) for g in cls) for cls in raw_classes)
+    )
+    table = character_table(partition)
+    if element.table != table:
+        raise _invalid(
+            "groups.characters.kernel_noncanonical_table",
+            "input must retain the exact canonical character table for its group",
+            ("character", "table"),
+        )
+    class_values = _character_values_for_kernel(element, table)
+    identity_class = next(
+        index
+        for index, conjugacy_class in enumerate(table.partition.classes)
+        if tuple(range(source.degree)) in conjugacy_class
+    )
+    degree_value = class_values[identity_class]
+    kernel_elements = {
+        tuple(group_element)
+        for class_index, value in enumerate(class_values)
+        if value == degree_value
+        for group_element in table.partition.classes[class_index]
+    }
+    subgroup = _permutation_group_generated_by(source, kernel_elements)
+    return CharacterKernel._from_kernel(ambient_group=source, subgroup=subgroup)
+
+
 __all__ = [
+    "MAX_CHARACTER_KERNEL_OUTPUT_BYTES",
+    "MAX_CHARACTER_KERNEL_WORK",
     "MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES",
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
     "MAX_CHARACTER_TENSOR_PRODUCT_WORK",
+    "character_exterior_square",
+    "character_kernel",
+    "character_symmetric_square",
     "character_tensor_product",
     "class_function_character_decomposition",
 ]

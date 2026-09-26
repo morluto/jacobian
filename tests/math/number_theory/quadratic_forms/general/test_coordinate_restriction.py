@@ -3,7 +3,10 @@
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
 )
@@ -143,6 +146,16 @@ def test_constructed_restriction_request_admits_support_at_the_kernel() -> None:
         error.value.errors()[0]["type"]
         == "quadratic_form.coordinate_restriction_support_bound"
     )
+
+
+def test_native_boundary_rejects_invalid_subset_before_indexing() -> None:
+    source = _form()
+    for selected in (("foreign",), ("x", "x")):
+        request = QuadraticFormRestrictionRequest.model_construct(
+            form=source, selected_axis=selected
+        )
+        with pytest.raises(OperationDomainValidationError):
+            quadratic_form_restrict_coordinates(request)
 
 
 def test_deserialization_rejects_inclusion_that_does_not_select_declared_axes() -> None:

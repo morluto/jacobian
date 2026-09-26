@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math._labels import OpaqueLabel
 
 MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS = 256
@@ -276,6 +277,28 @@ def require_bilinear_pairing_budget(
 ) -> None:
     """Bound exact denominator and output growth before polar arithmetic."""
 
+    if (
+        not isinstance(left, RationalCoordinateVector)
+        or not isinstance(right, RationalCoordinateVector)
+        or len(left.coordinates) != len(form.axis)
+        or len(right.coordinates) != len(form.axis)
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right", "coordinates"),
+            code="quadratic_form.vector_shape",
+            message="both vectors must have one coordinate per form axis label",
+        )
+    if (
+        not isinstance(left, RationalCoordinateVector)
+        or not isinstance(right, RationalCoordinateVector)
+        or len(left.coordinates) != len(form.axis)
+        or len(right.coordinates) != len(form.axis)
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right", "coordinates"),
+            code="quadratic_form.vector_shape",
+            message="both vectors must have one coordinate per form axis label",
+        )
     support_terms = len(form.diagonal_coefficients) + len(form.cross_terms)
     if support_terms > MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS:
         raise ValueError("quadratic-form pairing exceeds the total support budget")

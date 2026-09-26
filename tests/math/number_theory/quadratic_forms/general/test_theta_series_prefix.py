@@ -122,9 +122,7 @@ def test_selected_theta_coefficients_match_direct_finite_enumeration() -> None:
         value = x * x
         if value in expected:
             expected[value] += 1
-    result = theta_selected_coefficients(
-        ThetaSelectedCoefficientsRequest(form=form, indices=(0, 17, 1_000_000))
-    )
+    result = theta_selected_coefficients(form, (0, 17, 1_000_000))
     assert tuple((row.index, row.coefficient) for row in result.coefficients) == tuple(
         expected.items()
     )
@@ -143,9 +141,7 @@ def test_selected_theta_coefficients_match_cross_term_oracle_and_roundtrip() -> 
         value = vector[0] ** 2 + vector[0] * vector[1] + vector[1] ** 2
         if value in expected:
             expected[value] += 1
-    result = theta_selected_coefficients(
-        ThetaSelectedCoefficientsRequest(form=form, indices=indices)
-    )
+    result = theta_selected_coefficients(form, indices)
     assert tuple((row.index, row.coefficient) for row in result.coefficients) == tuple(
         (index, expected[index]) for index in indices
     )
@@ -163,14 +159,34 @@ def test_selected_theta_request_requires_canonical_bounded_indices(
         ThetaSelectedCoefficientsRequest(form=_form((1,)), indices=indices)
 
 
+def test_selected_theta_native_boundary_revalidates_nested_form_and_schema() -> None:
+    form = _form((1,))
+    forged_form = form.model_copy(
+        update={
+            "cross_terms": (
+                QuadraticCrossTerm.model_construct(
+                    left=0, right=4, coefficient=CanonicalRational(num=1, den=1)
+                ),
+            )
+        }
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        theta_selected_coefficients(forged_form, (0,))
+    assert exc_info.value.errors()[0]["type"] == "quadratic_form.theta_invalid_form"
+
+    schema = ThetaSelectedCoefficientsRequest.model_json_schema()
+    item = schema["properties"]["indices"]["items"]
+    assert item["type"] == "integer"
+    assert item["minimum"] == 0
+    assert item["maximum"] == 1_000_000_000
+
+
 def test_selected_theta_admission_bounds_proved_search_box() -> None:
     form = _form((1, 1, 1, 1, 1, 1, 1))
     with pytest.raises(
         OperationResourceAdmissionError, match="lattice box"
     ) as exc_info:
-        theta_selected_coefficients(
-            ThetaSelectedCoefficientsRequest(form=form, indices=(1_000_000,))
-        )
+        theta_selected_coefficients(form, (1_000_000,))
     assert exc_info.value.errors()[0]["loc"] == ("indices",)
 
 

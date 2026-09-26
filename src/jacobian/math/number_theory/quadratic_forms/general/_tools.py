@@ -141,7 +141,7 @@ def compute_finite_box_profile(
 def compute_theta_selected_coefficients(
     request: ThetaSelectedCoefficientsRequest,
 ) -> ThetaSelectedCoefficientsResult:
-    return theta_selected_coefficients(request)
+    return theta_selected_coefficients(request.form, request.indices)
 
 
 def compute_theta_representing_vectors(

@@ -4,13 +4,17 @@ from collections.abc import Sequence
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.values import (
     RationalMatrix,
     rational_matrix_from_fractions,
 )
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     MAX_DIRECT_SUM_AXIS,
+    MAX_DIRECT_SUM_COMPONENTS,
     MAX_DIRECT_SUM_FORM_TERMS,
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
@@ -41,6 +45,15 @@ def require_direct_sum_budget(
     or coordinate traversal runs.
     """
 
+    if len(forms) > MAX_DIRECT_SUM_COMPONENTS:
+        raise OperationResourceAdmissionError(
+            location=location,
+            code=f"quadratic_form.{code_prefix}_component_bound",
+            message=(
+                f"quadratic-form component count exceeds the "
+                f"{MAX_DIRECT_SUM_COMPONENTS}-component envelope"
+            ),
+        )
     dimension = sum(len(form.axis) for form in forms)
     support = sum(
         len(form.diagonal_coefficients) + len(form.cross_terms) for form in forms
@@ -133,10 +146,22 @@ def quadratic_form_restrict_coordinates(
 
     source = request.form
     selected = request.selected_axis
+    if (
+        not isinstance(selected, (tuple, list))
+        or any(not isinstance(label, str) for label in selected)
+        or len(set(selected)) != len(selected)
+        or any(label not in source.axis for label in selected)
+    ):
+        raise OperationDomainValidationError(
+            location=("selected_axis",),
+            code="quadratic_form.coordinate_restriction_subset",
+            message="selected coordinates must be distinct labels from the source axis",
+        )
     require_direct_sum_budget(
         (source,), location=("form",), code_prefix="coordinate_restriction"
     )
     positions = {label: index for index, label in enumerate(source.axis)}
+    selected = tuple(selected)
     selected_positions = tuple(positions[label] for label in selected)
     restricted_index = {
         source_index: index for index, source_index in enumerate(selected_positions)

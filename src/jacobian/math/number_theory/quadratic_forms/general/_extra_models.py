@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -377,8 +377,12 @@ class ThetaSelectedCoefficientsRequest(StrictModel):
     """Selected exact representation numbers of a positive-definite form."""
 
     form: RationalQuadraticForm
-    indices: tuple[int, ...] = Field(
-        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    indices: tuple[Annotated[int, Field(ge=0, le=MAX_THETA_SELECTED_INDEX)], ...] = Field(
+        min_length=1,
+        max_length=MAX_THETA_SELECTED_INDICES,
+        description=(
+            f"Strictly increasing distinct indices in [0, {MAX_THETA_SELECTED_INDEX}]."
+        ),
     )
 
     @model_validator(mode="after")

@@ -1,22 +1,16 @@
 """Exact rational quadratic-form values and direct evaluation."""
 
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    FiniteBoxProfileRequest,
     FiniteBoxProfileResult,
-    FiniteGaussSumRequest,
     FiniteGaussSumResult,
     ThetaRepresentingVectorsRequest,
     ThetaRepresentingVectorsResult,
     ThetaSelectedCoefficient,
-    ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
-    ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
-    QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
-    QuadraticFormRestrictionRequest,
     QuadraticFormRestrictionResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_operations import (
@@ -48,23 +42,17 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 )
 
 __all__ = [
-    "FiniteBoxProfileRequest",
     "FiniteBoxProfileResult",
-    "FiniteGaussSumRequest",
     "FiniteGaussSumResult",
     "QuadraticCrossTerm",
-    "QuadraticFormDirectSumRequest",
     "QuadraticFormDirectSumResult",
-    "QuadraticFormRestrictionRequest",
     "QuadraticFormRestrictionResult",
     "RationalCoordinateVector",
     "RationalQuadraticForm",
     "ThetaRepresentingVectorsRequest",
     "ThetaRepresentingVectorsResult",
     "ThetaSelectedCoefficient",
-    "ThetaSelectedCoefficientsRequest",
     "ThetaSelectedCoefficientsResult",
-    "ThetaSeriesPrefixRequest",
     "ThetaSeriesPrefixResult",
     "bilinear_pairing",
     "coefficient_matrix",

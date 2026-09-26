@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian.canonical import format_canonical_integer
 from jacobian.math.topology.chain_complexes._integral_homology import (
     admit_integral_homology,
     compute_integral_homology,
@@ -20,6 +19,7 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_TENSOR_COEFFICIENT_DIGITS,
     MAX_TENSOR_GROUP_DIMENSION,
     MAX_TENSOR_TOTAL_CELLS,
+    ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
     HomologyGroupValue,
@@ -28,10 +28,11 @@ from jacobian.math.topology.chain_complexes.values import (
     MappingConeResult,
     TensorProductResult,
     VerificationResult,
+    _format_chain_coefficient,
     require_prime_field_admission,
 )
 
-MapMatrices = tuple[tuple[tuple[str, ...], ...], ...]
+MapMatrices = tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
 
 __all__ = [
     "chain_map_commutes",
@@ -107,7 +108,8 @@ def _require_tensor_admission(
         for matrix in complex_value.differential_matrices:
             for row in matrix:
                 for entry in row:
-                    numerator, _, denominator = entry.partition("/")
+                    spelling = _format_chain_coefficient(entry)
+                    numerator, _, denominator = spelling.partition("/")
                     if (
                         len(numerator.lstrip("-")) > MAX_TENSOR_COEFFICIENT_DIGITS
                         or len(denominator.lstrip("-")) > MAX_TENSOR_COEFFICIENT_DIGITS
@@ -133,7 +135,7 @@ def _require_tensor_admission(
     )
     tensor_degree_min = left.degree_min + right.degree_min
     placeholder_diffs = tuple(
-        tuple(("0",) * group_sizes[index + 1] for _ in range(group_sizes[index]))
+        tuple((0,) * group_sizes[index + 1] for _ in range(group_sizes[index]))
         for index in range(max(0, group_count - 1))
     )
     ChainComplexValue(
@@ -148,7 +150,7 @@ def _require_tensor_admission(
     def max_entry_length(value: ChainComplexValue) -> int:
         return max(
             (
-                len(entry)
+                len(_format_chain_coefficient(entry))
                 for matrix in value.differential_matrices
                 for row in matrix
                 for entry in row
@@ -167,7 +169,7 @@ def _require_tensor_admission(
 def _require_cone_admission(
     source: ChainComplexValue,
     target: ChainComplexValue,
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+    map_matrices: MapMatrices,
 ) -> None:
     cone_basis_sizes = tuple(
         (target.basis_sizes[index] if index < len(target.basis_sizes) else 0)
@@ -176,7 +178,7 @@ def _require_cone_admission(
     )
     placeholder_diffs = tuple(
         tuple(
-            ("0",) * cone_basis_sizes[index + 1] for _ in range(cone_basis_sizes[index])
+            (0,) * cone_basis_sizes[index + 1] for _ in range(cone_basis_sizes[index])
         )
         for index in range(max(0, len(cone_basis_sizes) - 1))
     )
@@ -193,12 +195,17 @@ def _require_cone_admission(
         for index in range(len(cone_basis_sizes) - 1)
     )
     entry_chars = sum(
-        len(entry)
+        len(_format_chain_coefficient(entry))
         for value in (source, target)
         for matrix in value.differential_matrices
         for row in matrix
         for entry in row
-    ) + sum(len(entry) for matrix in map_matrices for row in matrix for entry in row)
+    ) + sum(
+        len(_format_chain_coefficient(entry))
+        for matrix in map_matrices
+        for row in matrix
+        for entry in row
+    )
     if entry_chars + cone_cells > MAX_MATRIX_ENTRY_CHARS:
         raise ChainComplexAdmissionError(
             "mapping_cone_output_budget_exceeded",
@@ -206,24 +213,16 @@ def _require_cone_admission(
         )
 
 
-def _parse_fraction(s: str, prime: int | None = None) -> Fraction:
+def _parse_fraction(s: int | Fraction, prime: int | None = None) -> Fraction:
     if prime is not None:
-        # Prime-field entries are canonical residues 0..p-1; accept integer strings only
-        try:
-            val = int(s)
-        except ValueError as error:
-            raise ValueError(
-                f"prime-field entry '{s}' must be an integer residue"
-            ) from error
-        return Fraction(val % prime)
-    if "/" in s:
-        num, den = s.split("/", 1)
-        return Fraction(int(num), int(den))
-    return Fraction(int(s))
+        if type(s) is not int:
+            raise ValueError("prime-field coefficients must be integers")
+        return Fraction(s % prime)
+    return s if type(s) is Fraction else Fraction(s)
 
 
 def _matrix_to_fractions(
-    matrix: tuple[tuple[str, ...], ...],
+    matrix: tuple[tuple[ChainCoefficient, ...], ...],
     rows: int,
     cols: int,
     prime: int | None = None,
@@ -428,7 +427,7 @@ def _differential_verdict(complex_value: ChainComplexValue) -> tuple[bool, str]:
 def _chain_map_verdict(
     source: ChainComplexValue,
     target: ChainComplexValue,
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+    map_matrices: MapMatrices,
 ) -> tuple[bool, str]:
     """Decide the chain-map relation exactly and derive its detail string.
 
@@ -542,31 +541,27 @@ def _compute_homology_groups(
     return tuple(groups)
 
 
-def _serialize_entry(value: Fraction, prime: int | None) -> str:
-    """One canonical matrix-entry spelling; GF(p) entries are residues.
-
-    Prime-field coefficients reduce modulo the modulus so an accepted
-    GF(p) request serializes canonical residues in ``[0, p)`` instead of
-    signed representatives that downstream values would reject.
-    """
-    if value.denominator != 1:
-        if prime is not None:
-            raise ValueError("prime-field coefficients must be integers")
-        return (
-            f"{format_canonical_integer(value.numerator)}/"
-            f"{format_canonical_integer(value.denominator)}"
-        )
-    coefficient = int(value)
-    if prime is not None:
-        return format_canonical_integer(coefficient % prime)
-    return format_canonical_integer(coefficient)
+def _native_entry(
+    value: Fraction, coefficient_ring: CoefficientRing, prime: int | None
+) -> ChainCoefficient:
+    if coefficient_ring is CoefficientRing.PRIME_FIELD:
+        if prime is None or value.denominator != 1:
+            raise ValueError("prime-field coefficients must be integer residues")
+        return int(value) % prime
+    if coefficient_ring is CoefficientRing.INTEGER:
+        if value.denominator != 1:
+            raise ValueError("integer-ring coefficients must be integers")
+        return value.numerator
+    return value
 
 
-def _serialized_matrix(
-    mat: list[list[Fraction]], prime: int | None
-) -> tuple[tuple[str, ...], ...]:
-    """Canonical string form of one exact derived matrix."""
-    return tuple(tuple(_serialize_entry(v, prime) for v in row) for row in mat)
+def _native_matrix(
+    mat: list[list[Fraction]], coefficient_ring: CoefficientRing, prime: int | None
+) -> tuple[tuple[ChainCoefficient, ...], ...]:
+    """Return one derived matrix in native exact scalar form."""
+    return tuple(
+        tuple(_native_entry(v, coefficient_ring, prime) for v in row) for row in mat
+    )
 
 
 def _require_mapping_cone_parents(
@@ -679,9 +674,10 @@ def _cone_differential_for_degree(
     source_diffs: list[list[list[Fraction]]],
     target_diffs: list[list[list[Fraction]]],
     map_mats: list[list[list[Fraction]]],
+    coefficient_ring: CoefficientRing,
     prime: int | None,
-) -> tuple[tuple[str, ...], ...]:
-    """One cone differential cone_n -> cone_{n-1} as canonical strings.
+) -> tuple[tuple[ChainCoefficient, ...], ...]:
+    """One cone differential cone_n -> cone_{n-1}.
 
     Blocks: top-left = -d_C^{n-1}, top-right = 0, bottom-left = f_{n-1},
     bottom-right = d_D^{n}.
@@ -700,14 +696,14 @@ def _cone_differential_for_degree(
     _fill_source_block(block, source_diffs, n, c_n_minus2, c_n_minus1)
     _fill_target_block(block, target_diffs, n, c_n_minus2, c_n_minus1, d_n_minus1, d_n)
     _fill_map_block(block, map_mats, n, c_n_minus2, c_n_minus1, d_n_minus1)
-    return _serialized_matrix(block, prime)
+    return _native_matrix(block, coefficient_ring, prime)
 
 
 def _compute_mapping_cone(
     source: ChainComplexValue,
     target: ChainComplexValue,
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
-) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
+    map_matrices: MapMatrices,
+) -> tuple[tuple[int, ...], tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]]:
     """Exact mapping cone after admitting the authored chain-map relation."""
     _require_mapping_cone_parents(source, target)
     prime = source.prime
@@ -765,6 +761,7 @@ def _compute_mapping_cone(
             source_diffs,
             target_diffs,
             map_mats,
+            source.coefficient_ring,
             prime,
         )
         for n in range(1, len(cone_basis_sizes))
@@ -865,8 +862,8 @@ def _tensor_differential_for_degree(
     left_diffs: list[list[list[Fraction]]],
     right_diffs: list[list[list[Fraction]]],
     prime: int | None,
-) -> tuple[tuple[str, ...], ...]:
-    """One tensor differential (C⊗D)_deg -> (C⊗D)_{deg-1} as strings.
+) -> tuple[tuple[ChainCoefficient, ...], ...]:
+    """One tensor differential (C⊗D)_deg -> (C⊗D)_{deg-1}.
 
     Each summand C_i ⊗ D_j contributes via d_C down to C_{i-1} ⊗ D_j and
     via the Koszul-signed id ⊗ d_D down to C_i ⊗ D_{j-1}.
@@ -902,13 +899,13 @@ def _tensor_differential_for_degree(
                 right=right,
                 right_diffs=right_diffs,
             )
-    return _serialized_matrix(block, prime)
+    return _native_matrix(block, left.coefficient_ring, prime)
 
 
 def _compute_tensor_product(
     left: ChainComplexValue,
     right: ChainComplexValue,
-) -> tuple[tuple[int, ...], tuple[tuple[tuple[str, ...], ...], ...]]:
+) -> tuple[tuple[int, ...], tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]]:
     """Exact tensor product after checking the authored factor differentials."""
     if left.coefficient_ring != right.coefficient_ring or left.prime != right.prime:
         raise ValueError("tensor product requires same coefficient ring and prime")
@@ -954,15 +951,15 @@ def _compute_tensor_product(
 
 def construct_chain_complex(
     basis_sizes: tuple[int, ...],
-    differential_matrices: tuple[tuple[tuple[str, ...], ...], ...],
+    differential_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
     *,
     coefficient_ring: CoefficientRing = CoefficientRing.RATIONAL,
     prime: int | None = None,
 ) -> ChainComplexValue:
     """Construct an admitted canonical chain-complex value.
 
-    Differential entries use the canonical exact string grammar carried by
-    :class:`ChainComplexValue`; adjacent differentials must compose to zero.
+    Differential entries are native exact scalars; adjacent differentials
+    must compose to zero.
     """
     require_prime_field_admission(coefficient_ring, prime)
     value = ChainComplexValue(

@@ -410,7 +410,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute the exact prism over a bounded rational polytope",
         description="Embed each source vertex p as a bottom vertex (p, 0) and a top "
         "vertex (p, 1) on a fresh height axis, returning the exact prism "
-        "V-polytope P x [0, 1] with suffixed bottom/top transport IDs and the "
+        "V-polytope P x [0, 1] with suffixed bottom/top transport IDs, the "
+        "named height_axis, retained source coordinate space and axis map, and the "
         "replayed dimension identity dim(prism) = dim(P) + 1. The height axis "
         "must be fresh and the suffixed IDs must be distinct.",
         request_type=PrismRequest,
@@ -452,7 +453,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Embed the left factor as (p, 0, 0) and the right factor as "
         "(0, q, 1) on (*left.axes, *right.axes, height_axis), returning the "
         "exact join V-polytope with unchanged source vertex IDs, explicit "
-        "left/right transport, and the replayed dimension identity "
+        "left/right vertex and ordered source-axis transports, retained factor "
+        "coordinate spaces, the named height_axis, and the dimension identity "
         "dim(join) = dim(P) + dim(Q) + 1. The factors must live on disjoint "
         "axes with disjoint vertex IDs and the height axis must be fresh.",
         request_type=JoinRequest,

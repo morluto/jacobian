@@ -108,7 +108,15 @@ class SearchableOperation(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class _SearchCorpus:
-    entries: tuple[tuple[SearchableOperation, tuple[frozenset[str], ...]], ...]
+    entries: tuple[
+        tuple[
+            SearchableOperation,
+            tuple[frozenset[str], ...],
+            frozenset[tuple[str, str]],
+            frozenset[tuple[str, str]],
+        ],
+        ...,
+    ]
     document_frequency: Counter[str]
 
 
@@ -117,7 +125,18 @@ class OperationSearchIndex:
 
     def __init__(self, operations: Sequence[SearchableOperation]) -> None:
         entries = tuple(
-            (operation, _operation_field_terms(operation)) for operation in operations
+            (
+                operation,
+                _operation_field_terms(operation),
+                _phrases(operation.title) | _phrases(operation.operation_id),
+                _phrases(operation.description)
+                | frozenset(
+                    phrase
+                    for term in operation.discovery_terms
+                    for phrase in _phrases(term)
+                ),
+            )
+            for operation in operations
         )
         self._all = self._corpus(entries)
         namespaces = {operation_namespace(operation) for operation in operations}
@@ -134,9 +153,19 @@ class OperationSearchIndex:
 
     @staticmethod
     def _corpus(
-        entries: tuple[tuple[SearchableOperation, tuple[frozenset[str], ...]], ...],
+        entries: tuple[
+            tuple[
+                SearchableOperation,
+                tuple[frozenset[str], ...],
+                frozenset[tuple[str, str]],
+                frozenset[tuple[str, str]],
+            ],
+            ...,
+        ],
     ) -> _SearchCorpus:
-        document_terms = tuple(frozenset().union(*fields) for _, fields in entries)
+        document_terms = tuple(
+            frozenset().union(*fields) for _, fields, _, _ in entries
+        )
         return _SearchCorpus(
             entries=entries,
             document_frequency=Counter(
@@ -175,8 +204,9 @@ def _match_corpus(
     normalized_namespace: str | None,
 ) -> OperationMatchResult:
     need_terms = discovery_terms(request.need)
+    need_phrases = _phrases(request.need)
     ranked: list[tuple[float, OperationDiscoveryMatch]] = []
-    for descriptor, fields in corpus.entries:
+    for descriptor, fields, title_phrases, contract_phrases in corpus.entries:
         if not _explicit_domain_matches(request.need, need_terms, fields, descriptor):
             continue
         score = need_relevance(
@@ -186,7 +216,7 @@ def _match_corpus(
             document_count=len(corpus.entries),
         )
         if score > 0:
-            score += _phrase_relevance(descriptor, request.need)
+            score += _phrase_relevance(need_phrases, title_phrases, contract_phrases)
         if score > 0 and (
             request.search_mode == "broad"
             or _precise_match(
@@ -194,7 +224,8 @@ def _match_corpus(
                 fields,
                 need_terms,
                 score,
-                request.need,
+                need_phrases,
+                title_phrases,
             )
         ):
             ranked.append(
@@ -364,13 +395,12 @@ def _phrases(value: str) -> frozenset[tuple[str, str]]:
     )
 
 
-def _phrase_relevance(operation: SearchableOperation, need: str) -> float:
-    phrases = _phrases(need)
+def _phrase_relevance(
+    phrases: frozenset[tuple[str, str]],
+    title_phrases: frozenset[tuple[str, str]],
+    contract_phrases: frozenset[tuple[str, str]],
+) -> float:
     # A matched phrase in several fields is still one piece of evidence.
-    title_phrases = _phrases(operation.title) | _phrases(operation.operation_id)
-    contract_phrases = _phrases(operation.description) | frozenset(
-        phrase for term in operation.discovery_terms for phrase in _phrases(term)
-    )
     return len(phrases & title_phrases) + 0.5 * len(
         phrases & (contract_phrases - title_phrases)
     )
@@ -415,7 +445,8 @@ def _precise_match(
     fields: tuple[frozenset[str], ...],
     need_terms: frozenset[str],
     score: float,
-    need: str,
+    need_phrases: frozenset[tuple[str, str]],
+    title_phrases: frozenset[tuple[str, str]],
 ) -> bool:
     """Require named-object/postcondition agreement for the default first page."""
 
@@ -438,9 +469,7 @@ def _precise_match(
     overlap = {term for term in need_terms & identifying_terms if len(term) > 2}
     if len(overlap) >= min(3, len(need_terms)):
         return True
-    return bool(
-        _phrases(need) & (_phrases(operation.operation_id) | _phrases(operation.title))
-    )
+    return bool(need_phrases & title_phrases)
 
 
 def _operation_field_terms(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -163,6 +164,45 @@ class BraidWord(StrictModel):
 
 class BraidWordRequest(StrictModel):
     word: BraidWord
+
+
+class BraidArtinActionResult(StrictModel):
+    """The Artin automorphism of the free group on the braid strands.
+
+    Images use zero-based generator indices and freely reduced words. The
+    convention is ``sigma_i(x_i)=x_i*x_(i+1)*x_i^-1`` and
+    ``sigma_i(x_(i+1))=x_i``; the remaining generators are fixed.
+    Letters in a braid word act successively on the current images.
+    """
+
+    word: BraidWord
+    generator_images: tuple[FiniteGroupWord, ...] = Field(
+        min_length=1, max_length=MAX_BRAID_STRANDS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_free_group_endomorphism(self) -> Self:
+        if len(self.generator_images) != self.word.strand_count:
+            raise _validation_error(
+                "artin_action_generator_axis",
+                "the action must provide one image for each braid strand generator",
+            )
+        for image in self.generator_images:
+            letters = image.letters
+            if any(letter.generator >= self.word.strand_count for letter in letters):
+                raise _validation_error(
+                    "artin_action_generator_index",
+                    "every image letter must name a generator on the retained axis",
+                )
+            if any(
+                left.generator == right.generator and left.exponent == -right.exponent
+                for left, right in pairwise(letters)
+            ):
+                raise _validation_error(
+                    "artin_action_not_reduced",
+                    "each free-group image must be freely reduced",
+                )
+        return self
 
 
 class BraidPermutationResult(StrictModel):

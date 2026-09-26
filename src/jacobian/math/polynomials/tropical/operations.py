@@ -30,6 +30,7 @@ from jacobian.math.polynomials.tropical.values import (
     MAX_TROPICAL_ACTIVE_RESULT_BYTES,
     MAX_TROPICAL_ACTIVE_TERM_WORK,
     MAX_TROPICAL_EXPONENT,
+    MAX_TROPICAL_MATRIX_RESULT_BYTES,
     MAX_TROPICAL_NEWTON_RESULT_BYTES,
     MAX_TROPICAL_POLYNOMIAL_TERMS,
     MAX_TROPICAL_ROOT_CROSSOVER_PAIRS,
@@ -68,10 +69,28 @@ def _admit_scalar(s: TropicalScalar, semiring: TropicalSemiring) -> None:
             code="tropical.semiring_mismatch",
             message="scalar must carry the request semiring",
         )
+    if s.kind not in ("FINITE", "POSITIVE_INFINITY", "NEGATIVE_INFINITY"):
+        raise OperationDomainValidationError(
+            location=("scalar", "kind"),
+            code="tropical.scalar_shape",
+            message="scalar kind must be a licensed tropical scalar kind",
+        )
     if s.kind == "FINITE":
-        if not isinstance(s.value, CanonicalRational) or (
-            semiring.base == "ZZ" and s.value.den != 1
-        ):
+        if not isinstance(s.value, CanonicalRational):
+            raise OperationDomainValidationError(
+                location=("scalar",),
+                code="tropical.scalar_shape",
+                message="finite scalar is not valid for its semiring",
+            )
+        try:
+            CanonicalRational.model_validate(s.value.model_dump(mode="python"))
+        except (AttributeError, TypeError, ValueError) as error:
+            raise OperationDomainValidationError(
+                location=("scalar",),
+                code="tropical.scalar_shape",
+                message="finite scalar must satisfy the canonical rational contract",
+            ) from error
+        if semiring.base == "ZZ" and s.value.den != 1:
             raise OperationDomainValidationError(
                 location=("scalar",),
                 code="tropical.scalar_shape",
@@ -120,6 +139,18 @@ def _admit_vector(vector: TropicalVector) -> None:
         _admit_scalar(entry, vector.semiring)
 
 
+def _is_valid_tropical_axis_label(label: object) -> bool:
+    return (
+        isinstance(label, str)
+        and bool(label)
+        and label == label.strip()
+        and len(label) <= 64
+        and not any(
+            unicodedata.category(character) in ("Cc", "Cs") for character in label
+        )
+    )
+
+
 def _admit_matrix(matrix: TropicalMatrix) -> None:
     if not isinstance(matrix, TropicalMatrix):
         raise OperationDomainValidationError(
@@ -128,13 +159,49 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
             message="expected a tropical matrix",
         )
     if (
-        len(matrix.row_axis) != len(matrix.entries)
-        or len(set(matrix.row_axis)) != len(matrix.row_axis)
-        or len(set(matrix.column_axis)) != len(matrix.column_axis)
-        or len(matrix.row_axis) > 128
+        type(matrix.semiring) is not TropicalSemiring
+        or type(matrix.row_axis) is not tuple
+        or type(matrix.column_axis) is not tuple
+        or type(matrix.entries) is not tuple
+        or any(type(row) is not tuple for row in matrix.entries)
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="tropical.matrix_shape",
+            message="matrix axes, rows, and semiring must be canonical values",
+        )
+    try:
+        TropicalSemiring.model_validate(matrix.semiring.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("semiring",),
+            code="tropical.semiring_invalid",
+            message="matrix semiring must satisfy the tropical semiring contract",
+        ) from error
+    if (
+        len(matrix.row_axis) > 128
         or len(matrix.column_axis) > 128
+        or len(matrix.row_axis) != len(matrix.entries)
         or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
     ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="tropical.matrix_shape",
+            message="matrix entries must match row and column axes",
+        )
+    if any(
+        not _is_valid_tropical_axis_label(label)
+        for axis in (matrix.row_axis, matrix.column_axis)
+        for label in axis
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix", "axis"),
+            code="tropical.matrix_axis_label",
+            message="matrix axis labels must satisfy the opaque-label contract",
+        )
+    if len(set(matrix.row_axis)) != len(matrix.row_axis) or len(
+        set(matrix.column_axis)
+    ) != len(matrix.column_axis):
         raise OperationDomainValidationError(
             location=("matrix",),
             code="tropical.matrix_shape",
@@ -273,6 +340,13 @@ def tropical_scalar_add(
 ) -> tuple[TropicalScalar, AddBranch, InfinityCase]:
     _admit_scalar(left, semiring)
     _admit_scalar(right, semiring)
+    return _tropical_scalar_add_admitted(semiring, left, right)
+
+
+def _tropical_scalar_add_admitted(
+    semiring: TropicalSemiring, left: TropicalScalar, right: TropicalScalar
+) -> tuple[TropicalScalar, AddBranch, InfinityCase]:
+    """Select the tropical sum after the caller has admitted both scalars."""
     lv, rv = _order(left), _order(right)
     if lv is None and rv is None:
         branch: AddBranch = "TIE"
@@ -1545,6 +1619,64 @@ def tropical_polynomial_univariate_newton_polygon(
     )
 
 
+def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> TropicalMatrix:
+    """Add matrices entrywise in one tropical semiring on identical axes."""
+    _admit_matrix(left)
+    _admit_matrix(right)
+    if (
+        left.semiring != right.semiring
+        or left.row_axis != right.row_axis
+        or left.column_axis != right.column_axis
+    ):
+        raise OperationDomainValidationError(
+            location=("right",),
+            code="tropical.matrix_mismatch",
+            message="matrices must have identical semiring and labelled axes",
+        )
+    # Tropical addition selects one operand per cell. Size the actual winners,
+    # not both inputs, before allocating the output rows.
+    winners = tuple(
+        _tropical_scalar_add_admitted(left.semiring, left_entry, right_entry)[0]
+        for left_row, right_row in zip(left.entries, right.entries, strict=True)
+        for left_entry, right_entry in zip(left_row, right_row, strict=True)
+    )
+    scalar_bytes = sum(
+        160
+        + (
+            0
+            if entry.value is None
+            else _digits(entry.value.num) + _digits(entry.value.den)
+        )
+        for entry in winners
+    )
+    output_bound = (
+        len(encode_strict_json(list(left.row_axis)))
+        + len(encode_strict_json(list(left.column_axis)))
+        + 256
+        + scalar_bytes
+    )
+    if output_bound > MAX_TROPICAL_MATRIX_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="tropical.matrix_output_bytes",
+            message="matrix sum may exceed the canonical output byte envelope",
+        )
+    rows = (
+        tuple(
+            winners[offset : offset + len(left.column_axis)]
+            for offset in range(0, len(winners), len(left.column_axis))
+        )
+        if left.column_axis
+        else tuple(() for _ in left.row_axis)
+    )
+    return TropicalMatrix(
+        semiring=left.semiring,
+        row_axis=left.row_axis,
+        column_axis=left.column_axis,
+        entries=rows,
+    )
+
+
 def tropical_matrix_multiply(
     left: TropicalMatrix, right: TropicalMatrix
 ) -> TropicalMatrix:
@@ -1854,6 +1986,7 @@ def tropical_matrix_minor_assignment_profiles(
 
 __all__ = [
     "tropical_assignment_profile",
+    "tropical_matrix_add",
     "tropical_matrix_finite_power_sum",
     "tropical_matrix_minor_assignment_profiles",
     "tropical_matrix_multiply",

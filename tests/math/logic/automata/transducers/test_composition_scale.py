@@ -41,7 +41,7 @@ def test_composition_admits_small_reachable_diagonal(size: int) -> None:
     assert restored.transducer.state_count == size
     for length in [0, 1, size - 1, size, size + 1]:
         word = (0,) * length
-        assert run_subsequential(restored.transducer, word)[1] == word
+        assert run_subsequential(restored.transducer, word).output == word
     assert verify_composition(restored)
 
 

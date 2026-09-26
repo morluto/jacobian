@@ -72,17 +72,20 @@ def enumerate_hyperelliptic_affine_places(
     non-prime residue field require other carriers.
     """
 
-    field = _canonical_field(_validated_field(field))
+    field = _validated_field(field)
+    # Characteristic admission must precede rational-function normalization:
+    # composite moduli do not have field inverses and can make Euclid loop.
+    _admit_field_resources(field)
     if field.characteristic == 2:
         raise OperationDomainValidationError(
             location=("field", "characteristic"),
             code="function_field.affine_enumeration_characteristic",
             message="affine y^2=f(x) enumeration requires odd characteristic",
         )
-    # Validate coefficient/work bounds before recognition. Squarefree y^2-f(x)
-    # itself proves irreducibility, so generic rational-function factorization
-    # is redundant and outside this operation's admission envelope.
-    _admit_field_resources(field)
+    # Squarefree y^2-f(x) itself proves irreducibility, so generic
+    # rational-function factorization is redundant and outside this operation's
+    # admission envelope.
+    field = _canonical_field(field)
     branch_degree_bound = max(
         (
             max(coefficient.numerator.degree, coefficient.denominator.degree)

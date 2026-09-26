@@ -50,6 +50,28 @@ def test_enumeration_is_complete_canonical_and_composes_with_valuation():
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_composite_characteristic_is_rejected_before_rational_normalization() -> None:
+    # Native malformed values must fail prime-field admission before rational
+    # coefficient normalization attempts inversion modulo a composite.
+    def rational(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:
+        return PrimeFieldRationalFunction(
+            numerator=PrimeFieldPolynomial(
+                characteristic=4, coefficients=coefficients
+            ),
+            denominator=PrimeFieldPolynomial(characteristic=4, coefficients=(1,)),
+        )
+
+    field = FiniteFunctionField(
+        characteristic=4,
+        variable="x",
+        generator="y",
+        defining_polynomial=(rational((2,)), rational((0,)), rational((1,))),
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        enumerate_hyperelliptic_affine_places(field)
+    assert exc_info.value.errors()[0]["type"] == "function_field.characteristic_not_prime"
+
+
 def test_non_squarefree_model_is_rejected_by_shape_recognition() -> None:
     field = FiniteFunctionField(
         characteristic=5,

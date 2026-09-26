@@ -72,21 +72,6 @@ class FiniteFieldTwistClassResult(StrictModel):
             or self.target_j_invariant.presentation != self.source.field
         ):
             raise ValueError("twist-class invariants must use the common curve field")
-        source_data = finite_field_discriminant(
-            self.source.field, self.source.coefficient_a, self.source.coefficient_b
-        )
-        target_data = finite_field_discriminant(
-            self.target.field, self.target.coefficient_a, self.target.coefficient_b
-        )
-        if (
-            source_data.j_invariant != self.source_j_invariant
-            or target_data.j_invariant != self.target_j_invariant
-            or source_data.j_invariant is None
-            or target_data.j_invariant is None
-        ):
-            raise ValueError(
-                "twist-class invariants must be the exact j values of the curves"
-            )
         if self.source_j_invariant == self.target_j_invariant and (
             not _nonzero(self.source.coefficient_a)
             or not _nonzero(self.source.coefficient_b)
@@ -126,22 +111,6 @@ class FiniteFieldTwistClassResult(StrictModel):
             raise ValueError(
                 "twist-class result has inconsistent invariants or witnesses"
             )
-        if self.relation == "ISOMORPHIC":
-            assert self.isomorphism is not None
-            if not _valid_isomorphism_witness(self.isomorphism):
-                raise ValueError(
-                    "isomorphism scaling does not transport curve coefficients"
-                )
-        if self.relation == "QUADRATIC_TWIST":
-            assert self.twist is not None and self.twist_to_target is not None
-            if not _valid_twist_witness(self.twist):
-                raise ValueError(
-                    "twist parameter or coefficients do not define the claimed twist"
-                )
-            if not _valid_isomorphism_witness(self.twist_to_target):
-                raise ValueError(
-                    "twisted-model scaling does not transport curve coefficients"
-                )
         return self
 
 
@@ -191,7 +160,13 @@ def _valid_twist_witness(relation: FiniteFieldQuadraticTwistRelation) -> bool:
 def _admit_pair(
     source: FiniteFieldShortWeierstrassCurve,
     target: FiniteFieldShortWeierstrassCurve,
-) -> tuple[FiniteFieldShortWeierstrassCurve, FiniteFieldShortWeierstrassCurve, int]:
+) -> tuple[
+    FiniteFieldShortWeierstrassCurve,
+    FiniteFieldShortWeierstrassCurve,
+    int,
+    FiniteFieldElement,
+    FiniteFieldElement,
+]:
     if not isinstance(source, FiniteFieldShortWeierstrassCurve) or not isinstance(
         target, FiniteFieldShortWeierstrassCurve
     ):
@@ -200,6 +175,7 @@ def _admit_pair(
             code="elliptic_curve.finite_field.twist_class_curve_type",
             message="twist-class inputs must be finite-field short-Weierstrass curves",
         )
+    source, target = _curve_admit(source), _curve_admit(target)
     if source.field != target.field:
         raise OperationDomainValidationError(
             location=("target", "field"),
@@ -215,6 +191,22 @@ def _admit_pair(
             code="elliptic_curve.finite_field.twist_class_order_bound",
             message="complete twist-class decision requires field order at most 4096",
         )
+    source_data = finite_field_discriminant(
+        source.field, source.coefficient_a, source.coefficient_b
+    )
+    target_data = finite_field_discriminant(
+        target.field, target.coefficient_a, target.coefficient_b
+    )
+    source_j, target_j = source_data.j_invariant, target_data.j_invariant
+    if source_j is None or target_j is None:
+        raise OperationDomainValidationError(
+            location=("source", "target"),
+            code="elliptic_curve.finite_field.twist_class_singular",
+            message="twist-class inputs must be nonsingular curves",
+        )
+    if source_j != target_j:
+        return source, target, q, source_j, target_j
+
     iso_work = q * field.degree**2 * (4 + 4 * q.bit_length())
     twist_work = q * field.degree**2 * (2 * q.bit_length() + 8)
     total = 2 * iso_work + twist_work
@@ -228,7 +220,6 @@ def _admit_pair(
             code="elliptic_curve.finite_field.twist_class_work_bound",
             message="complete twist-class decision exceeds its exact-work envelope",
         )
-    source, target = _curve_admit(source), _curve_admit(target)
     max_element = _element(field, (field.characteristic - 1,) * field.degree)
     # Admit the complete largest result shape, including both possible maps,
     # before invoking the exhaustive searches.
@@ -254,7 +245,7 @@ def _admit_pair(
             code="elliptic_curve.finite_field.twist_class_output_bound",
             message="twist-class result exceeds the canonical output-byte envelope",
         )
-    return source, target, q
+    return source, target, q, source_j, target_j
 
 
 def finite_field_twist_class(
@@ -268,16 +259,7 @@ def finite_field_twist_class(
     type: the class of the source and its nontrivial quadratic twist. The
     exhaustive scaling and twist searches are bounded by the field order.
     """
-    source, target, _ = _admit_pair(source, target)
-    source_data = finite_field_discriminant(
-        source.field, source.coefficient_a, source.coefficient_b
-    )
-    target_data = finite_field_discriminant(
-        target.field, target.coefficient_a, target.coefficient_b
-    )
-    source_j, target_j = source_data.j_invariant, target_data.j_invariant
-    if source_j is None or target_j is None:
-        raise RuntimeError("admitted nonsingular curves must have exact j-invariants")
+    source, target, _, source_j, target_j = _admit_pair(source, target)
     if source_j != target_j:
         return FiniteFieldTwistClassResult(
             source=source,

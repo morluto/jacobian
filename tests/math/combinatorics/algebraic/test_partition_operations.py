@@ -173,6 +173,29 @@ def test_ssyt_count_rejects_an_oversized_constructed_partition() -> None:
     assert error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_size"
 
 
+@pytest.mark.parametrize(
+    "operation", [native.hook_lengths, native.standard_young_tableaux_count]
+)
+def test_hook_operations_admit_partition_before_computation(operation) -> None:
+    """Direct hook kernels reject forged carriers before column expansion."""
+    forged = IntegerPartition.model_construct(parts=(10**9,))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        operation(forged)
+    assert error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_size"
+
+
+@pytest.mark.parametrize(
+    "operation", [native.hook_lengths, native.standard_young_tableaux_count]
+)
+def test_hook_operations_reject_a_non_partition_carrier(operation) -> None:
+    """Direct hook kernels report a typed error for wrong native carriers."""
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(None)  # type: ignore[arg-type]
+    assert (
+        error.value.errors()[0]["type"] == "algebraic_combinatorics.partition_carrier"
+    )
+
+
 def test_ssyt_count_rejects_an_oversized_native_alphabet() -> None:
     """A native alphabet beyond the ExactInteger carrier is a domain error."""
     from jacobian.catalog.models import OperationDomainValidationError

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Literal, Self
+from itertools import pairwise
+from typing import Annotated, Literal, Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
@@ -18,6 +19,8 @@ MAX_BIWORD_MASS = 500
 MAX_BIWORD_AXIS = 50
 MAX_BIWORD_LABEL_BYTES = 2_048
 MAX_BIWORD_CELLS = 2_500
+MAX_GREENE_WITNESS_WORD_LENGTH = 32
+MAX_GREENE_WITNESS_K = 8
 
 
 def _e(r: str, m: str) -> PydanticCustomError:
@@ -224,6 +227,144 @@ class GreeneResult(StrictModel):
     k: int
 
 
+class GreeneWitnessRequest(StrictModel):
+    """Compute disjoint subsequence witnesses in a deliberately small envelope."""
+
+    word: FiniteWord
+    k: StrictInt = Field(ge=1, le=MAX_GREENE_WITNESS_K)
+
+
+GreeneSubsequence = Annotated[
+    tuple[StrictInt, ...],
+    Field(min_length=1, max_length=MAX_GREENE_WITNESS_WORD_LENGTH),
+]
+GreeneSubsequenceFamily = Annotated[
+    tuple[GreeneSubsequence, ...],
+    Field(max_length=MAX_GREENE_WITNESS_K),
+]
+
+
+class GreeneWitnessFamily(StrictModel):
+    """Optimal disjoint subsequence families for one Greene index."""
+
+    k: StrictInt = Field(ge=1, le=MAX_GREENE_WITNESS_K)
+    increasing_subsequences: GreeneSubsequenceFamily
+    decreasing_subsequences: GreeneSubsequenceFamily
+    increasing_total: StrictInt = Field(ge=0, le=MAX_GREENE_WITNESS_WORD_LENGTH)
+    decreasing_total: StrictInt = Field(ge=0, le=MAX_GREENE_WITNESS_WORD_LENGTH)
+
+
+class GreeneWitnessResult(StrictModel):
+    """Source-bound disjoint witnesses for the first ``k`` Greene invariants.
+
+    Indices are zero-based positions in ``word``. Increasing subsequences are
+    weakly increasing and decreasing subsequences are strictly decreasing,
+    matching ordinary row insertion with first-strictly-greater bumping.
+    """
+
+    word: FiniteWord
+    shape: IntegerPartition
+    families: tuple[GreeneWitnessFamily, ...] = Field(
+        min_length=1, max_length=MAX_GREENE_WITNESS_K
+    )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_witness_relations(self) -> Self:
+        n = len(self.word.letters)
+        if n > MAX_GREENE_WITNESS_WORD_LENGTH:
+            raise _e(
+                "greene_witness_word_limit",
+                "word exceeds the disjoint Greene witness envelope",
+            )
+        if sum(self.shape.parts) != n:
+            raise _e("greene_witness_shape_size", "shape size must equal word length")
+        ranks = {letter: rank for rank, letter in enumerate(self.word.alphabet)}
+        conjugate = tuple(
+            sum(row_length >= column for row_length in self.shape.parts)
+            for column in range(1, (self.shape.parts[0] if self.shape.parts else 0) + 1)
+        )
+        if tuple(family.k for family in self.families) != tuple(
+            range(1, len(self.families) + 1)
+        ):
+            raise _e(
+                "greene_witness_indices", "families must cover consecutive k values"
+            )
+        for family in self.families:
+            expected_inc = sum(self.shape.parts[: family.k])
+            expected_dec = sum(conjugate[: family.k])
+            if (
+                family.increasing_total != expected_inc
+                or family.decreasing_total != expected_dec
+            ):
+                raise _e(
+                    "greene_witness_total_mismatch",
+                    "witness totals must equal the corresponding RSK shape sums",
+                )
+            for paths, total, increasing in (
+                (family.increasing_subsequences, family.increasing_total, True),
+                (family.decreasing_subsequences, family.decreasing_total, False),
+            ):
+                if len(paths) > family.k:
+                    raise _e(
+                        "greene_witness_path_count",
+                        "each family may contain at most k subsequences",
+                    )
+                used: set[int] = set()
+                membership_count = 0
+                for path in paths:
+                    if not path or any(i < 0 or i >= n for i in path):
+                        raise _e(
+                            "greene_witness_position",
+                            "subsequence positions must be nonempty and in range",
+                        )
+                    if tuple(sorted(path)) != path or used.intersection(path):
+                        raise _e(
+                            "greene_witness_disjointness",
+                            "paths must be position-ordered and pairwise disjoint",
+                        )
+                    values = tuple(ranks[self.word.letters[i]] for i in path)
+                    if any(
+                        (left > right if increasing else left <= right)
+                        for left, right in pairwise(values)
+                    ):
+                        raise _e(
+                            "greene_witness_monotonicity",
+                            "subsequence values violate the declared monotonicity",
+                        )
+                    used.update(path)
+                    membership_count += len(path)
+                if membership_count != total:
+                    raise _e(
+                        "greene_witness_membership_total",
+                        "subsequence memberships must sum to the declared total",
+                    )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        word: FiniteWord,
+        shape: IntegerPartition,
+        families: tuple[GreeneWitnessFamily, ...],
+    ) -> Self:
+        """Build one result after the admitted witness kernel established it.
+
+        The flow kernel already proved disjointness, monotonicity, and the
+        shape-sum totals for these exact witnesses, so the trusted producer
+        path does not replay that mathematics; deserialization and explicit
+        claim checking still run ``require_witness_relations``.
+        """
+
+        return cls.model_construct(
+            word=word,
+            shape=shape,
+            families=families,
+            convention="ROW_INSERTION_RSK_V1",
+        )
+
+
 __all__ = [
     "Biword",
     "BiwordNormalizeRequest",
@@ -232,6 +373,9 @@ __all__ = [
     "BiwordRSKRequest",
     "GreeneRequest",
     "GreeneResult",
+    "GreeneWitnessFamily",
+    "GreeneWitnessRequest",
+    "GreeneWitnessResult",
     "InverseBiwordRSKRequest",
     "InverseMatrixRSKRequest",
     "MatrixRSKRequest",

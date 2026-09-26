@@ -706,7 +706,11 @@ def link_signature(diagram: OrientedLinkDiagram) -> LinkSignatureResult:
             message="link signature result exceeds its conservative output envelope",
         )
 
-    goeritz_data = _goeritz_data_admitted(admitted) if crossing_count else None
+    goeritz_data = (
+        link_goeritz_data(_construct_blackboard_graph(admitted))
+        if crossing_count
+        else None
+    )
     integer_matrix = goeritz_data.reduced_matrix if goeritz_data is not None else None
     rational_matrix = (
         RationalMatrix(

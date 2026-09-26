@@ -216,7 +216,10 @@ class TestDisjointUnion:
 
         changed_target_label = json.loads(json.dumps(payload))
         changed_target_label["crossing_map"][0]["target_crossing_id"] = "foreign_id"
-        with pytest.raises(ValidationError, match="crossing transport must cover"):
+        with pytest.raises(
+            ValidationError,
+            match="crossing transport must bind matching source metadata",
+        ):
             LinkDisjointUnionResult.model_validate_json(
                 json.dumps(changed_target_label)
             )

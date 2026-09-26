@@ -8,6 +8,7 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     verify_from_feasible_sets,
     width,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import relabel
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidDistanceProfile,
     FiniteDeltaMatroid,
@@ -21,6 +22,7 @@ __all__ = [
     "dual",
     "from_feasible_sets",
     "minor",
+    "relabel",
     "twist",
     "verify_from_feasible_sets",
     "width",

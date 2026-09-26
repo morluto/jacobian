@@ -28,6 +28,11 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     twist,
     width,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import (
+    DeltaMatroidRelabelling,
+    DeltaMatroidRelabelRequest,
+    relabel,
+)
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     DeltaMatroidDistanceProfile,
@@ -108,6 +113,14 @@ def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
         raise
     except (TypeError, ValueError, IndexError) as exc:
         raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
+
+
+def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid,
+        request.target_ground,
+        request.target_to_source,
+    )
 
 
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
@@ -318,6 +331,38 @@ TOOLS: MathTools = (  # noqa: RUF005
                 name="binary_zero",
                 description="Reconstruct the principal-minor delta-matroid of the zero 2-by-2 symmetric matrix.",
                 input={"matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.relabel.compute",
+        title="Relabel and reorder a finite delta-matroid ground set",
+        description=(
+            "Apply a bijection from the target ground axis to the source axis, "
+            "transport every feasible subset to the target indices, and retain "
+            "both inverse axis maps. The complete source family is checked "
+            "before transport; memberships, ground labels, work, and result "
+            "allocations are bounded."
+        ),
+        request_type=DeltaMatroidRelabelRequest,
+        result_type=DeltaMatroidRelabelling,
+        run=_run_relabel,
+        tags=("delta-matroid", "relabel", "isomorphism", "exact"),
+        examples=(
+            OperationExample(
+                name="swap_ground_axis",
+                description=(
+                    "Swap the source axes while renaming them; feasible subsets "
+                    "and the inverse coordinate maps are transported exactly."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1]],
+                    },
+                    "target_ground": ["B", "A"],
+                    "target_to_source": [1, 0],
+                },
             ),
         ),
     ),

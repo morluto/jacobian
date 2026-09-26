@@ -268,6 +268,7 @@ class TestSubsequentialRun:
         states = [state]
         step_outputs: list[tuple[int, ...]] = []
         prefixes: list[tuple[int, ...]] = [()]
+
         emitted: tuple[int, ...] = ()
         for position, symbol in enumerate(word):
             transition = rows.get((state, symbol))

@@ -21,7 +21,6 @@ from jacobian.math.topology.finite.open_sets import (
     verify_topology,
 )
 from jacobian.math.topology.finite.open_sets._models import (
-    MAX_TOPOLOGY_OPERATION_POINTS,
     BeatPointsRequest,
     ConnectedComponentsRequest,
     ContinuityRequest,
@@ -113,12 +112,15 @@ def test_carriers_are_structural_while_wire_requests_own_operation_bounds() -> N
 
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"at most {MAX_TOPOLOGY_OPERATION_POINTS} points",
-    ):
+    ) as exc_info:
         compute_specialization_preorder(
             SpecializationPreorderRequest(topology=topology)
         )
 
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "finite_topology.point_count_exceeds_bound"
+    )
     request_schema = SpecializationPreorderRequest.model_json_schema()
     topology_schema = request_schema["properties"]["topology"]
     assert topology_schema["properties"]["point_count"]["maximum"] == 32

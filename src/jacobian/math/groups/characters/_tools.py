@@ -4,6 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
+    CharacterCenter,
+    CharacterCenterRequest,
     CharacterExteriorSquareRequest,
     CharacterKernel,
     CharacterKernelRequest,
@@ -49,6 +51,7 @@ from jacobian.math.groups.characters.operations import (
     restrict_cyclic_character,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_center,
     character_exterior_square,
     character_kernel,
     character_symmetric_square,
@@ -93,6 +96,10 @@ def _run_character_exterior_square(
 
 def _run_character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
     return character_kernel(request)
+
+
+def _run_character_center(request: CharacterCenterRequest) -> CharacterCenter:
+    return character_center(request)
 
 
 def _run_tensor_decomposition(
@@ -698,6 +705,39 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="s3_standard_exterior_square",
                 description="Lambda^2 of the standard S3 representation is sign.",
+                input={"character": _s3_ring_element([0, 0, 1])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.center.compute",
+        title="Compute the scalar-action subgroup of a finite-group character",
+        description=(
+            "For a table-bound ordinary character, return the subgroup of group "
+            "elements acting as scalars in an afforded complex representation. "
+            "An element is selected exactly when chi(g) * conjugate(chi(g)) "
+            "equals chi(1)^2; its normalized character value is the scalar "
+            "root of unity. The result retains selected canonical classes and "
+            "their exact scalar values. Supported groups are trivial, cyclic "
+            "of order at most 60 subject to the operation's output envelope, "
+            "and S3. Larger cyclic tables may be rejected before expansion."
+        ),
+        request_type=CharacterCenterRequest,
+        result_type=CharacterCenter,
+        run=_run_character_center,
+        tags=("finite-group", "character", "center", "exact"),
+        discovery_terms=(
+            "center of a finite group character",
+            "scalar action subgroup of representation",
+            "elements where character value has maximal absolute value",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_character_center",
+                description=(
+                    "The standard two-dimensional representation of S3 acts "
+                    "by scalars only at the identity."
+                ),
                 input={"character": _s3_ring_element([0, 0, 1])},
             ),
         ),

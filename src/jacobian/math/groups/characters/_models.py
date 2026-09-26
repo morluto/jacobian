@@ -760,6 +760,73 @@ class CharacterKernel(StrictModel):
         return cls.model_construct(ambient_group=ambient_group, subgroup=subgroup)
 
 
+class CharacterCenterRequest(StrictModel):
+    """Compute the scalar-action subgroup of an ordinary character."""
+
+    character: CharacterRingElement
+
+
+class CharacterCenter(StrictModel):
+    """The subgroup on which a retained character acts by scalars.
+
+    ``scalar_class_indices`` and ``scalar_values`` are parallel selections
+    from the retained character table. Each ``scalar_value`` is already
+    normalized by the character degree and is a scalar root of unity.
+    """
+
+    character: CharacterRingElement
+    subgroup: PermutationGroup
+    scalar_class_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+    scalar_values: tuple[CyclotomicValue, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+
+    @model_validator(mode="after")
+    def require_character_parent_and_class_values(self) -> Self:
+        table = self.character.table
+        if self.subgroup.degree != table.partition.source.degree:
+            raise _validation_error(
+                "center_domain",
+                "character center subgroup must share the ambient action domain",
+            )
+        if (
+            len(self.scalar_class_indices) != len(self.scalar_values)
+            or tuple(sorted(set(self.scalar_class_indices)))
+            != self.scalar_class_indices
+            or any(
+                not 0 <= index < len(table.partition.classes)
+                for index in self.scalar_class_indices
+            )
+            or any(
+                value.order != table.axis.cyclotomic_order
+                for value in self.scalar_values
+            )
+        ):
+            raise _validation_error(
+                "center_class_values",
+                "scalar values must bind in order to selected source classes",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        character: CharacterRingElement,
+        subgroup: PermutationGroup,
+        scalar_class_indices: tuple[int, ...],
+        scalar_values: tuple[CyclotomicValue, ...],
+    ) -> Self:
+        return cls.model_construct(
+            character=character,
+            subgroup=subgroup,
+            scalar_class_indices=scalar_class_indices,
+            scalar_values=scalar_values,
+        )
+
+
 class CharacterRingDecompositionResult(StrictModel):
     """Virtual-character coordinates of one class function in a complete table."""
 

@@ -100,6 +100,23 @@ Admission caps the concrete group order at 60 and jointly bounds class-value
 arithmetic, table validation, subgroup generation, and serialized parent plus
 kernel before conjugacy expansion.
 
+## Centers of characters
+
+`character.center.compute` accepts the same table-bound ordinary-character
+value and returns the subgroup on which an afforded representation acts by
+scalars. It retains the selected canonical classes and each exact normalized
+trace `chi(g) / chi(1)`. For a finite-dimensional complex representation, a
+unitary model gives `|chi(g)| = chi(1)` exactly when all eigenvalues of
+`rho(g)` agree; since `g` has finite order, that common eigenvalue is a root
+of unity. The implementation compares the exact cyclotomic product
+`chi(g) * conjugate(chi(g))` with `chi(1)^2`, without floating absolute
+values. GAP documents the equivalent root-of-unity quotient criterion for
+[`CentreOfCharacter`](https://gap-system.github.io/gap/doc/ref/chap72_mj.html).
+This is the center of the representation's image preimage, not the center of
+the abstract group. Negative virtual coordinates are rejected. The operation
+uses the same order-60 supported-table scope and admits exact norm arithmetic,
+subgroup generation, and result bytes before conjugacy expansion.
+
 ## Scaling a class function
 
 `class_function.scale.compute` multiplies every value by one exact scalar in

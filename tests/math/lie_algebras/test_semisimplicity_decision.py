@@ -102,8 +102,10 @@ def test_native_semisimplicity_normalizes_malformed_algebra_mapping() -> None:
     }
     with pytest.raises(OperationDomainValidationError) as error:
         lie_algebra_is_semisimple(malformed)
-    assert error.value.errors() == ({
-        "loc": (),
-        "type": "lie_algebra.input",
-        "msg": "algebra must be a valid finite-dimensional Lie algebra",
-    },)
+    assert error.value.errors() == (
+        {
+            "loc": (),
+            "type": "lie_algebra.input",
+            "msg": "algebra must be a valid finite-dimensional Lie algebra",
+        },
+    )

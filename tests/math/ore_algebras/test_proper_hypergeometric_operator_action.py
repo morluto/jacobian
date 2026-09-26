@@ -179,7 +179,7 @@ def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected():
     ) == _direct_binomial(29, 4)
 
     with pytest.raises(OperationResourceAdmissionError, match="256-term"):
-        proper_hypergeometric_operator_action(_operator(22), _binomial_term())
+        proper_hypergeometric_operator_action(_operator(16), _binomial_term())
 
 
 def test_sparse_univariate_shift_product_uses_its_actual_axis_support():

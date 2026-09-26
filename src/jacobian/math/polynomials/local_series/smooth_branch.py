@@ -137,22 +137,21 @@ class SmoothBranchPrefixResult(StrictModel):
             self.series.place,
             self.series.center,
             self.series.precision,
-            self.series.valuation_lower,
         ) != (
             self.source.variable,
             self.source.place,
             self.source.center,
             self.residual_precision,
-            0,
         ):
             raise _error(
                 "prefix_parent",
                 "branch prefix must retain the source parameter and declared precision",
             )
+        root_coefficient = _coefficient(self.series, 0)
         if (
-            len(self.series.coefficients) != self.residual_precision
-            or self.series.coefficients[0].as_fraction()
-            != self.initial_root.as_fraction()
+            len(self.series.coefficients)
+            != self.series.precision - self.series.valuation_lower
+            or root_coefficient != self.initial_root.as_fraction()
         ):
             raise _error(
                 "prefix_shape",
@@ -741,13 +740,16 @@ def smooth_branch_prefix(
             message="the supplied root must be simple: F_y(0,c) must be nonzero",
         )
 
+    valuation = next((index for index, value in enumerate(branch) if value), 0)
     result_series = TruncatedLaurentWindow(
         variable=source.variable,
         place=source.place,
         center=source.center,
-        valuation_lower=0,
+        valuation_lower=valuation,
         precision=precision,
-        coefficients=tuple(CanonicalRational.from_fraction(value) for value in branch),
+        coefficients=tuple(
+            CanonicalRational.from_fraction(value) for value in branch[valuation:]
+        ),
     )
     return SmoothBranchPrefixResult._from_kernel(
         source=source,

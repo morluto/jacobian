@@ -95,6 +95,39 @@ def test_smooth_branch_prefix_matches_exact_square_identity() -> None:
     )
 
 
+def test_smooth_branch_prefix_normalizes_zero_root_branch() -> None:
+    precision = 4
+    source = LocalPolynomialInSeries(
+        variable="t",
+        place="FINITE",
+        center=_rational(0),
+        coefficients=(
+            LocalPolynomialCoefficient(
+                y_degree=0, series=_series((0, -1, 0, 0), precision)
+            ),
+            LocalPolynomialCoefficient(
+                y_degree=1, series=_series((1, 0, 0, 0), precision)
+            ),
+        ),
+    )
+
+    result = smooth_branch_prefix(
+        SmoothBranchPrefixRequest(
+            polynomial=source, initial_root=_rational(0), precision=precision
+        )
+    )
+
+    assert result.series.valuation_lower == 1
+    assert tuple(value.as_fraction() for value in result.series.coefficients) == (
+        Fraction(1),
+        Fraction(0),
+        Fraction(0),
+    )
+    assert (
+        SmoothBranchPrefixResult.model_validate_json(result.model_dump_json()) == result
+    )
+
+
 def test_smooth_branch_prefix_accepts_exact_requested_source_precision() -> None:
     result = smooth_branch_prefix(
         SmoothBranchPrefixRequest(

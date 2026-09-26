@@ -480,6 +480,30 @@ def _build_reachable_state_profile(
     )
 
 
+def _reachability_work_preflight(automaton: BottomUpTreeAutomaton) -> int:
+    """Return a pre-execution upper bound for one priced saturation pass."""
+
+    transition_count = len(automaton.transitions)
+    maximum_arity = max(
+        (len(row.child_states) for row in automaton.transitions), default=0
+    )
+    sort_work = (
+        transition_count
+        * max(1, (transition_count - 1).bit_length())
+        * (4 + maximum_arity)
+    )
+    per_scan_work = 2 * automaton.state_count + sum(
+        6 + 4 * len(row.child_states) for row in automaton.transitions
+    )
+    # A monotone pass can add at most one state per round, plus the final
+    # no-change round. Reserve the maximum witness traversal as well.
+    return (
+        sort_work
+        + (automaton.state_count + 1) * per_scan_work
+        + 3 * MAX_REACHABILITY_WITNESS_NODES
+    )
+
+
 def _saturate_choices(
     transitions: tuple[TreeAutomatonTransition, ...], state_count: int
 ) -> tuple[list[_WitnessChoice | None], int]:

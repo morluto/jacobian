@@ -148,9 +148,7 @@ def _character_sturm_precision(space: ModularFormSpace) -> int:
 
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
-    return all(
-        coefficient.num == 0 for coefficient in value.coefficients_ascending
-    )
+    return all(coefficient.num == 0 for coefficient in value.coefficients_ascending)
 
 
 def _rref_character_prefix(

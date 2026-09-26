@@ -125,9 +125,7 @@ def _nu_infinity(level: int, conductor: int) -> int:
 
 
 def _integral_rational_part(value: RationalCyclotomicElement) -> int:
-    rational = tuple(
-        item.as_fraction() for item in value.coefficients_ascending
-    )
+    rational = tuple(item.as_fraction() for item in value.coefficients_ascending)
     if any(rational[1:]) or rational[0].denominator != 1:
         raise RuntimeError("Cohen--Oesterle dimension expression is not integral")
     return rational[0].numerator

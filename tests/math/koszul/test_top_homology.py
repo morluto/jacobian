@@ -147,6 +147,29 @@ def test_top_annihilator_handles_empty_zero_and_unit_sequences():
     assert unit.top_homology_basis == ()
 
 
+def test_top_homology_admits_top_only_case_beyond_full_complex_cap():
+    algebra = FiniteCommutativeAlgebra(
+        basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
+    )
+    module = BasedFiniteModule(
+        algebra=algebra,
+        basis=tuple(f"m{i}" for i in range(8)),
+        action=(((q(1),) + (q(0),) * 7, *((q(0),) * 8 for _ in range(7))),),
+    )
+    sequence = ((q(0),),) * 6
+    complex_value = module_koszul_complex(
+        ModuleKoszulRequest(algebra=algebra, module=module, sequence=sequence)
+    )
+    assert complex_value.differentials[-1].row_count == 48
+    assert complex_value.differentials[-1].entries == ()
+
+    result = module_koszul_top_homology(
+        ModuleKoszulTopHomologyRequest(complex=complex_value)
+    )
+    assert len(result.annihilator_basis) == 8
+    assert result.top_differential == complex_value.differentials[-1]
+
+
 def test_top_homology_rejects_square_zero_but_noncanonical_source_differential():
     _algebra, module = dual_numbers_regular_module()
     valid = module_koszul_complex(

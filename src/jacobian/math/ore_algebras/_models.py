@@ -34,6 +34,10 @@ MAX_SHIFT_ADDITIVE_WORK_CELLS = 4_096
 MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 MAX_SHIFT_POWER_EXPONENT = 16
 MAX_SHIFT_POWER_WORK_CELLS = 4_096
+MAX_RECURRENCE_PREFIX_STEPS = 512
+MAX_RECURRENCE_PREFIX_INDEX = 100_000
+MAX_RECURRENCE_PREFIX_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_RECURRENCE_PREFIX_WORK_CELLS = 1_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -426,6 +430,110 @@ class ShiftOperatorPrefixResult(StrictModel):
             residuals=residuals,
             coefficient_poles=coefficient_poles,
             right_boundary_indices=right_boundary_indices,
+        )
+
+
+class PolynomialRecurrencePrefixRequest(StrictModel):
+    """Solve a polynomial recurrence on one explicitly finite index interval."""
+
+    operator: ShiftOreOperator = Field(
+        description=(
+            "Polynomial-coefficient operator sum p_i(n) S^i. The coefficient "
+            "of its greatest shift exponent must be nonzero at every index "
+            "generated; the recurrence is asserted only on that finite range."
+        )
+    )
+    start_index: StrictInt = Field(
+        ge=-MAX_RECURRENCE_PREFIX_INDEX, le=MAX_RECURRENCE_PREFIX_INDEX
+    )
+    initial_values: FiniteRationalSequence = Field(
+        description="Exactly order(operator) consecutive values starting at start_index."
+    )
+    steps: StrictInt = Field(ge=0, le=MAX_RECURRENCE_PREFIX_STEPS)
+
+    @model_validator(mode="after")
+    def require_recurrence_shape(self) -> Self:
+        if not self.operator.terms:
+            raise _validation_error(
+                "zero_recurrence", "the zero operator does not define a recurrence"
+            )
+        if self.operator.order < 1:
+            raise _validation_error(
+                "positive_order",
+                "finite recurrence generation requires positive shift order",
+            )
+        if any(
+            not _is_polynomial_coefficient(term.coefficient)
+            for term in self.operator.terms
+        ):
+            raise _validation_error(
+                "polynomial_coefficients",
+                "finite recurrence generation requires coefficients in QQ[n]",
+            )
+        order = self.operator.order
+        if len(self.initial_values.values) != order:
+            raise _validation_error(
+                "initial_value_count",
+                "initial_values must contain exactly order(operator) consecutive values",
+            )
+        if abs(self.start_index + self.steps + order - 1) > MAX_RECURRENCE_PREFIX_INDEX:
+            raise _validation_error(
+                "index_range",
+                "the generated recurrence interval exceeds its index envelope",
+            )
+        return self
+
+
+class PolynomialRecurrencePrefix(StrictModel):
+    """Finite sequence whose recurrence equations hold on the declared interval."""
+
+    operator: ShiftOreOperator
+    start_index: StrictInt
+    recurrence_indices: tuple[StrictInt, ...]
+    values: FiniteRationalSequence
+
+    @model_validator(mode="after")
+    def require_prefix_structure(self) -> Self:
+        order = self.operator.order
+        if (
+            not self.operator.terms
+            or order < 1
+            or any(
+                not _is_polynomial_coefficient(term.coefficient)
+                for term in self.operator.terms
+            )
+        ):
+            raise _validation_error(
+                "polynomial_recurrence_shape",
+                "prefix values require a positive-order polynomial recurrence operator",
+            )
+        if self.recurrence_indices != tuple(
+            range(self.start_index, self.start_index + len(self.recurrence_indices))
+        ):
+            raise _validation_error(
+                "recurrence_indices",
+                "recurrence indices must be consecutive from start_index",
+            )
+        if len(self.values.values) != order + len(self.recurrence_indices):
+            raise _validation_error(
+                "prefix_value_count",
+                "prefix values must cover the initial values and recurrence interval",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: ShiftOreOperator,
+        start_index: int,
+        recurrence_indices: tuple[int, ...],
+        values: FiniteRationalSequence,
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator,
+            start_index=start_index,
+            recurrence_indices=recurrence_indices,
+            values=values,
         )
 
 

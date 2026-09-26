@@ -20,6 +20,7 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Function-field rational base inclusion](function-field-base-embedding.md)
 - [Exact function-field element addition](function-field-element-addition.md)
 - [Exact function-field element inversion](function-field-element-inversion.md)
+- [Exact function-field relative norm](function-field-element-norm.md)
 - [Exact function-field relative trace](function-field-element-trace.md)
 - [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)

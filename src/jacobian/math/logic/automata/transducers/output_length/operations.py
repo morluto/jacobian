@@ -8,49 +8,37 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.logic.automata.transducers.operations import (
+    _admit_transducer,
+    _admit_word,
+)
 from jacobian.math.logic.automata.transducers.output_length._models import (
     MAX_SUBSEQUENTIAL_OUTPUT_LENGTH_WORK,
-    SubsequentialOutputLengthRequest,
     SubsequentialOutputLengthResult,
 )
-from jacobian.math.logic.automata.transducers.values import SubsequentialTransducer
+from jacobian.math.logic.automata.transducers.values import MAX_FST_WORD_LENGTH
 
 
 def subsequential_output_length(
-    request: SubsequentialOutputLengthRequest | SubsequentialTransducer,
-    word: tuple[int, ...] | None = None,
+    transducer: object,
+    word: object,
 ) -> SubsequentialOutputLengthResult:
     """Return exact emitted-word length without constructing the word itself."""
 
-    if isinstance(request, SubsequentialTransducer):
-        if word is None:
-            raise OperationDomainValidationError(
-                location=("word",),
-                code="finite_state_transducer.output_length_word_required",
-                message="a word is required when passing a transducer directly",
-            )
-        request = SubsequentialOutputLengthRequest(transducer=request, word=word)
-
-    if not isinstance(request, SubsequentialOutputLengthRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="finite_state_transducer.output_length_request_type",
-            message="request must be a SubsequentialOutputLengthRequest value",
+    transducer = _admit_transducer(transducer)
+    word = _admit_word(word, field="word")
+    if len(word) > MAX_FST_WORD_LENGTH:
+        raise OperationResourceAdmissionError(
+            location=("word",),
+            code="finite_state_transducer.output_length_word_bound",
+            message="the input word exceeds the admitted length bound",
         )
-    try:
-        request = SubsequentialOutputLengthRequest.model_validate(
-            request.model_dump(), strict=True
-        )
-    except Exception as exc:
+    if any(not 0 <= symbol < transducer.input_alphabet_size for symbol in word):
         raise OperationDomainValidationError(
-            location=("request",),
-            code="finite_state_transducer.output_length_request_shape",
-            message="request must satisfy its complete canonical shape",
-        ) from exc
-    # The request dump round-trip above revalidates the nested transducer value
-    # once, including values created with model_construct().
-    transducer = request.transducer
-    word = request.word
+            location=("word",),
+            code="finite_state_transducer.word_symbol_out_of_range",
+            message="input word symbol is outside its alphabet",
+        )
     work = len(transducer.transitions) + len(word)
     if work > MAX_SUBSEQUENTIAL_OUTPUT_LENGTH_WORK:
         raise OperationResourceAdmissionError(
@@ -70,7 +58,8 @@ def subsequential_output_length(
         step = transition_map.get((state, symbol))
         if step is None:
             return SubsequentialOutputLengthResult._from_kernel(
-                request,
+                transducer,
+                word,
                 status="UNDEFINED_TRANSITION",
                 output_length=None,
                 transition_output_length=emitted_length,
@@ -86,7 +75,8 @@ def subsequential_output_length(
             "NONFINAL_DOMAIN_STATE"
         )
         return SubsequentialOutputLengthResult._from_kernel(
-            request,
+            transducer,
+            word,
             status=status,
             output_length=None,
             transition_output_length=emitted_length,
@@ -95,7 +85,8 @@ def subsequential_output_length(
         )
 
     return SubsequentialOutputLengthResult._from_kernel(
-        request,
+        transducer,
+        word,
         status="OUTPUT",
         output_length=emitted_length + final_output_length,
         transition_output_length=emitted_length,

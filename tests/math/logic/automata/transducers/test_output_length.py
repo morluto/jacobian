@@ -3,6 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.transducers.operations import run_subsequential
 from jacobian.math.logic.automata.transducers.output_length._models import (
     MAX_SUBSEQUENTIAL_OUTPUT_LENGTH,
@@ -44,7 +45,7 @@ def test_length_agrees_with_materialized_run_including_final_output() -> None:
     )
     request = SubsequentialOutputLengthRequest(transducer=transducer, word=(0,))
 
-    result = subsequential_output_length(request)
+    result = subsequential_output_length(transducer, request.word)
     run = run_subsequential(transducer, (0,))
 
     assert result.status == "OUTPUT"
@@ -62,12 +63,8 @@ def test_empty_output_and_empty_input_are_defined_with_length_zero() -> None:
         ),
     )
 
-    empty = subsequential_output_length(
-        SubsequentialOutputLengthRequest(transducer=transducer, word=())
-    )
-    consumed = subsequential_output_length(
-        SubsequentialOutputLengthRequest(transducer=transducer, word=(0,))
-    )
+    empty = subsequential_output_length(transducer, ())
+    consumed = subsequential_output_length(transducer, (0,))
 
     assert (empty.status, empty.output_length) == ("OUTPUT", 0)
     assert (consumed.status, consumed.output_length) == ("OUTPUT", 0)
@@ -81,12 +78,8 @@ def test_undefined_and_nonfinal_runs_report_emitted_prefix_length() -> None:
         final_outputs=(SubseqFinalOutput(state=0, output=()),),
     )
 
-    undefined = subsequential_output_length(
-        SubsequentialOutputLengthRequest(transducer=transducer, word=(0, 1))
-    )
-    nonfinal = subsequential_output_length(
-        SubsequentialOutputLengthRequest(transducer=transducer, word=(0,))
-    )
+    undefined = subsequential_output_length(transducer, (0, 1))
+    nonfinal = subsequential_output_length(transducer, (0,))
 
     assert (undefined.status, undefined.undefined_position) == (
         "UNDEFINED_TRANSITION",
@@ -121,9 +114,8 @@ def test_exact_large_length_does_not_materialize_run_output() -> None:
     )
     word = (0,) * 512
 
-    result = subsequential_output_length(
-        SubsequentialOutputLengthRequest(transducer=transducer, word=word)
-    )
+    result = subsequential_output_length(transducer, word)
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
     assert result.status == "OUTPUT"
     assert result.output_length == MAX_SUBSEQUENTIAL_OUTPUT_LENGTH == 262656
@@ -137,6 +129,25 @@ def test_wrong_alphabet_symbol_and_overlong_word_rejected() -> None:
         SubsequentialOutputLengthRequest(transducer=transducer, word=(2,))
     with pytest.raises(ValidationError):
         SubsequentialOutputLengthRequest(transducer=transducer, word=(0,) * 513)
+
+
+def test_native_and_catalog_reject_malformed_words_with_typed_errors() -> None:
+    transducer = _transducer(transitions=(), final_outputs=())
+    with pytest.raises(OperationDomainValidationError) as error:
+        subsequential_output_length(transducer, (2,))
+    assert (
+        error.value.errors()[0]["type"]
+        == "finite_state_transducer.word_symbol_out_of_range"
+    )
+
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "transducer.subsequential.output_length.compute"
+    )
+    forged = tool.request_type.model_construct(transducer=transducer)
+    with pytest.raises(OperationDomainValidationError):
+        tool.run(forged)
 
 
 def test_manifest_example_executes() -> None:

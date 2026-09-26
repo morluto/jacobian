@@ -91,7 +91,8 @@ class SubsequentialOutputLengthResult(StrictModel):
     @classmethod
     def _from_kernel(
         cls,
-        request: SubsequentialOutputLengthRequest,
+        transducer: SubsequentialTransducer,
+        word: tuple[int, ...],
         *,
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
         output_length: int | None,
@@ -100,8 +101,8 @@ class SubsequentialOutputLengthResult(StrictModel):
         undefined_position: int | None,
     ) -> Self:
         return cls.model_construct(
-            transducer=request.transducer,
-            word=request.word,
+            transducer=transducer,
+            word=word,
             status=status,
             output_length=output_length,
             transition_output_length=transition_output_length,

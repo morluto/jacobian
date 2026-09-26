@@ -15,7 +15,9 @@ from jacobian.math.logic.automata.transducers.output_length.operations import (
 def compute_output_length(
     request: SubsequentialOutputLengthRequest,
 ) -> SubsequentialOutputLengthResult:
-    return subsequential_output_length(request)
+    return subsequential_output_length(
+        getattr(request, "transducer", None), getattr(request, "word", None)
+    )
 
 
 _MACHINE = {

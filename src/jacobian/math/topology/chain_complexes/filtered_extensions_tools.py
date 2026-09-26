@@ -12,6 +12,10 @@ def _map(r: Any) -> Any:
     return filtered_map(r)
 
 
+def _page_zero_map(r: Any) -> Any:
+    return filtered_chain_map_page_zero(r)
+
+
 def _pages(r: Any) -> Any:
     return pages_through(r)
 
@@ -86,6 +90,35 @@ TOOLS = (
             OperationExample(
                 name="identity_filtered_map",
                 description="Check the identity map of a two-term filtered complex; source and target filtrations must have matching levels.",
+                input={
+                    "source": _C,
+                    "target": _C,
+                    "source_filtration": _F,
+                    "target_filtration": _F,
+                    "maps": [[["1"]], [["1"]]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.filtered_chain_map.page_zero.compute",
+        title="Induce a map on the associated graded",
+        description=(
+            "For a filtration-preserving chain map, compute its exact E0 map "
+            "in the quotient bases of the source and target associated-graded "
+            "complexes. The result retains both original complexes and "
+            "filtrations and the selected source and target quotient "
+            "representatives as the explicit matrix axes, and the induced maps "
+            "are checked against the E0 differentials."
+        ),
+        request_type=FilteredChainMapRequest,
+        result_type=FilteredChainMapPageZeroResult,
+        run=_page_zero_map,
+        tags=("homological", "filtered", "spectral-sequence", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_on_associated_graded",
+                description="The identity filtered chain map induces an identity on each associated-graded summand.",
                 input={
                     "source": _C,
                     "target": _C,

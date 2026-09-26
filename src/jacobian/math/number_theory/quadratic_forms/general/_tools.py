@@ -12,6 +12,18 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteGaussSumResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
+from jacobian.math.number_theory.quadratic_forms.general.characteristic_two import (
+    MAX_FINITE_QUADRATIC_FORM_AXIS,
+    MAX_FINITE_QUADRATIC_FORM_TERMS,
+    FiniteFieldQuadraticEvaluationRequest,
+    FiniteFieldQuadraticEvaluationResult,
+    FiniteFieldQuadraticPairingRequest,
+    FiniteFieldQuadraticPairingResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.characteristic_two_operations import (
+    evaluate_finite_field_quadratic_form,
+    polar_pairing_finite_field_quadratic_form,
+)
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
@@ -128,6 +140,73 @@ def compute_finite_box_profile(
     request: FiniteBoxProfileRequest,
 ) -> FiniteBoxProfileResult:
     return finite_box_value_profile(request)
+
+
+def compute_characteristic_two_evaluation(
+    request: FiniteFieldQuadraticEvaluationRequest,
+) -> FiniteFieldQuadraticEvaluationResult:
+    return evaluate_finite_field_quadratic_form(request)
+
+
+def compute_characteristic_two_pairing(
+    request: FiniteFieldQuadraticPairingRequest,
+) -> FiniteFieldQuadraticPairingResult:
+    return polar_pairing_finite_field_quadratic_form(request)
+
+
+_F2_FORM = {
+    "field": {
+        "characteristic": "2",
+        "modulus_coefficients": ["0", "1"],
+        "generator": "a",
+    },
+    "axis": ["x", "y"],
+    "diagonal_coefficients": [
+        {
+            "presentation": {
+                "characteristic": "2",
+                "modulus_coefficients": ["0", "1"],
+                "generator": "a",
+            },
+            "coordinates": ["1"],
+        },
+        {
+            "presentation": {
+                "characteristic": "2",
+                "modulus_coefficients": ["0", "1"],
+                "generator": "a",
+            },
+            "coordinates": ["0"],
+        },
+    ],
+    "cross_terms": [
+        {
+            "left": 0,
+            "right": 1,
+            "coefficient": {
+                "presentation": {
+                    "characteristic": "2",
+                    "modulus_coefficients": ["0", "1"],
+                    "generator": "a",
+                },
+                "coordinates": ["1"],
+            },
+        }
+    ],
+}
+
+
+def _f2_vector(x: str, y: str) -> dict[str, object]:
+    field = _F2_FORM["field"]
+    presentation = {"presentation": field}
+    return {
+        "field": field,
+        "axis": ["x", "y"],
+        "coordinates": [
+            {**presentation, "coordinates": [x]},
+            {**presentation, "coordinates": [y]},
+        ],
+    }
 
 
 def _form_example() -> dict[str, object]:
@@ -444,6 +523,53 @@ TOOLS = (
                 input={
                     "form": _form_example(),
                     "selected_axis": ["y", "x"],
+                },
+            ),
+        ),
+    ),
+)
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.characteristic_two.evaluate.compute",
+        title="Evaluate a finite-field quadratic form in characteristic two",
+        description=(
+            "Evaluate the explicit polynomial over GF(2^d). Diagonal square "
+            "coefficients remain part of the form even though they vanish from its polar pairing. "
+            f"The axis is limited to {MAX_FINITE_QUADRATIC_FORM_AXIS} labels and total support to "
+            f"{MAX_FINITE_QUADRATIC_FORM_TERMS} terms."
+        ),
+        request_type=FiniteFieldQuadraticEvaluationRequest,
+        result_type=FiniteFieldQuadraticEvaluationResult,
+        run=compute_characteristic_two_evaluation,
+        tags=("quadratic-form", "finite-field", "characteristic-two", "exact"),
+        examples=(
+            OperationExample(
+                name="square-term-retained",
+                description="Over GF(2), Q(x,y)=x^2+xy has Q(1,1)=0.",
+                input={"form": _F2_FORM, "vector": _f2_vector("1", "1")},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.characteristic_two.polar_pairing.compute",
+        title="Compute the polar pairing of a characteristic-two quadratic form",
+        description=(
+            "Return B_Q(x,y)=Q(x+y)-Q(x)-Q(y) over GF(2^d). "
+            "Square terms cancel in this pairing; mixed terms contribute in both orders."
+        ),
+        request_type=FiniteFieldQuadraticPairingRequest,
+        result_type=FiniteFieldQuadraticPairingResult,
+        run=compute_characteristic_two_pairing,
+        tags=("quadratic-form", "finite-field", "characteristic-two", "exact"),
+        examples=(
+            OperationExample(
+                name="mixed-term-polarization",
+                description="For Q(x,y)=x^2+xy over GF(2), B_Q((1,0),(0,1))=1.",
+                input={
+                    "form": _F2_FORM,
+                    "left": _f2_vector("1", "0"),
+                    "right": _f2_vector("0", "1"),
                 },
             ),
         ),

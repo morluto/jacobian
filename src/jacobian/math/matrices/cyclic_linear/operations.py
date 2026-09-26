@@ -148,7 +148,8 @@ def apply_cyclotomic_field_inclusion(
         )
     except (AttributeError, TypeError, ValidationError) as exc:
         raise CyclicRankKernelAdmissionError(
-            "inclusion_value", "the inclusion and element must be valid cyclotomic values"
+            "inclusion_value",
+            "the inclusion and element must be valid cyclotomic values",
         ) from exc
     if element.field != inclusion.source:
         raise CyclicRankKernelAdmissionError(

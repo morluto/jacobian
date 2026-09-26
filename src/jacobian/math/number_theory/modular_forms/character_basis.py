@@ -994,9 +994,7 @@ def modular_character_coordinates_u_prime(
     # valid products, while the linear result estimate alone misses a kernel
     # refusal after basis expansion.
     degree = field.degree
-    product_digits = (
-        product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
-    )
+    product_digits = product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
     # Each product is accumulated with cyclotomic.add, which applies the same
     # height admission to the larger of the product and partial sum. Admit that
     # second kernel boundary too, before the backend basis expansion.

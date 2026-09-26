@@ -138,7 +138,7 @@ def test_large_echoed_label_rejected_before_rank(monkeypatch) -> None:
     )
     module = BasedFiniteModule(
         algebra=algebra,
-        basis=("\x00" * 1_400_000,),
+        basis=("\x00" * 9_000_000,),
         action=(((q(1),),),),
     )
     complex_value = module_koszul_complex(

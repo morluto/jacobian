@@ -64,6 +64,23 @@ def test_native_substitution_rejects_forged_semiring_parent() -> None:
     assert "declared convention and base" in str(error.value)
 
 
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"exponents": [1]},
+        {"coefficient": object()},
+    ],
+)
+def test_native_substitution_rejects_forged_term_fields(updates: dict[str, object]) -> None:
+    source = _polynomial(("x",), (((1,), 1),))
+    forged_term = source.terms[0].model_copy(update=updates)
+    source = source.model_copy(update={"terms": (forged_term,)})
+    image = _polynomial(("t",), (((1,), 2),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        tropical_polynomial_substitute(source, ("t",), (image,))
+    assert error.value.errors()[0]["type"] == "tropical.polynomial_shape"
+
+
 def _direct_oracle(
     source: TropicalPolynomial,
     target_variables: tuple[str, ...],

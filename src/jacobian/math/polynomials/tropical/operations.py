@@ -195,8 +195,11 @@ def _admit_polynomial(poly: TropicalPolynomial) -> None:
         )
     exponents = []
     for term in poly.terms:
-        if not isinstance(term, TropicalPolynomialTerm) or len(term.exponents) != len(
-            poly.variables
+        if (
+            not isinstance(term, TropicalPolynomialTerm)
+            or not isinstance(term.exponents, tuple)
+            or not isinstance(term.coefficient, TropicalScalar)
+            or len(term.exponents) != len(poly.variables)
         ):
             raise OperationDomainValidationError(
                 location=("polynomial",),

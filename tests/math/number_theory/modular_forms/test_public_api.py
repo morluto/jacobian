@@ -6,7 +6,6 @@ from jacobian.math.number_theory import modular_forms
 def test_exact_public_api_symbols() -> None:
     assert tuple(modular_forms.__all__) == (
         "CyclotomicCharacterMap",
-        "CyclotomicIdentityFieldMap",
         "LevelOneModularQExpansion",
         "ModularCharacterBasis",
         "ModularCharacterBasisElement",

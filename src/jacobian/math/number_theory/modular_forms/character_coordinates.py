@@ -18,9 +18,6 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterGroup,
 )
 from jacobian.math.number_theory.modular_forms import cyclotomic
-from jacobian.math.number_theory.modular_forms.character_basis import (
-    _require_basis_space,
-)
 from jacobian.math.number_theory.modular_forms.character_dimensions import (
     character_space_dimensions,
 )

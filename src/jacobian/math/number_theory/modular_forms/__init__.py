@@ -4,7 +4,6 @@ from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,
     modular_form_coordinates_atkin_lehner,
-    modular_form_coordinates_equal,
     modular_form_coordinates_from_frame,
     modular_form_coordinates_hecke,
     modular_form_coordinates_product,
@@ -29,20 +28,29 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    CyclotomicCharacterMap,
+    CyclotomicIdentityFieldMap,
     ModularCharacterBasis,
     ModularCharacterBasisElement,
+    ModularCharacterCommonTargetPrefix,
+    ModularCharacterEqualityResult,
     ModularCharacterHeckeMatrix,
     ModularCharacterQExpansion,
+    ModularCharacterSpaceInclusion,
+    ModularCharacterTransportedForm,
+)
+from jacobian.math.number_theory.modular_forms.character_transport import (
+    modular_character_coordinates_equal_in_common_space,
+    modular_character_coordinates_transport,
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
     modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
 )
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
-    modular_form_field_coordinates_equal,
     modular_form_field_coordinates_q_expansion,
 )
-from jacobian.math.number_theory.modular_forms._models import ModularFormEqualityResult
 from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
     named_q_expansion,
@@ -69,15 +77,20 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 __all__ = [
+    "CyclotomicCharacterMap",
+    "CyclotomicIdentityFieldMap",
     "LevelOneModularQExpansion",
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",
+    "ModularCharacterCommonTargetPrefix",
+    "ModularCharacterEqualityResult",
     "ModularCharacterHeckeMatrix",
     "ModularCharacterQExpansion",
+    "ModularCharacterSpaceInclusion",
+    "ModularCharacterTransportedForm",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
-    "ModularFormEqualityResult",
     "ModularFormFieldQExpansion",
     "ModularFormFramedCoordinates",
     "ModularFormFramedHeckeMatrix",
@@ -90,21 +103,22 @@ __all__ = [
     "formal_q_series_v_operator",
     "level_one_named_q_expansion",
     "modular_character_basis_q_expansions",
+    "modular_character_coordinates_equal_in_common_space",
     "modular_character_coordinates_hecke",
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
+    "modular_character_coordinates_transport",
     "modular_character_hecke_matrix",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
     "modular_form_coordinates_add",
     "modular_form_coordinates_atkin_lehner",
-    "modular_form_coordinates_equal",
-    "modular_form_field_coordinates_equal",
     "modular_form_coordinates_extend_field",
     "modular_form_coordinates_from_frame",
     "modular_form_coordinates_hecke",
     "modular_form_coordinates_product",
     "modular_form_coordinates_q_expansion",
+    "modular_form_coordinates_scalar_multiply",
     "modular_form_coordinates_to_frame",
     "modular_form_coordinates_transport",
     "modular_form_coordinates_u2",

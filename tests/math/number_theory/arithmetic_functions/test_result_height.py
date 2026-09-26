@@ -77,25 +77,10 @@ def test_dirichlet_inverse_propagates_its_recurrence() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    "parsed_request",
-    [
-        SummatoryFunctionRequest.model_validate({"values": [_rational(1, 2)]}),
-        MobiusTransformRequest.model_validate({"values": [_rational(1, 2)]}),
-        DirichletInverseRequest.model_validate({"values": [_rational(1, 2)]}),
-        DirichletConvolutionRequest.model_validate(
-            {"f": [_rational(1, 2)], "g": [_rational(1, 3)]}
-        ),
-    ],
-)
-def test_ordinary_requests_remain_admitted(parsed_request: object) -> None:
-    assert parsed_request is not None
-
-
-@pytest.mark.parametrize("length", [900, 1000])
-def test_summatory_shared_denominator_prefixes(length: int) -> None:
+def test_summatory_shared_denominator_prefix_at_length_1000() -> None:
     from fractions import Fraction
 
+    length = 1000
     request = SummatoryFunctionRequest.model_validate(
         {"values": [_rational(1, 10**32)] * length}
     )

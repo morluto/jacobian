@@ -20,32 +20,18 @@ PARI's reference documents `mfinit` for full `M_k(Gamma0(N), chi)` spaces and
 cuspidal `S_k` spaces, `mfbasis` for the space basis, and `mfcoefs` for the
 matrix of basis q-expansions. This general Gamma0 adapter remains restricted
 to trivial character and rational coefficients. Separately, Jacobian has a
-bounded cyclotomic character-space basis slice for even characters of
-conductor 13 and order dividing six, represented at levels 13, 26, and 39
-over `Q(zeta_6)`. It
-covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases with minimum
-precisions 3, 8, and 10, respectively. The character-basis request may ask for
-any longer prefix through 128 coefficients; row reduction remains anchored at
-the complete Sturm-determining prefix. Its dimension implementation admits
-even characters of order dividing six, so it also covers the order-three
-characters whose bases can be multidimensional. It computes the
-Cohen--Oesterle character sums and cusp term in exact rational/cyclotomic
-arithmetic, compares that dimension with PARI, and checks that the returned
-prefix has the full expected rank before publishing a basis. The
-`S_2(Gamma0(13), chi)` one-dimensional order-six bases retain their established
-identifier, which existing character-coordinate operations consume. The
-generalized bases support canonical coordinate equality in their exact parent
-spaces; other operations remain limited to the explicitly documented slices.
-The formula follows Quer, “Dimensions
 bounded cyclotomic character-space basis slice for the even order-6 characters
 of conductor 13, represented at levels 13, 26, and 39 over `Q(zeta_6)`. It
 covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases through
 precisions 3, 8, and 10, respectively. Its dimension implementation admits
 only this parity, conductor, level, and field range. It computes the
+Cohen--Oesterle character sums and cusp term in exact rational/cyclotomic
+arithmetic, compares that dimension with PARI, and checks that the returned
+prefix has the full expected rank before publishing a basis. The
 `S_2(Gamma0(13), chi)` one-dimensional basis retains its established
 identifier, which existing character-coordinate operations consume; the
-generalized bases do not imply coordinate, operator, transport, or equality
-support outside that original parent. The formula follows Quer, “Dimensions
+generalized bases do not imply coordinate or operator support outside the
+documented parents. The formula follows Quer, “Dimensions
 of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
 ([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
 For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension
@@ -55,11 +41,6 @@ is
 over unit roots of `x^2+1` and `x^2+x+1` modulo `N`, and
 `nu_infinity = sum_{d|N, gcd(d,N/d)|(N/13)} phi(gcd(d,N/d))`.
 The full dimension is `dim M = dim S + nu_infinity`. This gives cusp/full
-dimensions `1/3`, `2/6`, and `3/7` for the order-six characters at levels 13,
-26, and 39. For the order-three characters, dimensions are `0/2`, `1/5`, and
-`3/7`. Inputs must have even parity, exact conductor 13, and values in the
-declared `Q(zeta_6)` field; no other character weights, levels, or conductors
-use this formula implementation.
 dimensions `1/3`, `2/6`, and `3/7` at levels 13, 26, and 39. The inputs must
 have even order-six character, exact conductor 13, and values in the declared
 `Q(zeta_6)` field; no other character weights, levels, or conductors use this
@@ -67,6 +48,53 @@ formula implementation.
 See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
 for the original exact q-prefix and same-space character-coordinate contract.
 Other character spaces and general field-valued Gamma0 bases remain unsupported.
+
+For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
+supports explicit nested-level inclusion from level 13, 26, or 39 into level
+26 or 39 when the source level divides the target, and identity inclusion at
+level 13. It also supports a common level-78 target for the nonnested 26-vs-39
+case. The request preserves both
+exact space parents and carries the character pullback and identity map of
+`Q(zeta_6)` parents. It checks the character map on every target unit and
+requires each character's explicit modulus to equal its space level. The
+operation returns target coordinates and the exact q-prefix through the target
+Sturm precision for levels 26 and 39, extending the source basis while
+retaining its canonical q-Sturm RREF normalization when needed. At targets 13
+and 78, it retains the explicit source inclusion and returns a typed Sturm
+prefix rather than target basis coordinates. The common q-expansion principle
+gives the same equality postcondition in either case: the explicit character
+map establishes membership in the target, identity pullback preserves the
+source q-expansion, and equality compares every coefficient through the
+target Sturm bound (3 coefficients at level 13, 29 at level 78). Level 13
+uses the same prefix representation to keep one equality postcondition and
+avoid relabeling the legacy level-13 coordinate value as a level-26/39-family
+coordinate type. At level 78, the current basis adapter failed exact
+reconstruction of an admitted included form, so target coordinates lack a
+sound canonical basis contract. Before either source basis is materialized,
+it bounds exact cyclotomic expansion and target-solve coefficient growth
+against the canonical 256-digit field-element limit. This bound is based on
+the represented source dimension, target dimension, and submitted coordinate
+height; values whose full expansion or reconstruction could exceed the limit
+are rejected before PARI work.
+
+The coefficient-growth estimate relies on a finite canonical-basis contract:
+at the transport precisions `(13,3)`, `(13,8)`, `(13,10)`, `(13,29)`,
+`(26,8)`, `(26,10)`, `(26,29)`, `(39,10)`, and `(39,29)`, the S2 basis
+dimensions are respectively `1, 1, 1, 1, 2, 2, 2, 3, 3`, and each cyclotomic
+rational coordinate is an integer of absolute value below 10. The basis
+producer admits the resulting cell/output
+envelope before PARI and checks the coefficient bound before publishing the
+basis. Regression fixtures cover both conjugate characters at each pair.
+
+`modular_form.character.equal.check` compares two transported forms only when
+they land in the identical target space and coefficient field. It recomputes
+each inclusion from the retained source form, checks the submitted target
+coordinates and q-prefix, and compares all coefficients through the target
+Sturm bound. This is a narrow global-equality decision for these represented
+spaces, including the exact 26-vs-39 comparison at common level 78; it does
+not add arbitrary-character transport, implicit character inflation,
+coefficient-field embeddings, or Hecke support. The dimension
+formula and PARI cross-check boundaries above remain unchanged.
 
 For this represented character slice,
 `modular_form.character_hecke_matrix.compute` returns the exact 1-by-1 matrix

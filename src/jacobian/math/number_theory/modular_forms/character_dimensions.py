@@ -1,4 +1,4 @@
-"""Bounded exact Cohen--Oesterle dimensions for conductor-thirteen characters."""
+"""Bounded exact Cohen--Oesterle dimensions for the order-six character slice."""
 
 from __future__ import annotations
 
@@ -40,8 +40,6 @@ def _root_in_field(
     embedded_exponent = Fraction(value.exponent * field.order, value.order)
     if embedded_exponent.denominator != 1:
         raise ValueError("character root is outside the declared coefficient field")
-    # Map ζ_value.order to ζ_field.order ** embedded_exponent, then reduce
-    # in the declared field rather than relabelling the source power.
     exponent = embedded_exponent.numerator
     power = [Fraction(0)] * (exponent + 1)
     power[exponent] = Fraction(1)
@@ -63,14 +61,11 @@ def _validated_character_table(
     for value in table.values():
         root_order = value.order // gcd(value.order, value.exponent)
         value_order = value_order * root_order // gcd(value_order, root_order)
-    if value_order > 6 or 6 % value_order:
+    if value_order != 6:
         raise OperationDomainValidationError(
             location=("space", "character"),
             code="modular_form.character_dimension_order",
-            message=(
-                "the bounded character dimension slice requires character values "
-                "in Q(zeta_6)"
-            ),
+            message="the bounded character dimension slice requires exact order six",
         )
     if table[(-1) % level].exponent != 0:
         raise OperationDomainValidationError(
@@ -130,9 +125,7 @@ def _nu_infinity(level: int, conductor: int) -> int:
 
 
 def _integral_rational_part(value: RationalCyclotomicElement) -> int:
-    rational = tuple(
-        Fraction(int(item.num), int(item.den)) for item in value.coefficients_ascending
-    )
+    rational = tuple(item.as_fraction() for item in value.coefficients_ascending)
     if any(rational[1:]) or rational[0].denominator != 1:
         raise RuntimeError("Cohen--Oesterle dimension expression is not integral")
     return rational[0].numerator
@@ -144,12 +137,12 @@ def character_space_dimensions(
     character: DirichletCharacter,
     field: RationalCyclotomicField,
 ) -> tuple[int, int]:
-    """Return (cusp, full) dimensions for the explicit conductor-13 slice.
+    """Return (cusp, full) dimensions for the explicit order-six inflation slice.
 
     Admission is intentionally limited to weight two and levels 13, 26, 39,
-    with an even character of conductor 13 and values in Q(zeta_6). The
-    Cohen--Oesterle character sums are evaluated directly in that exact field;
-    no backend dimension claim is used as the mathematical expectation.
+    with a character of conductor 13 and values in Q(zeta_6). This is enough
+    to cover the first nontrivial inflation targets while keeping every
+    character sum and the conductor claim independently checked here.
     """
     if (
         type(level) is not int

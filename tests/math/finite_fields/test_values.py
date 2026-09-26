@@ -13,9 +13,14 @@ from jacobian.math.finite_fields import (
     FiniteFieldElement,
     FiniteFieldPresentation,
     FiniteLinearMap,
+    ProjectiveLine,
     ProjectivePoint,
 )
-from jacobian.math.finite_fields.operations import element, restrict_scalars
+from jacobian.math.finite_fields.operations import (
+    element,
+    finite_field,
+    restrict_scalars,
+)
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 from jacobian.math.matrices.finite_fields.presentations import (
     bind_prime_matrix,
@@ -50,6 +55,38 @@ def test_presentation_identity_binds_modulus_generator_basis_and_encoding() -> N
         FiniteFieldPresentation.model_validate_json(presentation.model_dump_json())
         == presentation
     )
+
+
+def test_next_prime_field_presentation_and_element_round_trip() -> None:
+    presentation = finite_field(65_537, (0, 1))
+    value = element(presentation, (65_536,))
+
+    assert presentation.order == 65_537
+    assert (
+        FiniteFieldPresentation.model_validate_json(presentation.model_dump_json())
+        == presentation
+    )
+    assert FiniteFieldElement.model_validate_json(value.model_dump_json()) == value
+    assert value.model_dump(mode="json")["coordinates"] == ["65536"]
+
+
+def test_finite_field_presentation_order_still_has_a_separate_upper_bound() -> None:
+    with pytest.raises(ValidationError, match="field order exceeds"):
+        FiniteFieldPresentation(
+            characteristic=5,
+            modulus_coefficients=(0, 0, 0, 0, 0, 0, 0, 1),
+        )
+
+
+def test_projective_line_keeps_its_direction_cap_after_field_widens() -> None:
+    presentation = finite_field(65_537, (0, 1))
+
+    with pytest.raises(ValidationError, match="projective line exceeds"):
+        ProjectiveLine(
+            presentation=presentation,
+            axis=Axis(name="variables", labels=("x", "y")),
+            points=(),
+        )
 
 
 def test_exact_field_integer_leaves_are_native_in_python_and_decimal_in_json() -> None:

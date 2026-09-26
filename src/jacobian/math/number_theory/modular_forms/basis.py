@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import comb, factorial, gcd, isqrt, lcm
 from typing import Literal
@@ -40,7 +40,6 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
-    MAX_MODULAR_FORM_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
@@ -595,6 +594,10 @@ def _admit_pari_basis(
 
 
 def _materialize_pari_basis(plan: _BasisPlan) -> _BasisPlan:
+    if plan.dimension == 0:
+        # The exact dimension formula already determines the unique empty
+        # basis; no backend computation is needed to establish its labels.
+        return replace(plan, basis_vectors=(), basis_labels=())
     sturm_precision = sturm_bound(plan.space).bound + 1
     vectors = pari_gamma0_rational_basis(
         plan.space,
@@ -1135,7 +1138,9 @@ def modular_form_coordinates_to_frame(
             code="modular_form.frame_wrong_space",
             message="canonical coordinates must use the frame's exact space and source basis",
         )
-    _, canonical = _admit_coordinates(form, 1, admitted_plan=plan)
+    _, canonical = _admit_coordinates(
+        form, 1, admitted_plan=plan, materialize_pari=False
+    )
     _admit_change_of_basis_arithmetic(plan.dimension, matrix, canonical)
     framed = _solve_frame_matrix(matrix, canonical)
     return ModularFormFramedCoordinates.model_construct(
@@ -1381,207 +1386,6 @@ def _require_canonical_coordinate_space(
         )
 
 
-def _admitted_common_level(
-    left_space: ModularFormSpace, right_space: ModularFormSpace
-) -> int:
-    """The exact common Gamma0 level, admitted within the space bound."""
-
-    common_level = (
-        left_space.level * right_space.level // gcd(left_space.level, right_space.level)
-    )
-    if common_level > MAX_MODULAR_FORM_LEVEL:
-        raise OperationResourceAdmissionError(
-            location=(),
-            code="modular_form.equality_level_bound",
-            message=(
-                "the common Gamma0 level exceeds the modular-form level bound "
-                f"{MAX_MODULAR_FORM_LEVEL}"
-            ),
-        )
-    return common_level
-
-
-def modular_form_coordinates_equal(
-    left: ModularFormCoordinates, right: ModularFormCoordinates
-) -> bool:
-    """Decide exact equality in a shared supported modular-form ambient space."""
-
-    if not isinstance(left, ModularFormCoordinates) or not isinstance(
-        right, ModularFormCoordinates
-    ):
-        raise OperationDomainValidationError(
-            location=(),
-            code="modular_form.coordinates_type",
-            message="both operands must be exact modular-form coordinate values",
-        )
-    for side, form in (("left", left), ("right", right)):
-        _require_canonical_coordinate_space(form, side)
-    if left.space == right.space:
-        if left.space.coefficient_domain != "QQ":
-            if left.space.character != "TRIVIAL":
-                from jacobian.math.number_theory.modular_forms.character_coordinates import (
-                    modular_character_coordinates_equal,
-                )
-
-                return modular_character_coordinates_equal(left, right)
-            from jacobian.math.number_theory.modular_forms.field_coordinates import (
-                modular_form_field_coordinates_equal,
-            )
-
-            return modular_form_field_coordinates_equal(left, right)
-        plan_precision = (
-            sturm_bound(left.space).bound + 1 if left.space.level > 4 else 1
-        )
-        plan = _admit_basis(left.space, plan_precision, materialize_pari=False)
-        _, left_coordinates = _admit_coordinates(
-            left,
-            plan_precision,
-            admitted_plan=plan,
-            materialize_pari=False,
-            check_expansion_growth=False,
-        )
-        _, right_coordinates = _admit_coordinates(
-            right,
-            plan_precision,
-            admitted_plan=plan,
-            materialize_pari=False,
-            check_expansion_growth=False,
-        )
-        return left_coordinates == right_coordinates
-
-    left_space = left.space
-    right_space = right.space
-    if (
-        left_space.character != "TRIVIAL"
-        or right_space.character != "TRIVIAL"
-        or left_space.coefficient_domain != "QQ"
-        or right_space.coefficient_domain != "QQ"
-    ):
-        raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.equality_parent_unsupported",
-            message=(
-                "cross-space equality currently requires rational "
-                "trivial-character forms"
-            ),
-        )
-    if left_space.weight != right_space.weight:
-        raise OperationDomainValidationError(
-            location=("right", "space", "weight"),
-            code="modular_form.equality_weight_mismatch",
-            message="cross-space equality requires equal weights",
-        )
-
-    # Both forms embed into M_k(Gamma0(lcm(N1,N2))). The Sturm theorem there
-    # makes equality of this finite prefix equivalent to equality of forms;
-    # cusp forms embed in its ambient holomorphic space as well.
-    common_level = _admitted_common_level(left_space, right_space)
-    common_space = ModularFormSpace(
-        level=common_level, weight=left_space.weight, kind="M"
-    )
-    precision = sturm_bound(common_space).bound + 1
-    left_plan = _admit_basis(left_space, precision, materialize_pari=False)
-    right_plan = _admit_basis(right_space, precision, materialize_pari=False)
-    _, left_coordinates = _admit_coordinates(
-        left, precision, admitted_plan=left_plan, materialize_pari=False
-    )
-    _, right_coordinates = _admit_coordinates(
-        right, precision, admitted_plan=right_plan, materialize_pari=False
-    )
-
-    # Admit both basis materializations and the two exact linear combinations
-    # together, before either PARI expansion. Rational sums of d products with
-    # coordinate height C and basis coefficient height B have height at most
-    # d(C+B)+digits(d)+2.
-    combined_work = (
-        left_plan.work
-        + right_plan.work
-        + precision * (left_plan.dimension + right_plan.dimension)
-    )
-    combined_basis_bytes = sum(
-        plan.dimension * precision * (2 * plan.rref_digit_bound + 32)
-        if plan.basis_id == PARI_STURM_RREF_BASIS_ID
-        else plan.dimension * precision * (plan.coefficient_digits + 8)
-        for plan in (left_plan, right_plan)
-    )
-    if combined_work > MAX_PARI_BASIS_WORK:
-        raise OperationResourceAdmissionError(
-            location=(),
-            code="modular_form.equality_work_bound",
-            message="combined equality basis and coefficient work exceeds its envelope",
-        )
-    if combined_basis_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
-        raise OperationResourceAdmissionError(
-            location=(),
-            code="modular_form.equality_basis_output_bound",
-            message="combined equality basis output exceeds its exact envelope",
-        )
-    expansion_digit_bounds = []
-    for plan, coordinates in (
-        (left_plan, left_coordinates),
-        (right_plan, right_coordinates),
-    ):
-        coordinate_digits = max(
-            (
-                max(
-                    len(format_canonical_integer(abs(value.numerator))),
-                    len(format_canonical_integer(value.denominator)),
-                )
-                for value in coordinates
-            ),
-            default=1,
-        )
-        expansion_digit_bounds.append(
-            plan.dimension * (coordinate_digits + plan.coefficient_digits)
-            + len(str(max(1, plan.dimension)))
-            + 2
-        )
-    max_expansion_digits = max(expansion_digit_bounds, default=1)
-    combined_expansion_bytes = 2 * precision * (2 * max_expansion_digits + 32)
-    if max_expansion_digits > MAX_COORDINATE_RESULT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=(),
-            code="modular_form.equality_coefficient_growth",
-            message="common Sturm prefix coefficient growth exceeds its exact envelope",
-        )
-    if combined_expansion_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
-        raise OperationResourceAdmissionError(
-            location=(),
-            code="modular_form.equality_output_bound",
-            message="common Sturm comparison exceeds its exact output envelope",
-        )
-
-    request_checkpoint("before common-space equality basis materialization")
-    if left_plan.basis_id == PARI_STURM_RREF_BASIS_ID:
-        left_plan = _materialize_pari_basis(left_plan)
-    if right_plan.basis_id == PARI_STURM_RREF_BASIS_ID:
-        right_plan = _materialize_pari_basis(right_plan)
-    left_basis = _basis_coefficients(left_plan)
-    right_basis = _basis_coefficients(right_plan)
-    left_expansion = tuple(
-        sum(
-            (
-                scalar * basis[index]
-                for scalar, basis in zip(left_coordinates, left_basis, strict=True)
-            ),
-            Fraction(0),
-        )
-        for index in range(precision)
-    )
-    right_expansion = tuple(
-        sum(
-            (
-                scalar * basis[index]
-                for scalar, basis in zip(right_coordinates, right_basis, strict=True)
-            ),
-            Fraction(0),
-        )
-        for index in range(precision)
-    )
-    request_checkpoint("after exact common-space equality comparison")
-    return left_expansion == right_expansion
-
-
 def modular_form_coordinates_transport(
     form: ModularFormCoordinates, target_space: ModularFormSpace
 ) -> ModularFormCoordinates:
@@ -1645,13 +1449,16 @@ def modular_form_coordinates_transport(
     # Admitting the source at the target's determining precision also proves
     # the source representation can supply every target comparison term.
     source_plan = _admit_basis(source_space, target_precision, materialize_pari=False)
-    target_plan = _admit_basis(target_space, target_precision, materialize_pari=False)
     _, source_coordinates = _admit_coordinates(
         form,
         target_precision,
         admitted_plan=source_plan,
         materialize_pari=False,
+        check_expansion_growth=source_space != target_space,
     )
+    if source_space == target_space:
+        return form
+    target_plan = _admit_basis(target_space, target_precision, materialize_pari=False)
 
     total_work = source_plan.work + target_plan.work
     solve_work = target_precision * (
@@ -1704,8 +1511,6 @@ def modular_form_coordinates_transport(
             message="transport coordinates exceed the exact output-byte envelope",
         )
 
-    if source_space == target_space:
-        return form
     request_checkpoint("before modular-form transport basis materialization")
     source_plan = (
         _materialize_pari_basis(source_plan)
@@ -1813,10 +1618,7 @@ def modular_form_coordinates_product(
         raise OperationResourceAdmissionError(
             location=("space", "weight"),
             code="modular_form.product_target_weight_bound",
-            message=(
-                "product target weight exceeds the admitted modular-form bound "
-                f"{MAX_MODULAR_FORM_WEIGHT}"
-            ),
+            message="product target weight exceeds the admitted modular-form envelope",
         )
     target_space = ModularFormSpace(
         level=target_level,
@@ -1970,7 +1772,7 @@ def _apply_coordinate_operator(
 ) -> ModularFormCoordinates:
     """Apply one supported operator and recover its exact basis coordinates."""
 
-    plan, coordinates = _admit_coordinates(form, 1)
+    plan, coordinates = _admit_coordinates(form, 1, materialize_pari=False)
     chi_minus4 = _is_gamma0_four_chi4(form.space)
     if operator == "hecke":
         supported = (
@@ -2417,17 +2219,8 @@ def modular_form_coordinates_atkin_lehner(
     )
 
 
-def modular_form_hecke_matrix(
-    space: ModularFormSpace, index: int
-) -> ModularFormHeckeMatrix:
-    """Return the exact T_n matrix in the canonical basis of an admitted space.
-
-    Matrix rows are output basis coefficients and columns are input basis
-    vectors. One basis expansion at the required source order supplies every
-    column, and each column is reconstructed and checked through the exact
-    Sturm bound.
-    """
-
+def _admit_hecke_matrix_parent(space: ModularFormSpace, index: int) -> None:
+    """Validate shared Hecke index and parent constraints before any basis job."""
     if type(index) is not int or not 1 <= index <= MAX_Q_TRANSFORM_SOURCE_ORDER:
         raise OperationResourceAdmissionError(
             location=("index",),
@@ -2435,10 +2228,10 @@ def modular_form_hecke_matrix(
             message="Hecke matrix index is outside the exact admitted envelope",
         )
     if not isinstance(space, ModularFormSpace):
-        _admit_basis(space, 1)
+        _admit_basis(space, 1, materialize_pari=False)
         raise RuntimeError("unreachable invalid modular-form space")
     if type(space.weight) is not int or space.weight < 0:
-        _admit_basis(space, 1)
+        _admit_basis(space, 1, materialize_pari=False)
         raise RuntimeError("unreachable invalid modular-form weight")
     chi_minus4 = _is_gamma0_four_chi4(space)
     if space.level > 4:
@@ -2446,7 +2239,7 @@ def modular_form_hecke_matrix(
         # Gamma0 spaces through MAX_PARI_BASIS_LEVEL. Hecke T_n preserves
         # these spaces when (n, N) = 1.
         if space.character != "TRIVIAL" or space.coefficient_domain != "QQ":
-            _admit_basis(space, 1)
+            _admit_basis(space, 1, materialize_pari=False)
         supported = gcd(index, space.level) == 1
     else:
         supported = (
@@ -2462,6 +2255,21 @@ def modular_form_hecke_matrix(
             code="modular_form.hecke_matrix_not_coprime",
             message="Hecke matrices are supported when the index is coprime to the level",
         )
+
+
+def modular_form_hecke_matrix(
+    space: ModularFormSpace, index: int
+) -> ModularFormHeckeMatrix:
+    """Return the exact T_n matrix in the canonical basis of an admitted space.
+
+    Matrix rows are output basis coefficients and columns are input basis
+    vectors. One basis expansion at the required source order supplies every
+    column, and each column is reconstructed and checked through the exact
+    Sturm bound.
+    """
+
+    _admit_hecke_matrix_parent(space, index)
+    chi_minus4 = _is_gamma0_four_chi4(space)
     bound = sturm_bound(space).bound
     precision = bound + 1
     source_order = index * bound + 1
@@ -2527,6 +2335,7 @@ def modular_form_hecke_matrix(
             message="Hecke matrix exact entries exceed the bounded output envelope",
         )
 
+    request_checkpoint("before Hecke matrix basis materialization")
     if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
         plan = _materialize_pari_basis(plan)
     basis_vectors = _basis_coefficients(plan)
@@ -2611,12 +2420,37 @@ def modular_form_hecke_matrix_in_frame(
             code="modular_form.hecke_matrix_index_bound",
             message="Hecke matrix index is outside the exact admitted envelope",
         )
+    if isinstance(frame, ModularFormChangeOfBasisFrame):
+        _admit_hecke_matrix_parent(frame.space, index)
+    if (
+        isinstance(frame, ModularFormChangeOfBasisFrame)
+        and frame.source_basis_id == PARI_STURM_RREF_BASIS_ID
+    ):
+        # A PARI frame checks its canonical labels with a Sturm basis, then
+        # the canonical Hecke matrix needs a second, longer basis. Reserve both
+        # backend jobs before the first worker is launched.
+        bound = sturm_bound(frame.space).bound
+        frame_plan = _admit_basis(frame.space, bound + 1, materialize_pari=False)
+        source_order = index * bound + 1
+        matrix_plan = _admit_basis(frame.space, source_order, materialize_pari=False)
+        matrix_work = (
+            matrix_plan.dimension * (bound + 1) * index
+            + 2 * (bound + 1) * matrix_plan.dimension**2
+            + matrix_plan.work
+        )
+        if frame_plan.work + matrix_work > MAX_COORDINATE_HECKE_WORK:
+            raise OperationResourceAdmissionError(
+                location=("frame",),
+                code="modular_form.framed_hecke_aggregate_work_bound",
+                message="frame validation and canonical Hecke matrix exceed the shared work envelope",
+            )
     plan, change = _frame_admission(frame)
     dimension = plan.dimension
     zero = (Fraction(0),) * dimension
     _admit_change_of_basis_arithmetic(dimension, change, zero)
     inverse = _invert_frame_matrix(change)
-
+    # The framed path must admit the canonical matrix before frame basis
+    # materialization. Its own operation performs aggregate Hecke admission.
     canonical = modular_form_hecke_matrix(frame.space, index)
     if (
         canonical.space != frame.space
@@ -3282,6 +3116,12 @@ def modular_form_operator_image(
     """Bind U_p or V_p to an exact level-one form and its Gamma0(p) parent."""
 
     _admit_coordinates(source_form, 1)
+    if source_form.space.level != 1:
+        raise OperationDomainValidationError(
+            location=("source_form", "space", "level"),
+            code="modular_form.operator_image_source_level",
+            message="U_p and V_p operator images currently require level-one sources",
+        )
     if operator not in ("U", "V"):
         raise OperationDomainValidationError(
             location=("operator",),

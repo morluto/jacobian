@@ -15,6 +15,7 @@ from jacobian.math.number_theory.modular_forms.basis import (
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
     modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models import (
     ModularFormCoordinatesAddRequest,
@@ -65,6 +66,29 @@ def test_coordinate_addition_matches_direct_vector_and_q_expansion_oracles() -> 
         Fraction(4, 3),
         Fraction(384),
         Fraction(252_864),
+    )
+
+
+def test_coordinate_scalar_multiplication_scales_nonunit_coordinates_once() -> None:
+    form = _form((2, Fraction(3, 2)))
+
+    result = modular_form_coordinates_scalar_multiply(form, _q(3))
+
+    assert tuple(value.as_fraction() for value in result.coordinates) == (
+        6,
+        Fraction(9, 2),
+    )
+
+
+def test_scalar_admission_is_independent_of_wire_output_ceiling() -> None:
+    # Native exact arithmetic accepts these digits; JSON transport owns its own cap.
+    form = _form((1, 0))
+    scalar = _q(10**5000)
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        modular_form_coordinates_scalar_multiply(form, scalar)
+    assert (
+        refusal.value.errors()[0]["type"]
+        == "modular_form.coordinate_scalar_digit_bound"
     )
 
 

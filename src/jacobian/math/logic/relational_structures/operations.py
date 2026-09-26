@@ -22,6 +22,7 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_search,
     admit_induced_substructure,
     admit_polymorphism_check,
+    admit_relational_disjoint_union,
     admit_relational_reduct,
 )
 from jacobian.math.logic.relational_structures._models import (
@@ -44,6 +45,7 @@ from jacobian.math.logic.relational_structures._models import (
     InducedEmbeddingCheckResult,
     InducedRelationProfile,
     InducedSubstructureResult,
+    RelationalDisjointUnionResult,
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRelationProfile,
@@ -186,6 +188,57 @@ def transpose_binary_relation(
         carrier_size=source.carrier_size,
         signature=source.signature,
         relation_tables=tuple(tables),
+    )
+
+
+def disjoint_union_structure(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> RelationalDisjointUnionResult:
+    """Return a finite relational coproduct with canonical component maps.
+
+    Left labels retain their values, and a right label ``j`` becomes
+    ``left.carrier_size + j``. Positive-arity tuples remain within their
+    component; a nullary relation is true in the union exactly when it is true
+    in at least one component.
+    """
+
+    left = _admit_structure(left, "left")
+    right = _admit_structure(right, "right")
+    left_inclusion, right_inclusion, _work = admit_relational_disjoint_union(
+        left, right
+    )
+    offset = left.carrier_size
+    union_tables: list[tuple[tuple[int, ...], ...]] = []
+    for symbol, left_table, right_table in zip(
+        left.signature, left.relation_tables, right.relation_tables, strict=True
+    ):
+        request_checkpoint("during relational disjoint-union construction")
+        table: tuple[tuple[int, ...], ...]
+        if symbol.arity == 0:
+            table = ((),) if left_table or right_table else ()
+        else:
+            right_rows = tuple(
+                tuple(coordinate + offset for coordinate in row) for row in right_table
+            )
+            table = (*left_table, *right_rows)
+        union_tables.append(table)
+
+    request_checkpoint("before relational disjoint-union value construction")
+    union_value = FiniteRelationalStructure(
+        carrier_size=offset + right.carrier_size,
+        signature=left.signature,
+        relation_tables=tuple(union_tables),
+    )
+    return RelationalDisjointUnionResult(
+        left=left,
+        right=right,
+        disjoint_union=union_value,
+        left_inclusion=RelationalHomomorphism._from_kernel(
+            source=left, target=union_value, mapping=left_inclusion
+        ),
+        right_inclusion=RelationalHomomorphism._from_kernel(
+            source=right, target=union_value, mapping=right_inclusion
+        ),
     )
 
 

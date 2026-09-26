@@ -218,6 +218,57 @@ class BinaryRelationTransposeRequest(StrictModel):
         )
 
 
+class RelationalDisjointUnionRequest(StrictModel):
+    """Form the disjoint union of two structures over one signature."""
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+
+
+class RelationalDisjointUnionResult(StrictModel):
+    """A relational coproduct with its canonical component inclusions."""
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+    disjoint_union: FiniteRelationalStructure
+    left_inclusion: RelationalHomomorphism
+    right_inclusion: RelationalHomomorphism
+
+    @model_validator(mode="after")
+    def require_canonical_coproduct_axis(self) -> Self:
+        if self.left.signature != self.right.signature:
+            raise PydanticCustomError(
+                "relational.structure.disjoint_union_signature",
+                "disjoint-union components must have the same ranked signature",
+            )
+        if self.disjoint_union.signature != self.left.signature:
+            raise PydanticCustomError(
+                "relational.structure.disjoint_union_signature",
+                "the disjoint union retains the component signature",
+            )
+        left_size = self.left.carrier_size
+        right_size = self.right.carrier_size
+        if self.disjoint_union.carrier_size != left_size + right_size:
+            raise PydanticCustomError(
+                "relational.structure.disjoint_union_carrier",
+                "the disjoint-union carrier is the tagged sum of component carriers",
+            )
+        if (
+            self.left_inclusion.source != self.left
+            or self.left_inclusion.target != self.disjoint_union
+            or self.left_inclusion.mapping != tuple(range(left_size))
+            or self.right_inclusion.source != self.right
+            or self.right_inclusion.target != self.disjoint_union
+            or self.right_inclusion.mapping
+            != tuple(range(left_size, left_size + right_size))
+        ):
+            raise PydanticCustomError(
+                "relational.structure.disjoint_union_inclusions",
+                "component inclusions must follow canonical left-then-right labels",
+            )
+        return self
+
+
 class HomomorphismViolationWitness(StrictModel):
     """The first source tuple whose image is absent from the target relation.
 

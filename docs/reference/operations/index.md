@@ -35,5 +35,7 @@ that need more context than an operation card:
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
+- [Finite relational binary-relation transpose](relational-binary-relation-transpose.md)
+- [Finite relational disjoint union](relational-disjoint-union.md)
 - [Complete finite CSP solution enumeration](csp-solution-enumeration.md)
 - [Finite relational homomorphism maps](relational-homomorphism-maps.md)

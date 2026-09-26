@@ -6,6 +6,7 @@ import json
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafField,
@@ -16,6 +17,7 @@ from jacobian.math.topology.cellular_sheaves import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
+    FiniteCellularSheaf,
     SheafCochainComplex,
 )
 from jacobian.math.topology.cellular_sheaves._tools import TOOLS
@@ -78,6 +80,27 @@ def test_triangle_matches_independent_oriented_boundary_blocks() -> None:
     # Cohomology consumes the same canonical chain matrices.
     assert sheaf_cohomology(sheaf).coboundary_matrices == result.coboundary_matrices
     assert SheafCochainComplex.model_validate_json(result.model_dump_json()) == result
+
+
+def test_cochain_admission_rejects_oversized_source_scalar_before_parsing() -> None:
+    sheaf = _constant_triangle()
+    restriction = sheaf.cover_restrictions[0].model_copy(
+        update={"entries": ((_q(10**100),),)}
+    )
+    oversized = sheaf.model_copy(
+        update={"cover_restrictions": (restriction, *sheaf.cover_restrictions[1:])}
+    )
+    oversized = FiniteCellularSheaf.model_validate_json(oversized.model_dump_json())
+
+    try:
+        sheaf_cochain_complex(oversized)
+    except OperationResourceAdmissionError as exc:
+        assert (
+            exc.errors()[0]["type"]
+            == "topology.cellular_sheaf.cohomology.scalar_digits"
+        )
+    else:
+        raise AssertionError("oversized source scalar was not admitted before assembly")
 
 
 def test_cohomology_does_not_materialize_discarded_cochain_value(monkeypatch) -> None:

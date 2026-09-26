@@ -33,14 +33,15 @@ advertised envelope rather than a universal result-construction rule.
 
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 The native `lower_matroid` and `upper_matroid` conversions return
-`FiniteBasisMatroid` values whose bases are, respectively, all
-minimum-cardinality or all maximum-cardinality feasible sets. These deterministic
-projections remain available through the Python API without catalog declarations.
-They preserve the source ground axis and include
-`source_feasible_indices`, aligned with the result bases, as an exact map back
-to the source's canonical feasible rows. The source symmetric-exchange axiom is
-replayed at each operation boundary. The basis-family exchange axiom is checked
-by the result carrier.
+`DeltaMatroidExtremalMatroidResult` values. The canonical `FiniteBasisMatroid`
+is in `.matroid`; its bases are, respectively, all minimum-cardinality or all
+maximum-cardinality feasible sets. Pass that field to basis-matroid consumers.
+These deterministic projections remain available through the Python API
+without catalog declarations. The wrapper preserves the source ground axis and
+includes `source_feasible_indices`, aligned with the result bases, as an exact
+map back to the source's canonical feasible rows. The source
+symmetric-exchange axiom is replayed at each operation boundary. The
+basis-family exchange axiom is checked by the canonical matroid carrier.
 The lower/upper matroid theorem is stated in Section 6.1 of Dupont, Fink, and
 Moci, [*Universal Tutte characters via combinatorial coalgebras*](https://doi.org/10.5802/alco.35).
 

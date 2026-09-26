@@ -10,11 +10,11 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import (
-    PARI_STURM_RREF_BASIS_ID,
     modular_form_coordinates_q_expansion,
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
     modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
 )
 from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models import (
     ModularFormCoordinatesAddRequest,
@@ -23,6 +23,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
 )
+from jacobian.math.number_theory.modular_forms.basis import PARI_STURM_RREF_BASIS_ID
 
 _BASIS = "level-one-e4-e6-monomials-v1"
 
@@ -52,20 +53,33 @@ def test_coordinate_addition_matches_direct_vector_and_q_expansion_oracles() -> 
         Fraction(1),
         Fraction(1, 3),
     )
-    assert (
-        ModularFormCoordinates.model_validate_json(result.model_dump_json()) == result
-    )
+    assert ModularFormCoordinates.model_validate_json(result.model_dump_json()) == result
 
     # Independent Eisenstein coefficient formulas give E4^3=(1,720,179280)
     # and E6^2=(1,-1008,220752) through q^2.
     expansion = modular_form_coordinates_q_expansion(result, 3)
-    assert tuple(
-        value.as_fraction() for value in expansion.q_expansion.coefficients
-    ) == (
+    assert tuple(value.as_fraction() for value in expansion.q_expansion.coefficients) == (
         Fraction(4, 3),
         Fraction(384),
         Fraction(252_864),
     )
+
+
+def test_coordinate_scalar_multiplication_scales_nonunit_coordinates_once() -> None:
+    form = _form((2, Fraction(3, 2)))
+
+    result = modular_form_coordinates_scalar_multiply(form, _q(3))
+
+    assert tuple(value.as_fraction() for value in result.coordinates) == (6, Fraction(9, 2))
+
+
+def test_scalar_admission_is_independent_of_wire_output_ceiling() -> None:
+    # Native exact arithmetic accepts these digits; JSON transport owns its own cap.
+    form = _form((1, 0))
+    scalar = _q(10**5000)
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        modular_form_coordinates_scalar_multiply(form, scalar)
+    assert refusal.value.errors()[0]["type"] == "modular_form.coordinate_scalar_digit_bound"
 
 
 def test_coordinate_addition_rejects_different_complete_parents() -> None:
@@ -114,12 +128,12 @@ def test_coordinate_addition_composes_for_large_shared_denominator() -> None:
     result = modular_form_coordinates_add(left, right)
 
     assert result.coordinates[0].as_fraction() == Fraction(2, denominator)
-    assert modular_form_coordinates_add(result, left).coordinates[
-        0
-    ].as_fraction() == Fraction(3, denominator)
-    assert modular_form_coordinates_q_expansion(result, 1).q_expansion.coefficients[
-        0
-    ] == _q(Fraction(2, denominator))
+    assert modular_form_coordinates_add(result, left).coordinates[0].as_fraction() == Fraction(
+        3, denominator
+    )
+    assert modular_form_coordinates_q_expansion(result, 1).q_expansion.coefficients[0] == _q(
+        Fraction(2, denominator)
+    )
 
 
 def test_coordinate_addition_rejects_forged_missing_space() -> None:
@@ -128,9 +142,7 @@ def test_coordinate_addition_rejects_forged_missing_space() -> None:
     )
     with pytest.raises(OperationDomainValidationError) as refusal:
         modular_form_coordinates_add(forged, forged)
-    assert (
-        refusal.value.errors()[0]["type"] == "modular_form.coordinate_add_space_invalid"
-    )
+    assert refusal.value.errors()[0]["type"] == "modular_form.coordinate_add_space_invalid"
 
 
 def test_coordinate_addition_rejects_result_outside_consumer_digit_envelope() -> None:

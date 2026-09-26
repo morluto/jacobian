@@ -1,6 +1,9 @@
 """Finite class-function operations."""
 
 from jacobian.math.groups.characters._models import (
+    CharacterRingDecompositionRequest,
+    CharacterRingDecompositionResult,
+    CharacterRingElement,
     CharacterRow,
     CharacterTableResult,
     CharacterTensorDecompositionRequest,
@@ -31,8 +34,14 @@ from jacobian.math.groups.characters.operations import (
     frobenius_schur_indicator,
     restrict_cyclic_character,
 )
+from jacobian.math.groups.characters.representation_ring_operations import (
+    class_function_character_decomposition,
+)
 
 __all__ = [
+    "CharacterRingDecompositionRequest",
+    "CharacterRingDecompositionResult",
+    "CharacterRingElement",
     "CharacterRow",
     "CharacterTableResult",
     "CharacterTensorDecompositionRequest",
@@ -51,6 +60,7 @@ __all__ = [
     "character_table",
     "character_tensor_decomposition",
     "class_function_add",
+    "class_function_character_decomposition",
     "class_function_conjugate",
     "class_function_induce_from_subgroup",
     "class_function_inner_product",

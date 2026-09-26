@@ -642,7 +642,7 @@ def _admit_partition_source(source: object) -> tuple[int, tuple[tuple[int, ...],
         )
     degree = getattr(source, "degree", None)
     generators = getattr(source, "generators", None)
-    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+    if type(degree) is not int or not 0 <= degree <= MAX_GROUP_DEGREE:
         raise OperationDomainValidationError(
             location=("partition", "source"),
             code="groups.characters.partition_source",
@@ -841,17 +841,11 @@ def _character_table_from_admitted_partition(
                         order,
                         (
                             Fraction(
-                                
-                                    {"trivial": 1, "sign": 1, "standard": 2}[label]
-                                    if size == 1
-                                    else {"trivial": 1, "sign": -1, "standard": 0}[
-                                        label
-                                    ]
-                                    if size == 3
-                                    else {"trivial": 1, "sign": 1, "standard": -1}[
-                                        label
-                                    ]
-                                
+                                {"trivial": 1, "sign": 1, "standard": 2}[label]
+                                if size == 1
+                                else {"trivial": 1, "sign": -1, "standard": 0}[label]
+                                if size == 3
+                                else {"trivial": 1, "sign": 1, "standard": -1}[label]
                             ),
                             Fraction(0),
                         ),
@@ -1090,7 +1084,8 @@ def character_tensor_decomposition(
     # retained. Values use at most 512 digits; this estimate stays below both
     # the operation's 2 MB cap and the canonical 10 MB transport limit.
     group = axis.group
-    assert group is not None
+    if group is None:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
     degree = group.degree
     generator_count = len(group.generators)
     group_bytes = 512 + generator_count * (degree * 8 + 16)

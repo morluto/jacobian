@@ -136,7 +136,7 @@ class GroupConjugacyClassesRequest(StrictModel):
 
 ConjugacyClassElement = Annotated[
     tuple[int, ...],
-    Field(min_length=1, max_length=MAX_GROUP_DEGREE),
+    Field(min_length=0, max_length=MAX_GROUP_DEGREE),
 ]
 
 ConjugacyClass = Annotated[
@@ -181,7 +181,7 @@ class GroupConjugacyClassesResult(StrictModel):
 
     @model_validator(mode="after")
     def require_conjugacy_class_partition(self) -> Self:
-        _require_canonical_partition(self.classes)
+        _require_canonical_partition(self.classes, source_degree=self.source.degree)
         return self
 
     @classmethod
@@ -192,9 +192,14 @@ class GroupConjugacyClassesResult(StrictModel):
 
 
 def _require_canonical_partition(
-    classes: tuple[ConjugacyClass, ...],
+    classes: tuple[ConjugacyClass, ...], *, source_degree: int
 ) -> set[tuple[int, ...]]:
     degree = len(classes[0][0])
+    if degree != source_degree:
+        raise _validation_error(
+            "group.partition_degree",
+            "class members must have degree equal to the source group degree",
+        )
     expected_range = list(range(degree))
     elements: set[tuple[int, ...]] = set()
     previous_representative: tuple[int, ...] | None = None

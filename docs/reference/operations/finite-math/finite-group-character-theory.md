@@ -19,6 +19,38 @@ inner product, aggregate work, and output size before product or pairing
 arithmetic. It then checks the computed multiplicities are nonnegative
 integers.
 
+## Character ring coordinates
+
+`finite_group.class_function.character_ring_decompose.compute` expresses a
+class function in the canonical irreducible basis and returns a
+`CharacterRingElement`. That value retains the complete character table and
+one exact integer coordinate per irreducible row, so subsequent operations
+can compose in the representation ring without carrying a loose coefficient
+list. Signed coordinates represent virtual characters; nonnegative
+coordinates represent ordinary characters. The operation rejects a class
+function whose exact Hermitian pairings with the irreducibles are not integers.
+
+The character basis is reconstructed from the concrete source group before
+use. This release supports only the trivial group, finite cyclic groups up to
+order 60, and `S3`. It does not trust a caller-supplied character table or claim
+to decompose a class function on an unsupported group. The exact coordinate
+formula is the standard Hermitian pairing
+`<f, chi> = (1/|G|) sum_C |C| f(C) conjugate(chi(C))`; irreducible characters
+form an orthonormal basis of the complex class functions. GAP's reference
+manual documents the scalar product and distinguishes ordinary from virtual
+characters in its [class-function chapter](https://gap-system.github.io/gap/doc/ref/chap72_mj.html).
+
+Rational-valued input functions are included exactly into the table's
+cyclotomic field by sending `q` to the constant power-basis coefficient `q`.
+Inputs in any other field must already use the table's declared field; no
+nontrivial field embedding is inferred.
+
+Before conjugacy expansion, admission caps the concrete group order and bounds
+the worst-case complete table, all basis-pairing work, input coefficient
+growth, and serialized result size. The returned model checks coordinate axis
+and shape during deserialization; consumers that rely on table mathematics
+must reconstruct the canonical table from its group.
+
 ## Scaling a class function
 
 `class_function.scale.compute` multiplies every value by one exact scalar in

@@ -22,3 +22,27 @@ This anonymous value stores neither a source graph nor deletion identifiers.
 It does not assert that the card multiset is realizable as a vertex or edge
 deck. Source enumeration and reconstruction are separate mathematical
 questions and are not performed by this operation.
+
+## Anonymous vertex-deck edge count
+
+`graph.deck.anonymous_vertex.edge_count.compute` consumes an
+`AnonymousGraphCardMultiset` directly, so its input composes with
+`graph.deck.from_cards.construct` after a caller has supplied the cards. For a
+vertex deck of an n-vertex simple graph with n >= 3, each source edge survives
+exactly n-2 vertex deletions. Summing the card edge counts therefore gives
+`(n-2)|E|`, and division recovers the exact source edge count. This is the
+edge-count instance of Kelly's subgraph-counting identity; the operation uses
+the direct incidence argument and does not claim that divisibility alone
+proves deck realizability. See [Kelly's 1957 paper](https://doi.org/10.2140/pjm.1957.7.961)
+and the [Bondy–Hemminger reconstruction survey](https://doi.org/10.1002/jgt.3190010306).
+
+The operation admits card order at most eight; its edge-count-only admission
+checks the canonical labeled representatives and edge tuples linearly, without
+factorial canonical-form revalidation.
+Order zero is represented by the empty multiset of zero-vertex cards, and
+order one by one empty card; both have edge count zero and no divisor. Order
+two is rejected: its two one-vertex cards are identical whether the source has
+zero edges or one. For orders at least three, a nondivisible total is rejected
+as inconsistent with a vertex deck; a divisible total returns the unique
+candidate edge count conditional on the supplied multiset being a realizable
+vertex deck.

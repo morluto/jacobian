@@ -194,9 +194,9 @@ def test_sturm_operation_admits_arithmetic_before_computing_bound() -> None:
 def test_sturm_bounds_constructed_character_tables_before_copying() -> None:
     valid = dirichlet_character(character_group(13), (2,))
     fields = valid.group.model_dump()
-    fields["unit_residues"] = valid.group.unit_residues + (
-        0,
-    ) * (MAX_CHARACTER_GROUP_MODULUS + 1)
+    fields["unit_residues"] = valid.group.unit_residues + (0,) * (
+        MAX_CHARACTER_GROUP_MODULUS + 1
+    )
     oversized_group = type(valid.group).model_construct(**fields)
     forged_character = DirichletCharacter.model_construct(
         group=oversized_group,

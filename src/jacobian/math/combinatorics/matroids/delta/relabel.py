@@ -142,10 +142,11 @@ class DeltaMatroidRelabelRequest(StrictModel):
             raise _error("ground_unique", "target ground labels must be unique")
         label_sizes = tuple(_bounded_utf8_length(label) for label in self.target_ground)
         if any(size is None for size in label_sizes):
-            raise _error(
-                "ground_utf8", "target labels must be UTF-8 representable"
-            )
-        if sum(size for size in label_sizes if size is not None) > MAX_DELTA_LABEL_BYTES:
+            raise _error("ground_utf8", "target labels must be UTF-8 representable")
+        if (
+            sum(size for size in label_sizes if size is not None)
+            > MAX_DELTA_LABEL_BYTES
+        ):
             raise _error(
                 "ground_bytes", "target labels exceed the admitted UTF-8 byte bound"
             )

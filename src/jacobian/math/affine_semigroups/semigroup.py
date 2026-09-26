@@ -141,8 +141,10 @@ class AffineFactorization(StrictModel):
     """One exact factorization, bound to its positive semigroup parent.
 
     ``coordinates`` use the retained generator axis and ``target`` uses its
-    ambient row axis.  The defining matrix equation is checked when a caller
-    supplies the value; producers use ``_from_kernel`` after computing it.
+    ambient row axis. Decoding checks structure only (axes, signs, digit
+    bounds); the authored matrix relation belongs to the operation that
+    computed the value, and a consumer rechecks it when its own result
+    relies on that relation.
     """
 
     semigroup: PositiveAffineSemigroup

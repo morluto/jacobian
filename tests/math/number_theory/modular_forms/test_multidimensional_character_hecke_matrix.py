@@ -31,7 +31,7 @@ from jacobian.math.number_theory.modular_forms.multidimensional_hecke.models imp
 from jacobian.math.number_theory.modular_forms.multidimensional_hecke.operations import (
     modular_character_hecke_matrix_multidimensional,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
     pari_character_basis,
 )

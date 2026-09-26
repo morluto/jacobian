@@ -34,7 +34,7 @@ from jacobian.math.number_theory.modular_forms.character_coordinates import (
 from jacobian.math.number_theory.modular_forms.multidimensional_hecke.models import (
     ModularCharacterHeckeMatrixResult,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     MAX_PARI_BASIS_WORK,
     _pari_character_request,
     pari_character_basis,

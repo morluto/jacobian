@@ -32,7 +32,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
 from jacobian.math.number_theory.modular_forms.character_coordinates import (
     CHARACTER_RREF_BASIS_ID,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
 )
 from jacobian.math.number_theory.modular_forms.values import (

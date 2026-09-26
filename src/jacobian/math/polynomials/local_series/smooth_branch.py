@@ -137,6 +137,7 @@ def _horner_pair(
 
 @dataclass(frozen=True)
 class _SmoothBranchPlan:
+    source: LocalPolynomialInSeries
     root: Fraction
     constant_coefficients: tuple[Fraction, ...]
     linear_coefficients: tuple[Fraction, ...]
@@ -271,7 +272,7 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
         constant_digit_sum=constant_digits,
         linear_digit_sum=linear_digits,
     )
-    return _SmoothBranchPlan(root, constant, linear)
+    return _SmoothBranchPlan(source, root, constant, linear)
 
 
 def _admit_source(source: LocalPolynomialInSeries) -> tuple[int, int]:
@@ -341,7 +342,7 @@ def smooth_branch_first_jet(
     ``-F_t(0,c)/F_y(0,c)``. This computes a smooth unramified first jet only.
     """
     plan = _admit_request(request)
-    source = request.polynomial
+    source = plan.source
     root = plan.root
 
     constant_value, derivative_value = _horner_pair(plan.constant_coefficients, root)

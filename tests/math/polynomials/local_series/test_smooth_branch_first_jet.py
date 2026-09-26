@@ -50,6 +50,27 @@ def _polynomial(
     )
 
 
+def test_smooth_branch_returns_validated_canonical_source_for_native_input() -> None:
+    canonical = _polynomial(((0, _series(-2, -17)), (1, _series(1, 4))))
+    forged = LocalPolynomialInSeries.model_construct(
+        variable=canonical.variable,
+        place=canonical.place,
+        center=canonical.center,
+        coefficients=list(canonical.coefficients),
+    )
+
+    result = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest.model_construct(
+            polynomial=forged, initial_root=_rational(2)
+        )
+    )
+
+    assert isinstance(result.source.coefficients, tuple)
+    assert result.source == canonical
+    assert result.source.coefficients[0].series is not None
+    assert result.source.coefficients[0].series.coefficients == (_rational(-2), _rational(-17))
+
+
 def test_smooth_branch_first_jet_matches_independent_factorized_oracle() -> None:
     # Modulo t^2 this is (y - (2 + 3t)) (y + 1 + 7t).
     source = _polynomial(

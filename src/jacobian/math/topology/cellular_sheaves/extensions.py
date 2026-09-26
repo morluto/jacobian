@@ -939,8 +939,53 @@ def morphism(
     # that its declared GF(p) modulus is prime.  Establish both fields before
     # inspecting carrier internals or performing arithmetic so malformed
     # caller-authored carriers cannot leak raw attribute/type errors.
+    if not isinstance(source, FiniteCellularSheaf) or not isinstance(
+        target, FiniteCellularSheaf
+    ):
+        raise OperationDomainValidationError(
+            location=("source", "target"),
+            code="cellular_sheaf.morphism.parent_type_invalid",
+            message="morphism parents must be finite cellular sheaves",
+        )
     source_field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
+    if (
+        not isinstance(components, tuple)
+        or len(components) > MAX_SHEAF_SIMPLICES
+        or any(
+            not isinstance(component, tuple)
+            or len(component) != 2
+            or not (
+                isinstance(component[0], str)
+                or (
+                    isinstance(component[0], tuple)
+                    and all(isinstance(label, str) for label in component[0])
+                )
+            )
+            or not isinstance(component[1], (tuple, list))
+            or len(component[1]) > MAX_SHEAF_STALK_RANK
+            or any(
+                not isinstance(row, (tuple, list))
+                or len(row) > MAX_SHEAF_STALK_RANK
+                for row in component[1]
+            )
+            for component in components
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="cellular_sheaf.morphism.component_structure",
+            message="components must be a bounded tuple of (simplex key, matrix) pairs",
+        )
+    # A canonical Pydantic carrier does not establish that derived restrictions
+    # agree with the cover maps; reconstruct both parent diagrams at this trust
+    # boundary before relying on them in naturality squares.
+    from jacobian.math.topology.cellular_sheaves.morphism_kernel import (
+        _readmit_parent_sheaf,
+    )
+
+    _readmit_parent_sheaf(source, role="source")
+    _readmit_parent_sheaf(target, role="target")
     if (
         source.complex != target.complex
         or source.coefficient_field != target.coefficient_field

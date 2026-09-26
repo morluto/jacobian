@@ -33,6 +33,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     PumpingWitnessResult,
     ReachabilityRequest,
     ReachabilityResult,
+    ReachabilityTerminalSCCProfileRequest,
+    ReachabilityTerminalSCCProfileResult,
     ReachableDeadMarkingsRequest,
     ReachableDeadMarkingsResult,
     SiphonTrapFamilyRequest,
@@ -55,6 +57,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
+    reachability_terminal_scc_profile,
     reachable_dead_markings,
     replay_firing_sequence,
     reverse_petri_net,
@@ -113,6 +116,12 @@ def compute_reachable_dead_markings(
     return reachable_dead_markings(
         request.net, request.initial_marking, request.max_states
     )
+
+
+def compute_reachability_terminal_scc_profile(
+    request: ReachabilityTerminalSCCProfileRequest,
+) -> ReachabilityTerminalSCCProfileResult:
+    return reachability_terminal_scc_profile(request.source_graph)
 
 
 def compute_marking_reachability(
@@ -471,6 +480,50 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "initial_marking": {"tokens": [1]},
                     "max_states": 8,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.reachability.terminal_scc_profile.compute",
+        title="Profile terminal components of a bounded Petri reachability graph",
+        description=(
+            "Return the sink strongly connected components of the supplied exact "
+            "reachability graph as state-index sets. If its exploration was "
+            "truncated, terminality applies only to the represented partial graph "
+            "and says nothing about omitted successors or full-net recurrence."
+        ),
+        request_type=ReachabilityTerminalSCCProfileRequest,
+        result_type=ReachabilityTerminalSCCProfileResult,
+        run=compute_reachability_terminal_scc_profile,
+        tags=("petri-net", "reachability", "strongly-connected-components", "exact"),
+        discovery_terms=("terminal SCC", "sink strongly connected components"),
+        examples=(
+            OperationExample(
+                name="one_state_recurrent_self_loop",
+                description="A complete one-state graph with one self-loop is terminal.",
+                input={
+                    "source_graph": {
+                        "net": {
+                            "place_count": 1,
+                            "transition_count": 1,
+                            "pre": [[1]],
+                            "post": [[1]],
+                        },
+                        "initial_marking": {"tokens": [1]},
+                        "max_states": 8,
+                        "states": [
+                            {
+                                "state_index": 0,
+                                "place_axis": [0],
+                                "marking": {"tokens": [1]},
+                            }
+                        ],
+                        "edges": [
+                            {"source_state": 0, "transition": 0, "target_state": 0}
+                        ],
+                        "truncated": False,
+                    }
                 },
             ),
         ),

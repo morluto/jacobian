@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -13,6 +13,7 @@ from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
     MAX_PETRI_PLACES,
     MAX_PETRI_TRANSITIONS,
+    MAX_REACHABILITY_FIRING_RECORDS,
     MAX_REACHABILITY_STATES,
     FiringSequence,
     Marking,
@@ -37,6 +38,12 @@ MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
 MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_COMMUTATION_PROFILE_WORK = 100_000
 MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_TERMINAL_SCC_PROFILE_WORK = 1_000_000
+MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
+TerminalSCCStateIndices = Annotated[
+    tuple[int, ...],
+    Field(min_length=1, max_length=MAX_REACHABILITY_STATES),
+]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -566,8 +573,10 @@ class ReachabilityResult(StrictModel):
     net: PetriNet
     initial_marking: Marking
     max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    states: tuple[PetriMarkingState, ...]
-    edges: tuple[PetriReachabilityEdge, ...]
+    states: tuple[PetriMarkingState, ...] = Field(max_length=MAX_REACHABILITY_STATES)
+    edges: tuple[PetriReachabilityEdge, ...] = Field(
+        max_length=MAX_REACHABILITY_FIRING_RECORDS
+    )
     truncated: bool
 
     @model_validator(mode="after")
@@ -660,6 +669,52 @@ class ReachableDeadMarkingsResult(StrictModel):
         """Build an admitted bounded profile without replaying enabledness."""
 
         return cls.model_construct(**values)
+
+
+class ReachabilityTerminalSCCProfileRequest(StrictModel):
+    """Find sink strongly connected components in one represented graph."""
+
+    source_graph: ReachabilityResult
+
+
+class ReachabilityTerminalSCCProfileResult(StrictModel):
+    """Terminal SCCs of the exact represented reachability graph.
+
+    When ``source_graph.truncated`` is true, terminality is only a property of
+    the represented partial graph and says nothing about omitted successors.
+    """
+
+    source_graph: ReachabilityResult
+    terminal_components: tuple[TerminalSCCStateIndices, ...] = Field(
+        max_length=MAX_REACHABILITY_STATES
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_components(self) -> Self:
+        state_count = len(self.source_graph.states)
+        components = self.terminal_components
+        if any(
+            not component
+            or component != tuple(sorted(set(component)))
+            or any(not 0 <= state < state_count for state in component)
+            for component in components
+        ):
+            raise _validation_error(
+                "terminal_scc_components",
+                "terminal SCCs must be nonempty canonical subsets of source states",
+            )
+        if components != tuple(sorted(components, key=lambda component: component[0])):
+            raise _validation_error(
+                "terminal_scc_order",
+                "terminal SCCs must be ordered by least state index",
+            )
+        if len({state for component in components for state in component}) != sum(
+            len(component) for component in components
+        ):
+            raise _validation_error(
+                "terminal_scc_overlap", "terminal SCCs must be pairwise disjoint"
+            )
+        return self
 
 
 class MarkingReachabilityRequest(StrictModel):

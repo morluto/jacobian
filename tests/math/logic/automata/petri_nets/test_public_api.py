@@ -25,6 +25,7 @@ def test_exact_public_api_symbols() -> None:
         "place_set_initial_marking_profile",
         "place_set_support",
         "reachability_graph",
+        "reachability_terminal_scc_profile",
         "reachable_dead_markings",
         "replay_firing_sequence",
         "reverse_petri_net",

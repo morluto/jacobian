@@ -2547,7 +2547,10 @@ def dirichlet_character_sequence_twist(
 
 
 def dirichlet_character_arithmetic_function_twist(
-    function: DirichletConvolutionResult | DirichletInverseResult | MobiusTransformResult | SummatoryFunctionResult,
+    function: DirichletConvolutionResult
+    | DirichletInverseResult
+    | MobiusTransformResult
+    | SummatoryFunctionResult,
     character: DirichletCharacter,
 ) -> FiniteCyclotomicSequence:
     """Twist a finite arithmetic-function prefix on indices 1 through M."""
@@ -2577,6 +2580,19 @@ def dirichlet_character_arithmetic_function_twist(
             code="dirichlet_character.arithmetic_function_twist.source_shape",
             message="source must be a nonempty exact arithmetic-function prefix",
         )
+    total_digits = 0
+    for value in function.values:
+        total_digits += len(format_canonical_integer(abs(value.num)))
+        total_digits += len(format_canonical_integer(value.den))
+        if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("function", "values"),
+                code="dirichlet_character.arithmetic_function_twist.sequence_size",
+                message=(
+                    "source rational values exceed the finite sequence "
+                    f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound"
+                ),
+            )
     # The existing sequence operation admits coefficient growth, cyclotomic
     # degree, work, and result bytes before expanding any character values.
     sequence = FiniteRationalSequence(values=function.values)

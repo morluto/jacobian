@@ -35,7 +35,13 @@ def _admit_native_request(
     model: type[_RequestT], values: dict[str, object]
 ) -> _RequestT:
     try:
-        return model.model_validate(values)
+        native_values = {
+            key: value.model_dump(mode="python")
+            if isinstance(value, IntegerPartition)
+            else value
+            for key, value in values.items()
+        }
+        return model.model_validate(native_values)
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=(),
@@ -63,7 +69,7 @@ def littlewood_richardson_coefficient(
             "outer": outer.model_dump(mode="python"),
             "inner": inner.model_dump(mode="python"),
             "content": content.model_dump(mode="python"),
-        }
+        },
     )
     return _compute_validated_lr(request)
 
@@ -204,11 +210,7 @@ def littlewood_richardson_tableaux(
     """
     request = _admit_native_request(
         LittlewoodRichardsonTableauxRequest,
-        {
-            "outer": outer.model_dump(mode="python"),
-            "inner": inner.model_dump(mode="python"),
-            "content": content.model_dump(mode="python"),
-        }
+        {"outer": outer, "inner": inner, "content": content},
     )
     return _enumerate_validated_lr(request)
 
@@ -247,7 +249,7 @@ def schur_product(
         {
             "left": left.model_dump(mode="python"),
             "right": right.model_dump(mode="python"),
-        }
+        },
     )
     return _schur_product_from_request(request)
 

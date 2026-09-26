@@ -110,6 +110,12 @@ def test_native_invalid_alphabet_is_rejected_before_count(max_entry: int) -> Non
         )
 
 
+@pytest.mark.parametrize("max_entry", [-1, 4_097])
+def test_exported_count_rejects_invalid_alphabet(max_entry: int) -> None:
+    with pytest.raises(OperationDomainValidationError):
+        semistandard_tableaux_count(IntegerPartition(parts=(1,)), max_entry)
+
+
 def test_catalog_request_keeps_alphabet_bound() -> None:
     request = SemistandardTableauEnumerationRequest(
         partition=IntegerPartition(parts=(1,)), max_entry=4_096

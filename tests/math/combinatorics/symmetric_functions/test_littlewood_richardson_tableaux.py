@@ -7,6 +7,7 @@ from itertools import permutations
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.symmetric_functions import (
     IntegerPartition,
     littlewood_richardson_coefficient,
@@ -126,6 +127,13 @@ def test_lr_tableau_families_match_exhaustive_small_filling_oracle(size: int) ->
                     coefficient = littlewood_richardson_coefficient(*request)
                     assert coefficient.coefficient == len(observed)
                     assert len(observed) == len(set(observed))
+
+
+def test_native_nonpartition_argument_is_a_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        littlewood_richardson_tableaux(
+            None, IntegerPartition(parts=()), IntegerPartition(parts=())
+        )
 
 
 def test_empty_skew_shape_has_one_empty_lr_tableau() -> None:

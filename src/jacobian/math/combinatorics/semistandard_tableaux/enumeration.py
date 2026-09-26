@@ -25,6 +25,21 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 
 def semistandard_tableaux_count(partition: IntegerPartition, max_entry: int) -> int:
     """Compute the exact hook-content count for entries in ``1..max_entry``."""
+    try:
+        request = SemistandardTableauEnumerationRequest(
+            partition=partition, max_entry=max_entry
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="semistandard_tableaux.invalid_request",
+            message="request must contain a canonical partition and bounded alphabet",
+        ) from exc
+    return _hook_content_count(request.partition, request.max_entry)
+
+
+def _hook_content_count(partition: IntegerPartition, max_entry: int) -> int:
+    """Unchecked hook-content kernel for an already admitted request."""
     parts = partition.parts
     if not parts:
         return 1
@@ -122,7 +137,7 @@ def enumerate_semistandard_young_tableaux(
         ) from exc
     partition, max_entry = request.partition, request.max_entry
     request_checkpoint("before semistandard-tableau enumeration admission")
-    count = semistandard_tableaux_count(partition, max_entry)
+    count = _hook_content_count(partition, max_entry)
     request_checkpoint("after semistandard-tableau count admission")
     size = sum(partition.parts)
     if count > MAX_SEMISTANDARD_TABLEAUX:

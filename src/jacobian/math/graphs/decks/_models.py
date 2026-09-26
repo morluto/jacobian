@@ -596,9 +596,9 @@ class UnlabelledVertexDeckRequest(StrictModel):
 
     deck: VertexDeletionFamily = Field(
         description=(
-            "A complete vertex-deletion family admitted through source order 7; "
-            "exact permutation canonicalization and self-comparison are each "
-            "bounded by 2000000 work units."
+            "A complete vertex-deletion family admitted through source order 8 "
+            "under n*(n-1)!*(1+(n-1)+binom(n-1, 2)) <= 2000000 exact "
+            "permutation-canonicalization work units."
         )
     )
 

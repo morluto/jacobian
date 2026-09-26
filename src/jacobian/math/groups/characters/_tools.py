@@ -4,8 +4,12 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
+    CharacterRingDecompositionRequest,
+    CharacterRingDecompositionResult,
     CharacterTableRequest,
     CharacterTableResult,
+    CharacterTensorDecompositionRequest,
+    CharacterTensorDecompositionResult,
     ClassFunctionAddRequest,
     ClassFunctionConjugateRequest,
     ClassFunctionInductionRequest,
@@ -26,6 +30,7 @@ from jacobian.math.groups.characters._models import (
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
+    character_tensor_decomposition,
     class_function_add,
     class_function_conjugate,
     class_function_induce_from_subgroup,
@@ -37,6 +42,9 @@ from jacobian.math.groups.characters.operations import (
     frobenius_schur_indicator,
     restrict_cyclic_character,
 )
+from jacobian.math.groups.characters.representation_ring_operations import (
+    class_function_character_decomposition,
+)
 
 
 def _run_inner_product(
@@ -47,6 +55,18 @@ def _run_inner_product(
 
 def _run_character_table(request: CharacterTableRequest) -> CharacterTableResult:
     return character_table(request.partition)
+
+
+def _run_character_ring_decomposition(
+    request: CharacterRingDecompositionRequest,
+) -> CharacterRingDecompositionResult:
+    return class_function_character_decomposition(request)
+
+
+def _run_tensor_decomposition(
+    request: CharacterTensorDecompositionRequest,
+) -> CharacterTensorDecompositionResult:
+    return character_tensor_decomposition(request)
 
 
 def _run_pointwise_product(
@@ -479,6 +499,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="finite_group.character.tensor_product.decompose.compute",
+        title="Decompose a tensor product of canonical S3 characters",
+        description=(
+            "Take the pointwise tensor product of two irreducible rows in the "
+            "canonical complete S3 table and return its exact multiplicities in "
+            "that basis. The supported group is currently S3."
+        ),
+        request_type=CharacterTensorDecompositionRequest,
+        result_type=CharacterTensorDecompositionResult,
+        run=_run_tensor_decomposition,
+        tags=("finite-group", "character", "tensor-product", "decomposition", "exact"),
+        discovery_terms=(
+            "decompose tensor product of irreducible characters",
+            "S3 character tensor decomposition",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_tensor_square",
+                description=(
+                    "Decompose standard tensor standard as trivial plus sign plus "
+                    "standard for S3."
+                ),
+                input={
+                    "partition": _S3_PARTITION,
+                    "left_row_index": 2,
+                    "right_row_index": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="finite_group.character_table.compute",
         title="Compute a complete character table for a bounded finite group",
         description=(
@@ -506,6 +557,41 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "partition must be a complete canonical conjugacy-class partition."
                 ),
                 input={"partition": _S3_PARTITION},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_group.class_function.character_ring_decompose.compute",
+        title="Express a class function in a bounded character basis",
+        description=(
+            "For a class function on a supported concrete finite group, compute "
+            "its exact integer coordinates in the canonical irreducible-character "
+            "basis and return a table-bound virtual-character ring element. "
+            "Signed coordinates are allowed; nonnegative coordinates are ordinary "
+            "characters. Supported groups currently are the trivial, cyclic, and S3 groups."
+        ),
+        request_type=CharacterRingDecompositionRequest,
+        result_type=CharacterRingDecompositionResult,
+        run=_run_character_ring_decomposition,
+        tags=(
+            "finite-group",
+            "character",
+            "decomposition",
+            "representation-ring",
+            "exact",
+        ),
+        discovery_terms=(
+            "decompose finite group class function",
+            "virtual character irreducible multiplicities",
+            "finite group representation ring coordinates",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_character_coordinates",
+                description=(
+                    "Express the standard S3 character in the complete irreducible basis."
+                ),
+                input={"class_function": _s3_standard_class_function()},
             ),
         ),
     ),

@@ -176,6 +176,16 @@ def test_group_conjugacy_classes_result_rejects_non_permutations() -> None:
         )
 
 
+def test_group_conjugacy_classes_result_binds_member_degree_to_source() -> None:
+    from jacobian.math.groups._models import GroupConjugacyClassesResult
+
+    with _group_error("group.partition_degree"):
+        GroupConjugacyClassesResult(
+            source=PermutationGroup(degree=1, generators=((0,),)),
+            classes=(((),),),
+        )
+
+
 def test_group_conjugacy_classes_result_rejects_mixed_degrees() -> None:
     from jacobian.math.groups._models import GroupConjugacyClassesResult
 

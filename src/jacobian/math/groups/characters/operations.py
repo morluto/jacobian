@@ -40,6 +40,8 @@ from jacobian.math.groups.characters._models import (
     MAX_VALUE_COEFFICIENT_DIGITS,
     CharacterRow,
     CharacterTableResult,
+    CharacterTensorDecompositionRequest,
+    CharacterTensorDecompositionResult,
     ClassAxis,
     ClassContribution,
     ClassFunctionInductionResult,
@@ -640,7 +642,7 @@ def _admit_partition_source(source: object) -> tuple[int, tuple[tuple[int, ...],
         )
     degree = getattr(source, "degree", None)
     generators = getattr(source, "generators", None)
-    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+    if type(degree) is not int or not 0 <= degree <= MAX_GROUP_DEGREE:
         raise OperationDomainValidationError(
             location=("partition", "source"),
             code="groups.characters.partition_source",
@@ -786,6 +788,13 @@ def character_table(
     receiving a guessed partial table.
     """
     partition = _admit_character_partition(partition)
+    return _character_table_from_admitted_partition(partition)
+
+
+def _character_table_from_admitted_partition(
+    partition: GroupConjugacyClassesResult,
+) -> CharacterTableResult:
+    """Build a table from a partition authenticated by the caller."""
     order = sum(len(cls) for cls in partition.classes)
     if (
         order > MAX_GROUP_ORDER
@@ -812,37 +821,39 @@ def character_table(
                 label="trivial", degree=1, values=(_make_value(1, (Fraction(1),)),)
             )
         )
-    elif order == 6 and sizes == (1, 3, 2):
+    elif order == 6 and len(sizes) == 3 and set(sizes) == {1, 2, 3}:
         _admit_character_table(
             order=order,
             class_count=len(sizes),
             cyclotomic_order=1,
             row_count=3,
         )
-        # The class order is identity, transpositions, 3-cycles for the
-        # canonical permutation-class ordering.
+        # Canonical conjugacy ordering may permute the transposition and
+        # 3-cycle classes for non-natural embeddings; identify by class size.
+        labels = ("trivial", "sign", "standard")
+        degrees = (1, 1, 2)
         rows = [
             CharacterRow(
-                label="trivial",
-                degree=1,
+                label=label,
+                degree=degree,
                 values=tuple(
-                    _make_value(order, (Fraction(v), Fraction(0))) for v in (1, 1, 1)
+                    _make_value(
+                        order,
+                        (
+                            Fraction(
+                                {"trivial": 1, "sign": 1, "standard": 2}[label]
+                                if size == 1
+                                else {"trivial": 1, "sign": -1, "standard": 0}[label]
+                                if size == 3
+                                else {"trivial": 1, "sign": 1, "standard": -1}[label]
+                            ),
+                            Fraction(0),
+                        ),
+                    )
+                    for size in sizes
                 ),
-            ),
-            CharacterRow(
-                label="sign",
-                degree=1,
-                values=tuple(
-                    _make_value(order, (Fraction(v), Fraction(0))) for v in (1, -1, 1)
-                ),
-            ),
-            CharacterRow(
-                label="standard",
-                degree=2,
-                values=tuple(
-                    _make_value(order, (Fraction(v), Fraction(0))) for v in (2, 0, -1)
-                ),
-            ),
+            )
+            for label, degree in zip(labels, degrees, strict=True)
         ]
     elif order == 8 and len(sizes) == 5 and sorted(sizes) == [1, 1, 2, 2, 2]:
         _admit_character_table(
@@ -970,6 +981,183 @@ def character_table(
         partition=parent,
         rows=tuple(rows),
         axis=table_axis,
+    )
+
+
+MAX_CHARACTER_TENSOR_INNER_WORK = 50_000_000
+MAX_CHARACTER_TENSOR_OUTPUT_BYTES = 2_000_000
+
+
+def character_tensor_decomposition(
+    request: CharacterTensorDecompositionRequest,
+) -> CharacterTensorDecompositionResult:
+    """Decompose an S3 character tensor product in its canonical irreducibles."""
+    if not isinstance(request, CharacterTensorDecompositionRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="groups.characters.tensor_request_type",
+            message="request must be a character tensor-decomposition request",
+        )
+    try:
+        request = CharacterTensorDecompositionRequest.model_validate(
+            request.model_dump()
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="groups.characters.tensor_request_invalid",
+            message="request contains invalid tensor-decomposition fields",
+        ) from exc
+    # Tensor decomposition is defined only for S3. Reject incompatible
+    # class-size shapes before authenticated admission materializes the source
+    # group and recomputes its complete conjugacy partition. The claim is still
+    # fully authenticated for either possible S3 class ordering below.
+    classes = getattr(request.partition, "classes", None)
+    if (
+        not isinstance(classes, tuple)
+        or tuple(sorted(len(cls) for cls in classes if isinstance(cls, tuple)))
+        != (1, 2, 3)
+        or any(not isinstance(cls, tuple) for cls in classes)
+    ):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports only S3 class shapes",
+        )
+    partition = _admit_character_partition(request.partition)
+    table = _character_table_from_admitted_partition(partition)
+    if (
+        table.axis.group_order != 6
+        or tuple(sorted(table.axis.class_sizes)) != (1, 2, 3)
+        or table.axis.cyclotomic_order != 6
+        or tuple(row.label for row in table.rows) != ("trivial", "sign", "standard")
+    ):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports the canonical S3 table",
+        )
+    row_count = len(table.rows)
+    if request.left_row_index >= row_count or request.right_row_index >= row_count:
+        raise OperationDomainValidationError(
+            location=("row_index",),
+            code="groups.characters.tensor_row_index",
+            message="tensor-product row index is outside the canonical table",
+        )
+
+    axis = table.axis
+    left = FiniteClassFunction._from_kernel(
+        axis=axis, values=table.rows[request.left_row_index].values
+    )
+    right = FiniteClassFunction._from_kernel(
+        axis=axis, values=table.rows[request.right_row_index].values
+    )
+    product_axis, order, dimension = _admit_pointwise_axis(left, right)
+    pointwise_inputs = _admit_pointwise_inputs(
+        left, right, class_count=3, dimension=dimension
+    )
+    product_heights = _admit_pointwise_output(
+        pointwise_inputs, dimension=dimension, output_cells=3 * dimension
+    )
+    if any(height.denominator != 1 for height in product_heights):
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.tensor_product_height",
+            message="canonical S3 product estimate unexpectedly has a denominator",
+        )
+    predicted_product = FiniteClassFunction._from_kernel(
+        axis=product_axis,
+        values=tuple(
+            _make_value(
+                order,
+                (
+                    Fraction(10 ** max(1, height.lifted_numerator_digits) - 1),
+                    Fraction(0),
+                ),
+            )
+            for height in product_heights
+        ),
+    )
+
+    aggregate_inner_work = 0
+    for row in table.rows:
+        basis_function = FiniteClassFunction._from_kernel(axis=axis, values=row.values)
+        _admit_inner_product(predicted_product, basis_function)
+        maximum_digits = max(
+            canonical_rational_component_digits(coefficient)
+            for value in (*predicted_product.values, *basis_function.values)
+            for coefficient in value.coefficients
+        )
+        aggregate_inner_work += 3 * order * maximum_digits * maximum_digits
+    product_max_digits = max(
+        canonical_rational_component_digits(coefficient)
+        for value in (*left.values, *right.values)
+        for coefficient in value.coefficients
+    )
+    aggregate_work = (
+        3 * dimension * dimension * product_max_digits * product_max_digits
+        + aggregate_inner_work
+    )
+    if aggregate_work > MAX_CHARACTER_TENSOR_INNER_WORK:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.tensor_work_exceeds_envelope",
+            message="tensor-product and multiplicity arithmetic exceeds its work envelope",
+        )
+
+    # At most three copies of the bounded degree-256 permutation group are
+    # retained. Values use at most 512 digits; this estimate stays below both
+    # the operation's 2 MB cap and the canonical 10 MB transport limit.
+    group = axis.group
+    if group is None:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    degree = group.degree
+    generator_count = len(group.generators)
+    group_bytes = 512 + generator_count * (degree * 8 + 16)
+    structure_bytes = 3 * group_bytes + 12 * degree * 8 + 128_000
+    value_bytes = 12 * dimension * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 24)
+    if structure_bytes + value_bytes > MAX_CHARACTER_TENSOR_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("partition",),
+            code="groups.characters.tensor_output_exceeds_envelope",
+            message="tensor-decomposition result exceeds its bounded output envelope",
+        )
+
+    # Whole-operation admission is complete before any product or pairing.
+    tensor_values = tuple(
+        _make_value(order, multiply_values(order, _fractions(a), _fractions(b)))
+        for a, b in zip(left.values, right.values, strict=True)
+    )
+    tensor_product = FiniteClassFunction._from_kernel(axis=axis, values=tensor_values)
+    multiplicities: list[int] = []
+    for row in table.rows:
+        total = zero_value(order)
+        for class_size, tensor_value, row_value in zip(
+            axis.class_sizes, tensor_values, row.values, strict=True
+        ):
+            conjugate = conjugate_value(order, _fractions(row_value))
+            product = multiply_values(order, _fractions(tensor_value), conjugate)
+            weighted = scale_value(order, Fraction(class_size), product)
+            total = add_values(order, total, weighted)
+        inner = _make_value(
+            order,
+            tuple(coefficient / axis.group_order for coefficient in total),
+        )
+        if (
+            inner.coefficients[0].den != 1
+            or inner.coefficients[0].num < 0
+            or any(coefficient.num != 0 for coefficient in inner.coefficients[1:])
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        multiplicities.append(inner.coefficients[0].num)
+    if any(value > 4 for value in multiplicities):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return CharacterTensorDecompositionResult._from_kernel(
+        table=table,
+        left_row_index=request.left_row_index,
+        right_row_index=request.right_row_index,
+        tensor_product=tensor_product,
+        multiplicities=tuple(multiplicities),
     )
 
 
@@ -2188,12 +2376,13 @@ def _admit_pointwise_output(
     *,
     dimension: int,
     output_cells: int,
-) -> None:
+) -> tuple[_InputHeight, ...]:
     # Each raw convolution coefficient sums at most dimension rational
     # products. Reduction uses at most dimension-1 monic cyclotomic steps;
     # the owner envelope bounds every reduction coefficient to one digit.
     reduction_digits = MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS
     maximum_output_digits = 1
+    output_heights: list[_InputHeight] = []
     for left_height, right_height in heights:
         denominator = _bounded_product(
             left_height.denominator, right_height.denominator
@@ -2211,6 +2400,12 @@ def _admit_pointwise_output(
             + max(0, dimension - 1) * reduction_digits
         )
         output_denominator_digits = len(str(denominator))
+        output_heights.append(
+            _InputHeight(
+                denominator=denominator,
+                lifted_numerator_digits=output_numerator_digits,
+            )
+        )
         _reject_derived_height(
             "pointwise product",
             _CoefficientHeight(output_numerator_digits, output_denominator_digits),
@@ -2229,6 +2424,7 @@ def _admit_pointwise_output(
             code="groups.characters.product_output_exceeds_envelope",
             message="predicted exact class-function product exceeds the 2,000,000-digit envelope",
         )
+    return tuple(output_heights)
 
 
 def class_function_pointwise_product(

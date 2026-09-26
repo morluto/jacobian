@@ -2,27 +2,54 @@
 
 [Finite mathematics operations](index.md) · [Tool surface](../../tools.md)
 
-## Bounded complete character tables
+## Decomposing an S3 tensor product
 
-`finite_group.character_table.compute` returns a complete irreducible table for
-the trivial group, supported cyclic groups, S3, and a concrete nonabelian
-permutation group of order eight. For the last case, the complete canonical
-conjugacy partition must have class sizes `1, 1, 2, 2, 2`; this is the shared
-profile of D8 and Q8. The result retains the input group and exact class axis,
-uses rational character values, and includes four linear rows plus one
-degree-two row.
+`finite_group.character.tensor_product.decompose.compute` takes two row
+indices and a concrete complete class partition. It recomputes the canonical
+character table from that partition, so callers cannot supply an unauthenticated
+claim that arbitrary rows are a complete irreducible basis. This release is
+limited to S3. The result contains the pointwise tensor-product class function
+and its exact multiplicities, in table row order, computed by Hermitian inner
+products against every canonical irreducible row.
 
-The operation derives the linear rows from group multiplication. A pair of
-noncommuting elements generates a nonabelian order-eight group, so the four
-choices of signs on those generators exhaust its homomorphisms to `{±1}`. The
-degree-two row takes values `2` on the identity, `-2` on the other central
-element, and `0` on the three noncentral classes. Exact row orthogonality and
-the degree-square sum are checked before publication. GAP's character table
-reference gives the same table for D8 and Q8, with their class representative
-orders distinguishing the groups: [GAP Character Table Library](https://docs.gap-system.org/pkg/ctbllib/doc2/manual.pdf).
+For S3, the standard character `(2, 0, -1)` has tensor square `(4, 0, 1)`;
+its multiplicities in the trivial, sign, and standard rows are `(1, 1, 1)`.
+The operation preflights predicted product coefficient heights, every basis
+inner product, aggregate work, and output size before product or pairing
+arithmetic. It then checks the computed multiplicities are nonnegative
+integers.
 
-This order-eight extension does not claim tables for general nonabelian groups
-or for noncyclic abelian groups such as `C2 × C2 × C2`.
+## Character ring coordinates
+
+`finite_group.class_function.character_ring_decompose.compute` expresses a
+class function in the canonical irreducible basis and returns a
+`CharacterRingElement`. That value retains the complete character table and
+one exact integer coordinate per irreducible row, so subsequent operations
+can compose in the representation ring without carrying a loose coefficient
+list. Signed coordinates represent virtual characters; nonnegative
+coordinates represent ordinary characters. The operation rejects a class
+function whose exact Hermitian pairings with the irreducibles are not integers.
+
+The character basis is reconstructed from the concrete source group before
+use. This release supports only the trivial group, finite cyclic groups up to
+order 60, and `S3`. It does not trust a caller-supplied character table or claim
+to decompose a class function on an unsupported group. The exact coordinate
+formula is the standard Hermitian pairing
+`<f, chi> = (1/|G|) sum_C |C| f(C) conjugate(chi(C))`; irreducible characters
+form an orthonormal basis of the complex class functions. GAP's reference
+manual documents the scalar product and distinguishes ordinary from virtual
+characters in its [class-function chapter](https://gap-system.github.io/gap/doc/ref/chap72_mj.html).
+
+Rational-valued input functions are included exactly into the table's
+cyclotomic field by sending `q` to the constant power-basis coefficient `q`.
+Inputs in any other field must already use the table's declared field; no
+nontrivial field embedding is inferred.
+
+Before conjugacy expansion, admission caps the concrete group order and bounds
+the worst-case complete table, all basis-pairing work, input coefficient
+growth, and serialized result size. The returned model checks coordinate axis
+and shape during deserialization; consumers that rely on table mathematics
+must reconstruct the canonical table from its group.
 
 ## Scaling a class function
 
@@ -56,8 +83,7 @@ partition before its values are used.
 
 Admission currently allows source order at most 256 and subgroup order at most
 128, along with bounded permutation degree, class count, exact coefficient
-size, partition work, and the output's class-cell count and coefficient digit
-width. The smaller target order cap
+size, partition work, and serialized output. The smaller target order cap
 ensures its complete class axis fits the shared class-function carrier. The
 operation acts on class functions; when its input is an irreducible character,
 the same output is its character restriction.
@@ -81,9 +107,9 @@ The result retains the subgroup and parent conjugacy partitions, the map from
 subgroup classes to parent classes, and the induced values on the parent
 class axis. It uses the same cyclotomic field as the source class function.
 Admission bounds subgroup order by 128, parent order by 256, class count,
-exact coefficient growth, arithmetic work, and the exact output's retained
-cells and digit widths before conjugacy expansion. The canonical transport
-boundary separately bounds the serialized result at 10 MB.
+exact coefficient growth, arithmetic work, and serialized output before
+conjugacy expansion. The serialized result is bounded by the canonical 10 MB
+output limit.
 
 Inducing the trivial class function from a transposition subgroup `C2` to `S3`
 gives values `(3, 1, 0)` on `(identity, transposition, 3-cycle)`. Their inner
@@ -93,9 +119,12 @@ decomposition into the trivial and standard representations.
 
 Deserialization checks the restriction and induction result shapes, axis
 parents, and class-index ranges. It does not recompute either class map or
-authenticate the relation between a map and the carried function values. A
-consumer relying on a serialized relation must check it: for restriction,
-compare each target value with its mapped source value; for induction,
-check each mapped subgroup class lies in the stated parent class and the
-induced values satisfy the class-sum formula. The operations construct these
-relations directly from admitted canonical class partitions.
+authenticate the relation between a map and the carried function values. It
+also does not reauthenticate a tensor result's character table or recompute its
+pointwise product and multiplicities. A consumer relying on any serialized
+relation must check it: for restriction, compare each target value with its
+mapped source value; for induction, check each mapped subgroup class lies in the
+stated parent class and the induced values satisfy the class-sum formula; for
+tensor decomposition, reauthenticate the canonical table and check the
+pointwise product and inner-product multiplicities. The operation constructs
+these relations from admitted canonical class partitions.

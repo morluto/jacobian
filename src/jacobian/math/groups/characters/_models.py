@@ -7,7 +7,7 @@ from typing import Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
@@ -688,6 +688,147 @@ class CharacterTableResult(StrictModel):
         )
 
 
+class CharacterRingElement(StrictModel):
+    """A virtual character in the irreducible basis of one retained table.
+
+    Integer coordinates use the table's canonical row order. Nonnegative
+    coordinates describe an ordinary character; signed coordinates describe
+    a virtual character. A consumer relying on table semantics must
+    authenticate the table against its source group.
+    """
+
+    table: CharacterTableResult
+    irreducible_multiplicities: tuple[ExactInteger, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+
+    @model_validator(mode="after")
+    def require_complete_irreducible_coordinates(self) -> Self:
+        if len(self.irreducible_multiplicities) != len(self.table.rows):
+            raise _validation_error(
+                "ring_element_shape",
+                "one integer coordinate is required per irreducible row",
+            )
+        if any(
+            coefficient.bit_length() > 1702
+            for coefficient in self.irreducible_multiplicities
+        ):
+            raise _validation_error(
+                "ring_element_height",
+                "virtual-character coordinates exceed the exact coefficient envelope",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        table: CharacterTableResult,
+        irreducible_multiplicities: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            table=table, irreducible_multiplicities=irreducible_multiplicities
+        )
+
+
+class CharacterRingDecompositionRequest(StrictModel):
+    """Express a concrete class function in a supported canonical character basis."""
+
+    class_function: FiniteClassFunction
+
+
+class CharacterRingDecompositionResult(StrictModel):
+    """Virtual-character coordinates of one class function in a complete table."""
+
+    source_class_function: FiniteClassFunction
+    ring_element: CharacterRingElement
+
+    @model_validator(mode="after")
+    def require_source_axis(self) -> Self:
+        source_axis = self.source_class_function.axis
+        table_axis = self.ring_element.table.axis
+        if (
+            source_axis.class_sizes != table_axis.class_sizes
+            or source_axis.group_order != table_axis.group_order
+            or source_axis.group != table_axis.group
+            or source_axis.class_representatives != table_axis.class_representatives
+            or source_axis.cyclotomic_order not in (1, table_axis.cyclotomic_order)
+        ):
+            raise _validation_error(
+                "ring_decomposition_axis",
+                "source class function and character basis must share the group and class axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_class_function: FiniteClassFunction,
+        ring_element: CharacterRingElement,
+    ) -> Self:
+        return cls.model_construct(
+            source_class_function=source_class_function,
+            ring_element=ring_element,
+        )
+
+
+class CharacterTensorDecompositionRequest(StrictModel):
+    """Decompose the tensor product of two rows in a supported canonical table."""
+
+    partition: GroupConjugacyClassesResult
+    left_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    right_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+
+
+class CharacterTensorDecompositionResult(StrictModel):
+    """Tensor-product class function and multiplicities in the complete basis."""
+
+    table: CharacterTableResult
+    left_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    right_row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    tensor_product: FiniteClassFunction
+    multiplicities: tuple[int, ...] = Field(min_length=1, max_length=MAX_CLASS_COUNT)
+
+    @model_validator(mode="after")
+    def require_basis_bound_decomposition(self) -> Self:
+        row_count = len(self.table.rows)
+        if self.left_row_index >= row_count or self.right_row_index >= row_count:
+            raise _validation_error(
+                "tensor_row_index", "tensor-product row index is outside the table"
+            )
+        if self.tensor_product.axis != self.table.axis:
+            raise _validation_error(
+                "tensor_axis", "tensor-product values must use the table class axis"
+            )
+        if len(self.multiplicities) != row_count or any(
+            multiplicity < 0 for multiplicity in self.multiplicities
+        ):
+            raise _validation_error(
+                "tensor_multiplicities",
+                "one nonnegative multiplicity is required per table row",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        table: CharacterTableResult,
+        left_row_index: int,
+        right_row_index: int,
+        tensor_product: FiniteClassFunction,
+        multiplicities: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            table=table,
+            left_row_index=left_row_index,
+            right_row_index=right_row_index,
+            tensor_product=tensor_product,
+            multiplicities=multiplicities,
+        )
+
+
 class FrobeniusSchurIndicatorRequest(StrictModel):
     """Ordinary second indicator of one row in a complete exact table."""
 
@@ -718,9 +859,14 @@ __all__ = [
     "MAX_GROUP_ORDER",
     "MAX_INNER_PRODUCT_WORK",
     "MAX_VALUE_COEFFICIENT_DIGITS",
+    "CharacterRingDecompositionRequest",
+    "CharacterRingDecompositionResult",
+    "CharacterRingElement",
     "CharacterRow",
     "CharacterTableRequest",
     "CharacterTableResult",
+    "CharacterTensorDecompositionRequest",
+    "CharacterTensorDecompositionResult",
     "ClassAxis",
     "ClassContribution",
     "ClassFunctionConjugateRequest",

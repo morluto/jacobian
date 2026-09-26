@@ -61,14 +61,8 @@ def _require_same_parent(
 
 
 def _projected_digit_bound(left: Fraction, right: Fraction) -> int:
-    # Reduced Fraction inputs allow a gcd-aware addition: the resulting
-    # denominator divides lcm(d1, d2), hence never exceeds max(d1, d2).
-    common = gcd(left.denominator, right.denominator)
-    numerator_bound = max(
-        _digits(left.numerator) + _digits(right.denominator // common),
-        _digits(right.numerator) + _digits(left.denominator // common),
-    ) + 1
-    return max(numerator_bound, _digits(left.denominator), _digits(right.denominator))
+    result = left + right
+    return max(_digits(result.numerator), _digits(result.denominator))
 
 
 def modular_form_coordinates_add(

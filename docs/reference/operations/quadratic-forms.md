@@ -125,6 +125,27 @@ those envelopes the source-retaining result's aggregate output digits are
 bounded before the inclusion matrix or restricted polynomial is built, and
 the result constructor re-establishes the bound for deserialized values.
 
+## Scalar multiplication
+
+`quadratic_form.scale.compute` accepts a rational form `Q` and an exact
+rational scalar `c`, and returns the source form, scalar, and the form `cQ` on
+the identical ordered axis. It multiplies the polynomial coefficients
+directly, so the convention for cross terms stays unchanged. The result
+remains a `RationalQuadraticForm`; an integer-coefficient result therefore
+flows directly into the positive-definite theta-prefix and selected
+representation operations, which independently enforce their stronger
+domain conditions.
+
+Admission limits the axis to 128 coordinates, diagonal and cross-term support
+to 4,096 coefficients, and each scalar component to 256 decimal digits. Before
+forming any coefficient product, the kernel cancels numerator/denominator
+factors and uses integer division to check whether each exact reduced product
+fits the form carrier's 256-digit coefficient limit. It then constructs each
+accepted product once. This bounds the retained result intrinsically by
+cardinality and component digits rather than by transport bytes. A zero factor
+produces zero diagonal coefficients and omits zero cross terms, matching the
+canonical polynomial representation.
+
 ## Proper classes of positive-definite integral binary forms
 
 `number_theory.binary_quadratic_form.reduced_classes.compute` returns each
@@ -191,3 +212,43 @@ the canonical cyclotomic polynomial. The exact output is carried by
 `RationalCyclotomicElement`; no floating approximation or separate residue
 enumeration is used. The finite sum and histogram contract is consistent with
 the exact quadratic-form interfaces documented by [Sage](https://doc.sagemath.org/html/en/reference/quadratic_forms/sage/quadratic_forms/quadratic_form.html).
+
+## Selected theta coefficients
+
+`quadratic_form.theta_selected_coefficients.compute` returns the exact
+representation numbers `r_Q(n)` at a strictly increasing tuple of selected
+nonnegative indices for an integral positive-definite form. The form and each
+requested index remain attached to its result, including zero coefficients.
+Unlike a prefix, the result does not construct or serialize coefficients at
+intervening indices. This is useful for a sparse query such as `r_(x^2)(10^6)`.
+
+The kernel uses the same exact adjugate bound as the theta-prefix operation. If
+`C` is twice the half-polar Gram matrix, then any vector with `Q(x) <= N`
+satisfies `x_i^2 <= 2*N*(C^-1)_ii`; its diagonal cofactors therefore give a
+complete integer box for `N = max(indices)`. Dimension, coefficient growth,
+determinant work, full box size, evaluations, and retained output digits are
+admitted before enumeration. The index is capped at `10^9`, at most 128
+indices are accepted, at most 100,000 vectors are enumerated, and total work
+is capped at 2,000,000 term evaluations. A large maximum index can consequently
+be accepted in low dimension and rejected when its proved box is too large.
+The operation computes the selected finite coefficients directly; it makes no
+claim about modularity or an infinite theta series beyond those values.
+
+## Complete representation-vector fibers
+
+`quadratic_form.representing_vectors.compute` returns every integer vector
+`x` with `Q(x)=n` for each requested nonnegative index. Requested indices are
+strictly increasing; every index appears in the result, including an empty
+vector list when no representation exists. Each vector's coordinates are in
+the retained form's ordered axis, use canonical exact-integer JSON spellings,
+and are returned in lexicographic order. Sign changes and coordinate
+permutations remain distinct vectors.
+
+The form must be integral and positive definite. With `C` the integral polar
+matrix, the exact adjugate bound `x_i^2 <= 2*N*(C^-1)_ii`, where `N` is the
+largest requested index, yields a complete search box. The kernel admits the
+box size and term-evaluation work before enumeration. It also uses that box as
+a sound upper bound on the number of vectors that could be returned. At most
+100,000 vectors are allowed, with the schema's intrinsic coordinate bounds.
+This is a finite fiber operation; it does not decide representability beyond
+the requested indices.

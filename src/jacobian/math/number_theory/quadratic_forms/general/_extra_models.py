@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, ExactInteger, require_bounded_rational
+from jacobian._exact import (
+    CanonicalRational,
+    ExactInteger,
+    require_bounded_rational,
+)
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -16,6 +20,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 )
 from jacobian.math.matrices.values import RationalMatrix, RationalVectorSpaceBasis
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    RationalCoordinateVector,
     RationalQuadraticForm,
 )
 
@@ -264,10 +269,91 @@ class FiniteGaussSumResult(StrictModel):
 
 
 MAX_THETA_PREFIX_CUTOFF = 512
+MAX_THETA_SELECTED_INDEX = 1_000_000_000
+MAX_THETA_SELECTED_INDICES = 128
 MAX_THETA_PREFIX_DIMENSION = 7
 MAX_THETA_PREFIX_VECTORS = 100_000
 MAX_THETA_PREFIX_WORK = 2_000_000
 MAX_THETA_PREFIX_OUTPUT_DIGITS = 64_000
+MAX_THETA_REPRESENTATION_VECTOR_COUNT = 100_000
+MAX_THETA_REPRESENTATION_COORDINATE_ABS = 49_999
+
+
+class ThetaRepresentingVectorsRequest(StrictModel):
+    """Complete vector fibers at selected values of a positive-definite form."""
+
+    form: RationalQuadraticForm
+    indices: tuple[Annotated[int, Field(ge=0, le=MAX_THETA_SELECTED_INDEX)], ...] = (
+        Field(
+            min_length=1,
+            max_length=MAX_THETA_SELECTED_INDICES,
+            description=(
+                f"Strictly increasing, distinct indices in [0, {MAX_THETA_SELECTED_INDEX}]."
+            ),
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_indices(self) -> Self:
+        if any(index < 0 or index > MAX_THETA_SELECTED_INDEX for index in self.indices):
+            raise ValueError(
+                f"representation indices must lie in [0, {MAX_THETA_SELECTED_INDEX}]"
+            )
+        if tuple(sorted(set(self.indices))) != self.indices:
+            raise ValueError("representation indices must be strictly increasing")
+        return self
+
+    @property
+    def cutoff(self) -> int:
+        return self.indices[-1]
+
+
+class ThetaRepresentingVectorsRow(StrictModel):
+    index: int = Field(ge=0, le=MAX_THETA_SELECTED_INDEX)
+    vectors: tuple[RationalCoordinateVector, ...] = Field(
+        max_length=MAX_THETA_REPRESENTATION_VECTOR_COUNT,
+        description=(
+            "Every integer coordinate tuple in the result form's ordered axis, "
+            "in strictly increasing lexicographic order."
+        ),
+    )
+
+
+class ThetaRepresentingVectorsResult(StrictModel):
+    """All selected vectors, with coordinates ordered by ``form.axis``."""
+
+    form: RationalQuadraticForm
+    rows: tuple[ThetaRepresentingVectorsRow, ...] = Field(
+        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_complete_canonical_table(self) -> Self:
+        previous_index = -1
+        vector_count = 0
+        for row in self.rows:
+            if row.index <= previous_index:
+                raise ValueError("representation rows must have increasing indices")
+            previous_index = row.index
+            previous_vector: tuple[int, ...] | None = None
+            for vector in row.vectors:
+                if vector.axis != self.form.axis:
+                    raise ValueError("representation vector axis must match form axis")
+                if any(value.den != 1 for value in vector.coordinates):
+                    raise ValueError("representation coordinates must be integers")
+                coordinates = tuple(value.num for value in vector.coordinates)
+                if previous_vector is not None and coordinates <= previous_vector:
+                    raise ValueError(
+                        "representation vectors must be unique and ordered"
+                    )
+                previous_vector = coordinates
+                for coordinate in coordinates:
+                    if abs(coordinate) > MAX_THETA_REPRESENTATION_COORDINATE_ABS:
+                        raise ValueError("representation coordinate exceeds its bound")
+            vector_count += len(row.vectors)
+            if vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT:
+                raise ValueError("representation table exceeds its vector-count bound")
+        return self
 
 
 class ThetaSeriesPrefixRequest(StrictModel):
@@ -290,6 +376,62 @@ class ThetaSeriesPrefixResult(StrictModel):
             raise ValueError("theta coefficients must cover q^0 through q^cutoff")
         if any(value < 0 for value in self.coefficients):
             raise ValueError("theta coefficients must be nonnegative")
+        return self
+
+
+class ThetaSelectedCoefficientsRequest(StrictModel):
+    """Selected exact representation numbers of a positive-definite form."""
+
+    form: RationalQuadraticForm
+    indices: tuple[Annotated[int, Field(ge=0, le=MAX_THETA_SELECTED_INDEX)], ...] = (
+        Field(
+            min_length=1,
+            max_length=MAX_THETA_SELECTED_INDICES,
+            description=(
+                f"Strictly increasing distinct indices in [0, {MAX_THETA_SELECTED_INDEX}]."
+            ),
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_indices(self) -> Self:
+        if any(index < 0 or index > MAX_THETA_SELECTED_INDEX for index in self.indices):
+            raise ValueError(
+                f"theta indices must lie in [0, {MAX_THETA_SELECTED_INDEX}]"
+            )
+        if tuple(sorted(set(self.indices))) != self.indices:
+            raise ValueError("theta indices must be strictly increasing")
+        return self
+
+    @property
+    def cutoff(self) -> int:
+        return self.indices[-1]
+
+
+class ThetaSelectedCoefficient(StrictModel):
+    index: int = Field(ge=0, le=MAX_THETA_SELECTED_INDEX)
+    coefficient: int = Field(ge=0)
+
+
+class ThetaSelectedCoefficientsResult(StrictModel):
+    """Exact source-bound coefficients at the requested increasing indices."""
+
+    form: RationalQuadraticForm
+    coefficients: tuple[ThetaSelectedCoefficient, ...] = Field(
+        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_increasing_indices(self) -> Self:
+        indices = tuple(row.index for row in self.coefficients)
+        if tuple(sorted(set(indices))) != indices:
+            raise ValueError(
+                "selected theta result indices must be strictly increasing"
+            )
+        if any(row.coefficient > MAX_THETA_PREFIX_VECTORS for row in self.coefficients):
+            raise ValueError(
+                "a selected theta coefficient exceeds the admitted vector count"
+            )
         return self
 
 

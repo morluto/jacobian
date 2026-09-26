@@ -4,7 +4,6 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
     IntegralQuadraticCrossTerm,
     IntegralQuadraticForm,
     IntegralQuadraticFormInclusion,
-    IntegralQuadraticFormInclusionRequest,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.operations import (
     integral_form_to_rational,

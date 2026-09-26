@@ -39,3 +39,26 @@ defensively validating the untrusted card value, including its exact
 permutation canonical form. The catalog parser then establishes that canonical
 form once, and its adapter runs the profile kernel without repeating resource
 admission or canonicalization.
+
+`graph.deck.isomorphism_classes.compute` consumes a complete
+`VertexDeletionFamily` and returns canonical representatives, exact class
+multiplicities, a class index for every source card, and a vertex permutation
+from each card's ordered vertex axis to its representative's `v00`, `v01`, ...
+axis. The profile retains the source-bound family so every returned map can be
+checked against the original card edges. It admits at most 10 source vertices,
+including source-family validation, permutation canonicalization, map cells,
+and output bytes. Empty and one-vertex sources retain zero-order cards and empty
+permutations. Classifying the finite supplied deck does not reconstruct the
+source graph or assert any reconstruction conjecture.
+
+`graph.deck.edge.isomorphism_classes.compute` provides the corresponding exact
+profile for a complete `EdgeDeletionFamily`. It returns canonical class
+representatives, multiplicities, card indices, deleted source edges, and a
+permutation from each card's retained source-vertex axis to its representative's
+`v00`, `v01`, ... axis. The source-bound family keeps each mapping tied to the
+edge deletion that produced the card. Admission charges exact permutation
+canonicalization, source-family validation, map validation, and serialized
+output; the profile supports at most 10 source vertices and a shared 2,000,000
+work-unit bound. An empty edge deck on an edgeless graph has no classes or maps.
+This operation classifies supplied cards and makes no graph reconstruction
+claim.

@@ -9,6 +9,8 @@ from jacobian.math.graphs.decks._models import (
     AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
+    EdgeDeckIsomorphismProfile,
+    EdgeDeckIsomorphismProfileRequest,
     EdgeDeckRequest,
     EdgeDeletionFamily,
     UnlabelledDeck,
@@ -20,12 +22,16 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckEdgeCountRequest,
     VertexDeckInducedSubgraphCount,
     VertexDeckInducedSubgraphCountRequest,
+    VertexDeckIsomorphismProfile,
+    VertexDeckIsomorphismProfileRequest,
     VertexDeckRequest,
     VertexDeckSubgraphCount,
     VertexDeckSubgraphCountRequest,
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    _edge_deck_isomorphism_profile_from_admitted,
+    _vertex_deck_isomorphism_profile_from_admitted,
     anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
     edge_deletion_family,
@@ -64,6 +70,22 @@ def _run_unlabelled_vertex(
     request: UnlabelledVertexDeckRequest,
 ) -> UnlabelledVertexDeck:
     return unlabelled_vertex_deck(request.deck)
+
+
+def _run_vertex_isomorphism_profile(
+    request: VertexDeckIsomorphismProfileRequest,
+) -> VertexDeckIsomorphismProfile:
+    # Raw request admission precedes parsing; the nested family model then
+    # establishes the complete source-bound deletion relation exactly once.
+    return _vertex_deck_isomorphism_profile_from_admitted(request.deck)
+
+
+def _run_edge_isomorphism_profile(
+    request: EdgeDeckIsomorphismProfileRequest,
+) -> EdgeDeckIsomorphismProfile:
+    # The raw request admission precedes nested parsing; EdgeDeletionFamily
+    # establishes the exact source-minus-edge relation once.
+    return _edge_deck_isomorphism_profile_from_admitted(request.deck)
 
 
 def _run_anonymous_card_degree_profile(
@@ -310,6 +332,73 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="graph.deck.edge.isomorphism_classes.compute",
+        title="Map edge-deck cards to exact isomorphism classes",
+        description=(
+            "Canonicalize each card in a complete source-bound edge-deletion "
+            "family and return its class index plus an exact vertex permutation "
+            "to the canonical representative. Preserve every class multiplicity, "
+            "card index, and deleted source edge. Supports at most 10 source "
+            "vertices under a shared 2000000-unit work bound. This classifies "
+            "the supplied cards and makes no graph reconstruction claim."
+        ),
+        request_type=EdgeDeckIsomorphismProfileRequest,
+        result_type=EdgeDeckIsomorphismProfile,
+        run=_run_edge_isomorphism_profile,
+        tags=("graph", "deck", "edge-deletion", "isomorphism", "bijection", "exact"),
+        discovery_terms=(
+            "edge deck isomorphism class maps",
+            "edge-deleted card-to-class vertex bijection",
+            "exact edge deck graph isomorphism witnesses",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_edge_deck_class_maps",
+                description=(
+                    "Map the three isomorphic edge-deleted triangle cards to one "
+                    "class while retaining multiplicity three and exact vertex maps."
+                ),
+                input={
+                    "deck": {
+                        "source": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        },
+                        "cards": [
+                            {
+                                "deleted_edge": ["a", "b"],
+                                "card": {
+                                    "vertices": ["a", "b", "c"],
+                                    "edges": [["a", "c"], ["b", "c"]],
+                                },
+                                "retained_vertices": ["a", "b", "c"],
+                                "retained_edge_count": 2,
+                            },
+                            {
+                                "deleted_edge": ["a", "c"],
+                                "card": {
+                                    "vertices": ["a", "b", "c"],
+                                    "edges": [["a", "b"], ["b", "c"]],
+                                },
+                                "retained_vertices": ["a", "b", "c"],
+                                "retained_edge_count": 2,
+                            },
+                            {
+                                "deleted_edge": ["b", "c"],
+                                "card": {
+                                    "vertices": ["a", "b", "c"],
+                                    "edges": [["a", "b"], ["a", "c"]],
+                                },
+                                "retained_vertices": ["a", "b", "c"],
+                                "retained_edge_count": 2,
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="graph.deck.vertex.unlabelled.compute",
         title="Compute the unlabelled multiset quotient of a vertex deck",
         description=(
@@ -327,6 +416,70 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="path_vertex_quotient",
                 description="P3 has two isomorphic endpoint-deleted cards and one distinct middle-deleted card.",
+                input={
+                    "deck": {
+                        "source": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["b", "c"]],
+                        },
+                        "cards": [
+                            {
+                                "deleted_vertex": "a",
+                                "card": {"vertices": ["b", "c"], "edges": [["b", "c"]]},
+                                "retained_vertices": ["b", "c"],
+                                "retained_edge_count": 1,
+                                "deleted_edge_count": 1,
+                            },
+                            {
+                                "deleted_vertex": "b",
+                                "card": {"vertices": ["a", "c"], "edges": []},
+                                "retained_vertices": ["a", "c"],
+                                "retained_edge_count": 0,
+                                "deleted_edge_count": 2,
+                            },
+                            {
+                                "deleted_vertex": "c",
+                                "card": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+                                "retained_vertices": ["a", "b"],
+                                "retained_edge_count": 1,
+                                "deleted_edge_count": 1,
+                            },
+                        ],
+                        "edge_appearances": [1, 1],
+                        "vertex_appearances": [2, 2, 2],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.isomorphism_classes.compute",
+        title="Map vertex-deck cards to exact isomorphism classes",
+        description=(
+            "Canonicalize every card in a complete source-bound vertex-deletion "
+            "family and return its class index plus an exact vertex permutation "
+            "to the canonical representative. Each representative, multiplicity, "
+            "card index, and bijection is included in the finite profile. Supports "
+            "at most 10 source vertices under a shared 2000000-unit work bound. "
+            "This operation classifies supplied cards; it makes no source-graph "
+            "reconstruction claim."
+        ),
+        request_type=VertexDeckIsomorphismProfileRequest,
+        result_type=VertexDeckIsomorphismProfile,
+        run=_run_vertex_isomorphism_profile,
+        tags=("graph", "deck", "isomorphism", "bijection", "multiset", "exact"),
+        discovery_terms=(
+            "graph deck isomorphism classes",
+            "vertex deck card-to-class map",
+            "exact graph isomorphism maps between deck cards",
+        ),
+        examples=(
+            OperationExample(
+                name="path_vertex_deck_class_maps",
+                description=(
+                    "Map the three cards of P3 to their two exact isomorphism "
+                    "classes and return each card-to-representative vertex map."
+                ),
                 input={
                     "deck": {
                         "source": {

@@ -19,6 +19,9 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_enumeration,
     admit_homomorphism_search,
     admit_induced_substructure,
+    admit_invariant_closure_growth,
+    admit_invariant_closure_output,
+    admit_invariant_relation_closure,
     admit_polymorphism_check,
     admit_polymorphism_family,
     admit_pp_evaluation,
@@ -45,6 +48,8 @@ from jacobian.math.logic.relational_structures._models import (
     InducedEmbeddingCheckResult,
     InducedRelationProfile,
     InducedSubstructureResult,
+    RelationalInvariantClosure,
+    RelationalInvariantClosureRequest,
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismEnumerationRequest,
@@ -422,6 +427,142 @@ def check_polymorphism(
         polymorphism=polymorphism,
         witness=witness,
         relation_profiles=tuple(relation_profiles),
+    )
+
+
+def close_relation_under_polymorphisms(
+    request: RelationalInvariantClosureRequest,
+) -> RelationalInvariantClosure:
+    """Return the least relation containing the seeds and closed under ops.
+
+    Supplied operation tables are first checked against every relation of the
+    exact source structure. Closure is then computed as the generated
+    subalgebra of the finite power ``A^r`` using an incremental work queue.
+    """
+
+    if not isinstance(request, RelationalInvariantClosureRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.invariant_closure.request_type",
+            message="request must be a typed finite relational closure request",
+        )
+    source = _admit_structure(request.source, "source")
+    try:
+        admitted = RelationalInvariantClosureRequest.model_validate(
+            {
+                "source": source.model_dump(),
+                "relation_arity": request.relation_arity,
+                "generator_tuples": request.generator_tuples,
+                "polymorphisms": tuple(
+                    operation.model_dump() for operation in request.polymorphisms
+                ),
+            },
+            strict=True,
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.invariant_closure.request_shape",
+            message="request must contain canonical source-bound tuples and operations",
+        ) from exc
+
+    preservation_work, fixed_output_bytes = admit_invariant_relation_closure(
+        source,
+        admitted.relation_arity,
+        admitted.generator_tuples,
+        admitted.polymorphisms,
+    )
+    carrier_size = source.carrier_size
+
+    def closure_work(step_count: int) -> int:
+        """Charge preservation, generation, and queue sorting so far."""
+
+        return preservation_work + step_count + 8 * len(closure) * len(closure)
+
+    # A supplied operation is a claim. Recheck the entire defining preservation
+    # relation here because this operation relies on it to call the closure
+    # polymorphism-invariant.
+    for operation_index, operation in enumerate(admitted.polymorphisms):
+        checked = 0
+        for symbol, relation in zip(
+            source.signature, source.relation_tables, strict=True
+        ):
+            relation_set = set(relation)
+            for input_rows in product(relation, repeat=operation.arity):
+                checked += 1
+                if checked % 4_096 == 0:
+                    request_checkpoint(
+                        "during relational operation preservation checks"
+                    )
+                output = tuple(
+                    operation.operation_table[
+                        _operation_table_index(
+                            tuple(row[coordinate] for row in input_rows),
+                            carrier_size,
+                        )
+                    ]
+                    for coordinate in range(symbol.arity)
+                )
+                if output not in relation_set:
+                    raise OperationDomainValidationError(
+                        location=("polymorphisms", operation_index),
+                        code="relational.invariant_closure.not_polymorphism",
+                        message=(
+                            f"operation fails to preserve relation {symbol.symbol_id}: "
+                            f"input {tuple(input_rows)} maps to absent row {output}"
+                        ),
+                    )
+
+    closure = set(admitted.generator_tuples)
+    pending = sorted(closure)
+    cursor = 0
+    generated_steps = 0
+    admit_invariant_closure_growth(len(closure), closure_work(0))
+    while cursor < len(pending):
+        newest = pending[cursor]
+        cursor += 1
+        available = tuple(sorted(closure))
+        # The queue sorts the generated relation once per discovered row.
+        # Charge that sort before it runs so growth is refused in advance.
+        admit_invariant_closure_growth(len(closure), closure_work(generated_steps))
+        for operation in admitted.polymorphisms:
+            for position in range(operation.arity):
+                for remaining in product(available, repeat=operation.arity - 1):
+                    arguments = list(remaining)
+                    arguments.insert(position, newest)
+                    output = tuple(
+                        operation.operation_table[
+                            _operation_table_index(
+                                tuple(argument[coordinate] for argument in arguments),
+                                carrier_size,
+                            )
+                        ]
+                        for coordinate in range(admitted.relation_arity)
+                    )
+                    generated_steps += 1
+                    if generated_steps % 4_096 == 0:
+                        request_checkpoint("during relational invariant closure")
+                        admit_invariant_closure_growth(
+                            len(closure), closure_work(generated_steps)
+                        )
+                    if output not in closure:
+                        closure.add(output)
+                        admit_invariant_closure_growth(
+                            len(closure), closure_work(generated_steps)
+                        )
+                        pending.append(output)
+
+    result_tuples = tuple(sorted(closure))
+    admit_invariant_closure_growth(len(result_tuples), closure_work(generated_steps))
+    admit_invariant_closure_output(
+        fixed_output_bytes, admitted.relation_arity, len(result_tuples)
+    )
+    return RelationalInvariantClosure._from_kernel(
+        source=source,
+        relation_arity=admitted.relation_arity,
+        generator_tuples=admitted.generator_tuples,
+        polymorphisms=admitted.polymorphisms,
+        tuples=result_tuples,
     )
 
 
@@ -1248,6 +1389,7 @@ def compute_core(
 __all__ = [
     "check_homomorphism",
     "check_polymorphism",
+    "close_relation_under_polymorphisms",
     "compute_core",
     "count_homomorphisms",
     "csp_instance_to_source_structure",

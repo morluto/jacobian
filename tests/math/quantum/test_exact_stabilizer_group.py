@@ -6,12 +6,12 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
     ExactQubitPauli,
     ExactStabilizerGroup,
-    ExactStabilizerGroupRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_multiply,
     stabilizer_group_from_generators,
 )
+from jacobian.math.quantum._models import ExactStabilizerGroupRequest
 
 
 def _pauli(

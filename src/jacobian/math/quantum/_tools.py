@@ -144,6 +144,10 @@ def _run_exact_stabilizer_group(
     return stabilizer_group_from_generators(request)
 
 
+def _run_stabilizer_code(request: StabilizerCodeRequest) -> StabilizerCodeValue:
+    return stabilizer_code_compute(request.group, request.generator_eigenvalues)
+
+
 TOOLS = (
     MathTool(
         operation_id="quantum.stabilizer.code.compute",
@@ -158,7 +162,7 @@ TOOLS = (
         ),
         request_type=StabilizerCodeRequest,
         result_type=StabilizerCodeValue,
-        run=stabilizer_code_compute,
+        run=_run_stabilizer_code,
         tags=("quantum", "stabilizer", "code-space", "character", "exact"),
         discovery_terms=(
             "stabilizer code eigenspace",

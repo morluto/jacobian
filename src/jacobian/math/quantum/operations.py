@@ -40,7 +40,6 @@ from jacobian.math.quantum._models import (
     PauliToLabelsResult,
     PhaseFreeQubitPauli,
     QubitRegister,
-    StabilizerCodeRequest,
     StabilizerCodeValue,
     StabilizerDistanceResult,
     StabilizerErasureCorrectabilityRequest,
@@ -559,9 +558,9 @@ def stabilizer_group_from_generators(
     for generator in generators:
         reduced = generator
         vector = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
-        for pivot in sorted(echelon):
-            if vector[pivot]:
-                row = echelon[pivot]
+        for existing_pivot in sorted(echelon):
+            if vector[existing_pivot]:
+                row = echelon[existing_pivot]
                 product_pauli = _product_pauli_after_admission(reduced, row)
                 reduced = product_pauli
                 vector = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
@@ -577,20 +576,13 @@ def stabilizer_group_from_generators(
         echelon[pivot] = reduced
         independent.append(generator)
 
-    return ExactStabilizerGroup(qubit_register=register, generators=tuple(independent))
+    return ExactStabilizerGroup(register=register, generators=tuple(independent))
 
 
 def _admit_stabilizer_code_request(
-    request: object,
+    group: object, eigenvalues: object
 ) -> tuple[QubitRegister, tuple[ExactQubitPauli, ...], tuple[int, ...]]:
     """Validate a code's group, character, axes, and complete admitted work."""
-    if not isinstance(request, StabilizerCodeRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer.code.invalid_request",
-            "code construction requires a typed group and character",
-        )
-    group = getattr(request, "group", None)
     if not isinstance(group, ExactStabilizerGroup):
         _reject(
             "group",
@@ -599,7 +591,6 @@ def _admit_stabilizer_code_request(
         )
     register = _admit_register(getattr(group, "qubit_register", None), "group")
     generators = getattr(group, "generators", None)
-    eigenvalues = getattr(request, "generator_eigenvalues", None)
     if not isinstance(generators, tuple) or len(generators) > MAX_CHECK_ROWS:
         _reject(
             "group",
@@ -678,7 +669,9 @@ def _admit_stabilizer_code_request(
     return register, generators, eigenvalues
 
 
-def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeValue:
+def stabilizer_code_compute(
+    group: ExactStabilizerGroup, generator_eigenvalues: tuple[int, ...]
+) -> StabilizerCodeValue:
     """Canonicalize an exact group together with its one-dimensional character.
 
     Each input generator ``g`` with eigenvalue ``lambda`` is replaced by
@@ -686,7 +679,9 @@ def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeVal
     space with eigenvalue +1. Row operations carry their exact Pauli products,
     so RREF canonicalizes the subgroup without losing scalar signs.
     """
-    register, generators, eigenvalues = _admit_stabilizer_code_request(request)
+    register, generators, eigenvalues = _admit_stabilizer_code_request(
+        group, generator_eigenvalues
+    )
     width = len(register.qubit_ids)
 
     # Replace each generator g with chi(g) g. The resulting operators have
@@ -809,12 +804,7 @@ def _measurement_post_state(
     group = ExactStabilizerGroup(
         register=state.group.register, generators=tuple(updated)
     )
-    return stabilizer_code_compute(
-        StabilizerCodeRequest(
-            group=group,
-            generator_eigenvalues=(1,) * len(updated),
-        )
-    )
+    return stabilizer_code_compute(group, (1,) * len(updated))
 
 
 def stabilizer_state_measure_pauli(
@@ -894,9 +884,7 @@ def stabilizer_state_measure_pauli(
 
     # Revalidate/canonicalize the authored state once; all subsequent tableau
     # updates use the resulting independent +1 group on the same register.
-    canonical_state = stabilizer_code_compute(
-        StabilizerCodeRequest(group=state.group, generator_eigenvalues=(1,) * n)
-    )
+    canonical_state = stabilizer_code_compute(state.group, (1,) * n)
     canonical_generators = canonical_state.group.generators
     observable_vector = (
         *observable.phase_free.x_bits,

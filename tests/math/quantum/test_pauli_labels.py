@@ -9,12 +9,12 @@ from pydantic import ValidationError
 
 from jacobian.math.quantum import (
     ExactQubitPauli,
-    PauliFromLabelsRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_from_labels,
     pauli_to_labels,
 )
+from jacobian.math.quantum._models import PauliFromLabelsRequest
 
 _I = ((1, 0), (0, 1))
 _X = ((0, 1), (1, 0))

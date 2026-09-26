@@ -9,12 +9,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.quantum import (
-    PauliFamilyCommutationRequest,
     PauliFamilyEntry,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_family_commutation_matrix,
 )
+from jacobian.math.quantum._models import PauliFamilyCommutationRequest
 
 
 def _value(

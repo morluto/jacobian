@@ -2,8 +2,15 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 
-def validate_dart_axes(crossings, arcs):
+if TYPE_CHECKING:
+    from jacobian.math.topology.links._models import LinkCrossing, OrientedDiagramArc
+
+
+def validate_dart_axes(
+    crossings: tuple[LinkCrossing, ...], arcs: tuple[OrientedDiagramArc, ...]
+) -> tuple[dict[str, int], dict[str, str], set[str], set[str]]:
     ids = [crossing.crossing_id for crossing in crossings]
     if ids != sorted(ids) or len(set(ids)) != len(ids):
         raise ValueError("crossing IDs must be unique and strictly ordered")
@@ -41,7 +48,7 @@ def validate_dart_axes(crossings, arcs):
     return dart_owner, partner, tails, heads
 
 
-def crossing_sign(crossing, tails, heads) -> int:
+def crossing_sign(crossing: LinkCrossing, tails: set[str], heads: set[str]) -> int:
     """Right-hand crossing sign for CCW cyclic positions and directed tangents."""
     radial = ((1, 0), (0, 1), (-1, 0), (0, -1))
     tangents: dict[int, tuple[int, int]] = {}
@@ -50,12 +57,14 @@ def crossing_sign(crossing, tails, heads) -> int:
         if dart in heads:
             x, y = -x, -y
         tangents[index] = (x, y)
-    over_x, over_y = tangents[crossing.over_pair[0]]
-    under_x, under_y = tangents[crossing.under_pair[0]]
+    over_x, over_y = tangents[min(crossing.over_pair)]
+    under_x, under_y = tangents[min(crossing.under_pair)]
     return 1 if under_x * over_y - under_y * over_x > 0 else -1
 
 
-def validate_crossing_orientations(crossings, tails, heads):
+def validate_crossing_orientations(
+    crossings: tuple[LinkCrossing, ...], tails: set[str], heads: set[str]
+) -> None:
     for crossing in crossings:
         for pair in (crossing.over_pair, crossing.under_pair):
             left, right = (crossing.half_edges[index] for index in pair)
@@ -69,7 +78,7 @@ def validate_crossing_orientations(crossings, tails, heads):
             )
 
 
-def _permutation_cycles(successor):
+def _permutation_cycles(successor: dict[str, str]) -> list[set[str]]:
     faces: list[set[str]] = []
     unseen = set(successor)
     while unseen:
@@ -86,7 +95,7 @@ def _permutation_cycles(successor):
     return faces
 
 
-def _graph_components(adjacency):
+def _graph_components(adjacency: dict[int, set[int]]) -> list[set[int]]:
     unseen = set(adjacency)
     components: list[set[int]] = []
     while unseen:
@@ -103,7 +112,12 @@ def _graph_components(adjacency):
     return components
 
 
-def validate_sphere_embedding(crossings, arcs, dart_owner, partner):
+def validate_sphere_embedding(
+    crossings: tuple[LinkCrossing, ...],
+    arcs: tuple[OrientedDiagramArc, ...],
+    dart_owner: dict[str, int],
+    partner: dict[str, str],
+) -> None:
     successor = {
         dart: crossing.half_edges[(index + 1) % 4]
         for crossing in crossings

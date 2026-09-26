@@ -16,6 +16,7 @@ from jacobian.math.topology.edge_paths._models import (
 )
 from jacobian.math.topology.links._models import (
     MAX_LINK_CROSSINGS,
+    MAX_LINK_LABEL_LENGTH,
     LinkComponentsResult,
     LinkLabel,
     OrientedLinkDiagram,
@@ -25,10 +26,35 @@ MAX_BRAID_STRANDS = 32
 MAX_BRAID_WORD_LENGTH = MAX_LINK_CROSSINGS
 MAX_WIRTINGER_GENERATORS = 64
 MAX_STATE_CIRCLE_CROSSINGS = MAX_LINK_CROSSINGS
-MAX_STATE_CIRCLE_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_CONWAY_CENTERED_DEGREE = 64
 MAX_CONWAY_COEFFICIENT_DIGITS = 4_096
-MAX_CONWAY_OUTPUT_BYTES = 1024 * 1024
+
+# Output bounds are materialization CELL counts derived from the link-diagram
+# domain maxima (crossings, arcs, free loops, darts, and label characters), not
+# transport-byte measures. Each crossing carries one crossing_id label and four
+# half-edge dart labels, each at most MAX_LINK_LABEL_LENGTH characters.
+_MAX_LINK_DIAGRAM_LABEL_CELLS = MAX_LINK_CROSSINGS * 5 * MAX_LINK_LABEL_LENGTH
+_MAX_LINK_DIAGRAM_STRUCTURAL_CELLS = (
+    MAX_LINK_CROSSINGS  # crossings
+    + 2 * MAX_LINK_CROSSINGS  # arcs
+    + MAX_LINK_CROSSINGS  # free loops
+    + 4 * MAX_LINK_CROSSINGS  # darts
+)
+MAX_STATE_CIRCLE_OUTPUT_CELLS = (
+    _MAX_LINK_DIAGRAM_LABEL_CELLS
+    + _MAX_LINK_DIAGRAM_STRUCTURAL_CELLS
+    + 20 * (4 * MAX_STATE_CIRCLE_CROSSINGS)
+    + 8 * MAX_STATE_CIRCLE_CROSSINGS
+    + 16 * MAX_STATE_CIRCLE_CROSSINGS
+    + 128
+)
+MAX_CONWAY_OUTPUT_CELLS = (
+    (MAX_CONWAY_CENTERED_DEGREE + 1) * (2 * MAX_CONWAY_COEFFICIENT_DIGITS + 128)
+    + _MAX_LINK_DIAGRAM_LABEL_CELLS
+    + _MAX_LINK_DIAGRAM_STRUCTURAL_CELLS
+    + (2 * MAX_LINK_CROSSINGS + 1)  # retained Alexander polynomial terms
+    + 256
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -203,7 +229,7 @@ class LinkStateCirclesResult(StrictModel):
 
     state: LinkDiagramSmoothingState
     circles: tuple[LinkSmoothedCircle, ...]
-    circle_count: StrictInt = Field(ge=1, le=2 * MAX_LINK_CROSSINGS)
+    circle_count: StrictInt = Field(ge=1, le=3 * MAX_LINK_CROSSINGS)
 
     @model_validator(mode="after")
     def require_complete_cyclic_partition(self) -> Self:
@@ -222,11 +248,6 @@ class LinkStateCirclesResult(StrictModel):
                 "state_circle_partition",
                 "smoothed circles must partition every source dart exactly once",
             )
-        if diagram.crossings and any(not circle.darts for circle in self.circles):
-            raise _validation_error(
-                "state_circle_empty",
-                "a crossing-bearing state circle must contain darts",
-            )
         if not diagram.crossings and any(circle.darts for circle in self.circles):
             raise _validation_error(
                 "state_circle_free_loop", "crossing-free circles have no dart labels"
@@ -239,7 +260,10 @@ class LinkStateCirclesResult(StrictModel):
                 "state_circle_rotation",
                 "each cyclic dart sequence must start at its least dart",
             )
-        expected_count = len(self.circles) if diagram.crossings else diagram.free_loops
+        expected_count = (
+            len({circle.darts for circle in self.circles if circle.darts})
+            + diagram.free_loops
+        )
         if self.circle_count != expected_count or len(self.circles) != expected_count:
             raise _validation_error(
                 "state_circle_count", "circle count must equal the retained circle axis"

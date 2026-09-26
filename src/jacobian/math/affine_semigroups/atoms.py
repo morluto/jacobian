@@ -171,7 +171,9 @@ def _admit_atom_output(semigroup: PositiveAffineSemigroup) -> None:
     """Bound output from source dimensions before factorization enumeration."""
     config = semigroup.configuration
     label_characters = sum(
-        len(label.encode("utf-8")) + sum(ord(character) < 32 for character in label) * 5
+        len(label.encode("utf-8"))
+        + sum(ord(character) < 32 for character in label) * 5
+        + sum(character in ('"', "\\") for character in label)
         for label in (*config.row_labels, *config.generator_labels)
     )
     grading_bits = sum(

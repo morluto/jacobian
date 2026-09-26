@@ -96,6 +96,32 @@ def _det(left: tuple[int, int], right: tuple[int, int]) -> int:
     return left[0] * right[1] - left[1] * right[0]
 
 
+def _generator_coordinates_in_lattice_basis(
+    vectors: tuple[tuple[int, int], ...],
+    basis: tuple[tuple[int, ...], tuple[int, ...]],
+) -> tuple[tuple[int, int], ...]:
+    """Recover exact source-column coordinates in a full-rank row-HNF basis."""
+    determinant = _det(basis[0], basis[1])
+    if determinant == 0:
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.fundamental_holes_rank",
+            message="fundamental holes require a full-rank generated lattice",
+        )
+    numerators = tuple(
+        (
+            vector[0] * basis[1][1] - vector[1] * basis[1][0],
+            -vector[0] * basis[0][1] + vector[1] * basis[0][0],
+        )
+        for vector in vectors
+    )
+    if any(numerator % determinant for pair in numerators for numerator in pair):
+        raise ArithmeticError("generated-lattice coordinates are not integral")
+    return tuple(
+        (first // determinant, second // determinant) for first, second in numerators
+    )
+
+
 def _iter_parallelogram_lattice_points(
     first: tuple[int, int],
     second: tuple[int, int],
@@ -190,11 +216,9 @@ def fundamental_holes(
             code="affine_semigroup.fundamental_hole_basis_digits",
             message="generated-lattice basis exceeds its exact minor-index bound",
         )
-    generator_coordinates = group.generator_lattice_coordinates.entries
-    if len(generator_coordinates) != source.configuration.columns or any(
-        len(row) != 2 for row in generator_coordinates
-    ):
-        raise ArithmeticError("generated-lattice coordinates lost source axes")
+    generator_coordinates = _generator_coordinates_in_lattice_basis(
+        source_generators, basis
+    )
     if any(
         abs(value) >= 2 * 10**MAX_AFFINE_DIGITS
         for row in generator_coordinates

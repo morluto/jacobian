@@ -129,7 +129,12 @@ HomologyInputComplex = Annotated[
 
 
 def _raw_component_digit_count(value: object, maximum_digits: int) -> int:
-    """Count digits safely, without decimal expansion of native integers."""
+    """Count one raw coefficient's digits without decimal expansion.
+
+    Wire spellings are already decimal text.  Native scalars reuse the
+    canonical coefficient model's bit-length guard, so a cheaply constructed
+    oversized integer is rejected before any decimal materialization.
+    """
     if isinstance(value, str):
         parts = value.split("/", 1)
         return max((len(part.lstrip("-")) for part in parts), default=0)

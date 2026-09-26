@@ -52,7 +52,7 @@ from jacobian.math.topology.cubical_complexes.operations import (
 
 
 def _f_vector(request: CubicalComplexRequest) -> FVectorResult:
-    return f_vector(request.cells)
+    return f_vector(request.complex)
 
 
 def _face_closure(request: FaceClosureRequest) -> FaceClosureResult:
@@ -68,7 +68,7 @@ def _face_poset(request: CubicalComplexRequest) -> CubicalFacePosetResult:
 
 
 def _chain_complex(request: CubicalChainComplexRequest) -> CubicalChainComplexResult:
-    return chain_complex(request.cells, request.coefficient_ring, request.prime)
+    return chain_complex(request.complex, request.coefficient_ring, request.prime)
 
 
 def _boundary_subcomplex(
@@ -78,7 +78,7 @@ def _boundary_subcomplex(
 
 
 def _product(request: CubicalProductRequest) -> CubicalProductResult:
-    return product(request.left_cells, request.right_cells)
+    return product(request.left_complex, request.right_complex)
 
 
 def _skeleton(request: CubicalSkeletonRequest) -> CubicalSkeletonResult:
@@ -101,12 +101,15 @@ def _one_skeleton(request: CubicalComplexRequest) -> CubicalOneSkeletonResult:
 
 # A single 2D square: [(0,1),(0,1)] + [(0,1),(1,2)] + [(1,2),(0,1)] + [(1,2),(1,2)]
 _CELLS = {
-    "cells": [
-        {"intervals": [[0, 1], [0, 1]]},
-        {"intervals": [[0, 1], [1, 2]]},
-        {"intervals": [[1, 2], [0, 1]]},
-        {"intervals": [[1, 2], [1, 2]]},
-    ]
+    "complex": {
+        "ambient_dimension": 2,
+        "cells": [
+            {"intervals": [[0, 1], [0, 1]]},
+            {"intervals": [[0, 1], [1, 2]]},
+            {"intervals": [[1, 2], [0, 1]]},
+            {"intervals": [[1, 2], [1, 2]]},
+        ],
+    }
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -137,7 +140,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "Return the four exposed edges and all four vertices of a "
                     "single unit square."
                 ),
-                input={"cells": [{"intervals": [[0, 1], [0, 1]]}]},
+                input={
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    }
+                },
             ),
         ),
     ),
@@ -187,7 +195,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "poset label to its exact cubical cell and dimension. Admission "
             "limits the face closure and poset to 64 cells, with bounded face "
             "candidate work, coordinate digits, relations, and result bytes. "
-            "The current cubical-complex carrier excludes the void complex."
+            "This operation requires a nonempty cubical complex."
         ),
         request_type=CubicalComplexRequest,
         result_type=CubicalFacePosetResult,
@@ -205,7 +213,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "Compute the inclusion order of the square and its four edges "
                     "and four vertices."
                 ),
-                input={"cells": [{"intervals": [[0, 1], [0, 1]]}]},
+                input={
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    }
+                },
             ),
         ),
     ),
@@ -234,7 +247,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "Project a unit square to its four vertex and four boundary-edge graph."
                 ),
-                input={"cells": [{"intervals": [[0, 1], [0, 1]]}]},
+                input={
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    }
+                },
             ),
         ),
     ),
@@ -372,7 +390,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute a finite cubical product",
         description=(
             "Compute the Cartesian product of two finite cubical complexes. "
-            "Each factor is closed under faces, then product cells concatenate "
+            "Each canonical factor is closed under faces, then product cells concatenate "
             "the left factor's integer-lattice coordinates before the right "
             f"factor's. The complete result is bounded to "
             f"{MAX_CUBICAL_CHAIN_CELLS} cells and ambient dimension "
@@ -392,8 +410,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "output is an interval on the concatenated coordinate axes."
                 ),
                 input={
-                    "left_cells": [{"intervals": [[0, 1]]}],
-                    "right_cells": [{"intervals": [[5, 5]]}],
+                    "left_complex": {
+                        "ambient_dimension": 1,
+                        "cells": [{"intervals": [[0, 1]]}],
+                    },
+                    "right_complex": {
+                        "ambient_dimension": 1,
+                        "cells": [{"intervals": [[5, 5]]}],
+                    },
                 },
             ),
         ),
@@ -466,14 +490,22 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Build the integer cubical chain complex of one unit "
                 "square (4 vertices, 4 edges, 1 square); faces are closed "
                 "automatically and intervals must be unit length (b = a + 1).",
-                input={"cells": [{"intervals": [[0, 1], [0, 1]]}]},
+                input={
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    }
+                },
             ),
             OperationExample(
                 name="unit_square_mod_two_chain_complex",
                 description="Build the GF(2) cubical chain complex of the same "
                 "unit square with boundary coefficients reduced modulo two.",
                 input={
-                    "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    },
                     "coefficient_ring": "GF_p",
                     "prime": 2,
                 },

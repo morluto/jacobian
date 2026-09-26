@@ -38,7 +38,7 @@ def test_interval_times_point_is_exact_canonical_and_composable() -> None:
     decoded = CubicalProductResult.model_validate_json(result.model_dump_json())
     assert decoded == result
     # Existing consumers accept the product's canonical cell representation.
-    chain = f_vector(decoded.complex.cells)
+    chain = f_vector(decoded.complex)
     assert chain.f_vector.counts == (2, 1, 0)
     assert chain.euler_characteristic == 1
 
@@ -50,7 +50,7 @@ def test_square_times_interval_has_the_cube_f_vector() -> None:
     )
 
     assert result.complex.ambient_dimension == 3
-    vector = f_vector(result.complex.cells)
+    vector = f_vector(result.complex)
     assert vector.f_vector.counts == (8, 12, 6, 1)
     assert vector.euler_characteristic == 1
 
@@ -62,7 +62,7 @@ def test_product_tool_is_published_with_typed_example() -> None:
     request = CubicalProductRequest.model_validate(tool.examples[0].input)
     result = tool.run(request)
     assert result.complex.ambient_dimension == 2
-    assert f_vector(result.complex.cells).f_vector.counts == (2, 1, 0)
+    assert f_vector(result.complex).f_vector.counts == (2, 1, 0)
 
 
 def test_product_rejects_ambient_axis_growth_before_expansion() -> None:

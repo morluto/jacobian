@@ -23,6 +23,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalChainCoefficient,
     CubicalChainComplexRequest,
     CubicalChainComplexResult,
+    CubicalComplex,
 )
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
 from jacobian.math.topology.cubical_complexes.operations import chain_complex
@@ -204,12 +205,12 @@ class TestResourceAdmission:
 class TestCatalogParity:
     def test_native_matches_catalog_entry(self) -> None:
         request = CubicalChainComplexRequest(
-            cells=_SQUARE,
+            complex=CubicalComplex(ambient_dimension=2, cells=_SQUARE),
             coefficient_ring=CubicalChainCoefficient.PRIME_FIELD,
             prime=5,
         )
         assert _tool_result(request) == chain_complex(
-            request.cells, request.coefficient_ring, request.prime
+            request.complex, request.coefficient_ring, request.prime
         )
 
     def test_examples_execute(self) -> None:

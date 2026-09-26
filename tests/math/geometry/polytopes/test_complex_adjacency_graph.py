@@ -1,0 +1,202 @@
+"""Exact maximal-cell facet adjacency projections."""
+
+import json
+from fractions import Fraction
+from itertools import combinations
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.geometry.polytopes._models import (
+    RationalCoordinateSpace,
+    RationalPolytopeVertex,
+    RationalVPolytope,
+)
+from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
+    PolytopalComplexAdjacencyGraph,
+)
+from jacobian.math.geometry.polytopes.complexes.adjacency.operations import (
+    polytopal_complex_adjacency_graph,
+)
+from jacobian.math.graphs.values import SimpleUndirectedGraph
+
+
+def _cell(points: tuple[tuple[int, int], ...]) -> RationalVPolytope:
+    return RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=label,
+                coordinates=tuple(
+                    CanonicalRational.from_fraction(Fraction(value)) for value in point
+                ),
+            )
+            for label, point in zip(("a", "b", "c"), points, strict=True)
+        ),
+    )
+
+
+def _segment() -> RationalVPolytope:
+    return RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=label,
+                coordinates=tuple(
+                    CanonicalRational.from_fraction(Fraction(value)) for value in point
+                ),
+            )
+            for label, point in zip(
+                ("a", "b", "c"), ((3, 3), (4, 3), (5, 3)), strict=True
+            )
+        ),
+    )
+
+
+def test_adjacency_uses_shared_facets_and_not_vertex_contacts() -> None:
+    cells = (
+        _cell(((0, 0), (1, 0), (0, 1))),
+        _cell(((1, 0), (1, 1), (0, 1))),
+        _cell(((1, 1), (2, 1), (2, 2))),
+    )
+    result = polytopal_complex_adjacency_graph(cells)
+
+    cell_points = {
+        cell.cell_id: {
+            tuple(coord.as_integer_ratio() for coord in p.coordinates)
+            for p in cell.vertices
+        }
+        for cell in result.cells
+    }
+    oracle_edges = {
+        pair
+        for pair in combinations(sorted(cell_points), 2)
+        if len(cell_points[pair[0]] & cell_points[pair[1]]) == 2
+    }
+    assert result.graph.edges == tuple(sorted(oracle_edges))
+    assert len(result.graph.edges) == 1
+    assert len(result.facet_edges) == 1
+    shared = result.facet_edges[0]
+    intersection = cell_points[shared.left_cell_id] & cell_points[shared.right_cell_id]
+    facet_points = {
+        tuple(coord.as_integer_ratio() for coord in point.coordinates)
+        for point in shared.facet.vertices
+    }
+    assert shared.facet.dimension == 1
+    assert facet_points == intersection
+    assert (
+        SimpleUndirectedGraph.model_validate_json(result.graph.model_dump_json())
+        == result.graph
+    )
+
+
+def test_adjacency_admits_only_bounded_cell_families() -> None:
+    triangle = _cell(((0, 0), (1, 0), (0, 1)))
+    cells = (triangle,) * 17
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        polytopal_complex_adjacency_graph(cells)
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.adjacency.cell_count_over_envelope"
+    )
+
+
+def test_adjacency_requires_the_pure_full_dimensional_closure_contract() -> None:
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))), _segment()))
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.maximal_cell_not_full_dimensional"
+    )
+
+
+def test_multi_digit_cell_ids_keep_numeric_vertices_and_lexical_graph_edges() -> None:
+    cells = (
+        *(
+            _cell(((3 * index, 0), (3 * index + 1, 0), (3 * index, 1)))
+            for index in range(10)
+        ),
+        _cell(((28, 0), (28, 1), (27, 1))),
+    )
+    result = polytopal_complex_adjacency_graph(cells)
+
+    assert result.graph.vertices == tuple(f"M{index}" for index in range(11))
+    assert result.graph.edges == (("M10", "M9"),)
+    assert len(result.facet_edges) == 1
+    assert result.facet_edges[0].facet.maximal_cell_ids == ("M10", "M9")
+    assert (
+        PolytopalComplexAdjacencyGraph.model_validate_json(result.model_dump_json())
+        == result
+    )
+
+
+def test_result_json_rejects_forged_nonfacet_with_correct_declared_dimension() -> None:
+    result = polytopal_complex_adjacency_graph(
+        (
+            _cell(((0, 0), (1, 0), (0, 1))),
+            _cell(((1, 0), (1, 1), (0, 1))),
+        )
+    )
+    payload = json.loads(result.model_dump_json())
+    facet = payload["facet_edges"][0]["facet"]
+    facet["vertices"] = [facet["vertices"][0]]
+
+    with pytest.raises(ValidationError) as exc_info:
+        PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.adjacency_facet_vertices"
+    )
+
+
+@pytest.mark.parametrize(
+    ("replacement", "error_code"),
+    [
+        (((2, 0),), "polytopal_complex.adjacency_cell_dimension"),
+        (
+            (
+                (0, 0),
+                (0, 1),
+                (Fraction(1, 4), Fraction(1, 4)),
+                (1, 0),
+            ),
+            "polytopal_complex.adjacency_cell_extreme_vertices",
+        ),
+    ],
+)
+def test_result_json_rejects_noncanonical_cell_vertex_claims(
+    replacement: tuple[tuple[Fraction | int, ...], ...], error_code: str
+) -> None:
+    result = polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))),))
+    payload = json.loads(result.model_dump_json())
+    points = replacement
+    payload["cells"][0]["vertices"] = [
+        {
+            "coordinates": [
+                {
+                    "num": str(Fraction(value).numerator),
+                    "den": str(Fraction(value).denominator),
+                }
+                for value in point
+            ]
+        }
+        for point in points
+    ]
+
+    with pytest.raises(ValidationError) as exc_info:
+        PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == error_code
+
+
+def test_result_json_bounds_coordinate_height_before_exact_hull_validation() -> None:
+    result = polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))),))
+    payload = json.loads(result.model_dump_json())
+    payload["cells"][0]["vertices"][0]["coordinates"][0]["num"] = "1" + "0" * 1_024
+
+    with pytest.raises(ValidationError) as exc_info:
+        PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.adjacency_coordinate_digits"
+    )

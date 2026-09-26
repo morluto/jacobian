@@ -331,13 +331,17 @@ def test_minimality_work_bound_is_enforced_after_candidate_work_fits() -> None:
 
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{total_work} checks; maximum is {MAX_TRANSVERSAL_ENUMERATION_WORK}",
-    ):
+    ) as exc_info:
         enumerate_minimal_transversals(
             MinimalTransversalEnumerationRequest(
                 hypergraph=source, maximum_cardinality=maximum_cardinality
             )
         )
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.minimal_transversal.work_bound"
+    )
 
 
 def test_accepted_near_envelope_execution_charges_each_search_primitive() -> None:
@@ -577,13 +581,17 @@ def test_domination_presolve_shares_the_enumeration_work_bound() -> None:
 
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{total_work} checks; maximum is {MAX_TRANSVERSAL_ENUMERATION_WORK}",
-    ):
+    ) as exc_info:
         enumerate_minimal_transversals(
             MinimalTransversalEnumerationRequest(
                 hypergraph=source, maximum_cardinality=maximum_cardinality
             )
         )
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.minimal_transversal.work_bound"
+    )
 
 
 def test_forced_rank_exhaustion_with_residual_edge_is_empty() -> None:

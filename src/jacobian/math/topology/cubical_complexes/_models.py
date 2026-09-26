@@ -101,12 +101,6 @@ class CubicalCell(StrictModel):
         return sum(1 for a, b in self.intervals if b > a)
 
 
-class CubicalComplexRequest(StrictModel):
-    """A finite cubical complex: a set of elementary cubes."""
-
-    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
-
-
 class CubicalComplex(StrictModel):
     """Canonical cubical complex with an explicit ambient coordinate axis.
 
@@ -133,6 +127,16 @@ class CubicalComplex(StrictModel):
         if len(set(self.cells)) != len(self.cells):
             raise _validation_error("duplicate_cells", "cells must be distinct")
         return self
+
+
+class CubicalComplexRequest(StrictModel):
+    """Consume the canonical cubical-complex value without reshaping it."""
+
+    complex: CubicalComplex
+
+    @property
+    def cells(self) -> tuple[CubicalCell, ...]:
+        return self.complex.cells
 
 
 class CubicalBoundarySubcomplexResult(StrictModel):
@@ -443,7 +447,7 @@ class FVectorResult(StrictModel):
     """The f-vector and Euler characteristic bound to a cubical complex."""
 
     complex: CubicalComplex
-    source_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    source_cells: tuple[CubicalCell, ...] = Field(max_length=MAX_FACE_CELLS)
     f_vector: FVector
     euler_characteristic: int
 
@@ -628,10 +632,23 @@ class CubicalCellBirth(StrictModel):
 
 
 class CubicalProductRequest(StrictModel):
-    """Two finite elementary-cube families whose Cartesian product is requested."""
+    """Two canonical cubical complexes whose Cartesian product is requested."""
 
-    left_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
-    right_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    left_complex: CubicalComplex
+    right_complex: CubicalComplex
+
+    @model_validator(mode="after")
+    def require_product_dimension_bound(self) -> Self:
+        if (
+            self.left_complex.ambient_dimension
+            + self.right_complex.ambient_dimension
+            > MAX_DIM
+        ):
+            raise _validation_error(
+                "product_ambient_dimension",
+                "the product ambient dimension exceeds the supported bound",
+            )
+        return self
 
 
 class CubicalProductResult(StrictModel):
@@ -772,9 +789,13 @@ class CubicalChainComplexRequest(StrictModel):
     the request itself need only use one ambient coordinate axis.
     """
 
-    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    complex: CubicalComplex
     coefficient_ring: CubicalChainCoefficient = CubicalChainCoefficient.INTEGER
     prime: int | None = Field(default=None, ge=2, le=MAX_CUBICAL_PRIME)
+
+    @property
+    def cells(self) -> tuple[CubicalCell, ...]:
+        return self.complex.cells
 
 
 class CubicalCellBasis(StrictModel):
@@ -782,7 +803,6 @@ class CubicalCellBasis(StrictModel):
 
     dimension: int = Field(ge=0, le=MAX_DIM)
     cells: tuple[CubicalCell, ...] = Field(
-        min_length=1,
         max_length=MAX_CUBICAL_CHAIN_GROUP,
         description=(
             "Canonically ordered cells of one dimension; the order is the "

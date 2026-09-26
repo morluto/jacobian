@@ -55,9 +55,10 @@ def test_empty_smith_rejects_excessive_axes(shape: tuple[int, int]) -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
-    ):
+    ) as exc_info:
         smith_normal_form_result(matrix)
+
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 @pytest.mark.parametrize(

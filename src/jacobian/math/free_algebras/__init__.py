@@ -20,6 +20,7 @@ from jacobian.math.free_algebras._models import (
 from jacobian.math.free_algebras.operations import (
     add,
     compare_words,
+    compose_polynomial_homomorphisms,
     concatenate_words,
     groebner_shirshov_through_degree,
     ideal_degree_component,
@@ -55,6 +56,7 @@ __all__ = [
     "GroebnerShirshovResult",
     "add",
     "compare_words",
+    "compose_polynomial_homomorphisms",
     "concatenate_words",
     "groebner_shirshov_through_degree",
     "ideal_degree_component",

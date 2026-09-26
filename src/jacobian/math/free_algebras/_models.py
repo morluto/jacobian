@@ -662,6 +662,32 @@ class FreeAlgebraPolynomialSubstitutionRequest(StrictModel):
         return self
 
 
+class FreeAlgebraPolynomialHomomorphismCompositionRequest(StrictModel):
+    """Maps ``f:A→B`` and ``g:B→C`` in the order used by ``g ∘ f``."""
+
+    f: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The first map f:A→B, applied before g. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+    g: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The second map g:B→C, applied after f. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_matching_intermediate_alphabet(self) -> Self:
+        if self.f.target_alphabet != self.g.source_alphabet:
+            raise _validation_error(
+                "homomorphism_composition_alphabet",
+                "f target alphabet must equal g source alphabet in the same order",
+            )
+        return self
+
+
 class FreeAlgebraIdeal(StrictModel):
     """A finitely generated left, right, or two-sided ideal presentation."""
 

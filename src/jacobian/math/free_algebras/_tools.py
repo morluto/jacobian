@@ -1,4 +1,4 @@
-"""Public declaration for exact free associative algebra multiplication."""
+"""Public declarations for exact free associative algebra operations."""
 
 from jacobian.catalog.models import (
     MathTool,
@@ -14,6 +14,8 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraIdealPrefixResult,
     FreeAlgebraPolynomial,
     FreeAlgebraPolynomialAddRequest,
+    FreeAlgebraPolynomialHomomorphism,
+    FreeAlgebraPolynomialHomomorphismCompositionRequest,
     FreeAlgebraPolynomialProductRequest,
     FreeAlgebraPolynomialProductResult,
     FreeAlgebraPolynomialSubstitutionRequest,
@@ -38,6 +40,7 @@ from jacobian.math.free_algebras._models import (
 from jacobian.math.free_algebras.operations import (
     add,
     compare_words,
+    compose_polynomial_homomorphisms,
     concatenate_words,
     groebner_shirshov_through_degree,
     ideal_degree_component,
@@ -118,6 +121,12 @@ def _run_polynomial_substitute(
     request: FreeAlgebraPolynomialSubstitutionRequest,
 ) -> FreeAlgebraPolynomial:
     return substitute_polynomial(request.substitution, request.polynomial)
+
+
+def _run_homomorphism_compose(
+    request: FreeAlgebraPolynomialHomomorphismCompositionRequest,
+) -> FreeAlgebraPolynomialHomomorphism:
+    return compose_polynomial_homomorphisms(request.f, request.g)
 
 
 _EXAMPLE_ALPHABET = ["x", "y"]
@@ -544,6 +553,78 @@ TOOLS = (
                                 "word": ["x", "y"],
                             },
                             {"coefficient": {"num": "1", "den": "1"}, "word": []},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.homomorphism.compose.compute",
+        title="Compose exact free-algebra homomorphisms",
+        description=(
+            "Compose the supplied maps f:A→B and g:B→C in that input order, "
+            "returning g∘f:A→C. The ordered intermediate alphabet must match "
+            "exactly. The result reuses the canonical "
+            "FreeAlgebraPolynomialHomomorphism value. All image substitutions "
+            "are aggregate-preflighted for expansion, work, coefficient growth, "
+            "and output allocation before any image is expanded."
+        ),
+        request_type=FreeAlgebraPolynomialHomomorphismCompositionRequest,
+        result_type=FreeAlgebraPolynomialHomomorphism,
+        run=_run_homomorphism_compose,
+        tags=("free-algebra", "homomorphism", "composition", "exact"),
+        discovery_terms=(
+            "compose free algebra homomorphisms",
+            "homomorphism composition g after f",
+            "free associative algebra map composition",
+        ),
+        examples=(
+            OperationExample(
+                name="compose_generator_maps",
+                description="Apply f first, then g; composition is g after f.",
+                input={
+                    "f": {
+                        "source_alphabet": ["x"],
+                        "target_alphabet": ["u", "v"],
+                        "images": [
+                            {
+                                "alphabet": ["u", "v"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["v"],
+                                    },
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["u"],
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    "g": {
+                        "source_alphabet": ["u", "v"],
+                        "target_alphabet": ["a"],
+                        "images": [
+                            {
+                                "alphabet": ["a"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["a"],
+                                    }
+                                ],
+                            },
+                            {
+                                "alphabet": ["a"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "2", "den": "1"},
+                                        "word": ["a"],
+                                    }
+                                ],
+                            },
                         ],
                     },
                 },

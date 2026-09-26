@@ -364,6 +364,8 @@ def multiply(
 
 def _admit_substitution_images(
     substitution: FreeAlgebraPolynomialHomomorphism,
+    *,
+    location_prefix: tuple[str | int, ...] = ("substitution",),
 ) -> tuple[dict[str, tuple[FreeAlgebraTerm, ...]], dict[str, int], dict[str, int], int]:
     """Reauthenticate images and gather the bounded expansion metadata."""
     image_term_counts: dict[str, int] = {}
@@ -380,7 +382,7 @@ def _admit_substitution_images(
     ):
         if len(image.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
             _reject_resource(
-                ("substitution", "images", letter, "terms"),
+                (*location_prefix, "images", letter, "terms"),
                 "substitution_image_term_budget",
                 "each generator image is limited to 64 terms",
             )
@@ -392,7 +394,7 @@ def _admit_substitution_images(
         for index, term in enumerate(image.terms):
             if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
                 _reject_resource(
-                    ("substitution", "images", letter, "terms", index, "word"),
+                    (*location_prefix, "images", letter, "terms", index, "word"),
                     "substitution_image_word_budget",
                     "generator image words are limited to 32 letters",
                 )
@@ -406,50 +408,76 @@ def _admit_substitution_images(
 
 def _preflight_substitution_expansion(
     substitution: FreeAlgebraPolynomialHomomorphism,
-    source: FreeAlgebraPolynomial,
+    sources: tuple[FreeAlgebraPolynomial, ...],
     image_terms: dict[str, tuple[FreeAlgebraTerm, ...]],
     image_term_counts: dict[str, int],
     image_word_lengths: dict[str, int],
     maximum_letter_scalars: int,
+    *,
+    source_locations: tuple[tuple[str | int, ...], ...] | None = None,
 ) -> None:
     """Admit expansion, coefficient, work, and result envelopes up front."""
 
     expansion_count = 0
     maximum_source_word_length = 0
     maximum_output_word_length = 0
-    maximum_contribution_digits = 0
-    for term in source.terms:
-        maximum_source_word_length = max(maximum_source_word_length, len(term.word))
-        expansion = 1
-        output_length = 0
-        contribution_digits = canonical_rational_component_digits(term.coefficient)
-        for letter in term.word:
-            expansion *= image_term_counts[letter]
-            if not expansion:
-                break
-            output_length += image_word_lengths[letter]
-            contribution_digits += max(
-                (
-                    canonical_rational_component_digits(image_term.coefficient)
-                    for image_term in image_terms[letter]
-                ),
-                default=0,
-            )
-        expansion_count += expansion
-        maximum_output_word_length = max(maximum_output_word_length, output_length)
-        maximum_contribution_digits = max(
-            maximum_contribution_digits, contribution_digits
+    source_expansion_counts = []
+    source_coefficient_digit_bounds = []
+    locations = source_locations or tuple(("polynomial", "terms") for _ in sources)
+    for source_index, source in enumerate(sources):
+        location = locations[source_index]
+        source_expansion_count = 0
+        source_maximum_contribution_digits = 0
+        for term in source.terms:
+            maximum_source_word_length = max(maximum_source_word_length, len(term.word))
+            expansion = 1
+            output_length = 0
+            contribution_digits = canonical_rational_component_digits(term.coefficient)
+            for letter in term.word:
+                expansion *= image_term_counts[letter]
+                if not expansion:
+                    break
+                output_length += image_word_lengths[letter]
+                contribution_digits += max(
+                    (
+                        (
+                            0
+                            if abs(image_term.coefficient.num) == 1
+                            and image_term.coefficient.den == 1
+                            else canonical_rational_component_digits(
+                                image_term.coefficient
+                            )
+                        )
+                        for image_term in image_terms[letter]
+                    ),
+                    default=0,
+                )
+            expansion_count += expansion
+            source_expansion_count += expansion
+            if expansion:
+                maximum_output_word_length = max(
+                    maximum_output_word_length, output_length
+                )
+            if expansion:
+                source_maximum_contribution_digits = max(
+                    source_maximum_contribution_digits, contribution_digits
+                )
+        source_coefficient_digits = (
+            source_expansion_count * source_maximum_contribution_digits
+            + (len(str(source_expansion_count)) if source_expansion_count > 1 else 0)
         )
+        source_expansion_counts.append(source_expansion_count)
+        source_coefficient_digit_bounds.append(source_coefficient_digits)
         if expansion_count > MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS:
             _reject_resource(
-                ("polynomial", "terms"),
+                location,
                 "substitution_expansion_budget",
                 "polynomial substitution exceeds the admitted expansion count",
             )
 
     if maximum_output_word_length > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH:
         _reject_resource(
-            ("substitution",),
+            locations[0],
             "substitution_word_length_budget",
             "substituted words exceed the 64-letter exact value limit",
         )
@@ -461,23 +489,34 @@ def _preflight_substitution_expansion(
     )
     if work_bound > MAX_FREE_ALGEBRA_SUBSTITUTION_WORK:
         _reject_resource(
-            ("polynomial", "terms"),
+            locations[0],
             "substitution_work_budget",
             "polynomial substitution exceeds the admitted exact work bound",
         )
-    if expansion_count > MAX_FREE_ALGEBRA_RESULT_TERMS:
+    if any(count > MAX_FREE_ALGEBRA_RESULT_TERMS for count in source_expansion_counts):
         _reject_resource(
-            ("polynomial", "terms"),
+            next(
+                location
+                for location, count in zip(
+                    locations, source_expansion_counts, strict=True
+                )
+                if count > MAX_FREE_ALGEBRA_RESULT_TERMS
+            ),
             "substitution_result_term_budget",
             "polynomial substitution can exceed the exact result term limit",
         )
-
-    predicted_coefficient_digits = expansion_count * maximum_contribution_digits + (
-        len(str(expansion_count)) if expansion_count > 1 else 0
-    )
-    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+    if any(
+        digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+        for digits in source_coefficient_digit_bounds
+    ):
         _reject_resource(
-            ("substitution",),
+            next(
+                location
+                for location, digits in zip(
+                    locations, source_coefficient_digit_bounds, strict=True
+                )
+                if digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+            ),
             "substitution_coefficient_growth",
             "predicted exact coefficient growth exceeds the 64-digit limit",
         )
@@ -488,7 +527,7 @@ def _preflight_substitution_expansion(
     )
     if output_cell_bound > MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS:
         _reject_resource(
-            ("polynomial",),
+            locations[0],
             "substitution_output_cells",
             "predicted canonical output exceeds the admitted "
             f"{MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS}-cell allocation bound",
@@ -568,13 +607,73 @@ def substitute_polynomial(
     )
     _preflight_substitution_expansion(
         canonical_substitution,
-        source,
+        (source,),
         images,
         counts,
         lengths,
         letter_scalars,
     )
     return _expand_polynomial_substitution(canonical_substitution, source, images)
+
+
+def compose_polynomial_homomorphisms(
+    f: FreeAlgebraPolynomialHomomorphism,
+    g: FreeAlgebraPolynomialHomomorphism,
+) -> FreeAlgebraPolynomialHomomorphism:
+    """Return ``g ∘ f`` after aggregate admission of all generator images."""
+
+    try:
+        first = FreeAlgebraPolynomialHomomorphism.model_validate(f.model_dump())
+        second = FreeAlgebraPolynomialHomomorphism.model_validate(g.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("homomorphisms",),
+            code="free_algebra.homomorphism_composition_shape",
+            message="both polynomial homomorphisms must be canonical",
+        ) from exc
+    if first.target_alphabet != second.source_alphabet:
+        raise OperationDomainValidationError(
+            location=("g", "source_alphabet"),
+            code="free_algebra.homomorphism_composition_alphabet",
+            message="f target alphabet must equal g source alphabet in the same order",
+        )
+
+    images, counts, lengths, letter_scalars = _admit_substitution_images(
+        second, location_prefix=("g",)
+    )
+    for index, image in enumerate(first.images):
+        if len(image.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+            _reject_resource(
+                ("f", "images", index, "terms"),
+                "substitution_operand_term_budget",
+                "each generator image being composed is limited to 64 terms",
+            )
+        for term_index, term in enumerate(image.terms):
+            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+                _reject_resource(
+                    ("f", "images", index, "terms", term_index, "word"),
+                    "substitution_operand_word_length_budget",
+                    "composed-map source image words are limited to 32 letters",
+                )
+    _preflight_substitution_expansion(
+        second,
+        first.images,
+        images,
+        counts,
+        lengths,
+        letter_scalars,
+        source_locations=tuple(
+            ("f", "images", i, "terms") for i in range(len(first.images))
+        ),
+    )
+    composed_images = tuple(
+        _expand_polynomial_substitution(second, image, images) for image in first.images
+    )
+    return FreeAlgebraPolynomialHomomorphism.model_construct(
+        source_alphabet=first.source_alphabet,
+        target_alphabet=second.target_alphabet,
+        images=composed_images,
+    )
 
 
 def concatenate_words(

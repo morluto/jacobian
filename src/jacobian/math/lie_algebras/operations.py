@@ -548,8 +548,14 @@ def lie_algebra_is_semisimple(
     computes the exact nullspace; only the resulting decision is returned.
     """
 
-    killing_radical = lie_killing_form_radical(algebra)
+    canonical_algebra = (
+        algebra
+        if isinstance(algebra, FiniteDimensionalLieAlgebra)
+        else FiniteDimensionalLieAlgebra.model_validate(algebra)
+    )
+    killing_radical = lie_killing_form_radical(canonical_algebra)
     return LieSemisimplicityResult(
+        algebra=canonical_algebra,
         is_semisimple=killing_radical.radical.generators.row_count == 0,
     )
 

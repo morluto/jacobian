@@ -1,18 +1,15 @@
 # Lie algebra semisimplicity decision
 
-`lie_algebra.is_semisimple.compute` accepts a finite-dimensional Lie algebra
-over `QQ` and returns the direct boolean decision `is_semisimple`. For
-characteristic zero, Cartan's criterion says this is true exactly when the
-Killing form is nondegenerate. The operation admits the algebra, computes the
-exact Killing-form radical, and returns only the decision.
+`lie_algebra_is_semisimple` is a native convenience projection over the
+published `lie_algebra.killing_form.radical.compute` operation: over `QQ`,
+Cartan's criterion says the algebra is semisimple exactly when the Killing form
+has zero radical. It returns a source-bound result containing the canonical
+algebra and the exact boolean decision. The helper is not a separate catalog
+operation because the decision is already a cheap projection of the public
+radical result.
 
-The result contains no source algebra, Killing form, or radical, so it makes no
-source-bound or serialized-witness claim. Consumers that receive a boolean
-alongside an algebra from caller-authored data must recompute the decision for
-that algebra before relying on it. The detailed Killing form and radical are
-available separately from `lie_algebra.killing_form.compute` and
-`lie_algebra.killing_form.radical.compute`. This operation does not identify
-simple factors, compute a classification, or calculate the solvable radical.
+This helper does not identify simple factors, compute a classification, or
+calculate the solvable radical.
 
 The supported dimension is at most eight, as in the current
 finite-dimensional Lie-algebra carrier.

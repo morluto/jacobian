@@ -1,6 +1,5 @@
 """Exact Cartan semisimplicity decisions for finite-dimensional QQ algebras."""
 
-
 import pytest
 from pydantic import ValidationError
 
@@ -42,16 +41,18 @@ def test_cartan_criterion_known_answers() -> None:
     # Degenerate but nonzero Killing form distinguishes degeneracy from
     # vanishing as a decision case.
     assert not lie_algebra_is_semisimple(AFFINE).is_semisimple
-    assert lie_algebra_is_semisimple(SL2).model_dump() == {"is_semisimple": True}
+    assert lie_algebra_is_semisimple(SL2).model_dump() == {
+        "algebra": SL2.model_dump(),
+        "is_semisimple": True,
+    }
 
 
-def test_decision_has_strict_json_roundtrip_without_source_claims() -> None:
+def test_decision_roundtrip_retains_source_algebra() -> None:
     decision = lie_algebra_is_semisimple(SL2)
-    assert decision.model_dump_json() == '{"is_semisimple":true}'
     restored = LieSemisimplicityResult.model_validate_json(decision.model_dump_json())
     assert restored == decision
-    assert set(restored.model_dump()) == {"is_semisimple"}
-    assert not hasattr(restored, "algebra")
+    assert restored.algebra == SL2
+    assert restored.is_semisimple is True
 
 
 def test_decision_wire_value_requires_a_json_boolean() -> None:

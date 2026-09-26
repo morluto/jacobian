@@ -480,8 +480,9 @@ class LieKillingRadicalResult(StrictModel):
 
 
 class LieSemisimplicityResult(StrictModel):
-    """The boolean decision from Cartan's semisimplicity criterion over QQ."""
+    """Cartan's semisimplicity decision, bound to its source algebra."""
 
+    algebra: FiniteDimensionalLieAlgebra
     is_semisimple: StrictBool
 
 

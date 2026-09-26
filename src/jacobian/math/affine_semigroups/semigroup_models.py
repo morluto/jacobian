@@ -70,7 +70,7 @@ class AffineFactorizationRequest(StrictModel):
     """Evaluate one nonnegative coefficient vector in its semigroup parent."""
 
     semigroup: PositiveAffineSemigroup
-    coordinates: tuple[Annotated[ExactInteger, Field(ge=0, max_length=32)], ...] = (
+    coordinates: tuple[ExactInteger, ...] = (
         Field(
             max_length=MAX_AFFINE_GENERATORS,
             description=(

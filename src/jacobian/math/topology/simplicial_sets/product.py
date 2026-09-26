@@ -28,9 +28,16 @@ def simplicial_set_product(
 ) -> SimplicialSetProductResult:
     """Construct X x Y with the canonical left-major index-pair axes."""
     left, right = request.left, request.right
-    left_result = from_tables(left.max_degree, left.sets, left.face_maps, left.degeneracy_maps)
-    right_result = from_tables(right.max_degree, right.sets, right.face_maps, right.degeneracy_maps)
-    if left_result.status != "SIMPLICIAL_SET" or right_result.status != "SIMPLICIAL_SET":
+    left_result = from_tables(
+        left.max_degree, left.sets, left.face_maps, left.degeneracy_maps
+    )
+    right_result = from_tables(
+        right.max_degree, right.sets, right.face_maps, right.degeneracy_maps
+    )
+    if (
+        left_result.status != "SIMPLICIAL_SET"
+        or right_result.status != "SIMPLICIAL_SET"
+    ):
         raise OperationDomainValidationError(
             location=("left" if left_result.status != "SIMPLICIAL_SET" else "right",),
             code="simplicial_set.product_factor_invalid",

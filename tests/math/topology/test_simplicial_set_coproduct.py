@@ -116,7 +116,9 @@ def test_coproduct_rejects_level_overflow_before_expansion() -> None:
 
 def test_coproduct_canonicalizes_forged_factor_summaries() -> None:
     factor = standard_simplex(1, 1)
-    forged = factor.model_copy(update={"checked_identities": factor.checked_identities + 1})
+    forged = factor.model_copy(
+        update={"checked_identities": factor.checked_identities + 1}
+    )
     result = simplicial_set_coproduct(
         SimplicialSetCoproductRequest(left=forged, right=factor)
     )

@@ -95,8 +95,12 @@ def test_product_projections_are_simplicial_maps() -> None:
 
 def test_product_canonicalizes_factors_with_forged_identity_summary() -> None:
     factor = standard_simplex(1, 1)
-    forged = factor.model_copy(update={"checked_identities": factor.checked_identities + 1})
-    result = simplicial_set_product(SimplicialSetProductRequest(left=forged, right=factor))
+    forged = factor.model_copy(
+        update={"checked_identities": factor.checked_identities + 1}
+    )
+    result = simplicial_set_product(
+        SimplicialSetProductRequest(left=forged, right=factor)
+    )
     assert result.left == factor
     assert result.left_projection.target == factor
 

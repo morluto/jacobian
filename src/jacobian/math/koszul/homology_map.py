@@ -12,12 +12,13 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.koszul.module_models import (
+    ModuleKoszulChainMap,
     ModuleKoszulHomologyMap,
     ModuleKoszulHomologyMapRequest,
     ModuleKoszulMapRequest,
 )
 from jacobian.math.koszul.module_operations import (
-    module_koszul_homology,
+    _module_koszul_homology_admitted,
     module_koszul_map,
 )
 
@@ -87,6 +88,57 @@ def _coordinates_mod_boundaries(
     return [rows[boundary_count + index][-1] for index in range(len(homology_basis))]
 
 
+def _preflight_chain_map_inputs(
+    supplied: ModuleKoszulChainMap,
+) -> list[CanonicalRational]:
+    """Reject over-envelope parents before the module-map helper expands them.
+
+    The module-map helper validates and expands both complexes under its much
+    larger standalone envelope, so coefficient and combined-basis overflows
+    must be rejected here first. The returned coefficients are reused for the
+    operation's own growth estimates.
+    """
+    combined_chain_cells = (len(supplied.source.basis) + len(supplied.target.basis)) * (
+        1 << len(supplied.sequence)
+    )
+    if combined_chain_cells > MAX_KOSZUL_HOMOLOGY_MAP_BASIS_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("chain_map",),
+            code="koszul.module.homology_map_basis_budget",
+            message="combined chain bases exceed the induced homology-map envelope",
+        )
+    coefficients = [coefficient for row in supplied.module_map for coefficient in row]
+    coefficients.extend(
+        coefficient
+        for module in (supplied.source, supplied.target)
+        for action in module.action
+        for row in action
+        for coefficient in row
+    )
+    coefficients.extend(
+        coefficient
+        for row in supplied.algebra.multiplication
+        for cell in row
+        for coefficient in cell
+    )
+    coefficients.extend(
+        coefficient for element in supplied.sequence for coefficient in element
+    )
+    if supplied.algebra.unit is not None:
+        coefficients.extend(supplied.algebra.unit)
+    if any(
+        canonical_rational_component_digits(coefficient)
+        > MAX_KOSZUL_HOMOLOGY_MAP_COEFFICIENT_DIGITS
+        for coefficient in coefficients
+    ):
+        raise OperationResourceAdmissionError(
+            location=("chain_map",),
+            code="koszul.module.homology_map_coefficient_budget",
+            message="chain-map coefficients exceed the induced homology-map envelope",
+        )
+    return coefficients
+
+
 def koszul_homology_map(
     request: ModuleKoszulHomologyMapRequest | Mapping[str, Any],
 ) -> ModuleKoszulHomologyMap:
@@ -99,10 +151,10 @@ def koszul_homology_map(
     """
 
     try:
-        value = (
-            request
+        value = ModuleKoszulHomologyMapRequest.model_validate(
+            request.model_dump()
             if isinstance(request, ModuleKoszulHomologyMapRequest)
-            else ModuleKoszulHomologyMapRequest.model_validate(request)
+            else request
         )
         supplied = value.chain_map
     except OperationResourceAdmissionError:
@@ -113,6 +165,10 @@ def koszul_homology_map(
             code="koszul.module.homology_map_request",
             message="the supplied Koszul chain map is not canonical",
         ) from exc
+
+    # Cheap parent preflight before the module-map helper expands both
+    # complexes under its much larger standalone envelope.
+    input_coefficients = _preflight_chain_map_inputs(supplied)
 
     # Check serialized claims structurally against the canonical reconstruction;
     # do not trust retained complexes or degree maps supplied by the caller.
@@ -152,23 +208,7 @@ def koszul_homology_map(
             code="koszul.module.homology_map_basis_budget",
             message="combined chain bases exceed the induced homology-map envelope",
         )
-    coefficients = [coefficient for row in supplied.module_map for coefficient in row]
-    coefficients.extend(
-        coefficient
-        for module in (supplied.source, supplied.target)
-        for coefficient in (
-            value for action in module.action for row in action for value in row
-        )
-    )
-    coefficients.extend(
-        coefficient
-        for row in supplied.algebra.multiplication
-        for cell in row
-        for coefficient in cell
-    )
-    coefficients.extend(
-        coefficient for element in supplied.sequence for coefficient in element
-    )
+    coefficients = list(input_coefficients)
     coefficients.extend(
         coefficient
         for complex_value in (
@@ -264,8 +304,8 @@ def koszul_homology_map(
             message="retained homology bases and induced maps exceed the output bound",
         )
 
-    source_homology = module_koszul_homology(verified.source_complex)
-    target_homology = module_koszul_homology(verified.target_complex)
+    source_homology = _module_koszul_homology_admitted(verified.source_complex)
+    target_homology = _module_koszul_homology_admitted(verified.target_complex)
     induced: list[tuple[tuple[CanonicalRational, ...], ...]] = []
     for degree, matrix in enumerate(verified.degree_maps):
         dense = _dense_map(matrix)

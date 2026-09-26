@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import combinations
+from math import comb
 from typing import Self
 
 from pydantic import Field, model_validator
@@ -183,12 +184,24 @@ class ModuleKoszulChainMap(StrictModel):
             raise _err(
                 "chain_map_binding", "chain map must retain compatible source axes"
             )
+        if any(len(element) != len(self.algebra.basis) for element in self.sequence):
+            raise _err(
+                "chain_map_axes", "sequence coordinates must use the algebra basis"
+            )
         for degree, matrix in enumerate(self.degree_maps):
-            if (matrix.row_count, matrix.column_count) != (
-                self.target_complex.basis_sizes[degree],
-                self.source_complex.basis_sizes[degree],
+            wedge_size = comb(len(self.sequence), degree)
+            expected_source = len(self.source.basis) * wedge_size
+            expected_target = len(self.target.basis) * wedge_size
+            if (
+                matrix.row_count != expected_target
+                or matrix.column_count != expected_source
+                or self.source_complex.basis_sizes[degree] != expected_source
+                or self.target_complex.basis_sizes[degree] != expected_target
             ):
-                raise _err("chain_map_axes", "degree maps must match complex axes")
+                raise _err(
+                    "chain_map_axes",
+                    "degree maps must match canonical module-wedge axes",
+                )
         return self
 
 

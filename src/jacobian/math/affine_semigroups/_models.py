@@ -8,6 +8,7 @@ normal-form kernels rather than introducing a second integer-module carrier.
 
 from __future__ import annotations
 
+from math import comb
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, WithJsonSchema, model_validator
@@ -24,6 +25,16 @@ MAX_RELATION_LATTICE_INPUT_DIGITS = 8
 MAX_RELATION_LATTICE_BASIS_ENTRIES = (
     MAX_RELATION_LATTICE_DIMENSION * MAX_RELATION_LATTICE_DIMENSION
 )
+MAX_CIRCUIT_SUPPORTS = (1 << MAX_RELATION_LATTICE_DIMENSION) - 1
+MAX_CIRCUIT_COORDINATE_DIGITS = 94
+MAX_CIRCUIT_RANK_WORK = sum(
+    comb(MAX_RELATION_LATTICE_DIMENSION, size)
+    * MAX_RELATION_LATTICE_DIMENSION
+    * size
+    * min(MAX_RELATION_LATTICE_DIMENSION, size)
+    for size in range(1, MAX_RELATION_LATTICE_DIMENSION + 1)
+)
+MAX_CIRCUIT_KERNEL_WORK = MAX_CIRCUIT_SUPPORTS * MAX_RELATION_LATTICE_DIMENSION**3
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -42,6 +53,14 @@ def _configuration_json_schema() -> JsonSchemaValue:
             minimum=1,
             maximum=MAX_RELATION_LATTICE_DIMENSION,
         )
+    entries = properties["entries"]
+    entries.update(minItems=1, maxItems=MAX_RELATION_LATTICE_DIMENSION)
+    row = entries["items"]
+    row.update(minItems=1, maxItems=MAX_RELATION_LATTICE_DIMENSION)
+    row["items"].update(
+        maxLength=9,
+        pattern=r"^(?:0|-?[1-9][0-9]{0,7})(?![\s\S])",
+    )
     schema["description"] = (
         "One nonempty integer generator configuration A in ZZ^(d x n) with "
         f"1 <= d, n <= {MAX_RELATION_LATTICE_DIMENSION} and at most "
@@ -89,6 +108,117 @@ class RelationLatticeRequest(StrictModel):
                 f"{MAX_RELATION_LATTICE_INPUT_DIGITS} decimal digits",
             )
         return self
+
+
+class IntegerConfigurationCircuitsRequest(StrictModel):
+    """Enumerate primitive support-minimal relations of a bounded configuration."""
+
+    configuration: Annotated[
+        IntegerMatrix,
+        WithJsonSchema(_configuration_json_schema()),
+    ] = Field(
+        description=(
+            "Integer configuration A; columns label generators and circuit vectors "
+            "use that exact column axis. Axes are 1..12 and each entry has at most "
+            "8 decimal digits."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_admitted_envelope(self) -> Self:
+        rows = self.configuration.row_count
+        columns = self.configuration.column_count
+        if not (
+            1 <= rows <= MAX_RELATION_LATTICE_DIMENSION
+            and 1 <= columns <= MAX_RELATION_LATTICE_DIMENSION
+        ):
+            raise _validation_error(
+                "circuit_budget_exceeded",
+                "circuit configuration axes are limited to "
+                f"{MAX_RELATION_LATTICE_DIMENSION} rows and columns",
+            )
+        limit = 10**MAX_RELATION_LATTICE_INPUT_DIGITS
+        if any(
+            abs(int(value)) >= limit
+            for row in self.configuration.entries
+            for value in row
+        ):
+            raise _validation_error(
+                "circuit_budget_exceeded",
+                "circuit configuration scalars are limited to "
+                f"{MAX_RELATION_LATTICE_INPUT_DIGITS} decimal digits",
+            )
+        return self
+
+
+class IntegerConfigurationCircuitsResult(StrictModel):
+    """All primitive support-minimal integer relations of one configuration.
+
+    Circuit vectors are in the retained configuration's column coordinates,
+    primitive, sign-normalized, and lexicographically ordered.
+    """
+
+    configuration: IntegerMatrix
+    circuits: tuple[tuple[ExactInteger, ...], ...] = Field(
+        max_length=MAX_CIRCUIT_SUPPORTS
+    )
+    convention: Literal["PRIMITIVE_CIRCUIT_FIRST_NONZERO_POSITIVE"] = (
+        "PRIMITIVE_CIRCUIT_FIRST_NONZERO_POSITIVE"
+    )
+
+    @model_validator(mode="after")
+    def require_structural_consistency(self) -> Self:
+        n = self.configuration.column_count
+        if not (
+            1 <= self.configuration.row_count <= MAX_RELATION_LATTICE_DIMENSION
+            and 1 <= n <= MAX_RELATION_LATTICE_DIMENSION
+        ):
+            raise _validation_error(
+                "circuit_shape",
+                "circuit results require configuration axes in "
+                f"1..{MAX_RELATION_LATTICE_DIMENSION}",
+            )
+        if any(len(vector) != n for vector in self.circuits):
+            raise _validation_error(
+                "circuit_axis_mismatch",
+                "each circuit must use the retained configuration column axis",
+            )
+        if self.circuits != tuple(sorted(set(self.circuits))):
+            raise _validation_error(
+                "circuit_order", "circuit vectors must be sorted and unique"
+            )
+        if any(
+            not vector
+            or all(value == 0 for value in vector)
+            or next(value for value in vector if value != 0) < 0
+            for vector in self.circuits
+        ):
+            raise _validation_error(
+                "circuit_sign", "each circuit must be nonzero and sign-normalized"
+            )
+        if any(
+            abs(int(value)) >= 10**MAX_CIRCUIT_COORDINATE_DIGITS
+            for vector in self.circuits
+            for value in vector
+        ):
+            raise _validation_error(
+                "circuit_coordinate_bound",
+                "circuit coordinates exceed their determinant-derived digit bound",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        configuration: IntegerMatrix,
+        circuits: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Construct after the admitted exact kernel establishes circuit invariants."""
+        return cls.model_construct(
+            configuration=configuration,
+            circuits=circuits,
+        )
 
 
 class RelationLatticeResult(StrictModel):

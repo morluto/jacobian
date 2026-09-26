@@ -14,6 +14,15 @@ cuspidal space the unique vector is the empty tuple. The original
 one-dimensional order-six `S_2(Gamma0(13), chi)` spaces retain their existing
 basis identifier and coordinate behavior.
 
+`modular_form.character_basis.compute` accepts an optional coefficient count
+`precision`. Omitting it returns the smallest Sturm-determining prefix; a
+larger request returns the same canonical basis vectors through that many
+coefficients, with row reduction still normalized by every Sturm pivot. The
+requested count must be at least the space's Sturm precision and at most 128.
+The basis identifier and first Sturm-determining coefficients are therefore
+stable across requests. These longer exact prefixes support finite operator
+reconstruction while retaining the same space and coefficient-field parent.
+
 The existing `modular_form.equal.check` operation compares two character
 coordinate vectors when they have the identical exact space and canonical
 basis identifier. Equality of vectors is equivalent to equality of the

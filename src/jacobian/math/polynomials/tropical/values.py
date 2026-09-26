@@ -585,14 +585,23 @@ class TropicalPolynomialEssentialPart(StrictModel):
                 "essential_part_polynomial",
                 "returned polynomial must contain exactly the attained source terms in source order",
             )
-        if self.essential_term_indices and not set(
-            self.essential_term_indices
-        ).issubset(
-            {index for face in self.finite_faces for index in face.source_term_indices}
-        ):
+        finite_support = {
+            index for face in self.finite_faces for index in face.source_term_indices
+        }
+        if finite_support != set(self.essential_term_indices):
             raise _validation_error(
                 "essential_part_face_coverage",
-                "every attained source term must lie on a finite-normal lifted face",
+                "finite-normal face incidence must equal the attained source support",
+            )
+        if any(
+            face.normal[-1].num >= 0
+            if self.source.semiring.convention == "MIN_PLUS"
+            else face.normal[-1].num <= 0
+            for face in self.finite_faces
+        ):
+            raise _validation_error(
+                "essential_part_face_orientation",
+                "finite-face orientation must match the min-plus lower or max-plus upper convention",
             )
         if any(
             tuple(sorted(set(face.source_term_indices))) != face.source_term_indices

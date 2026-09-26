@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from math import comb
 from typing import Any
 
 from pydantic import ValidationError
@@ -95,26 +94,51 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             code="ore_algebra.hypergeometric_factorial_ratio_budget",
             message="the factorial shift quotient exceeds the admitted product degree",
         )
-    shifted_terms = _shifted_polynomial_term_bound(term, axis)
-    factorial_terms = comb(factorial_degree + 2, 2)
-    # Every linear factorial factor can increase the exponent of an axis only
-    # when its affine form contains that axis. Intersect the total-degree
-    # simplex with the axis-aligned exponent box before backend expansion.
-    # Both numerator and denominator are bounded by this union of all factors;
-    # reductions can only decrease their actual support.
-    bounds = tuple(
-        max(monomial.exponents[coordinate] for monomial in polynomial.terms)
-        + sum(
-            abs((factor.n_coefficient, factor.k_coefficient)[axis]) * abs(factor.power)
-            for factor in term.factorial_factors
-            if (factor.n_coefficient, factor.k_coefficient)[coordinate]
+
+    # Track the actual bounded Minkowski supports, rather than an ambient
+    # simplex/rectangle: sparse and mixed-affine products can be much smaller.
+    def support_product(
+        support: set[tuple[int, int]], choices: set[tuple[int, int]], repetitions: int
+    ) -> set[tuple[int, int]]:
+        for _ in range(repetitions):
+            support = {
+                (left[0] + right[0], left[1] + right[1])
+                for left in support
+                for right in choices
+            }
+            if len(support) > _MAX_EXPANSION_TERMS:
+                return support
+        return support
+
+    original = {monomial.exponents for monomial in polynomial.terms}
+    shifted_support = set().union(
+        *(
+            {
+                (
+                    monomial.exponents[0] + (axis == 0) * j,
+                    monomial.exponents[1] + (axis == 1) * j,
+                )
+                for j in range(monomial.exponents[axis] + 1)
+            }
+            for monomial in polynomial.terms
         )
-        for coordinate in (0, 1)
     )
-    expanded_terms = min(
-        comb(_term_degree(term) + factorial_degree + 2, 2),
-        (bounds[0] + 1) * (bounds[1] + 1),
-    )
+    numerator_support = shifted_support
+    denominator_support = original
+    for factor in term.factorial_factors:
+        coefficient = (factor.n_coefficient, factor.k_coefficient)[axis]
+        for _ in range(abs(factor.power) * abs(coefficient)):
+            choices = {(0, 0)}
+            if factor.n_coefficient:
+                choices.add((1, 0))
+            if factor.k_coefficient:
+                choices.add((0, 1))
+            goes_up = (coefficient > 0) == (factor.power > 0)
+            if goes_up:
+                numerator_support = support_product(numerator_support, choices, 1)
+            else:
+                denominator_support = support_product(denominator_support, choices, 1)
+    expanded_terms = max(len(numerator_support), len(denominator_support))
     if expanded_terms > _MAX_EXPANSION_TERMS:
         raise OperationResourceAdmissionError(
             location=("term",),
@@ -141,7 +165,7 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
         + factorial_degree * 5
         + _factorial_offset_excess_digits(term, axis)
         + _term_degree(term)
-        + len(str(max(1, shifted_terms * factorial_terms)))
+        + len(str(max(1, expanded_terms)))
     )
     if conservative_digits > _MAX_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(

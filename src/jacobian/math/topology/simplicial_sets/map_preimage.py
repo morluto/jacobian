@@ -122,6 +122,14 @@ def _preflight(request: SimplicialMapPreimageRequest) -> None:
     inclusion_target = _checked_carrier(
         target_inclusion.target, location="target_subset.inclusion.target"
     )
+    # Rebuild the map envelopes against admitted carriers before estimates walk
+    # their rows; this also rechecks row counts, lengths, and index ranges.
+    checked_map = TruncatedSimplicialMap(
+        source=source, target=target, maps=value.maps
+    )
+    checked_inclusion = TruncatedSimplicialMap(
+        source=selected_target, target=inclusion_target, maps=target_inclusion.maps
+    )
     if inclusion_target != target:
         raise OperationDomainValidationError(
             location=("target_subset", "inclusion", "target"),

@@ -157,6 +157,12 @@ class FiniteBasisMatroid(StrictModel):
     @classmethod
     def preflight_raw_envelope(cls, data: object) -> object:
         _preflight_raw_envelope(data)
+        if isinstance(data, Mapping):
+            unknown = set(data) - {"ground", "bases"}
+            if unknown:
+                raise _validation_error(
+                    "unknown_field", "matroid input contains an unknown field"
+                )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
@@ -215,6 +221,11 @@ class FiniteBasisMatroid(StrictModel):
         return self
 
     def require_basis_exchange(self) -> None:
+        # This is a public trust boundary: model_construct and other unchecked
+        # construction paths can bypass Pydantic's canonical-structure validator.
+        _preflight_ground_axis(self.ground)
+        _preflight_basis_family(self.bases)
+        self.require_canonical_basis_matroid()
         maximum_difference = min(self.rank, self.ground_size - self.rank)
         work_bound = len(self.bases) ** 2 * maximum_difference**2
         if work_bound > MAX_FINITE_BASIS_EXCHANGE_CHECKS:

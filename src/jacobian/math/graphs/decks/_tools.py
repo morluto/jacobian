@@ -110,7 +110,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=AnonymousGraphCardMultisetRequest,
         result_type=AnonymousGraphCardMultiset,
-        run=lambda request: anonymous_graph_card_multiset(request),
+        run=lambda request: anonymous_graph_card_multiset(
+            getattr(request, "card_order", None), getattr(request, "cards", None)
+        ),
         tags=("graph", "deck", "anonymous", "multiset", "isomorphism", "exact"),
         discovery_terms=(
             "anonymous graph card multiset",

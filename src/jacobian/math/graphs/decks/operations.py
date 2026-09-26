@@ -15,7 +15,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
-    MAX_ANONYMOUS_CARD_RESULT_BYTES,
+    MAX_ANONYMOUS_CARD_RESULT_UNITS,
     MAX_DECK_CARD_EDGES,
     MAX_DECK_ECHO_ALLOCATION,
     MAX_DECK_VERTICES,
@@ -26,7 +26,6 @@ from jacobian.math.graphs.decks._models import (
     MAX_UNLABELLED_DECK_VERTICES,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetRequest,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -68,27 +67,27 @@ __all__ = [
 
 
 def _admit_anonymous_card_request(
-    request: AnonymousGraphCardMultisetRequest,
-) -> AnonymousGraphCardMultisetRequest:
-    if type(request) is not AnonymousGraphCardMultisetRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.anonymous_request_carrier",
-            message="request must be an AnonymousGraphCardMultisetRequest",
-        )
-    n = getattr(request, "card_order", None)
-    cards = getattr(request, "cards", None)
+    card_order: object,
+    cards: object,
+) -> tuple[int, tuple[SimpleUndirectedGraph, ...]]:
+    n = card_order
     if cards is None:
         raise OperationDomainValidationError(
             location=("cards",),
             code="graph_deck.anonymous_cards_missing",
             message="cards field is required",
         )
-    if type(n) is not int or n < 0 or n > MAX_UNLABELLED_DECK_VERTICES:
+    if type(n) is not int or n < 0:
+        raise OperationDomainValidationError(
+            location=("card_order",),
+            code="graph_deck.anonymous_order_invalid",
+            message="card_order must be a nonnegative exact integer",
+        )
+    if n > MAX_UNLABELLED_DECK_VERTICES:
         raise OperationResourceAdmissionError(
             location=("card_order",),
             code="graph_deck.anonymous_order_bound",
-            message="anonymous cards support orders from zero through the isomorphism bound",
+            message="anonymous cards support orders through the isomorphism bound",
         )
     if type(cards) is not tuple:
         raise OperationDomainValidationError(
@@ -104,16 +103,16 @@ def _admit_anonymous_card_request(
             code="graph_deck.anonymous_canonicalization_bound",
             message="exact permutation canonicalization exceeds the admitted work bound",
         )
-    output_bytes = len(cards) * (64 + 16 * pair_count)
-    if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
+    output_units = len(cards) * (64 + 16 * pair_count)
+    if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
         raise OperationResourceAdmissionError(
             location=("cards",),
             code="graph_deck.anonymous_result_bound",
-            message="canonical anonymous card output exceeds the byte bound",
+            message="canonical anonymous card output exceeds the admitted allocation bound",
         )
     for index, graph in enumerate(cards):
         _admit_anonymous_card(graph, n, pair_count, index)
-    return request
+    return n, cards
 
 
 def _admit_anonymous_card(
@@ -209,13 +208,14 @@ def _canonical_anonymous_graph(graph: SimpleUndirectedGraph) -> SimpleUndirected
 
 
 def anonymous_graph_card_multiset(
-    request: AnonymousGraphCardMultisetRequest,
+    card_order: object,
+    cards: object,
 ) -> AnonymousGraphCardMultiset:
     """Canonicalize anonymous graph cards without asserting deck realizability."""
-    request = _admit_anonymous_card_request(request)
+    card_order, cards = _admit_anonymous_card_request(card_order, cards)
     counts: dict[tuple[tuple[str, str], ...], int] = {}
     representatives: dict[tuple[tuple[str, str], ...], SimpleUndirectedGraph] = {}
-    for graph in request.cards:
+    for graph in cards:
         canonical = _canonical_anonymous_graph(graph)
         key = canonical.edges
         counts[key] = counts.get(key, 0) + 1
@@ -226,7 +226,7 @@ def anonymous_graph_card_multiset(
         )
         for key in sorted(counts)
     )
-    return AnonymousGraphCardMultiset._from_kernel(request.card_order, classes)
+    return AnonymousGraphCardMultiset._from_kernel(card_order, classes)
 
 
 def vertex_deck_anonymous_multiset(

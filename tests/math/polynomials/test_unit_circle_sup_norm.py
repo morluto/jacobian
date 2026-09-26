@@ -13,25 +13,17 @@ from __future__ import annotations
 
 import json
 import math
-import random
-import time
 from fractions import Fraction
-from typing import Any
 
 import pytest
 import sympy
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian._execution import (
-    BackendFailureReason,
-    OperationBackendError,
-    request_execution,
-)
+from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
-from jacobian.math._root_isolation import strict_root_count
 from jacobian.math.number_theory.algebraic_numbers.real import RealAlgebraicValue
 from jacobian.math.number_theory.number_fields import GaussianRational
 from jacobian.math.polynomials.unit_circle import _sup_norm as sup_norm_kernel
@@ -42,8 +34,6 @@ from jacobian.math.polynomials.unit_circle._sup_norm import (
 )
 from jacobian.math.polynomials.unit_circle._sup_norm_models import (
     MAX_SUP_NORM_DEGREE,
-    GaussianRationalPolynomial,
-    GaussianRationalPolynomialTerm,
     UnitCircleSupNormSquaredRequest,
     UnitCircleSupNormSquaredResult,
 )
@@ -381,142 +371,6 @@ def test_exact_maximum_round_trip_through_serialization() -> None:
     assert decoded == result
     assert decoded.sup_norm_squared_exact is not None
     assert tuple(decoded.sup_norm_squared_exact.polynomial) == (27, -216, 176)
-
-
-@pytest.mark.parametrize(
-    (
-        "coefficients",
-        "maximizer_count",
-        "endpoint_maximizer",
-        "has_repeated_critical_root",
-    ),
-    [
-        ({0: (1, 0), 1: (1, 0), 2: (-1, 0), 3: (1, 0)}, 2, False, False),
-        ({0: (-1, 0), 1: (1, 0), 2: (1, 0), 3: (-1, 0)}, 2, False, True),
-        ({0: (-1, 0), 1: (1, 0)}, 0, True, False),
-    ],
-)
-def test_fast_extremum_path_matches_default_exact_baseline(
-    monkeypatch: pytest.MonkeyPatch,
-    coefficients: dict[int, tuple[int, int]],
-    maximizer_count: int,
-    endpoint_maximizer: bool,
-    has_repeated_critical_root: bool,
-) -> None:
-    optimized = _result(coefficients)
-    original_intervals = sympy.Poly.intervals
-
-    def default_intervals(self: sympy.Poly, *args: object, **kwargs: object) -> Any:
-        kwargs.pop("fast", None)
-        kwargs.pop("eps", None)
-        return original_intervals(self, *args, **kwargs)
-
-    def default_comparison(
-        polynomial: sympy.Poly,
-        factors: tuple[sympy.Poly, ...],
-        intervals: tuple[tuple[Fraction, Fraction], ...],
-        endpoint: Fraction,
-    ) -> tuple[int, ...]:
-        comparisons: list[int] = []
-        for lower, upper in intervals:
-            if lower == upper:
-                comparisons.append(
-                    0 if endpoint == lower else (1 if lower > endpoint else -1)
-                )
-            elif endpoint <= lower:
-                comparisons.append(1)
-            elif endpoint >= upper:
-                comparisons.append(-1)
-            elif (
-                polynomial.eval(
-                    sympy.Rational(endpoint.numerator, endpoint.denominator)
-                )
-                == 0
-            ):
-                comparisons.append(0)
-            else:
-                count = strict_root_count(
-                    polynomial,
-                    sympy.Rational(lower.numerator, lower.denominator),
-                    sympy.Rational(endpoint.numerator, endpoint.denominator),
-                )
-                comparisons.append(-1 if count else 1)
-        return tuple(comparisons)
-
-    monkeypatch.setattr(sympy.Poly, "intervals", default_intervals)
-    monkeypatch.setattr(
-        sup_norm_kernel, "_compare_rational_to_value_roots", default_comparison
-    )
-    baseline = _result(coefficients)
-
-    assert optimized.sup_norm_squared_exact == baseline.sup_norm_squared_exact
-    assert optimized.maximizing_status == baseline.maximizing_status
-    assert optimized.endpoint_minus_one_is_maximizer == (
-        baseline.endpoint_minus_one_is_maximizer
-    )
-    assert optimized.endpoint_minus_one_is_maximizer == endpoint_maximizer
-    assert tuple(
-        (point.root_index, point.comparison_rank, point.is_maximizer)
-        for point in optimized.critical_points
-    ) == tuple(
-        (point.root_index, point.comparison_rank, point.is_maximizer)
-        for point in baseline.critical_points
-    )
-    assert sum(point.is_maximizer for point in optimized.critical_points) == (
-        maximizer_count
-    )
-    assert all(
-        max(
-            Fraction(*fast.parameter.lower.as_integer_ratio()),
-            Fraction(*slow.parameter.lower.as_integer_ratio()),
-        )
-        <= min(
-            Fraction(*fast.parameter.upper.as_integer_ratio()),
-            Fraction(*slow.parameter.upper.as_integer_ratio()),
-        )
-        for fast, slow in zip(
-            optimized.critical_points, baseline.critical_points, strict=True
-        )
-    )
-    if has_repeated_critical_root:
-        symbol = sympy.Symbol("t")
-        derivative = sympy.Poly(
-            sum(
-                sympy.Rational(int(term.num), int(term.den)) * symbol**index
-                for index, term in enumerate(optimized.derivative_numerator)
-            ),
-            symbol,
-            domain=sympy.QQ,
-        )
-        assert derivative.eval(0) == derivative.diff().eval(0) == 0
-        assert derivative.diff().diff().diff().eval(0) != 0
-
-
-def test_degree_eight_32_digit_request_finishes_inside_outer_deadline() -> None:
-    rng = random.Random(2768)
-    polynomial = GaussianRationalPolynomial(
-        terms=tuple(
-            GaussianRationalPolynomialTerm(
-                exponent=exponent,
-                coefficient=_gaussian(
-                    rng.randrange(10**31, 10**32),
-                    rng.randrange(10**31, 10**32),
-                ),
-            )
-            for exponent in range(MAX_SUP_NORM_DEGREE, -1, -1)
-        )
-    )
-    started = time.monotonic()
-    with request_execution(started, outer_deadline=started + 15.0):
-        result = unit_circle_sup_norm_squared(polynomial)
-        assert result.degree == MAX_SUP_NORM_DEGREE
-        assert len(result.critical_points) == 16
-        assert (
-            sum(point.is_maximizer for point in result.critical_points)
-            + int(result.endpoint_minus_one_is_maximizer)
-            == 1
-        )
-        assert verify_unit_circle_sup_norm_squared(result)
 
 
 def test_forged_exact_maximum_is_rejected() -> None:

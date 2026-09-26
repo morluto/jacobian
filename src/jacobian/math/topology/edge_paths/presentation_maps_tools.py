@@ -7,7 +7,6 @@ from jacobian.math.topology.edge_paths._models import (
     FundamentalGroupMapRequest,
     FundamentalGroupMapResult,
     PresentationMapCompositionRequest,
-    PresentationMapCompositionResult,
 )
 from jacobian.math.topology.edge_paths.presentation_maps import (
     DirectRelatorMatchRequest,
@@ -71,7 +70,7 @@ TOOLS = (
             "and the corresponding integer matrix on abelianizations."
         ),
         request_type=PresentationMapCompositionRequest,
-        result_type=PresentationMapCompositionResult,
+        result_type=FundamentalGroupMapResult,
         run=_run_compose,
         tags=("topology", "fundamental-group", "composition", "exact"),
         discovery_terms=(

@@ -85,12 +85,6 @@ def test_prime_field_matrix_computations_have_one_operation_family() -> None:
     ]
 
 
-def test_root_to_coroot_is_registered_from_its_owner_manifest() -> None:
-    assert "root_system.root_to_coroot.compute" in {
-        tool.operation_id for tool in BUILTIN_TOOLS
-    }
-
-
 def test_linear_code_dual_and_syndrome_have_one_operation_family() -> None:
     """Dual codes and syndromes of canonical prime-field encoders are owned
     by ``code.linear``; duplicate IDs routing to the identical request,

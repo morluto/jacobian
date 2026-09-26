@@ -9,12 +9,20 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    MAX_GAUGE_LABEL_LENGTH,
+    MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS,
+    MAX_GAUGE_LOOP_FAMILY_SIZE,
+    MAX_GAUGE_LOOP_FAMILY_STEPS,
+    MAX_GAUGE_LOOP_FAMILY_WORK,
+    MAX_GAUGE_PATH_LENGTH,
     MIN_GAUGE_DEGREE,
     EdgeContribution,
     GaugeEdge,
     GaugeField,
     GaugeFieldEdgeLabel,
     GaugeLattice,
+    GaugeLoopFamilyHolonomies,
+    GaugeLoopHolonomy,
     GaugePathStep,
     GaugeTransformResult,
     GaugeVertexValue,
@@ -54,14 +62,14 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
     # trusted producers, so merely checking the outer GaugeField type is not a
     # sufficient public boundary.
     lattice, labels = _admit_transform_field(field)
-    if not isinstance(path, OrientedGaugePath):
+    if type(path) is not OrientedGaugePath:
         _reject(
             "path",
             "lattice_gauge.holonomy.path_not_a_gauge_path",
             "holonomy path must be an oriented lattice edge path",
         )
     steps = getattr(path, "steps", _MISSING)
-    if not isinstance(steps, tuple):
+    if type(steps) is not tuple:
         _reject(
             "path",
             "lattice_gauge.holonomy.path_shape",
@@ -411,6 +419,214 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     )
 
 
+def _admit_loop_family_size(
+    loops: tuple[OrientedGaugePath, ...] | list[OrientedGaugePath],
+) -> int:
+    if type(loops) not in (tuple, list):
+        _reject(
+            "loops",
+            "lattice_gauge.loop_family.loop_collection",
+            "loop family must be a finite tuple or list of oriented paths",
+        )
+    if len(loops) > MAX_GAUGE_LOOP_FAMILY_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("loops",),
+            code="lattice_gauge.loop_family.count_over_envelope",
+            message="loop family exceeds the 128-loop envelope",
+        )
+    total_steps = 0
+    for path in loops:
+        if not isinstance(path, OrientedGaugePath):
+            _reject(
+                "loops",
+                "lattice_gauge.loop_family.path_shape",
+                "every family member must be an oriented gauge path",
+            )
+        steps = getattr(path, "steps", _MISSING)
+        if not isinstance(steps, tuple):
+            _reject(
+                "loops",
+                "lattice_gauge.loop_family.path_shape",
+                "loop path steps must be a tuple",
+            )
+        if len(steps) > MAX_GAUGE_PATH_LENGTH:
+            raise OperationResourceAdmissionError(
+                location=("loops",),
+                code="lattice_gauge.loop_family.path_length_over_envelope",
+                message="a loop exceeds the 256-step path envelope",
+            )
+        total_steps += len(steps)
+        if total_steps > MAX_GAUGE_LOOP_FAMILY_STEPS:
+            raise OperationResourceAdmissionError(
+                location=("loops",),
+                code="lattice_gauge.loop_family.steps_over_envelope",
+                message="aggregate loop-family paths exceed 4096 steps",
+            )
+    return total_steps
+
+
+def _admit_closed_loop(
+    path: OrientedGaugePath, lattice: GaugeLattice, by_edge: dict[str, GaugeEdge]
+) -> str:
+    first: str | None = None
+    cursor: str | None = None
+    for step in path.steps:
+        edge = by_edge.get(step.edge_id)
+        if edge is None:
+            _reject(
+                "loops",
+                "lattice_gauge.loop_family.unknown_edge",
+                "loop paths must use edges of the source field",
+            )
+        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+        if cursor is not None and cursor != tail:
+            _reject(
+                "loops",
+                "lattice_gauge.loop_family.disconnected_path",
+                "each loop must chain head-to-tail",
+            )
+        if first is None:
+            first = tail
+        cursor = head
+    if first is None:
+        basepoint = getattr(path, "basepoint", _MISSING)
+        if not _gauge_label_is_valid(basepoint) or basepoint not in lattice.vertices:
+            _reject(
+                "loops",
+                "lattice_gauge.loop_family.empty_path_basepoint",
+                "an empty loop must name a source-lattice basepoint",
+            )
+        return basepoint
+    if cursor != first:
+        _reject(
+            "loops",
+            "lattice_gauge.loop_family.open_path",
+            "every member of a loop family must be closed",
+        )
+    basepoint = getattr(path, "basepoint", None)
+    if basepoint is not None and basepoint != first:
+        _reject(
+            "loops",
+            "lattice_gauge.loop_family.basepoint_mismatch",
+            "a supplied loop basepoint must equal its first vertex",
+        )
+    return first
+
+
+def _admit_loop_family_path_shapes(
+    loops: tuple[OrientedGaugePath, ...] | list[OrientedGaugePath],
+) -> int:
+    """Check bounded scalar shapes and count text work before path replay."""
+
+    text_units = 0
+    for path in loops:
+        for step in path.steps:
+            if not isinstance(step, GaugePathStep):
+                _reject(
+                    "loops",
+                    "lattice_gauge.loop_family.step_shape",
+                    "every loop step must be a typed lattice traversal",
+                )
+            edge_id = getattr(step, "edge_id", _MISSING)
+            forward = getattr(step, "forward", _MISSING)
+            if not _gauge_label_is_valid(edge_id) or type(forward) is not bool:
+                _reject(
+                    "loops",
+                    "lattice_gauge.loop_family.step_shape",
+                    "loop steps require a strict edge label and boolean orientation",
+                )
+            text_units += len(cast(str, edge_id))
+        basepoint = getattr(path, "basepoint", None)
+        if basepoint is not None:
+            if not _gauge_label_is_valid(basepoint):
+                _reject(
+                    "loops",
+                    "lattice_gauge.loop_family.basepoint_shape",
+                    "a supplied loop basepoint must be a valid lattice label",
+                )
+            text_units += len(cast(str, basepoint))
+    return text_units
+
+
+def _loop_family_output_units(
+    field: GaugeField,
+    loops: tuple[tuple[OrientedGaugePath, str], ...],
+) -> int:
+    degree = field.degree
+    units = 32
+    units += sum(len(vertex) + 4 for vertex in field.lattice.vertices)
+    units += sum(
+        len(edge.edge_id) + len(edge.tail) + len(edge.head) + 8
+        for edge in field.lattice.edges
+    )
+    units += sum(len(entry.edge_id) + degree + 4 for entry in field.edge_labels)
+    units += sum(
+        len(basepoint) + degree + 12 + sum(len(step.edge_id) + 4 for step in path.steps)
+        for path, basepoint in loops
+    )
+    return units
+
+
+def loop_family_holonomies(
+    field: GaugeField,
+    loops: tuple[OrientedGaugePath, ...] | list[OrientedGaugePath],
+) -> GaugeLoopFamilyHolonomies:
+    """Compute the exact holonomy of each supplied closed path.
+
+    The field is admitted once and retained once in the result.  Each path is
+    an explicit based loop; this operation does not enumerate loops or search
+    for a generating family.
+    """
+
+    total_steps = _admit_loop_family_size(loops)
+    lattice, labels = _admit_transform_field(field)
+    degree = field.degree
+    path_text_units = _admit_loop_family_path_shapes(loops)
+    work_units = len(lattice.vertices) + len(lattice.edges) * degree * degree
+    work_units += len(loops)
+    work_units += total_steps * (2 * degree + MAX_GAUGE_LABEL_LENGTH + 1)
+    work_units += len(lattice.edges) * MAX_GAUGE_LABEL_LENGTH * 8
+    work_units += sum(len(vertex) for vertex in lattice.vertices)
+    work_units += sum(
+        len(edge.edge_id) + len(edge.tail) + len(edge.head) for edge in lattice.edges
+    )
+    work_units += sum(len(entry.edge_id) for entry in field.edge_labels)
+    work_units += path_text_units
+    if work_units > MAX_GAUGE_LOOP_FAMILY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("loops",),
+            code="lattice_gauge.loop_family.work_over_envelope",
+            message="loop-family admission work exceeds its exact envelope",
+        )
+
+    by_edge = {edge.edge_id: edge for edge in lattice.edges}
+    admitted = tuple(
+        (path, _admit_closed_loop(path, lattice, by_edge)) for path in loops
+    )
+    if _loop_family_output_units(field, admitted) > MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("loops",),
+            code="lattice_gauge.loop_family.output_over_envelope",
+            message="source-bound loop results exceed the exact output envelope",
+        )
+
+    results: list[GaugeLoopHolonomy] = []
+    for path, basepoint in admitted:
+        product = tuple(range(degree))
+        for step in path.steps:
+            edge_value = labels[step.edge_id].image
+            oriented_value = edge_value if step.forward else _inverse(edge_value)
+            product = _compose(product, oriented_value)
+        results.append(
+            GaugeLoopHolonomy(
+                path=path,
+                basepoint=basepoint,
+                holonomy=PermutationLabel(degree=degree, image=product),
+            )
+        )
+    return GaugeLoopFamilyHolonomies._from_kernel(field=field, loops=tuple(results))
+
+
 def _run_path_holonomy(request: object) -> HolonomyResult:
     from jacobian.math.gauge._models import HolonomyRequest as _Request
 
@@ -419,4 +635,9 @@ def _run_path_holonomy(request: object) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
 
 
-__all__ = ["gauge_transform", "path_holonomy", "plaquette_curvature"]
+__all__ = [
+    "gauge_transform",
+    "loop_family_holonomies",
+    "path_holonomy",
+    "plaquette_curvature",
+]

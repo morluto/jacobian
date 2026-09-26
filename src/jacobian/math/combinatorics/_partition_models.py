@@ -101,7 +101,7 @@ class NonpositivePartObstruction(StrictModel):
 
     kind: Literal["NONPOSITIVE_PART"] = "NONPOSITIVE_PART"
     index: StrictInt = Field(ge=0, le=MAX_PARTITION_SIZE - 1)
-    value: StrictInt = Field(le=0)
+    value: StrictInt = Field(ge=-MAX_PARTITION_ITEM, le=0)
 
 
 class IncreasingPartsObstruction(StrictModel):
@@ -109,8 +109,8 @@ class IncreasingPartsObstruction(StrictModel):
 
     kind: Literal["INCREASING_ADJACENT_PARTS"] = "INCREASING_ADJACENT_PARTS"
     index: StrictInt = Field(ge=1, le=MAX_PARTITION_SIZE - 1)
-    previous_value: StrictInt = Field(ge=1)
-    value: StrictInt = Field(ge=1)
+    previous_value: StrictInt = Field(ge=1, le=MAX_PARTITION_ITEM)
+    value: StrictInt = Field(ge=1, le=MAX_PARTITION_ITEM)
 
     @model_validator(mode="after")
     def require_increase(self) -> Self:

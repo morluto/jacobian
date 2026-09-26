@@ -59,6 +59,15 @@ def test_partition_found_rejects_cells_outside_one_based_bounds(cell) -> None:
         )
 
 
+def test_partition_obstruction_scalars_stay_within_source_integer_bound() -> None:
+    with pytest.raises(ValidationError):
+        NonpositivePartObstruction(index=0, value=-(2**80))
+    with pytest.raises(ValidationError):
+        IncreasingPartsObstruction(
+            index=1, previous_value=1, value=2**80
+        )
+
+
 @pytest.mark.parametrize(
     ("parts", "expected"),
     [

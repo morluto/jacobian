@@ -7,6 +7,7 @@ from fractions import Fraction
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import ExactInteger
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -33,6 +34,7 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 MAX_NORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
 MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS = 600_000
 MAX_INDUCED_CHAIN_MAP_WORK_UNITS = 1_000_000
+MAX_HOMOLOGY_MAP_COMPOSITION_WORK = 1_000_000
 _NORMALIZED_CHAIN_OUTPUT_STRUCTURE = 4_096
 
 
@@ -812,8 +814,13 @@ def induced_normalized_homology_map(
                 ),
             )
         )
+    checked_map = TruncatedSimplicialMap(
+        source=source.simplicial_set,
+        target=target.simplicial_set,
+        maps=map_value.maps,
+    )
     return SimplicialHomologyMapValue(
-        simplicial_map=map_value,
+        simplicial_map=checked_map,
         source=source,
         target=target,
         degree_maps=tuple(degree_maps),
@@ -851,6 +858,15 @@ def compose_simplicial_homology_maps(
     second: SimplicialHomologyMapValue,
 ) -> SimplicialHomologyMapValue:
     """Compose two induced normalized integral homology maps."""
+    # Authenticate the authored coordinates before using them as operands.
+    checked_first = induced_normalized_homology_map(first.simplicial_map)
+    checked_second = induced_normalized_homology_map(second.simplicial_map)
+    if checked_first != first or checked_second != second:
+        raise OperationDomainValidationError(
+            location=("homology_map",),
+            code="simplicial_set.homology_map_claim_mismatch",
+            message="homology coordinates must agree with the induced simplicial maps",
+        )
     if first.target != second.source:
         raise OperationDomainValidationError(
             location=("second", "source"),
@@ -862,6 +878,52 @@ def compose_simplicial_homology_maps(
             first=first.simplicial_map, second=second.simplicial_map
         )
     )
+    composition_work = 0
+    maximum_input_bits = 0
+    maximum_middle_rank = 0
+    for first_degree, second_degree in zip(
+        first.degree_maps, second.degree_maps, strict=True
+    ):
+        first_images = (
+            *first_degree.free_generator_images,
+            *first_degree.torsion_generator_images,
+        )
+        second_images = (
+            *second_degree.free_generator_images,
+            *second_degree.torsion_generator_images,
+        )
+        middle_rank = len(second_images)
+        maximum_middle_rank = max(maximum_middle_rank, middle_rank)
+        target_rank = (
+            len(second_images[0].free) + len(second_images[0].torsion)
+            if second_images
+            else 0
+        )
+        composition_work += len(first_images) * middle_rank * target_rank
+        for coordinates in (*first_images, *second_images):
+            maximum_input_bits = max(
+                maximum_input_bits,
+                *(abs(value).bit_length() for value in (*coordinates.free, *coordinates.torsion)),
+            )
+    if composition_work > MAX_HOMOLOGY_MAP_COMPOSITION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("homology_map",),
+            code="simplicial_set.homology_map_composition_work_exceeded",
+            message="homology-coordinate composition exceeds its admitted work bound",
+        )
+    # Each output is a sum of at most the middle rank many products. This
+    # integer-only upper bound is checked before any coordinate multiplication.
+    maximum_output_digits = (
+        (2 * maximum_input_bits * 30_103 + 99_999) // 100_000
+        + (maximum_middle_rank.bit_length() * 30_103 + 99_999) // 100_000
+        + 1
+    )
+    if maximum_output_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("homology_map",),
+            code="simplicial_set.homology_map_composition_digits_exceeded",
+            message="homology-coordinate products may exceed the canonical integer digit limit",
+        )
     degree_maps: list[NormalizedHomologyDegreeMap] = []
     for degree, first_degree in enumerate(first.degree_maps):
         target_group = second.target.homology_groups[degree]

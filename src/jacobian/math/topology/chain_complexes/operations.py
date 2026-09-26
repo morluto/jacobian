@@ -1047,6 +1047,7 @@ def mapping_cone(
     chain_map: ChainMapValue,
 ) -> MappingConeResult:
     """Compute the mapping cone of a chain-map value."""
+    chain_map = ChainMapValue.model_validate(chain_map.model_dump())
     source, target, map_matrices = (
         chain_map.source,
         chain_map.target,

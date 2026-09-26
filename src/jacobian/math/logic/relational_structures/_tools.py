@@ -8,12 +8,10 @@ from jacobian.math.logic.relational_structures._admission import (
     MAX_POLYMORPHISM_COORDINATE_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
     MAX_RELATIONAL_DISJOINT_UNION_WORK,
-    MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK,
     MAX_SEARCH_CANDIDATES,
     MAX_SEARCH_TUPLE_REPLAYS,
 )
 from jacobian.math.logic.relational_structures._models import (
-    BinaryRelationTransposeRequest,
     CspAssignmentProfile,
     CspAssignmentRequest,
     CspSolutions,
@@ -60,7 +58,6 @@ from jacobian.math.logic.relational_structures.operations import (
     reduct_structure,
     search_embedding,
     search_homomorphism,
-    transpose_binary_relation,
 )
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_ARITY,
@@ -164,12 +161,6 @@ def _relational_disjoint_union(
     request: RelationalDisjointUnionRequest,
 ) -> RelationalDisjointUnionResult:
     return disjoint_union_structure(request.left, request.right)
-
-
-def _transpose_binary_relation(
-    request: BinaryRelationTransposeRequest,
-) -> FiniteRelationalStructure:
-    return transpose_binary_relation(request.source, request.symbol_id)
 
 
 def _quotient(request: RelationalQuotientRequest) -> RelationalQuotient:
@@ -376,51 +367,6 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="relational_structure.transpose_binary_relation.compute",
-        title="Transpose one binary relation",
-        description=(
-            "Swap the two coordinates of one selected binary relation table, "
-            "leaving the finite carrier, ranked signature, and all other "
-            "relation tables unchanged. The returned value is a canonical "
-            "finite relational structure, and applying the operation twice "
-            "to the same symbol recovers the source. The selected complete "
-            f"table has at most {MAX_RELATIONAL_TABLE_ROWS} rows. The full "
-            "output reconstruction and selected coordinate swap are admitted "
-            f"before construction against {MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK} "
-            "row and coordinate visits, derived from the structure value bounds."
-        ),
-        request_type=BinaryRelationTransposeRequest,
-        result_type=FiniteRelationalStructure,
-        run=_transpose_binary_relation,
-        tags=("relational-structures", "finite-model-theory", "exact"),
-        discovery_terms=(
-            "converse binary relation",
-            "inverse relation",
-            "transpose relation",
-            "reverse directed edges",
-        ),
-        examples=(
-            OperationExample(
-                name="transpose_directed_edges",
-                description=(
-                    "Transposes the selected edge table while leaving the "
-                    "unary vertex predicate unchanged."
-                ),
-                input={
-                    "source": {
-                        "carrier_size": 3,
-                        "signature": [
-                            {"symbol_id": "E", "arity": 2},
-                            {"symbol_id": "P", "arity": 1},
-                        ],
-                        "relation_tables": [[[0, 1], [1, 2]], [[2]]],
-                    },
-                    "symbol_id": "E",
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="relational_structure.disjoint_union.compute",
         title="Form a disjoint union of finite relational structures",
         description=(
@@ -609,7 +555,10 @@ TOOLS: MathTools = (
         result_type=CspSolutions,
         run=_csp_solutions,
         tags=("csp", "solutions", "relational-structures", "exact"),
-        discovery_terms=("enumerate all CSP solutions", "complete satisfying assignments"),
+        discovery_terms=(
+            "enumerate all CSP solutions",
+            "complete satisfying assignments",
+        ),
         examples=(
             OperationExample(
                 name="two_color_one_edge",

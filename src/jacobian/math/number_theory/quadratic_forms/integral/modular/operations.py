@@ -144,15 +144,23 @@ def reduce_integral_form_modulus(
         raise _domain_error(
             "request_type", "expected a typed modular reduction request"
         )
-    coefficients = _check_integral_form(request.form)
-    modulus_digits = _admit_modulus(request.modulus)
+    return _reduce_integral_form_modulus_value(request.form, request.modulus)
+
+
+def _reduce_integral_form_modulus_value(
+    form: IntegralQuadraticForm, modulus: int
+) -> ModularQuadraticPolynomial:
+    """Reduce canonical values after the owning caller has parsed its request."""
+
+    coefficients = _check_integral_form(form)
+    modulus_digits = _admit_modulus(modulus)
     support = len(coefficients)
     work = sum(_digits(coefficient) + modulus_digits for coefficient in coefficients)
     if work > MAX_MODULAR_REDUCTION_WORK:
         raise _resource_error(
             "work_bound", "coefficient reduction exceeds its digit-work bound"
         )
-    label_size = sum(len(label) for label in request.form.axis)
+    label_size = sum(len(label) for label in form.axis)
     # Bound the complete returned value, including retained source coefficients
     # and the axis/support structures duplicated in source and target.
     source_coefficient_digits = sum(
@@ -170,20 +178,19 @@ def reduce_integral_form_modulus(
             "result_bound", "modular polynomial exceeds its exact-result bound"
         )
 
-    modulus = request.modulus
-    diagonal = tuple(value % modulus for value in request.form.diagonal_coefficients)
+    diagonal = tuple(value % modulus for value in form.diagonal_coefficients)
     cross_terms = tuple(
         ModularQuadraticCrossTerm(
             left=term.left,
             right=term.right,
             coefficient=residue,
         )
-        for term in request.form.cross_terms
+        for term in form.cross_terms
         if (residue := term.coefficient % modulus) != 0
     )
     target = ModularQuadraticPolynomial(
         modulus=modulus,
-        axis=request.form.axis,
+        axis=form.axis,
         diagonal_residues=diagonal,
         cross_terms=cross_terms,
     )

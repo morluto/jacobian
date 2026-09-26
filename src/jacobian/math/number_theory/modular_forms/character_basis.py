@@ -47,6 +47,7 @@ CHARACTER_BASIS_ID: Literal["gamma0-13-even-order6-character-sturm-v1"] = (
 _DIMENSION = 1
 _STURM_PRECISION: Literal[3] = 3  # floor(2 * [SL2(Z):Gamma0(13)] / 12) + 1 = 3
 _MAX_WORK = 50_000_000
+_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 _MAX_ALLOCATION_BYTES = 8 * 1024 * 1024
 _MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
@@ -236,8 +237,6 @@ def modular_character_basis_q_expansions(
     return _character_basis_from_admission(
         space, field, character_request, requested_precision=precision
     )
-    """Construct the exact Sturm-determining q-prefix basis for the admitted space."""
-    return _character_basis_from_admission(space, field, character_request)
 
 
 def _character_basis_from_admission(
@@ -422,7 +421,10 @@ def modular_character_coordinates_equal(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> bool:
     """Compare coordinates in the established one-dimensional character basis."""
-    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+    if (
+        type(left) is not ModularFormCoordinates
+        or type(right) is not ModularFormCoordinates
+    ):
         _domain("character coordinate equality requires canonical coordinate values")
     if left.space != right.space:
         _domain("character coordinate equality requires the identical exact space")
@@ -696,6 +698,221 @@ def _character_root_of_unity(
     return result
 
 
+def _order_six_product_coordinates(
+    left: tuple[Fraction, ...], right: tuple[Fraction, ...]
+) -> tuple[Fraction, Fraction]:
+    """Multiply two Q(zeta_6) values using zeta_6^2 = zeta_6 - 1."""
+    a, b = left
+    c, d = right
+    return a * c - b * d, a * d + b * c + b * d
+
+
+def _order_six_character_hecke_coefficient(
+    coefficients: tuple[RationalCyclotomicElement, ...],
+    character: DirichletCharacter,
+    field: RationalCyclotomicField,
+    index: int,
+    output_index: int,
+) -> RationalCyclotomicElement:
+    """Apply the weight-two divisor formula with admitted exact arithmetic."""
+    result = (Fraction(0), Fraction(0))
+    for divisor in range(1, index + 1):
+        if gcd(output_index, index) % divisor:
+            continue
+        source_index = output_index * index // (divisor * divisor)
+        source = cyclotomic._validate_element(coefficients[source_index])[1]
+        root = cyclotomic._validate_element(
+            _character_root_of_unity(character, divisor, field)
+        )[1]
+        term = _order_six_product_coordinates(source, root)
+        result = tuple(
+            left + divisor * right for left, right in zip(result, term, strict=True)
+        )
+    return _coefficient(field, result)
+
+
+def _rref_character_coordinates_hecke(
+    form: ModularFormCoordinates, index: int
+) -> ModularFormCoordinates:
+    """Apply T_n to a one-dimensional canonical RREF character space.
+
+    The operator is an endomorphism: the exact space and basis identifier are
+    retained. A multidimensional character matrix requires its own admitted
+    matrix result contract and is not inferred from this scalar action.
+    """
+    if type(form) is not ModularFormCoordinates:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="modular_form.character_coordinates_type",
+            message="character Hecke requires a canonical ModularFormCoordinates value",
+        )
+    from jacobian.math.number_theory.modular_forms.character_coordinates import (
+        CHARACTER_RREF_BASIS_ID,
+        _admit_coordinate_space,
+        _admit_coordinate_vector,
+    )
+
+    context = _admit_coordinate_space(form.space)
+    _admit_coordinate_vector(form, context, "form")
+    if form.basis_id != CHARACTER_RREF_BASIS_ID:
+        raise OperationDomainValidationError(
+            location=("form", "basis_id"),
+            code="modular_form.character_hecke_basis",
+            message="the generalized character Hecke action requires the canonical q-Sturm RREF basis",
+        )
+    if type(index) is not int or not 1 <= index <= MAX_CHARACTER_HECKE_INDEX:
+        raise OperationResourceAdmissionError(
+            location=("index",),
+            code="modular_form.character_hecke_index_bound",
+            message=(
+                "character-valued Hecke indices must lie in "
+                f"[1, {MAX_CHARACTER_HECKE_INDEX}]"
+            ),
+        )
+    if gcd(index, context.space.level) != 1:
+        raise OperationDomainValidationError(
+            location=("index",),
+            code="modular_form.character_hecke_coprime_level",
+            message="T_n on a character space currently requires gcd(n, level) = 1",
+        )
+    if context.dimension == 0 or index == 1:
+        return form
+    if context.dimension != 1:
+        raise OperationDomainValidationError(
+            location=("form", "space"),
+            code="modular_form.character_hecke_dimension",
+            message="the generalized character Hecke action currently supports one-dimensional q-Sturm RREF spaces",
+        )
+
+    space, field, character_request = _require_basis_space(context.space)
+    character = space.character
+    if type(character) is not DirichletCharacter:
+        raise RuntimeError("admitted character space lost its exact character")
+    input_digits = max(
+        cyclotomic._validate_element(value)[2] for value in form.coordinates
+    )
+    if not any(
+        coefficient.num for coefficient in form.coordinates[0].coefficients_ascending
+    ):
+        return form
+
+    sturm_precision = _character_sturm_precision(space)
+    source_precision = index * (sturm_precision - 1) + 1
+    max_admitted_index = (
+        MAX_CHARACTER_HECKE_INDEX
+        if sturm_precision == 1
+        else min(
+            MAX_CHARACTER_HECKE_INDEX,
+            (MAX_CHARACTER_BASIS_PRECISION - 1) // (sturm_precision - 1),
+        )
+    )
+    if index > max_admitted_index:
+        raise OperationResourceAdmissionError(
+            location=("index",),
+            code="modular_form.character_hecke_precision_bound",
+            message=(
+                f"this space admits Hecke indices through {max_admitted_index}; "
+                "the source prefix n * (S - 1) + 1 must fit the "
+                f"{MAX_CHARACTER_BASIS_PRECISION}-coefficient basis envelope"
+            ),
+        )
+    divisor_count = sum(index % divisor == 0 for divisor in range(1, index + 1))
+    # PARI's character worker caps each raw power-basis coordinate at four
+    # digits. Dividing one raw vector by its first nonzero Sturm coefficient
+    # has a 30-digit exact inverse bound in degree two. The following budget
+    # includes form scaling, every divisor term, and final eigenvalue scaling.
+    basis_digits = 30
+    scaled_source_digits = input_digits + basis_digits + 2
+    term_digits = scaled_source_digits + len(str(index)) + 4
+    hecke_digits = divisor_count * term_digits + len(str(divisor_count)) + 2
+    result_digits = hecke_digits + input_digits + 2
+    work = (
+        source_precision * field.degree * 24
+        + sturm_precision * index * field.degree * 12
+        + divisor_count * sturm_precision * field.degree * 8
+    )
+    output_bytes = (
+        source_precision * field.degree * (2 * basis_digits + 32)
+        + sturm_precision * field.degree * (2 * hecke_digits + 32)
+        + field.degree * (2 * result_digits + 32)
+        + 2_048
+    )
+    if (
+        source_precision > MAX_CHARACTER_BASIS_PRECISION
+        or result_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        or work > _MAX_WORK
+        or output_bytes > _MAX_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("index",),
+            code="modular_form.character_hecke_admission",
+            message="character Hecke precision, work, coefficient growth, or output exceeds its exact envelope",
+        )
+
+    request_checkpoint("before canonical character Hecke basis expansion")
+    basis = _character_basis_from_admission(
+        space, field, character_request, requested_precision=source_precision
+    )
+    if (
+        len(basis.elements) != 1
+        or basis.basis_id != CHARACTER_RREF_BASIS_ID
+        or basis.precision != source_precision
+    ):
+        raise RuntimeError("canonical RREF basis changed its admitted Hecke parent")
+    basis_coefficients = basis.elements[0].expansion.coefficients
+    if any(
+        cyclotomic._validate_element(value)[2] > basis_digits
+        for value in basis_coefficients
+    ):
+        raise RuntimeError("canonical RREF basis exceeded its admitted Hecke height")
+    pivot = next(
+        (term for term, value in enumerate(basis_coefficients) if not _is_zero(value)),
+        None,
+    )
+    if pivot is None or basis_coefficients[pivot] != _coefficient(
+        field, (Fraction(1), Fraction(0))
+    ):
+        raise RuntimeError("canonical one-dimensional RREF basis has no unit pivot")
+
+    scalar = cyclotomic._validate_element(form.coordinates[0])[1]
+    source_coefficients = tuple(
+        _coefficient(field, _order_six_product_coordinates(scalar, coefficient))
+        for coefficient in (
+            cyclotomic._validate_element(value)[1] for value in basis_coefficients
+        )
+    )
+    transformed = tuple(
+        _order_six_character_hecke_coefficient(
+            source_coefficients, character, field, index, output_index
+        )
+        for output_index in range(sturm_precision)
+    )
+    eigenvalue = transformed[pivot]
+    eigenvalue_coordinates = cyclotomic._validate_element(eigenvalue)[1]
+    if any(
+        transformed[output_index]
+        != _coefficient(
+            field,
+            _order_six_product_coordinates(
+                eigenvalue_coordinates,
+                cyclotomic._validate_element(basis_coefficients[output_index])[1],
+            ),
+        )
+        for output_index in range(sturm_precision)
+    ):
+        raise RuntimeError("Hecke image failed exact RREF Sturm reconstruction")
+
+    # The source was scaled before applying T_n, so the pivot already equals
+    # the complete output coordinate c*lambda (not merely lambda).
+    result_coordinate = eigenvalue
+    request_checkpoint("after canonical character Hecke reconstruction")
+    return ModularFormCoordinates(
+        space=space,
+        basis_id=CHARACTER_RREF_BASIS_ID,
+        coordinates=(result_coordinate,),
+    )
+
+
 def _scale_cyclotomic(
     value: RationalCyclotomicElement, scalar: int
 ) -> RationalCyclotomicElement:
@@ -728,12 +945,22 @@ def _hecke_character_coefficient(
 def modular_character_coordinates_hecke(
     form: ModularFormCoordinates, index: int
 ) -> ModularFormCoordinates:
-    """Apply ``T_n`` to the admitted one-dimensional ``S_2(Gamma0(13), chi)``.
+    """Apply ``T_n`` within an admitted exact character space.
 
-    The image is reconstructed in the same exact cyclotomic coordinate parent
-    and checked through its Sturm bound. The private PARI prefix extends to
-    ``n * B + 1`` terms, where this space has ``B = 2``.
+    The legacy order-six level-13 cusp spaces and one-dimensional generalized
+    q-Sturm RREF spaces are supported. ``T_n`` is taken at the represented
+    level, preserves its exact character space when ``gcd(n, level) = 1``, and
+    returns coordinates with the identical space and basis identifier.
     """
+    from jacobian.math.number_theory.modular_forms.character_coordinates import (
+        CHARACTER_RREF_BASIS_ID,
+    )
+
+    if (
+        type(form) is ModularFormCoordinates
+        and form.basis_id == CHARACTER_RREF_BASIS_ID
+    ):
+        return _rref_character_coordinates_hecke(form, index)
     admitted = _admit_character_form(form)
     if type(index) is not int or not 1 <= index <= MAX_CHARACTER_HECKE_INDEX:
         raise OperationResourceAdmissionError(
@@ -886,8 +1113,7 @@ def modular_character_hecke_matrix(
         coordinates=(one,),
     )
     # The delegated coordinate operation pre-admits n*B+1 source precision,
-    # exact coefficient height, work, and output before entering the PARI
-    # basis worker or reconstructing the Hecke image.
+    # coefficient height, work, and output before entering the PARI basis worker.
     image = modular_character_coordinates_hecke(normalized, index)
     image_scalar = image.coordinates[0]
     if type(image_scalar) is not RationalCyclotomicElement:
@@ -900,26 +1126,11 @@ def modular_character_hecke_matrix(
     )
 
 
-def modular_character_coordinates_equal(
-    left: ModularFormCoordinates, right: ModularFormCoordinates
-) -> bool:
-    """Compare the canonical scalar coordinates in the legacy character slice."""
-    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
-        _domain("character coordinate equality requires canonical coordinate values")
-    if left.space != right.space:
-        _domain("character coordinate equality requires the identical exact space")
-    admitted_space = _require_space(left.space)
-    _, _, left_value, _ = _admit_character_form(left, admitted_space)
-    _, _, right_value, _ = _admit_character_form(right, admitted_space)
-    request_checkpoint("during legacy character coordinate equality")
-    return left_value == right_value
-
-
 __all__ = [
     "CHARACTER_BASIS_ID",
     "modular_character_basis_q_expansions",
-    "modular_character_coordinates_hecke",
     "modular_character_coordinates_equal",
+    "modular_character_coordinates_hecke",
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
     "modular_character_hecke_matrix",

@@ -7,6 +7,7 @@ import math
 import sys
 import time
 from fractions import Fraction
+from math import gcd, lcm
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Literal
@@ -239,7 +240,6 @@ def _pari_character_request(space: ModularFormSpace) -> dict[str, object]:
             code="modular_form.pari_character_coordinates",
             message="PARI character coordinates must lie on every complete dual-group axis",
         )
-    from math import gcd, lcm
 
     character_order = 1
     for coordinate, order in zip(
@@ -566,6 +566,25 @@ def pari_character_basis(
                 coordinates.append(coefficient)
             terms.append(tuple(coordinates))
         vectors.append(tuple(terms))
+    character = space.character
+    if type(character) is DirichletCharacter:
+        character_order = lcm(
+            *(
+                order // gcd(coordinate, order)
+                for coordinate, order in zip(
+                    character.coordinates, character.group.generator_orders, strict=True
+                )
+            )
+        )
+        if character_order == 3:
+            # PARI uses t^2+t+1; the declared field uses x^2-x+1, with t=x-1.
+            vectors = [
+                tuple(
+                    (coefficient[0] - coefficient[1], coefficient[1])
+                    for coefficient in vector
+                )
+                for vector in vectors
+            ]
     return tuple(vectors)
 
 

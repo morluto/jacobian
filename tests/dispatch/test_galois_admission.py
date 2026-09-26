@@ -17,10 +17,12 @@ _S6 = {
 }
 
 
-def test_catalog_dispatch_accepts_the_degree_six_full_symmetric_group() -> None:
-    result = invoke_operation(
-        "number_field.polynomial.splitting_field.compute", _S6, Catalog.open()
-    )
+def test_catalog_dispatch_rejects_degree_six_splitting_field() -> None:
+    import pytest
 
-    assert result.output["field"]["degree"] == 720
-    assert len(result.output["field"]["basis_labels"]) == 720
+    from jacobian.dispatch import OperationRequestValidationError
+
+    with pytest.raises(OperationRequestValidationError):
+        invoke_operation(
+            "number_field.polynomial.splitting_field.compute", _S6, Catalog.open()
+        )

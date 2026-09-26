@@ -81,7 +81,7 @@ class TestCompleteConstructor:
             }
             assert set(members) == expected
 
-    def test_result_reparses(self) -> None:
+    def test_serialized_result_is_structural_and_verifiable(self) -> None:
         result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
         reparsed = CliqueCandidateHypergraphResult.model_validate(
             result.model_dump(mode="json")
@@ -89,8 +89,6 @@ class TestCompleteConstructor:
         assert reparsed == result
         assert verify_clique_candidate_hypergraph(reparsed)
 
-    def test_serialized_result_is_structural_and_verifiable(self) -> None:
-        result = construct_all_clique_candidate_hypergraph(_graph(BOWTIE))
         payload = result.model_dump(mode="json")
 
         payload["hypergraph"]["edges"][0][1] = []

@@ -466,7 +466,7 @@ def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
     assert result.filtration_preserving is True
 
 
-def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> None:
+def test_filtered_chain_map_rejects_non_nested_filtration() -> None:
     complex_ = ChainComplexValue(
         coefficient_ring=CoefficientRing.PRIME_FIELD,
         prime=2,
@@ -499,6 +499,34 @@ def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> No
                 ),
                 source_filtration=malformed,
                 target_filtration=malformed,
+            )
+        )
+
+
+def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
+    complex_ = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=2,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 1),
+        differential_matrices=(((1,),),),
+    )
+    zero = FilteredSubspace(vectors=())
+    filtration = (
+        FiltrationLevel(subspaces=(zero, zero)),
+        FiltrationLevel(subspaces=(zero, zero)),
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="top filtration level must span"
+    ):
+        filtered_map(
+            FilteredChainMapRequest(
+                source=complex_,
+                source_filtration=filtration,
+                target=complex_,
+                target_filtration=filtration,
+                maps=(((1,),), ((1,),)),
             )
         )
 

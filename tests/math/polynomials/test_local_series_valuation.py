@@ -108,16 +108,16 @@ def test_defining_invariant_leading_term_reconstruction() -> None:
     assert result.zero_order == max(result.valuation, 0)
 
 
-def test_native_and_catalog_results_agree() -> None:
+def test_native_and_helper_results_agree() -> None:
     series = _window((_rational(2), _rational(0), _rational(1, 3)), valuation_lower=-1)
 
     native = laurent_valuation_profile(series)
-    catalog = compute_valuation_profile(ValuationProfileRequest(series=series))
+    helper = compute_valuation_profile(ValuationProfileRequest(series=series))
 
-    assert catalog == native
-    assert catalog.series == series
+    assert helper == native
+    assert helper.series == series
     assert (
-        ValuationProfileResult.model_validate_json(catalog.model_dump_json()) == catalog
+        ValuationProfileResult.model_validate_json(helper.model_dump_json()) == helper
     )
 
 

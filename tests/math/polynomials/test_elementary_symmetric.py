@@ -1,6 +1,8 @@
 """Canonical elementary symmetric families."""
 
 from fractions import Fraction
+from itertools import combinations
+from math import comb
 
 import pytest
 from pydantic import ValidationError
@@ -27,16 +29,6 @@ def coefficients(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fracti
         term.exponents: term.coefficient.as_fraction()
         for term in polynomial.polynomial.terms
     }
-
-
-def test_family_through_degree_two() -> None:
-    result = elementary_symmetric_family(
-        ("x", "y", "z"),
-        2,
-    )
-    assert support(result.polynomials[0]) == ((0, 0, 0),)
-    assert support(result.polynomials[1]) == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
-    assert support(result.polynomials[2]) == ((1, 1, 0), (1, 0, 1), (0, 1, 1))
 
 
 def test_empty_axis_e_zero_is_a_canonical_constant() -> None:
@@ -119,15 +111,21 @@ def test_vieta_reconstruction_matches_product_of_linear_factors() -> None:
 
 
 def test_complete_eighth_axis_family_stays_within_exact_carrier() -> None:
+    variables = tuple(f"x{index}" for index in range(8))
     result = elementary_symmetric_family(
-        tuple(f"x{index}" for index in range(8)),
+        variables,
         8,
     )
     assert len(result.polynomials) == 9
-    assert (
-        sum(len(polynomial.polynomial.terms) for polynomial in result.polynomials)
-        == 256
-    )
+    for degree, polynomial in enumerate(result.polynomials):
+        expected_support = {
+            tuple(int(index in subset) for index in range(len(variables)))
+            for subset in combinations(range(len(variables)), degree)
+        }
+        actual_coefficients = coefficients(polynomial)
+        assert len(actual_coefficients) == comb(len(variables), degree)
+        assert set(actual_coefficients) == expected_support
+        assert set(actual_coefficients.values()) == {Fraction(1)}
 
 
 def test_catalog_declaration_uses_requested_operation_id_and_round_trips() -> None:

@@ -39,16 +39,20 @@ path is removed rather than retained as a forwarding package, and operation IDs
 and wire schemas remain unchanged unless their mathematical contract changes
 independently.
 
-Native values are mathematical values rather than wire envelopes. Native and
+Native values are mathematical values rather than wire envelopes. The
+[architecture responsibility map](../explanation/architecture.md#library-publication-and-delivery)
+distinguishes values, operation arguments, wire requests, and execution context.
+The native API can be broader than the published catalog: exporting a useful
+function does not require publishing another math tool. Native and
 MCP calls use the same domain-owned request admission, kernel path, canonical
 result construction, and typed outcome semantics. Most native functions simply
 normalize and validate their input, perform the computation, and return a
 canonical value. An operation uses a distinct execution plan only when
 admission derives information that its kernel or result construction needs to
 reuse. The MCP path adds only wire parsing and the final transport projection;
-native code must not
-inherit MCP byte/depth/echo limits unless those limits are part of the
-mathematical operation itself.
+native code must not inherit MCP byte/depth/echo policy. Intrinsic structural
+and computational limits still apply independently of the calling surface;
+sharing a numeric threshold does not make a transport limit mathematical.
 
 This parity includes bounded execution. Deadlines, cancellation checkpoints,
 deterministic work accounting, worker containment, and backend-failure
@@ -104,11 +108,13 @@ values, meaningful refinements, representation transforms, and changes of
 parent. It also defines when conversions belong only in the native API and
 what serialization does and does not establish.
 
-Each mathematical value has one owner-defined public type, normally in the
-domain's `values.py`. Producers return that type and consumers accept the same
-type directly. Operation-specific request and result models may contain a
-canonical value alongside genuine operation parameters, but must not reproduce
-it as a parallel set of fields.
+Reuse the owner-defined public type for the same mathematical value and
+representation, normally from the domain's `values.py`. Producers return that
+type and consumers accept it directly. Distinct storage or basis variants need
+explicit semantics and conversions, not operation-specific copies of the same
+fields. Request and result models may contain a canonical value alongside
+genuine operation parameters, but must not reproduce it as a parallel set of
+fields.
 
 Finite probability uses this same rule. `FiniteJointTable`,
 `MutualInformationResult`, and the asymmetric local-lemma witness and result

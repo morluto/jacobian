@@ -56,7 +56,7 @@ def _optimum_worker_stdout_limit(set_system: FiniteSetSystem) -> int:
 def compute_optimal_discrepancy_isolated(
     set_system: FiniteSetSystem,
 ) -> DiscrepancyOptimumResult:
-    """Run the complete HiGHS/Z3 transaction under one request deadline."""
+    """Run exact enumeration or the complete HiGHS/Z3 solve under one deadline."""
 
     execution = current_request_execution()
     if execution is None:

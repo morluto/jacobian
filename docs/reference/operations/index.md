@@ -35,3 +35,5 @@ that need more context than an operation card:
 - [Free associative algebra homomorphism application](free-algebra-homomorphism-apply.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
+- [Free-algebra factor-avoidance automata](free-algebra-factor-avoidance.md)
+- [Free-algebra ideal components and membership](free-algebra-ideal-components.md)

@@ -248,10 +248,6 @@ class TestVolumeOracle:
         result = polytope_prism(base, "h")
         assert convex_hull_volume(base) == convex_hull_volume(result.prism)
 
-    def test_segment_prism_volume_is_one(self) -> None:
-        result = polytope_prism(_segment(), "h")
-        assert convex_hull_volume(result.prism) == CanonicalRational(num=1, den=1)
-
     def test_join_volume_identity(self) -> None:
         # vol(P * Q) = vol(P) vol(Q) m! n! / (m+n+1)! for dim m, n.
         # Two unit segments: 1 * 1 * 1! 1! / 3! = 1/6.

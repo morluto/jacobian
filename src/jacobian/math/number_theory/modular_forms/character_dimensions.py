@@ -5,6 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from math import gcd
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -21,11 +22,14 @@ from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.cyclotomic import _reduce
 
 
-def _element(field: RationalCyclotomicField, coordinates: tuple[Fraction, ...]):
+def _element(
+    field: RationalCyclotomicField, coordinates: tuple[Fraction, ...]
+) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=tuple(
-            {"num": item.numerator, "den": item.denominator} for item in coordinates
+            CanonicalRational(num=item.numerator, den=item.denominator)
+            for item in coordinates
         ),
     )
 
@@ -121,9 +125,7 @@ def _nu_infinity(level: int, conductor: int) -> int:
 
 
 def _integral_rational_part(value: RationalCyclotomicElement) -> int:
-    rational = tuple(
-        Fraction(int(item.num), int(item.den)) for item in value.coefficients_ascending
-    )
+    rational = tuple(item.as_fraction() for item in value.coefficients_ascending)
     if any(rational[1:]) or rational[0].denominator != 1:
         raise RuntimeError("Cohen--Oesterle dimension expression is not integral")
     return rational[0].numerator

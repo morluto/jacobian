@@ -17,8 +17,6 @@ from jacobian.math.number_theory.modular_forms._models import (
     ModularFormCoordinatesV2Request,
     ModularFormCoordinatesV3Request,
     ModularFormCoordinatesVDegeneracyRequest,
-    ModularFormEqualityRequest,
-    ModularFormEqualityResult,
     ModularFormFramedHeckeMatrixRequest,
     ModularFormFramedToCanonicalRequest,
     ModularFormHeckeMatrixRequest,
@@ -31,7 +29,6 @@ from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,
     modular_form_coordinates_atkin_lehner,
-    modular_form_coordinates_equal,
     modular_form_coordinates_from_frame,
     modular_form_coordinates_hecke,
     modular_form_coordinates_product,
@@ -50,6 +47,14 @@ from jacobian.math.number_theory.modular_forms.basis import (
 )
 from jacobian.math.number_theory.modular_forms.character_basis_tools import (
     TOOLS as CHARACTER_BASIS_TOOLS,
+)
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
+    modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
+)
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models import (
+    ModularFormCoordinatesAddRequest,
+    ModularFormCoordinatesScalarMultiplyRequest,
 )
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
     TOOLS as FIELD_COORDINATE_TOOLS,
@@ -91,6 +96,18 @@ def compute_coordinate_q_expansion(
     return modular_form_coordinates_q_expansion(request.form, request.precision)
 
 
+def compute_coordinate_addition(
+    request: ModularFormCoordinatesAddRequest,
+) -> ModularFormCoordinates:
+    return modular_form_coordinates_add(request.left, request.right)
+
+
+def compute_coordinate_scalar_multiplication(
+    request: ModularFormCoordinatesScalarMultiplyRequest,
+) -> ModularFormCoordinates:
+    return modular_form_coordinates_scalar_multiply(request.form, request.scalar)
+
+
 def multiply_coordinate_forms(
     request: ModularFormCoordinatesProductRequest,
 ) -> ModularFormCoordinates:
@@ -101,14 +118,6 @@ def transport_coordinates(
     request: ModularFormCoordinatesTransportRequest,
 ) -> ModularFormCoordinates:
     return modular_form_coordinates_transport(request.form, request.target_space)
-
-
-def decide_coordinate_equality(
-    request: ModularFormEqualityRequest,
-) -> ModularFormEqualityResult:
-    return ModularFormEqualityResult(
-        equal=modular_form_coordinates_equal(request.left, request.right)
-    )
 
 
 def compute_basis_frame(
@@ -198,47 +207,6 @@ def compute_operator_image_prefix(
 
 
 TOOLS: MathTools = (
-    MathTool(
-        operation_id="modular_form.equal.check",
-        title="Check global equality of modular forms",
-        description=(
-            "Decide exact equality of two globally represented forms. In one exact "
-            "space, compare admitted canonical coordinates; across supported "
-            "rational trivial-character spaces of equal weight, compare through "
-            "the Sturm bound of their common Gamma0(lcm(levels)) ambient M space. "
-            "The represented cyclotomic character space also uses its exact Sturm "
-            "prefix; cyclotomic comparisons require the identical space and basis. "
-            "Finite q-prefixes are not accepted as forms."
-        ),
-        request_type=ModularFormEqualityRequest,
-        result_type=ModularFormEqualityResult,
-        run=decide_coordinate_equality,
-        tags=("modular-forms", "equality", "coordinates", "exact"),
-        examples=(
-            OperationExample(
-                name="equal_weight_four_forms",
-                description="The represented forms 2 A2^2 + 3 E4 are equal.",
-                input={
-                    "left": {
-                        "space": {"level": 2, "weight": 4, "kind": "M"},
-                        "basis_id": "gamma0-two-weight-2-4-monomials-v1",
-                        "coordinates": [
-                            {"num": "2", "den": "1"},
-                            {"num": "3", "den": "1"},
-                        ],
-                    },
-                    "right": {
-                        "space": {"level": 2, "weight": 4, "kind": "M"},
-                        "basis_id": "gamma0-two-weight-2-4-monomials-v1",
-                        "coordinates": [
-                            {"num": "2", "den": "1"},
-                            {"num": "3", "den": "1"},
-                        ],
-                    },
-                },
-            ),
-        ),
-    ),
     MathTool(
         operation_id="modular_form.coordinates.transport.compute",
         title="Transport modular-form coordinates into a nested Gamma0 space",
@@ -594,6 +562,75 @@ TOOLS: MathTools = (
                         },
                         "basis_id": "level-one-e4-e6-monomials-v1",
                         "coordinates": [{"num": "1", "den": "1"}],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.coordinates.scalar_multiply.compute",
+        title="Scale exact modular-form coordinates",
+        description=(
+            "Multiply rational coordinates by an exact rational scalar while "
+            "preserving their complete modular-space parent and canonical basis."
+        ),
+        request_type=ModularFormCoordinatesScalarMultiplyRequest,
+        result_type=ModularFormCoordinates,
+        run=compute_coordinate_scalar_multiplication,
+        tags=("modular-forms", "coordinates", "scalar-action", "exact"),
+        examples=(
+            OperationExample(
+                name="scale_level_one_weight_twelve_coordinates",
+                description="Scale E4^3 by two in the canonical M_12 basis.",
+                input={
+                    "form": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "scalar": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.coordinates.add.compute",
+        title="Add exact modular-form coordinates",
+        description=(
+            "Add rational coordinate vectors in the identical exact modular "
+            "space and canonical basis. The complete space parent and ordered "
+            "basis coordinates are preserved in the result."
+        ),
+        request_type=ModularFormCoordinatesAddRequest,
+        result_type=ModularFormCoordinates,
+        run=compute_coordinate_addition,
+        tags=("modular-forms", "coordinates", "addition", "exact"),
+        examples=(
+            OperationExample(
+                name="add_level_one_weight_twelve_coordinates",
+                description=(
+                    "Add E4^3 and one third of E6^2 in the canonical basis of "
+                    "M_12(SL2Z)."
+                ),
+                input={
+                    "left": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "right": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "3"},
+                        ],
                     },
                 },
             ),

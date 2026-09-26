@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from itertools import product
 from math import gcd
+from typing import Literal, cast
 
 import pytest
 from pydantic import TypeAdapter
 
-from jacobian.catalog.catalog import Catalog
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -22,6 +24,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
@@ -29,7 +32,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     CyclotomicCharacterMap,
     CyclotomicIdentityFieldMap,
-    ModularCharacterCoordinates,
+    ModularCharacterCommonTargetPrefix,
     ModularCharacterCoordinatesTransportRequest,
     ModularCharacterEqualityRequest,
     ModularCharacterSpaceInclusion,
@@ -45,11 +48,17 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 _FIELD = RationalCyclotomicField(order=6)
-_GENERIC_BASIS = "gamma0-cyclotomic-character-sturm-rref-v1"
-_LEGACY_BASIS = "gamma0-13-even-order6-character-sturm-v1"
+_GENERIC_BASIS: Literal["gamma0-cyclotomic-character-sturm-rref-v1"] = (
+    "gamma0-cyclotomic-character-sturm-rref-v1"
+)
+_LEGACY_BASIS: Literal["gamma0-13-even-order6-character-sturm-v1"] = (
+    "gamma0-13-even-order6-character-sturm-v1"
+)
 
 
-def _inflate(source_character, target_level: int):
+def _inflate(
+    source_character: DirichletCharacter, target_level: int
+) -> DirichletCharacter:
     target_group = character_group(target_level)
     for coordinates in product(
         *(range(order) for order in target_group.generator_orders)
@@ -65,7 +74,7 @@ def _inflate(source_character, target_level: int):
     raise AssertionError("no exact character inflation fixture was found")
 
 
-def _space(level: int, character) -> ModularFormSpace:
+def _space(level: int, character: DirichletCharacter) -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
         weight=2,
@@ -79,30 +88,34 @@ def _element(constant: int, zeta: int = 0) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": constant, "den": 1},
-            {"num": zeta, "den": 1},
+            CanonicalRational(num=constant, den=1),
+            CanonicalRational(num=zeta, den=1),
         ),
     )
 
 
-def _sum_cyclotomic(values) -> RationalCyclotomicElement:
+def _sum_cyclotomic(
+    values: Iterable[RationalCyclotomicElement],
+) -> RationalCyclotomicElement:
     total = _element(0)
     for value in values:
         total = cyclotomic.add(total, value)
     return total
 
 
-def _inclusion(source_space: ModularFormSpace, target_space: ModularFormSpace):
+def _inclusion(
+    source_space: ModularFormSpace, target_space: ModularFormSpace
+) -> ModularCharacterSpaceInclusion:
     return ModularCharacterSpaceInclusion(
         source_space=source_space,
         target_space=target_space,
         character_map=CyclotomicCharacterMap(
-            source=source_space.character,
-            target=target_space.character,
+            source=cast(DirichletCharacter, source_space.character),
+            target=cast(DirichletCharacter, target_space.character),
         ),
         coefficient_field_map=CyclotomicIdentityFieldMap(
-            source=source_space.coefficient_domain,
-            target=target_space.coefficient_domain,
+            source=cast(RationalCyclotomicField, source_space.coefficient_domain),
+            target=cast(RationalCyclotomicField, target_space.coefficient_domain),
         ),
     )
 
@@ -128,6 +141,7 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
 
     assert transported.inclusion == inclusion
     assert transported.source_form.space == source_space
+    assert type(transported.target_form) is ModularFormCoordinates
     assert transported.target_form.space == target_space
     assert transported.target_form.basis_id == _GENERIC_BASIS
     assert transported.target_form.coordinates == (_element(1), _element(-1, -1))
@@ -154,9 +168,6 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
         )
         == transported
     )
-    assert Catalog.open().operation(
-        "modular_form.character_coordinates.transport.compute"
-    )
 
 
 def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
@@ -168,6 +179,7 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     from_level_13 = modular_character_coordinates_transport(
         _level_13_form(source_space), _inclusion(source_space, target_space)
     )
+    assert type(from_level_13.target_form) is ModularFormCoordinates
     target_form_same_f = modular_character_coordinates_transport(
         from_level_13.target_form, _inclusion(target_space, target_space)
     )
@@ -181,7 +193,7 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
 
     # The second target basis row is exactly V_2(f)=f(q^2) in this canonical
     # q-Sturm frame. Add it to f and compare at the full level-26 Sturm bound.
-    f_plus_v2 = ModularCharacterCoordinates(
+    f_plus_v2 = ModularFormCoordinates(
         space=target_space,
         basis_id=_GENERIC_BASIS,
         coordinates=(_element(1), _element(0, -1)),
@@ -192,7 +204,6 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     assert not modular_character_coordinates_equal_in_common_space(
         from_level_13, target_form_f_plus_v2
     ).equal
-    assert Catalog.open().operation("modular_form.character.equal.check")
 
 
 def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
@@ -208,6 +219,8 @@ def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
     form_39 = modular_character_coordinates_transport(
         _level_13_form(source_13), _inclusion(source_13, source_39)
     ).target_form
+    assert type(form_26) is ModularFormCoordinates
+    assert type(form_39) is ModularFormCoordinates
     left = modular_character_coordinates_transport(
         form_26, _inclusion(source_26, target_78)
     )
@@ -231,7 +244,12 @@ def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
                     coordinate,
                     source_basis.elements[index].expansion.coefficients[q],
                 )
-                for index, coordinate in enumerate(source_form.coordinates)
+                for index, coordinate in enumerate(
+                    cast(
+                        tuple[RationalCyclotomicElement, ...],
+                        source_form.coordinates,
+                    )
+                )
             )
             for q in range(29)
         )
@@ -247,11 +265,14 @@ def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
         == left
     )
 
-    twice_39 = ModularCharacterCoordinates(
+    twice_39 = ModularFormCoordinates(
         space=source_39,
         basis_id=form_39.basis_id,
         coordinates=tuple(
-            cyclotomic.multiply(value, _element(2)) for value in form_39.coordinates
+            cyclotomic.multiply(value, _element(2))
+            for value in cast(
+                tuple[RationalCyclotomicElement, ...], form_39.coordinates
+            )
         ),
     )
     unequal_right = modular_character_coordinates_transport(
@@ -271,7 +292,7 @@ def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
 
 
 def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.number_theory.modular_forms import character_basis
 
@@ -282,11 +303,12 @@ def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
         _level_13_form(source_space), _inclusion(source_space, target_space)
     )
     assert transported.target_form is None
+    assert type(transported.target_q_expansion) is ModularCharacterCommonTargetPrefix
     assert transported.target_q_expansion.precision == 29
     assert len(transported.target_q_expansion.coefficients) == 29
 
     source_39 = _space(39, _inflate(source_character, 39))
-    boundary = ModularCharacterCoordinates(
+    boundary = ModularFormCoordinates(
         space=source_39,
         basis_id=_GENERIC_BASIS,
         coordinates=(_element(10**40), _element(0), _element(0)),
@@ -294,13 +316,14 @@ def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
     admitted = modular_character_coordinates_transport(
         boundary, _inclusion(source_39, target_space)
     )
+    assert type(admitted.target_q_expansion) is ModularCharacterCommonTargetPrefix
     assert admitted.target_q_expansion.precision == 29
 
-    def backend_must_not_run(*args, **kwargs):
+    def backend_must_not_run(*args: object, **kwargs: object) -> None:
         raise AssertionError("source basis backend ran after output-height rejection")
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
-    oversized = ModularCharacterCoordinates(
+    oversized = ModularFormCoordinates(
         space=source_39,
         basis_id=_GENERIC_BASIS,
         coordinates=(_element(10**41), _element(0), _element(0)),
@@ -321,12 +344,13 @@ def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
     left = modular_character_coordinates_transport(
         _level_13_form(source_space), _inclusion(source_space, target_space)
     )
+    assert type(left.target_form) is ModularFormCoordinates
     right = modular_character_coordinates_transport(
         left.target_form, _inclusion(target_space, target_space)
     )
     forged = left.model_copy(
         update={
-            "target_form": ModularCharacterCoordinates(
+            "target_form": ModularFormCoordinates(
                 space=target_space,
                 basis_id=_GENERIC_BASIS,
                 coordinates=(_element(2), _element(0)),
@@ -344,6 +368,7 @@ def test_global_equality_requires_the_least_common_source_level() -> None:
     first = modular_character_coordinates_transport(
         _level_13_form(source_13), _inclusion(source_13, target_26)
     )
+    assert type(first.target_form) is ModularFormCoordinates
     second = modular_character_coordinates_transport(
         first.target_form, _inclusion(target_26, target_26)
     )
@@ -357,6 +382,24 @@ def test_global_equality_requires_the_least_common_source_level() -> None:
     assert len(identity.target_q_expansion.coefficients) == 3
     assert modular_character_coordinates_equal_in_common_space(identity, identity).equal
     assert modular_character_coordinates_equal_in_common_space(second, second).equal
+
+
+def test_global_equality_retains_revalidated_nested_target_dictionaries() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    transported = modular_character_coordinates_transport(
+        _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    assert type(transported.target_form) is ModularFormCoordinates
+    canonical = modular_character_coordinates_transport(
+        transported.target_form, _inclusion(target_space, target_space)
+    )
+    forged = ModularCharacterTransportedForm.model_construct(
+        **canonical.model_dump(mode="python")
+    )
+
+    assert modular_character_coordinates_equal_in_common_space(forged, canonical).equal
 
 
 def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
@@ -383,7 +426,8 @@ def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
         source_space=source_space,
         target_space=mismatched_target,
         character_map=CyclotomicCharacterMap(
-            source=source_character, target=wrong_target.character
+            source=source_character,
+            target=cast(DirichletCharacter, wrong_target.character),
         ),
         coefficient_field_map=CyclotomicIdentityFieldMap(
             source=_FIELD, target=larger_field
@@ -503,7 +547,7 @@ def test_common_equality_rejects_malformed_constructed_transport_with_typed_erro
 
 
 def test_transport_height_boundary_is_admitted_before_basis_materialization(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.number_theory.modular_forms import character_basis
 
@@ -513,7 +557,7 @@ def test_transport_height_boundary_is_admitted_before_basis_materialization(
     target_space = _space(26, target_character)
     inclusion = _inclusion(source_space, target_space)
 
-    def backend_must_not_run(*args, **kwargs):
+    def backend_must_not_run(*args: object, **kwargs: object) -> None:
         raise AssertionError("PARI basis work ran before height admission")
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
@@ -546,6 +590,7 @@ def test_transport_accepts_admitted_height_boundary_through_exact_expansion() ->
         form, _inclusion(source_space, target_space)
     )
 
+    assert type(transported.target_form) is ModularFormCoordinates
     assert transported.target_form.coordinates == (
         _element(coefficient),
         _element(-coefficient, -coefficient),

@@ -1,6 +1,22 @@
 """Public declaration of exact bounded character-valued basis construction."""
 
+import json
+from itertools import product
+from math import gcd
+from typing import cast
+
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
+from jacobian.math.matrices.cyclic_linear._models import (
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+)
+from jacobian.math.number_theory.characters.operations import (
+    character_group,
+    dirichlet_character,
+    dirichlet_character_value,
+)
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
     modular_character_coordinates_hecke,
@@ -9,6 +25,8 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    CyclotomicCharacterMap,
+    CyclotomicIdentityFieldMap,
     ModularCharacterBasis,
     ModularCharacterBasisRequest,
     ModularCharacterCoordinatesProductRequest,
@@ -20,6 +38,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeMatrixRequest,
     ModularCharacterHeckeRequest,
     ModularCharacterQExpansion,
+    ModularCharacterSpaceInclusion,
     ModularCharacterTransportedForm,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
@@ -29,6 +48,7 @@ from jacobian.math.number_theory.modular_forms.character_transport import (
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormFieldQExpansion,
+    ModularFormSpace,
 )
 
 
@@ -128,6 +148,100 @@ def _character_form_example(coordinate: int = 2) -> dict[str, object]:
     }
 
 
+def _transport_example_values() -> tuple[
+    ModularFormCoordinates,
+    ModularFormSpace,
+    ModularCharacterSpaceInclusion,
+]:
+    source_form = ModularFormCoordinates.model_validate_json(
+        json.dumps(_character_form_example(2))
+    )
+    source_character = cast(DirichletCharacter, source_form.space.character)
+    target_group = character_group(26)
+    target_character = None
+    for coordinates in product(
+        *(range(order) for order in target_group.generator_orders)
+    ):
+        candidate = dirichlet_character(target_group, coordinates)
+        if all(
+            dirichlet_character_value(candidate, residue).value
+            == dirichlet_character_value(source_character, residue).value
+            for residue in range(26)
+            if gcd(residue, 26) == 1
+        ):
+            target_character = candidate
+            break
+    if target_character is None:
+        raise RuntimeError("the documented character has no level-26 inflation")
+    target_space = source_form.space.model_copy(
+        update={"level": 26, "character": target_character}
+    )
+    inclusion = ModularCharacterSpaceInclusion(
+        source_space=source_form.space,
+        target_space=target_space,
+        character_map=CyclotomicCharacterMap(
+            source=source_character, target=target_character
+        ),
+        coefficient_field_map=CyclotomicIdentityFieldMap(
+            source=cast(RationalCyclotomicField, source_form.space.coefficient_domain),
+            target=cast(RationalCyclotomicField, target_space.coefficient_domain),
+        ),
+    )
+    return source_form, target_space, inclusion
+
+
+def _transport_example() -> dict[str, object]:
+    form, _target, inclusion = _transport_example_values()
+    return {
+        "form": form.model_dump(mode="json"),
+        "inclusion": inclusion.model_dump(mode="json"),
+    }
+
+
+def _equality_example() -> dict[str, object]:
+    form, target_space, inclusion = _transport_example_values()
+    field = cast(RationalCyclotomicField, target_space.coefficient_domain)
+
+    def element(real: int, zeta: int = 0) -> RationalCyclotomicElement:
+        return RationalCyclotomicElement(
+            field=field,
+            coefficients_ascending=(
+                CanonicalRational(num=real, den=1),
+                CanonicalRational(num=zeta, den=1),
+            ),
+        )
+
+    coordinates = ModularFormCoordinates(
+        space=target_space,
+        basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
+        coordinates=(element(1), element(-1, -1)),
+    )
+    q_coefficients = tuple(
+        element(real, zeta)
+        for real, zeta in (
+            (0, 0),
+            (1, 0),
+            (-1, -1),
+            (-2, 2),
+            (0, 1),
+            (1, -2),
+            (4, -2),
+            (0, 0),
+        )
+    )
+    transported = ModularCharacterTransportedForm(
+        source_form=form,
+        inclusion=inclusion,
+        target_form=coordinates,
+        target_q_expansion=ModularCharacterQExpansion(
+            space=target_space,
+            basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
+            coefficients=q_coefficients,
+        ),
+    ).model_dump(mode="json")
+    return {"left": transported, "right": transported}
+
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="modular_form.character_coordinates.transport.compute",
@@ -146,6 +260,16 @@ TOOLS: MathTools = (
         result_type=ModularCharacterTransportedForm,
         run=_transport,
         tags=("modular-forms", "characters", "transport", "exact"),
+        examples=(
+            OperationExample(
+                name="inflate_level13_character_form_to_level26",
+                description=(
+                    "Transport the normalized level-13 order-six character form "
+                    "through its explicit level-26 inflation."
+                ),
+                input=_transport_example(),
+            ),
+        ),
     ),
     MathTool(
         operation_id="modular_form.character.equal.check",
@@ -163,6 +287,16 @@ TOOLS: MathTools = (
         result_type=ModularCharacterEqualityResult,
         run=_global_equal,
         tags=("modular-forms", "characters", "equality", "exact"),
+        examples=(
+            OperationExample(
+                name="compare_two_representations_of_one_character_form",
+                description=(
+                    "Check equality after explicitly transporting the same "
+                    "level-13 form into one level-26 character space."
+                ),
+                input=_equality_example(),
+            ),
+        ),
     ),
     MathTool(
         operation_id="modular_form.character_hecke_matrix.compute",

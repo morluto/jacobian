@@ -5,7 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd, lcm
+from typing import cast
 
+from jacobian._exact import canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -30,8 +32,8 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     _require_basis_space,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    ModularCharacterBasis,
     ModularCharacterCommonTargetPrefix,
-    ModularCharacterCoordinates,
     ModularCharacterEqualityResult,
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
@@ -46,12 +48,12 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 _MAX_TRANSPORT_WORK = 5_000_000
-_MAX_TRANSPORT_OUTPUT_BYTES = 1_000_000
+_MAX_TRANSPORT_OUTPUT_SCALARS = 1_024
 
 
 @dataclass(frozen=True)
 class _AdmittedTransport:
-    form: ModularFormCoordinates | ModularCharacterCoordinates
+    form: ModularFormCoordinates
     inclusion: ModularCharacterSpaceInclusion
     source_dimension: int
     target_dimension: int
@@ -64,13 +66,12 @@ class _AdmittedTransport:
 def _linear_combination_digit_bound(
     coordinate_digits: int, terms: int, basis_coefficient_digits: int
 ) -> int:
-    """Bound a cyclotomic linear combination with integral, one-digit basis rows.
+    """Bound a cyclotomic linear combination over the admitted basis rows.
 
     In Q(zeta_6), multiplication combines at most three rational products.
     The common denominator must account for both coordinate components and
     both basis components in every term; the numerator adds at most ``3 *
     terms`` such products.
-    This covers the integral one-digit bases at levels 13, 26, and 39.
     """
     return terms * (2 * coordinate_digits + 2 * basis_coefficient_digits) + 1
 
@@ -152,12 +153,12 @@ def _require_inflation_map(
 
 
 def _canonical_transport_form(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
-) -> ModularFormCoordinates | ModularCharacterCoordinates:
-    if type(form) not in (ModularFormCoordinates, ModularCharacterCoordinates):
+    form: ModularFormCoordinates,
+) -> ModularFormCoordinates:
+    if type(form) is not ModularFormCoordinates:
         _domain("character transport requires a canonical character coordinate form")
     try:
-        return type(form).model_validate(form.model_dump(warnings=False))
+        return ModularFormCoordinates.model_validate(form.model_dump(warnings=False))
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
             location=("form",),
@@ -167,7 +168,7 @@ def _canonical_transport_form(
 
 
 def _admit_transport(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
+    form: ModularFormCoordinates,
     inclusion: ModularCharacterSpaceInclusion,
 ) -> _AdmittedTransport:
     inclusion = _require_inflation_map(inclusion)
@@ -177,7 +178,10 @@ def _admit_transport(
     source_space = inclusion.source_space
     field = inclusion.coefficient_field_map.source
     source_cusp, _ = character_space_dimensions(
-        source_space.level, source_space.weight, source_space.character, field
+        source_space.level,
+        source_space.weight,
+        cast(DirichletCharacter, source_space.character),
+        field,
     )
     target_cusp = (
         0
@@ -185,11 +189,11 @@ def _admit_transport(
         else character_space_dimensions(
             inclusion.target_space.level,
             inclusion.target_space.weight,
-            inclusion.target_space.character,
+            cast(DirichletCharacter, inclusion.target_space.character),
             field,
         )[0]
     )
-    if type(form) is ModularFormCoordinates:
+    if form.basis_id == CHARACTER_BASIS_ID:
         if (
             source_space.level != 13
             or source_space.kind != "S"
@@ -202,24 +206,26 @@ def _admit_transport(
             _domain(
                 "legacy character coordinates are admitted only in the level-13 cusp source"
             )
-        for coordinate in form.coordinates:
-            cyclotomic._validate_element(coordinate)
-    else:
+    elif form.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
         if (
-            form.basis_id != "gamma0-cyclotomic-character-sturm-rref-v1"
+            type(form.coordinates) is not tuple
             or len(form.coordinates) != source_cusp
             or source_space.level == 13
         ):
             _domain(
                 "general character coordinates must match a level-26 or level-39 cusp basis"
             )
-        for coordinate in form.coordinates:
-            if (
-                type(coordinate) is not RationalCyclotomicElement
-                or coordinate.field != field
-            ):
-                _domain("every character coordinate must use the exact declared field")
-            cyclotomic._validate_element(coordinate)
+    else:
+        _domain("character transport requires an admitted character coordinate basis")
+
+    coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
+    for coordinate in coordinates:
+        if (
+            type(coordinate) is not RationalCyclotomicElement
+            or coordinate.field != field
+        ):
+            _domain("every character coordinate must use the exact declared field")
+        cyclotomic._validate_element(coordinate)
 
     target_precision = _character_sturm_precision(inclusion.target_space)
     source_precision = _character_sturm_precision(source_space)
@@ -231,16 +237,12 @@ def _admit_transport(
         )
     coordinate_digits = max(
         (
-            max(
-                len(str(abs(int(value.num)))),
-                len(str(int(value.den))),
-            )
-            for coordinate in form.coordinates
+            canonical_rational_component_digits(value)
+            for coordinate in coordinates
             for value in coordinate.coefficients_ascending
         ),
         default=1,
     )
-    same_space = source_space == inclusion.target_space
     source_basis_digits = _TRANSPORT_STURM_BASIS_ENVELOPE[
         (source_space.level, target_precision)
     ][1]
@@ -254,14 +256,10 @@ def _admit_transport(
     source_expansion_digits = _linear_combination_digit_bound(
         coordinate_digits, source_cusp, source_basis_digits
     )
-    target_coordinate_digits = (
-        coordinate_digits if same_space else source_expansion_digits
-    )
     target_expansion_digits = (
         source_expansion_digits
-        if same_space
-        else source_expansion_digits
         if inclusion.target_space.level in (13, 78)
+        or source_space == inclusion.target_space
         else _linear_combination_digit_bound(
             source_expansion_digits, target_cusp, target_basis_digits
         )
@@ -276,10 +274,10 @@ def _admit_transport(
             message="character transport expansion or target solve exceeds the exact coefficient-height bound",
         )
     work = target_precision * (source_cusp + target_cusp**2 + source_cusp * target_cusp)
-    output_bytes = target_precision * field.degree * (
-        2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32
-    ) + target_cusp * field.degree * (2 * target_coordinate_digits + 32)
-    if work > _MAX_TRANSPORT_WORK or output_bytes > _MAX_TRANSPORT_OUTPUT_BYTES:
+    # Count the cyclotomic rational components in both retained coordinate
+    # forms and in the target Sturm prefix independently of wire encoding.
+    output_scalars = field.degree * (source_cusp + target_cusp + target_precision)
+    if work > _MAX_TRANSPORT_WORK or output_scalars > _MAX_TRANSPORT_OUTPUT_SCALARS:
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.character_transport_admission",
@@ -301,7 +299,7 @@ def _basis(
     space: ModularFormSpace,
     precision: int,
     admitted_dimensions: tuple[int, int],
-):
+) -> ModularCharacterBasis:
     space, field, character_request = _require_basis_space(space)
     return _character_basis_from_admission(
         space,
@@ -313,34 +311,37 @@ def _basis(
 
 
 def _expand_coordinates(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
-    basis,
+    form: ModularFormCoordinates,
+    basis: ModularCharacterBasis,
     field: RationalCyclotomicField,
 ) -> tuple[RationalCyclotomicElement, ...]:
-    return _expand_coordinate_tuple(form.coordinates, basis, field)
+    coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
+    return _expand_coordinate_tuple(coordinates, basis, field)
 
 
 def _expand_coordinate_tuple(
-    coordinates: tuple[RationalCyclotomicElement, ...], basis, field
+    coordinates: tuple[RationalCyclotomicElement, ...],
+    basis: ModularCharacterBasis,
+    field: RationalCyclotomicField,
 ) -> tuple[RationalCyclotomicElement, ...]:
     if len(coordinates) != len(basis.elements):
         _domain("character coordinate count differs from its exact basis dimension")
     result = [[Fraction(0), Fraction(0)] for _ in range(basis.precision)]
     for scalar, element in zip(coordinates, basis.elements, strict=True):
         a, b = (
-            Fraction(coefficient.num, coefficient.den)
-            for coefficient in scalar.coefficients_ascending
+            coefficient.as_fraction() for coefficient in scalar.coefficients_ascending
         )
         for index, coefficient in enumerate(element.expansion.coefficients):
-            c, d = (int(value.num) for value in coefficient.coefficients_ascending)
+            c, d = (value.num for value in coefficient.coefficients_ascending)
             result[index][0] += a * c - b * d
             result[index][1] += a * d + b * c + b * d
     return tuple(cyclotomic._canonical(field, tuple(pair)) for pair in result)
 
 
 def _coordinates_from_prefix(
-    prefix: tuple[RationalCyclotomicElement, ...], basis
-) -> ModularCharacterCoordinates:
+    prefix: tuple[RationalCyclotomicElement, ...],
+    basis: ModularCharacterBasis,
+) -> ModularFormCoordinates:
     if len(prefix) != basis.precision:
         _domain("q-prefix precision must equal the common target Sturm precision")
     pivots = tuple(
@@ -359,19 +360,25 @@ def _coordinates_from_prefix(
             code="modular_form.character_transport_not_in_target",
             message="the source q-expansion is not in the target character space",
         )
-    return ModularCharacterCoordinates(
+    return ModularFormCoordinates(
         space=basis.space,
         basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
         coordinates=coordinates,
     )
 
 
-def _linear_combination_from_coordinates(coordinates, basis):
-    return _expand_coordinate_tuple(coordinates, basis, basis.space.coefficient_domain)
+def _linear_combination_from_coordinates(
+    coordinates: tuple[RationalCyclotomicElement, ...],
+    basis: ModularCharacterBasis,
+) -> tuple[RationalCyclotomicElement, ...]:
+    field = cast(RationalCyclotomicField, basis.space.coefficient_domain)
+    return _expand_coordinate_tuple(coordinates, basis, field)
 
 
 def _transport_from_bases(
-    admitted: _AdmittedTransport, source_basis, target_basis=None
+    admitted: _AdmittedTransport,
+    source_basis: ModularCharacterBasis,
+    target_basis: ModularCharacterBasis | None,
 ) -> ModularCharacterTransportedForm:
     source_prefix = _expand_coordinates(admitted.form, source_basis, admitted.field)
     if len(source_prefix) != admitted.precision:
@@ -385,18 +392,16 @@ def _transport_from_bases(
             precision=admitted.precision,
             coefficients=source_prefix,
         )
-    elif admitted.inclusion.source_space == admitted.inclusion.target_space:
-        if type(admitted.form) is ModularCharacterCoordinates:
-            target_form = admitted.form
-        else:
-            _domain("identity transport requires generalized character coordinates")
-        target_expansion = ModularCharacterQExpansion(
-            space=admitted.inclusion.target_space,
-            basis_id=target_basis.basis_id,
-            coefficients=source_prefix,
-        )
     else:
-        target_form = _coordinates_from_prefix(source_prefix, target_basis)
+        if target_basis is None:
+            raise RuntimeError("character target basis is missing after admission")
+        if admitted.inclusion.source_space == admitted.inclusion.target_space:
+            if admitted.form.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
+                target_form = admitted.form
+            else:
+                _domain("identity transport requires generalized character coordinates")
+        else:
+            target_form = _coordinates_from_prefix(source_prefix, target_basis)
         target_expansion = ModularCharacterQExpansion(
             space=admitted.inclusion.target_space,
             basis_id=target_basis.basis_id,
@@ -411,7 +416,7 @@ def _transport_from_bases(
 
 
 def modular_character_coordinates_transport(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
+    form: ModularFormCoordinates,
     inclusion: ModularCharacterSpaceInclusion,
 ) -> ModularCharacterTransportedForm:
     """Transport a represented cusp form through explicit character inflation."""
@@ -494,18 +499,14 @@ def modular_character_coordinates_equal_in_common_space(
         )
         for admitted in (left_admitted, right_admitted)
     )
-    combined_output_bytes = sum(
-        admitted.precision
-        * admitted.field.degree
-        * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
-        + admitted.target_dimension
-        * admitted.field.degree
-        * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
+    combined_output_scalars = sum(
+        admitted.field.degree
+        * (admitted.source_dimension + admitted.target_dimension + admitted.precision)
         for admitted in (left_admitted, right_admitted)
     )
     if (
         combined_work > _MAX_TRANSPORT_WORK
-        or combined_output_bytes > _MAX_TRANSPORT_OUTPUT_BYTES
+        or combined_output_scalars > _MAX_TRANSPORT_OUTPUT_SCALARS
     ):
         raise OperationResourceAdmissionError(
             location=(),
@@ -523,8 +524,10 @@ def modular_character_coordinates_equal_in_common_space(
             left_admitted.target_character_dimensions,
         )
     )
-    bases = [] if target_basis is None else [(target, target_basis)]
-    transported = []
+    bases: list[tuple[ModularFormSpace, ModularCharacterBasis]] = (
+        [] if target_basis is None else [(target, target_basis)]
+    )
+    transported: list[tuple[RationalCyclotomicElement, ...]] = []
     for value, admitted in ((left, left_admitted), (right, right_admitted)):
         source_space = admitted.inclusion.source_space
         source_basis = next(

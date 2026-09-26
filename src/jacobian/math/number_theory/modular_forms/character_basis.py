@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Literal, NoReturn
+from typing import Literal, NoReturn, cast
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -47,7 +47,6 @@ _DIMENSION = 1
 _STURM_PRECISION: Literal[3] = 3  # floor(2 * [SL2(Z):Gamma0(13)] / 12) + 1 = 3
 _MAX_WORK = 1_000_000
 _MAX_ALLOCATION_BYTES = 1_000_000
-_MAX_OUTPUT_BYTES = 1_000_000
 _MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
@@ -163,9 +162,7 @@ def _character_sturm_precision(space: ModularFormSpace) -> int:
 
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
-    return all(
-        int(coefficient.num) == 0 for coefficient in value.coefficients_ascending
-    )
+    return all(coefficient.num == 0 for coefficient in value.coefficients_ascending)
 
 
 def _rref_character_prefix(
@@ -247,7 +244,12 @@ def _character_basis_from_admission(
     # Quer, Thm. 2.3, gives the exact independent dimension formula for this
     # bounded character family. Admission is complete before entering PARI.
     cusp_dimension, full_dimension = (
-        character_space_dimensions(space.level, space.weight, space.character, field)
+        character_space_dimensions(
+            space.level,
+            space.weight,
+            cast(DirichletCharacter, space.character),
+            field,
+        )
         if admitted_dimensions is None
         else admitted_dimensions
     )
@@ -294,7 +296,7 @@ def _character_basis_from_admission(
             )
         envelope_cells = dimension * precision * field.degree
         envelope_bytes = envelope_cells * (2 * coefficient_digits + 32)
-        if envelope_bytes > _MAX_OUTPUT_BYTES:
+        if envelope_bytes > _MAX_ALLOCATION_BYTES:
             raise OperationResourceAdmissionError(
                 location=("space",),
                 code="modular_form.character_basis_transport_admission",
@@ -330,7 +332,7 @@ def _character_basis_from_admission(
         space.kind == "S"
         and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
         and any(
-            max(len(str(abs(int(value.num)))), len(str(int(value.den))))
+            canonical_rational_component_digits(value)
             > _TRANSPORT_STURM_BASIS_ENVELOPE[(space.level, precision)][1]
             for vector in normalized
             for coefficient in vector
@@ -470,45 +472,6 @@ def modular_character_coordinates_q_expansion(
         )
     basis = _character_basis_from_admission(*admitted[:2], admitted[3])
     return _character_form_prefix(form, admitted, basis)
-
-
-def modular_character_coordinates_equal(
-    left: ModularFormCoordinates,
-    right: ModularFormCoordinates,
-) -> bool:
-    """Decide global equality by comparing the common exact Sturm prefix."""
-    left_admitted = _admit_character_form(left)
-    if type(right) is not ModularFormCoordinates:
-        _domain("right character form must be a canonical ModularFormCoordinates value")
-    if right.space != left_admitted[0] or right.basis_id != left.basis_id:
-        raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.character_equality_parent",
-            message="character equality requires the identical space and basis; no implicit embedding is defined",
-        )
-    right_admitted = _admit_character_form(
-        right, (*left_admitted[:2], left_admitted[3])
-    )
-    left_space = left_admitted[0]
-    right_space = right_admitted[0]
-    if left_space != right_space or left.basis_id != right.basis_id:
-        raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.character_equality_parent",
-            message="character equality requires the identical space and basis; no implicit embedding is defined",
-        )
-    left_zero = not any(value.num for value in left_admitted[2].coefficients_ascending)
-    right_zero = not any(
-        value.num for value in right_admitted[2].coefficients_ascending
-    )
-    if left_zero and right_zero:
-        return True
-    basis = _character_basis_from_admission(
-        left_space, left_admitted[1], left_admitted[3]
-    )
-    left_prefix = _character_form_prefix(left, left_admitted, basis)
-    right_prefix = _character_form_prefix(right, right_admitted, basis)
-    return left_prefix.coefficients == right_prefix.coefficients
 
 
 def modular_character_coordinates_product(

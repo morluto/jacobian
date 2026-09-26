@@ -136,6 +136,28 @@ class TestKnownAnswer:
         ]
         assert len(shared) == 1
         assert shared[0].maximal_cell_ids == ("M0", "M1")
+        ordinary = sum(
+            (-1) ** level * result.f_vector[level + 1]
+            for level in range(result.dimension + 1)
+        )
+        assert result.euler_characteristic == ordinary
+        assert result.reduced_euler_characteristic == ordinary - 1
+
+        face_by_id = {face.face_id: face for face in result.faces}
+        for row in result.pairwise_intersections:
+            if row.status != "face":
+                continue
+            assert row.intersection_face_id is not None
+            maximal_cell_ids = face_by_id[row.intersection_face_id].maximal_cell_ids
+            assert row.first_cell_id in maximal_cell_ids
+            assert row.second_cell_id in maximal_cell_ids
+        assert [row.source_index for row in result.source_cell_map] == [0, 1]
+        assert [row.cell_id for row in result.source_cell_map] == ["M0", "M1"]
+        face_intersections = [
+            row for row in result.pairwise_intersections if row.status == "face"
+        ]
+        assert len(face_intersections) == 1
+        assert face_intersections[0].intersection_face_id == shared[0].face_id
 
     def test_disjoint_cells_are_disconnected(self) -> None:
         first = _cells(("x", "y"), (("a", (0, 0)), ("b", (1, 0)), ("c", (0, 1))))
@@ -153,15 +175,11 @@ class TestBoundary:
         assert result.dimension == 1
         assert result.f_vector == (1, 2, 1)
         assert result.component_count == 1
-
-    def test_empty_face_is_admitted_once(self) -> None:
-        segment = _cells(("x",), (("a", (0,)), ("b", (1,))))
-        result = polytopal_complex_closure((segment,))
         empty = [face for face in result.faces if face.dimension == -1]
         assert len(empty) == 1
         assert empty[0].vertices == ()
-        assert result.empty_face_admitted is True
         assert empty[0].maximal_cell_ids == ("M0",)
+        assert result.empty_face_admitted is True
 
     def test_redundant_interior_vertex_is_dropped(self) -> None:
         triangle = _cells(
@@ -257,42 +275,12 @@ class TestDefiningInvariant:
         )
         result = polytopal_complex_closure((square,))
         dimension_of = {face.face_id: face.dimension for face in result.faces}
+        assert result.cover_relations
         for relation in result.cover_relations:
             assert (
                 dimension_of[relation.upper_face_id]
                 == dimension_of[relation.lower_face_id] + 1
             )
-
-    def test_euler_alternating_sums(self) -> None:
-        first = _cells(("x", "y"), (("a", (0, 0)), ("b", (1, 0)), ("c", (0, 1))))
-        second = _cells(("x", "y"), (("d", (1, 0)), ("e", (1, 1)), ("f", (0, 1))))
-        result = polytopal_complex_closure((first, second))
-        ordinary = sum(
-            (-1) ** level * result.f_vector[level + 1]
-            for level in range(result.dimension + 1)
-        )
-        reduced = -1 + ordinary
-        assert result.euler_characteristic == ordinary
-        assert result.reduced_euler_characteristic == reduced
-
-    def test_pairwise_symmetry_and_transport(self) -> None:
-        first = _cells(("x", "y"), (("a", (0, 0)), ("b", (1, 0)), ("c", (0, 1))))
-        second = _cells(("x", "y"), (("d", (1, 0)), ("e", (1, 1)), ("f", (0, 1))))
-        result = polytopal_complex_closure((first, second))
-        face_by_id = {face.face_id: face for face in result.faces}
-        for row in result.pairwise_intersections:
-            if row.status != "face":
-                continue
-            intersection_face_id = row.intersection_face_id
-            assert intersection_face_id is not None
-            assert (
-                row.first_cell_id in face_by_id[intersection_face_id].maximal_cell_ids
-            )
-            assert (
-                row.second_cell_id in face_by_id[intersection_face_id].maximal_cell_ids
-            )
-        assert [row.source_index for row in result.source_cell_map] == [0, 1]
-        assert [row.cell_id for row in result.source_cell_map] == ["M0", "M1"]
 
     def test_presentation_order_invariance(self) -> None:
         first = _cells(("x", "y"), (("a", (0, 0)), ("b", (1, 0)), ("c", (0, 1))))

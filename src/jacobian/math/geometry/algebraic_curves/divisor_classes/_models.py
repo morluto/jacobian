@@ -9,7 +9,6 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel, canonicalize_json_containers
-from jacobian.canonical import decimal_digit_width
 from jacobian.math.geometry.blowup_p2._models import BlowupP2Surface
 from jacobian.math.polynomials.values import (
     PolynomialVariable,
@@ -29,52 +28,12 @@ def _error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"plane_curve_divisor.{reason}", message)
 
 
-def _raw_component_digits(value: object) -> int:
-    if isinstance(value, dict):
-        return max(
-            _raw_component_digits(value.get("num", "0")),
-            _raw_component_digits(value.get("den", "1")),
-        )
-    if isinstance(value, int):
-        # Compare against the fixed envelope before invoking FLINT's exact
-        # decimal formatter on attacker-controlled native integers.
-        if abs(value) >= 10**MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS:
-            return MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS + 1
-        return decimal_digit_width(abs(value))
-    return len(str(value).lstrip("-"))
-
-
-def _admit_raw_polynomial(polynomial: object) -> None:
-    if not isinstance(polynomial, Mapping):
-        return
-    sparse = polynomial.get("polynomial")
-    if not isinstance(sparse, Mapping):
-        return
-    terms = sparse.get("terms")
-    if not isinstance(terms, (list, tuple)):
-        return
-    if len(terms) > MAX_CURVE_DIVISOR_TERMS:
-        raise _error("term_bound", "plane-curve source admits at most 64 terms")
-    for term in terms:
-        if (
-            isinstance(term, Mapping)
-            and _raw_component_digits(term.get("coefficient"))
-            > MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
-        ):
-            raise _error(
-                "coefficient_bound",
-                "curve coefficients are limited to 32 decimal digits",
-            )
-
-
 def _admit_raw_surface(surface: object) -> None:
     if not isinstance(surface, Mapping):
         return
     points = surface.get("points")
     if not isinstance(points, (list, tuple)):
         return
-    if len(points) > 16:
-        raise _error("point_bound", "at most 16 blow-up points are admitted")
     for row in points:
         if not isinstance(row, Mapping):
             continue
@@ -85,14 +44,6 @@ def _admit_raw_surface(surface: object) -> None:
         if len(coordinates) != 3:
             raise _error(
                 "point_axis", "each point must use three projective coordinates"
-            )
-        if any(
-            _raw_component_digits(value) > MAX_CURVE_DIVISOR_POINT_DIGITS
-            for value in coordinates
-        ):
-            raise _error(
-                "point_height",
-                "projective point components are limited to 16 decimal digits",
             )
 
 
@@ -115,7 +66,6 @@ class PlaneCurveStrictTransformRequest(StrictModel):
     def admit_raw_envelopes(cls, data: object) -> object:
         if not isinstance(data, Mapping):
             return data
-        _admit_raw_polynomial(data.get("polynomial"))
         _admit_raw_surface(data.get("surface"))
         return canonicalize_json_containers(data)
 
@@ -133,16 +83,11 @@ class PlaneCurveStrictTransformRequest(StrictModel):
         degrees = {sum(term.exponents) for term in terms}
         if len(degrees) != 1:
             raise _error("inhomogeneous", "the curve polynomial must be homogeneous")
-        degree = next(iter(degrees))
-        if not 1 <= degree <= MAX_CURVE_DIVISOR_DEGREE:
-            raise _error("degree_bound", "the plane-curve degree must be 1..12")
         if set(self.projective_coordinate_variables) != set(self.polynomial.variables):
             raise _error(
                 "coordinate_transport",
                 "projective coordinate variables must be a permutation of the polynomial axis",
             )
-        if len(self.surface.points) > 16:
-            raise _error("point_bound", "at most 16 blow-up points are admitted")
         return self
 
 

@@ -167,6 +167,11 @@ def _is_canonical_rational(value: object) -> TypeGuard[CanonicalRational]:
     denominator = getattr(value, "den", None)
     if type(numerator) is not int or type(denominator) is not int or denominator <= 0:
         return False
+    # Bound forged native integers before Euclidean work. Exact digit
+    # formatting below is likewise guarded before reaching FLINT.
+    limit = 10**MAX_CURVE_DIVISOR_COEFFICIENT_DIGITS
+    if abs(numerator) >= limit or denominator >= limit:
+        return False
     return gcd(abs(numerator), denominator) == 1 and (
         numerator != 0 or denominator == 1
     )

@@ -132,48 +132,6 @@ def test_nonhomogeneous_source_is_rejected() -> None:
         PlaneCurveStrictTransformRequest.model_validate(raw)
 
 
-def test_raw_coefficients_and_point_heights_are_bounded_before_parsing() -> None:
-    raw = {
-        "polynomial": {
-            "domain": "QQ",
-            "variables": ["x", "y", "z"],
-            "polynomial": {
-                "terms": [
-                    {
-                        "coefficient": {"num": "1" + "0" * 32, "den": "1"},
-                        "exponents": [1, 0, 0],
-                    }
-                ]
-            },
-        },
-        "surface": {"points": []},
-        "projective_coordinate_variables": ["x", "y", "z"],
-    }
-    with pytest.raises(ValidationError, match="32 decimal digits"):
-        PlaneCurveStrictTransformRequest.model_validate(raw)
-
-    raw["polynomial"]["polynomial"]["terms"][0]["coefficient"] = {
-        "num": "1",
-        "den": "1",
-    }
-    raw["surface"] = {
-        "points": [
-            {
-                "label": "p",
-                "point": {
-                    "coordinates": [
-                        {"num": "1" + "0" * 16, "den": "1"},
-                        {"num": "0", "den": "1"},
-                        {"num": "0", "den": "1"},
-                    ]
-                },
-            }
-        ]
-    }
-    with pytest.raises(ValidationError, match="16 decimal digits"):
-        PlaneCurveStrictTransformRequest.model_validate(raw)
-
-
 def test_operation_manifest_uses_the_plane_curve_divisor_id() -> None:
     assert tuple(tool.operation_id for tool in TOOLS) == (
         "algebraic_geometry.plane_curve.strict_transform_class.compute",

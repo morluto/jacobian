@@ -1,7 +1,6 @@
 # Standard cyclotomic field inclusions
 
-The operations `matrix.cyclic.cyclotomic_inclusion.compute`,
-`matrix.cyclic.cyclotomic_inclusion.compose`, and
+The operations `matrix.cyclic.cyclotomic_inclusion.compute` and
 `matrix.cyclic.cyclotomic_element.map` expose the standard inclusion
 
 ```text
@@ -12,11 +11,8 @@ The source and target are Jacobian's canonical fields
 `QQ[x]/(Phi_n(x))` and `QQ[x]/(Phi_m(x))`, with `x` their named generators.
 The inclusion value carries the reduced power-basis coordinates of the image
 of the source generator. Application substitutes this image into the source
-element and reduces modulo `Phi_m`. Composition accepts only matching
-intermediate parents and validates both carried generator images before
-returning the canonical direct inclusion. These operations do not describe
-arbitrary embeddings or arbitrary isomorphisms between fields that happen to
-be equal.
+element and reduces modulo `Phi_m`. These operations do not describe arbitrary
+embeddings or arbitrary isomorphisms between fields that happen to be equal.
 
 Orders are at most 128. Element coordinates are bounded to 256 decimal digits;
 mapping admits field work and a conservative exact numerator/denominator

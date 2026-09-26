@@ -96,6 +96,16 @@ def _standard_inclusion(
 
 
 def _require_standard_inclusion_image(inclusion: CyclotomicFieldInclusion) -> None:
+    if inclusion.target.order % inclusion.source.order:
+        raise CyclicRankKernelAdmissionError(
+            "inclusion_parent",
+            "the source cyclotomic order must divide the target order",
+        )
+    if len(inclusion.generator_image) != inclusion.target.degree:
+        raise CyclicRankKernelAdmissionError(
+            "cyclotomic_coordinate_count",
+            "an inclusion generator image needs exactly phi(target order) coordinates",
+        )
     work = inclusion.source.degree * inclusion.target.degree * inclusion.target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
         raise CyclicRankKernelAdmissionError(

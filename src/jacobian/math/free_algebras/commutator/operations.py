@@ -236,13 +236,20 @@ def commutator(
             values[reverse] = values.get(reverse, Fraction(0)) - contribution
     ordered = tuple(
         sorted(
-            ((word, coefficient) for word, coefficient in values.items() if coefficient),
+            (
+                (word, coefficient)
+                for word, coefficient in values.items()
+                if coefficient
+            ),
             key=lambda item: canonical_word_key(left.alphabet, item[0]),
             reverse=True,
         )
     )
     for _, coefficient in ordered:
-        if max(len(str(abs(coefficient.numerator))), len(str(coefficient.denominator))) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+        if (
+            max(len(str(abs(coefficient.numerator))), len(str(coefficient.denominator)))
+            > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+        ):
             _reject_resource(
                 "coefficient_growth",
                 "exact commutator coefficient exceeds the 64-digit bound",

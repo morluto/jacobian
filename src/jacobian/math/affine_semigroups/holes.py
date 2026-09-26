@@ -206,9 +206,19 @@ def _coordinate_configuration(
     basis = group.lattice.basis.entries
     if len(basis) != 2 or any(len(row) != 2 for row in basis):
         raise ValueError("hole profiles require a full-rank generated lattice")
-    coordinates = group.generator_lattice_coordinates.entries
-    if len(coordinates) != source.configuration.columns:
-        raise ArithmeticError("generated-lattice coordinates lost source columns")
+    determinant = basis[0][0] * basis[1][1] - basis[0][1] * basis[1][0]
+    if determinant == 0:
+        raise ArithmeticError("full-rank generated lattice has singular basis")
+    coordinates = []
+    for x, y in source.configuration.columns_vectors:
+        first_numerator = x * basis[1][1] - y * basis[1][0]
+        second_numerator = basis[0][0] * y - basis[0][1] * x
+        if first_numerator % determinant or second_numerator % determinant:
+            raise ArithmeticError("source generator is outside its generated lattice")
+        coordinates.append(
+            (first_numerator // determinant, second_numerator // determinant)
+        )
+    coordinates = tuple(coordinates)
     if any(abs(value) >= 10**MAX_AFFINE_DIGITS for row in coordinates for value in row):
         raise OperationResourceAdmissionError(
             location=("semigroup", "configuration"),

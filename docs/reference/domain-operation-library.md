@@ -323,11 +323,12 @@ Treat values reconstructed with native bypasses such as `model_construct()` or
 runtime field types before arithmetic or recomputation, then establish only the
 source-bound relation its consumer uses.
 
-No ordinary boundary may factor, isolate roots, enumerate candidates, invoke a
-solver or backend, recompute a defining relation, or trigger a nested public
-validator that performs that work. A computed result is a trusted producer
-output. Public deserialization establishes its canonical representation, not a
-second proof of its mathematical postcondition.
+Structural parsing, serialization, and result packaging must not hide
+factorization, root isolation, search, a solver call, or a nested validator that
+repeats such work. Necessary candidate checks belong to the admitted producing
+computation, and relied-upon authored claims belong to admitted consumers.
+Public deserialization establishes canonical representation, not trusted
+provenance or a second proof of the producer's mathematical postcondition.
 
 Public results describe mathematical meaning, not the implementation used to
 compute it. Do not expose a constant backend, method, algorithm, exactness,
@@ -366,13 +367,14 @@ wrappers must not recompute the decision independently. A simple admission
 guard may return nothing on success. Do not introduce a plan class or module
 unless it carries information that a later phase genuinely consumes.
 
-Result construction uses one private owner-local factory such as
-``_from_kernel`` whenever public validation would replay semantic work. It may
-use trusted construction
-only after the kernel has established every invariant it skips. Pydantic result
-validators remain limited to structural, linearly bounded checks; they do not
-call a backend, enumerate a search space, invoke a solver, or recompute the
-operation's defining relation.
+When construction would otherwise repeat established invariants, use a private
+owner-local factory such as ``_from_kernel`` only after the kernel has
+established every invariant it skips. Do not add a trusted-construction layer
+where ordinary structural validation suffices. Pydantic notes that
+[`model_construct()` is not necessarily faster](https://docs.pydantic.dev/latest/concepts/models/#creating-models-without-validation);
+profile a performance claim rather than assuming a bypass helps. Result
+validators perform bounded representation checks, not backend calls, search,
+or a second solve. Their cost includes scalar widths, not just entry counts.
 
 When removing repeated validation, trace each removed invariant to its owner.
 Removing replay does not authorize removing recognition of a caller-supplied
@@ -392,14 +394,16 @@ canonicity, irreducibility, or non-existence. Unexpected owner or backend faults
 remain operational failures and must not be converted into a mathematical
 negative.
 
-Public numeric values are canonical exact rationals. IEEE doubles may exist
-only inside a private kernel; any double crossing the boundary is carried as
-its exact dyadic rational (`Fraction(float(v))` is lossless), because the
-transport rejects JSON floating points and results must stay reconstructible.
-Numerical backends such as Golub-Welsch therefore compute in floats but return
-dyadic-exact values with their admission bounded to the finite-double range.
-This invariant is enforced by the canonical transport and the integration
-examples lane; meet it at design time rather than relying on those tripwires.
+Separate exact encoding from mathematical accuracy. The canonical transport
+rejects JSON floating-point numbers. A finite IEEE double returned by a
+numerical kernel can be represented losslessly as its exact dyadic rational
+(`Fraction(float(v))`), but that rational preserves the computed approximation,
+not an exact value of the underlying mathematical target. Numerical backends
+such as Golub-Welsch therefore need an explicit approximation contract as well
+as a reconstructible encoding. State the promised accuracy or enclosure, if
+any; never imply an error guarantee merely because serialization is exact.
+Exact operations instead return the domain-owned exact value, which may be a
+rational, algebraic number, polynomial, or another canonical object.
 
 Do not add a public operation until its stated mathematical claim has a bounded,
 appropriate implementation. A public operation is the `MathTool` contract—its
@@ -503,8 +507,10 @@ consumers whenever possible. If a distinct type is necessary, record the
 different parent, representation, or postcondition, and define an explicit
 typed conversion rather than relying on caller-side reconstruction.
 
-Each mathematical value has one canonical type owned by its domain. A producer
-returns that type and downstream consumers accept it unchanged. An operation
+The same mathematical value and representation use one canonical domain-owned
+type. Distinct storage or basis variants require explicit semantics and
+conversions, not duplicate operation-specific carriers. A producer returns the
+shared type and downstream consumers accept it unchanged. An operation
 request may contain the value alongside genuine operation parameters, but must
 not redefine the value as a parallel collection of fields. Callers must not
 have to remember and reattach a field, ordered axis, ranked signature, ambient
@@ -598,7 +604,18 @@ expose backend values.
 
 Mathematical correctness, parent compatibility, reconstruction, and backend
 domain support require executable contract and property tests. Do not encode
-those semantic claims as source-text or private-helper lint rules.
+those semantic claims as source-text or private-helper lint rules. Passing an
+AST check is not evidence that an estimate is sound or a conversion is exact.
+
+Some current rules are intentionally stricter syntactic conventions: the
+checker rejects evaluator-capable calls throughout the mathematical tree,
+production `assert` statements, and selected output-byte names. These are not
+proofs of untrusted data flow, expensive replay, or transport ownership. Do not
+rename a quantity or move a call to evade a diagnostic. If a rule rejects a
+legitimate boundary, review its scope with a focused reproducer and update the
+rule and its tests together; documentation alone does not disable enforcement.
+Required input, resource, and correctness checks must use explicit failures,
+not assertions that disappear under `python -O`.
 
 ### Boundedness proof
 
@@ -649,11 +666,14 @@ ceiling by default; pass `CanonicalLimits` only when the caller owns such a
 boundary. Shared dispatch is not such a boundary: it preserves strict JSON
 semantics without imposing an HTTP, stdio, or in-process payload size. An
 unexplained reserve added to the codec's default is not an output
-proof. The architecture check rejects canonical output defaults and result-byte
-policies in mathematical carriers and operation owners, while allowing limits
-whose names identify a concrete worker or process channel. Express mathematical
-safety through cardinality, component digits, depth, or another intrinsic
-representation quantity.
+proof. Express mathematical safety through cardinality, component digits,
+depth, allocation estimates, or other intrinsic representation quantities.
+Allocation bytes are distinct from encoded response bytes; cells alone do not
+bound storage for variable-width scalars. The current architecture check uses
+selected names and attributes to flag misplaced byte policy, not dimensional
+analysis. A rename from bytes to cells is not a repair. See the
+[limit ownership table](../explanation/architecture.md#domain-admission-capacity-and-delivery)
+and the [enforcement guidance](#static-and-executable-enforcement).
 
 A concrete channel or host may reject work that exceeds its configured
 capacity. That failure does not redefine the operation's mathematical domain.

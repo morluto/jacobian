@@ -4,6 +4,10 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.affine_semigroups.factorization_count import (
+    AffineFactorizationCount,
+    factorization_count,
+)
 from jacobian.math.affine_semigroups.group_lattice import (
     AffineGroupLattice,
     compute_group_lattice,
@@ -17,24 +21,31 @@ from jacobian.math.affine_semigroups.holes import (
     holes_through_degree,
 )
 from jacobian.math.affine_semigroups.semigroup import (
+    AffineFactorization,
     AffineFiber,
     AffineFiberGraph,
     AffineHilbertBasis,
     AffineMembershipResult,
+    AffineSemigroupNormalization,
     PositiveAffineSemigroup,
     PositiveGradingResult,
+    _evaluate_factorization,
     construct,
     fiber,
     fiber_graph,
     hilbert_basis,
     membership,
+    normalization,
     positive_grading,
 )
 from jacobian.math.affine_semigroups.semigroup_models import (
+    AffineFactorizationCountRequest,
+    AffineFactorizationRequest,
     AffineFiberGraphRequest,
     AffineFiberRequest,
     AffineHilbertBasisRequest,
     AffineMembershipRequest,
+    AffineSemigroupNormalizationRequest,
     AffineSemigroupRequest,
     PositiveGradingRequest,
 )
@@ -90,6 +101,36 @@ def _fiber(r: AffineFiberRequest) -> AffineFiber:
         ) from e
 
 
+def _factorization_count(
+    request: AffineFactorizationCountRequest,
+) -> AffineFactorizationCount:
+    try:
+        return factorization_count(request.semigroup, request.target)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="affine_semigroup.factorization_count",
+            message=str(exc),
+        ) from exc
+
+
+def _factorization(request: AffineFactorizationRequest) -> AffineFactorization:
+    try:
+        return _evaluate_factorization(
+            request.semigroup, request.coordinates, validate_parent=False
+        )
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization",
+            message=str(exc),
+        ) from exc
+
+
 def _membership(r: AffineMembershipRequest) -> AffineMembershipResult:
     try:
         return membership(r.semigroup, r.target)
@@ -105,6 +146,8 @@ def _fiber_graph(r: AffineFiberGraphRequest) -> AffineFiberGraph:
     try:
         return fiber_graph(r.semigroup, r.target, r.moves)
     except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(
@@ -125,7 +168,107 @@ def _hilbert_basis(r: AffineHilbertBasisRequest) -> AffineHilbertBasis:
         ) from e
 
 
+def _normalization(
+    r: AffineSemigroupNormalizationRequest,
+) -> AffineSemigroupNormalization:
+    try:
+        return normalization(r.semigroup)
+    except OperationDomainValidationError:
+        # The native boundary already exposes the stable owner diagnostic;
+        # preserve it so direct Python and catalog invocations agree.
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as e:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.normalization",
+            message=str(e),
+        ) from e
+
+
 TOOLS = (
+    MathTool(
+        operation_id="affine_semigroup.factorization_count.compute",
+        title="Count a finite affine-semigroup fiber exactly",
+        description=(
+            "Return the exact number of nonnegative factorizations Au=b for any "
+            "admitted positive affine semigroup. The positive grading makes each "
+            "fiber finite. One-row fibers use a gcd-normalized generating-function "
+            "dynamic program; higher-row fibers are counted directly inside the "
+            "admitted target-derived coefficient box without materializing the "
+            "factorization set. State, work, and count-digit bounds are checked first."
+        ),
+        request_type=AffineFactorizationCountRequest,
+        result_type=AffineFactorizationCount,
+        run=_factorization_count,
+        tags=("affine-semigroup", "factorization-count", "fiber", "exact"),
+        discovery_terms=(
+            "count the nonnegative factorizations of a target",
+            "exact cardinality of an affine-semigroup fiber",
+            "number of solutions to Au=b in nonnegative integers",
+            "factorization count without listing the entire fiber",
+        ),
+        examples=(
+            OperationExample(
+                name="two_unit_weights_target_four",
+                description=(
+                    "Count the five factorizations of 4 using two distinct "
+                    "generators of weight 1."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["degree"],
+                            "generator_labels": ["a", "b"],
+                            "entries": [["1", "1"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}],
+                    },
+                    "target": ["4"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.factorization.evaluate",
+        title="Evaluate a parent-bound affine-semigroup factorization",
+        description=(
+            "Evaluate one nonnegative coefficient vector on the retained "
+            "generator axis and return an AffineFactorization carrying its "
+            "positive semigroup parent and exact ambient target. This is a "
+            "single O(rows x generators) matrix product; it does not enumerate "
+            "a fiber or claim that the factorization is unique. Admission limits "
+            "coefficients to 32 decimal digits and preflights arithmetic and output size."
+        ),
+        request_type=AffineFactorizationRequest,
+        result_type=AffineFactorization,
+        run=_factorization,
+        discovery_terms=(
+            "evaluate affine semigroup factorization coordinates",
+            "map a nonnegative generator vector to its exact semigroup element",
+            "parent-bound affine semigroup element from factorization",
+        ),
+        tags=("affine-semigroup", "factorization", "exact"),
+        examples=(
+            OperationExample(
+                name="quadrant_factorization",
+                description=(
+                    "Evaluate (2,3) on generators (1,0),(0,1), returning "
+                    "the parent-bound element (2,3)."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["a", "b"],
+                            "entries": [["1", "0"], ["0", "1"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+                    },
+                    "coordinates": ["2", "3"],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="affine_semigroup.holes_through_degree.compute",
         title="Enumerate affine-semigroup holes through a positive degree",
@@ -236,6 +379,45 @@ TOOLS = (
                         "row_labels": ["x", "y"],
                         "generator_labels": ["u", "v"],
                         "entries": [["1", "1"], ["0", "3"]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.normalization.compute",
+        title="Compute the normalization of a two-dimensional affine semigroup",
+        description=(
+            "Return the minimal generators of cone(S) intersect gp(S) for a "
+            "positive, full-rank affine semigroup in Z^2. Computation is in the "
+            "lattice generated by S, then transported back to the retained "
+            "ambient row axes. The cone Hilbert determinant is at most 1,000."
+        ),
+        request_type=AffineSemigroupNormalizationRequest,
+        result_type=AffineSemigroupNormalization,
+        run=_normalization,
+        discovery_terms=(
+            "normalization of a two-dimensional affine semigroup",
+            "integral closure in the group lattice",
+            "minimal generators of cone(S) intersect gp(S)",
+        ),
+        tags=("affine-semigroup", "normalization", "hilbert-basis", "exact"),
+        examples=(
+            OperationExample(
+                name="diagonal_submonoid",
+                description=(
+                    "Normalize the semigroup generated by (2,0), (0,2), and "
+                    "(2,2). Its generated group is 2Z^2, so the normalization "
+                    "generators are (0,2) and (2,0), in canonical order."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["a", "b", "c"],
+                            "entries": [["2", "0", "2"], ["0", "2", "2"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
                     }
                 },
             ),

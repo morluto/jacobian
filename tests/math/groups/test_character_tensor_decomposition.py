@@ -58,6 +58,28 @@ def test_standard_tensor_square_matches_independent_s3_decomposition() -> None:
         assert result.multiplicities == expected
 
 
+def test_regular_degree_six_s3_partition_decomposes_in_its_class_order() -> None:
+    degree = 6
+    generators = ((1, 4, 5, 2, 0, 3), (3, 5, 4, 0, 2, 1))
+    source = PermutationGroup(degree=degree, generators=generators)
+    classes = group_conjugacy_classes(degree, [list(row) for row in generators])
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(member) for member in row) for row in classes)
+    )
+    assert tuple(map(len, partition.classes)) == (1, 2, 3)
+
+    result = character_tensor_decomposition(
+        CharacterTensorDecompositionRequest(
+            partition=partition, left_row_index=2, right_row_index=2
+        )
+    )
+    assert result.table.axis.class_sizes == (1, 2, 3)
+    assert result.multiplicities == (1, 1, 1)
+    assert tuple(
+        value.coefficients[0].as_fraction() for value in result.tensor_product.values
+    ) == (Fraction(4), Fraction(1), Fraction(0))
+
+
 def test_sign_tensor_standard_is_standard() -> None:
     result = character_tensor_decomposition(
         CharacterTensorDecompositionRequest(
@@ -74,6 +96,37 @@ def test_sign_tensor_standard_is_standard() -> None:
     ]
 
 
+def test_tensor_decomposition_rejects_a7_before_conjugacy_recomputation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # These generators give A7 (order 2520), so re-authenticating its partition
+    # expands thousands of permutations although tensor decomposition is S3-only.
+    degree = 7
+    generators = ((1, 2, 3, 4, 5, 6, 0), (1, 2, 0, 3, 4, 5, 6))
+    source = PermutationGroup(degree=degree, generators=generators)
+    classes = group_conjugacy_classes(degree, [list(row) for row in generators])
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(member) for member in row) for row in classes)
+    )
+
+    def unexpected_expansion(*args: object, **kwargs: object) -> object:
+        raise AssertionError("unsupported A7 partition reached conjugacy expansion")
+
+    monkeypatch.setattr(
+        "jacobian.math.groups.operations.group_conjugacy_classes",
+        unexpected_expansion,
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        character_tensor_decomposition(
+            CharacterTensorDecompositionRequest(
+                partition=partition, left_row_index=0, right_row_index=0
+            )
+        )
+    assert exc_info.value.errors()[0]["type"] == (
+        "groups.characters.tensor_group_unsupported"
+    )
+
+
 def test_tensor_decomposition_rejects_other_supported_table_families() -> None:
     source = PermutationGroup(degree=3, generators=((1, 0, 2),))
     classes = group_conjugacy_classes(3, [[1, 0, 2]])
@@ -86,6 +139,17 @@ def test_tensor_decomposition_rejects_other_supported_table_families() -> None:
                 partition=partition, left_row_index=0, right_row_index=0
             )
         )
+
+
+def test_forged_tensor_request_raises_domain_error() -> None:
+    forged = CharacterTensorDecompositionRequest.model_construct(
+        partition=_s3_partition(), left_row_index=-1, right_row_index=0
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        character_tensor_decomposition(forged)
+    assert exc_info.value.errors()[0]["type"] == (
+        "groups.characters.tensor_request_invalid"
+    )
 
 
 def test_tensor_decomposition_rejects_row_index_outside_basis() -> None:

@@ -998,12 +998,37 @@ def character_tensor_decomposition(
             code="groups.characters.tensor_request_type",
             message="request must be a character tensor-decomposition request",
         )
-    request = CharacterTensorDecompositionRequest.model_validate(request.model_dump())
+    try:
+        request = CharacterTensorDecompositionRequest.model_validate(
+            request.model_dump()
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="groups.characters.tensor_request_invalid",
+            message="request contains invalid tensor-decomposition fields",
+        ) from exc
+    # Tensor decomposition is defined only for S3. Reject incompatible
+    # class-size shapes before authenticated admission materializes the source
+    # group and recomputes its complete conjugacy partition. The claim is still
+    # fully authenticated for either possible S3 class ordering below.
+    classes = getattr(request.partition, "classes", None)
+    if (
+        not isinstance(classes, tuple)
+        or tuple(sorted(len(cls) for cls in classes if isinstance(cls, tuple)))
+        != (1, 2, 3)
+        or any(not isinstance(cls, tuple) for cls in classes)
+    ):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports only S3 class shapes",
+        )
     partition = _admit_character_partition(request.partition)
     table = _character_table_from_admitted_partition(partition)
     if (
         table.axis.group_order != 6
-        or table.axis.class_sizes != (1, 3, 2)
+        or tuple(sorted(table.axis.class_sizes)) != (1, 2, 3)
         or table.axis.cyclotomic_order != 6
         or tuple(row.label for row in table.rows) != ("trivial", "sign", "standard")
     ):

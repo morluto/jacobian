@@ -16,10 +16,11 @@ from jacobian.math.combinatorics.algebraic._models import (
     LongestIncreasingSubsequenceResult,
 )
 from jacobian.math.combinatorics.algebraic._rsk import word_payload_scalars
+from jacobian.math.logic.languages.words.values import FiniteWord
 
 
 def longest_increasing_subsequence(
-    request: LongestIncreasingSubsequenceRequest,
+    word: FiniteWord | LongestIncreasingSubsequenceRequest,
 ) -> LongestIncreasingSubsequenceResult:
     """Return one deterministic strict longest increasing subsequence.
 
@@ -28,7 +29,8 @@ def longest_increasing_subsequence(
     search examines exactly at most ``n * (n - 1) // 2`` predecessor pairs.
     """
 
-    word = request.word
+    if isinstance(word, LongestIncreasingSubsequenceRequest):
+        word = word.word
     n = len(word.letters)
     if n > MAX_LIS_WORD_LENGTH:
         raise OperationResourceAdmissionError(
@@ -81,7 +83,7 @@ def longest_increasing_subsequence(
         cursor = predecessors[cursor]
     indices.reverse()
     chosen = tuple(indices)
-    return LongestIncreasingSubsequenceResult(
+    return LongestIncreasingSubsequenceResult.model_construct(
         source_word=word,
         length=len(chosen),
         indices=chosen,
@@ -90,11 +92,12 @@ def longest_increasing_subsequence(
 
 
 def longest_decreasing_subsequence(
-    request: LongestDecreasingSubsequenceRequest,
+    word: FiniteWord | LongestDecreasingSubsequenceRequest,
 ) -> LongestDecreasingSubsequenceResult:
     """Return one deterministic strict longest decreasing subsequence."""
 
-    word = request.word
+    if isinstance(word, LongestDecreasingSubsequenceRequest):
+        word = word.word
     n = len(word.letters)
     if n > MAX_LIS_WORD_LENGTH:
         raise OperationResourceAdmissionError(
@@ -147,7 +150,7 @@ def longest_decreasing_subsequence(
         cursor = predecessors[cursor]
     indices.reverse()
     chosen = tuple(indices)
-    return LongestDecreasingSubsequenceResult(
+    return LongestDecreasingSubsequenceResult.model_construct(
         source_word=word,
         length=len(chosen),
         indices=chosen,

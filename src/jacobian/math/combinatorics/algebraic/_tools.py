@@ -25,9 +25,9 @@ from jacobian.math.combinatorics.algebraic._models import (
     PlacticEquivalenceResult,
     PlacticNormalFormRequest,
     PlacticNormalFormResult,
+    RSKInversePermutationRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
-    RSKResult,
     RSKWordRequest,
     RSKWordTraceRequest,
     RSKWordTraceResult,
@@ -72,7 +72,11 @@ from jacobian.math.combinatorics.algebraic.subsequences import (
     longest_decreasing_subsequence,
     longest_increasing_subsequence,
 )
-from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
+from jacobian.math.combinatorics.algebraic.values import (
+    FinitePermutation,
+    PermutationRSKPair,
+    RSKTableauPair,
+)
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 
@@ -126,20 +130,8 @@ def check_semistandard_tableau(
     return native.check_semistandard_tableau(request.tableau)
 
 
-def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
-    try:
-        insertion_rows, recording_rows = native._rsk_permutation(request.permutation)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("permutation",),
-            code="algebraic_combinatorics.permutation_invalid",
-            message=str(exc),
-        ) from exc
-    return RSKResult._from_kernel(
-        request,
-        insertion_rows=insertion_rows,
-        recording_rows=recording_rows,
-    )
+def rsk_permutation(request: RSKPermutationRequest) -> PermutationRSKPair:
+    return native.permutation_rsk(request.permutation)
 
 
 def rsk_word(request: RSKWordRequest) -> RSKTableauPair:
@@ -159,6 +151,10 @@ def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
             code="algebraic_combinatorics.rsk_pair_incompatible",
             message=str(exc),
         ) from exc
+
+
+def inverse_rsk_permutation(request: RSKInversePermutationRequest) -> FinitePermutation:
+    return native.inverse_permutation_rsk(request.pair)
 
 
 def knuth_moves(request: KnuthMovesRequest) -> KnuthMovesResult:
@@ -246,11 +242,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="combinatorics.rsk.permutation.compute",
         title="Compute RSK correspondence for a permutation",
         description="Compute the Robinson-Schensted-Knuth correspondence for one "
-        "strict permutation of 1..n, returning the exact source, canonical "
-        "standard P/Q tableaux, canonical shape, and LIS/LDS lengths under "
-        "ROW_INSERTION_RSK_V1.",
+        "finite permutation of 1..n, returning its canonical standard P/Q "
+        "tableau pair under ROW_INSERTION_RSK_V1.",
         request_type=RSKPermutationRequest,
-        result_type=RSKResult,
+        result_type=PermutationRSKPair,
         run=rsk_permutation,
         tags=("combinatorics", "rsk", "exact"),
         examples=(
@@ -259,7 +254,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Compute RSK of permutation (1, 3, 2); "
                 "input must be a permutation of 1..n.",
                 input={
-                    "permutation": [1, 3, 2],
+                    "permutation": {"images": [1, 3, 2]},
+                    "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.inverse_permutation.compute",
+        title="Invert a permutation RSK tableau pair",
+        description="Reconstruct the unique finite permutation of 1..n from its "
+        "compatible pair of standard tableaux by reverse row insertion under "
+        "ROW_INSERTION_RSK_V1.",
+        request_type=RSKInversePermutationRequest,
+        result_type=FinitePermutation,
+        run=inverse_rsk_permutation,
+        tags=("combinatorics", "rsk", "permutations", "inverse", "exact"),
+        examples=(
+            OperationExample(
+                name="inverse_rsk_permutation_312",
+                description="Recover permutation (3, 1, 2) from its standard P/Q pair; both tableaux must be standard and have the same shape.",
+                input={
+                    "pair": {
+                        "p_tableau": {"rows": [[1, 2], [3]]},
+                        "q_tableau": {"rows": [[1, 3], [2]]},
+                        "convention": "ROW_INSERTION_RSK_V1",
+                    },
                     "convention": "ROW_INSERTION_RSK_V1",
                 },
             ),

@@ -14,6 +14,8 @@ from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_LENGTH,
     MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKConvention,
     RSKInsertionEvent,
     RSKTableauPair,
@@ -24,7 +26,6 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
-    StandardYoungTableau,
     TableauCandidate,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord, Symbol
@@ -185,7 +186,7 @@ class SemistandardTableauCheckRequest(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    __doc__ = f"""One strict bounded permutation for ordinary row-insertion RSK.
+    __doc__ = f"""One bounded canonical permutation for ordinary row-insertion RSK.
 
     Forward insertion performs at most
     ``N(N-1)/2 <= {
@@ -195,61 +196,20 @@ class RSKPermutationRequest(StrictModel):
     ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
     """
 
-    permutation: tuple[StrictInt, ...] = Field(
-        min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
-    )
+    permutation: FinitePermutation
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
 
-class RSKResult(StrictModel):
-    """Canonical tableaux produced by one admitted permutation-RSK kernel."""
+class RSKInversePermutationRequest(StrictModel):
+    __doc__ = f"""Invert one compatible standard-tableau RSK pair with at most
+    {MAX_RSK_PERMUTATION_LENGTH} cells.
 
-    permutation: tuple[StrictInt, ...] = Field(
-        min_length=0,
-        max_length=MAX_RSK_PERMUTATION_LENGTH,
-        description="The exact source permutation of 1 through n.",
-    )
-    p_tableau: StandardYoungTableau
-    q_tableau: StandardYoungTableau
-    shape: IntegerPartition
-    lis_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
-    lds_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
+    Reverse insertion performs at most ``N(N-1)/2`` row searches and at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search.
+    """
+
+    pair: PermutationRSKPair
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-    @model_validator(mode="after")
-    def require_structural_consistency(self) -> Self:
-        if self.p_tableau.shape != self.shape or self.q_tableau.shape != self.shape:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_shape_mismatch",
-                "tableaux and shape must agree",
-            )
-        if sum(self.shape.parts) != len(self.permutation):
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_size_mismatch",
-                "tableau shape size must equal permutation length",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        request: RSKPermutationRequest,
-        *,
-        insertion_rows: tuple[tuple[int, ...], ...],
-        recording_rows: tuple[tuple[int, ...], ...],
-    ) -> Self:
-        """Build one result after the admitted RSK kernel established it."""
-
-        shape = IntegerPartition(parts=tuple(len(row) for row in insertion_rows))
-        return cls.model_construct(
-            permutation=request.permutation,
-            p_tableau=StandardYoungTableau(rows=insertion_rows),
-            q_tableau=StandardYoungTableau(rows=recording_rows),
-            shape=shape,
-            lis_length=shape.parts[0] if shape.parts else 0,
-            lds_length=len(shape.parts),
-            convention=request.convention,
-        )
 
 
 class RSKWordRequest(StrictModel):
@@ -811,9 +771,9 @@ __all__ = [
     "PartitionDominanceResult",
     "PlacticNormalFormRequest",
     "PlacticNormalFormResult",
+    "RSKInversePermutationRequest",
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
-    "RSKResult",
     "RSKWordRequest",
     "RSKWordTraceRequest",
     "RSKWordTraceResult",

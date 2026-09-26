@@ -11,4 +11,5 @@ hypergraphs.
 - [Tableau row-reading native helper](plactic-normal-forms.md#reading-an-existing-rsk-tableau)
 - [Disjoint Greene witnesses](greene-witnesses.md)
 - [Strict longest increasing subsequence](longest-increasing-subsequence.md)
+- [Permutation RSK and its inverse](permutation-rsk.md)
 - [Complete sunflower hypergraphs](sunflower-hypergraphs.md)

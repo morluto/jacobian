@@ -709,6 +709,27 @@ def test_twist_polynomial_result_rejects_oversized_authored_axes() -> None:
     }
 
 
+@pytest.mark.parametrize(
+    "coefficients",
+    (["1"] + ["0"] * 13, ["9" * 1_000]),
+)
+def test_twist_polynomial_result_preflights_nested_polynomial_claim(
+    coefficients: list[str],
+) -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["polynomial"]["coefficients"] = coefficients
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == (
+        "delta_matroid.twist_polynomial_polynomial_bound"
+    )
+
+
 def test_twist_polynomial_result_rejects_overbudget_authored_label() -> None:
     import json
 

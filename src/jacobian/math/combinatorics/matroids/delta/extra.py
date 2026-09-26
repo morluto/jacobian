@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -185,6 +185,49 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
             "of twists of width k."
         )
     )
+
+    @field_validator("polynomial", mode="before")
+    @classmethod
+    def admit_polynomial_claim(cls, value: object) -> object:
+        # Check a raw authored polynomial before the generic IntegerPolynomial
+        # codec expands up to 4,096 coefficients of up to 32,768 digits each.
+        coefficients: object
+        if isinstance(value, IntegerPolynomial):
+            coefficients = value.coefficients
+        elif type(value) is dict:
+            coefficients = value.get("coefficients")
+        else:
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_polynomial_bound",
+                "polynomial must have an admitted coefficient sequence",
+            )
+        if (
+            not isinstance(coefficients, (tuple, list))
+            or type(coefficients) not in (tuple, list)
+            or not 1 <= len(coefficients) <= MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES
+        ):
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_polynomial_bound",
+                "polynomial exceeds the admitted term capacity",
+            )
+        for coefficient in coefficients:
+            if type(coefficient) is str:
+                # Allow one sign character; the canonical codec checks spelling.
+                if len(coefficient) <= MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS + (
+                    coefficient.startswith("-")
+                ):
+                    continue
+            elif (
+                type(coefficient) is int
+                and coefficient.bit_length() <= 14
+                and abs(coefficient) < 10_000
+            ):
+                continue
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_polynomial_bound",
+                "polynomial coefficient exceeds its admitted four-digit envelope",
+            )
+        return value
 
     @model_validator(mode="after")
     def complete_width_axis(self) -> Self:

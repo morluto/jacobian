@@ -25,13 +25,6 @@ def test_n2() -> None:
     assert len(result.hypergraph.edges) == 1
 
 
-def test_n3() -> None:
-    """N=3: 9 vertices, 5 squares."""
-    result = construct_axis_aligned_square_grid(3)
-    assert len(result.hypergraph.vertices) == 9
-    assert len(result.hypergraph.edges) == 5
-
-
 def test_n9_count() -> None:
     """N=9: 81 vertices, 204 squares, 816 incidences."""
     result = construct_axis_aligned_square_grid(9)
@@ -41,17 +34,13 @@ def test_n9_count() -> None:
     assert total_inc == 816
 
 
-def test_edge_size() -> None:
-    """Every edge has exactly 4 vertices."""
-    result = construct_axis_aligned_square_grid(3)
-    for _, members in result.hypergraph.edges:
-        assert len(members) == 4
-
-
 def test_replay_squares() -> None:
     """Every edge is a valid axis-aligned square."""
     result = construct_axis_aligned_square_grid(3)
+    assert len(result.hypergraph.vertices) == 9
+    assert len(result.hypergraph.edges) == 5
     for _, members in result.hypergraph.edges:
+        assert len(members) == 4
         coords = [tuple(int(s) for s in m.strip("()").split(",")) for m in members]
         xs = sorted({c[0] for c in coords})
         ys = sorted({c[1] for c in coords})

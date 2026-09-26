@@ -96,13 +96,16 @@ def test_missing_source_edge_is_not_given_an_implicit_colour() -> None:
 def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
     vertices = tuple(str(i) for i in range(5))
     members = complete_edges(vertices, 3)
-    colors = [index % 2 for index, _ in enumerate(members)]
+    colors = [0 if index == 0 else 1 for index, _ in enumerate(members)]
     source = make_coloring(vertices, members, colors)
 
     result = construct(source, 3, 4)
     expected: dict[tuple[str, ...], int] = {}
     lookup = {
         frozenset(edge): color for edge, color in zip(members, colors, strict=True)
+    }
+    source_ids = {
+        frozenset(edge): f"e{index}" for index, edge in enumerate(members)
     }
     for target in combinations(vertices, 4):
         target_colors = {lookup[frozenset(edge)] for edge in combinations(target, 3)}
@@ -115,6 +118,20 @@ def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
             result.hypergraph.edges, result.candidate_colors, strict=True
         )
     } == expected
+    assert expected
+    assert result.source_edge_witnesses
+
+    for (_, target), candidate_color, witness in zip(
+        result.hypergraph.edges,
+        result.candidate_colors,
+        result.source_edge_witnesses,
+        strict=True,
+    ):
+        required = tuple(combinations(tuple(sorted(target)), 3))
+        assert witness == tuple(source_ids[frozenset(edge)] for edge in required)
+        assert {
+            lookup[frozenset(edge)] for edge in required
+        } == {candidate_color}
 
 
 def test_target_equal_source_uniformity_returns_each_source_edge() -> None:

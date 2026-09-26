@@ -6,7 +6,7 @@ from fractions import Fraction
 from math import gcd
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits, encode_strict_json
+from jacobian.canonical import CanonicalLimits, decimal_digit_width, encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -26,7 +26,7 @@ MAX_COORDINATE_ADDITION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _digits(value: int) -> int:
-    return len(str(abs(value)))
+    return decimal_digit_width(abs(value))
 
 
 def _require_same_parent(

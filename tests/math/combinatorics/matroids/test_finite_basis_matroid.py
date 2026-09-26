@@ -92,6 +92,13 @@ def test_empty_ground_rank_zero_and_full_rank_preserve_the_ground_axis() -> None
     assert full_rank.rank == 3
 
 
+def test_exchange_verifier_rejects_mutable_basis_rows_before_set_checks() -> None:
+    forged = FiniteBasisMatroid.model_construct(ground=("a",), bases=([0],))
+
+    with pytest.raises(Exception, match="basis rows must be immutable tuples"):
+        forged.require_basis_exchange()
+
+
 def test_json_round_trip_is_structural_and_exchange_check_is_explicit() -> None:
     value = FiniteBasisMatroid(
         ground=("a", "b", "c", "d"),

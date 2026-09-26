@@ -201,6 +201,10 @@ class FiniteBasisMatroid(StrictModel):
             raise _validation_error(
                 "basis_family_empty", "bases must be a nonempty immutable tuple"
             )
+        if any(type(basis) is not tuple for basis in self.bases):
+            raise _validation_error(
+                "basis_row_type", "basis rows must be immutable tuples"
+            )
         ground_size = len(self.ground)
         if len(set(self.ground)) != ground_size:
             raise _validation_error("ground_duplicate", "ground labels must be unique")

@@ -19,6 +19,7 @@ vertex quotient currently admits orders through eight; order nine and above
 exceed its exact permutation-canonicalization budget. The edge quotient
 admits per-card permutation canonicalization over the full source order.
 
+
 `graph.deck.from_cards.construct` accepts an unordered finite multiset of cards
 of one declared order and stores each exact graph-isomorphism class once with
 its positive multiplicity. Its canonical representatives make card relabeling
@@ -28,6 +29,14 @@ row ordering, and multiplicity bounds; it does not prove that each supplied row
 is a permutation-minimal representative or that different rows are
 nonisomorphic. The degree invariant profile uses only graph degrees, so it does
 not require permutation canonicalization.
+its declared order. The native
+`anonymous_graph_card_multiset_equal(request)` function compares two such
+values by declared order, canonical classes, and exact multiplicities; it
+returns only whether those supplied anonymous multisets are equal. It does not
+check deck realizability or identify a source graph. Pairwise canonical
+validation is admitted against one combined work bound before nested parsing,
+and `card_order` must be a native integer so coercion cannot bypass that bound.
+
 
 `graph.deck.vertex.induced_subgraph_count.compute` reconstructs the number of
 induced copies of a caller-supplied pattern `H` when `|V(H)| < n`, where `n` is

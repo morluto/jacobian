@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+
 from itertools import combinations, permutations
 from math import comb, factorial
 from typing import Annotated, Any, Self, cast
 
-from pydantic import Field, model_validator
+from pydantic import Field, PrivateAttr, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
@@ -14,15 +15,19 @@ from jacobian._models import StrictModel
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
+
 from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
+
 
 MAX_DECK_VERTICES = 64
 """Admission cap on source vertices so the complete card family fits output."""
 
 MAX_DECK_CARD_EDGES = 130_000
+"""Admission cap on aggregate card edges across the whole family."""
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
+
 MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
 MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
 MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
@@ -33,6 +38,7 @@ MAX_ANONYMOUS_CARD_PROFILE_WORK = 2_000_000
 MAX_ANONYMOUS_CARD_PROFILE_CELLS = 200_000
 MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES = 1_000_000
 """Admission cap on aggregate card edges across the whole family."""
+
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
     MAX_UNLABELLED_DECK_VERTICES - 1, 2
@@ -41,7 +47,13 @@ MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
 MAX_KELLY_DECK_TOTAL_WORK = MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS
 MAX_KELLY_COUNT_DIGITS = 3
 MAX_KELLY_SUBGRAPH_COUNT_DIGITS = 12
+MAX_DECK_ECHO_ALLOCATION = 1_000_000
+"""Bound vertex-label characters echoed by a Kelly deck result."""
+MAX_DEGREE_MULTISET_DIGITS = 64
+"""Aggregate decimal digits admitted in a reconstructed degree multiset."""
+
 MAX_KELLY_RESULT_BYTES = 1_000_000
+
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -226,6 +238,121 @@ class AnonymousGraphCardMultiset(StrictModel):
         cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
     ) -> Self:
         return cls.model_construct(card_order=card_order, classes=classes)
+
+
+class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
+    """Compare two bounded anonymous multisets of graph isomorphism classes."""
+
+    left: AnonymousGraphCardMultiset
+    right: AnonymousGraphCardMultiset
+    _admitted_operands: (
+        tuple[AnonymousGraphCardMultiset, AnonymousGraphCardMultiset] | None
+    ) = PrivateAttr(default=None)
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_both_carriers_before_nested_validation(cls, value: Any) -> Any:
+        if type(value) is not dict:
+            return value
+        total_work = 0
+        for side in ("left", "right"):
+            multiset = value.get(side)
+            if type(multiset) is dict:
+                order = multiset.get("card_order")
+                classes = multiset.get("classes")
+            elif type(multiset) is AnonymousGraphCardMultiset:
+                # Revalidate typed inputs once after pair admission. Check the
+                # shape needed to bound model_dump before materializing it.
+                order = multiset.card_order
+                classes = multiset.classes
+                if (
+                    type(order) is not int
+                    or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
+                    or type(classes) is not tuple
+                    or len(classes) > MAX_ANONYMOUS_CARD_CLASSES
+                ):
+                    raise _validation_error(
+                        "anonymous_equality_typed_shape",
+                        "typed operand shape exceeds its preflight bound",
+                    )
+                expected_vertices = tuple(f"v{i:02d}" for i in range(order))
+                pair_count = comb(order, 2)
+                for item in classes:
+                    graph = getattr(item, "representative", None)
+                    if (
+                        type(item) is not AnonymousGraphCardClass
+                        or type(getattr(item, "multiplicity", None)) is not int
+                        or not 1 <= item.multiplicity < 10**12
+                        or type(graph) is not SimpleUndirectedGraph
+                        or type(graph.vertices) is not tuple
+                        or graph.vertices != expected_vertices
+                        or type(graph.edges) is not tuple
+                        or len(graph.edges) > pair_count
+                        or any(
+                            type(edge) is not tuple
+                            or len(edge) != 2
+                            or any(type(label) is not str for label in edge)
+                            or len(edge[0]) > MAX_GRAPH_LABEL_BYTES
+                            or len(edge[1]) > MAX_GRAPH_LABEL_BYTES
+                            or edge[0] >= edge[1]
+                            or edge[0] not in expected_vertices
+                            or edge[1] not in expected_vertices
+                            for edge in graph.edges
+                        )
+                    ):
+                        raise _validation_error(
+                            "anonymous_equality_typed_shape",
+                            "typed operand shape exceeds its preflight bound",
+                        )
+            else:
+                continue
+            if (
+                type(order) is not int
+                and type(multiset) is dict
+                and "card_order" in multiset
+            ):
+                raise _validation_error(
+                    "anonymous_equality_typed_shape",
+                    "card_order must be a native integer before combined admission",
+                )
+            if (
+                type(order) is not int
+                or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
+                or type(classes) not in (list, tuple)
+            ):
+                continue
+            if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
+                raise _validation_error(
+                    "anonymous_equality_class_bound",
+                    "equality input has too many card classes",
+                )
+            total_work += _anonymous_canonicalization_work(order, len(classes))
+        if total_work > MAX_ANONYMOUS_CARD_EQUALITY_WORK:
+            raise _validation_error(
+                "anonymous_equality_work_bound",
+                "combined canonical validation exceeds the equality work bound",
+            )
+        normalized = dict(value)
+        for side in ("left", "right"):
+            multiset = value.get(side)
+            if type(multiset) is dict:
+                normalized[side] = _normalize_anonymous_profile_json_tuples(
+                    {"multiset": multiset}
+                )["multiset"]
+            elif type(multiset) is AnonymousGraphCardMultiset:
+                normalized[side] = multiset.model_dump(mode="python")
+        return normalized
+
+    @model_validator(mode="after")
+    def record_admitted_operands(self) -> Self:
+        object.__setattr__(self, "_admitted_operands", (self.left, self.right))
+        return self
+
+
+class AnonymousGraphCardMultisetEqualityResult(StrictModel):
+    """Exact equality of card order, isomorphism classes, and multiplicities."""
+
+    equal: bool
 
 
 class AnonymousCardDegreeFrequency(StrictModel):
@@ -669,8 +796,9 @@ class UnlabelledDeckRequest(StrictModel):
     deck: EdgeDeletionFamily = Field(
         description=(
             "A complete source-bound edge deck; quotient is admitted for at most "
-            "10 source vertices and 2000000 units of pairwise isomorphism work."
-        )
+            "10 source vertices and 2000000 units of exact permutation "
+            "canonicalization work."
+        ),
     )
 
 
@@ -747,6 +875,7 @@ class UnlabelledDeck(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
 
 
 class UnlabelledEdgeDeckRequest(StrictModel):
@@ -827,6 +956,7 @@ class UnlabelledEdgeDeck(StrictModel):
         return cls.model_construct(**values)
 
 
+
 class UnlabelledVertexDeckRequest(StrictModel):
     """Consume a complete source-bound vertex-deletion family."""
 
@@ -901,6 +1031,7 @@ class UnlabelledVertexDeck(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
 
 
 class VertexDeckIsomorphismProfileRequest(StrictModel):
@@ -1849,6 +1980,7 @@ def _normalize_edge_family_json(value: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+
 class VertexDeckInducedSubgraphCountRequest(StrictModel):
     """Count an induced pattern from a complete vertex deck."""
 
@@ -2130,11 +2262,15 @@ class VertexDeckEdgeCount(StrictModel):
 
 __all__ = [
     "MAX_DECK_CARD_EDGES",
+    "MAX_DECK_ECHO_ALLOCATION",
     "MAX_DECK_VERTICES",
+    "MAX_DEGREE_MULTISET_DIGITS",
     "MAX_EDGE_DECK_EDGES",
     "MAX_KELLY_COUNT_DIGITS",
     "MAX_KELLY_DECK_TOTAL_WORK",
+
     "MAX_KELLY_RESULT_BYTES",
+
     "MAX_KELLY_SUBGRAPH_COUNT_DIGITS",
     "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK",
     "MAX_UNLABELLED_DECK_VERTICES",

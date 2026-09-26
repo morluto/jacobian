@@ -2,20 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import BeforeValidator, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.logic.automata.transducers.values import (
+    MAX_FST_ALPHABET_ID_LENGTH,
     MAX_FST_RESULT_WORD_LENGTH,
     MAX_FST_STATES,
     MAX_FST_WORD_LENGTH,
+    FiniteAlphabet,
     RationalTransducer,
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.finite_alphabet import _reject_lone_surrogate_symbol
+from jacobian.math.logic.languages.words.values import WordMorphism
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -26,7 +30,30 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 class SubseqRunRequest(StrictModel):
     transducer: SubsequentialTransducer
-    word: tuple[int, ...] = Field(max_length=MAX_FST_WORD_LENGTH)
+    word: tuple[int, ...] = Field(
+        max_length=MAX_FST_WORD_LENGTH,
+        description=(
+            "Input symbol indices in the request's transducer input alphabet order. "
+            "This is request-scoped index data, not an alphabet-parented FiniteWord."
+        ),
+    )
+
+
+class SubseqIdentityRequest(StrictModel):
+    """Construct the identity function on one exact ordered alphabet."""
+
+    alphabet: FiniteAlphabet
+    alphabet_id: Annotated[
+        str | None,
+        BeforeValidator(_reject_lone_surrogate_symbol),
+        Field(max_length=MAX_FST_ALPHABET_ID_LENGTH),
+    ] = None
+
+
+class WordMorphismToSubseqRequest(StrictModel):
+    """A total word morphism to realize as a one-state subsequential machine."""
+
+    morphism: WordMorphism
 
 
 class SubseqRunResult(SubseqRunRequest):
@@ -42,6 +69,37 @@ class SubseqRunResult(SubseqRunRequest):
     final_state: int = Field(ge=0, lt=MAX_FST_STATES)
     undefined_position: int | None = None
     partial_output: tuple[int, ...] = Field(max_length=MAX_FST_RESULT_WORD_LENGTH)
+    state_trace: tuple[int, ...] = Field(
+        max_length=MAX_FST_WORD_LENGTH + 1,
+        description="Initial state followed by the state after each consumed symbol.",
+    )
+    transition_outputs: tuple[
+        Annotated[tuple[int, ...], Field(max_length=MAX_FST_WORD_LENGTH)], ...
+    ] = Field(
+        max_length=MAX_FST_WORD_LENGTH,
+        description="One output word per successfully consumed input symbol.",
+    )
+    cumulative_outputs: tuple[
+        Annotated[tuple[int, ...], Field(max_length=MAX_FST_RESULT_WORD_LENGTH)], ...
+    ] = Field(
+        max_length=MAX_FST_WORD_LENGTH + 1,
+        description=(
+            "Transition-output prefix after each input prefix, including the empty "
+            "prefix; final output is separate."
+        ),
+    )
+    final_output: tuple[int, ...] = Field(
+        max_length=MAX_FST_WORD_LENGTH,
+        description="Final-state output on OUTPUT; empty otherwise.",
+    )
+    obstruction_position: int | None = Field(
+        default=None,
+        description="Undefined input position, or input length for a nonfinal terminal state.",
+    )
+    obstruction_state: int | None = Field(default=None)
+    obstruction_symbol: int | None = Field(
+        default=None, description="Input symbol lacking a transition, when undefined."
+    )
 
     @model_validator(mode="after")
     def require_canonical_outcome_shape(self) -> Self:
@@ -49,24 +107,73 @@ class SubseqRunResult(SubseqRunRequest):
             raise _validation_error(
                 "run_final_state_out_of_range", "final state is outside the transducer"
             )
+        output_rows = (
+            self.output,
+            self.partial_output,
+            self.final_output,
+            *self.transition_outputs,
+            *self.cumulative_outputs,
+        )
         if any(
             not 0 <= symbol < self.transducer.output_alphabet_size
-            for symbol in (*self.output, *self.partial_output)
+            for row in output_rows
+            for symbol in row
         ):
             raise _validation_error(
                 "run_output_symbol_out_of_range",
                 "run output contains a symbol outside the output alphabet",
             )
+        if any(
+            not 0 <= state < self.transducer.state_count for state in self.state_trace
+        ):
+            raise _validation_error(
+                "run_state_trace_out_of_range", "run trace contains an undeclared state"
+            )
+        if (
+            len(self.state_trace) != len(self.transition_outputs) + 1
+            or len(self.cumulative_outputs) != len(self.state_trace)
+            or not self.state_trace
+            or self.state_trace[0] != self.transducer.initial_state
+            or self.state_trace[-1] != self.final_state
+        ):
+            raise _validation_error(
+                "run_trace_shape", "run trace arrays must align with consumed prefixes"
+            )
         if self.status == "OUTPUT":
-            valid = self.undefined_position is None and not self.partial_output
+            valid = (
+                self.undefined_position is None
+                and self.obstruction_position is None
+                and self.obstruction_state is None
+                and self.obstruction_symbol is None
+                and len(self.state_trace) == len(self.word) + 1
+                and not self.partial_output
+                and len(self.transition_outputs) == len(self.word)
+                and len(self.final_output) <= MAX_FST_WORD_LENGTH
+                and len(self.output) <= MAX_FST_RESULT_WORD_LENGTH
+            )
         elif self.status == "UNDEFINED_TRANSITION":
             valid = (
                 not self.output
                 and self.undefined_position is not None
                 and 0 <= self.undefined_position < len(self.word)
+                and self.obstruction_position == self.undefined_position
+                and self.obstruction_state == self.final_state
+                and self.obstruction_symbol == self.word[self.undefined_position]
+                and len(self.transition_outputs) == self.undefined_position
+                and len(self.state_trace) == self.undefined_position + 1
+                and not self.final_output
             )
         else:
-            valid = not self.output and self.undefined_position is None
+            valid = (
+                not self.output
+                and self.undefined_position is None
+                and self.obstruction_position == len(self.word)
+                and self.obstruction_state == self.final_state
+                and self.obstruction_symbol is None
+                and len(self.transition_outputs) == len(self.word)
+                and len(self.state_trace) == len(self.word) + 1
+                and not self.final_output
+            )
         if not valid:
             raise _validation_error(
                 "run_outcome_shape",
@@ -77,24 +184,39 @@ class SubseqRunResult(SubseqRunRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: SubseqRunRequest,
         *,
+        transducer: SubsequentialTransducer,
+        word: tuple[int, ...],
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
         output: tuple[int, ...],
         final_state: int,
         undefined_position: int | None,
         partial_output: tuple[int, ...],
+        state_trace: tuple[int, ...],
+        transition_outputs: tuple[tuple[int, ...], ...],
+        cumulative_outputs: tuple[tuple[int, ...], ...],
+        final_output: tuple[int, ...],
+        obstruction_position: int | None,
+        obstruction_state: int | None,
+        obstruction_symbol: int | None,
     ) -> Self:
         """Construct a run outcome emitted by the trusted owner-local kernel."""
 
         return cls.model_construct(
-            transducer=request.transducer,
-            word=request.word,
+            transducer=transducer,
+            word=word,
             status=status,
             output=output,
             final_state=final_state,
             undefined_position=undefined_position,
             partial_output=partial_output,
+            state_trace=state_trace,
+            transition_outputs=transition_outputs,
+            cumulative_outputs=cumulative_outputs,
+            final_output=final_output,
+            obstruction_position=obstruction_position,
+            obstruction_state=obstruction_state,
+            obstruction_symbol=obstruction_symbol,
         )
 
 
@@ -156,6 +278,91 @@ class ComposeResult(ComposeRequest):
 
 class TrimRequest(StrictModel):
     transducer: SubsequentialTransducer
+
+
+class ReachableStatesRequest(StrictModel):
+    """Find shortest input paths to each reachable transducer state."""
+
+    transducer: SubsequentialTransducer
+
+
+class ReachableStateWitness(StrictModel):
+    """One shortest path witness from the transducer's initial state."""
+
+    state: int = Field(ge=0, lt=MAX_FST_STATES)
+    input_word: tuple[int, ...] = Field(max_length=MAX_FST_STATES - 1)
+    output_word: tuple[int, ...] = Field(
+        max_length=MAX_FST_STATES * MAX_FST_WORD_LENGTH
+    )
+    state_trace: tuple[int, ...] = Field(min_length=1, max_length=MAX_FST_STATES)
+
+
+class ReachableStatesResult(ReachableStatesRequest):
+    """Reachable states with canonical shortest transition-output traces.
+
+    Rows are ordered by source state ID. A kernel establishes that each path
+    is valid and shortest; this carrier checks only its bounded shape.
+    """
+
+    witnesses: tuple[ReachableStateWitness, ...] = Field(max_length=MAX_FST_STATES)
+
+    @model_validator(mode="after")
+    def require_canonical_witness_shape(self) -> Self:
+        states = tuple(row.state for row in self.witnesses)
+        if (
+            states != tuple(sorted(set(states)))
+            or self.transducer.initial_state not in states
+        ):
+            raise _validation_error(
+                "reachable_witness_order",
+                "witnesses must be state-sorted and include the initial state",
+            )
+        for row in self.witnesses:
+            if (
+                not row.state_trace
+                or row.state >= self.transducer.state_count
+                or row.state_trace[0] != self.transducer.initial_state
+                or row.state_trace[-1] != row.state
+                or len(row.state_trace) != len(row.input_word) + 1
+                or any(
+                    not 0 <= symbol < self.transducer.input_alphabet_size
+                    for symbol in row.input_word
+                )
+                or any(
+                    not 0 <= symbol < self.transducer.output_alphabet_size
+                    for symbol in row.output_word
+                )
+                or any(
+                    not 0 <= state < self.transducer.state_count
+                    for state in row.state_trace
+                )
+            ):
+                raise _validation_error(
+                    "reachable_witness_shape",
+                    "each witness must have bounded symbols and aligned source-state endpoints",
+                )
+        initial = next(
+            row for row in self.witnesses if row.state == self.transducer.initial_state
+        )
+        if (
+            initial.input_word
+            or initial.output_word
+            or initial.state_trace != (initial.state,)
+        ):
+            raise _validation_error(
+                "reachable_initial_witness",
+                "the initial state witness must be the empty path",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        transducer: SubsequentialTransducer,
+        witnesses: tuple[ReachableStateWitness, ...],
+    ) -> Self:
+        return cls.model_construct(transducer=transducer, witnesses=witnesses)
 
 
 class TrimResult(TrimRequest):
@@ -487,7 +694,9 @@ class MinimizeResult(MinimizeRequest):
 
     def _require_sample_agreement(self) -> None:
         alphabet = self.transducer.input_alphabet_size
-        if alphabet <= 1:
+        if alphabet == 0:
+            expected_words = 1  # Only the empty word exists over the empty alphabet.
+        elif alphabet == 1:
             expected_words = self.sample_max_length + 1
         else:
             expected_words = sum(
@@ -537,6 +746,12 @@ class RelationPathReplayRequest(StrictModel):
     transducer: RationalTransducer
     initial_state: int = Field(ge=0, lt=MAX_FST_STATES)
     edge_path: tuple[int, ...] = Field(max_length=MAX_FST_WORD_LENGTH)
+
+
+class RationalRelationInverseRequest(StrictModel):
+    """Reverse the input/output coordinates of one finite rational relation."""
+
+    transducer: RationalTransducer
 
 
 class RelationPathReplayResult(RelationPathReplayRequest):
@@ -610,6 +825,7 @@ __all__ = [
     "ComposeResult",
     "MinimizeRequest",
     "MinimizeResult",
+    "RationalRelationInverseRequest",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
     "StatePairDistinguishability",

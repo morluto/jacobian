@@ -9,7 +9,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.groups.root_systems._cartan import cartan_type_matrix
 from jacobian.math.groups.root_systems._models import (
     MAX_HIGHEST_WEIGHT_BITS,
     CartanMatrix,
@@ -19,6 +18,7 @@ from jacobian.math.groups.root_systems._weight_character_models import (
     MAX_CHARACTER_STATES,
     IrreducibleWeightCharacter,
     WeightMultiplicity,
+    _type_a_axis_order,
 )
 from jacobian.math.groups.root_systems.operations import (
     _admit_cartan_finite_type,
@@ -96,10 +96,21 @@ def highest_weight_character(
             message="highest-weight coordinates exceed the admitted bit bound",
         )
 
+    # Recognize the bounded Cartan axis before computing an exact output
+    # envelope: a worst-permutation estimate would reject useful valid inputs.
+    axis_order = _type_a_axis_order(cartan.entries)
+    if axis_order is None:
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="root_system.character_type_unsupported",
+            message="highest-weight character enumeration currently supports irreducible type A only",
+        )
+    kernel_highest = tuple(highest[index] for index in axis_order)
+    inverse_axis = tuple(axis_order.index(index) for index in range(rank))
     # A dominant A_(n-1) weight a_i has GL_n partition
     # (a_1+...+a_(n-1), a_2+...+a_(n-1), ..., a_(n-1), 0).
     n = rank + 1
-    partition = (*(sum(highest[index:]) for index in range(rank)), 0)
+    partition = (*(sum(kernel_highest[index:]) for index in range(rank)), 0)
     total = sum(partition)
     # Every candidate content has total ``total``. The number of all weak
     # compositions is a sound upper bound on both candidate states and output.
@@ -132,16 +143,8 @@ def highest_weight_character(
             message="complete type-A character exceeds its admitted state, work, integer, or output bound",
         )
 
-    # Type recognition follows the semantic resource admission and precedes
-    # root/weight expansion. This bounded slice currently implements A only.
+    # Admission precedes all candidate and root expansion.
     _admit_cartan_finite_type(cartan.entries)
-    if cartan.entries != cartan_type_matrix("A", rank):
-        raise OperationDomainValidationError(
-            location=("matrix",),
-            code="root_system.character_type_unsupported",
-            message="highest-weight character enumeration currently supports irreducible type A only",
-        )
-
     contents = _type_a_candidates(partition, total)
     if len(contents) > state_bound:
         raise RuntimeError(
@@ -206,7 +209,9 @@ def highest_weight_character(
         sorted(
             (
                 WeightMultiplicity(
-                    weight=content_to_weight[content],
+                    weight=tuple(
+                        content_to_weight[content][index] for index in inverse_axis
+                    ),
                     multiplicity=multiplicities[content],
                 )
                 for content in contents

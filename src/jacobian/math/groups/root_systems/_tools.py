@@ -9,6 +9,7 @@ from jacobian.math.groups.root_systems._highest_coroot_models import (
 )
 from jacobian.math.groups.root_systems._highest_coroot_operations import highest_coroots
 from jacobian.math.groups.root_systems._models import (
+    MAX_BRUHAT_INTERVAL_GROUP_ORDER,
     MAX_RANK,
     CartanDatumRequest,
     CartanMatrixRequest,
@@ -32,6 +33,8 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
+    WeylBruhatIntervalRequest,
+    WeylBruhatIntervalResult,
     WeylDescentsResult,
     WeylDimensionRequest,
     WeylDimensionResult,
@@ -75,6 +78,7 @@ from jacobian.math.groups.root_systems.operations import (
     simple_reflection,
     simple_reflections,
     weight_lattice_vector,
+    weyl_bruhat_interval,
     weyl_element_compose,
     weyl_element_descents,
     weyl_element_from_word,
@@ -218,6 +222,12 @@ def _run_weyl_element_compose(request: WeylElementComposeRequest) -> WeylElement
 
 def _run_weyl_element_inverse(request: WeylElementInverseRequest) -> WeylElement:
     return weyl_element_inverse(request.element)
+
+
+def _run_weyl_bruhat_interval(
+    request: WeylBruhatIntervalRequest,
+) -> WeylBruhatIntervalResult:
+    return weyl_bruhat_interval(request.lower, request.upper)
 
 
 def _run_weyl_element_descents(
@@ -1260,6 +1270,53 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "in A2; each word index must be below the Cartan rank and "
                 "the word within the length budget.",
                 input={"matrix": _A2["matrix"], "word": [0, 1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.bruhat_interval.compute",
+        title="Compute a complete finite Weyl Bruhat interval",
+        description=(
+            "Return every Weyl element x with lower <= x <= upper in the "
+            "strong Bruhat order, together with exact length ranks and the "
+            "finite-poset covers. The endpoints must share an ordered finite "
+            "Cartan parent whose Weyl group has order at most "
+            f"{MAX_BRUHAT_INTERVAL_GROUP_ORDER}. Incomparable endpoints give "
+            "the empty interval; equal endpoints give a singleton."
+        ),
+        request_type=WeylBruhatIntervalRequest,
+        result_type=WeylBruhatIntervalResult,
+        run=_run_weyl_bruhat_interval,
+        tags=("algebra", "root-system", "weyl-group", "poset", "exact"),
+        discovery_terms=(
+            "Bruhat order interval",
+            "Weyl group Bruhat interval poset",
+            "strong Bruhat interval",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_identity_to_reflection_interval",
+                description="Return [e,s0] in A2, a two-element chain.",
+                input={
+                    "lower": {
+                        **_A2,
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["1", "0"], ["0", "1"]],
+                        },
+                    },
+                    "upper": {
+                        **_A2,
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                },
             ),
         ),
     ),

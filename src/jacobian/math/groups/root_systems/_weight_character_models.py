@@ -21,6 +21,45 @@ MAX_CHARACTER_STATES = 4_096
 MAX_CHARACTER_MULTIPLICITY_BITS = 16_384
 
 
+def _type_a_axis_order(
+    entries: tuple[tuple[int, ...], ...],
+) -> tuple[int, ...] | None:
+    """Find a type-A path in the caller's ordered Cartan axes, if present."""
+    rank = len(entries)
+    if rank == 0:
+        return None
+    neighbors = tuple(
+        tuple(j for j in range(rank) if i != j and entries[i][j] != 0)
+        for i in range(rank)
+    )
+    endpoints = tuple(i for i, row in enumerate(neighbors) if len(row) == 1)
+    order: tuple[int, ...]
+    if rank == 1:
+        order = (0,)
+    elif len(endpoints) == 2:
+        path: list[int] = []
+        previous, current = -1, min(endpoints)
+        for _ in range(rank):
+            if current in path:
+                return None
+            path.append(current)
+            following = tuple(node for node in neighbors[current] if node != previous)
+            if not following:
+                break
+            previous, current = current, following[0]
+        order = tuple(path)
+    else:
+        return None
+    standard = cartan_type_matrix("A", rank)
+    if len(order) != rank or any(
+        entries[order[i]][order[j]] != standard[i][j]
+        for i in range(rank)
+        for j in range(rank)
+    ):
+        return None
+    return order
+
+
 class HighestWeightCharacterRequest(CartanMatrixRequest):
     """A dominant highest weight in fundamental-weight coordinates."""
 
@@ -75,7 +114,7 @@ class IrreducibleWeightCharacter(StrictModel):
         rank = len(self.matrix)
         weights = tuple(term.weight for term in self.terms)
         if (
-            self.matrix.entries != cartan_type_matrix("A", rank)
+            _type_a_axis_order(self.matrix.entries) is None
             or self.weight_axis != tuple(range(rank))
             or len(self.highest_weight) != rank
             or any(value < 0 for value in self.highest_weight)

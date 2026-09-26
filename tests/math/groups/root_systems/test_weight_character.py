@@ -102,6 +102,35 @@ def test_sparse_high_rank_character_admits_output_by_retained_weight_bound() -> 
     assert all(term.multiplicity == 1 for term in character.terms)
 
 
+def test_dense_a2_character_uses_both_retained_term_bounds() -> None:
+    # The Weyl dimension is 512, but there are only 253 compositions; 169
+    # contents survive. Dimension alone overestimates this result's size.
+    character = highest_weight_character(A2, (7, 7))
+    assert len(character.terms) == 169
+    assert (
+        sum(term.multiplicity for term in character.terms)
+        == weyl_dimension(A2, (7, 7)).dimension
+        == 512
+    )
+
+
+def test_a8_fundamental_character_scans_more_than_retained_capacity() -> None:
+    # 12,870 weak compositions are scanned; only nine weights are retained.
+    # Scanning is admitted by work, not by the 4,096-term result capacity.
+    a8 = tuple(
+        tuple(2 if i == j else -1 if abs(i - j) == 1 else 0 for j in range(8))
+        for i in range(8)
+    )
+    character = highest_weight_character(a8, (0, 0, 0, 0, 0, 0, 0, 1))
+    assert len(character.terms) == 9
+    assert all(term.multiplicity == 1 for term in character.terms)
+    assert (
+        sum(term.multiplicity for term in character.terms)
+        == weyl_dimension(a8, (0, 0, 0, 0, 0, 0, 0, 1)).dimension
+        == 9
+    )
+
+
 @pytest.mark.parametrize(("cartan", "highest"), ((A2, (2, 1)), (A3, (1, 1, 0))))
 def test_character_has_weyl_symmetry_and_dimension(
     cartan: tuple[tuple[int, ...], ...], highest: tuple[int, ...]

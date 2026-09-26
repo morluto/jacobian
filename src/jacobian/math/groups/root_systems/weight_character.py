@@ -126,7 +126,7 @@ def highest_weight_character(
     partition = (*(sum(kernel_highest[index:]) for index in range(rank)), 0)
     total = sum(partition)
     # Every candidate content has total ``total``. The number of all weak
-    # compositions is a sound upper bound on both candidate states and output.
+    # compositions bounds scanning; retained weights have a tighter bound.
     # Reject large totals before computing a potentially huge binomial.
     if total + 1 > MAX_CHARACTER_STATES:
         raise OperationResourceAdmissionError(
@@ -141,17 +141,17 @@ def highest_weight_character(
     intermediate_bits_bound = (
         dimension_bits_bound + (4 * root_count * max(total, 1) ** 2 + 1).bit_length()
     )
-    # The Weyl dimension bounds the number of retained weights (each has
-    # positive integral multiplicity). Unlike the scanned-composition envelope,
-    # it therefore gives a useful conservative wire-size estimate for sparse
-    # characters such as exterior powers. Compute it using the type-A Weyl
-    # product before candidate expansion.
+    # Every retained weight has positive integral multiplicity, so the Weyl
+    # dimension bounds retained terms. The composition scan also bounds them;
+    # use their minimum for result capacity and size, but only the work bound
+    # for rejected (unretained) compositions.
     dimension = _type_a_dimension(partition)
-    output_bound = dimension * (
+    retained_bound = min(state_bound, dimension)
+    output_bound = retained_bound * (
         128 + rank * ((total + 1).bit_length() + 2) + intermediate_bits_bound // 3 + 4
     )
     if (
-        state_bound > MAX_CHARACTER_STATES
+        retained_bound > MAX_CHARACTER_STATES
         or work_bound > MAX_CHARACTER_WORK
         or intermediate_bits_bound > MAX_CHARACTER_MULTIPLICITY_BITS
         or output_bound > MAX_CHARACTER_OUTPUT_DIGITS
@@ -165,9 +165,9 @@ def highest_weight_character(
     # Admission precedes all candidate and root expansion.
     _admit_cartan_finite_type(cartan.entries)
     contents = _type_a_candidates(partition, total)
-    if len(contents) > state_bound:
+    if len(contents) > retained_bound:
         raise RuntimeError(
-            "type-A content enumeration exceeded its admitted state bound"
+            "type-A content enumeration exceeded its admitted retained-term bound"
         )
     content_set = set(contents)
     # Convert GL_n content to the simple-coroot pairings, i.e. fundamental

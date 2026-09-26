@@ -27,6 +27,7 @@ ROOT_MATH_DOMAINS = (
     "finite_dim_algebras",
     "finite_fields",
     "finite_semigroups",
+    "function_fields",
     "geometry",
     "graphs",
     "groups",

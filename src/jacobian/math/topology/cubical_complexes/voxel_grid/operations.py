@@ -138,6 +138,30 @@ def _face_keys(
     return cells
 
 
+def _count_distinct_face_keys(
+    request: BinaryVoxels3DRequest,
+    ledger: OperationWorkLedger,
+) -> int:
+    """Count exact distinct faces using bounded mixed-radix integer keys."""
+    base = 2 * (MAX_CUBICAL_VOXEL_GRID_SIDE + 1)
+    keys: set[int] = set()
+    for z, plane in enumerate(request.voxels):
+        for y, row in enumerate(plane):
+            for x, occupied in enumerate(row):
+                ledger.charge()
+                if not occupied:
+                    continue
+                choices = tuple(
+                    ((value, 0), (value, 1), (value + 1, 0))
+                    for value in (x, y, z)
+                )
+                for (cx, sx), (cy, sy), (cz, sz) in product(*choices):
+                    ledger.charge()
+                    ix, iy, iz = 2 * cx + sx, 2 * cy + sy, 2 * cz + sz
+                    keys.add((ix * base + iy) * base + iz)
+    return len(keys)
+
+
 def binary_voxels_to_complex(request: BinaryVoxels3DRequest) -> CubicalComplex:
     """Return the closure of occupied unit voxels on the ordered (x,y,z) lattice."""
 
@@ -178,7 +202,7 @@ def binary_voxels_to_complex(request: BinaryVoxels3DRequest) -> CubicalComplex:
         )
     sort_work_bound = output_cell_bound * max(1, ceil(log2(max(2, output_cell_bound))))
     construction_work_bound = (
-        voxel_count + candidate_bound + sort_work_bound + 8 * output_cell_bound
+        voxel_count + 2 * candidate_bound + sort_work_bound + 8 * output_cell_bound
     )
     if construction_work_bound > MAX_CUBICAL_VOXEL_WORK:
         raise OperationResourceAdmissionError(
@@ -189,6 +213,13 @@ def binary_voxels_to_complex(request: BinaryVoxels3DRequest) -> CubicalComplex:
     # The complete generation, ordering, and value-check envelope is admitted
     # before expanding any occupied cube into its 27 possible faces.
     request_checkpoint("after cubical voxel construction admission")
+    exact_face_count = _count_distinct_face_keys(request, ledger)
+    if exact_face_count > MAX_FACE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("voxels",),
+            code="cubical_complex.voxel_grid_face_bound_exceeded",
+            message="voxel face closure exceeds the canonical complex cell limit",
+        )
     faces = _face_keys(request, ledger)
     ledger.charge(sort_work_bound + 8 * len(faces))
     ordered_faces = tuple(sorted(faces))

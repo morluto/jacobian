@@ -28,6 +28,7 @@ from jacobian.math.topology.cubical_complexes._models import (
 )
 from jacobian.math.topology.cubical_complexes.operations import (
     _boundary_terms,
+    _canonical_complex_value,
     _canonical_complex,
     _cells_by_dimension,
 )
@@ -64,7 +65,11 @@ class RelativeCubicalHomologyResult(StrictModel):
 
 
 class CubicalTriangulationRequest(StrictModel):
-    cells: tuple[CubicalCell, ...] = Field(min_length=1)
+    complex: CubicalComplex
+
+    @property
+    def cells(self) -> tuple[CubicalCell, ...]:
+        return self.complex.cells
 
 
 TriangulationCell = Annotated[
@@ -76,7 +81,7 @@ class CubicalTriangulationResult(StrictModel):
     complex: CubicalComplex
     # The triangulation groups are indexed by this retained source-cell axis,
     # not by ``complex.cells`` (which is the face closure).
-    source_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    source_cells: tuple[CubicalCell, ...] = Field(max_length=MAX_CELLS)
     simplex_vertices: tuple[tuple[int, ...], ...] = Field(
         max_length=MAX_TRIANGULATION_POINTS
     )
@@ -325,7 +330,7 @@ def relative_homology(
 
 
 def triangulate(request: CubicalTriangulationRequest) -> CubicalTriangulationResult:
-    complex_, source = _canonical_complex(request.cells)
+    complex_, source = _canonical_complex_value(request.complex)
     # Admit the unavoidable staircase expansion before allocating its result.
     point_axis_set: set[tuple[int, ...]] = set()
     simplex_count = 0

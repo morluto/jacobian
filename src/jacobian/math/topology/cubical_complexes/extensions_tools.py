@@ -108,7 +108,12 @@ TOOLS = (
             OperationExample(
                 name="square_staircase",
                 description="Triangulate one unit square by its two staircase triangles; source intervals must be unit lattice intervals.",
-                input=_SQUARE,
+                input={
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
+                    }
+                },
             ),
         ),
     ),

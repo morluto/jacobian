@@ -167,6 +167,62 @@ def _canonical_complex(
     )
 
 
+def _canonical_complex_value(
+    complex_: CubicalComplex,
+) -> tuple[CubicalComplex, tuple[CubicalCell, ...]]:
+    """Revalidate a canonical carrier and admit its face closure."""
+    if type(complex_) is not CubicalComplex:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="cubical_complex.value_invalid",
+            message="complex must be a canonical CubicalComplex value",
+        )
+    ambient_dimension = getattr(complex_, "ambient_dimension", None)
+    cells = getattr(complex_, "cells", None)
+    if type(ambient_dimension) is not int or not 1 <= ambient_dimension <= MAX_DIM:
+        raise OperationDomainValidationError(
+            location=("complex", "ambient_dimension"),
+            code="cubical_complex.ambient_dimension_invalid",
+            message="complex must retain a valid ambient coordinate axis",
+        )
+    if type(cells) is not tuple or len(cells) > MAX_FACE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("complex", "cells"),
+            code="cubical_complex.face_closure_bound",
+            message="canonical complex exceeds its admitted cell bound",
+        )
+    raw_cells = []
+    for cell in cells:
+        intervals = getattr(cell, "intervals", None)
+        if type(cell) is not CubicalCell or type(intervals) is not tuple:
+            raise OperationDomainValidationError(
+                location=("complex", "cells"),
+                code="cubical_complex.cell_invalid",
+                message="complex cells must be canonical cubical cells",
+            )
+        raw_cells.append({"intervals": intervals})
+    try:
+        admitted = CubicalComplex.model_validate(
+            {"ambient_dimension": ambient_dimension, "cells": raw_cells}
+        )
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="cubical_complex.value_invalid",
+            message="complex does not satisfy its canonical value contract",
+        ) from exc
+    if not admitted.cells:
+        return admitted, ()
+    closed, source_cells = _canonical_complex(admitted.cells)
+    if closed.ambient_dimension != admitted.ambient_dimension:
+        raise OperationDomainValidationError(
+            location=("complex", "ambient_dimension"),
+            code="cubical_complex.ambient_dimension_mismatch",
+            message="complex cells do not use the retained ambient coordinate axis",
+        )
+    return closed, source_cells
+
+
 def _admit_face_poset_source(
     cells: tuple[CubicalCell, ...],
 ) -> tuple[tuple[CubicalCell, ...], int, int]:
@@ -331,14 +387,17 @@ def _counts(complex_: CubicalComplex) -> FVector:
     )
 
 
-def f_vector(cells: tuple[CubicalCell, ...]) -> FVectorResult:
+def f_vector(cells: tuple[CubicalCell, ...] | CubicalComplex) -> FVectorResult:
     """Compute the f-vector and Euler characteristic of a cubical complex.
 
     The f-vector counts all faces (including the supplied maximal cells) by
     dimension.  A single square [0,1]x[0,1] has 4 vertices, 4 edges, 1 square,
     so its f-vector is (4, 4, 1).
     """
-    complex_, source_cells = _canonical_complex(cells)
+    if isinstance(cells, CubicalComplex):
+        complex_, source_cells = _canonical_complex_value(cells)
+    else:
+        complex_, source_cells = _canonical_complex(cells)
     vector = _counts(complex_)
     euler = sum((-1) ** d * count for d, count in enumerate(vector.counts))
     return FVectorResult(
@@ -888,7 +947,12 @@ def product(
 def verify_f_vector(claim: FVectorResult) -> bool:
     """Verify f-vector and Euler claims against retained source cells."""
     try:
-        return f_vector(claim.source_cells) == claim
+        expected = (
+            f_vector(claim.source_cells)
+            if claim.source_cells
+            else f_vector(claim.complex)
+        )
+        return expected == claim
     except OperationResourceAdmissionError:
         raise
     except OperationDomainValidationError:
@@ -910,10 +974,11 @@ def _cells_by_dimension(
 ) -> tuple[tuple[CubicalCell, ...], ...]:
     """Partition the canonical face-closed cells by dimension.
 
-    Face closure guarantees at least one cell in every dimension from zero
-    through the top cell dimension, so the resulting groups form a
-    contiguous degree axis.
+    Nonempty face closure guarantees all degrees through its top dimension.
+    A void complex retains an empty basis at each ambient dimension.
     """
+    if not complex_.cells:
+        return tuple(() for _ in range(complex_.ambient_dimension + 1))
     top = max(cell.dimension for cell in complex_.cells)
     groups: list[list[CubicalCell]] = [[] for _ in range(top + 1)]
     for cell in complex_.cells:
@@ -969,7 +1034,7 @@ def _boundary_matrices(
 
 
 def chain_complex(
-    cells: tuple[CubicalCell, ...],
+    cells: tuple[CubicalCell, ...] | CubicalComplex,
     coefficient_ring: CubicalChainCoefficient = CubicalChainCoefficient.INTEGER,
     prime: int | None = None,
 ) -> CubicalChainComplexResult:
@@ -982,7 +1047,10 @@ def chain_complex(
     shared exact based chain-complex kernel, which replays ``d^2 = 0`` before
     the result is returned.
     """
-    complex_, _source_cells = _canonical_complex(cells)
+    if isinstance(cells, CubicalComplex):
+        complex_, _source_cells = _canonical_complex_value(cells)
+    else:
+        complex_, _source_cells = _canonical_complex(cells)
     return _chain_complex_from_canonical(complex_, coefficient_ring, prime)
 
 

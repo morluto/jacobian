@@ -3,18 +3,30 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_POSET_ELEMENTS,
     CubicalCell,
+    CubicalComplex,
     CubicalComplexRequest,
 )
 from jacobian.math.topology.cubical_complexes.operations import face_poset
 
 _OPERATION_ID = "topology.cubical_complex.face_poset.compute"
+
+
+def _request(cells: tuple[CubicalCell, ...], ambient_dimension: int | None = None):
+    dimension = ambient_dimension or (len(cells[0].intervals) if cells else 2)
+    canonical = CubicalComplex(
+        ambient_dimension=dimension,
+        cells=tuple(sorted(cells, key=lambda cell: cell.intervals)),
+    )
+    return CubicalComplexRequest(complex=canonical)
 
 
 def _oracle_face_closure(cells: tuple[CubicalCell, ...]) -> tuple[CubicalCell, ...]:
@@ -48,7 +60,7 @@ def _oracle_order(
 
 
 def _assert_matches_independent_oracle(request_cells: tuple[CubicalCell, ...]) -> None:
-    result = face_poset(CubicalComplexRequest(cells=request_cells))
+    result = face_poset(_request(request_cells))
     expected_cells = _oracle_face_closure(request_cells)
     expected_order = _oracle_order(expected_cells)
     label_to_cell = {entry.element: entry.cell for entry in result.cell_elements}
@@ -86,7 +98,7 @@ def test_square_face_poset_matches_product_face_and_inclusion_oracle() -> None:
 
 def test_point_cell_has_empty_order_relations_and_void_input_is_unavailable() -> None:
     point = CubicalCell(intervals=((4, 4), (9, 9)))
-    result = face_poset(CubicalComplexRequest(cells=(point,)))
+    result = face_poset(_request((point,)))
     assert result.complex.cells == (point,)
     assert result.poset.elements == ("c00",)
     assert result.poset.strict_order_pairs == ()
@@ -96,14 +108,14 @@ def test_point_cell_has_empty_order_relations_and_void_input_is_unavailable() ->
     assert result.poset.ranks[0].rank == 0
     _assert_matches_independent_oracle((point,))
 
-    with pytest.raises(ValidationError):
-        CubicalComplexRequest(cells=())
+    with pytest.raises(OperationDomainValidationError):
+        face_poset(_request((), ambient_dimension=2))
 
 
 def test_nonpure_face_poset_retains_cell_dimensions_without_poset_ranks() -> None:
     edge = CubicalCell(intervals=((0, 1),))
     isolated_point = CubicalCell(intervals=((4, 4),))
-    result = face_poset(CubicalComplexRequest(cells=(isolated_point, edge)))
+    result = face_poset(_request((isolated_point, edge)))
     assert result.poset.graded is False
     assert result.poset.ranks is None
     assert tuple(entry.dimension for entry in result.cell_elements) == (0, 1, 0, 0)
@@ -124,7 +136,7 @@ def test_face_poset_preflights_existing_cell_count_and_single_cell_closure() -> 
     at_element_bound = tuple(
         CubicalCell(intervals=((index, index),)) for index in range(MAX_POSET_ELEMENTS)
     )
-    admitted = face_poset(CubicalComplexRequest(cells=at_element_bound))
+    admitted = face_poset(_request(at_element_bound, ambient_dimension=1))
     assert len(admitted.poset.elements) == MAX_POSET_ELEMENTS
     assert admitted.poset.strict_order_pairs == ()
     assert len(admitted.poset.incomparable_pairs) == (
@@ -136,8 +148,8 @@ def test_face_poset_preflights_existing_cell_count_and_single_cell_closure() -> 
         for index in range(MAX_POSET_ELEMENTS + 1)
     )
     with pytest.raises(OperationResourceAdmissionError):
-        face_poset(CubicalComplexRequest(cells=too_many_points))
+        face_poset(_request(too_many_points, ambient_dimension=1))
 
     four_cube = CubicalCell(intervals=((0, 1),) * 4)
     with pytest.raises(OperationResourceAdmissionError):
-        face_poset(CubicalComplexRequest(cells=(four_cube,)))
+        face_poset(_request((four_cube,), ambient_dimension=4))

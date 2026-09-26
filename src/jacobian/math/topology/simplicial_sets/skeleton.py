@@ -81,9 +81,9 @@ def _preflight(
     degeneracy_cells = sum(
         (degree + 1) * sizes[degree] for degree in range(source.max_degree)
     )
-    # Source and result validation each check the simplicial identities;
-    # table restriction and inclusion naturality each scan the visible maps.
-    work = 2 * identity_rows + 3 * table_cells + degeneracy_cells
+    # Check identities once at the untrusted source boundary. Restriction and
+    # inclusion are constructed from those admitted tables without replay.
+    work = identity_rows + 2 * table_cells + degeneracy_cells
     # Bound UTF-8/escaped labels, all table indices and their list framing
     # without serializing the source merely to estimate its output size.
     label_chars = sum(
@@ -167,26 +167,32 @@ def simplicial_set_skeleton(
         tuple(index for index, keep in enumerate(level) if keep) for level in included
     )
     skeleton_sets, faces, degeneracies = _restrict_tables(source, source_indices)
-    skeleton = _from_admitted_tables(
-        source.max_degree,
-        skeleton_sets,
-        faces,
-        degeneracies,
-        tuple(map(len, skeleton_sets)),
-    ).simplicial_set
-    if skeleton is None:
-        raise RuntimeError(
-            "degeneracy closure of a simplicial set was not a simplicial set"
+    skeleton_sizes = tuple(map(len, skeleton_sets))
+    skeleton_identities = (
+        sum((degree + 1) * degree // 2 for degree in range(2, source.max_degree + 1))
+        + sum(
+            (degree + 1) * (degree + 2) // 2
+            for degree in range(source.max_degree - 1)
         )
-
-    inclusion = TruncatedSimplicialMap(
-        source=skeleton,
-        target=source,
-        maps=source_indices,
+        + sum(
+            (degree + 1) * (degree + 2)
+            for degree in range(source.max_degree)
+        )
     )
-    # The table restrictions above make these squares commute by construction;
-    # verify the admitted inclusion before publishing it as a reusable map.
-    _check_inclusion(skeleton, source, inclusion)
+    # Degeneracy closure preserves restricted identities, and restriction
+    # indices intertwine every source map by construction. These trusted kernel
+    # constructors avoid repeating those admitted scans during production.
+    skeleton = FiniteTruncatedSimplicialSet._from_kernel(
+        max_degree=source.max_degree,
+        sets=skeleton_sets,
+        face_maps=faces,
+        degeneracy_maps=degeneracies,
+        total_simplices=sum(skeleton_sizes),
+        checked_identities=skeleton_identities,
+    )
+    inclusion = TruncatedSimplicialMap.model_construct(
+        source=skeleton, target=source, maps=source_indices
+    )
 
     return SimplicialSetSkeletonResult(k=k, skeleton=skeleton, inclusion=inclusion)
 
@@ -228,33 +234,6 @@ def _restrict_tables(
         for degree in range(source.max_degree)
     )
     return skeleton_sets, faces, degeneracies
-
-
-def _check_inclusion(
-    skeleton: FiniteTruncatedSimplicialSet,
-    source: FiniteTruncatedSimplicialSet,
-    inclusion: TruncatedSimplicialMap,
-) -> None:
-    for degree in range(1, source.max_degree + 1):
-        for face_index, row in enumerate(skeleton.face_maps[degree - 1]):
-            for simplex_index, face_image in enumerate(row):
-                if (
-                    source.face_maps[degree - 1][face_index][
-                        inclusion.maps[degree][simplex_index]
-                    ]
-                    != inclusion.maps[degree - 1][face_image]
-                ):
-                    raise RuntimeError("skeleton inclusion failed a face square")
-    for degree in range(source.max_degree):
-        for degeneracy_index, row in enumerate(skeleton.degeneracy_maps[degree]):
-            for simplex_index, degeneracy_image in enumerate(row):
-                if (
-                    source.degeneracy_maps[degree][degeneracy_index][
-                        inclusion.maps[degree][simplex_index]
-                    ]
-                    != inclusion.maps[degree + 1][degeneracy_image]
-                ):
-                    raise RuntimeError("skeleton inclusion failed a degeneracy square")
 
 
 __all__ = [

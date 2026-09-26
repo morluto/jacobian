@@ -131,6 +131,20 @@ def plane_curve_blowup_chart(
 ) -> PlaneCurveBlowupChartData:
     """Return the strict transform in x=a+u, y=b+u*t and its E intersection."""
     _admit_curve_polynomial(polynomial)
+    if type(center) is not VariablePoint:
+        _domain_error(
+            "blowup_center_invalid",
+            "the blowup center must be a canonical rational point",
+            "center",
+        )
+    try:
+        center = VariablePoint.model_validate(center.model_dump(), strict=True)
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=("center",),
+            code="plane_algebraic_curve.blowup_center_invalid",
+            message="the blowup center must satisfy its canonical carrier shape",
+        ) from exc
     if len(polynomial.variables) != 2:
         _domain_error(
             "blowup_axis_invalid",

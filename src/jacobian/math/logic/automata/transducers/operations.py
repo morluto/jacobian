@@ -403,11 +403,11 @@ def identity_transducer(
     exact context and identity. The size-only form remains useful for
     request-scoped integer alphabets.
     """
-    if type(alphabet_size) is not int or not 1 <= alphabet_size <= MAX_FST_ALPHABET:
+    if type(alphabet_size) is not int or not 0 <= alphabet_size <= MAX_FST_ALPHABET:
         raise OperationResourceAdmissionError(
             location=("alphabet",),
             code="finite_state_transducer.identity_alphabet_bound_exceeded",
-            message="identity alphabet size must be between 1 and 32",
+            message="identity alphabet size must be between 0 and 32",
         )
     if alphabet is not None:
         if not isinstance(alphabet, FiniteAlphabet):

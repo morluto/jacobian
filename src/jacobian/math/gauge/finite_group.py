@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import NoReturn, cast
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -10,10 +10,12 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.gauge._models import (
     FiniteGroupGaugeContribution,
+    FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
+    GaugeLattice,
     GaugePathStep,
     OrientedGaugePath,
 )
@@ -40,14 +42,21 @@ def _is_gauge_label(value: object) -> bool:
 def _admit_group(
     group: FiniteGroupTable, *, location: str = "field"
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...], int, int]:
-    table, inverse, identity = group.multiplication, group.inverse, group.identity
-    order = len(table) if isinstance(table, tuple) else 0
-    if not 1 <= order <= 24 or not isinstance(inverse, tuple) or len(inverse) != order:
+    table = getattr(group, "multiplication", None)
+    inverse = getattr(group, "inverse", None)
+    identity = getattr(group, "identity", None)
+    if (
+        not isinstance(table, tuple)
+        or not isinstance(inverse, tuple)
+        or not 1 <= len(table) <= 24
+        or len(inverse) != len(table)
+    ):
         _reject(
             location,
             "lattice_gauge.finite_group.table_shape",
             "finite group table is malformed",
         )
+    order = len(table)
     if any(not isinstance(row, tuple) or len(row) != order for row in table):
         _reject(
             location,
@@ -101,11 +110,18 @@ def _admit_group(
     return table, inverse, identity, order
 
 
-def _admit_field(
-    field: FiniteGroupGaugeField, group: FiniteGroupTable, order: int
-) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], dict[str, int]]:
-    lattice = field.lattice
-    vertices, edges, values = lattice.vertices, lattice.edges, field.edge_values
+def _admit_lattice(
+    field: FiniteGroupGaugeField,
+) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...]]:
+    lattice = getattr(field, "lattice", None)
+    if not isinstance(lattice, GaugeLattice):
+        _reject(
+            "field",
+            "lattice_gauge.finite_group.lattice",
+            "field lattice must be a typed gauge lattice",
+        )
+    vertices = getattr(lattice, "vertices", None)
+    edges = getattr(lattice, "edges", None)
     if (
         not isinstance(vertices, tuple)
         or not vertices
@@ -121,36 +137,64 @@ def _admit_field(
     if (
         not isinstance(edges, tuple)
         or not 1 <= len(edges) <= 128
-        or any(not isinstance(e, GaugeEdge) for e in edges)
+        or any(not isinstance(edge, GaugeEdge) for edge in edges)
     ):
         _reject(
             "field", "lattice_gauge.finite_group.lattice", "lattice edges are malformed"
         )
-    edge_ids = tuple(e.edge_id for e in edges)
-    if any(
-        not _is_gauge_label(edge.edge_id)
-        or not _is_gauge_label(edge.tail)
-        or not _is_gauge_label(edge.head)
-        for edge in edges
+    _require_canonical_edges(edges, vertices)
+    return vertices, edges
+
+
+def _require_canonical_edges(
+    edges: tuple[GaugeEdge, ...], vertices: tuple[str, ...]
+) -> None:
+    edge_ids: list[str] = []
+    for edge in edges:
+        edge_id = getattr(edge, "edge_id", None)
+        tail = getattr(edge, "tail", None)
+        head = getattr(edge, "head", None)
+        if (
+            not _is_gauge_label(edge_id)
+            or not _is_gauge_label(tail)
+            or not _is_gauge_label(head)
+        ):
+            _reject(
+                "field",
+                "lattice_gauge.finite_group.lattice",
+                "edge identifiers and endpoints must be bounded labels",
+            )
+        edge_ids.append(cast(str, edge_id))
+    ordered_ids = tuple(edge_ids)
+    if tuple(sorted(ordered_ids)) != ordered_ids or len(set(ordered_ids)) != len(
+        ordered_ids
     ):
-        _reject(
-            "field",
-            "lattice_gauge.finite_group.lattice",
-            "edge identifiers and endpoints must be bounded labels",
-        )
-    if tuple(sorted(edge_ids)) != edge_ids or len(set(edge_ids)) != len(edge_ids):
         _reject(
             "field",
             "lattice_gauge.finite_group.lattice",
             "lattice edge identifiers must be unique and ordered",
         )
     vertex_set = set(vertices)
-    if any(e.tail not in vertex_set or e.head not in vertex_set for e in edges):
+    if any(
+        getattr(edge, "tail", None) not in vertex_set
+        or getattr(edge, "head", None) not in vertex_set
+        for edge in edges
+    ):
         _reject(
             "field",
             "lattice_gauge.finite_group.lattice",
             "edge endpoints must belong to the lattice",
         )
+
+
+def _admit_edge_values(
+    field: FiniteGroupGaugeField,
+    group: FiniteGroupTable,
+    order: int,
+    edges: tuple[GaugeEdge, ...],
+) -> dict[str, int]:
+    edge_ids = tuple(edge.edge_id for edge in edges)
+    values = getattr(field, "edge_values", None)
     if not isinstance(values, tuple) or len(values) != len(edges):
         _reject(
             "field",
@@ -159,41 +203,56 @@ def _admit_field(
         )
     value_by_id = {}
     for item in values:
-        if (
-            not hasattr(item, "edge_id")
-            or not hasattr(item, "value")
-            or not isinstance(item.value, FiniteGroupTableElement)
-        ):
+        if not isinstance(item, FiniteGroupGaugeEdgeLabel):
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value",
                 "edge labels must be typed table indices",
             )
-        if not _is_gauge_label(item.edge_id):
+        item_value = getattr(item, "value", None)
+        if not isinstance(item_value, FiniteGroupTableElement):
+            _reject(
+                "field",
+                "lattice_gauge.finite_group.edge_value",
+                "edge labels must be typed table indices",
+            )
+        if not _is_gauge_label(getattr(item, "edge_id", None)):
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value",
                 "edge identifier must be a bounded label",
             )
-        if item.value.group != group:
+        if getattr(item_value, "group", None) != group:
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value_parent",
                 "edge element must use the field's exact group table",
             )
-        if type(item.value.index) is not int or not 0 <= item.value.index < order:
+        item_index = getattr(item_value, "index", None)
+        if type(item_index) is not int or not 0 <= item_index < order:
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value",
                 "edge value must index the bound group",
             )
-        value_by_id[item.edge_id] = item.value.index
+        value_by_id[item.edge_id] = item_index
     if set(value_by_id) != set(edge_ids) or len(value_by_id) != len(values):
         _reject(
             "field",
             "lattice_gauge.finite_group.edge_values",
             "field must label every lattice edge exactly once",
         )
+    return value_by_id
+
+
+def _admit_field(
+    field: FiniteGroupGaugeField, group: FiniteGroupTable, order: int
+) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], dict[str, int]]:
+    # Native callers can reach this kernel through ``model_construct`` and
+    # bypass the field validators, so re-admit the nested lattice and edge
+    # values before indexing them instead of leaking ``AttributeError``.
+    vertices, edges = _admit_lattice(field)
+    value_by_id = _admit_edge_values(field, group, order, edges)
     return vertices, edges, value_by_id
 
 
@@ -204,7 +263,8 @@ def _resolve_path(
     values: dict[str, int],
     inverse: tuple[int, ...],
 ) -> tuple[str, str, tuple[tuple[str, bool, int], ...]]:
-    steps = path.steps
+    steps = getattr(path, "steps", None)
+    basepoint = getattr(path, "basepoint", None)
     if not isinstance(steps, tuple) or len(steps) > 256:
         raise OperationResourceAdmissionError(
             location=("path",),
@@ -213,7 +273,6 @@ def _resolve_path(
         )
     edge_by_id = {edge.edge_id: edge for edge in edges}
     if not steps:
-        basepoint = path.basepoint
         if not _is_gauge_label(basepoint) or basepoint not in set(vertices):
             _reject(
                 "path",
@@ -224,19 +283,21 @@ def _resolve_path(
     cursor = start = None
     resolved = []
     for step in steps:
+        step_forward = getattr(step, "forward", None)
+        step_edge_id = getattr(step, "edge_id", None)
         if (
             not isinstance(step, GaugePathStep)
-            or type(step.forward) is not bool
-            or not _is_gauge_label(step.edge_id)
-            or step.edge_id not in edge_by_id
+            or type(step_forward) is not bool
+            or not _is_gauge_label(step_edge_id)
+            or step_edge_id not in edge_by_id
         ):
             _reject(
                 "path",
                 "lattice_gauge.finite_group.path_step",
                 "path step must name a lattice edge and orientation",
             )
-        edge = edge_by_id[step.edge_id]
-        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+        edge = edge_by_id[step_edge_id]
+        tail, head = (edge.tail, edge.head) if step_forward else (edge.head, edge.tail)
         if cursor is not None and cursor != tail:
             _reject(
                 "path",
@@ -244,11 +305,17 @@ def _resolve_path(
                 "oriented path steps must chain head-to-tail",
             )
         if start is None:
+            if basepoint is not None and basepoint != tail:
+                _reject(
+                    "path",
+                    "lattice_gauge.finite_group.path_basepoint",
+                    "a supplied path basepoint must equal its first oriented vertex",
+                )
             start = tail
         cursor = head
-        index = values[step.edge_id]
+        index = values[step_edge_id]
         resolved.append(
-            (step.edge_id, step.forward, index if step.forward else inverse[index])
+            (step_edge_id, step_forward, index if step_forward else inverse[index])
         )
     if start is None or cursor is None:
         raise RuntimeError("admitted nonempty path produced no endpoints")
@@ -265,7 +332,8 @@ def finite_group_gauge_holonomy(
             "lattice_gauge.finite_group.request_type",
             "expected a finite-group gauge holonomy request",
         )
-    field, path = request.field, request.path
+    field = getattr(request, "field", None)
+    path = getattr(request, "path", None)
     if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
         path, OrientedGaugePath
     ):
@@ -274,7 +342,7 @@ def finite_group_gauge_holonomy(
             "lattice_gauge.finite_group.request_shape",
             "field and path must be typed values",
         )
-    group = field.group
+    group = getattr(field, "group", None)
     if not isinstance(group, FiniteGroupTable):
         _reject(
             "field",
@@ -283,7 +351,7 @@ def finite_group_gauge_holonomy(
         )
     table, inverse, identity, order = _admit_group(group)
     vertices, edges, values = _admit_field(field, group, order)
-    steps = path.steps
+    steps = getattr(path, "steps", None)
     if not isinstance(steps, tuple) or len(steps) > 256:
         raise OperationResourceAdmissionError(
             location=("path",),

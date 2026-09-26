@@ -11,6 +11,7 @@ from jacobian.math.polynomials.tropical._tools import (
     compute_univariate_split_form,
 )
 from jacobian.math.polynomials.tropical.values import (
+    MAX_TROPICAL_SCALAR_DIGITS,
     TropicalPolynomial,
     TropicalPolynomialTerm,
     TropicalScalar,
@@ -191,6 +192,49 @@ def test_support_growth_is_rejected_before_root_computation(monkeypatch) -> None
     )
     with pytest.raises(OperationResourceAdmissionError, match="consecutive split form"):
         compute_univariate_split_form(UnivariateSplitFormRequest(polynomial=source))
+
+
+def test_split_form_cancellation_is_admitted_and_package_exports_function() -> None:
+    from jacobian.math.polynomials.tropical import (
+        tropical_polynomial_univariate_split_form,
+    )
+
+    assert callable(tropical_polynomial_univariate_split_form)
+    denominator = 10**5_000 + 7
+    source = _poly(
+        "MIN_PLUS",
+        "QQ",
+        ((0, Fraction(1, denominator)), (1, Fraction(0))),
+    )
+    result = tropical_polynomial_univariate_split_form(source)
+    assert _evaluate(result, Fraction(0)) == _evaluate(source, Fraction(0))
+    assert (
+        max(
+            len(str(abs(term.coefficient.value.num)))  # type: ignore[union-attr]
+            for term in result.terms
+        )
+        <= MAX_TROPICAL_SCALAR_DIGITS
+    )
+
+
+def test_split_form_skips_unused_root_profile_byte_limit() -> None:
+    from jacobian.math.polynomials.tropical.operations import (
+        tropical_polynomial_univariate_roots,
+    )
+
+    coefficient = Fraction(10**4_999 + 123)
+    source = _poly(
+        "MIN_PLUS",
+        "ZZ",
+        tuple((exponent, coefficient) for exponent in range(207)),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="result-byte"):
+        tropical_polynomial_univariate_roots(source)
+    result = compute_univariate_split_form(
+        UnivariateSplitFormRequest(polynomial=source)
+    )
+    assert len(result.terms) == 207
+    assert _evaluate(result, Fraction(0)) == coefficient
 
 
 def test_split_form_is_published_as_one_immutable_operation() -> None:

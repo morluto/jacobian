@@ -24,8 +24,13 @@ from jacobian.math.topology.chain_complexes.values import (
     ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
+
+    _bounded_integer_digits,
+
     _format_chain_coefficient,
 )
+
+type _RawCoefficientEntry = str | int | Fraction
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -125,16 +130,26 @@ HomologyInputComplex = Annotated[
 ]
 
 
-def _raw_component_digit_count(value: object) -> int:
+
+def _raw_component_digit_count(value: object, maximum_digits: int) -> int:
+    """Count one raw coefficient's digits without decimal expansion.
+
+    Wire spellings are already decimal text.  Native scalars reuse the
+    canonical coefficient model's bit-length guard, so a cheaply constructed
+    oversized integer is rejected before any decimal materialization.
+    """
+
     if isinstance(value, str):
         parts = value.split("/", 1)
         return max((len(part.lstrip("-")) for part in parts), default=0)
     if type(value) is int:
-        return len(format_canonical_integer(abs(value)))
+
+        return _bounded_integer_digits(value, maximum_digits)
     if type(value) is Fraction:
         return max(
-            len(format_canonical_integer(abs(value.numerator))),
-            len(format_canonical_integer(value.denominator)),
+            _bounded_integer_digits(value.numerator, maximum_digits),
+            _bounded_integer_digits(value.denominator, maximum_digits),
+
         )
     return 0
 
@@ -145,7 +160,9 @@ def _preflight_raw_differentials(
     maximum_axis: int,
     maximum_cells: int,
     maximum_digits: int,
-) -> tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] | None:
+
+) -> tuple[tuple[tuple[_RawCoefficientEntry, ...], ...], ...] | None:
+
     if not isinstance(differentials, (list, tuple)):
         return None
     if len(differentials) > 2 * MAX_CHAIN_DEGREE:
@@ -155,7 +172,9 @@ def _preflight_raw_differentials(
         )
 
     cells = 0
-    canonical_matrices: list[tuple[tuple[ChainCoefficient, ...], ...]] = []
+
+    canonical_matrices: list[tuple[tuple[_RawCoefficientEntry, ...], ...]] = []
+
     for matrix in differentials:
         if not isinstance(matrix, (list, tuple)):
             raise _validation_error(
@@ -167,7 +186,9 @@ def _preflight_raw_differentials(
                 "homology_raw_matrix_rows_exceeded",
                 f"a homology differential has more than {maximum_axis} rows",
             )
-        canonical_rows: list[tuple[ChainCoefficient, ...]] = []
+
+        canonical_rows: list[tuple[_RawCoefficientEntry, ...]] = []
+
         for row in matrix:
             if not isinstance(row, (list, tuple)):
                 raise _validation_error(
@@ -186,7 +207,9 @@ def _preflight_raw_differentials(
                     "homology differential cells exceed the raw "
                     f"{maximum_cells}-cell envelope",
                 )
-            canonical_entries: list[object] = []
+
+            canonical_entries: list[_RawCoefficientEntry] = []
+
             for entry in row:
                 if not (
                     isinstance(entry, str)
@@ -197,7 +220,7 @@ def _preflight_raw_differentials(
                         "homology_raw_coefficient_invalid",
                         "each raw homology coefficient must be an exact scalar",
                     )
-                if _raw_component_digit_count(entry) > maximum_digits:
+                if _raw_component_digit_count(entry, maximum_digits) > maximum_digits:
                     raise _validation_error(
                         "homology_raw_coefficient_digits_exceeded",
                         "a homology coefficient exceeds the raw "

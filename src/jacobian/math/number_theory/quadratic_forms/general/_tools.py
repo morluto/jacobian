@@ -10,6 +10,8 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileResult,
     FiniteGaussSumRequest,
     FiniteGaussSumResult,
+    ThetaRepresentingVectorsRequest,
+    ThetaRepresentingVectorsResult,
     ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
 )
@@ -33,7 +35,15 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     coefficient_matrix,
     evaluate_rational_quadratic_form,
 )
+from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
+    QuadraticFormScaleRequest,
+    QuadraticFormScaleResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.scaling_operations import (
+    scale_rational_quadratic_form,
+)
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_representing_vectors,
     theta_selected_coefficients,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -129,6 +139,12 @@ def compute_coordinate_restriction(
     return quadratic_form_restrict_coordinates(request)
 
 
+def compute_scale(
+    request: QuadraticFormScaleRequest,
+) -> QuadraticFormScaleResult:
+    return scale_rational_quadratic_form(request)
+
+
 def compute_finite_box_profile(
     request: FiniteBoxProfileRequest,
 ) -> FiniteBoxProfileResult:
@@ -139,6 +155,12 @@ def compute_theta_selected_coefficients(
     request: ThetaSelectedCoefficientsRequest,
 ) -> ThetaSelectedCoefficientsResult:
     return theta_selected_coefficients(request.form, request.indices)
+
+
+def compute_theta_representing_vectors(
+    request: ThetaRepresentingVectorsRequest,
+) -> ThetaRepresentingVectorsResult:
+    return theta_representing_vectors(request)
 
 
 def _form_example() -> dict[str, object]:
@@ -337,6 +359,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 TOOLS = (
     *TOOLS,
     MathTool(
+        operation_id="quadratic_form.representing_vectors.compute",
+        title="Enumerate complete quadratic-form representation vectors",
+        description=(
+            "Return every integer vector x, in the exact ordered form axis, at "
+            "each requested value Q(x)=n. All requested fibers are complete, "
+            "including empty fibers. The positive-definite search box, exact "
+            "evaluation work, vector count, and coordinate bounds are admitted "
+            "before enumeration."
+        ),
+        request_type=ThetaRepresentingVectorsRequest,
+        result_type=ThetaRepresentingVectorsResult,
+        run=compute_theta_representing_vectors,
+        tags=("quadratic-form", "representation-vectors", "exact"),
+        examples=(
+            OperationExample(
+                name="sum-of-two-squares-vectors",
+                description=(
+                    "Return every signed and ordered representation of 2 by x^2+y^2."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                    "indices": [0, 1, 2, 3],
+                },
+            ),
+        ),
+    ),
+)
+TOOLS = (
+    *TOOLS,
+    MathTool(
         operation_id="quadratic_form.theta_selected_coefficients.compute",
         title="Compute selected quadratic-form theta coefficients",
         description=(
@@ -487,6 +545,45 @@ TOOLS = (
                 input={
                     "form": _form_example(),
                     "selected_axis": ["y", "x"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.scale.compute",
+        title="Scale a rational quadratic form",
+        description=(
+            "Multiply every polynomial coefficient by an exact rational scalar, "
+            "preserving the ordered coordinate axis. Integral output remains "
+            "usable as an integral rational form by theta operations."
+        ),
+        request_type=QuadraticFormScaleRequest,
+        result_type=QuadraticFormScaleResult,
+        run=compute_scale,
+        tags=("quadratic-form", "scaling", "exact"),
+        examples=(
+            OperationExample(
+                name="rational-scale",
+                description=(
+                    "Scale x^2+2xy+3y^2 by 3/2; all resulting coefficients "
+                    "remain exact rationals on the source axis."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "3", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "2", "den": "1"},
+                            }
+                        ],
+                    },
+                    "factor": {"num": "3", "den": "2"},
                 },
             ),
         ),

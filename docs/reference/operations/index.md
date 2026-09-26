@@ -11,6 +11,7 @@ Additional references document mathematical contracts or external boundaries
 that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
+- [Degree-truncated free-algebra quotients](free-algebra-truncated-quotients.md)
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Root-system coroots](groups/root-coroots.md)
@@ -33,5 +34,6 @@ that need more context than an operation card:
 - [Exact quadratic forms](quadratic-forms.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
+- [Free associative algebra homomorphism application](free-algebra-homomorphism-apply.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)

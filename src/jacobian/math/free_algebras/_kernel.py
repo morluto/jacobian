@@ -1,9 +1,8 @@
-"""Direct sparse noncommutative polynomial multiplication kernel.
+"""Direct sparse noncommutative polynomial arithmetic kernels.
 
-The kernel performs one exact distributive concatenation product.  Semantic
-admission has already established every operand and growth bound, so this
-module computes only the product and its ledger and constructs the canonical
-result value.  It never re-runs admission.
+Semantic admission has already established every operand and growth bound, so
+these functions compute the exact arithmetic result and construct its
+canonical value without replaying admission.
 """
 
 from __future__ import annotations
@@ -17,6 +16,39 @@ from jacobian.math.free_algebras._models import (
     TermPairMultiplicationLedger,
     canonical_word_key,
 )
+
+
+def add_sparse(
+    left: FreeAlgebraPolynomial,
+    right: FreeAlgebraPolynomial,
+) -> FreeAlgebraPolynomial:
+    """Return the exact coefficientwise sum in canonical sparse form."""
+
+    coefficients: dict[tuple[str, ...], Fraction] = {}
+    for term in (*left.terms, *right.terms):
+        word = term.word
+        value = term.coefficient.as_fraction()
+        coefficients[word] = coefficients.get(word, Fraction(0)) + value
+
+    ordered = tuple(
+        sorted(
+            (
+                (word, coefficient)
+                for word, coefficient in coefficients.items()
+                if coefficient
+            ),
+            key=lambda item: canonical_word_key(left.alphabet, item[0]),
+            reverse=True,
+        )
+    )
+    terms = tuple(
+        FreeAlgebraTerm(
+            coefficient=CanonicalRational.from_fraction(coefficient),
+            word=word,
+        )
+        for word, coefficient in ordered
+    )
+    return FreeAlgebraPolynomial.model_construct(alphabet=left.alphabet, terms=terms)
 
 
 def multiply_sparse(
@@ -80,4 +112,4 @@ def multiply_sparse(
     return product, ledger
 
 
-__all__ = ["multiply_sparse"]
+__all__ = ["add_sparse", "multiply_sparse"]

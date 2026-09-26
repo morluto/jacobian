@@ -126,6 +126,28 @@ def _preflight(
     if pair_count == 0:
         return (), (), 1, 1
 
+    # Reduce every scalar product before word construction. This is both an
+    # admission bound and preserves cases such as (1/N)x, N*y where the raw
+    # numerator/denominator products are large but the reduced product is not.
+    # Each contribution is itself a possible output coefficient, so admitting
+    # an over-cap contribution would violate the exact-output bound during
+    # convolution even when subsequent unrelated terms happen to cancel it.
+    for left_term in left.terms:
+        left_coefficient = left_term.coefficient.as_fraction()
+        for right_term in right.terms:
+            contribution = left_coefficient * right_term.coefficient.as_fraction()
+            if (
+                max(
+                    len(str(abs(contribution.numerator))),
+                    len(str(contribution.denominator)),
+                )
+                > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+            ):
+                _reject_resource(
+                    "coefficient_growth",
+                    "exact commutator contribution exceeds the 64-digit bound",
+                )
+
     left_denominator_sizes = tuple(
         len(str(term.coefficient.as_fraction().denominator)) for term in left.terms
     )

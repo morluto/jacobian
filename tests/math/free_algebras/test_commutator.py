@@ -168,6 +168,18 @@ def test_commutator_reduces_cancellable_cross_factor_before_coefficient_cap() ->
     }
 
 
+def test_commutator_rejects_oversized_reduced_contribution_before_convolution() -> None:
+    n = 10**63
+    left = _polynomial(((("x",), Fraction(n)),))
+    right = _polynomial(((("y",), Fraction(n)),))
+
+    with pytest.raises(OperationResourceAdmissionError) as caught:
+        commutator(left, right)
+    assert caught.value.errors()[0]["type"] == (
+        "free_algebra.commutator.coefficient_growth"
+    )
+
+
 def test_commutator_rejects_candidate_output_before_convolution() -> None:
     dense = _dense_operand()
     distinct = FreeAlgebraPolynomial(

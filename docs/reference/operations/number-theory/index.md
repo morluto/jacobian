@@ -6,6 +6,7 @@
 - [Rational function-field divisor arithmetic](function-field-divisor-arithmetic.md)
 - [Rational function-field Riemann-Roch spaces](function-field-riemann-roch.md)
 - [Rational function-field places](function-field-rational-place-enumeration.md)
+- [Function-field place uniformizer](function-field-place-uniformizer.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
@@ -19,6 +20,7 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Function-field rational base inclusion](function-field-base-embedding.md)
 - [Exact function-field element addition](function-field-element-addition.md)
 - [Exact function-field element inversion](function-field-element-inversion.md)
+- [Exact function-field relative norm](function-field-element-norm.md)
 - [Exact function-field relative trace](function-field-element-trace.md)
 - [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)

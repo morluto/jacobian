@@ -165,9 +165,13 @@ def test_component_growth_is_rejected_before_algebraic_work() -> None:
     source = laurent(2 * huge, -huge)
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit",
-    ):
+    ) as exc_info:
         real_symmetric_degree_one_fejer_riesz_factor(source)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.fejer_riesz_component_bound"
+    )
 
 
 def test_every_admitted_factor_remains_inside_the_verifier_envelope() -> None:
@@ -184,9 +188,13 @@ def test_every_admitted_factor_remains_inside_the_verifier_envelope() -> None:
     )
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit",
-    ):
+    ) as exc_info:
         real_symmetric_degree_one_fejer_riesz_factor(outside)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.fejer_riesz_component_bound"
+    )
 
 
 def test_fejer_riesz_verifier_propagates_operational_failure(
@@ -216,6 +224,10 @@ def test_fejer_riesz_verifier_propagates_source_resource_admission() -> None:
 
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{MAX_FEJER_RIESZ_COMPONENT_DIGITS}-digit",
-    ):
+    ) as exc_info:
         verify_real_symmetric_degree_one_fejer_riesz_factor(claim)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "polynomial.unit_circle.fejer_riesz_component_bound"
+    )

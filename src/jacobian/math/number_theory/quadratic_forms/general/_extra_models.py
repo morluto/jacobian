@@ -6,7 +6,7 @@ from typing import Literal, Self
 
 from pydantic import Field, model_validator
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational, ExactInteger, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -157,7 +157,7 @@ class DiagonalizationResult(StrictModel):
                 max_digits=MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
                 label="quadratic-form diagonalization coefficient",
             )
-            output_digits += len(str(abs(value.num))) + len(str(value.den))
+            output_digits += len(str(abs(value.num))) + len(str(abs(value.den)))
         for row in self.change.entries:
             for value in row:
                 require_bounded_rational(
@@ -165,7 +165,7 @@ class DiagonalizationResult(StrictModel):
                     max_digits=MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
                     label="quadratic-form diagonalization change coefficient",
                 )
-                output_digits += len(str(abs(value.num))) + len(str(value.den))
+                output_digits += len(str(abs(value.num))) + len(str(abs(value.den)))
         if output_digits > MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS:
             raise ValueError("diagonalization result exceeds its aggregate digit bound")
         return self
@@ -211,10 +211,19 @@ class ModularProfileResult(StrictModel):
 
 MAX_QUADRATIC_GAUSS_MODULUS = 64
 MAX_QUADRATIC_GAUSS_STATES = 2_000_000
+MAX_QUADRATIC_GAUSS_WORK = 2_000_000
+MAX_QUADRATIC_GAUSS_SUPPORT_TERMS = 4_096
+MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS = 1_000_000
 
 
 class FiniteGaussSumRequest(StrictModel):
-    """The sum of exp(2*pi*i*Q(x)/m) over the complete residue module."""
+    """The sum of exp(2*pi*i*Q(x)/m) over the complete residue module.
+
+    Admission bounds the residue domain, the polynomial support (which the
+    result retains and each enumerated state evaluates), their product as
+    kernel work, and the retained source plus canonical output as aggregate
+    decimal digits, all before any enumeration runs.
+    """
 
     form: RationalQuadraticForm
     modulus: int = Field(ge=1, le=MAX_QUADRATIC_GAUSS_MODULUS)
@@ -246,7 +255,7 @@ class FiniteGaussSumResult(StrictModel):
         ):
             raise ValueError("finite Gauss histogram exceeds its admitted state count")
         if any(
-            max(len(str(abs(coordinate.num))), len(str(coordinate.den)))
+            max(len(str(abs(coordinate.num))), len(str(abs(coordinate.den))))
             > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
             for coordinate in self.value.coefficients_ascending
         ):
@@ -258,7 +267,7 @@ MAX_THETA_PREFIX_CUTOFF = 512
 MAX_THETA_PREFIX_DIMENSION = 7
 MAX_THETA_PREFIX_VECTORS = 100_000
 MAX_THETA_PREFIX_WORK = 2_000_000
-MAX_THETA_PREFIX_OUTPUT_BYTES = 1_000_000
+MAX_THETA_PREFIX_OUTPUT_DIGITS = 64_000
 
 
 class ThetaSeriesPrefixRequest(StrictModel):
@@ -287,7 +296,7 @@ class ThetaSeriesPrefixResult(StrictModel):
 MAX_QUADRATIC_BOX_RADIUS = 64
 MAX_QUADRATIC_BOX_VECTORS = 25_000
 MAX_QUADRATIC_BOX_PROFILE_ROWS = 25_000
-MAX_QUADRATIC_BOX_OUTPUT_BYTES = 1_000_000
+MAX_QUADRATIC_BOX_OUTPUT_DIGITS = 1_000_000
 
 
 class FiniteBoxProfileRequest(StrictModel):
@@ -298,7 +307,7 @@ class FiniteBoxProfileRequest(StrictModel):
 
 
 class FiniteBoxProfileRow(StrictModel):
-    value: int
+    value: ExactInteger
     representation_count: int = Field(ge=1)
 
 
@@ -312,8 +321,8 @@ class FiniteBoxProfileResult(StrictModel):
     rows: tuple[FiniteBoxProfileRow, ...] = Field(
         max_length=MAX_QUADRATIC_BOX_PROFILE_ROWS
     )
-    minimum_value: int
-    maximum_value: int
+    minimum_value: ExactInteger
+    maximum_value: ExactInteger
 
     @model_validator(mode="after")
     def complete_profile_shape(self) -> Self:
@@ -321,6 +330,16 @@ class FiniteBoxProfileResult(StrictModel):
             bound != (-self.radius, self.radius) for bound in self.coordinate_bounds
         ):
             raise ValueError("coordinate bounds must match the source form axis")
+        side_length = 2 * self.radius + 1
+        expected_vectors = 1
+        for _ in self.form.axis:
+            expected_vectors *= side_length
+            if expected_vectors > MAX_QUADRATIC_BOX_VECTORS:
+                break
+        if self.vector_count != expected_vectors:
+            raise ValueError("vector count must cover the declared integer box")
+        if sum(row.representation_count for row in self.rows) != self.vector_count:
+            raise ValueError("profile counts must cover the complete vector domain")
         values = tuple(row.value for row in self.rows)
         if not values or values != tuple(sorted(set(values))):
             raise ValueError("finite-box profile values must be strictly increasing")

@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections import Counter
 from itertools import product
 
+from jacobian._exact import canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    MAX_QUADRATIC_BOX_OUTPUT_BYTES,
+    MAX_QUADRATIC_BOX_OUTPUT_DIGITS,
     MAX_QUADRATIC_BOX_PROFILE_ROWS,
     MAX_QUADRATIC_BOX_RADIUS,
     MAX_QUADRATIC_BOX_VECTORS,
@@ -22,6 +23,16 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
 
 def _admit(request: FiniteBoxProfileRequest) -> int:
     form = request.form
+    if (
+        isinstance(request.radius, bool)
+        or not isinstance(request.radius, int)
+        or request.radius < 0
+    ):
+        raise OperationDomainValidationError(
+            location=("radius",),
+            code="quadratic_form.finite_box_radius",
+            message="finite-box radius must be a non-negative integer",
+        )
     if request.radius > MAX_QUADRATIC_BOX_RADIUS:
         raise OperationResourceAdmissionError(
             location=("radius",),
@@ -69,23 +80,26 @@ def _admit(request: FiniteBoxProfileRequest) -> int:
     ) + sum(abs(term.coefficient.num) for term in form.cross_terms)
     value_digits = len(str(max(1, coefficient_magnitude * request.radius**2)))
     count_digits = len(str(vector_count))
-    # Admit the worst case of one output row per enumerated vector, as well as
-    # source serialization and bounded JSON punctuation/field overhead.
-    source_bytes = len(form.model_dump_json().encode("utf-8"))
-    output_bound = (
-        source_bytes
-        + 512
-        + 24 * dimension
-        + vector_count * (value_digits + count_digits + 48)
+    # Admit the worst case of one output row per enumerated vector by
+    # aggregate decimal digits: the retained source coefficients and axis
+    # labels plus two components per profile entry. Per-entry serialization
+    # structure scales with the vector and profile-row cardinality bounds.
+    source_digits = sum(len(label) for label in form.axis) + 2 * sum(
+        canonical_rational_component_digits(value)
+        for value in (
+            *form.diagonal_coefficients,
+            *(term.coefficient for term in form.cross_terms),
+        )
     )
+    profile_digits = vector_count * (value_digits + count_digits)
     if (
         vector_count > MAX_QUADRATIC_BOX_PROFILE_ROWS
-        or output_bound > MAX_QUADRATIC_BOX_OUTPUT_BYTES
+        or source_digits + profile_digits > MAX_QUADRATIC_BOX_OUTPUT_DIGITS
     ):
         raise OperationResourceAdmissionError(
             location=("radius", "form", "axis"),
             code="quadratic_form.finite_box_output_bound",
-            message="finite-box complete profile exceeds its canonical output envelope",
+            message="finite-box complete profile exceeds its admitted output digit envelope",
         )
     return vector_count
 

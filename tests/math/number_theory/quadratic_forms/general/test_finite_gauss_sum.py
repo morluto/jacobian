@@ -14,6 +14,7 @@ from jacobian.math.number_theory.quadratic_forms.general.extra_operations import
     finite_quadratic_gauss_sum,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     QuadraticCrossTerm,
     RationalQuadraticForm,
 )
@@ -93,6 +94,83 @@ def test_rejects_residue_space_above_bound_before_enumeration() -> None:
         OperationResourceAdmissionError, match="complete residue domain"
     ):
         finite_quadratic_gauss_sum(request)
+
+
+def test_rejects_dense_support_before_enumeration() -> None:
+    # A dense 20-variable form with modulus 2 has only 2^20 states, but each
+    # state evaluates all 210 polynomial terms.
+    axis = tuple(f"x{index}" for index in range(20))
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(CanonicalRational(num=1, den=1) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left,
+                right=right,
+                coefficient=CanonicalRational(num=1, den=1),
+            )
+            for left in range(20)
+            for right in range(left + 1, 20)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=2))
+
+
+def test_rejects_oversized_support_before_enumeration() -> None:
+    # Modulus 1 always has a single state, so only the support bound guards
+    # the retained source and per-state traversal.
+    axis = tuple(f"x{index}" for index in range(100))
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(CanonicalRational(num=1, den=1) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left,
+                right=right,
+                coefficient=CanonicalRational(num=1, den=1),
+            )
+            for left in range(100)
+            for right in range(left + 1, 100)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="support"):
+        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+
+
+def test_rejects_retained_source_above_output_digit_envelope() -> None:
+    # Modulus 1 always enumerates a single residue state, so the state and
+    # work bounds admit this schema-valid form, but the result retains the
+    # complete 2080-term form with 256-digit coefficients: well over one
+    # megabyte of canonical decimal digits for a one-state computation.
+    axis = tuple(f"x{index}" for index in range(64))
+    tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
+    form = RationalQuadraticForm(
+        axis=axis,
+        diagonal_coefficients=tuple(CanonicalRational(num=tall, den=1) for _ in axis),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left,
+                right=right,
+                coefficient=CanonicalRational(num=tall, den=1),
+            )
+            for left in range(64)
+            for right in range(left + 1, 64)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output digit envelope"):
+        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+
+
+def test_small_support_with_tall_coefficients_remains_admitted() -> None:
+    # The output envelope must not evict tall-but-small forms: 10^256-1 is
+    # divisible by 3, so every residue of Q(x) = tall*x^2 vanishes mod 3.
+    tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
+    result = finite_quadratic_gauss_sum(
+        FiniteGaussSumRequest(form=_form(("x",), (tall,)), modulus=3)
+    )
+    assert result.histogram == (3, 0, 0)
+    assert result.total == 3
 
 
 def test_rejects_rational_coefficients() -> None:

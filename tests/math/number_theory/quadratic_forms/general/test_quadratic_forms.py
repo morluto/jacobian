@@ -6,7 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.quadratic_forms.general import (
     QuadraticCrossTerm,
     RationalCoordinateVector,
@@ -62,6 +65,46 @@ def test_full_polar_pairing_matches_independent_polarization_with_odd_cross_term
     assert "quadratic_form.bilinear_pairing.compute" in {
         tool.operation_id for tool in TOOLS
     }
+
+
+def test_pairing_rejects_malformed_native_vector_shape() -> None:
+    form = RationalQuadraticForm(
+        axis=("x", "y"),
+        diagonal_coefficients=(_rational(1), _rational(1)),
+        cross_terms=(),
+    )
+    valid = RationalCoordinateVector(
+        axis=("x", "y"), coordinates=(_rational(1), _rational(1))
+    )
+    malformed = valid.model_copy(update={"coordinates": (_rational(1),)})
+    with pytest.raises(OperationDomainValidationError) as error:
+        bilinear_pairing(form, malformed, valid)
+    assert error.value.errors()[0]["type"] == "quadratic_form.vector_shape"
+
+
+def test_pairing_admission_runs_once_in_the_kernel() -> None:
+    # An over-budget pairing parses as a request (axis relation only) and is
+    # then rejected once by the shared kernel as an admission error.
+    heavy = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
+    labels = [f"x{index}" for index in range(15)]
+    payload = {
+        "form": {
+            "axis": labels,
+            "diagonal_coefficients": [{"num": heavy, "den": 1} for _ in labels],
+        },
+        "left": {
+            "axis": labels,
+            "coordinates": [{"num": 1, "den": heavy} for _ in labels],
+        },
+        "right": {
+            "axis": labels,
+            "coordinates": [{"num": 1, "den": heavy} for _ in labels],
+        },
+    }
+    request = BilinearPairingRequest.model_validate(payload)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        compute_bilinear_pairing(request)
+    assert error.value.errors()[0]["type"] == "quadratic_form.pairing_budget"
 
 
 def _rational(numerator: int, denominator: int = 1) -> dict[str, int]:

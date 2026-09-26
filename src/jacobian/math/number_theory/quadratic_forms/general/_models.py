@@ -27,7 +27,6 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_TERM_DIGITS,
     RationalCoordinateVector,
     RationalQuadraticForm,
-    require_bilinear_pairing_budget,
 )
 
 
@@ -108,6 +107,9 @@ class BilinearPairingRequest(StrictModel):
     For t active products, admission bounds the aggregate denominator digit
     count d plus one coefficient/vector-product height and ``len(str(t))`` by
     the evaluation result digit limit. Form support is independently capped.
+    The axis relation is checked here; the growth preflight runs once in the
+    shared kernel so catalog requests surface it as the operation's
+    admission error rather than request validation.
     """
 
     form: RationalQuadraticForm = Field(
@@ -135,10 +137,6 @@ class BilinearPairingRequest(StrictModel):
             raise _validation_error(
                 "axis_mismatch", "both vectors must use the quadratic-form axis"
             )
-        try:
-            require_bilinear_pairing_budget(self.form, self.left, self.right)
-        except ValueError as error:
-            raise _validation_error("pairing_budget", str(error)) from error
         return self
 
 

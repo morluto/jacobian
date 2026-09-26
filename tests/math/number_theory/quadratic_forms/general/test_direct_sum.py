@@ -5,7 +5,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     EvaluationRequest,
 )
@@ -13,9 +13,10 @@ from jacobian.math.number_theory.quadratic_forms.general._tools import evaluate_
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     MAX_DIRECT_SUM_AXIS,
     MAX_DIRECT_SUM_FORM_TERMS,
+    MAX_DIRECT_SUM_OUTPUT_DIGITS,
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
-    direct_sum_output_byte_upper_bound,
+    direct_sum_output_digit_upper_bound,
 )
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_operations import (
     quadratic_form_direct_sum,
@@ -114,10 +115,67 @@ def test_zero_dimensional_summand_retains_zero_by_nonzero_projection_shape() -> 
     assert result.form.diagonal_coefficients == (_r(7),)
 
 
-def test_direct_sum_admits_aggregate_axis_before_building_maps() -> None:
+def test_direct_sum_admits_aggregate_axis_before_building_maps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def build_maps(*args: object, **kwargs: object) -> None:
+        raise AssertionError("coordinate maps must not be built before admission")
+
+    monkeypatch.setattr(
+        "jacobian.math.number_theory.quadratic_forms.general"
+        ".direct_sum_operations.rational_matrix_from_fractions",
+        build_maps,
+    )
     oversized = _form(tuple(f"x{i}" for i in range(129)), (0,) * 129)
-    with pytest.raises(ValueError, match="aggregate axis bound"):
-        QuadraticFormDirectSumRequest(forms=(oversized,))
+    request = QuadraticFormDirectSumRequest(forms=(oversized,))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        quadratic_form_direct_sum(request)
+    assert error.value.errors()[0]["type"] == "quadratic_form.direct_sum_axis_bound"
+
+
+def test_constructed_direct_sum_request_still_admits_axis_at_the_kernel() -> None:
+    oversized = _form(tuple(f"x{i}" for i in range(129)), (0,) * 129)
+    request = QuadraticFormDirectSumRequest.model_construct(forms=(oversized,))
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        quadratic_form_direct_sum(request)
+    assert error.value.errors()[0]["type"] == "quadratic_form.direct_sum_axis_bound"
+
+
+def test_direct_sum_admits_aggregate_support_before_building_maps() -> None:
+    # 91 coordinates keep the axis inside its envelope, but the complete
+    # 4,095-term cross support plus the diagonal exceeds 4,096 terms.
+    dense = _form(
+        tuple(f"x{i}" for i in range(91)),
+        (1,) * 91,
+        [(left, right, 1) for left in range(91) for right in range(left + 1, 91)],
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        quadratic_form_direct_sum(QuadraticFormDirectSumRequest(forms=(dense,)))
+    assert error.value.errors()[0]["type"] == "quadratic_form.direct_sum_support_bound"
+
+
+def test_direct_sum_accepts_the_exact_aggregate_envelope() -> None:
+    axis = tuple(f"x{i}" for i in range(MAX_DIRECT_SUM_AXIS))
+    pairs = (
+        (left, right)
+        for left in range(MAX_DIRECT_SUM_AXIS)
+        for right in range(left + 1, MAX_DIRECT_SUM_AXIS)
+    )
+    boundary = _form(
+        axis,
+        (1,) * MAX_DIRECT_SUM_AXIS,
+        [(left, right, 1) for left, right in pairs][
+            : MAX_DIRECT_SUM_FORM_TERMS - MAX_DIRECT_SUM_AXIS
+        ],
+    )
+    assert (
+        len(boundary.diagonal_coefficients) + len(boundary.cross_terms)
+        == MAX_DIRECT_SUM_FORM_TERMS
+    )
+    result = quadratic_form_direct_sum(QuadraticFormDirectSumRequest(forms=(boundary,)))
+    assert len(result.form.axis) == MAX_DIRECT_SUM_AXIS
+    assert len(result.form.cross_terms) == MAX_DIRECT_SUM_FORM_TERMS - len(axis)
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 def test_inclusion_projection_composition_is_identity_on_each_factor() -> None:
@@ -157,18 +215,32 @@ def test_deserialization_rejects_inconsistent_coordinate_map_shape() -> None:
         QuadraticFormDirectSumResult.model_validate(payload)
 
 
-def test_maximum_admitted_support_and_dense_maps_fit_canonical_output_limit() -> None:
+def test_maximum_admitted_support_and_dense_maps_fit_output_digit_limit() -> None:
     assert (
-        direct_sum_output_byte_upper_bound(
-            MAX_DIRECT_SUM_AXIS, MAX_DIRECT_SUM_FORM_TERMS
+        direct_sum_output_digit_upper_bound(
+            MAX_DIRECT_SUM_AXIS, 2 * MAX_DIRECT_SUM_FORM_TERMS
         )
-        < CanonicalLimits().max_output_bytes
+        < MAX_DIRECT_SUM_OUTPUT_DIGITS
     )
     assert (
-        direct_sum_output_byte_upper_bound(
+        direct_sum_output_digit_upper_bound(
             MAX_DIRECT_SUM_AXIS,
-            MAX_DIRECT_SUM_FORM_TERMS,
+            2 * MAX_DIRECT_SUM_FORM_TERMS,
             map_component_digits=32_768,
         )
-        > CanonicalLimits().max_output_bytes
+        > MAX_DIRECT_SUM_OUTPUT_DIGITS
     )
+
+
+def test_deserialization_rejects_maps_beyond_the_output_digit_limit() -> None:
+    axis = tuple(f"x{i}" for i in range(16))
+    result = quadratic_form_direct_sum(
+        QuadraticFormDirectSumRequest(forms=(_form(axis, (1,) * 16),))
+    )
+    payload = result.model_dump(mode="python")
+    payload["coordinate_inclusions"][0]["entries"] = tuple(
+        tuple(CanonicalRational.from_integer_ratio(10**9_000, 1) for _ in range(16))
+        for _ in range(16)
+    )
+    with pytest.raises(ValueError, match="output digit bound"):
+        QuadraticFormDirectSumResult.model_validate(payload)

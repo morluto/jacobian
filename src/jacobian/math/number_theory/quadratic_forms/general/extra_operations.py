@@ -8,7 +8,7 @@ from math import gcd
 
 from sympy import Poly, cyclotomic_poly, symbols
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -33,7 +33,11 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_DIGITS,
     MAX_QUADRATIC_DIAGONALIZATION_OUTPUT_TOTAL_DIGITS,
     MAX_QUADRATIC_DIAGONALIZATION_WORK,
+    MAX_QUADRATIC_GAUSS_MODULUS,
+    MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS,
     MAX_QUADRATIC_GAUSS_STATES,
+    MAX_QUADRATIC_GAUSS_SUPPORT_TERMS,
+    MAX_QUADRATIC_GAUSS_WORK,
     MAX_QUADRATIC_PULLBACK_AXIS,
     MAX_QUADRATIC_PULLBACK_OUTPUT_ENTRIES,
     MAX_QUADRATIC_PULLBACK_WORK,
@@ -455,6 +459,16 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
     """Compute sum_x zeta_m^Q(x), reducing the full histogram in QQ[zeta_m]."""
 
     form, modulus = request.form, request.modulus
+    if (
+        not isinstance(modulus, int)
+        or isinstance(modulus, bool)
+        or not 1 <= modulus <= MAX_QUADRATIC_GAUSS_MODULUS
+    ):
+        raise OperationDomainValidationError(
+            location=("modulus",),
+            code="quadratic_form.gauss_sum.modulus_bound",
+            message=f"modulus must be an integer from 1 through {MAX_QUADRATIC_GAUSS_MODULUS}",
+        )
     if any(c.den != 1 for c in form.diagonal_coefficients) or any(
         term.coefficient.den != 1 for term in form.cross_terms
     ):
@@ -470,6 +484,28 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
             location=("form", "axis"),
             code="quadratic_form.gauss_sum.state_bound",
             message="complete residue domain exceeds the finite Gauss state bound",
+        )
+
+    # Every enumerated residue vector evaluates each stored polynomial term
+    # once, and the result retains the complete source form alongside the
+    # histogram and cyclotomic coordinates. Bound the support first so both
+    # the kernel traversal and the retained source stay inside the envelope,
+    # then bound their product as work before any enumeration runs.
+    support = len(form.axis) + len(form.cross_terms)
+    if support > MAX_QUADRATIC_GAUSS_SUPPORT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="quadratic_form.gauss_sum.support_bound",
+            message=(
+                "finite Gauss form support exceeds the admitted polynomial "
+                "support envelope"
+            ),
+        )
+    if total * max(support, 1) > MAX_QUADRATIC_GAUSS_WORK:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.gauss_sum.work_bound",
+            message="complete residue enumeration exceeds the finite Gauss work bound",
         )
 
     # The public modulus cap bounds both cyclotomic construction and the
@@ -490,6 +526,28 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
             message="cyclotomic coefficient growth exceeds the exact output bound",
         )
 
+    # The result retains the complete source form next to the histogram and
+    # the reduced cyclotomic coordinates, so the state bound alone does not
+    # bound the canonical response. Admit the aggregate decimal digits of
+    # every retained component before any enumeration runs.
+    source_digits = sum(len(label) for label in form.axis) + 2 * sum(
+        canonical_rational_component_digits(value)
+        for value in (
+            *form.diagonal_coefficients,
+            *(term.coefficient for term in form.cross_terms),
+        )
+    )
+    growth_digits = len(str(total * max(1, coefficient_l1) ** modulus))
+    output_digits = (
+        source_digits + modulus * len(str(total)) + degree * 2 * growth_digits
+    )
+    if output_digits > MAX_QUADRATIC_GAUSS_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.gauss_sum.output_bound",
+            message="finite Gauss result exceeds its admitted output digit envelope",
+        )
+
     histogram, enumerated = modular_histogram(form, modulus)
     if enumerated != total:
         raise RuntimeError(
@@ -507,8 +565,6 @@ def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSum
                 reduced[power - degree + lower_power] -= (
                     coefficient * phi_ascending[lower_power]
                 )
-    from jacobian._exact import CanonicalRational
-
     element = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=modulus),
         coefficients_ascending=tuple(

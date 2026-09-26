@@ -41,7 +41,8 @@ class BieberbachTranslationTorusChains(StrictModel):
             comb(dimension, degree) for degree in range(dimension + 1)
         )
         if (
-            not 1 <= dimension <= 4
+            not self.source.is_fundamental_domain
+            or not 1 <= dimension <= 4
             or len(self.circle_directions) != dimension
             or any(len(direction) != dimension for direction in self.circle_directions)
             or chain.coefficient_ring != CoefficientRing.INTEGER

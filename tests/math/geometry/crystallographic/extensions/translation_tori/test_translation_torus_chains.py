@@ -162,6 +162,24 @@ def test_serialized_source_composes_without_losing_exact_cell_data() -> None:
     assert result.source == decoded
 
 
+def test_result_value_rejects_nonfundamental_source() -> None:
+    result = translation_torus_quotient_chains(_checked_cube())
+    payload = result.model_dump(mode="python")
+    payload["source"]["is_fundamental_domain"] = False
+
+    with pytest.raises(ValidationError):
+        type(result).model_validate(payload)
+
+
+def test_result_value_rejects_forged_circle_directions() -> None:
+    result = translation_torus_quotient_chains(_checked_cube())
+    payload = result.model_dump(mode="python")
+    payload["circle_directions"] = ((0, 0, 0),) * 3
+
+    with pytest.raises(ValidationError):
+        type(result).model_validate(payload)
+
+
 def test_result_value_rejects_nonzero_differential() -> None:
     result = translation_torus_quotient_chains(_checked_cube())
     payload = result.model_dump(mode="python")

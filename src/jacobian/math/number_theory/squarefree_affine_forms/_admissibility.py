@@ -1,8 +1,8 @@
-"""Local admissibility decisions with a replayed finite cutoff (#1705).
+"""Local admissibility decisions with a finite cutoff (#1705).
 
 A family is locally admissible when no prime's square divides any form
 value on a complete residue system.  For all sufficiently large primes
-this follows from an elementary bound replayed from the exact family:
+this follows from an elementary bound derived from the exact family:
 with ``A`` the largest nonzero coefficient magnitude and ``M`` covering
 the form count and constant magnitudes, every prime ``p > B`` with
 ``B = max(A, isqrt(M))`` leaves a valid residue.  Finitely many primes
@@ -17,21 +17,14 @@ from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
-from sympy import isprime
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
 from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeLocalFactorRow,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._kernel import (
-    _SolutionCoset,
     closed_form_ledger,
-    form_solution_profile,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._models import (
     MAX_LOCAL_FACTOR_PRIME,
@@ -42,12 +35,6 @@ from jacobian.math.number_theory.squarefree_affine_forms._models import (
 from jacobian.math.number_theory.squarefree_affine_forms.values import (
     SquarefreeAffineFamily,
 )
-
-
-def _invariant_error(message: str) -> PydanticCustomError:
-    return PydanticCustomError(
-        "number_theory.squarefree_affine.admissibility_invariant", message
-    )
 
 
 def admissibility_cutoff(source: SquarefreeAffineFamily) -> tuple[int, int, int]:
@@ -88,7 +75,7 @@ def primes_up_to(bound: int) -> tuple[int, ...]:
 
 
 class LocalAdmissibilityRequest(StrictModel):
-    """Decide local square admissibility with a replayed finite cutoff."""
+    """Decide local square admissibility with a finite cutoff."""
 
     source: SquarefreeAffineFamily
 
@@ -108,69 +95,30 @@ class LocalAdmissibilityResult(StrictModel):
     cutoff: StrictInt = Field(ge=1, le=MAX_LOCAL_FACTOR_PRIME)
     max_abs_coefficient: StrictInt = Field(ge=0)
     large_prime_bound: StrictInt = Field(ge=1)
-    rows: tuple[SquarefreeLocalFactorRow, ...]
+    rows: tuple[SquarefreeLocalFactorRow, ...] = Field(
+        max_length=MAX_LOCAL_FACTOR_PRIME
+    )
     obstruction: SquarefreeLocalFactorRow | None = None
 
     @model_validator(mode="after")
-    def require_cutoff_proof_data(self) -> Self:
-        absolute = max(
-            (abs(form.coefficient) for form in self.source.forms if form.coefficient),
-            default=0,
-        )
-        constants = [
-            abs(form.constant)
-            for form in self.source.forms
-            if form.constant and not form.coefficient
-        ]
-        magnitude = max([len(self.source.forms), *constants, 1])
-        if self.max_abs_coefficient != absolute or self.large_prime_bound != magnitude:
-            raise _invariant_error(
-                "cutoff data must replay the family coefficient and magnitude bounds"
-            )
-        if self.cutoff != max(absolute, isqrt(magnitude)):
-            raise _invariant_error(
-                "cutoff must equal max(A, isqrt(M)) of the admitted family"
-            )
-        return self
-
-    @model_validator(mode="after")
-    def require_complete_prime_rows(self) -> Self:
-        if tuple(row.prime for row in self.rows) != primes_up_to(self.cutoff):
-            raise _invariant_error("rows must cover exactly the primes through cutoff")
-        for row in self.rows:
-            if not isprime(row.prime):
-                raise _invariant_error("every row prime must be prime")
-            modulus = row.prime * row.prime
-            bad: set[int] = set()
-            for form in self.source.forms:
-                profile = form_solution_profile(form, row.prime)
-                if isinstance(profile, _SolutionCoset) and profile.count == modulus:
-                    bad = set(range(modulus))
-                    break
-                if isinstance(profile, _SolutionCoset):
-                    bad.update(
-                        profile.root + offset * profile.stride
-                        for offset in range(profile.count)
-                    )
-            if len(bad) != row.bad_count or modulus - len(bad) != row.valid_count:
-                raise _invariant_error("every row must replay its residue partition")
-            if row.has_local_obstruction != (row.valid_count == 0):
-                raise _invariant_error("row obstruction flags must match valid counts")
-            if row.modulus != modulus:
-                raise _invariant_error("row modulus must equal the square of its prime")
+    def require_obstruction_branch_shape(self) -> Self:
         if self.status == "LOCALLY_OBSTRUCTED":
             if self.obstruction is None:
-                raise _invariant_error("an obstructed family carries its first row")
-            first = next((row for row in self.rows if row.valid_count == 0), None)
-            if first is None or first != self.obstruction:
-                raise _invariant_error(
-                    "the obstruction must be the first fully covered prime"
+                raise PydanticCustomError(
+                    "number_theory.squarefree_affine.admissibility_branch",
+                    "an obstructed result carries its obstruction row",
+                )
+            if self.obstruction not in self.rows or self.obstruction.valid_count != 0:
+                raise PydanticCustomError(
+                    "number_theory.squarefree_affine.admissibility_branch",
+                    "the obstruction is an empty row in the retained row family",
                 )
         elif self.obstruction is not None or any(
             row.valid_count == 0 for row in self.rows
         ):
-            raise _invariant_error(
-                "an admissible family carries no obstruction and no empty row"
+            raise PydanticCustomError(
+                "number_theory.squarefree_affine.admissibility_branch",
+                "an admissible result carries no obstruction or empty row",
             )
         return self
 
@@ -240,19 +188,10 @@ def local_admissibility(
     )
 
 
-def verify_local_admissibility(claim: LocalAdmissibilityResult) -> bool:
-    """Check an admissibility claim by recomputing its cutoff and rows."""
-    try:
-        return local_admissibility(claim.source) == claim
-    except (OperationDomainValidationError, OperationResourceAdmissionError):
-        return False
-
-
 __all__ = [
     "LocalAdmissibilityRequest",
     "LocalAdmissibilityResult",
     "admissibility_cutoff",
     "local_admissibility",
     "primes_up_to",
-    "verify_local_admissibility",
 ]

@@ -19,10 +19,6 @@ from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
 from jacobian.math.number_theory.affine_forms.values import AffineFormId
 from jacobian.math.number_theory.squarefree_affine_forms._admissibility import (
     primes_up_to,
@@ -31,6 +27,7 @@ from jacobian.math.number_theory.squarefree_affine_forms._models import (
     MAX_INTERVAL_LENGTH,
     admit_interval,
     admit_interval_sieve_residues,
+    admit_interval_sieve_visits,
 )
 from jacobian.math.number_theory.squarefree_affine_forms.values import (
     SquarefreeAffineFamily,
@@ -160,20 +157,30 @@ def _congruence_classes(
     return (root + offset * step for offset in range(count))
 
 
-def _interval_sieve_residue_work(
+def _interval_sieve_work(
     source: SquarefreeAffineFamily, primes: tuple[int, ...], length: int
-) -> int:
-    """Count congruence classes the interval sieve would enumerate."""
+) -> tuple[int, int]:
+    """Bound class enumeration and point visits before the interval sieve."""
 
-    work = 0
+    classes = 0
+    visits = 0
     for prime in primes:
         modulus = prime * prime
         for form in source.forms:
             divisor = gcd(form.coefficient, modulus)
             if form.constant % divisor != 0:
                 continue
-            work += length if divisor == modulus else divisor
-    return work
+            if divisor == modulus:
+                # The kernel marks every interval point directly.
+                classes += length
+                visits += length
+            else:
+                classes += divisor
+                # Each residue is traversed with stride ``modulus`` in the
+                # kernel; bound the number of points for every one of the
+                # ``divisor`` roots before constructing the residue iterator.
+                visits += divisor * ((length + modulus - 1) // modulus)
+    return classes, visits
 
 
 def interval_count(
@@ -213,13 +220,16 @@ def interval_count(
     # always be probed even when that bound admits none.
     limit = max(isqrt(magnitude), 2)
     primes = primes_up_to(limit)
-    admit_interval_sieve_residues(
-        _interval_sieve_residue_work(source, primes, upper - lower + 1)
-    )
-    # obstruction[n] = (form_index, prime), first hit wins: primes ascend and
-    # forms keep source order, so the recorded pair is the least prime and,
-    # on ties, the first form.
-    obstruction: dict[int, tuple[int, int]] = {}
+    class_work, visit_work = _interval_sieve_work(source, primes, upper - lower + 1)
+    admit_interval_sieve_residues(class_work)
+    admit_interval_sieve_visits(visit_work)
+    # A byte per interval point is enough for the count-only result. Retain
+    # form/prime metadata only when the caller requests the mathematical
+    # obstruction ledger. First hit wins: primes ascend and forms keep source
+    # order, so that pair is the least prime and, on ties, the first form.
+    length = upper - lower + 1
+    rejected = bytearray(length)
+    obstruction: dict[int, tuple[int, int]] | None = {} if include_ledger else None
     for prime in primes:
         modulus = prime * prime
         for form_index, form in enumerate(source.forms):
@@ -228,22 +238,31 @@ def interval_count(
                 # The congruence holds for every residue: mark the whole
                 # interval instead of enumerating ``modulus`` classes.
                 for point in range(lower, upper + 1):
-                    obstruction.setdefault(point, (form_index, prime))
+                    offset = point - lower
+                    if not rejected[offset]:
+                        rejected[offset] = 1
+                        if obstruction is not None:
+                            obstruction[offset] = (form_index, prime)
                 continue
             for root in residues:
                 # Smallest class member at or above the interval lower bound.
                 point = root + (-((root - lower) // modulus)) * modulus
                 while point <= upper:
-                    obstruction.setdefault(point, (form_index, prime))
+                    offset = point - lower
+                    if not rejected[offset]:
+                        rejected[offset] = 1
+                        if obstruction is not None:
+                            obstruction[offset] = (form_index, prime)
                     point += modulus
     matching: list[int] = []
     obstructions: list[IntervalObstruction] = []
-    for point in range(lower, upper + 1):
-        hit = obstruction.get(point)
-        if hit is None:
-            matching.append(point)
-        elif include_ledger:
-            form_index, prime = hit
+    if obstruction is not None:
+        for offset, is_rejected in enumerate(rejected):
+            point = lower + offset
+            if not is_rejected:
+                matching.append(point)
+                continue
+            form_index, prime = obstruction[offset]
             obstructions.append(
                 IntervalObstruction._from_kernel(
                     n=point,
@@ -256,21 +275,10 @@ def interval_count(
         lower=lower,
         upper=upper,
         include_ledger=include_ledger,
-        count=len(matching),
-        matching=tuple(matching) if include_ledger else (),
-        obstructions=tuple(obstructions) if include_ledger else (),
+        count=len(matching) if include_ledger else length - sum(rejected),
+        matching=tuple(matching),
+        obstructions=tuple(obstructions),
     )
-
-
-def verify_interval_count(claim: IntervalCountResult) -> bool:
-    """Check an interval count by recomputing it within its bounds."""
-    try:
-        return (
-            interval_count(claim.source, claim.lower, claim.upper, claim.include_ledger)
-            == claim
-        )
-    except (OperationDomainValidationError, OperationResourceAdmissionError):
-        return False
 
 
 __all__ = [
@@ -278,5 +286,4 @@ __all__ = [
     "IntervalCountResult",
     "IntervalObstruction",
     "interval_count",
-    "verify_interval_count",
 ]

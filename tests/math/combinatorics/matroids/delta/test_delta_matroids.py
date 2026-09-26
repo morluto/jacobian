@@ -690,6 +690,25 @@ def test_twist_polynomial_result_requires_strict_wire_histogram(
     assert error.value.errors()[0]["type"] == "int_type"
 
 
+def test_twist_polynomial_result_rejects_oversized_authored_axes() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["ground"] = [f"e{i}" for i in range(13)]
+    payload["coefficients_by_width"] = [8_192] + [0] * 13
+    payload["polynomial"]["coefficients"] = ["8192"]
+
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert {issue["loc"] for issue in error.value.errors()} >= {
+        ("ground",),
+        ("coefficients_by_width",),
+    }
+
+
 def test_twist_polynomial_admits_own_native_label_budget_boundary() -> None:
     label = "a" * 1_000_000
     source = FiniteDeltaMatroid(ground=(label,), feasible=((),))

@@ -174,8 +174,10 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
 class DeltaMatroidTwistPolynomialResult(StrictModel):
     """The twist polynomial and its complete width histogram."""
 
-    ground: tuple[str, ...]
-    coefficients_by_width: tuple[StrictInt, ...]
+    ground: tuple[str, ...] = Field(max_length=MAX_TWIST_POLYNOMIAL_GROUND)
+    coefficients_by_width: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES
+    )
     polynomial: IntegerPolynomial = Field(
         description=(
             "Exact integer polynomial in the formal variable z, stored in "

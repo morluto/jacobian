@@ -128,6 +128,7 @@ class ModularCharacterBasis(StrictModel):
         "gamma0-cyclotomic-character-sturm-rref-v1",
     ]
     precision: StrictInt = Field(ge=1, le=MAX_CHARACTER_BASIS_PRECISION)
+    precision: StrictInt = Field(ge=1, le=128)
     elements: tuple[ModularCharacterBasisElement, ...] = Field(max_length=32)
 
     @model_validator(mode="after")

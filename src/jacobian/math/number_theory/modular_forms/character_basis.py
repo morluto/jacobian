@@ -134,6 +134,7 @@ def _require_basis_space(
     ):
         _domain(
             "character basis supports weight-two conductor-13 characters at levels 13, 26, and 39 over Q(zeta_6)"
+            "character basis supports weight-two order-six character spaces at levels 13, 26, and 39 over Q(zeta_6)"
         )
     request = _pari_character_request(space)
     return space, field, request
@@ -235,6 +236,8 @@ def modular_character_basis_q_expansions(
     return _character_basis_from_admission(
         space, field, character_request, requested_precision=precision
     )
+    """Construct the exact Sturm-determining q-prefix basis for the admitted space."""
+    return _character_basis_from_admission(space, field, character_request)
 
 
 def _character_basis_from_admission(

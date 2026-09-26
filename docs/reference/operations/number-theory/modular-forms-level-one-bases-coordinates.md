@@ -57,6 +57,8 @@ remain unsupported in the rational basis and coordinate paths.
 the canonical `RationalCyclotomicField` power-basis value. A narrow
 field-valued character basis slice supports even characters of conductor 13
 and order dividing six at levels 13, 26, and 39, in both `M_2` and `S_2`, over
+field-valued character basis slice supports even order-6 characters of
+conductor 13 at levels 13, 26, and 39, in both `M_2` and `S_2`, over
 `Q(zeta_6)`. `modular_form.character_basis.compute` returns the complete
 q-Sturm RREF basis at precisions 3, 8, and 10 for those levels.
 `S_2(Gamma0(13), chi)` remains one-dimensional and retains its previous
@@ -69,6 +71,13 @@ returns its exact field-valued Sturm prefix. The operation
 basis identifiers are identical, using the common q^0..q^2 prefix.
 For this space the index is 14 and the weight-2 Sturm bound is 2, so that
 prefix decides global equality. `modular_form.character_coordinates.hecke.apply`
+`ModularFormCoordinates` represents one exact scalar multiple of that
+basis element; `modular_form.character_coordinates.q_expansion.compute`
+returns its exact field-valued Sturm prefix. For this space the index is 14
+and the weight-2 Sturm bound is 2, so the
+returned q^0..q^2 prefix is the determining finite projection. Callers perform
+coefficient comparisons on returned values themselves.
+`modular_form.character_coordinates.hecke.apply`
 supports `T_n` for `1 <= n <= 32` with `gcd(n,13)=1`; it extends the private
 PARI basis prefix through `q^(2n)`, applies the exact character-valued Hecke
 coefficient formula, and reconstructs the image in the same exact coordinate

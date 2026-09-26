@@ -37,6 +37,15 @@ identifier, which existing character-coordinate operations consume. The
 generalized bases support canonical coordinate equality in their exact parent
 spaces; other operations remain limited to the explicitly documented slices.
 The formula follows Quer, “Dimensions
+bounded cyclotomic character-space basis slice for the even order-6 characters
+of conductor 13, represented at levels 13, 26, and 39 over `Q(zeta_6)`. It
+covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases through
+precisions 3, 8, and 10, respectively. Its dimension implementation admits
+only this parity, conductor, level, and field range. It computes the
+`S_2(Gamma0(13), chi)` one-dimensional basis retains its established
+identifier, which existing character-coordinate operations consume; the
+generalized bases do not imply coordinate, operator, transport, or equality
+support outside that original parent. The formula follows Quer, “Dimensions
 of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
 ([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
 For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension
@@ -51,6 +60,10 @@ dimensions `1/3`, `2/6`, and `3/7` for the order-six characters at levels 13,
 `3/7`. Inputs must have even parity, exact conductor 13, and values in the
 declared `Q(zeta_6)` field; no other character weights, levels, or conductors
 use this formula implementation.
+dimensions `1/3`, `2/6`, and `3/7` at levels 13, 26, and 39. The inputs must
+have even order-six character, exact conductor 13, and values in the declared
+`Q(zeta_6)` field; no other character weights, levels, or conductors use this
+formula implementation.
 See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
 for the original exact q-prefix and same-space character-coordinate contract.
 Other character spaces and general field-valued Gamma0 bases remain unsupported.

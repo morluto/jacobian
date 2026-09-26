@@ -186,6 +186,9 @@ TOOLS: MathTools = (
             "levels 13, 26, or 39. Requested precision must be at least the "
             "space's Sturm precision and at most 128; the RREF normalization "
             "always uses the complete Sturm prefix. Dimensions are established by the bounded "
+            "Return the exact q-Sturm RREF basis over Q(zeta_6) for weight-two "
+            "M or S spaces with an even order-6 character of conductor 13 at "
+            "levels 13, 26, or 39. Dimensions are established by the bounded "
             "Cohen-Oesterle formula and checked against PARI; the result retains "
             "the exact character and coefficient-field parents."
         ),

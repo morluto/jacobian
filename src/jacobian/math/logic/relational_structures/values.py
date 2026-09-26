@@ -29,6 +29,11 @@ MAX_RELATIONAL_TABLE_ROWS = 4_096
 # implied per-table structural maximum so the published transport envelope
 # is a real admission bound.
 MAX_RELATIONAL_TRANSPORT_TUPLES = 16_384
+# An m-ary operation is represented by its complete table on A^m. The
+# operation-specific envelope bounds arity and table cells independently of
+# the larger carrier envelope.
+MAX_RELATIONAL_POLYMORPHISM_ARITY = 8
+MAX_RELATIONAL_OPERATION_TABLE_CELLS = 16_384
 
 RelationSymbolId = Annotated[
     str,
@@ -177,6 +182,8 @@ class FiniteRelationalStructure(StrictModel):
 __all__ = [
     "MAX_RELATIONAL_ARITY",
     "MAX_RELATIONAL_CARRIER",
+    "MAX_RELATIONAL_OPERATION_TABLE_CELLS",
+    "MAX_RELATIONAL_POLYMORPHISM_ARITY",
     "MAX_RELATIONAL_SYMBOLS",
     "MAX_RELATIONAL_TABLE_ROWS",
     "MAX_RELATIONAL_TRANSPORT_TUPLES",

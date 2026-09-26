@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from itertools import product
 
 import pytest
 from pydantic import ValidationError
@@ -16,8 +17,10 @@ from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
     HomomorphismCheckResult,
+    HomomorphismEnumerationResult,
     HomomorphismStatus,
     check_homomorphism,
+    enumerate_homomorphisms,
 )
 from jacobian.math.logic.relational_structures._models import (
     HomomorphismCheckRequest,
@@ -31,6 +34,7 @@ from jacobian.math.logic.relational_structures.values import (
 )
 
 OPERATION_ID = "relational.homomorphism.check"
+ENUMERATION_OPERATION_ID = "relational.homomorphism.enumerate.compute"
 
 _EDGE = (FiniteRelationSymbol(symbol_id="E", arity=2),)
 
@@ -393,3 +397,84 @@ def test_transport_envelope_admits_boundary_and_rejects_above() -> None:
 def test_operation_is_published_in_the_catalog() -> None:
     ids = {tool.operation_id for tool in BUILTIN_TOOLS}
     assert OPERATION_ID in ids
+
+
+def test_homomorphism_enumeration_matches_independent_map_scan() -> None:
+    source = _structure(2, _EDGE, (((0, 1),),))
+    target = _three_cycle()
+    result = enumerate_homomorphisms(source, target)
+    independently_expected = tuple(
+        mapping
+        for mapping in product(range(3), repeat=2)
+        if (mapping[0], mapping[1]) in set(target.relation_tables[0])
+    )
+    assert result.source == source
+    assert result.target == target
+    assert result.total_candidates == 9
+    assert result.carrier_maps == independently_expected == ((0, 1), (1, 2), (2, 0))
+
+
+def test_homomorphism_enumeration_handles_empty_source_and_no_maps() -> None:
+    empty_source = _structure(0, _EDGE, ((),))
+    result = enumerate_homomorphisms(empty_source, _three_cycle())
+    assert result.carrier_maps == ((),)
+    assert result.total_candidates == 1
+    assert (
+        enumerate_homomorphisms(
+            _three_cycle(), _structure(0, _EDGE, ((),))
+        ).carrier_maps
+        == ()
+    )
+
+
+def test_homomorphism_enumeration_admits_before_candidate_product(monkeypatch) -> None:
+    import jacobian.math.logic.relational_structures.operations as operations
+
+    source = _structure(6, _EDGE, ((),))
+    target = _structure(8, _EDGE, ((),))
+
+    def forbidden_product(*args, **kwargs):
+        raise AssertionError(
+            "candidate product must not be constructed before admission"
+        )
+
+    monkeypatch.setattr(operations, "product", forbidden_product)
+    with pytest.raises(OperationResourceAdmissionError):
+        operations.enumerate_homomorphisms(source, target)
+
+
+def test_enumeration_output_admission_bounds_retained_map_labels(
+    monkeypatch,
+) -> None:
+    import jacobian.math.logic.relational_structures._admission as admission
+    import jacobian.math.logic.relational_structures.operations as operations
+
+    source = _structure(5, _EDGE, (((0, 1), (1, 2), (2, 3), (3, 4)),))
+    target = _three_cycle()
+
+    def forbidden_product(*_args, **_kwargs):
+        raise AssertionError(
+            "candidate maps must not be expanded before output admission"
+        )
+
+    monkeypatch.setattr(operations, "product", forbidden_product)
+    monkeypatch.setattr(admission, "MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS", 100)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        operations.enumerate_homomorphisms(source, target)
+    assert exc_info.value.errors()[0]["type"] == (
+        "relational.homomorphism.enumeration_output"
+    )
+
+
+def test_homomorphism_enumeration_tool_example_executes() -> None:
+    tool = next(
+        tool for tool in BUILTIN_TOOLS if tool.operation_id == ENUMERATION_OPERATION_ID
+    )
+    example = tool.examples[0]
+    result = tool.run(tool.request_type.model_validate(example.input))
+    assert isinstance(result, HomomorphismEnumerationResult)
+    assert result.carrier_maps == ((0, 1), (1, 2), (2, 0))
+
+
+def test_homomorphism_enumeration_is_published() -> None:
+    assert ENUMERATION_OPERATION_ID in {tool.operation_id for tool in BUILTIN_TOOLS}

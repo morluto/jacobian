@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from itertools import product
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -13,13 +13,25 @@ from jacobian._models import StrictModel
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_ARITY,
     MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_OPERATION_TABLE_CELLS,
+    MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_SYMBOLS,
     FiniteRelationalStructure,
     RelationSymbolId,
 )
 
+MAX_CSP_CONSTRAINTS = 4_096
+MAX_CSP_SCOPE_ENTRIES = 16_384
+MAX_CSP_SOLUTION_ASSIGNMENTS = 65_536
+MAX_CSP_SOLUTION_LABELS = 1_048_576
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"relational.homomorphism.{reason}", message)
+
+
+def _polymorphism_validation_error(reason: str, message: str) -> PydanticCustomError:
+    return PydanticCustomError(f"relational.polymorphism.{reason}", message)
 
 
 class HomomorphismStatus(StrEnum):
@@ -27,6 +39,217 @@ class HomomorphismStatus(StrEnum):
 
     HOMOMORPHISM = "HOMOMORPHISM"
     NOT_HOMOMORPHISM = "NOT_HOMOMORPHISM"
+
+
+class InducedSubstructureRequest(StrictModel):
+    """Select an ordered carrier subset and take its induced structure.
+
+    ``inclusion[i]`` is the source label represented by the canonical label
+    ``i`` in the induced carrier. Its order is significant and is retained by
+    the result as the source-axis transport.
+    """
+
+    source: FiniteRelationalStructure
+    inclusion: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "An ordered list of distinct source labels. Position i becomes "
+            "label i in the induced carrier; any ordering of the selected "
+            "subset is supported."
+        ),
+    )
+
+
+class InducedSubstructureResult(StrictModel):
+    """An induced finite structure with its exact source and carrier map.
+
+    ``inclusion[i]`` embeds induced-carrier label i into the retained source.
+    The substructure carries one complete induced relation table per source
+    signature symbol, including exact nullary truth values.
+    """
+
+    source: FiniteRelationalStructure
+    substructure: FiniteRelationalStructure
+    inclusion: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "The source label represented by each induced-carrier label, in "
+            "the caller-selected order."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_source_binding(self) -> Self:
+        if self.source.signature != self.substructure.signature:
+            raise _validation_error(
+                "induced_signature",
+                "an induced substructure retains the exact source signature",
+            )
+        if len(self.inclusion) != self.substructure.carrier_size:
+            raise _validation_error(
+                "induced_inclusion_axis",
+                "the inclusion has one source label per induced-carrier label",
+            )
+        if len(set(self.inclusion)) != len(self.inclusion):
+            raise _validation_error(
+                "induced_inclusion_injective",
+                "the induced-carrier inclusion must be injective",
+            )
+        if any(not 0 <= label < self.source.carrier_size for label in self.inclusion):
+            raise _validation_error(
+                "induced_inclusion_range",
+                "every inclusion label must belong to the exact source carrier",
+            )
+        return self
+
+
+class RelationalReductRequest(StrictModel):
+    """Restrict a structure to a selected sub-signature."""
+
+    source: FiniteRelationalStructure
+    symbol_ids: tuple[RelationSymbolId, ...] = Field(
+        max_length=MAX_RELATIONAL_SYMBOLS,
+        description=(
+            "Relation symbols to retain. The returned sub-signature follows "
+            "source signature order, independently of this selection order."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_known_distinct_symbols(self) -> Self:
+        if len(set(self.symbol_ids)) != len(self.symbol_ids):
+            raise _validation_error(
+                "reduct.symbol_ids_not_unique",
+                "selected relation symbol IDs must be unique",
+            )
+        source_ids = {symbol.symbol_id for symbol in self.source.signature}
+        if any(symbol_id not in source_ids for symbol_id in self.symbol_ids):
+            raise _validation_error(
+                "reduct.symbol_id_unknown",
+                "every selected relation symbol must belong to the source signature",
+            )
+        return self
+
+
+class RelationalProductRequest(StrictModel):
+    """Form the direct product of two structures with identical signatures."""
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+
+
+class RelationalReductResult(StrictModel):
+    """A reduct together with its exact relation-symbol inclusion map."""
+
+    source: FiniteRelationalStructure
+    reduct: FiniteRelationalStructure
+    source_symbol_indices: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_SYMBOLS,
+        description=(
+            "For each reduct signature position, the corresponding position "
+            "in the source signature."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_signature_transport(self) -> Self:
+        if self.source.carrier_size != self.reduct.carrier_size:
+            raise _validation_error(
+                "reduct.carrier", "a signature reduct preserves the carrier"
+            )
+        if len(self.source_symbol_indices) != len(self.reduct.signature):
+            raise _validation_error(
+                "reduct.symbol_map_axis",
+                "the symbol map must cover every reduct signature position",
+            )
+        if len(set(self.source_symbol_indices)) != len(self.source_symbol_indices):
+            raise _validation_error(
+                "reduct.symbol_map_injective",
+                "distinct reduct symbols must map to distinct source symbols",
+            )
+        if any(
+            not 0 <= index < len(self.source.signature)
+            for index in self.source_symbol_indices
+        ):
+            raise _validation_error(
+                "reduct.symbol_map_range",
+                "every mapped source symbol must belong to the source signature",
+            )
+        if (
+            tuple(self.source.signature[index] for index in self.source_symbol_indices)
+            != self.reduct.signature
+        ):
+            raise _validation_error(
+                "reduct.signature_transport",
+                "the map must identify each reduct symbol with its source symbol",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        reduct: FiniteRelationalStructure,
+        source_symbol_indices: tuple[int, ...],
+    ) -> Self:
+        """Construct the source-bound reduct emitted by the admitted kernel."""
+
+        return cls.model_construct(
+            source=source,
+            reduct=reduct,
+            source_symbol_indices=source_symbol_indices,
+        )
+
+
+class RelationalProductResult(StrictModel):
+    """A direct product with canonical coordinate projections.
+
+    Product carrier label ``i * right.carrier_size + j`` denotes ``(i, j)``.
+    Relation tables use that encoding coordinatewise; signatures are retained
+    verbatim from both (necessarily equal) factors.
+    """
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+    product: FiniteRelationalStructure
+    left_projection: tuple[StrictInt, ...]
+    right_projection: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_product_axis(self) -> Self:
+        if self.left.signature != self.right.signature:
+            raise _validation_error(
+                "product_signature", "product factors need the same ranked signature"
+            )
+        if self.product.signature != self.left.signature:
+            raise _validation_error(
+                "product_signature", "product retains the factor signature"
+            )
+        size = self.left.carrier_size * self.right.carrier_size
+        if self.product.carrier_size != size:
+            raise _validation_error(
+                "product_carrier", "product carrier is the Cartesian carrier"
+            )
+        expected_left = (
+            tuple(index // self.right.carrier_size for index in range(size))
+            if self.right.carrier_size
+            else ()
+        )
+        expected_right = (
+            tuple(index % self.right.carrier_size for index in range(size))
+            if self.right.carrier_size
+            else ()
+        )
+        if (
+            self.left_projection != expected_left
+            or self.right_projection != expected_right
+        ):
+            raise _validation_error(
+                "product_projections",
+                "projections must follow canonical lexicographic pair labels",
+            )
+        return self
 
 
 class HomomorphismViolationWitness(StrictModel):
@@ -500,6 +723,22 @@ class HomomorphismCountRequest(StrictModel):
         return self
 
 
+class HomomorphismEnumerationRequest(StrictModel):
+    """Enumerate all maps preserving every relation over a shared signature."""
+
+    source: FiniteRelationalStructure
+    target: FiniteRelationalStructure
+
+    @model_validator(mode="after")
+    def require_shared_signature(self) -> Self:
+        if self.source.signature != self.target.signature:
+            raise _validation_error(
+                "signature_mismatch",
+                "source and target structures must be declared over one shared signature",
+            )
+        return self
+
+
 class HomomorphismCountResult(StrictModel):
     """The exact homomorphism count with its source-bound structures.
 
@@ -559,6 +798,302 @@ class HomomorphismCountResult(StrictModel):
             source=source,
             target=target,
             count=count,
+            total_candidates=total_candidates,
+        )
+
+
+class HomomorphismEnumerationResult(StrictModel):
+    """Complete, source-bound lexicographic list of all homomorphisms."""
+
+    source: FiniteRelationalStructure
+    target: FiniteRelationalStructure
+    carrier_maps: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=65_536,
+        description=(
+            "Every relation-preserving total carrier map, in lexicographic "
+            "order with source label 0 varying slowest."
+        ),
+    )
+    total_candidates: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_enumeration_shape(self) -> Self:
+        if self.source.signature != self.target.signature:
+            raise _validation_error(
+                "signature_mismatch", "structures must share a signature"
+            )
+        expected = (
+            1
+            if self.source.carrier_size == 0
+            else (
+                0
+                if self.target.carrier_size == 0
+                else self.target.carrier_size**self.source.carrier_size
+            )
+        )
+        if self.total_candidates != expected:
+            raise _validation_error(
+                "enumeration_receipt",
+                "total_candidates must be the complete map-space size",
+            )
+        previous = None
+        for carrier_map in self.carrier_maps:
+            if len(carrier_map) != self.source.carrier_size or any(
+                not 0 <= image < self.target.carrier_size for image in carrier_map
+            ):
+                raise _validation_error(
+                    "carrier_map", "each map must be total and target-valued"
+                )
+            if previous is not None and carrier_map <= previous:
+                raise _validation_error(
+                    "ordering",
+                    "carrier maps must be unique and lexicographically ordered",
+                )
+            previous = carrier_map
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        target: FiniteRelationalStructure,
+        carrier_maps: tuple[tuple[int, ...], ...],
+        total_candidates: int,
+    ) -> Self:
+        """Build after the admitted exhaustive scan; do not replay maps here."""
+        return cls.model_construct(
+            source=source,
+            target=target,
+            carrier_maps=carrier_maps,
+            total_candidates=total_candidates,
+        )
+
+
+class FiniteCspConstraint(StrictModel):
+    """One named constraint occurrence over a finite template."""
+
+    constraint_id: str = Field(pattern=r"^[A-Za-z][A-Za-z0-9_]{0,31}$")
+    symbol_id: RelationSymbolId
+    scope: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_ARITY)
+
+
+class FiniteCspInstance(StrictModel):
+    """A finite CSP instance with canonical variable labels ``0..n-1``.
+
+    Each constraint occurrence names one template relation and an ordered
+    scope. Repeated variables and repeated scopes are significant and retained.
+    """
+
+    template: FiniteRelationalStructure
+    variable_count: StrictInt = Field(ge=0, le=MAX_RELATIONAL_CARRIER)
+    constraints: tuple[FiniteCspConstraint, ...] = Field(max_length=MAX_CSP_CONSTRAINTS)
+
+    @model_validator(mode="after")
+    def require_valid_constraints(self) -> Self:
+        ids = tuple(constraint.constraint_id for constraint in self.constraints)
+        if len(set(ids)) != len(ids):
+            raise _validation_error(
+                "constraint_identity", "constraint IDs must be unique"
+            )
+        symbols = {symbol.symbol_id: symbol for symbol in self.template.signature}
+        for constraint in self.constraints:
+            symbol = symbols.get(constraint.symbol_id)
+            if symbol is None:
+                raise _validation_error(
+                    "constraint_symbol",
+                    "every constraint must name a template relation",
+                )
+            if len(constraint.scope) != symbol.arity:
+                raise _validation_error(
+                    "constraint_arity",
+                    "constraint scope length must match relation arity",
+                )
+            if any(
+                not 0 <= variable < self.variable_count for variable in constraint.scope
+            ):
+                raise _validation_error(
+                    "constraint_variable",
+                    "constraint variables must lie on the declared axis",
+                )
+        if (
+            sum(len(constraint.scope) for constraint in self.constraints)
+            > MAX_CSP_SCOPE_ENTRIES
+        ):
+            raise _validation_error(
+                "scope_bound", "aggregate CSP scope entries exceed the bound"
+            )
+        return self
+
+
+class CspAssignmentRequest(StrictModel):
+    """One complete assignment of the variables of a finite CSP instance."""
+
+    instance: FiniteCspInstance
+    assignment: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description="One template-carrier label for each variable in increasing order.",
+    )
+
+    @model_validator(mode="after")
+    def require_complete_assignment(self) -> Self:
+        if len(self.assignment) != self.instance.variable_count:
+            raise _validation_error(
+                "assignment_axis",
+                "assignment must have one value per instance variable",
+            )
+        if any(
+            not 0 <= value < self.instance.template.carrier_size
+            for value in self.assignment
+        ):
+            raise _validation_error(
+                "assignment_value", "assignment values must lie in the template carrier"
+            )
+        return self
+
+
+class CspConstraintEvaluation(StrictModel):
+    """The exact target tuple induced by an assignment at one occurrence."""
+
+    constraint_id: str
+    symbol_id: RelationSymbolId
+    scope: tuple[StrictInt, ...]
+    target_tuple: tuple[StrictInt, ...]
+    allowed: bool
+
+
+class CspAssignmentProfile(StrictModel):
+    """Complete per-occurrence evaluation of one CSP assignment.
+
+    Repeated constraint occurrences remain visible even when they have the
+    same relation symbol and scope. ``first_violation`` is the first rejected
+    occurrence in the instance's declared order.
+    """
+
+    status: Literal["SOLUTION", "NOT_A_SOLUTION"]
+    instance: FiniteCspInstance
+    assignment: tuple[StrictInt, ...]
+    evaluations: tuple[CspConstraintEvaluation, ...] = Field(
+        max_length=MAX_CSP_CONSTRAINTS
+    )
+    first_violation: CspConstraintEvaluation | None
+
+    @model_validator(mode="after")
+    def require_complete_profile(self) -> Self:
+        if len(self.assignment) != self.instance.variable_count:
+            raise _validation_error(
+                "assignment_axis", "profile assignment is not total"
+            )
+        if any(
+            not 0 <= value < self.instance.template.carrier_size
+            for value in self.assignment
+        ):
+            raise _validation_error(
+                "assignment_value",
+                "profile assignment values must lie in the template carrier",
+            )
+        if len(self.evaluations) != len(self.instance.constraints):
+            raise _validation_error(
+                "assignment_profile", "every constraint occurrence must be evaluated"
+            )
+        for constraint, evaluation in zip(
+            self.instance.constraints, self.evaluations, strict=True
+        ):
+            if (
+                evaluation.constraint_id != constraint.constraint_id
+                or evaluation.symbol_id != constraint.symbol_id
+                or evaluation.scope != constraint.scope
+                or evaluation.target_tuple
+                != tuple(self.assignment[variable] for variable in constraint.scope)
+            ):
+                raise _validation_error(
+                    "assignment_binding",
+                    "evaluation must retain its exact constraint occurrence and assigned tuple",
+                )
+        failed = next((item for item in self.evaluations if not item.allowed), None)
+        if self.first_violation != failed:
+            raise _validation_error(
+                "assignment_witness",
+                "first violation must be the first rejected occurrence",
+            )
+        if (self.status == "SOLUTION") != (failed is None):
+            raise _validation_error(
+                "assignment_status", "status must agree with all constraint evaluations"
+            )
+        return self
+
+
+class CspSolutions(StrictModel):
+    """The complete lexicographically ordered solution family of one CSP.
+
+    Assignments use the variable axis and labels of the retained template.
+    The instance keeps named constraint occurrences and their provenance,
+    including occurrences that deduplicate in its canonical source structure.
+    """
+
+    instance: FiniteCspInstance
+    assignments: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...
+    ] = Field(max_length=MAX_CSP_SOLUTION_ASSIGNMENTS)
+    total_candidates: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_assignment_family_shape(self) -> Self:
+        expected = (
+            1
+            if self.instance.variable_count == 0
+            else (
+                0
+                if self.instance.template.carrier_size == 0
+                else self.instance.template.carrier_size**self.instance.variable_count
+            )
+        )
+        if self.total_candidates != expected:
+            raise _validation_error(
+                "solutions.candidate_count",
+                "total_candidates must be the complete assignment-space size",
+            )
+        if len(self.assignments) > expected:
+            raise _validation_error(
+                "solutions.assignment_count",
+                "the solution family cannot exceed the complete assignment space",
+            )
+        if sum(map(len, self.assignments)) > MAX_CSP_SOLUTION_LABELS:
+            raise _validation_error(
+                "solutions.output_bound",
+                "the retained assignment labels exceed the output envelope",
+            )
+        previous: tuple[int, ...] | None = None
+        for assignment in self.assignments:
+            if len(assignment) != self.instance.variable_count or any(
+                not 0 <= value < self.instance.template.carrier_size
+                for value in assignment
+            ):
+                raise _validation_error(
+                    "solutions.assignment_shape",
+                    "each assignment must be total and template-valued",
+                )
+            if previous is not None and assignment <= previous:
+                raise _validation_error(
+                    "solutions.order",
+                    "assignments must be unique and lexicographically ordered",
+                )
+            previous = assignment
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        instance: FiniteCspInstance,
+        assignments: tuple[tuple[int, ...], ...],
+        total_candidates: int,
+    ) -> Self:
+        """Build after the admitted exhaustive search without replaying it."""
+
+        return cls.model_construct(
+            instance=instance,
+            assignments=assignments,
             total_candidates=total_candidates,
         )
 
@@ -792,6 +1327,313 @@ class EmbeddingSearchResult(StrictModel):
         )
 
 
+class RelationalQuotientRequest(StrictModel):
+    """Form a quotient by a partition of the finite carrier."""
+
+    source: FiniteRelationalStructure
+    classes: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_CARRIER,
+        description=(
+            "One equivalence-class label per source carrier element. Labels "
+            "may be arbitrary integers; output classes are canonically ordered "
+            "by their least source representative."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_total_partition(self) -> Self:
+        if len(self.classes) != self.source.carrier_size:
+            raise _validation_error(
+                "quotient.partition_axis",
+                "classes must give exactly one label for each source element",
+            )
+        return self
+
+
+class RelationalQuotient(StrictModel):
+    """A quotient structure and its canonical surjective projection."""
+
+    source: FiniteRelationalStructure
+    quotient: FiniteRelationalStructure
+    quotient_map: tuple[StrictInt, ...] = Field(max_length=MAX_RELATIONAL_CARRIER)
+
+    @model_validator(mode="after")
+    def require_projection_shape(self) -> Self:
+        if self.source.signature != self.quotient.signature:
+            raise _validation_error(
+                "quotient.signature", "quotient must retain the source signature"
+            )
+        if len(self.quotient_map) != self.source.carrier_size:
+            raise _validation_error(
+                "quotient.map_axis", "quotient map must be total on the source"
+            )
+        if any(
+            not 0 <= value < self.quotient.carrier_size for value in self.quotient_map
+        ):
+            raise _validation_error(
+                "quotient.map_value", "quotient map values must lie in the quotient"
+            )
+        if set(self.quotient_map) != set(range(self.quotient.carrier_size)):
+            raise _validation_error(
+                "quotient.map_surjective", "quotient map must be surjective"
+            )
+        return self
+
+
+class RelationalPolymorphismRequest(StrictModel):
+    """Check one complete finite operation table against a structure."""
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
+    operation_table: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_OPERATION_TABLE_CELLS,
+        description=(
+            "Complete table of f:A^m→A in lexicographic input-tuple order; "
+            "the exact number of entries is |A|^m. This is an operation "
+            "table, not a carrier map A→B."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_complete_table(self) -> Self:
+        expected = self.source.carrier_size**self.arity
+        if len(self.operation_table) != expected:
+            raise _polymorphism_validation_error(
+                "polymorphism.table_axis",
+                "operation_table must contain one value for every tuple in A^m",
+            )
+        if any(
+            not 0 <= value < self.source.carrier_size for value in self.operation_table
+        ):
+            raise _polymorphism_validation_error(
+                "polymorphism.table_value",
+                "every operation table value must lie in the exact source carrier",
+            )
+        return self
+
+
+class RelationalPolymorphism(StrictModel):
+    """A complete operation table established to preserve one exact structure."""
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
+    operation_table: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_OPERATION_TABLE_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_table(self) -> Self:
+        expected = self.source.carrier_size**self.arity
+        if len(self.operation_table) != expected:
+            raise _polymorphism_validation_error(
+                "polymorphism.table_axis",
+                "operation_table must contain one value for every tuple in A^m",
+            )
+        if any(
+            not 0 <= value < self.source.carrier_size for value in self.operation_table
+        ):
+            raise _polymorphism_validation_error(
+                "polymorphism.table_value",
+                "every operation table value must lie in the exact source carrier",
+            )
+        return self
+
+
+class RelationalPolymorphismStatus(StrEnum):
+    POLYMORPHISM = "POLYMORPHISM"
+    NOT_POLYMORPHISM = "NOT_POLYMORPHISM"
+
+
+class RelationalPolymorphismWitness(StrictModel):
+    """Relation rows whose coordinatewise operation image is absent."""
+
+    symbol_id: RelationSymbolId
+    relation_arity: StrictInt = Field(ge=0, le=MAX_RELATIONAL_ARITY)
+    input_rows: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_RELATIONAL_POLYMORPHISM_ARITY
+    )
+    output_row: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_witness_axes(self) -> Self:
+        if any(len(row) != self.relation_arity for row in self.input_rows):
+            raise _polymorphism_validation_error(
+                "polymorphism.witness_rows",
+                "each witness input row must have the declared relation arity",
+            )
+        if len(self.output_row) != self.relation_arity:
+            raise _polymorphism_validation_error(
+                "polymorphism.witness_output",
+                "the coordinatewise output must have the declared relation arity",
+            )
+        return self
+
+
+class RelationalPolymorphismRelationProfile(StrictModel):
+    symbol_id: RelationSymbolId
+    arity: StrictInt = Field(ge=0, le=MAX_RELATIONAL_ARITY)
+    input_combinations: StrictInt = Field(ge=0)
+    preserved_combinations: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_profile_bounds(self) -> Self:
+        if self.preserved_combinations > self.input_combinations:
+            raise _polymorphism_validation_error(
+                "polymorphism.profile_bounds",
+                "preserved combinations cannot exceed the complete relation product",
+            )
+        return self
+
+
+class RelationalPolymorphismCheckResult(StrictModel):
+    """Complete preservation profile for one caller-supplied operation table.
+
+    Validation is structural: the witness must reference the named source
+    relation and its rows, with carrier-valued coordinates, and the relation
+    profiles must agree with the source signature and counts. The admitted
+    ``relational.polymorphism.check`` kernel performs the exhaustive
+    coordinatewise image replay; re-checking an externally authored claim
+    means running that operation again on its admitted source, arity, and
+    operation table, not replaying it inside deserialization.
+    """
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
+    operation_table: tuple[StrictInt, ...] = Field(
+        max_length=MAX_RELATIONAL_OPERATION_TABLE_CELLS
+    )
+    status: RelationalPolymorphismStatus
+    polymorphism: RelationalPolymorphism | None
+    witness: RelationalPolymorphismWitness | None
+    relation_profiles: tuple[RelationalPolymorphismRelationProfile, ...]
+
+    @model_validator(mode="after")
+    def require_result_binding(self) -> Self:
+        expected_rows = self.source.carrier_size**self.arity
+        if len(self.operation_table) != expected_rows or any(
+            not 0 <= value < self.source.carrier_size for value in self.operation_table
+        ):
+            raise _polymorphism_validation_error(
+                "polymorphism.result_table",
+                "the retained operation table must be total and source-bound",
+            )
+        expected_signature = tuple(
+            (symbol.symbol_id, symbol.arity) for symbol in self.source.signature
+        )
+        if (
+            tuple((p.symbol_id, p.arity) for p in self.relation_profiles)
+            != expected_signature
+        ):
+            raise _polymorphism_validation_error(
+                "polymorphism.result_profiles",
+                "profiles must cover the complete signature in source order",
+            )
+        success = self.status is RelationalPolymorphismStatus.POLYMORPHISM
+        if success and (self.polymorphism is None or self.witness is not None):
+            raise _polymorphism_validation_error(
+                "polymorphism.result_status",
+                "successful checks retain a polymorphism and no failure witness",
+            )
+        if not success and (self.polymorphism is not None or self.witness is None):
+            raise _polymorphism_validation_error(
+                "polymorphism.result_status",
+                "failed checks retain an exact failure witness and no polymorphism",
+            )
+        if self.polymorphism is not None and (
+            self.polymorphism.source != self.source
+            or self.polymorphism.arity != self.arity
+            or self.polymorphism.operation_table != self.operation_table
+        ):
+            raise _polymorphism_validation_error(
+                "polymorphism.result_value",
+                "the checked polymorphism must retain the exact source and operation table",
+            )
+        if success and any(
+            p.preserved_combinations != p.input_combinations
+            for p in self.relation_profiles
+        ):
+            raise _polymorphism_validation_error(
+                "polymorphism.result_profile",
+                "a polymorphism preserves every relation-row combination",
+            )
+        for profile, table in zip(
+            self.relation_profiles,
+            self.source.relation_tables,
+            strict=True,
+        ):
+            if profile.input_combinations != len(table) ** self.arity:
+                raise _polymorphism_validation_error(
+                    "polymorphism.result_profile_axis",
+                    "profile input combinations must equal the complete relation power",
+                )
+        if self.witness is not None:
+            witness = self.witness
+            if len(witness.input_rows) != self.arity:
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_operation_arity",
+                    "witness must contain one source relation row per operation input",
+                )
+            try:
+                symbol_index = next(
+                    i
+                    for i, symbol in enumerate(self.source.signature)
+                    if symbol.symbol_id == witness.symbol_id
+                )
+            except StopIteration as exc:
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_symbol",
+                    "witness symbol must belong to the exact source signature",
+                ) from exc
+            symbol = self.source.signature[symbol_index]
+            relation = self.source.relation_tables[symbol_index]
+            if symbol.arity != witness.relation_arity or any(
+                row not in relation for row in witness.input_rows
+            ):
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_source",
+                    "witness inputs must be rows of the named source relation",
+                )
+            if any(
+                not 0 <= value < self.source.carrier_size
+                for value in witness.output_row
+            ):
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_output",
+                    "witness output coordinates must be source carrier labels",
+                )
+            profile = self.relation_profiles[symbol_index]
+            if profile.preserved_combinations >= profile.input_combinations:
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_profile",
+                    "the witnessed relation must record a non-preserved combination",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        arity: int,
+        operation_table: tuple[int, ...],
+        status: RelationalPolymorphismStatus,
+        polymorphism: RelationalPolymorphism | None,
+        witness: RelationalPolymorphismWitness | None,
+        relation_profiles: tuple[RelationalPolymorphismRelationProfile, ...],
+    ) -> Self:
+        """Construct after exhaustive, pre-admitted relation-product replay."""
+
+        return cls.model_construct(
+            source=source,
+            arity=arity,
+            operation_table=operation_table,
+            status=status,
+            polymorphism=polymorphism,
+            witness=witness,
+            relation_profiles=relation_profiles,
+        )
+
+
 __all__ = [
     "EmbeddingSearchRequest",
     "EmbeddingSearchResult",
@@ -808,5 +1650,15 @@ __all__ = [
     "HomomorphismViolationWitness",
     "InducedEmbeddingCheckResult",
     "InducedRelationProfile",
+    "InducedSubstructureRequest",
+    "InducedSubstructureResult",
+    "RelationalPolymorphism",
+    "RelationalPolymorphismCheckResult",
+    "RelationalPolymorphismRelationProfile",
+    "RelationalPolymorphismRequest",
+    "RelationalPolymorphismStatus",
+    "RelationalPolymorphismWitness",
+    "RelationalQuotient",
+    "RelationalQuotientRequest",
     "SymbolTransportProfile",
 ]

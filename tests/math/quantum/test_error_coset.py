@@ -30,9 +30,7 @@ def test_canonical_coset_matches_exhaustive_span_and_is_unique() -> None:
     span = {(0, 0, 0, 0), (0, 0, 1, 1)}
     values: dict[tuple[int, ...], set[tuple[int, ...]]] = {}
     for error in errors:
-        coset = stabilizer_error_coset(
-            StabilizerErrorCosetRequest(check_space=checks, error=error)
-        )
+        coset = stabilizer_error_coset(checks, error)
         reduced = (*coset.representative.x_bits, *coset.representative.z_bits)
         source = (*error.x_bits, *error.z_bits)
         assert tuple((a + b) % 2 for a, b in zip(source, reduced, strict=True)) in span
@@ -53,12 +51,8 @@ def test_coset_is_not_syndrome_classification() -> None:
     )
     x0 = _pauli(register, (1, 0, 0, 0))
     x1 = _pauli(register, (0, 1, 0, 0))
-    first = stabilizer_error_coset(
-        StabilizerErrorCosetRequest(check_space=checks, error=x0)
-    )
-    second = stabilizer_error_coset(
-        StabilizerErrorCosetRequest(check_space=checks, error=x1)
-    )
+    first = stabilizer_error_coset(checks, x0)
+    second = stabilizer_error_coset(checks, x1)
     assert first != second
 
 
@@ -68,19 +62,13 @@ def test_coset_rejects_nonisotropic_space_and_foreign_register() -> None:
     z = _pauli(register, (0, 1))
     with pytest.raises(OperationDomainValidationError):
         stabilizer_error_coset(
-            StabilizerErrorCosetRequest(
-                check_space=CheckSpaceValue(register=register, basis=(x, z)),
-                error=x,
-            )
+            CheckSpaceValue(register=register, basis=(x, z)), x
         )
     foreign_register = QubitRegister(qubit_ids=("other",))
     foreign = _pauli(foreign_register, (1, 0))
     with pytest.raises(OperationDomainValidationError):
         stabilizer_error_coset(
-            StabilizerErrorCosetRequest(
-                check_space=CheckSpaceValue(register=register, basis=(z,)),
-                error=foreign,
-            )
+            CheckSpaceValue(register=register, basis=(z,)), foreign
         )
 
 
@@ -145,31 +133,17 @@ def test_coset_rejects_a_foreign_register_basis_row() -> None:
 def test_coset_rejects_model_constructed_check_spaces() -> None:
     register = QubitRegister(qubit_ids=("q",))
     error = _pauli(register, (1, 0))
-    forged_requests = (
-        StabilizerErrorCosetRequest.model_construct(),
-        StabilizerErrorCosetRequest.model_construct(
-            check_space=CheckSpaceValue.model_construct(), error=error
-        ),
-        StabilizerErrorCosetRequest.model_construct(
-            check_space=CheckSpaceValue.model_construct(qubit_register=register),
-            error=error,
-        ),
-        StabilizerErrorCosetRequest.model_construct(
-            check_space=CheckSpaceValue.model_construct(
-                qubit_register=register, basis="ab"
-            ),
-            error=error,
-        ),
-        StabilizerErrorCosetRequest.model_construct(
-            check_space=CheckSpaceValue.model_construct(
-                qubit_register=register, basis=(None, "x") * 4
-            ),
-            error=error,
+    malformed_spaces = (
+        CheckSpaceValue.model_construct(),
+        CheckSpaceValue.model_construct(qubit_register=register),
+        CheckSpaceValue.model_construct(qubit_register=register, basis="ab"),
+        CheckSpaceValue.model_construct(
+            qubit_register=register, basis=(None, "x") * 4
         ),
     )
-    for forged in forged_requests:
+    for check_space in malformed_spaces:
         with pytest.raises(OperationDomainValidationError):
-            stabilizer_error_coset(forged)
+            stabilizer_error_coset(check_space, error)  # type: ignore[arg-type]
 
 
 def test_catalog_publishes_coset_operation() -> None:

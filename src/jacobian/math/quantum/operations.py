@@ -1333,17 +1333,10 @@ def stabilizer_error_equivalence(
 
 
 def stabilizer_error_coset(
-    request: StabilizerErrorCosetRequest,
+    check_space: CheckSpaceValue,
+    error: PhaseFreeQubitPauli,
 ) -> StabilizerErrorCoset:
     """Return the unique RREF-reduced representative of ``error + S``."""
-    if not isinstance(request, StabilizerErrorCosetRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer.error_coset.not_a_request",
-            "error-coset projection requires a typed request",
-        )
-    check_space = getattr(request, "check_space", None)
-    error = getattr(request, "error", None)
     if not isinstance(check_space, CheckSpaceValue):
         _reject(
             "check_space",

@@ -133,7 +133,7 @@ def _run_error_equivalence(
 
 
 def _run_error_coset(request: StabilizerErrorCosetRequest) -> StabilizerErrorCoset:
-    return stabilizer_error_coset(request)
+    return stabilizer_error_coset(request.check_space, request.error)
 
 
 def _run_exact_stabilizer_group(

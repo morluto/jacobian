@@ -2407,6 +2407,28 @@ def modular_form_hecke_matrix_in_frame(
             code="modular_form.hecke_matrix_index_bound",
             message="Hecke matrix index is outside the exact admitted envelope",
         )
+    if (
+        isinstance(frame, ModularFormChangeOfBasisFrame)
+        and frame.source_basis_id == PARI_STURM_RREF_BASIS_ID
+    ):
+        # A PARI frame checks its canonical labels with a Sturm basis, then
+        # the canonical Hecke matrix needs a second, longer basis. Reserve both
+        # backend jobs before the first worker is launched.
+        bound = sturm_bound(frame.space).bound
+        frame_plan = _admit_basis(frame.space, bound + 1, materialize_pari=False)
+        source_order = index * bound + 1
+        matrix_plan = _admit_basis(frame.space, source_order, materialize_pari=False)
+        matrix_work = (
+            matrix_plan.dimension * (bound + 1) * index
+            + 2 * (bound + 1) * matrix_plan.dimension**2
+            + matrix_plan.work
+        )
+        if frame_plan.work + matrix_work > MAX_COORDINATE_HECKE_WORK:
+            raise OperationResourceAdmissionError(
+                location=("frame",),
+                code="modular_form.framed_hecke_aggregate_work_bound",
+                message="frame validation and canonical Hecke matrix exceed the shared work envelope",
+            )
     plan, change = _frame_admission(frame)
     dimension = plan.dimension
     zero = (Fraction(0),) * dimension

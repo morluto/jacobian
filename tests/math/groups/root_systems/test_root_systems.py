@@ -2,6 +2,7 @@
 
 import pytest
 
+from jacobian.canonical import canonicalize_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
     CartanMatrix as CartanMatrixValue,
@@ -14,6 +15,8 @@ from jacobian.math.groups.root_systems._models import (
     WeylGroupOrderResult,
 )
 from jacobian.math.groups.root_systems.operations import (
+    MAX_ROOT_PROFILE_OUTPUT_CELLS,
+    positive_root_profile,
     positive_roots,
     root_system_data,
     simple_reflection,
@@ -131,6 +134,110 @@ class TestRootSystemData:
     def test_simple_roots(self) -> None:
         result = compute_root_system_data(CartanMatrixRequest(matrix=_cartan(A2)))
         assert result.simple_roots == ((1, 0), (0, 1))
+
+
+class TestPositiveRootProfile:
+    @pytest.mark.parametrize(
+        ("matrix", "roots", "heights", "supports", "highest"),
+        (
+            (
+                ((2,),),
+                ((1,),),
+                (1,),
+                ((0,),),
+                ((0, (1,)),),
+            ),
+            (
+                A2,
+                ((0, 1), (1, 0), (1, 1)),
+                (1, 1, 2),
+                ((1,), (0,), (0, 1)),
+                ((2, (1, 1)),),
+            ),
+            (
+                B2,
+                ((0, 1), (1, 0), (1, 1), (2, 1)),
+                (1, 1, 2, 3),
+                ((1,), (0,), (0, 1), (0, 1)),
+                ((3, (2, 1)),),
+            ),
+            (
+                G2,
+                ((0, 1), (1, 0), (1, 1), (2, 1), (3, 1), (3, 2)),
+                (1, 1, 2, 3, 4, 5),
+                ((1,), (0,), (0, 1), (0, 1), (0, 1), (0, 1)),
+                ((5, (3, 2)),),
+            ),
+        ),
+    )
+    def test_independent_root_profiles(
+        self,
+        matrix: CartanMatrix,
+        roots: tuple[tuple[int, ...], ...],
+        heights: tuple[int, ...],
+        supports: tuple[tuple[int, ...], ...],
+        highest: tuple[tuple[int, tuple[int, ...]], ...],
+    ) -> None:
+        result = positive_root_profile(matrix)
+        assert result.datum.cartan_matrix.entries == matrix
+        assert (
+            tuple(entry.root_coefficients for entry in result.positive_roots) == roots
+        )
+        assert tuple(entry.height for entry in result.positive_roots) == heights
+        assert (
+            tuple(entry.support_simple_root_indices for entry in result.positive_roots)
+            == supports
+        )
+        assert (
+            tuple(
+                (
+                    component.highest_root_index,
+                    result.positive_roots[
+                        component.highest_root_index
+                    ].root_coefficients,
+                )
+                for component in result.components
+            )
+            == highest
+        )
+
+    def test_disconnected_datum_preserves_factor_and_root_axes(self) -> None:
+        result = positive_root_profile(A1_X_A2)
+        assert tuple(
+            component.simple_root_indices for component in result.components
+        ) == (
+            (0,),
+            (1, 2),
+        )
+        assert tuple(
+            component.positive_root_indices for component in result.components
+        ) == (
+            (3,),
+            (0, 1, 2),
+        )
+        assert tuple(
+            component.highest_root_index for component in result.components
+        ) == (
+            3,
+            2,
+        )
+
+    def test_e8_full_root_family_fits_the_admitted_profile_output_bound(self) -> None:
+        result = positive_root_profile(E8)
+        encoded = canonicalize_json(result.model_dump(mode="json"))
+        assert len(result.positive_roots) == 120
+        assert len(encoded) <= MAX_ROOT_PROFILE_OUTPUT_CELLS
+        highest = result.positive_roots[result.components[0].highest_root_index]
+        assert highest.height == 29
+
+    def test_serialized_profile_roundtrips_with_parent_and_axis(self) -> None:
+        result = positive_root_profile(G2)
+        revived = type(result).model_validate_json(result.model_dump_json())
+        assert revived == result
+        assert revived.datum.cartan_matrix.entries == G2
+        assert (
+            revived.positive_roots[revived.components[0].highest_root_index].height == 5
+        )
 
 
 class TestSimpleReflection:

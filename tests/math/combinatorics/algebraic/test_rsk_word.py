@@ -20,7 +20,6 @@ from jacobian.math.combinatorics.algebraic._models import (
     HookLengthRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
-    RSKResult,
     RSKWordRequest,
 )
 from jacobian.math.combinatorics.algebraic._tools import (
@@ -32,8 +31,10 @@ from jacobian.math.combinatorics.algebraic._tools import (
 )
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions import (
@@ -269,7 +270,9 @@ def test_forward_pair_matches_independent_scan_oracle_exhaustively() -> None:
     """
     alphabet = ("a", "b", "c")
 
-    def reference_pair(letters: tuple[str, ...]):
+    def reference_pair(
+        letters: tuple[str, ...],
+    ) -> tuple[tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...]]:
         insertion: list[list[int]] = []
         recording: list[list[int]] = []
         ranks = {letter: index + 1 for index, letter in enumerate(alphabet)}
@@ -306,7 +309,9 @@ def test_forward_pair_matches_independent_scan_oracle_exhaustively() -> None:
 
 def test_permutation_operation_agrees_with_word_specialization() -> None:
     permutation = (3, 1, 4, 2)
-    old_result = rsk_permutation(RSKPermutationRequest(permutation=permutation))
+    old_result = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=permutation))
+    )
     word_pair = _pair(
         FiniteWord(
             alphabet=("1", "2", "3", "4"),
@@ -323,9 +328,11 @@ def test_permutation_inversion_swaps_the_tableaux() -> None:
         inverse = [0] * len(permutation)
         for position, value in enumerate(permutation, start=1):
             inverse[value - 1] = position
-        pair = rsk_permutation(RSKPermutationRequest(permutation=permutation))
+        pair = rsk_permutation(
+            RSKPermutationRequest(permutation=FinitePermutation(images=permutation))
+        )
         inverse_pair = rsk_permutation(
-            RSKPermutationRequest(permutation=tuple(inverse))
+            RSKPermutationRequest(permutation=FinitePermutation(images=tuple(inverse)))
         )
         assert pair.p_tableau == inverse_pair.q_tableau
         assert pair.q_tableau == inverse_pair.p_tableau
@@ -335,29 +342,29 @@ def test_permutation_envelope_is_derived_from_the_canonical_cell_budget() -> Non
     assert MAX_RSK_PERMUTATION_LENGTH == MAX_RSK_WORD_LENGTH
 
     identity_51 = tuple(range(1, 52))
-    result = rsk_permutation(RSKPermutationRequest(permutation=identity_51))
+    result = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=identity_51))
+    )
     assert result.shape.parts == (51,)
-    assert result.lis_length == 51
-    assert result.lds_length == 1
 
     identity_at_cap = tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 1))
-    wide = rsk_permutation(RSKPermutationRequest(permutation=identity_at_cap))
+    wide = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=identity_at_cap))
+    )
     assert wide.p_tableau.rows == (identity_at_cap,)
     assert wide.q_tableau.rows == (identity_at_cap,)
     assert wide.shape.parts == (MAX_RSK_PERMUTATION_LENGTH,)
-    assert RSKResult.model_validate(wide.model_dump()) == wide
+    assert PermutationRSKPair.model_validate(wide.model_dump()) == wide
 
     descending_at_cap = tuple(range(MAX_RSK_PERMUTATION_LENGTH, 0, -1))
-    deep = rsk_permutation(RSKPermutationRequest(permutation=descending_at_cap))
+    deep = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=descending_at_cap))
+    )
     assert deep.shape.parts == (1,) * MAX_RSK_PERMUTATION_LENGTH
-    assert deep.lis_length == 1
-    assert deep.lds_length == MAX_RSK_PERMUTATION_LENGTH
-    assert RSKResult.model_validate(deep.model_dump()) == deep
+    assert PermutationRSKPair.model_validate(deep.model_dump()) == deep
 
     with pytest.raises(ValidationError):
-        RSKPermutationRequest(
-            permutation=tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 2))
-        )
+        FinitePermutation(images=tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 2)))
 
 
 def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:
@@ -405,7 +412,7 @@ def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
     return tuple("\U0001f600" * 63 + chr(0x1F600 + index) for index in range(count))
 
 
-def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
+def test_word_length_and_payload_cardinality_bounds_are_closed() -> None:
     length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH)
     assert sum(_pair(length_boundary).shape.parts) == MAX_RSK_WORD_LENGTH
 
@@ -441,20 +448,20 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
         )
 
     boundary_symbols = _wide_unicode_symbols(50)
-    per_symbol_bytes = len(boundary_symbols[0].encode("utf-8"))
-    boundary_letter_count = MAX_RSK_WORD_BYTES // per_symbol_bytes - len(
+    per_symbol_scalars = len(boundary_symbols[0])
+    boundary_letter_count = MAX_RSK_WORD_PAYLOAD_SCALARS // per_symbol_scalars - len(
         boundary_symbols
     )
-    byte_boundary = FiniteWord(
+    payload_boundary = FiniteWord(
         alphabet=boundary_symbols,
         letters=(boundary_symbols[0],) * boundary_letter_count,
     )
-    assert RSKWordRequest(word=byte_boundary).word == byte_boundary
+    assert RSKWordRequest(word=payload_boundary).word == payload_boundary
 
     assert (
-        sum(len(symbol.encode("utf-8")) for symbol in boundary_symbols)
-        + sum(len(letter.encode("utf-8")) for letter in byte_boundary.letters)
-        == MAX_RSK_WORD_BYTES
+        sum(len(symbol) for symbol in boundary_symbols)
+        + sum(len(letter) for letter in payload_boundary.letters)
+        == MAX_RSK_WORD_PAYLOAD_SCALARS
     )
 
 
@@ -566,7 +573,7 @@ def test_comparison_bound_boundary_word_round_trips() -> None:
 
 def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert MAX_RSK_ROW_SEARCH_COMPARISONS == 9
-    assert MAX_RSK_WORD_BYTES == 140_800
+    assert MAX_RSK_WORD_PAYLOAD_SCALARS == 35_200
 
     schema = RSKWordRequest.model_json_schema()
     assert schema["properties"]["convention"]["const"] == "ROW_INSERTION_RSK_V1"
@@ -574,7 +581,7 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert "unique strings" in description
     assert "every positioned letter" in description
     assert f"at most {MAX_RSK_WORD_LENGTH} letters" in description
-    assert f"{MAX_RSK_WORD_BYTES} UTF-8 bytes" in description
+    assert f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values" in description
     class_description = schema["description"]
     assert "2N" in class_description
     assert (

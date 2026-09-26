@@ -6,18 +6,21 @@ from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.algebraic._models import (
     MAX_LIS_DP_WORK,
-    MAX_LIS_OUTPUT_BYTES,
-    MAX_LIS_WORD_BYTES,
+    MAX_LIS_INDEX_DIGITS,
+    MAX_LIS_OUTPUT_SCALARS,
     MAX_LIS_WORD_LENGTH,
+    MAX_LIS_WORD_PAYLOAD_SCALARS,
     LongestDecreasingSubsequenceRequest,
     LongestDecreasingSubsequenceResult,
     LongestIncreasingSubsequenceRequest,
     LongestIncreasingSubsequenceResult,
 )
+from jacobian.math.combinatorics.algebraic._rsk import word_payload_scalars
+from jacobian.math.logic.languages.words.values import FiniteWord
 
 
 def longest_increasing_subsequence(
-    request: LongestIncreasingSubsequenceRequest,
+    word: FiniteWord | LongestIncreasingSubsequenceRequest,
 ) -> LongestIncreasingSubsequenceResult:
     """Return one deterministic strict longest increasing subsequence.
 
@@ -26,7 +29,8 @@ def longest_increasing_subsequence(
     search examines exactly at most ``n * (n - 1) // 2`` predecessor pairs.
     """
 
-    word = request.word
+    if isinstance(word, LongestIncreasingSubsequenceRequest):
+        word = word.word
     n = len(word.letters)
     if n > MAX_LIS_WORD_LENGTH:
         raise OperationResourceAdmissionError(
@@ -34,13 +38,12 @@ def longest_increasing_subsequence(
             code="algebraic_combinatorics.lis_word_length",
             message="word length exceeds the admitted strict-LIS envelope",
         )
-    payload_bytes = sum(len(symbol.encode("utf-8")) for symbol in word.alphabet)
-    payload_bytes += sum(len(symbol.encode("utf-8")) for symbol in word.letters)
-    if payload_bytes > MAX_LIS_WORD_BYTES:
+    payload_scalars = word_payload_scalars(word)
+    if payload_scalars > MAX_LIS_WORD_PAYLOAD_SCALARS:
         raise OperationResourceAdmissionError(
             location=("word",),
             code="algebraic_combinatorics.lis_word_bytes",
-            message="word UTF-8 payload exceeds the admitted strict-LIS envelope",
+            message="word payload exceeds the admitted strict-LIS envelope",
         )
     work = n * (n - 1) // 2
     if work > MAX_LIS_DP_WORK:
@@ -49,8 +52,8 @@ def longest_increasing_subsequence(
             code="algebraic_combinatorics.lis_dp_work",
             message="strict-LIS dynamic-programming work exceeds its admitted bound",
         )
-    output_bound = 2 * payload_bytes + 16 * n + 4096
-    if output_bound > MAX_LIS_OUTPUT_BYTES:
+    output_bound = 2 * payload_scalars + (n + 1) * MAX_LIS_INDEX_DIGITS
+    if output_bound > MAX_LIS_OUTPUT_SCALARS:
         raise OperationResourceAdmissionError(
             location=("word",),
             code="algebraic_combinatorics.lis_output_bytes",
@@ -80,7 +83,7 @@ def longest_increasing_subsequence(
         cursor = predecessors[cursor]
     indices.reverse()
     chosen = tuple(indices)
-    return LongestIncreasingSubsequenceResult(
+    return LongestIncreasingSubsequenceResult.model_construct(
         source_word=word,
         length=len(chosen),
         indices=chosen,
@@ -89,11 +92,12 @@ def longest_increasing_subsequence(
 
 
 def longest_decreasing_subsequence(
-    request: LongestDecreasingSubsequenceRequest,
+    word: FiniteWord | LongestDecreasingSubsequenceRequest,
 ) -> LongestDecreasingSubsequenceResult:
     """Return one deterministic strict longest decreasing subsequence."""
 
-    word = request.word
+    if isinstance(word, LongestDecreasingSubsequenceRequest):
+        word = word.word
     n = len(word.letters)
     if n > MAX_LIS_WORD_LENGTH:
         raise OperationResourceAdmissionError(
@@ -101,13 +105,12 @@ def longest_decreasing_subsequence(
             code="algebraic_combinatorics.lds_word_length",
             message="word length exceeds the admitted strict-LDS envelope",
         )
-    payload_bytes = sum(len(symbol.encode("utf-8")) for symbol in word.alphabet)
-    payload_bytes += sum(len(symbol.encode("utf-8")) for symbol in word.letters)
-    if payload_bytes > MAX_LIS_WORD_BYTES:
+    payload_scalars = word_payload_scalars(word)
+    if payload_scalars > MAX_LIS_WORD_PAYLOAD_SCALARS:
         raise OperationResourceAdmissionError(
             location=("word",),
             code="algebraic_combinatorics.lds_word_bytes",
-            message="word UTF-8 payload exceeds the admitted strict-LDS envelope",
+            message="word payload exceeds the admitted strict-LDS envelope",
         )
     work = n * (n - 1) // 2
     if work > MAX_LIS_DP_WORK:
@@ -116,8 +119,8 @@ def longest_decreasing_subsequence(
             code="algebraic_combinatorics.lds_dp_work",
             message="strict-LDS dynamic-programming work exceeds its admitted bound",
         )
-    output_bound = 2 * payload_bytes + 16 * n + 4096
-    if output_bound > MAX_LIS_OUTPUT_BYTES:
+    output_bound = 2 * payload_scalars + (n + 1) * MAX_LIS_INDEX_DIGITS
+    if output_bound > MAX_LIS_OUTPUT_SCALARS:
         raise OperationResourceAdmissionError(
             location=("word",),
             code="algebraic_combinatorics.lds_output_bytes",
@@ -147,7 +150,7 @@ def longest_decreasing_subsequence(
         cursor = predecessors[cursor]
     indices.reverse()
     chosen = tuple(indices)
-    return LongestDecreasingSubsequenceResult(
+    return LongestDecreasingSubsequenceResult.model_construct(
         source_word=word,
         length=len(chosen),
         indices=chosen,

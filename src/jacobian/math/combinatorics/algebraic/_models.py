@@ -12,8 +12,10 @@ from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKConvention,
     RSKTableauPair,
 )
@@ -23,7 +25,6 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
-    StandardYoungTableau,
     TableauCandidate,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord, Symbol
@@ -182,7 +183,7 @@ class SemistandardTableauCheckRequest(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    __doc__ = f"""One strict bounded permutation for ordinary row-insertion RSK.
+    __doc__ = f"""One bounded canonical permutation for ordinary row-insertion RSK.
 
     Forward insertion performs at most
     ``N(N-1)/2 <= {
@@ -192,61 +193,20 @@ class RSKPermutationRequest(StrictModel):
     ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
     """
 
-    permutation: tuple[StrictInt, ...] = Field(
-        min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
-    )
+    permutation: FinitePermutation
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
 
-class RSKResult(StrictModel):
-    """Canonical tableaux produced by one admitted permutation-RSK kernel."""
+class RSKInversePermutationRequest(StrictModel):
+    __doc__ = f"""Invert one compatible standard-tableau RSK pair with at most
+    {MAX_RSK_PERMUTATION_LENGTH} cells.
 
-    permutation: tuple[StrictInt, ...] = Field(
-        min_length=0,
-        max_length=MAX_RSK_PERMUTATION_LENGTH,
-        description="The exact source permutation of 1 through n.",
-    )
-    p_tableau: StandardYoungTableau
-    q_tableau: StandardYoungTableau
-    shape: IntegerPartition
-    lis_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
-    lds_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
+    Reverse insertion performs at most ``N(N-1)/2`` row searches and at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search.
+    """
+
+    pair: PermutationRSKPair
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-    @model_validator(mode="after")
-    def require_structural_consistency(self) -> Self:
-        if self.p_tableau.shape != self.shape or self.q_tableau.shape != self.shape:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_shape_mismatch",
-                "tableaux and shape must agree",
-            )
-        if sum(self.shape.parts) != len(self.permutation):
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_size_mismatch",
-                "tableau shape size must equal permutation length",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        request: RSKPermutationRequest,
-        *,
-        insertion_rows: tuple[tuple[int, ...], ...],
-        recording_rows: tuple[tuple[int, ...], ...],
-    ) -> Self:
-        """Build one result after the admitted RSK kernel established it."""
-
-        shape = IntegerPartition(parts=tuple(len(row) for row in insertion_rows))
-        return cls.model_construct(
-            permutation=request.permutation,
-            p_tableau=StandardYoungTableau(rows=insertion_rows),
-            q_tableau=StandardYoungTableau(rows=recording_rows),
-            shape=shape,
-            lis_length=shape.parts[0] if shape.parts else 0,
-            lds_length=len(shape.parts),
-            convention=request.convention,
-        )
 
 
 class RSKWordRequest(StrictModel):
@@ -266,7 +226,7 @@ class RSKWordRequest(StrictModel):
             "every positioned letter must be one of those exact symbols. The "
             f"word has at most {MAX_RSK_WORD_LENGTH} letters and the alphabet "
             "plus positioned letters carry at most "
-            f"{MAX_RSK_WORD_BYTES} UTF-8 bytes."
+            f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values."
         )
     )
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
@@ -287,9 +247,17 @@ class RSKInverseWordRequest(StrictModel):
 
 
 MAX_LIS_WORD_LENGTH = MAX_RSK_WORD_LENGTH
-MAX_LIS_WORD_BYTES = MAX_RSK_WORD_BYTES
+MAX_LIS_WORD_PAYLOAD_SCALARS = MAX_RSK_WORD_PAYLOAD_SCALARS
 MAX_LIS_DP_WORK = MAX_LIS_WORD_LENGTH * (MAX_LIS_WORD_LENGTH - 1) // 2
-MAX_LIS_OUTPUT_BYTES = 2 * MAX_LIS_WORD_BYTES + 16 * MAX_LIS_WORD_LENGTH + 4096
+# The exact result retains the source word payload and copies at most n of
+# its own letters as the witness values, so the emitted letter payload is
+# bounded by the second copy of the source envelope; the n witness positions
+# and the one length are integers not exceeding the word length and therefore
+# carry at most MAX_LIS_INDEX_DIGITS decimal digits each.
+MAX_LIS_INDEX_DIGITS = len(str(MAX_LIS_WORD_LENGTH))
+MAX_LIS_OUTPUT_SCALARS = (
+    2 * MAX_LIS_WORD_PAYLOAD_SCALARS + (MAX_LIS_WORD_LENGTH + 1) * MAX_LIS_INDEX_DIGITS
+)
 
 
 class LongestIncreasingSubsequenceRequest(StrictModel):
@@ -299,9 +267,11 @@ class LongestIncreasingSubsequenceRequest(StrictModel):
         description=(
             "A finite ordered-alphabet word. The strict convention requires "
             "each selected letter to be strictly greater than its predecessor. "
-            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and the UTF-8 "
-            f"payload has at most {MAX_LIS_WORD_BYTES} bytes; the exact result "
-            f"fits within {MAX_LIS_OUTPUT_BYTES} estimated UTF-8 bytes."
+            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and its "
+            "alphabet plus positioned letters carry at most "
+            f"{MAX_LIS_WORD_PAYLOAD_SCALARS} Unicode scalar values; the exact "
+            "result is bounded by the same retained-word cardinality plus "
+            f"{MAX_LIS_INDEX_DIGITS}-digit indices."
         )
     )
 
@@ -352,9 +322,11 @@ class LongestDecreasingSubsequenceRequest(StrictModel):
         description=(
             "A finite ordered-alphabet word. Strict decrease requires each "
             "selected letter to be strictly smaller than its predecessor. "
-            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and the UTF-8 "
-            f"payload at most {MAX_LIS_WORD_BYTES} bytes; the exact result "
-            f"fits within {MAX_LIS_OUTPUT_BYTES} estimated UTF-8 bytes."
+            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and its "
+            "alphabet plus positioned letters carry at most "
+            f"{MAX_LIS_WORD_PAYLOAD_SCALARS} Unicode scalar values; the exact "
+            "result is bounded by the same retained-word cardinality plus "
+            f"{MAX_LIS_INDEX_DIGITS}-digit indices."
         )
     )
 
@@ -494,15 +466,6 @@ class PlacticNormalFormRequest(StrictModel):
 
     word: FiniteWord
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-
-class TableauRowReadingWordRequest(StrictModel):
-    """Read an RSK insertion tableau bottom row first, left to right."""
-
-    pair: RSKTableauPair
-    convention: Literal["TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1"] = (
-        "TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1"
-    )
 
 
 class PlacticNormalFormResult(StrictModel):
@@ -723,9 +686,9 @@ __all__ = [
     "PartitionDominanceResult",
     "PlacticNormalFormRequest",
     "PlacticNormalFormResult",
+    "RSKInversePermutationRequest",
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
-    "RSKResult",
     "RSKWordRequest",
     "SemistandardTableauCheckRequest",
     "SemistandardTableauCheckResult",
@@ -739,5 +702,4 @@ __all__ = [
     "StandardTableauCheckResult",
     "StandardYoungTableauCountRequest",
     "StandardYoungTableauCountResult",
-    "TableauRowReadingWordRequest",
 ]

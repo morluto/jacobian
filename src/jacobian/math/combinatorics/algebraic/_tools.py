@@ -25,9 +25,9 @@ from jacobian.math.combinatorics.algebraic._models import (
     PlacticEquivalenceResult,
     PlacticNormalFormRequest,
     PlacticNormalFormResult,
+    RSKInversePermutationRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
-    RSKResult,
     RSKWordRequest,
     SemistandardTableauCheckRequest,
     SemistandardTableauCheckResult,
@@ -39,7 +39,6 @@ from jacobian.math.combinatorics.algebraic._models import (
     StandardTableauCheckResult,
     StandardYoungTableauCountRequest,
     StandardYoungTableauCountResult,
-    TableauRowReadingWordRequest,
 )
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
@@ -71,7 +70,11 @@ from jacobian.math.combinatorics.algebraic.subsequences import (
     longest_decreasing_subsequence,
     longest_increasing_subsequence,
 )
-from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
+from jacobian.math.combinatorics.algebraic.values import (
+    FinitePermutation,
+    PermutationRSKPair,
+    RSKTableauPair,
+)
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 
@@ -125,20 +128,8 @@ def check_semistandard_tableau(
     return native.check_semistandard_tableau(request.tableau)
 
 
-def rsk_permutation(request: RSKPermutationRequest) -> RSKResult:
-    try:
-        insertion_rows, recording_rows = native._rsk_permutation(request.permutation)
-    except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("permutation",),
-            code="algebraic_combinatorics.permutation_invalid",
-            message=str(exc),
-        ) from exc
-    return RSKResult._from_kernel(
-        request,
-        insertion_rows=insertion_rows,
-        recording_rows=recording_rows,
-    )
+def rsk_permutation(request: RSKPermutationRequest) -> PermutationRSKPair:
+    return native.permutation_rsk(request.permutation)
 
 
 def rsk_word(request: RSKWordRequest) -> RSKTableauPair:
@@ -156,6 +147,10 @@ def inverse_rsk_word(request: RSKInverseWordRequest) -> FiniteWord:
         ) from exc
 
 
+def inverse_rsk_permutation(request: RSKInversePermutationRequest) -> FinitePermutation:
+    return native.inverse_permutation_rsk(request.pair)
+
+
 def knuth_moves(request: KnuthMovesRequest) -> KnuthMovesResult:
     return KnuthMovesResult._from_kernel(
         request, neighbors=native.knuth_moves(request.word)
@@ -169,11 +164,7 @@ def plactic_normal_form(request: PlacticNormalFormRequest) -> PlacticNormalFormR
 def plactic_equivalence(
     request: PlacticEquivalenceRequest,
 ) -> PlacticEquivalenceResult:
-    return native.plactic_equivalence(request)
-
-
-def tableau_row_reading_word(request: TableauRowReadingWordRequest) -> FiniteWord:
-    return native.tableau_row_reading_word(request.pair)
+    return native.plactic_equivalence(request.left, request.right)
 
 
 def check_skew_littlewood_richardson(
@@ -245,11 +236,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="combinatorics.rsk.permutation.compute",
         title="Compute RSK correspondence for a permutation",
         description="Compute the Robinson-Schensted-Knuth correspondence for one "
-        "strict permutation of 1..n, returning the exact source, canonical "
-        "standard P/Q tableaux, canonical shape, and LIS/LDS lengths under "
-        "ROW_INSERTION_RSK_V1.",
+        "finite permutation of 1..n, returning its canonical standard P/Q "
+        "tableau pair under ROW_INSERTION_RSK_V1.",
         request_type=RSKPermutationRequest,
-        result_type=RSKResult,
+        result_type=PermutationRSKPair,
         run=rsk_permutation,
         tags=("combinatorics", "rsk", "exact"),
         examples=(
@@ -258,7 +248,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description="Compute RSK of permutation (1, 3, 2); "
                 "input must be a permutation of 1..n.",
                 input={
-                    "permutation": [1, 3, 2],
+                    "permutation": {"images": [1, 3, 2]},
+                    "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.inverse_permutation.compute",
+        title="Invert a permutation RSK tableau pair",
+        description="Reconstruct the unique finite permutation of 1..n from its "
+        "compatible pair of standard tableaux by reverse row insertion under "
+        "ROW_INSERTION_RSK_V1.",
+        request_type=RSKInversePermutationRequest,
+        result_type=FinitePermutation,
+        run=inverse_rsk_permutation,
+        tags=("combinatorics", "rsk", "permutations", "inverse", "exact"),
+        examples=(
+            OperationExample(
+                name="inverse_rsk_permutation_312",
+                description="Recover permutation (3, 1, 2) from its standard P/Q pair; both tableaux must be standard and have the same shape.",
+                input={
+                    "pair": {
+                        "p_tableau": {"rows": [[1, 2], [3]]},
+                        "q_tableau": {"rows": [[1, 3], [2]]},
+                        "convention": "ROW_INSERTION_RSK_V1",
+                    },
                     "convention": "ROW_INSERTION_RSK_V1",
                 },
             ),
@@ -563,9 +578,9 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Return the exact maximum length and one deterministic source-index "
             "witness for a word over its explicit ordered alphabet. Strict means "
             "each selected letter is strictly greater than the previous one, "
-            "so duplicate letters cannot both occur. Admission bounds the UTF-8 "
-            "payload, output size, word length, and the complete O(n^2) "
-            "predecessor-pair scan."
+            "so duplicate letters cannot both occur. Admission bounds the word "
+            "payload cardinality, output size, word length, and the complete "
+            "O(n^2) predecessor-pair scan."
         ),
         request_type=LongestIncreasingSubsequenceRequest,
         result_type=LongestIncreasingSubsequenceResult,
@@ -598,8 +613,8 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Return the exact maximum length and one deterministic source-index "
             "witness for a word over its explicit ordered alphabet. Strict means "
             "each selected letter is strictly smaller than the previous one. "
-            "Admission bounds payload bytes, word length, output bytes, and the "
-            "complete O(n^2) predecessor-pair scan."
+            "Admission bounds payload cardinality, word length, output size, "
+            "and the complete O(n^2) predecessor-pair scan."
         ),
         request_type=LongestDecreasingSubsequenceRequest,
         result_type=LongestDecreasingSubsequenceResult,
@@ -673,41 +688,6 @@ TOOLS = TOOLS + (  # noqa: RUF005
                 input={
                     "left": {"alphabet": ["1", "2", "3"], "letters": ["1", "3", "2"]},
                     "right": {"alphabet": ["1", "2", "3"], "letters": ["3", "1", "2"]},
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="tableau.row_reading_word.compute",
-        title="Read an RSK insertion tableau as a word",
-        description=(
-            "Read the insertion tableau bottom row to top row and each row "
-            "left to right (TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1), "
-            "retaining the exact ordered alphabet from its RSK pair."
-        ),
-        request_type=TableauRowReadingWordRequest,
-        result_type=FiniteWord,
-        run=tableau_row_reading_word,
-        tags=("combinatorics", "tableaux", "words", "rsk", "exact"),
-        discovery_terms=(
-            "tableau row reading word",
-            "bottom to top tableau word",
-            "RSK insertion tableau to word",
-        ),
-        examples=(
-            OperationExample(
-                name="tableau_row_reading_word",
-                description=(
-                    "Read P with rows [1,2] and [3] bottom-to-top, "
-                    "left-to-right over its retained alphabet."
-                ),
-                input={
-                    "pair": {
-                        "alphabet": ["a", "b", "c"],
-                        "insertion_tableau": {"rows": [[1, 2], [3]]},
-                        "recording_tableau": {"rows": [[1, 3], [2]]},
-                        "shape": {"parts": [2, 1]},
-                    }
                 },
             ),
         ),

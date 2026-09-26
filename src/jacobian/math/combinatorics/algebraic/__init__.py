@@ -2,7 +2,6 @@
 
 from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
-    PlacticEquivalenceRequest,
     PlacticEquivalenceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
@@ -29,22 +28,27 @@ from jacobian.math.combinatorics.algebraic.operations import (
     check_standard_tableau,
     conjugate_partition,
     hook_lengths,
+    inverse_permutation_rsk,
     inverse_row_insertion_rsk,
     knuth_moves,
     partition_dominance,
+    permutation_rsk,
     plactic_equivalence,
     plactic_normal_form,
     row_insertion_rsk,
     semistandard_young_tableaux_count,
     standard_young_tableaux_count,
     tableau_row_reading_word,
-    verify_rsk,
 )
 from jacobian.math.combinatorics.algebraic.subsequences import (
     longest_decreasing_subsequence,
     longest_increasing_subsequence,
 )
-from jacobian.math.combinatorics.algebraic.values import RSKTableauPair
+from jacobian.math.combinatorics.algebraic.values import (
+    FinitePermutation,
+    PermutationRSKPair,
+    RSKTableauPair,
+)
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     EndpointProfileEntry,
     EndpointProfileResult,
@@ -59,9 +63,10 @@ __all__ = [
     "BiwordRSKPair",
     "EndpointProfileEntry",
     "EndpointProfileResult",
+    "FinitePermutation",
     "NonnegativeIntegerMatrix",
     "PartitionDominanceResult",
-    "PlacticEquivalenceRequest",
+    "PermutationRSKPair",
     "PlacticEquivalenceResult",
     "RSKTableauPair",
     "SemistandardTableauCheckResult",
@@ -77,6 +82,7 @@ __all__ = [
     "hook_lengths",
     "inverse_biword",
     "inverse_matrix",
+    "inverse_permutation_rsk",
     "inverse_row_insertion_rsk",
     "knuth_moves",
     "longest_decreasing_subsequence",
@@ -84,6 +90,7 @@ __all__ = [
     "matrix_biword",
     "normalize_biword",
     "partition_dominance",
+    "permutation_rsk",
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
@@ -91,5 +98,4 @@ __all__ = [
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",
     "tableau_row_reading_word",
-    "verify_rsk",
 ]

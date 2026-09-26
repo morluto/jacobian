@@ -31,8 +31,8 @@ two insertion tableaux (and therefore their plactic classes) agree. Both
 insertions are admitted together before either starts. For source lengths
 `m` and `n`, the kernel performs at most
 `m² ceil(log2(m+1)) + n² ceil(log2(n+1))` row-search comparisons; the combined
-result has a preflighted byte bound derived from both alphabet and word
-payloads. It does not search the Knuth graph.
+result has a preflighted payload-cardinality bound derived from both retained
+alphabets and word letters. It does not search the Knuth graph.
 
 This equality criterion is the ordinary row-insertion characterization of
 plactic equivalence. Sage's maintained implementation similarly exposes
@@ -41,13 +41,17 @@ representatives: [Sage plactic monoid reference](https://doc-release--sagemath.n
 
 ## Reading an existing RSK tableau
 
-`tableau.row_reading_word.compute` accepts an existing alphabet-bound ordinary
-RSK pair and returns its insertion tableau as a `FiniteWord`. Its explicit
-convention is `TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1`: start at
-the lowermost row, read each row left-to-right, then move upward. This agrees
-with Sage's `Tableau.to_word_by_row()` convention. The ordered alphabet comes
-from the pair, so the resulting word composes directly with word operations.
-The operation admits at most 500 tableau cells and validates the insertion
-tableau's semistandard and alphabet-rank conditions before constructing output.
+Given the alphabet-bound `RSKTableauPair` returned by
+`tableau.rsk.word.compute`, the native helper
+`jacobian.math.combinatorics.algebraic.tableau_row_reading_word` reads an
+existing insertion tableau as a `FiniteWord`. Its convention
+`TABLEAU_ROW_READING_BOTTOM_TO_TOP_LEFT_TO_RIGHT_V1` starts at the lowermost
+row, reads each row left-to-right, then moves upward. This agrees with Sage's
+`Tableau.to_word_by_row()` convention. The ordered alphabet comes from the
+pair, so the resulting word composes directly with word operations. The
+helper admits at most 500 tableau cells and validates the insertion tableau's
+semistandard and alphabet-rank conditions before constructing output. Because
+this is a cheap deterministic projection of an already-public value, it stays
+a native helper rather than a separate catalog operation.
 
 [Sage tableau reference](https://doc.sagemath.org/html/en/reference/combinat/sage/combinat/tableau.html)

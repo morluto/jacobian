@@ -173,7 +173,7 @@ def test_request_schema_publishes_exact_preflight_envelopes() -> None:
         "max_feasible_rows": 256,
         "max_feasible_set_memberships": 1_024,
         "max_twist_transport_work_units": 20_736,
-        "max_output_cells": 1_352,
+        "max_output_cells": 1_376,
         "max_output_ground_label_utf8_bytes": 4_096,
     }
 

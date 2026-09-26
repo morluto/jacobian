@@ -145,10 +145,6 @@ class DeltaMatroidRelabelRequest(StrictModel):
             raise _error(
                 "ground_utf8", "target labels must be UTF-8 representable"
             )
-        if sum(size for size in label_sizes if size is not None) > MAX_DELTA_LABEL_BYTES:
-            raise _error(
-                "ground_bytes", "target labels exceed the admitted UTF-8 byte bound"
-            )
         return self
 
 
@@ -193,6 +189,25 @@ def _output_cell_count(source: FiniteDeltaMatroid) -> int:
     return 2 * n + 2 * rows + 2 * memberships + 2 * n + 4
 
 
+def _require_target_ground_bytes(target_ground: tuple[str, ...]) -> None:
+    """Reject oversized targets before constructing the typed request."""
+
+    if any(not isinstance(label, str) for label in target_ground):
+        return
+    target_bytes = 0
+    for label in target_ground:
+        size = _bounded_utf8_length(label)
+        if size is None:
+            return
+        target_bytes += size
+        if target_bytes > MAX_DELTA_LABEL_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("target_ground",),
+                code="delta_matroid.relabel_target_bytes",
+                message="target labels exceed the admitted UTF-8 byte bound",
+            )
+
+
 def relabel(
     delta_matroid: FiniteDeltaMatroid,
     target_ground: tuple[str, ...],
@@ -200,21 +215,8 @@ def relabel(
 ) -> DeltaMatroidRelabelling:
     """Transport a complete feasible family through a ground-axis bijection."""
 
-    if isinstance(target_ground, tuple) and all(
-        isinstance(label, str) for label in target_ground
-    ):
-        target_bytes = 0
-        for label in target_ground:
-            size = _bounded_utf8_length(label)
-            if size is None:
-                break
-            target_bytes += size
-            if target_bytes > MAX_DELTA_LABEL_BYTES:
-                raise OperationResourceAdmissionError(
-                    location=("target_ground",),
-                    code="delta_matroid.relabel_target_bytes",
-                    message="target labels exceed the admitted UTF-8 byte bound",
-                )
+    if isinstance(target_ground, tuple):
+        _require_target_ground_bytes(target_ground)
 
     try:
         request = DeltaMatroidRelabelRequest(

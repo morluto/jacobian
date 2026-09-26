@@ -275,7 +275,7 @@ def binary_matrix_twist(
     states = 1 << n
     max_output_memberships = (n * states) // 2
     transport_work = states * (1 + 2 * n + n**2)
-    output_cells = n**2 + states + max_output_memberships + n
+    output_cells = n**2 + states + max_output_memberships + 4 * n
     output_label_bytes = 2 * label_bytes
     if (
         states > MAX_BINARY_TWIST_STATES

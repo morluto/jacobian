@@ -7,6 +7,22 @@ with a cyclic order of four darts at each crossing, explicit over/under strands,
 directed arcs, and checked crossing signs. The diagram is a presentation; these
 operations do not decide whether two presentations are isotopic.
 
+## Disjoint union
+
+`link_diagram.disjoint_union.compute` combines one to 64 source diagrams into
+one diagram. It assigns deterministic labels on source-indexed crossing and
+dart axes, preserves crossing signs and directed arc pairings, and returns
+complete source-to-target maps for crossings, darts, arcs, and crossing-free
+components. The source index and each source label together identify a crossing
+or dart even when input diagrams reuse the same labels. Crossing-free loops
+have no labels in `OrientedLinkDiagram`, so the result maps each loop by its
+source index and local loop index.
+
+Admission bounds the union to at most 64 crossings, 64 free loops, and an
+estimated 8 MiB serialized result before output construction. Work is linear in
+the admitted source diagram and transport axes. A one-input union is allowed
+and produces the same canonical tagged relabeling.
+
 ## Signed checkerboard graph
 
 `link_diagram.blackboard_graph.compute` returns the source-bound signed Tait
@@ -39,10 +55,37 @@ connected plane graph.
 and forms its signed Laplacian. It deletes the final shaded-region row and
 column, returning the exact integral reduced matrix and its absolute
 determinant. The matrix operation has a tighter 32-crossing envelope. The
-matrix and determinant are diagram-level values; this operation does not
-compute a signature correction or make a link-equivalence decision.
+matrix and determinant are diagram-level values and do not by themselves give
+the link signature.
 
 For the positive Hopf link, the checkerboard graph has two vertices joined by
 two positive parallel edges. Its Laplacian is
 `[[2, -2], [-2, 2]]`, and deleting one vertex gives the `1 × 1` Goeritz matrix
 `[[2]]`.
+
+## Oriented link signature
+
+`link_diagram.signature.compute` composes the reduced Goeritz matrix with exact
+rational inertia and the Gordon–Litherland correction term. Under this
+module's Tait convention, each crossing incidence is `+1` when the shaded
+corners are the overpassing pair and `-1` otherwise. The oriented crossing
+sign is already checked against the diagram's directed arcs. A crossing is
+type II exactly when the product of that crossing sign and its Tait incidence
+is `-1`; the correction is the sum of incidences over type-II crossings. The
+returned signature is
+
+```text
+number of positive Goeritz directions
+- number of negative Goeritz directions
+- type-II correction.
+```
+
+The operation retains the source diagram, Goeritz matrix when crossings are
+present, exact inertia result, and each crossing's type and correction
+contribution. Crossing-free unlinks return zero using the empty-matrix inertia
+convention. Nonempty projections must be connected and have at most 32
+crossings, matching the Goeritz matrix bound. It does not test link equivalence.
+The defining relation is the Gordon–Litherland formula for an oriented link;
+see [Gordon and Litherland, “On the signature of a link”](https://doi.org/10.1007/BF01609479)
+and the explicit checkerboard sign conventions in Cimasoni and Ferretti,
+[§2.2](https://www.unige.ch/~cimasoni/Kashaev-signature.pdf).

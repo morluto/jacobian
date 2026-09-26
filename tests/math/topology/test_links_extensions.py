@@ -25,6 +25,7 @@ from jacobian.math.topology.links import (
     link_blackboard_graph,
     link_components,
     link_determinant,
+    link_disjoint_union,
     link_goeritz_data,
     link_linking_matrix,
     link_mirror,
@@ -43,6 +44,8 @@ from jacobian.math.topology.links._extensions_models import (
     LinkBlackboardGraph,
     LinkDeterminantRequest,
     LinkDeterminantResult,
+    LinkDisjointUnionRequest,
+    LinkDisjointUnionResult,
     SeifertCircleRequest,
     WirtingerPresentationRequest,
     WirtingerPresentationResult,
@@ -159,6 +162,139 @@ class TestBraidWords:
 
         with pytest.raises(OperationDomainValidationError, match="braid-word contract"):
             braid_permutation(forged)
+
+
+class TestDisjointUnion:
+    def test_hopf_union_preserves_source_axes_and_has_block_diagonal_linking(
+        self,
+    ) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        result = link_disjoint_union((hopf, hopf))
+
+        assert len(result.diagram.crossings) == 4
+        assert len(result.diagram.arcs) == 8
+        assert len(result.crossing_map) == 4
+        assert len(result.dart_map) == 16
+        assert len(result.arc_map) == 8
+        assert {row.source_index for row in result.crossing_map} == {0, 1}
+        assert result.sources == (hopf, hopf)
+        assert len(link_components(result.diagram).components) == 4
+
+        # Each copy has two positive mixed crossings, so its linking number is
+        # one. No crossing joins the two source blocks.
+        linking = link_linking_matrix(result.diagram).matrix
+        assert tuple(tuple(cell.as_fraction() for cell in row) for row in linking) == (
+            (0, 1, 0, 0),
+            (1, 0, 0, 0),
+            (0, 0, 0, 1),
+            (0, 0, 1, 0),
+        )
+
+    def test_free_loop_transport_and_json_roundtrip(self) -> None:
+        result = link_disjoint_union(
+            (OrientedLinkDiagram(free_loops=2), OrientedLinkDiagram(free_loops=1))
+        )
+
+        assert result.diagram == OrientedLinkDiagram(free_loops=3)
+        assert tuple(
+            (row.source_index, row.source_loop_index, row.target_loop_index)
+            for row in result.free_loop_map
+        ) == ((0, 0, 0), (0, 1, 1), (1, 0, 2))
+        assert (
+            LinkDisjointUnionResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+
+    def test_json_roundtrip_rejects_missing_or_duplicate_source_transport(self) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        payload = link_disjoint_union((hopf, hopf)).model_dump(mode="json")
+
+        missing_crossing = json.loads(json.dumps(payload))
+        missing_crossing["crossing_map"].pop()
+        with pytest.raises(ValidationError, match="crossing transport must cover"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(missing_crossing))
+
+        changed_target_label = json.loads(json.dumps(payload))
+        changed_target_label["crossing_map"][0]["target_crossing_id"] = "foreign_id"
+        with pytest.raises(
+            ValidationError,
+            match="crossing transport must bind matching source metadata",
+        ):
+            LinkDisjointUnionResult.model_validate_json(
+                json.dumps(changed_target_label)
+            )
+
+        duplicate_crossing = json.loads(json.dumps(payload))
+        duplicate_crossing["crossing_map"][1] = duplicate_crossing["crossing_map"][0]
+        with pytest.raises(ValidationError, match="transport keys must each be unique"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(duplicate_crossing))
+
+        duplicate_dart_target = json.loads(json.dumps(payload))
+        duplicate_dart_target["dart_map"][1]["target_dart_id"] = duplicate_dart_target[
+            "dart_map"
+        ][0]["target_dart_id"]
+        with pytest.raises(ValidationError, match="transport keys must each be unique"):
+            LinkDisjointUnionResult.model_validate_json(
+                json.dumps(duplicate_dart_target)
+            )
+
+        wrong_dart_source = json.loads(json.dumps(payload))
+        wrong_dart_source["dart_map"][0]["source_index"] = 2
+        with pytest.raises(ValidationError, match="dart transport must cover"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(wrong_dart_source))
+
+    def test_json_roundtrip_rejects_changed_crossing_metadata(self) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        payload = link_disjoint_union((hopf,)).model_dump(mode="json")
+        crossing = payload["diagram"]["crossings"][0]
+        crossing["over_pair"], crossing["under_pair"] = (
+            crossing["under_pair"],
+            crossing["over_pair"],
+        )
+        crossing["sign"] = -crossing["sign"]
+
+        with pytest.raises(
+            ValidationError,
+            match="crossing transport must bind matching source metadata",
+        ):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(payload))
+
+    def test_json_roundtrip_rejects_reversed_arc_map_and_bad_loop_offset(self) -> None:
+        hopf = braid_closure(_two_braid(1, 1)).diagram
+        payload = link_disjoint_union((hopf,)).model_dump(mode="json")
+        payload["arc_map"][0]["target_tail"], payload["arc_map"][0]["target_head"] = (
+            payload["arc_map"][0]["target_head"],
+            payload["arc_map"][0]["target_tail"],
+        )
+
+        with pytest.raises(
+            ValidationError,
+            match="arc transport must bind directed source and target arcs",
+        ):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(payload))
+
+        unlink = link_disjoint_union(
+            (OrientedLinkDiagram(free_loops=1), OrientedLinkDiagram(free_loops=1))
+        ).model_dump(mode="json")
+        unlink["free_loop_map"][0]["target_loop_index"] = 1
+        unlink["free_loop_map"][1]["target_loop_index"] = 0
+        with pytest.raises(ValidationError, match="cumulative offset"):
+            LinkDisjointUnionResult.model_validate_json(json.dumps(unlink))
+
+    def test_union_admits_aggregate_crossing_bound_before_output(self) -> None:
+        full = braid_closure(_two_braid(*([1] * 64))).diagram
+        one = braid_closure(_two_braid(1)).diagram
+
+        with pytest.raises(OperationResourceAdmissionError, match="64 crossings"):
+            link_disjoint_union((full, one))
+
+    def test_catalog_declares_disjoint_union(self) -> None:
+        catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
+        result = catalog["link_diagram.disjoint_union.compute"].run(
+            LinkDisjointUnionRequest(diagrams=(OrientedLinkDiagram(free_loops=1),) * 2)
+        )
+
+        assert result.diagram.free_loops == 2
 
 
 class TestGoeritzData:

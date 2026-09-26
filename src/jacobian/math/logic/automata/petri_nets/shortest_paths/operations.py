@@ -44,7 +44,10 @@ def _admit_source_graph(
     )
     work = (
         state_count * max(1, transitions) * max(1, places)
-        + edge_count * max(1, places)
+        # Charge the complete edge firing during both represented-edge
+        # validation and enabled-successor closure (precondition plus result
+        # construction scans in each pass).
+        + 4 * edge_count * max(1, places)
         + state_count
         + edge_count
         + parented_markings * places * transitions

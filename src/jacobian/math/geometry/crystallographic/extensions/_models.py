@@ -17,9 +17,14 @@ from jacobian._models import StrictModel
 from jacobian.math.geometry.polytopes._models import (
     MAX_COMPUTED_FACETS,
     MAX_FACET_DIMENSION,
+    MAX_VERTICES,
     CoordinateAxis,
     FacetIncidenceResult,
     RationalVPolytope,
+)
+from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
+    CoefficientRing,
 )
 
 MAX_EXTENSION_GROUP_ORDER = 8
@@ -84,6 +89,14 @@ TorsionVector = Annotated[
 PairingTranslationInteger = Annotated[int, DecimalIntegerEncoding(max_digits=33)]
 PairingTranslation = Annotated[
     tuple[PairingTranslationInteger, ...],
+    Field(min_length=1, max_length=MAX_EXTENSION_LATTICE_RANK),
+]
+FaceOrbitGroupTranslationEntry = Annotated[
+    int,
+    DecimalIntegerEncoding(max_digits=128),
+]
+FaceOrbitGroupTranslation = Annotated[
+    tuple[FaceOrbitGroupTranslationEntry, ...],
     Field(min_length=1, max_length=MAX_EXTENSION_LATTICE_RANK),
 ]
 
@@ -432,6 +445,164 @@ class CrystallographicFundamentalDomainResult(StrictModel):
         return self
 
 
+class BieberbachFaceOrbitMap(StrictModel):
+    """One exact vertex map induced by a directed paired polygon edge."""
+
+    source_facet_index: StrictInt = Field(ge=0, le=MAX_COMPUTED_FACETS - 1)
+    source_vertex_index: StrictInt = Field(ge=0, le=MAX_VERTICES - 1)
+    target_facet_index: StrictInt = Field(ge=0, le=MAX_COMPUTED_FACETS - 1)
+    target_vertex_index: StrictInt = Field(ge=0, le=MAX_VERTICES - 1)
+    lattice_translation: PairingTranslation
+    holonomy_element: GroupIndex
+
+
+class BieberbachGroupRingBoundaryEntry(StrictModel):
+    """A signed face incidence labelled by an element of the extension."""
+
+    source_cell_index: StrictInt = Field(ge=0, le=MAX_VERTICES - 1)
+    target_cell_index: StrictInt = Field(ge=0, le=MAX_VERTICES - 1)
+    coefficient: StrictInt = Field(ge=-1, le=1)
+    incidence_index: StrictInt = Field(ge=0, le=MAX_VERTICES - 1)
+    lattice_translation: FaceOrbitGroupTranslation
+    holonomy_element: GroupIndex
+
+
+class BieberbachFaceOrbitComplex(StrictModel):
+    """Two-dimensional quotient cell structure and its integral chains.
+
+    The source retains the checked fundamental polygon and all directed side
+    pairings. Orbit maps record every paired-edge endpoint identification.
+    Group-ring boundary entries preserve the exact deck transformations. The
+    ordinary ZZ chain complex is the augmentation of these cellular chains;
+    this value does not claim to contain or verify a free ZGamma-resolution.
+    """
+
+    source: CrystallographicFundamentalDomainResult
+    vertex_orbits: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_VERTICES)], ...
+    ] = Field(max_length=MAX_VERTICES)
+    edge_orbit_representatives: tuple[StrictInt, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS
+    )
+    orbit_maps: tuple[BieberbachFaceOrbitMap, ...] = Field(
+        max_length=2 * MAX_COMPUTED_FACETS
+    )
+    boundary_1_to_0: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
+        max_length=2 * MAX_COMPUTED_FACETS
+    )
+    boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS
+    )
+    quotient_chain_complex: ChainComplexValue
+
+    @model_validator(mode="after")
+    def require_bounded_two_dimensional_source(self) -> Self:
+        profile = self.source.source.facet_profile
+        source_vertices = set(range(len(profile.vertices)))
+        expected_maps = {
+            (facet_index, vertex_index)
+            for facet_index, facet in enumerate(profile.facets)
+            for vertex_index in facet.source_vertex_indices
+        }
+        actual_maps = {
+            (item.source_facet_index, item.source_vertex_index)
+            for item in self.orbit_maps
+        }
+        pairing_by_source = {
+            pairing.source_facet_index: pairing
+            for pairing in self.source.source.pairings
+        }
+        maps_match_facets = all(
+            item.source_facet_index in pairing_by_source
+            and item.source_vertex_index
+            in profile.facets[item.source_facet_index].source_vertex_indices
+            and item.target_facet_index < len(profile.facets)
+            and item.target_facet_index
+            == pairing_by_source[item.source_facet_index].target_facet_index
+            and item.target_vertex_index
+            in profile.facets[item.target_facet_index].source_vertex_indices
+            and item.lattice_translation
+            == pairing_by_source[item.source_facet_index].lattice_translation
+            and item.holonomy_element
+            == pairing_by_source[item.source_facet_index].holonomy_element
+            for item in self.orbit_maps
+        )
+        flattened_orbits = tuple(
+            vertex for orbit in self.vertex_orbits for vertex in orbit
+        )
+        canonical_vertex_orbits = tuple(
+            tuple(sorted(orbit))
+            for orbit in sorted(
+                self.vertex_orbits, key=lambda orbit: min(orbit, default=-1)
+            )
+            if orbit
+        )
+        expected_edge_representatives = {
+            min(pairing.source_facet_index, pairing.target_facet_index)
+            for pairing in self.source.source.pairings
+        }
+        if (
+            not self.source.is_fundamental_domain
+            or profile.dimension != 2
+            or self.quotient_chain_complex.coefficient_ring != CoefficientRing.INTEGER
+            or self.quotient_chain_complex.degree_min != 0
+            or self.quotient_chain_complex.degree_max != 2
+            or actual_maps != expected_maps
+            or len(actual_maps) != len(self.orbit_maps)
+            or not maps_match_facets
+            or set(flattened_orbits) != source_vertices
+            or len(flattened_orbits) != len(source_vertices)
+            or self.vertex_orbits != canonical_vertex_orbits
+            or set(self.edge_orbit_representatives) != expected_edge_representatives
+            or self.edge_orbit_representatives
+            != tuple(sorted(expected_edge_representatives))
+            or len(self.edge_orbit_representatives)
+            != len(expected_edge_representatives)
+            or self.quotient_chain_complex.basis_sizes
+            != (len(self.vertex_orbits), len(self.edge_orbit_representatives), 1)
+            or len(self.boundary_1_to_0) != 2 * len(self.edge_orbit_representatives)
+            or len(self.boundary_2_to_1) != len(profile.facets)
+            or {
+                (entry.source_cell_index, entry.incidence_index)
+                for entry in self.boundary_1_to_0
+            }
+            != {
+                (edge_index, vertex_index)
+                for edge_index, facet_index in enumerate(
+                    self.edge_orbit_representatives
+                )
+                for vertex_index in profile.facets[facet_index].source_vertex_indices
+            }
+            or {entry.incidence_index for entry in self.boundary_2_to_1}
+            != set(range(len(profile.facets)))
+        ):
+            raise _error(
+                "face_orbit_source",
+                "face-orbit source, complete endpoint maps, orbit partition, edge representatives, or augmented ZZ chain axes are inconsistent",
+            )
+        rank = len(self.source.source.affine_realization.source.action_matrices[0])
+        group_order = len(self.source.source.affine_realization.source.multiplication_table)
+        boundary_entries = (*self.boundary_1_to_0, *self.boundary_2_to_1)
+        if any(
+            entry.source_cell_index >= len(self.edge_orbit_representatives)
+            or entry.target_cell_index >= len(self.vertex_orbits)
+            for entry in self.boundary_1_to_0
+        ) or any(
+            entry.source_cell_index != 0
+            or entry.target_cell_index >= len(self.edge_orbit_representatives)
+            for entry in self.boundary_2_to_1
+        ) or any(
+            len(entry.lattice_translation) != rank
+            or entry.holonomy_element >= group_order
+            for entry in boundary_entries
+        ):
+            raise _error(
+                "face_orbit_boundary_axis",
+                "group-labelled boundary entry has an invalid cell index",
+            )
+        return self
+
+
 def _error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"crystallographic.extension.{reason}", message)
 
@@ -444,6 +615,9 @@ __all__ = [
     "MAX_EXTENSION_PAIRING_DIGITS",
     "MAX_EXTENSION_TORSION_RESULT_SIZE",
     "MAX_EXTENSION_TORSION_VECTOR_DIGITS",
+    "BieberbachFaceOrbitComplex",
+    "BieberbachFaceOrbitMap",
+    "BieberbachGroupRingBoundaryEntry",
     "CrystallographicAffineRealization",
     "CrystallographicAffineSectionMap",
     "CrystallographicExtensionTorsionResult",

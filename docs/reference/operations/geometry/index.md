@@ -14,3 +14,4 @@
 - [Bounded regular plane-curve arclength](plane-curve-arclength.md)
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)
 - [Plane-curve blowups](plane-curve-blowups.md)
+- [Two-dimensional Bieberbach polygon quotient chains](bieberbach-polygon-quotient-chains.md)

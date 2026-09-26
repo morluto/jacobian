@@ -23,6 +23,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     AffineFiberGraph,
     AffineHilbertBasis,
     AffineMembershipResult,
+    AffineSemigroupNormalization,
     PositiveAffineSemigroup,
     PositiveGradingResult,
     construct,
@@ -31,6 +32,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     fiber_graph,
     hilbert_basis,
     membership,
+    normalization,
     positive_grading,
 )
 
@@ -41,6 +43,7 @@ __all__ = [
     "AffineFiberGraph",
     "AffineHilbertBasis",
     "AffineMembershipResult",
+    "AffineSemigroupNormalization",
     "IntegerConfigurationCircuitsResult",
     "IntegerConfigurationGraverBasis",
     "IntegerConfigurationMarkovBasis",
@@ -55,6 +58,7 @@ __all__ = [
     "integer_configuration_circuits",
     "markov_basis",
     "membership",
+    "normalization",
     "positive_grading",
     "relation_lattice",
     "toric_ideal",

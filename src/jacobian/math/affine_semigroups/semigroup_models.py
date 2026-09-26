@@ -14,6 +14,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     AffineFiberGraph,
     AffineHilbertBasis,
     AffineMembershipResult,
+    AffineSemigroupNormalization,
     PositiveAffineSemigroup,
     PositiveGradingResult,
 )
@@ -79,6 +80,10 @@ class AffineHilbertBasisRequest(StrictModel):
     )
 
 
+class AffineSemigroupNormalizationRequest(StrictModel):
+    semigroup: PositiveAffineSemigroup
+
+
 __all__ = [
     "AffineFactorizationRequest",
     "AffineFiber",
@@ -89,6 +94,8 @@ __all__ = [
     "AffineHilbertBasisRequest",
     "AffineMembershipRequest",
     "AffineMembershipResult",
+    "AffineSemigroupNormalization",
+    "AffineSemigroupNormalizationRequest",
     "AffineSemigroupRequest",
     "PositiveAffineSemigroup",
     "PositiveGradingRequest",

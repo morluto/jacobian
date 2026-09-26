@@ -4,8 +4,14 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd, lcm
+from time import monotonic
 
-from jacobian._execution import request_checkpoint
+from jacobian._execution import (
+    bind_request_deadline,
+    current_request_execution,
+    request_checkpoint,
+    request_execution,
+)
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -34,9 +40,26 @@ def _ceil_log10(value: int) -> int:
     return 0 if value <= 1 else len(str(value - 1))
 
 
+def _validated_request(request: object) -> DeterminantDiscriminantRequest:
+    if not isinstance(request, DeterminantDiscriminantRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.determinant_request_type",
+            message="request must be a DeterminantDiscriminantRequest",
+        )
+    try:
+        return DeterminantDiscriminantRequest.model_validate(request.model_dump())
+    except Exception as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.determinant_request_invalid",
+            message="request and nested quadratic form must satisfy their domain models",
+        ) from error
+
+
 def _preflight(
     request: DeterminantDiscriminantRequest,
-) -> None:
+) -> DeterminantDiscriminantRequest:
     """Admit dimension, dense work, output height, and row denominators.
 
     Clearing each polar-Gram row by the product of its stored denominators
@@ -47,12 +70,7 @@ def _preflight(
     exact intermediate before the kernel starts.
     """
 
-    if not isinstance(request, DeterminantDiscriminantRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="quadratic_form.determinant_request_type",
-            message="request must be a DeterminantDiscriminantRequest",
-        )
+    request = _validated_request(request)
     request_checkpoint("before quadratic-form determinant admission")
     form = request.form
     n = len(form.axis)
@@ -167,7 +185,7 @@ def _preflight(
             code="quadratic_form.determinant_intermediate_height_bound",
             message="Bareiss determinant intermediates exceed the admitted digit bound",
         )
-    return None
+    return request
 
 
 def _polar_gram_rows(
@@ -224,12 +242,25 @@ def _bareiss_determinant(matrix: list[list[int]]) -> int:
     return sign * matrix[-1][-1]
 
 
+_DETERMINANT_WALL_SECONDS = 600.0
+
+
 def polar_gram_determinant_discriminant(
     request: DeterminantDiscriminantRequest,
 ) -> DeterminantDiscriminantResult:
     """Return ``det(G)`` and ``(-1)^(n(n-1)/2) det(G)`` exactly."""
 
-    _preflight(request)
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return polar_gram_determinant_discriminant(request)
+    execution = current_request_execution()
+    assert execution is not None
+    deadline = monotonic() + _DETERMINANT_WALL_SECONDS
+    if execution.outer_deadline is not None:
+        deadline = min(deadline, execution.outer_deadline)
+    bind_request_deadline(deadline)
+    request_checkpoint("before quadratic-form determinant admission")
+    request = _preflight(request)
     request_checkpoint("before polar Gram matrix construction")
     rows = _polar_gram_rows(request)
     if not rows:

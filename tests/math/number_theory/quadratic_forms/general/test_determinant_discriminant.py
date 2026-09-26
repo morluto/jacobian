@@ -206,6 +206,25 @@ def test_result_rejects_signed_scalar_inconsistent_with_dimension() -> None:
         type(result).model_validate_json(json.dumps(malformed), strict=True)
 
 
+@pytest.mark.parametrize(
+    "bad_request",
+    (
+        object(),
+        DeterminantDiscriminantRequest.model_construct(form=1),
+        DeterminantDiscriminantRequest.model_construct(
+            form=RationalQuadraticForm.model_construct(axis=("x",), domain="QQ")
+        ),
+    ),
+)
+def test_native_request_revalidates_constructed_model_internals(
+    bad_request: object,
+) -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        polar_gram_determinant_discriminant(bad_request)  # type: ignore[arg-type]
+
+
 def test_axis_boundary_is_accepted_and_next_dimension_rejected() -> None:
     accepted = _form(tuple(_r(1) for _ in range(MAX_POLAR_DETERMINANT_AXIS)))
     result = polar_gram_determinant_discriminant(

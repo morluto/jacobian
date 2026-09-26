@@ -78,16 +78,20 @@ def _preflight_ground_axis(ground: object) -> None:
 
 def _preflight_basis_family(bases: object) -> None:
     if not isinstance(bases, (list, tuple)):
-        return
+        raise _validation_error("basis_family_type", "bases must be a list or tuple")
     if len(bases) > MAX_FINITE_BASIS_COUNT:
         raise _validation_error(
             "basis_count_bound",
             f"basis family has more than {MAX_FINITE_BASIS_COUNT} rows",
         )
+    if not bases:
+        raise _validation_error("basis_family_empty", "basis family must be nonempty")
     memberships = 0
     for row in bases:
         if not isinstance(row, (list, tuple)):
-            continue
+            raise _validation_error(
+                "basis_row_type", "each basis must be a list or tuple"
+            )
         if len(row) > MAX_FINITE_BASIS_GROUND_SIZE:
             raise _validation_error(
                 "basis_size_bound",
@@ -188,6 +192,12 @@ class FiniteBasisMatroid(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_basis_matroid(self) -> Self:
+        if type(self.ground) is not tuple:
+            raise _validation_error("ground_type", "ground must be an immutable tuple")
+        if type(self.bases) is not tuple or not self.bases:
+            raise _validation_error(
+                "basis_family_empty", "bases must be a nonempty immutable tuple"
+            )
         ground_size = len(self.ground)
         if len(set(self.ground)) != ground_size:
             raise _validation_error("ground_duplicate", "ground labels must be unique")

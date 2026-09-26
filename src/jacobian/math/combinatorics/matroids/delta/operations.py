@@ -139,17 +139,28 @@ def _preflight_extremal_source(delta_matroid: object) -> FiniteDeltaMatroid:
             )
     memberships = 0
     for row in feasible:
-        if not isinstance(row, tuple):
-            raise ValueError("source feasible rows must be immutable tuples")
-        if any(type(index) is not int for index in row):
-            raise ValueError("source feasible indices must be exact integers")
-        memberships += len(row)
-        if memberships > MAX_DELTA_MEMBERSHIPS:
-            raise DeltaMatroidAdmissionError(
-                "memberships_exceeded",
-                "source feasible-family memberships exceed the envelope",
-            )
+        memberships += _preflight_extremal_row(row, len(ground), memberships)
     return delta_matroid
+
+
+def _preflight_extremal_row(
+    row: object, ground_size: int, prior_memberships: int
+) -> int:
+    """Bound one forged feasible row before inspecting its indices."""
+    if not isinstance(row, tuple):
+        raise ValueError("source feasible rows must be immutable tuples")
+    if len(row) > ground_size:
+        raise DeltaMatroidAdmissionError(
+            "row_size_exceeded", "source feasible row exceeds the ground axis"
+        )
+    if prior_memberships + len(row) > MAX_DELTA_MEMBERSHIPS:
+        raise DeltaMatroidAdmissionError(
+            "memberships_exceeded",
+            "source feasible-family memberships exceed the envelope",
+        )
+    if any(type(index) is not int for index in row):
+        raise ValueError("source feasible indices must be exact integers")
+    return len(row)
 
 
 def twist(

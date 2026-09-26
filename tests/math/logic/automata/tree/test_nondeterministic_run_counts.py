@@ -14,6 +14,8 @@ from jacobian.math.logic.automata.tree import (
     complete_deterministic_tree_automaton,
     nondeterministic_run_counts,
 )
+from jacobian.math.logic.automata.tree import _tools as tree_tools
+from jacobian.math.logic.automata.tree import values as tree_values
 from jacobian.math.logic.automata.tree._models import NondeterministicRunCountsRequest
 from jacobian.math.logic.automata.tree._tools import compute_nondeterministic_run_counts
 
@@ -111,6 +113,66 @@ def test_deterministic_and_completed_carriers_compose_with_run_counting() -> Non
     completed = complete_deterministic_tree_automaton(deterministic).completed
     assert nondeterministic_run_counts(deterministic, 3) == (1, 1, 1)
     assert nondeterministic_run_counts(completed, 3) == (1, 1, 1)
+
+
+def test_catalog_zero_profile_does_not_enter_polynomial_kernel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    machine = BottomUpTreeAutomaton(
+        state_count=1,
+        arity=(0, 16),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(0,) * 16, target_state=0),
+        ),
+        final_states=(),
+    )
+
+    def cannot_enter_kernel(*_args: object) -> None:
+        pytest.fail("a zero accepting-run profile must not enter the DP kernel")
+
+    monkeypatch.setattr(
+        tree_tools, "_nondeterministic_run_counts_admitted", cannot_enter_kernel
+    )
+    result = compute_nondeterministic_run_counts(
+        NondeterministicRunCountsRequest(automaton=machine, max_size=100)
+    )
+    assert result.run_counts_by_size == (0,) * 100
+    assert result.estimated_work_bound == 0
+
+
+def test_native_and_catalog_each_saturate_ground_reachability_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    machine = BottomUpTreeAutomaton(
+        state_count=4,
+        arity=(0, 1),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            *(
+                TreeAutomatonTransition(symbol=1, child_states=(i,), target_state=i + 1)
+                for i in range(3)
+            ),
+        ),
+        final_states=(3,),
+    )
+    calls = 0
+    real_saturation = tree_values._ground_reachable_states
+
+    def counting(value: BottomUpTreeAutomaton) -> frozenset[int]:
+        nonlocal calls
+        calls += 1
+        return real_saturation(value)
+
+    monkeypatch.setattr(tree_values, "_ground_reachable_states", counting)
+    assert nondeterministic_run_counts(machine, 4) == (0, 0, 0, 1)
+    assert calls == 1
+    result = compute_nondeterministic_run_counts(
+        NondeterministicRunCountsRequest(automaton=machine, max_size=4)
+    )
+    assert result.run_counts_by_size == (0, 0, 0, 1)
+    assert result.estimated_work_bound >= 4 * machine.state_count
+    assert calls == 2
 
 
 def test_nullary_empty_transition_and_no_final_state_profiles() -> None:

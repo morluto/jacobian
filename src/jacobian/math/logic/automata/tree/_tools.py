@@ -51,8 +51,8 @@ from jacobian.math.logic.automata.tree.operations import (
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
     TreeStateChartEntry,
+    _admit_nondeterministic_run_counts,
     accepted_tree_count_work_bound,
-    nondeterministic_run_counts_work_bound,
     validate_ranked_tree,
 )
 
@@ -90,15 +90,18 @@ def compute_accepted_tree_count(
 def compute_nondeterministic_run_counts(
     request: NondeterministicRunCountsRequest,
 ) -> NondeterministicRunCountsResult:
-    estimated_work_bound = nondeterministic_run_counts_work_bound(
-        request.automaton, request.max_size
+    admission = _admit_nondeterministic_run_counts(request.automaton, request.max_size)
+    counts = (
+        (0,) * request.max_size
+        if admission.zero
+        else _nondeterministic_run_counts_admitted(
+            request.automaton, request.max_size, admission.reachable
+        )
     )
     return NondeterministicRunCountsResult._from_kernel(
         request,
-        run_counts_by_size=_nondeterministic_run_counts_admitted(
-            request.automaton, request.max_size
-        ),
-        estimated_work_bound=estimated_work_bound,
+        run_counts_by_size=counts,
+        estimated_work_bound=admission.work,
     )
 
 

@@ -43,11 +43,10 @@ from jacobian.math.logic.automata.tree.values import (
     RegularTreeGrammar,
     TreeAutomatonTransition,
     TreeStateChartEntry,
+    _admit_nondeterministic_run_counts,
     _build_reachable_state_profile,
-    _ground_reachable_states,
     _reject_tree,
     accepted_tree_count_work_bound,
-    nondeterministic_run_counts_work_bound,
     validate_ranked_tree,
 )
 
@@ -1145,15 +1144,12 @@ def nondeterministic_run_counts(
     """
 
     automaton = _validate_native_tree_automaton(automaton)
-    nondeterministic_run_counts_work_bound(automaton, max_size)
-    if not automaton.final_states or not any(
-        not transition.child_states for transition in automaton.transitions
-    ):
+    admission = _admit_nondeterministic_run_counts(automaton, max_size)
+    if admission.zero:
         return (0,) * max_size
-    reachable = _ground_reachable_states(automaton)
-    if not any(state in reachable for state in automaton.final_states):
-        return (0,) * max_size
-    return _nondeterministic_run_counts_admitted(automaton, max_size)
+    return _nondeterministic_run_counts_admitted(
+        automaton, max_size, admission.reachable
+    )
 
 
 def _validate_native_tree_automaton(
@@ -1174,9 +1170,10 @@ def _validate_native_tree_automaton(
 
 
 def _nondeterministic_run_counts_admitted(
-    automaton: BottomUpTreeAutomaton, max_size: int
+    automaton: BottomUpTreeAutomaton,
+    max_size: int,
+    reachable: frozenset[int],
 ) -> tuple[int, ...]:
-    reachable = _ground_reachable_states(automaton)
     by_key: dict[tuple[int, tuple[int, ...]], list[int]] = defaultdict(list)
     for transition in automaton.transitions:
         if any(child not in reachable for child in transition.child_states):

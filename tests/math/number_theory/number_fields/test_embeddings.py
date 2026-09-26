@@ -25,7 +25,9 @@ from jacobian._execution import (
     request_execution,
 )
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+)
 from jacobian.math.number_theory import number_fields
 from jacobian.math.number_theory.algebraic_numbers.complex import (
     ComplexAlgebraicValue,
@@ -46,6 +48,9 @@ from jacobian.math.number_theory.number_fields._embedding_protocol import (
 )
 from jacobian.math.number_theory.number_fields._embeddings_worker import (
     compute_embeddings_worker_response,
+)
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    apply_simple_number_field_embedding,
 )
 from jacobian.math.number_theory.number_fields._models import (
     NumberFieldEmbeddingsRequest,
@@ -467,6 +472,29 @@ def test_degree_coefficient_isolation_and_worker_bounds_are_preflighted() -> Non
     with pytest.raises(NumberFieldEmbeddingAdmissionError) as caught:
         embeddings(large_eisenstein)
     assert caught.value.reason == "pair_ordering_precision_bound"
+
+
+def test_field_map_admission_reports_the_target_side() -> None:
+    source = _field("1", "0", "-2")
+    target = _field("1", "0", "0", "0", "0", "0", "0", "-2")
+    with pytest.raises(OperationDomainValidationError) as caught:
+        apply_simple_number_field_embedding(
+            source,
+            target,
+            SimpleNumberFieldElement(
+                presentation=target,
+                coefficients_ascending=tuple(
+                    _rational(0) for _ in range(target.degree)
+                ),
+            ),
+            SimpleNumberFieldElement(
+                presentation=source,
+                coefficients_ascending=tuple(
+                    _rational(0) for _ in range(source.degree)
+                ),
+            ),
+        )
+    assert caught.value.errors()[0]["loc"] == ("target",)
 
 
 def test_real_embedding_rejects_degree_above_its_runtime_carrier_bound() -> None:

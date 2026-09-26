@@ -84,6 +84,13 @@ def _relation(*, initial_states: tuple[int, ...] = (0,)) -> RationalTransducer:
     )
 
 
+def test_rational_transducer_alphabet_id_is_intrinsically_bounded() -> None:
+    payload = _relation().model_dump()
+    payload["input_alphabet_id"] = "x" * 129
+    with pytest.raises(ValidationError):
+        RationalTransducer.model_validate(payload)
+
+
 def test_native_boundaries_reject_model_constructed_carriers() -> None:
     forged_subsequential = SubsequentialTransducer.model_construct()
     with pytest.raises(OperationDomainValidationError):

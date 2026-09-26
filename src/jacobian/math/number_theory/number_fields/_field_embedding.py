@@ -159,25 +159,27 @@ def _evaluate_integer_polynomial(
 
 
 def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
-    if (
-        request.source.degree > MAX_FIELD_MAP_DEGREE
-        or request.target.degree > MAX_FIELD_MAP_DEGREE
-    ):
-        raise _error(
-            "degree_bound",
-            f"field maps admit source and target degrees at most {MAX_FIELD_MAP_DEGREE}",
-            location=("source",),
-        )
+    for side, presentation in (("source", request.source), ("target", request.target)):
+        if presentation.degree > MAX_FIELD_MAP_DEGREE:
+            raise _error(
+                "degree_bound",
+                f"field maps admit source and target degrees at most {MAX_FIELD_MAP_DEGREE}",
+                location=(side,),
+            )
+    for side, presentation in (("source", request.source), ("target", request.target)):
+        if any(
+            len(str(abs(value))) > MAX_FIELD_MAP_INPUT_DIGITS
+            for value in presentation.coefficients_descending
+        ):
+            raise OperationResourceAdmissionError(
+                location=(side,),
+                code="number_field.embedding.coefficient_bound",
+                message=f"field-map polynomial coefficients are limited to {MAX_FIELD_MAP_INPUT_DIGITS} digits",
+            )
     values = (
         *request.source.coefficients_descending,
         *request.target.coefficients_descending,
     )
-    if any(len(str(abs(value))) > MAX_FIELD_MAP_INPUT_DIGITS for value in values):
-        raise OperationResourceAdmissionError(
-            location=("source",),
-            code="number_field.embedding.coefficient_bound",
-            message=f"field-map polynomial coefficients are limited to {MAX_FIELD_MAP_INPUT_DIGITS} digits",
-        )
     rationals = (
         ("generator_image", request.generator_image.coefficients_ascending),
         ("element", request.element.coefficients_ascending),

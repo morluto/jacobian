@@ -17,6 +17,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS,
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     ModularFormCoordinates,
+    ModularFormSpace,
 )
 
 MAX_COORDINATE_ADDITION_DIGITS = 2 * MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS + 1
@@ -183,7 +184,14 @@ def modular_form_coordinates_scalar_multiply(
             code="modular_form.coordinate_scalar_invalid_rational",
             message="scalar must have canonical integer components and be reduced",
         ) from exc
-    if form.space.coefficient_domain != "QQ":
+    space = getattr(form, "space", None)
+    if not isinstance(space, ModularFormSpace):
+        raise OperationDomainValidationError(
+            location=("form", "space"),
+            code="modular_form.coordinate_scalar_coefficient_domain",
+            message="coordinate scaling requires an exact modular-form space parent",
+        )
+    if space.coefficient_domain != "QQ":
         raise OperationDomainValidationError(
             location=("form", "space", "coefficient_domain"),
             code="modular_form.coordinate_scalar_coefficient_domain",
@@ -195,17 +203,31 @@ def modular_form_coordinates_scalar_multiply(
         1,
         materialize_pari=False,
         check_expansion_growth=False,
+        allow_short_prefix=True,
     )
     numerator, denominator = scalar.as_integer_ratio()
     scalar_digits = max(
         _integer_digit_upper_bound(numerator),
         _integer_digit_upper_bound(denominator),
     )
-    if scalar_digits > MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS:
+    if scalar_digits > MAX_COORDINATE_SCALAR_DIGITS:
         raise OperationResourceAdmissionError(
             location=("scalar",),
             code="modular_form.coordinate_scalar_digit_bound",
             message="scalar exceeds the admitted rational digit bound",
+        )
+    max_coordinate_digits = max(
+        (
+            max(_digits(value.numerator), _digits(value.denominator))
+            for value in values
+        ),
+        default=1,
+    )
+    if max_coordinate_digits + scalar_digits > 2 * MAX_COORDINATE_SCALAR_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("scalar",),
+            code="modular_form.coordinate_scalar_digit_bound",
+            message="scalar-coordinate intermediate growth exceeds the scaling envelope",
         )
 
     scalar_value = Fraction(numerator, denominator)

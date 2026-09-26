@@ -27,6 +27,21 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice_gauge.{reason}", message)
 
 
+def _has_canonical_path_steps(path: object) -> bool:
+    steps = getattr(path, "steps", None)
+    return type(steps) is tuple and all(
+        isinstance(step, GaugePathStep)
+        and type(step.edge_id) is str
+        and type(step.forward) is bool
+        for step in steps
+    )
+
+
+def _has_valid_permutation_degree(field: object) -> bool:
+    degree = getattr(field, "degree", None)
+    return type(degree) is int and 1 <= degree <= 8
+
+
 def _json_arrays_to_tuples(value: object) -> object:
     """Decode only declared JSON array fields as tuples for strict round trips."""
     if not isinstance(value, dict):
@@ -599,6 +614,7 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
             or not isinstance(self.field.group, FiniteGroupTable)
             or type(self.field.group.multiplication) is not tuple
             or not isinstance(self.path, OrientedGaugePath)
+            or not _has_canonical_path_steps(self.path)
             or not isinstance(self.holonomy, FiniteGroupTableElement)
             or self.holonomy.group != self.field.group
             or type(self.contributions) is not tuple
@@ -1027,7 +1043,7 @@ class GaugeLoopFamilyHolonomies(StrictModel):
         return value
 
     @model_validator(mode="after")
-    def require_source_bound_closed_loops(self) -> Self:
+    def require_source_bound_closed_loops(self) -> Self:  # noqa: C901
         try:
             field = GaugeField.model_validate(self.field.model_dump())
             if type(self.loops) is not tuple:
@@ -1037,10 +1053,12 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                 for entry in self.loops
             )
         except (AttributeError, TypeError, ValueError, ValidationError):
-            raise _validation_error("loop_family_parent", "loop-family source is malformed")
+            raise _validation_error(
+                "loop_family_parent", "loop-family source is malformed"
+            ) from None
         lattice = field.lattice
         by_edge = {edge.edge_id: edge for edge in lattice.edges}
-        if type(self.field.degree) is not int or not 1 <= self.field.degree <= 8:
+        if not _has_valid_permutation_degree(self.field):
             raise _validation_error(
                 "loop_family_degree", "source field has an invalid permutation degree"
             )
@@ -1061,9 +1079,14 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                 or any(type(value) is not int for value in entry.holonomy.image)
                 or type(entry.holonomy.image) is not tuple
                 or type(entry.holonomy.degree) is not int
-                or (entry.path.basepoint is not None and type(entry.path.basepoint) is not str)
+                or (
+                    entry.path.basepoint is not None
+                    and type(entry.path.basepoint) is not str
+                )
             ):
-                raise _validation_error("loop_family_path", "loop-family values are malformed")
+                raise _validation_error(
+                    "loop_family_path", "loop-family values are malformed"
+                )
             path = entry.path
             steps = path.steps
             total_steps += len(steps)

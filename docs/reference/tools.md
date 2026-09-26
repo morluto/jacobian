@@ -64,16 +64,21 @@ operational failure, not a mathematical conclusion.
 
 ## Execution non-completion and recovery
 
-MCP distinguishes an invalid request from a valid call that could not complete.
+Distinguish protocol validity, operation admission, and execution capacity.
 Structural or mathematical admission failures use the model-visible tool error
-channel with a bounded structured diagnostic. Timeout,
-cancellation, configured worker or host capacity exhaustion, backend failure,
-and delivery failure return an agent-visible tool error (`is_error=true`). The
-error is not a mathematical result and must not be interpreted as `False`,
-`UNSAT`, absence of a witness, or completeness of a partial search.
-This follows MCP's tool-execution error channel: the call returns an error
-result that the model can inspect and respond to, rather than a protocol-level
-claim that its parameters were invalid.
+channel with a bounded diagnostic. The adapter raises SDK `ToolError`; the SDK
+encodes a result with wire field `isError: true` (Python attribute `is_error`).
+Jacobian does not map ordinary operation-payload or domain rejections to
+JSON-RPC `INVALID_PARAMS`. Malformed protocol messages belong to the SDK's
+protocol error path, not the mathematical operation.
+
+Timeout, cancellation, configured worker or host capacity exhaustion, and
+backend failure also use tool errors, with distinct diagnostics. A delivery
+failure may prevent any error from reaching the caller. None of these failures
+is a mathematical result or may be interpreted as `False`, `UNSAT`, absence of
+a witness, or completeness of a partial search. A successful mathematical
+`false` remains a successful tool result when it belongs to the operation's
+codomain.
 
 An agent can retry with a smaller request, a more compact representation,
 another backend, or a deployment with more capacity. Diagnostics may name the

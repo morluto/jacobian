@@ -21,7 +21,6 @@ from jacobian.math.graphs.uniform_subset_intersection._tools import (
 from jacobian.math.graphs.uniform_subset_intersection.operations import (
     construct_uniform_subset_intersection_graph,
 )
-from jacobian.math.graphs.values import MAX_SIMPLE_GRAPH_VERTICES
 
 
 def _subset_label(subset: tuple[int, ...]) -> str:
@@ -224,9 +223,13 @@ def test_rejects_family_beyond_graph_vertex_bound_before_enumeration() -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph bound",
-    ):
+    ) as exc_info:
         _construct(request)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.uniform_subset_intersection.request_not_admitted"
+    )
 
 
 def test_rejects_huge_binomial_family_without_constructing_it() -> None:
@@ -238,9 +241,13 @@ def test_rejects_huge_binomial_family_without_constructing_it() -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_SIMPLE_GRAPH_VERTICES}-vertex graph bound",
-    ):
+    ) as exc_info:
         _construct(request)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "graph.uniform_subset_intersection.request_not_admitted"
+    )
 
 
 def test_catalog_adapter_uses_the_native_admission() -> None:

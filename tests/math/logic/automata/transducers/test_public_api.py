@@ -19,6 +19,7 @@ def test_exact_public_api_symbols() -> None:
         "identity_transducer",
         "invert_rational",
         "minimize_subsequential",
+        "reachable_state_witnesses",
         "reachable_states",
         "replay_rational_path",
         "run_subsequential",
@@ -26,6 +27,7 @@ def test_exact_public_api_symbols() -> None:
         "verify_composition",
         "verify_minimization",
         "verify_subsequential_run",
+        "word_morphism_to_subsequential",
     )
     assert tuple(finite_state_transducers.__all__) == expected
     assert len(finite_state_transducers.__all__) == len(

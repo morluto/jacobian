@@ -13,9 +13,13 @@ exact direct operations:
 - `topology.simplicial_complex.g_vector.compute`
 - `topology.simplicial_complex.clique_from_graph.compute`
 - `topology.poset.order_complex.compute`
-- `topology.simplicial_complex.one_skeleton.compute`
 - `topology.simplicial_homology.compute`
 - `topology.simplicial_homology.integral.compute`
+
+The native-only `jacobian.math.topology.one_skeleton` helper projects a
+canonical finite simplicial complex to its indexed graph while retaining the
+vertex and edge-face axes. Catalog callers can use
+`topology.simplicial_complex.skeleton.compute` with `k=1` for the one-skeleton.
 
 The integral operation wraps the same chain-complex-owned `HomologyResult`
 returned by `chain_complex.homology.compute`. It retains the canonical `ZZ`

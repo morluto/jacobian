@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from fractions import Fraction
 from itertools import pairwise, permutations
 from typing import Literal
@@ -48,6 +49,9 @@ from jacobian.math.polynomials.tropical.values import (
     require_scalar_budget,
 )
 
+MAX_TROPICAL_SUBSTITUTION_PAIR_WORK = 750_000
+MAX_TROPICAL_SUBSTITUTION_COORDINATE_WORK = 10_000_000
+
 
 def _admit_scalar(s: TropicalScalar, semiring: TropicalSemiring) -> None:
     if not isinstance(semiring, TropicalSemiring):
@@ -61,6 +65,12 @@ def _admit_scalar(s: TropicalScalar, semiring: TropicalSemiring) -> None:
             location=("scalar",),
             code="tropical.semiring_mismatch",
             message="scalar must carry the request semiring",
+        )
+    if s.kind not in ("FINITE", "POSITIVE_INFINITY", "NEGATIVE_INFINITY"):
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="tropical.scalar_shape",
+            message="scalar kind must be finite or a declared infinity",
         )
     if s.kind == "FINITE":
         if not isinstance(s.value, CanonicalRational) or (
@@ -147,6 +157,36 @@ def _admit_polynomial(poly: TropicalPolynomial) -> None:
             code="tropical.polynomial_type",
             message="expected a tropical polynomial",
         )
+    if (
+        not isinstance(poly.semiring, TropicalSemiring)
+        or poly.semiring.convention not in ("MIN_PLUS", "MAX_PLUS")
+        or poly.semiring.base not in ("ZZ", "QQ")
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "semiring"),
+            code="tropical.semiring_shape",
+            message="polynomial semiring must have a declared convention and base",
+        )
+    if (
+        not isinstance(poly.variables, tuple)
+        or len(poly.variables) > 128
+        or any(
+            not isinstance(label, str)
+            or not label
+            or label != label.strip()
+            or len(label) > 64
+            or any(
+                unicodedata.category(character) in ("Cc", "Cs") for character in label
+            )
+            for label in poly.variables
+        )
+        or len(set(poly.variables)) != len(poly.variables)
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "variables"),
+            code="tropical.polynomial_axis",
+            message="polynomial variable axis must be bounded, unique, and canonical",
+        )
     if len(poly.terms) > MAX_TROPICAL_POLYNOMIAL_TERMS:
         raise OperationResourceAdmissionError(
             location=("polynomial",),
@@ -155,8 +195,11 @@ def _admit_polynomial(poly: TropicalPolynomial) -> None:
         )
     exponents = []
     for term in poly.terms:
-        if not isinstance(term, TropicalPolynomialTerm) or len(term.exponents) != len(
-            poly.variables
+        if (
+            not isinstance(term, TropicalPolynomialTerm)
+            or not isinstance(term.exponents, tuple)
+            or not isinstance(term.coefficient, TropicalScalar)
+            or len(term.exponents) != len(poly.variables)
         ):
             raise OperationDomainValidationError(
                 location=("polynomial",),
@@ -382,6 +425,15 @@ def tropical_scalar_dual(scalar: TropicalScalar) -> ScalarDualResult:
             message="expected a tropical scalar",
         )
     _admit_scalar(scalar, scalar.semiring)
+    if scalar.semiring.convention not in (
+        "MIN_PLUS",
+        "MAX_PLUS",
+    ) or scalar.semiring.base not in ("ZZ", "QQ"):
+        raise OperationDomainValidationError(
+            location=("scalar", "semiring"),
+            code="tropical.semiring_value",
+            message="scalar semiring has an unsupported convention or base",
+        )
     target_convention = (
         "MAX_PLUS" if scalar.semiring.convention == "MIN_PLUS" else "MIN_PLUS"
     )
@@ -736,6 +788,302 @@ def tropical_polynomial_power(
     if result is None:
         raise RuntimeError("positive polynomial power produced no result")
     return result
+
+
+def _substitution_term_is_annihilated(
+    exponents: tuple[int, ...], image_supports: list[set[tuple[int, ...]]]
+) -> bool:
+    return any(
+        exponent > 0 and not image_support
+        for exponent, image_support in zip(exponents, image_supports, strict=True)
+    )
+
+
+def _substitution_support(  # noqa: C901
+    polynomial: TropicalPolynomial,
+    images: tuple[TropicalPolynomial, ...],
+    target_variables: tuple[str, ...],
+) -> tuple[set[tuple[int, ...]], int]:
+    """Preflight exact sparse support and all convolution work before coefficients."""
+    zero = tuple(0 for _ in target_variables)
+    pair_work = 0
+    coordinate_work = 0
+
+    def product_support(
+        left: set[tuple[int, ...]], right: set[tuple[int, ...]]
+    ) -> set[tuple[int, ...]]:
+        nonlocal pair_work, coordinate_work
+        pairs = len(left) * len(right)
+        pair_work += pairs
+        coordinate_work += pairs * max(1, len(target_variables))
+        if (
+            pair_work > MAX_TROPICAL_SUBSTITUTION_PAIR_WORK
+            or coordinate_work > MAX_TROPICAL_SUBSTITUTION_COORDINATE_WORK
+        ):
+            raise OperationResourceAdmissionError(
+                location=("polynomial", "images"),
+                code="tropical.substitution_work_bound",
+                message="substitution exceeds its sparse convolution work envelope",
+            )
+        output: set[tuple[int, ...]] = set()
+        for first in left:
+            for second in right:
+                exponent = tuple(a + b for a, b in zip(first, second, strict=True))
+                if any(value > MAX_TROPICAL_EXPONENT for value in exponent):
+                    raise OperationResourceAdmissionError(
+                        location=("polynomial", "images"),
+                        code="tropical.substitution_exponent_bound",
+                        message="a substituted exponent exceeds the admitted bound",
+                    )
+                output.add(exponent)
+                if len(output) > MAX_TROPICAL_POLYNOMIAL_TERMS:
+                    raise OperationResourceAdmissionError(
+                        location=("polynomial", "images"),
+                        code="tropical.substitution_term_bound",
+                        message="an intermediate substituted polynomial exceeds the term bound",
+                    )
+        return output
+
+    image_supports = [{term.exponents for term in image.terms} for image in images]
+    result_support: set[tuple[int, ...]] = set()
+    for term in polynomial.terms:
+        if _substitution_term_is_annihilated(term.exponents, image_supports):
+            continue
+        monomial_support = {zero}
+        for exponent, image_support in zip(term.exponents, image_supports, strict=True):
+            if exponent == 0:
+                continue
+            if not image_support:
+                monomial_support.clear()
+                break
+            power_support = {zero}
+            base_support = image_support
+            remaining = exponent
+            while remaining:
+                if remaining & 1:
+                    power_support = product_support(power_support, base_support)
+                remaining >>= 1
+                if remaining:
+                    base_support = product_support(base_support, base_support)
+            monomial_support = product_support(monomial_support, power_support)
+        result_support.update(monomial_support)
+        if len(result_support) > MAX_TROPICAL_POLYNOMIAL_TERMS:
+            raise OperationResourceAdmissionError(
+                location=("polynomial",),
+                code="tropical.substitution_term_bound",
+                message="substitution result exceeds the polynomial term bound",
+            )
+    return result_support, pair_work
+
+
+def _multiply_substitution_coefficients(
+    left: dict[tuple[int, ...], Fraction],
+    right: dict[tuple[int, ...], Fraction],
+    *,
+    semiring: TropicalSemiring,
+) -> dict[tuple[int, ...], Fraction]:
+    output: dict[tuple[int, ...], Fraction] = {}
+    for left_exponent, left_coefficient in left.items():
+        for right_exponent, right_coefficient in right.items():
+            exponent = tuple(
+                a + b for a, b in zip(left_exponent, right_exponent, strict=True)
+            )
+            coefficient = _sum_fractions_checked(left_coefficient, right_coefficient)
+            if exponent in output:
+                current = output[exponent]
+                coefficient = (
+                    min(current, coefficient)
+                    if semiring.convention == "MIN_PLUS"
+                    else max(current, coefficient)
+                )
+            output[exponent] = coefficient
+    return output
+
+
+def _validate_substitution_inputs(
+    polynomial: TropicalPolynomial,
+    target_variables: tuple[str, ...],
+    images: tuple[TropicalPolynomial, ...],
+) -> None:
+    _admit_polynomial(polynomial)
+    if not isinstance(target_variables, tuple) or len(target_variables) > 128:
+        raise OperationDomainValidationError(
+            location=("target_variables",),
+            code="tropical.substitution_target_axis",
+            message="target variable axis must be a bounded tuple",
+        )
+    if any(
+        not isinstance(label, str)
+        or not label
+        or label != label.strip()
+        or len(label) > 64
+        or any(unicodedata.category(character) in ("Cc", "Cs") for character in label)
+        for label in target_variables
+    ) or len(set(target_variables)) != len(target_variables):
+        raise OperationDomainValidationError(
+            location=("target_variables",),
+            code="tropical.substitution_target_axis",
+            message="target labels must be unique canonical opaque labels",
+        )
+    if not isinstance(images, tuple) or len(images) != len(polynomial.variables):
+        raise OperationDomainValidationError(
+            location=("images",),
+            code="tropical.substitution_arity",
+            message="images must contain one polynomial per source variable",
+        )
+    for image in images:
+        _admit_polynomial(image)
+        if image.semiring != polynomial.semiring or image.variables != target_variables:
+            raise OperationDomainValidationError(
+                location=("images",),
+                code="tropical.substitution_image_parent",
+                message="images must share the source semiring and target variable axis",
+            )
+
+
+def _admit_substitution_output(
+    polynomial: TropicalPolynomial,
+    target_variables: tuple[str, ...],
+    images: tuple[TropicalPolynomial, ...],
+    support: set[tuple[int, ...]],
+) -> None:
+    max_coefficient_digits = 1
+    for term in polynomial.terms:
+        # An empty image annihilates the monomial, so none of its coefficients
+        # participate in the result. Check before scanning any image terms.
+        if any(
+            exponent > 0 and not image.terms
+            for exponent, image in zip(term.exponents, images, strict=True)
+        ):
+            continue
+        if term.coefficient.value is None:
+            continue
+        digit_bound = max(
+            _digits(term.coefficient.value.num), _digits(term.coefficient.value.den)
+        )
+        scalar_additions = 0
+        for exponent, image in zip(term.exponents, images, strict=True):
+            if exponent == 0:
+                continue
+            if not image.terms:
+                # This source monomial vanishes; later images incur no arithmetic.
+                digit_bound = 0
+                break
+            image_digits = max(
+                max(
+                    _digits(item.coefficient.value.num),
+                    _digits(item.coefficient.value.den),
+                )
+                for item in image.terms
+                if item.coefficient.value is not None
+            )
+            digit_bound += exponent * image_digits
+            scalar_additions += exponent
+        digit_bound += scalar_additions
+        max_coefficient_digits = max(max_coefficient_digits, digit_bound)
+    if max_coefficient_digits > MAX_TROPICAL_SCALAR_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "images", "coefficient"),
+            code="tropical.substitution_scalar_bound",
+            message="substitution coefficient growth may exceed the scalar digit bound",
+        )
+    estimated_output_bytes = (
+        8_192
+        + len(encode_strict_json(list(target_variables)))
+        + len(support) * (128 + 6 * len(target_variables) + 2 * max_coefficient_digits)
+    )
+    if estimated_output_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="tropical.substitution_output_bound",
+            message="substitution result may exceed the canonical output limit",
+        )
+
+
+def _coefficient_power(
+    image: TropicalPolynomial, exponent: int
+) -> dict[tuple[int, ...], Fraction]:
+    image_terms = {
+        term.exponents: _finite_value(term.coefficient).as_fraction()
+        for term in image.terms
+    }
+    result: dict[tuple[int, ...], Fraction] | None = None
+    base = image_terms
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = (
+                base
+                if result is None
+                else _multiply_substitution_coefficients(
+                    result, base, semiring=image.semiring
+                )
+            )
+        remaining >>= 1
+        if remaining:
+            base = _multiply_substitution_coefficients(
+                base, base, semiring=image.semiring
+            )
+    if result is None:
+        raise RuntimeError("positive substitution exponent had no power")
+    return result
+
+
+def tropical_polynomial_substitute(
+    polynomial: TropicalPolynomial,
+    target_variables: tuple[str, ...],
+    images: tuple[TropicalPolynomial, ...],
+) -> TropicalPolynomial:
+    """Apply a simultaneous map of source variables to sparse polynomials."""
+    _validate_substitution_inputs(polynomial, target_variables, images)
+    support, _ = _substitution_support(polynomial, images, target_variables)
+    _admit_substitution_output(polynomial, target_variables, images, support)
+    zero = tuple(0 for _ in target_variables)
+    output: dict[tuple[int, ...], Fraction] = {}
+    for source_term in polynomial.terms:
+        # An empty factor annihilates the whole tropical product. Check the
+        # complete support before expanding any preceding coefficient powers.
+        if any(
+            exponent > 0 and not image.terms
+            for exponent, image in zip(source_term.exponents, images, strict=True)
+        ):
+            continue
+        current = {zero: _finite_value(source_term.coefficient).as_fraction()}
+        for exponent, image in zip(source_term.exponents, images, strict=True):
+            if exponent == 0:
+                continue
+            if not image.terms:
+                current = {}
+                break
+            power = _coefficient_power(image, exponent)
+            current = _multiply_substitution_coefficients(
+                current, power, semiring=polynomial.semiring
+            )
+        for output_exponents, coefficient in current.items():
+            if output_exponents in output:
+                coefficient = (
+                    min(output[output_exponents], coefficient)
+                    if polynomial.semiring.convention == "MIN_PLUS"
+                    else max(output[output_exponents], coefficient)
+                )
+            output[output_exponents] = coefficient
+
+    terms = tuple(
+        TropicalPolynomialTerm(
+            exponents=exponent,
+            coefficient=TropicalScalar._from_kernel(
+                semiring=polynomial.semiring,
+                kind="FINITE",
+                value=CanonicalRational.from_fraction(coefficient),
+            ),
+        )
+        for exponent, coefficient in sorted(output.items())
+    )
+    return TropicalPolynomial(
+        semiring=polynomial.semiring,
+        variables=target_variables,
+        terms=terms,
+    )
 
 
 def _polynomial_point_plan(
@@ -1515,6 +1863,7 @@ __all__ = [
     "tropical_polynomial_evaluate",
     "tropical_polynomial_multiply",
     "tropical_polynomial_power",
+    "tropical_polynomial_substitute",
     "tropical_polynomial_univariate_newton_polygon",
     "tropical_polynomial_univariate_roots",
     "tropical_polynomial_univariate_split_form",

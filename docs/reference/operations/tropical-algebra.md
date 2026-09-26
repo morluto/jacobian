@@ -48,6 +48,31 @@ remove monomials that are inessential as piecewise-linear functions and does
 not establish functional equality. For example, the cube of `0 ⊕ x` in
 min-plus has formal terms `0 ⊙ x^k` for `k = 0, 1, 2, 3`.
 
+## Simultaneous polynomial substitution
+
+`tropical.polynomial.substitute.compute` maps each variable of a sparse source
+polynomial to a sparse tropical polynomial over one explicit target variable
+axis. Images are positional: image `i` substitutes the source variable at
+`polynomial.variables[i]`. This is simultaneous substitution, so variables in
+an image are interpreted on the target axis and are not substituted again.
+The returned value is the exact normalized formal polynomial, not a functional
+normal form.
+
+The operation preflights exact Minkowski support for every source monomial,
+including all binary-power intermediates, before coefficient arithmetic. Each
+intermediate and final polynomial has at most 512 terms; coordinate exponents
+are at most 1,024; total sparse pair work is at most 750,000 pairs and 10
+million coordinate additions; coefficient growth is at most 8,192 decimal
+digits; and the estimated canonical result fits the 10 MiB output limit.
+Substitution into a zero image removes any source monomial that uses that
+variable with positive exponent. These bounds apply to the expanded formal
+result, so a small functional simplification does not license an oversized
+intermediate.
+
+For example, substituting `0 ⊕ t` for `x` in `0 ⊕ x` over min-plus returns
+`0 ⊕ t`; the repeated constant exponent is merged by taking its tropical
+minimum.
+
 ## Tropical assignment profiles
 
 `tropical.matrix.assignment_profile.compute` accepts an `n × n` tropical

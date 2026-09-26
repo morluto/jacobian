@@ -69,7 +69,7 @@ The principal-minor kernel admits at most eight ground elements and 250,000
 elimination work units before enumerating subsets. The twist transport is
 bounded by `2^n (1 + 2n + n^2)` work units, at most 256 rows, and at most
 `n 2^(n-1) <= 1,024` feasible-row memberships (`0` memberships for the empty
-ground). The retained result has at most 1,352 matrix, row, membership, and
+ground). The retained result has at most 1,376 matrix, row, membership, and
 twist cells and at most 4,096 aggregate ground-label bytes across its matrix
 and delta-matroid axes. These are mathematical allocation bounds; they are not
 a deployment wire-byte ceiling.

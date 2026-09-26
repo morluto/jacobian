@@ -215,6 +215,14 @@ def relabel(
 ) -> DeltaMatroidRelabelling:
     """Transport a complete feasible family through a ground-axis bijection."""
 
+    if isinstance(target_ground, tuple) and len(target_ground) > MAX_DELTA_RELABEL_GROUND:
+        raise OperationDomainValidationError(
+            location=("target_ground",),
+            code="delta_matroid.relabel_ground_limit",
+            message=(
+                f"relabeling supports at most {MAX_DELTA_RELABEL_GROUND} ground elements"
+            ),
+        )
     if isinstance(target_ground, tuple):
         _require_target_ground_bytes(target_ground)
 

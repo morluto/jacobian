@@ -353,6 +353,54 @@ class RSKWordTraceResult(StrictModel):
                 "algebraic_combinatorics.rsk_trace_total_bumps",
                 "the total bump path exceeds the alphabet-height bound",
             )
+        previous_lengths: tuple[int, ...] = ()
+        for event in self.insertion_events:
+            lengths = event.row_lengths
+            if len(lengths) not in (len(previous_lengths), len(previous_lengths) + 1):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_prefix_shape",
+                    "successive trace shapes must grow by one cell in one row",
+                )
+            previous = previous_lengths + (
+                (0,) if len(lengths) > len(previous_lengths) else ()
+            )
+            deltas = tuple(
+                current - prior
+                for prior, current in zip(previous, lengths, strict=True)
+            )
+            if (
+                any(delta not in (0, 1) for delta in deltas)
+                or sum(deltas) != 1
+                or deltas[event.added_row] != 1
+                or previous[event.added_row] != event.added_column
+            ):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_prefix_shape",
+                    "successive trace shapes must grow by one cell in one row",
+                )
+            previous_lengths = lengths
+        if previous_lengths != self.tableau_pair.shape.parts:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_final_shape",
+                "the final trace prefix must match the tableau pair shape",
+            )
+        rank_by_letter = {
+            letter: rank for rank, letter in enumerate(self.word.alphabet, start=1)
+        }
+        for event in self.insertion_events:
+            carried = rank_by_letter[event.letter]
+            for step in event.bump_path:
+                if step.bumped_entry <= carried:
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_trace_entry_chain",
+                        "each bumped entry must be strictly larger than the carried entry",
+                    )
+                carried = step.bumped_entry
+            if event.added_entry != carried:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_entry_chain",
+                    "the terminal entry must equal the final carried entry",
+                )
         return self
 
     @classmethod
@@ -407,6 +455,44 @@ class RSKWordInverseTraceResult(StrictModel):
                 "algebraic_combinatorics.rsk_reverse_trace_letters",
                 "each event letter must match its reconstructed word position",
             )
+        current_shape = self.tableau_pair.shape.parts
+        for event in self.reverse_insertion_events:
+            after_shape = event.row_lengths
+            if event.removed_row == len(after_shape):
+                prior_shape = (*after_shape, 1)
+            elif event.removed_row < len(after_shape):
+                prior = list(after_shape)
+                prior[event.removed_row] += 1
+                prior_shape = tuple(prior)
+                previous_length = (
+                    after_shape[event.removed_row - 1]
+                    if event.removed_row > 0
+                    else None
+                )
+                if (
+                    previous_length is not None
+                    and previous_length <= after_shape[event.removed_row]
+                ):
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                        "each removed cell must be a corner of the prior partition",
+                    )
+            else:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                    "each removed cell must belong to the prior partition",
+                )
+            if prior_shape != current_shape:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                    "reverse event shapes must form one removal chain from the tableau pair",
+                )
+            current_shape = after_shape
+        if current_shape:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                "the reverse removal chain must end at the empty partition",
+            )
         rank_by_letter = {
             letter: rank
             for rank, letter in enumerate(self.tableau_pair.alphabet, start=1)
@@ -414,6 +500,10 @@ class RSKWordInverseTraceResult(StrictModel):
         if any(
             event.removed_entry > len(rank_by_letter)
             or event.output_entry > len(rank_by_letter)
+            or any(
+                step.displaced_entry > len(rank_by_letter)
+                for step in event.reverse_bump_path
+            )
             or rank_by_letter.get(event.letter) != event.output_entry
             for event in self.reverse_insertion_events
         ):

@@ -443,17 +443,14 @@ def test_homomorphism_enumeration_admits_before_candidate_product(monkeypatch) -
         operations.enumerate_homomorphisms(source, target)
 
 
-def test_enumeration_output_admission_counts_retained_structures(monkeypatch) -> None:
+def test_enumeration_output_admission_bounds_retained_map_labels(
+    monkeypatch,
+) -> None:
     import jacobian.math.logic.relational_structures._admission as admission
     import jacobian.math.logic.relational_structures.operations as operations
 
-    signature = (FiniteRelationSymbol(symbol_id="R", arity=2),)
-    source = _structure(0, signature, ((),))
-    target = _structure(
-        MAX_RELATIONAL_CARRIER,
-        signature,
-        (tuple((left, right) for left in range(64) for right in range(64)),),
-    )
+    source = _structure(5, _EDGE, (((0, 1), (1, 2), (2, 3), (3, 4)),))
+    target = _three_cycle()
 
     def forbidden_product(*_args, **_kwargs):
         raise AssertionError(
@@ -461,9 +458,12 @@ def test_enumeration_output_admission_counts_retained_structures(monkeypatch) ->
         )
 
     monkeypatch.setattr(operations, "product", forbidden_product)
-    monkeypatch.setattr(admission, "MAX_HOMOMORPHISM_ENUMERATION_OUTPUT_BYTES", 132)
-    with pytest.raises(OperationResourceAdmissionError):
+    monkeypatch.setattr(admission, "MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS", 100)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         operations.enumerate_homomorphisms(source, target)
+    assert exc_info.value.errors()[0]["type"] == (
+        "relational.homomorphism.enumeration_output"
+    )
 
 
 def test_homomorphism_enumeration_tool_example_executes() -> None:

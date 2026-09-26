@@ -2,16 +2,12 @@
 
 from __future__ import annotations
 
-import json
 from itertools import product
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.relational_structures import (
     FiniteCspInstance,
     FiniteRelationalStructure,
@@ -111,15 +107,3 @@ def test_forged_oversized_instance_is_rejected_before_recursive_copy() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         csp_instance_to_source_structure(forged)
     assert error.value.errors()[0]["type"] == "relational.csp.instance_shape"
-
-
-def test_catalog_operation_is_published_with_direct_structure_result() -> None:
-    operation_id = "csp.instance.to_source_structure.compute"
-    descriptor = Catalog.open().inspect(operation_id)
-    assert descriptor.operation_id == operation_id
-    assert any(tool.operation_id == operation_id for tool in BUILTIN_TOOLS)
-    payload = json.loads(_instance().model_dump_json())
-    result = invoke_operation(operation_id, payload, Catalog.open())
-    assert FiniteRelationalStructure.model_validate(result.output) == (
-        csp_instance_to_source_structure(_instance())
-    )

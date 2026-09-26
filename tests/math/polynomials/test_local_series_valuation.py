@@ -165,3 +165,17 @@ def test_window_at_envelope_is_accepted() -> None:
 def test_native_rejects_a_non_window_value() -> None:
     with pytest.raises(OperationDomainValidationError):
         laurent_valuation_profile("not-a-window")  # type: ignore[arg-type]
+
+
+def test_native_rejects_forged_infinity_center() -> None:
+    forged = TruncatedLaurentWindow.model_construct(
+        variable="t",
+        place="INFINITY",
+        center=_rational(1),
+        valuation_lower=0,
+        precision=1,
+        coefficients=(_rational(1),),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="infinity"):
+        laurent_valuation_profile(forged)

@@ -33,6 +33,22 @@ order. This matters for noncommutative groups such as S3. This slice does not
 provide vertex gauge transformations, plaquette curvature, or Wilson traces
 for arbitrary table groups.
 
+`lattice_gauge.finite_group.complex.construct.compute` supplies the missing
+source-bound 2-cell carrier for that path operation. Each face stores an
+ordered, closed attaching walk over the exact `GaugeLattice` and retains the
+same `FiniteGroupTable` parent used by finite-group edge fields. The walk is
+the oriented attaching map, so reversing a face reverses step order and flips
+each `forward` bit. A constant attachment is an empty walk with an explicit
+basepoint; a backtracking walk remains a separate, nonempty face. Face IDs are
+unique and sorted. This is the finite combinatorial form of attaching a
+2-cell along a map from its boundary circle into the 1-skeleton ([Hatcher,
+Algebraic Topology, Appendix](https://pi.math.cornell.edu/~hatcher/AT/ATapp.pdf)).
+
+Construction admits at most 128 faces, 256 steps per face, 4096 aggregate
+steps, and a conservative serialized result estimate below two megabytes before
+returning the value. The value records topology only: no curvature product,
+flatness conclusion, or Wilson observable is computed by this constructor.
+
 ## Identity cases
 
 `lattice_gauge.holonomy.compute` accepts a zero-length path only when the path

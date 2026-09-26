@@ -7,6 +7,7 @@ from typing import Annotated, Self
 from pydantic import (
     AfterValidator,
     Field,
+    StrictBool,
     StrictInt,
     StringConstraints,
     model_validator,
@@ -14,11 +15,155 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.groups._table_models import FiniteGroupTable, FiniteGroupTableElement
+from jacobian.math.groups._table_models import (
+    MAX_FINITE_TABLE_GROUP_ORDER,
+    FiniteGroupTable,
+    FiniteGroupTableElement,
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice_gauge.{reason}", message)
+
+
+def _json_arrays_to_tuples(value: object) -> object:
+    """Decode only declared JSON array fields as tuples for strict round trips."""
+    if not isinstance(value, dict):
+        return value
+    result = dict(value)
+    lattice = result.get("lattice")
+    if isinstance(lattice, dict):
+        lattice = dict(lattice)
+        for key in ("vertices", "edges"):
+            if isinstance(lattice.get(key), (list, tuple)):
+                lattice[key] = tuple(lattice[key])
+        result["lattice"] = lattice
+    group = result.get("group")
+    if isinstance(group, dict):
+        group = dict(group)
+        multiplication = group.get("multiplication")
+        if isinstance(multiplication, (list, tuple)):
+            group["multiplication"] = tuple(
+                tuple(row) if isinstance(row, (list, tuple)) else row
+                for row in multiplication
+            )
+        if isinstance(group.get("inverse"), (list, tuple)):
+            group["inverse"] = tuple(group["inverse"])
+        result["group"] = group
+    faces = result.get("faces")
+    if isinstance(faces, (list, tuple)):
+        normalized_faces = []
+        for face in faces:
+            if isinstance(face, dict):
+                face = dict(face)
+                boundary = face.get("boundary")
+                if isinstance(boundary, dict):
+                    boundary = dict(boundary)
+                    if isinstance(boundary.get("steps"), (list, tuple)):
+                        boundary["steps"] = tuple(boundary["steps"])
+                    face["boundary"] = boundary
+            normalized_faces.append(face)
+        result["faces"] = tuple(normalized_faces)
+    return result
+
+
+def _check_raw_complex_shape(value: object) -> None:
+    """Bound every public array before copying JSON lists into canonical tuples."""
+    if not isinstance(value, dict):
+        return
+    if set(value) - {"lattice", "group", "faces"}:
+        raise _validation_error(
+            "complex_request_shape", "complex request has unknown fields"
+        )
+    _check_raw_lattice_shape(value.get("lattice"))
+    _check_raw_group_shape(value.get("group"))
+    _check_raw_faces_shape(value.get("faces"))
+
+
+def _check_raw_lattice_shape(lattice: object) -> None:
+    if isinstance(lattice, dict):
+        if set(lattice) - {"vertices", "edges"}:
+            raise _validation_error(
+                "complex_lattice_shape", "lattice has unknown fields"
+            )
+        vertices = lattice.get("vertices")
+        edges = lattice.get("edges")
+        if isinstance(vertices, (tuple, list)) and len(vertices) > MAX_GAUGE_VERTICES:
+            raise _validation_error(
+                "complex_vertex_bound", "lattice exceeds the vertex bound"
+            )
+        if isinstance(edges, (tuple, list)) and len(edges) > MAX_GAUGE_EDGES:
+            raise _validation_error(
+                "complex_edge_bound", "lattice exceeds the edge bound"
+            )
+
+
+def _check_raw_group_shape(group: object) -> None:
+    if isinstance(group, dict):
+        if set(group) - {"multiplication", "identity", "inverse"}:
+            raise _validation_error(
+                "complex_group_shape", "group table has unknown fields"
+            )
+        multiplication = group.get("multiplication")
+        inverse = group.get("inverse")
+        if isinstance(multiplication, (tuple, list)) and (
+            len(multiplication) > MAX_FINITE_TABLE_GROUP_ORDER
+            or any(
+                isinstance(row, (tuple, list))
+                and len(row) > MAX_FINITE_TABLE_GROUP_ORDER
+                for row in multiplication
+            )
+        ):
+            raise _validation_error(
+                "complex_group_bound", "group table exceeds order 24"
+            )
+        if (
+            isinstance(inverse, (tuple, list))
+            and len(inverse) > MAX_FINITE_TABLE_GROUP_ORDER
+        ):
+            raise _validation_error(
+                "complex_group_bound", "group table exceeds order 24"
+            )
+
+
+def _check_raw_faces_shape(faces: object) -> None:
+    if not isinstance(faces, (tuple, list)):
+        return
+    if len(faces) > MAX_GAUGE_FACES:
+        raise _validation_error("complex_face_bound", "complex exceeds the face bound")
+    total_steps = 0
+    for face in faces:
+        total_steps += _raw_face_step_count(face)
+        if total_steps > MAX_GAUGE_TOTAL_FACE_STEPS:
+            raise _validation_error(
+                "complex_boundary_bound",
+                "aggregate face boundary exceeds the finite complex envelope",
+            )
+
+
+def _raw_face_step_count(face: object) -> int:
+    if not isinstance(face, dict):
+        return 0
+    if set(face) - {"face_id", "boundary"}:
+        raise _validation_error("complex_face_shape", "face has unknown fields")
+    boundary = face.get("boundary")
+    if not isinstance(boundary, dict):
+        return 0
+    if set(boundary) - {"steps", "basepoint"}:
+        raise _validation_error("complex_boundary_shape", "boundary has unknown fields")
+    steps = boundary.get("steps")
+    if not isinstance(steps, (tuple, list)):
+        return 0
+    if len(steps) > MAX_GAUGE_PATH_LENGTH:
+        raise _validation_error(
+            "complex_face_length", "face exceeds 256 boundary steps"
+        )
+    for step in steps:
+        if isinstance(step, dict) and set(step) - {"edge_id", "forward"}:
+            raise _validation_error(
+                "complex_step_shape", "face step has unknown fields"
+            )
+    return len(steps)
 
 
 MAX_GAUGE_VERTICES = 64
@@ -35,6 +180,14 @@ MIN_GAUGE_DEGREE = 1
 
 MAX_GAUGE_PATH_LENGTH = 256
 """Maximum oriented steps in one admitted lattice path."""
+
+MAX_GAUGE_FACES = 128
+"""Maximum oriented 2-cells in one admitted finite gauge complex."""
+
+MAX_GAUGE_TOTAL_FACE_STEPS = 4096
+"""Maximum aggregate attaching-walk steps in one gauge complex."""
+
+"""Maximum conservative serialized size of one finite gauge complex."""
 
 MAX_GAUGE_LABEL_LENGTH = 64
 """Maximum length of a vertex or edge identifier."""
@@ -162,7 +315,7 @@ class GaugePathStep(StrictModel):
     """One oriented traversal of a lattice edge."""
 
     edge_id: GaugeLabel
-    forward: bool
+    forward: StrictBool
 
 
 class OrientedGaugePath(StrictModel):
@@ -218,6 +371,104 @@ class FiniteGroupGaugeField(StrictModel):
                 "edge values must cover every lattice edge once",
             )
         return self
+
+
+class FiniteGroupGaugeFace(StrictModel):
+    """One oriented 2-cell attached by a closed edge word.
+
+    The ordered walk is the attaching map of the oriented face. Reversing the
+    face reverses the walk and flips every step orientation. A constant
+    attaching map is represented by an empty walk at its explicit basepoint.
+    """
+
+    face_id: GaugeLabel
+    boundary: OrientedGaugePath
+
+
+class FiniteGroupGaugeComplex(StrictModel):
+    """A finite oriented 2-complex bound to one lattice and finite group."""
+
+    lattice: GaugeLattice
+    group: FiniteGroupTable
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
+
+    @model_validator(mode="before")
+    @classmethod
+    def canonicalize_json_arrays(cls, value: object) -> object:
+        _check_raw_complex_shape(value)
+        value = _json_arrays_to_tuples(value)
+        return value
+
+    @model_validator(mode="after")
+    def require_closed_source_bound_faces(self) -> Self:
+        edges = {edge.edge_id: edge for edge in self.lattice.edges}
+        face_ids = tuple(face.face_id for face in self.faces)
+        if tuple(sorted(face_ids)) != face_ids or len(set(face_ids)) != len(face_ids):
+            raise _validation_error(
+                "complex_face_ids", "face IDs must be unique and strictly ordered"
+            )
+        total_steps = 0
+        for face in self.faces:
+            path = face.boundary
+            steps = path.steps
+            if len(steps) > MAX_GAUGE_PATH_LENGTH:
+                raise _validation_error(
+                    "complex_face_length", "face boundary exceeds 256 oriented steps"
+                )
+            total_steps += len(steps)
+            if total_steps > MAX_GAUGE_TOTAL_FACE_STEPS:
+                raise _validation_error(
+                    "complex_boundary_bound",
+                    "aggregate face boundary exceeds the finite complex envelope",
+                )
+            if not steps:
+                if path.basepoint not in self.lattice.vertices:
+                    raise _validation_error(
+                        "complex_empty_face_basepoint",
+                        "a constant face attachment must name a source lattice vertex",
+                    )
+                continue
+            first: str | None = None
+            cursor: str | None = None
+            for step in steps:
+                edge = edges.get(step.edge_id)
+                if edge is None:
+                    raise _validation_error(
+                        "complex_face_edge",
+                        "face boundary must use source lattice edges",
+                    )
+                tail, head = (
+                    (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+                )
+                if cursor is not None and cursor != tail:
+                    raise _validation_error(
+                        "complex_face_chain",
+                        "face boundary steps must chain head-to-tail",
+                    )
+                if first is None:
+                    first = tail
+                cursor = head
+            if first != cursor or (
+                path.basepoint is not None and path.basepoint != first
+            ):
+                raise _validation_error(
+                    "complex_face_closed", "each oriented face boundary must be closed"
+                )
+        return self
+
+
+class FiniteGroupGaugeComplexRequest(StrictModel):
+    """Construct source-bound oriented face boundaries over one gauge lattice."""
+
+    lattice: GaugeLattice
+    group: FiniteGroupTable
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_raw_face_growth(cls, value: object) -> object:
+        _check_raw_complex_shape(value)
+        return _json_arrays_to_tuples(value)
 
 
 class FiniteGroupGaugeHolonomyRequest(StrictModel):
@@ -493,11 +744,16 @@ class HolonomyResult(StrictModel):
 __all__ = [
     "MAX_GAUGE_DEGREE",
     "MAX_GAUGE_EDGES",
+    "MAX_GAUGE_FACES",
     "MAX_GAUGE_LABEL_LENGTH",
     "MAX_GAUGE_PATH_LENGTH",
+    "MAX_GAUGE_TOTAL_FACE_STEPS",
     "MAX_GAUGE_VERTICES",
     "MIN_GAUGE_DEGREE",
     "EdgeContribution",
+    "FiniteGroupGaugeComplex",
+    "FiniteGroupGaugeComplexRequest",
+    "FiniteGroupGaugeFace",
     "GaugeEdge",
     "GaugeField",
     "GaugeFieldEdgeLabel",

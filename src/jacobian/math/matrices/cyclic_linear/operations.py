@@ -50,7 +50,7 @@ _CYCLIC_PROFILE_WALL_SECONDS = 3_600.0
 _ADMISSION_CHECK_INTERVAL = 256
 
 
-class CyclicRankKernelAdmissionError(OperationDomainValidationError):
+class CyclicRankKernelAdmissionError(OperationResourceAdmissionError):
     """A proved owner-local resource rejection before exact elimination."""
 
     def __init__(self, reason: str, message: str) -> None:
@@ -231,13 +231,6 @@ def apply_cyclotomic_field_inclusion(
     powers = [Poly(1, variable, domain="QQ")]
     for _ in range(1, source_degree):
         powers.append((powers[-1] * image) % modulus)
-    row_norm = max(
-        1,
-        *(
-            sum(abs(_fraction(power.nth(i))) for i in range(target_degree))
-            for power in powers
-        ),
-    )
     # One common-denominator and basis-image norm bound controls exact
     # rational height before expanding the caller's element.
     denominator = 1
@@ -246,15 +239,21 @@ def apply_cyclotomic_field_inclusion(
             denominator * value.denominator // gcd(denominator, value.denominator)
         )
     denominator_digits = _decimal_digits(denominator)
-    scaled_numerator = max(
+    numerator_bound = sum(
         (
-            abs(value.numerator) * (denominator // value.denominator)
-            for value in coordinates
+            Fraction(abs(value.numerator) * (denominator // value.denominator))
+            * sum(
+                (abs(_fraction(power.nth(i))) for i in range(target_degree)),
+                Fraction(0),
+            )
+            for value, power in zip(coordinates, powers, strict=True)
         ),
-        default=0,
+        Fraction(0),
     )
-    numerator_bound = Fraction(scaled_numerator) * source_degree * row_norm
-    numerator_digits = _decimal_digits(numerator_bound.numerator)
+    numerator_digits = _decimal_digits(
+        (numerator_bound.numerator + numerator_bound.denominator - 1)
+        // numerator_bound.denominator
+    )
     if max(denominator_digits, numerator_digits) > MAX_CYCLIC_FIELD_ELEMENT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("element",),

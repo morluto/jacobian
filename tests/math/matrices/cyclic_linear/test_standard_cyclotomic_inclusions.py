@@ -148,6 +148,17 @@ def test_identity_inclusion_accepts_large_bounded_element() -> None:
     assert mapped == element
 
 
+def test_sparse_constant_maps_at_height_boundary_under_nonidentity_inclusion() -> None:
+    inclusion = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=5), RationalCyclotomicField(order=10)
+    )
+    element = _element(5, (10**255, 1), (0, 1), (0, 1), (0, 1))
+    mapped = apply_cyclotomic_field_inclusion(inclusion, element)
+    assert mapped.field == inclusion.target
+    assert mapped.coefficients_ascending[0].as_fraction() == 10**255
+    assert all(value.as_fraction() == 0 for value in mapped.coefficients_ascending[1:])
+
+
 def test_inclusion_rejects_nondividing_parent() -> None:
     tool = next(
         t

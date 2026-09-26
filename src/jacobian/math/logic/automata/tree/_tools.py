@@ -9,14 +9,10 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
-    NondeterministicRunCountsRequest,
-    NondeterministicRunCountsResult,
     RankedTreePositionsRequest,
     RankedTreePositionsResult,
     RankedTreeSubtreeRequest,
     RankedTreeSubtreeResult,
-    RegularTreeGrammarToAutomatonRequest,
-    RegularTreeGrammarToAutomatonResult,
     TreeAutomatonBooleanProductRequest,
     TreeAutomatonBooleanProductResult,
     TreeAutomatonComplementRequest,
@@ -30,12 +26,13 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonTrimResult,
     TreeDeterminizeRequest,
     TreeDeterminizeResult,
+    TreeLanguageProfile,
+    TreeLanguageProfileRequest,
     TreeRunRequest,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
-    _nondeterministic_run_counts_admitted,
     _tree_state_chart_unchecked,
     boolean_product_tree_automata,
     complement_tree_automaton,
@@ -45,14 +42,13 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
-    regular_tree_grammar_to_automaton,
+    tree_language_profile,
     trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
     TreeStateChartEntry,
     accepted_tree_count_work_bound,
-    nondeterministic_run_counts_work_bound,
     validate_ranked_tree,
 )
 
@@ -87,48 +83,16 @@ def compute_accepted_tree_count(
     )
 
 
-def compute_nondeterministic_run_counts(
-    request: NondeterministicRunCountsRequest,
-) -> NondeterministicRunCountsResult:
-    estimated_work_bound = nondeterministic_run_counts_work_bound(
-        request.automaton, request.max_size
-    )
-    return NondeterministicRunCountsResult._from_kernel(
-        request,
-        run_counts_by_size=_nondeterministic_run_counts_admitted(
-            request.automaton, request.max_size
-        ),
-        estimated_work_bound=estimated_work_bound,
-    )
-
-
-def compute_regular_tree_grammar_to_automaton(
-    request: RegularTreeGrammarToAutomatonRequest,
-) -> RegularTreeGrammarToAutomatonResult:
-    return RegularTreeGrammarToAutomatonResult._from_kernel(
-        grammar=request.grammar,
-        automaton=regular_tree_grammar_to_automaton(request.grammar),
-    )
-
-
 def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
-    return ranked_tree_positions(request.tree)
+    return ranked_tree_positions(request)
 
 
 def compute_ranked_tree_subtree(
     request: RankedTreeSubtreeRequest,
 ) -> RankedTreeSubtreeResult:
-    return ranked_tree_subtree(request.tree, request.position)
-
-
-def compute_tree_automaton_boolean_product(
-    request: TreeAutomatonBooleanProductRequest,
-) -> TreeAutomatonBooleanProductResult:
-    return boolean_product_tree_automata(
-        request.left, request.right, request.connective
-    )
+    return ranked_tree_subtree(request)
 
 
 def compute_tree_automaton_reachability(
@@ -137,6 +101,10 @@ def compute_tree_automaton_reachability(
     """Compute the exact reachable-state profile with minimum tree witnesses."""
 
     return reachable_state_profile(request.automaton)
+
+
+def compute_tree_language_profile(request: TreeLanguageProfileRequest) -> TreeLanguageProfile:
+    return tree_language_profile(request)
 
 
 def compute_tree_automaton_trim(
@@ -240,7 +208,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=TreeAutomatonBooleanProductRequest,
         result_type=TreeAutomatonBooleanProductResult,
-        run=compute_tree_automaton_boolean_product,
+        run=boolean_product_tree_automata,
         tags=("tree-automata", "boolean-operations", "product", "exact"),
         discovery_terms=(
             "tree language intersection",
@@ -249,12 +217,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="intersect_complete_nullary_machines",
-                description=(
-                    "Build an intersection product of two complete one-state "
-                    "machines over one nullary symbol; Boolean products "
-                    "require complete deterministic inputs."
-                ),
+                name="intersect_partial_machines",
+                description="Build an intersection product over one nullary symbol.",
                 input={
                     "left": {
                         "state_count": 1,
@@ -303,6 +267,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 input={
                     "automaton": _RUN_EXAMPLE["automaton"],
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.language.profile.compute",
+        title="Profile the accepted tree language",
+        description=(
+            "Return the exact reachable states, reachable final states, and "
+            "the canonical minimum-node witness tree for each reachable final "
+            "state. The language is empty exactly when no final state is "
+            "reachable. Uses the same admitted fixed-point profile as state "
+            "reachability; it does not enumerate trees."
+        ),
+        request_type=TreeLanguageProfileRequest,
+        result_type=TreeLanguageProfile,
+        run=compute_tree_language_profile,
+        tags=("tree-automata", "language-profile", "emptiness", "exact"),
+        discovery_terms=("tree automaton emptiness", "shortest accepted tree", "reachable final states"),
+        examples=(
+            OperationExample(
+                name="one_leaf_language",
+                description="The one reachable final state has a one-node witness.",
+                input={"automaton": {"state_count": 1, "arity": [0], "transitions": [{"symbol": 0, "child_states": [], "target_state": 0}], "final_states": [0]}},
             ),
         ),
     ),
@@ -519,46 +506,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="tree_automaton.nondeterministic.run_counts.compute",
-        title="Count accepting runs by tree size",
-        description=(
-            "Count accepting runs of a nondeterministic bottom-up tree automaton "
-            "for every node size from 1 through max_size. A run is one state "
-            "assignment over a ranked tree; the same tree contributes multiple "
-            "times when it has multiple accepting assignments. This differs from "
-            "accepted_tree_count, which counts distinct trees once. Transition "
-            "work, exact integer digits, and profile output are bounded before "
-            "dynamic programming."
-        ),
-        request_type=NondeterministicRunCountsRequest,
-        result_type=NondeterministicRunCountsResult,
-        run=compute_nondeterministic_run_counts,
-        tags=("tree-automata", "counting", "exact", "nondeterministic"),
-        examples=(
-            OperationExample(
-                name="nullary_runs",
-                description=(
-                    "The leaf has two possible states; every f-node is final "
-                    "from either child state, so a single tree can have two runs."
-                ),
-                input={
-                    "automaton": {
-                        "state_count": 2,
-                        "arity": [0, 1],
-                        "transitions": [
-                            {"symbol": 0, "child_states": [], "target_state": 0},
-                            {"symbol": 0, "child_states": [], "target_state": 1},
-                            {"symbol": 1, "child_states": [0], "target_state": 0},
-                            {"symbol": 1, "child_states": [1], "target_state": 0},
-                        ],
-                        "final_states": [0],
-                    },
-                    "max_size": 3,
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="ranked_tree.positions.compute",
         title="List all positions in a ranked tree",
         description=(
@@ -622,47 +569,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                     "position": [0],
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="regular_tree_grammar.to_automaton.compute",
-        title="Translate a regular tree grammar to a tree automaton",
-        description=(
-            "Convert each unit-free ranked production A -> f(B1,...,Bk) to "
-            "the bottom-up transition f(B1,...,Bk) -> A. Nonterminals retain "
-            "their integer state IDs and the start nonterminal becomes the "
-            "sole final state. Production-derived work is preflighted, while "
-            "the state, signature, rank, and row limits bound the complete "
-            "source-bound output."
-        ),
-        request_type=RegularTreeGrammarToAutomatonRequest,
-        result_type=RegularTreeGrammarToAutomatonResult,
-        run=compute_regular_tree_grammar_to_automaton,
-        tags=("regular-tree-grammar", "tree-automata", "exact"),
-        discovery_terms=(
-            "convert regular tree grammar",
-            "regular tree grammar to bottom-up automaton",
-            "tree grammar recognition",
-        ),
-        examples=(
-            OperationExample(
-                name="binary_tree_grammar",
-                description=(
-                    "Translate a grammar for binary trees whose leaves have "
-                    "symbol 0 and whose internal nodes have symbol 1."
-                ),
-                input={
-                    "grammar": {
-                        "nonterminal_count": 1,
-                        "arity": [0, 2],
-                        "start_nonterminal": 0,
-                        "productions": [
-                            {"nonterminal": 0, "symbol": 0, "children": []},
-                            {"nonterminal": 0, "symbol": 1, "children": [0, 0]},
-                        ],
-                    }
                 },
             ),
         ),

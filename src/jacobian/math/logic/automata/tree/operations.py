@@ -25,6 +25,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonMinimizeResult,
     TreeAutomatonTrimResult,
     TreeDeterminizeResult,
+    TreeLanguageProfile,
+    TreeLanguageProfileRequest,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.values import (
@@ -65,6 +67,7 @@ __all__ = [
     "reachable_state_profile",
     "regular_tree_grammar_to_automaton",
     "run_tree_automaton",
+    "tree_language_profile",
     "tree_state_chart",
     "trim_tree_automaton",
     "verify_accepted_tree_count",
@@ -936,6 +939,29 @@ def reachable_state_profile(
     """Return each reachable state and its canonical minimum-node witness tree."""
 
     return _build_reachable_state_profile(automaton)
+
+
+def tree_language_profile(request: TreeLanguageProfileRequest) -> TreeLanguageProfile:
+    """Project the admitted state-reachability value to reachable finals."""
+
+    if type(request) is not TreeLanguageProfileRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_automata.language_profile.request_type",
+            message="request must be a canonical tree-language profile request",
+        )
+    profile = reachable_state_profile(request.automaton)
+    final_states = set(request.automaton.final_states)
+    accepting = tuple(state for state in profile.reachable_states if state in final_states)
+    witnesses = tuple(witness for witness in profile.witnesses if witness.state in final_states)
+    return TreeLanguageProfile._from_kernel(
+        automaton=request.automaton,
+        reachable_states=profile.reachable_states,
+        unreachable_states=profile.unreachable_states,
+        reachable_final_states=accepting,
+        witnesses=witnesses,
+        empty=not accepting,
+    )
 
 
 def _productive_states(automaton: BottomUpTreeAutomaton) -> set[int]:

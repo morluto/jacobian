@@ -2,6 +2,14 @@
 
 [Documentation home](../../index.md) · [Tool surface](../tools.md)
 
+## Ranked tree languages
+
+`tree_automaton.language.profile.compute` returns the states reachable by
+finite ground trees, the reachable final states, and one canonical
+minimum-node witness tree per reachable final state. The language is empty
+exactly when there are no reachable final states. This uses the bounded
+bottom-up reachability fixed point; it does not enumerate trees.
+
 `regular_language.dfa.equivalence.decide` compares two total deterministic
 finite automata over the same ordered integer alphabet. It explores only the
 reachable product of their initial states and returns `equivalent=true` when

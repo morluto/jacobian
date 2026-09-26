@@ -647,6 +647,57 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     )
 
 
+class TreeLanguageProfileRequest(StrictModel):
+    """Return the exact reachable-final profile of a tree automaton."""
+
+    automaton: BottomUpTreeAutomaton
+
+
+class TreeLanguageProfile(StrictModel):
+    """Reachable states and canonical minimum trees for reachable finals."""
+
+    automaton: BottomUpTreeAutomaton
+    reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    unreachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    reachable_final_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    witnesses: tuple[TreeStateWitness, ...] = Field(max_length=MAX_TA_STATES)
+    empty: bool
+
+    @model_validator(mode="after")
+    def require_profile_shape(self) -> Self:
+        if self.reachable_states != tuple(sorted(set(self.reachable_states))):
+            raise _validation_error("language_profile_reachable", "reachable states must be sorted and unique")
+        if self.unreachable_states != tuple(sorted(set(self.unreachable_states))):
+            raise _validation_error("language_profile_unreachable", "unreachable states must be sorted and unique")
+        if set(self.reachable_states) | set(self.unreachable_states) != set(range(self.automaton.state_count)) or set(self.reachable_states) & set(self.unreachable_states):
+            raise _validation_error("language_profile_partition", "reachable and unreachable states must partition the state set")
+        expected_finals = tuple(sorted(set(self.automaton.final_states) & set(self.reachable_states)))
+        if self.reachable_final_states != expected_finals:
+            raise _validation_error("language_profile_finals", "reachable final states must be exactly the reachable accepting states")
+        if tuple(witness.state for witness in self.witnesses) != expected_finals:
+            raise _validation_error("language_profile_witnesses", "one witness must be supplied for every reachable final state")
+        # Deserialized profiles are untrusted: every alleged witness must be a
+        # ground tree over this automaton's ranked alphabet.
+        for witness in self.witnesses:
+            stack = [(witness.tree, 1)]
+            while stack:
+                node, depth = stack.pop()
+                if depth > MAX_RUN_TREE_DEPTH:
+                    raise _validation_error("language_profile_witness_depth", "witness exceeds the ranked-tree depth bound")
+                if node.symbol >= len(self.automaton.arity):
+                    raise _validation_error("language_profile_witness_symbol", "witness symbol is outside the automaton alphabet")
+                if len(node.children) != self.automaton.arity[node.symbol]:
+                    raise _validation_error("language_profile_witness_arity", "witness node arity does not match the automaton alphabet")
+                stack.extend((child, depth + 1) for child in node.children)
+        if self.empty != (not expected_finals):
+            raise _validation_error("language_profile_empty", "empty must indicate whether any final state is reachable")
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 class TreeDeterminizeRequest(StrictModel):
     """Determinize a bottom-up tree automaton by subset construction."""
 

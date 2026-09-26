@@ -27,27 +27,71 @@ from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_f
 
 
 def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
-    dimension = len(request.matrices)
-    order = request.matrices[0].row_count
+    if not isinstance(request, LieMatrixSpanRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="lie_algebra.matrix_span_request",
+            message="request must be a typed matrix-span value",
+        )
+    matrices = getattr(request, "matrices", None)
+    if type(matrices) is not tuple or not 1 <= len(matrices) <= 8:
+        raise OperationDomainValidationError(
+            location=("matrices",),
+            code="lie_algebra.matrix_span_dimension",
+            message="matrix span dimension must be 1..8",
+        )
+    if any(not isinstance(matrix, RationalMatrix) for matrix in matrices):
+        raise OperationDomainValidationError(
+            location=("matrices",),
+            code="lie_algebra.matrix_span_shape",
+            message="every span element must be a rational matrix",
+        )
+    order = getattr(matrices[0], "row_count", None)
+    if type(order) is not int:
+        raise OperationDomainValidationError(
+            location=("matrices", 0),
+            code="lie_algebra.matrix_span_shape",
+            message="matrix shape is malformed",
+        )
+    dimension = len(matrices)
     if not 1 <= order <= 8 or any(
-        matrix.row_count < 1 or matrix.row_count > 8 for matrix in request.matrices
+        type(getattr(matrix, "row_count", None)) is not int
+        or not 1 <= matrix.row_count <= 8
+        for matrix in matrices
     ):
         raise OperationDomainValidationError(
-            location=("matrices",), code="lie_algebra.matrix_span_order",
+            location=("matrices",),
+            code="lie_algebra.matrix_span_order",
             message="matrix order must be 1..8",
         )
     if any(
-        matrix.row_count != order or matrix.column_count != order
-        for matrix in request.matrices
+        matrix.row_count != order
+        or type(getattr(matrix, "column_count", None)) is not int
+        or matrix.column_count != order
+        or type(getattr(matrix, "entries", None)) is not tuple
+        or len(matrix.entries) != order
+        or any(type(row) is not tuple or len(row) != order for row in matrix.entries)
+        for matrix in matrices
     ):
         raise OperationDomainValidationError(
             location=("matrices",),
             code="lie_algebra.matrix_span_shape",
             message="all matrices must have the same square order",
         )
+    if any(
+        not isinstance(entry, CanonicalRational)
+        for matrix in matrices
+        for row in matrix.entries
+        for entry in row
+    ):
+        raise OperationDomainValidationError(
+            location=("matrices",),
+            code="lie_algebra.matrix_span_shape",
+            message="matrix entries must be canonical rational scalars",
+        )
     input_digits = max(
         max(decimal_digit_width(entry.num), decimal_digit_width(entry.den))
-        for matrix in request.matrices
+        for matrix in matrices
         for row in matrix.entries
         for entry in row
     )
@@ -75,12 +119,13 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
         + decimal_digit_width(factorial(dimension))
         + 2
     )
-    coordinate_digits = determinant_digits + replacement_digits + 2
+    coordinate_digits = determinant_digits + replacement_digits + 2 if pairs else 1
     # Output coefficients are rational coordinates in the pivot basis. Refuse
     # conservatively before any RREF or commutator expansion.
     if coordinate_digits > MAX_MATRIX_SPAN_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
-            location=("matrices",), code="lie_algebra.matrix_span_result_height",
+            location=("matrices",),
+            code="lie_algebra.matrix_span_result_height",
             message="induced structure constants may exceed the 64-digit result bound",
         )
     work = (

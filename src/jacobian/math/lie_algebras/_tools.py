@@ -26,7 +26,6 @@ from jacobian.math.lie_algebras._models import (
     LieLowerCentralSeriesResult,
     LieQuotientRequest,
     LieQuotientResult,
-    LieSemisimplicityResult,
     LieSubalgebra,
     LieSubalgebraCheckResult,
     LieSubalgebraConstructionRequest,
@@ -39,7 +38,6 @@ from jacobian.math.lie_algebras.operations import (
     check_subalgebra,
     lie_adjoint,
     lie_adjoint_representation,
-    lie_algebra_is_semisimple,
     lie_bracket,
     lie_center,
     lie_derived_series,
@@ -69,12 +67,6 @@ def _run_lie_killing_form_radical(
     request: LieAlgebraRequest,
 ) -> LieKillingRadicalResult:
     return lie_killing_form_radical(request.algebra)
-
-
-def _run_lie_semisimplicity_decision(
-    request: LieAlgebraRequest,
-) -> LieSemisimplicityResult:
-    return lie_algebra_is_semisimple(request.algebra)
 
 
 def _run_lie_adjoint_representation(
@@ -342,6 +334,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Killing form radical",
             "nullspace of Killing form",
             "radical of the Killing bilinear form",
+            "Cartan semisimplicity criterion",
+            "is a Lie algebra semisimple",
+            "Killing form nondegenerate",
+            "Lie algebra semisimplicity decision",
         ),
         examples=(
             OperationExample(
@@ -364,41 +360,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     }
                 },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="lie_algebra.is_semisimple.compute",
-        title="Decide whether a Lie algebra over QQ is semisimple",
-        description=(
-            "Return the direct exact boolean decision for whether a finite-"
-            "dimensional Lie algebra over QQ is semisimple, using Cartan's "
-            "characteristic-zero criterion that its Killing form is "
-            "nondegenerate. The output contains only this decision. For the "
-            "source-bound exact Killing form and radical, use the dedicated "
-            "Killing-form operations. Caller-authored decisions must be "
-            "recomputed for the algebra before relying on them. "
-            "Admission validates and bounds the algebra before exact form and "
-            "nullspace computation."
-        ),
-        request_type=LieAlgebraRequest,
-        result_type=LieSemisimplicityResult,
-        run=_run_lie_semisimplicity_decision,
-        tags=("lie-algebra", "semisimplicity", "cartan-criterion", "exact", "rational"),
-        discovery_terms=(
-            "Cartan semisimplicity criterion",
-            "is a Lie algebra semisimple",
-            "Killing form nondegenerate",
-            "Lie algebra semisimplicity decision",
-        ),
-        examples=(
-            OperationExample(
-                name="sl2_is_semisimple",
-                description=(
-                    "The Killing form of sl2(QQ) is nondegenerate, so Cartan's "
-                    "criterion says this algebra is semisimple."
-                ),
-                input={"algebra": _SL2_ALGEBRA},
             ),
         ),
     ),

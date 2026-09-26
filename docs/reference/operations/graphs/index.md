@@ -20,3 +20,4 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Full graph automorphism group](graph-automorphism-group.md)
 - [Chromatic bipartition feasibility](graph-chromatic-bipartition.md)
 - [Induced edge-deletion profiles](induced-edge-deletion-profile.md)
+- [Exact graph deletion decks](graph-decks.md)

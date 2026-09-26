@@ -177,6 +177,7 @@ def _admit_inverse_trace(pair: RSKTableauPair) -> tuple[RSKInverseWordRequest, i
             message="expected a canonical RSK tableau pair",
         )
     try:
+        pair = RSKTableauPair.model_validate(pair.model_dump(mode="python"))
         require_semistandard(pair.insertion_tableau)
         require_standard(pair.recording_tableau)
         if any(
@@ -237,6 +238,7 @@ def inverse_row_insertion_rsk_trace(
 ) -> RSKWordInverseTraceResult:
     """Reconstruct a word together with every reverse-insertion event."""
     request, cell_count = _admit_inverse_trace(pair)
+    pair = request.pair
     insertion = [list(row) for row in pair.insertion_tableau.rows]
     label_cells: list[tuple[int, int] | None] = [None] * cell_count
     for row_index, row in enumerate(pair.recording_tableau.rows):

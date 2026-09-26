@@ -10,4 +10,5 @@ retained below for that mathematical reference.
 
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
 - [Normalized chains of a finite simplicial set](simplicial-set-normalized-chains.md)
+- [Degenerate subcomplex of a finite simplicial set](simplicial-set-degenerate-submodule.md)
 - [Image factorization of a finite simplicial map](simplicial-map-image.md)

@@ -24,9 +24,18 @@ from jacobian.math.topology.simplicial_sets.degeneracy import (
     DegeneracyProfileResult,
     degeneracy_profile,
 )
+from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
+    DegenerateSubmoduleRequest,
+    DegenerateSubmoduleResult,
+    degenerate_submodule,
+)
 from jacobian.math.topology.simplicial_sets.image import (
     SimplicialMapImageResult,
     simplicial_map_image,
+)
+from jacobian.math.topology.simplicial_sets.map_preimage import (
+    SimplicialMapPreimageResult,
+    simplicial_map_preimage,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
     NormalizedHomologyResult,
@@ -59,11 +68,14 @@ from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_
 __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
+    "DegenerateSubmoduleRequest",
+    "DegenerateSubmoduleResult",
     "FiniteTruncatedSimplicialSet",
     "NormalizedHomologyResult",
     "SimplicialComplexPrefixResult",
     "SimplicialIdentityObstruction",
     "SimplicialMapImageResult",
+    "SimplicialMapPreimageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
     "SimplicialSetQuotientRequest",
@@ -74,6 +86,7 @@ __all__ = [
     "UnnormalizedChainsResult",
     "compose_simplicial_maps",
     "degeneracy_profile",
+    "degenerate_submodule",
     "from_tables",
     "identity_simplicial_map",
     "normalized_chains",
@@ -82,6 +95,7 @@ __all__ = [
     "simplex_horn",
     "simplicial_map",
     "simplicial_map_image",
+    "simplicial_map_preimage",
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",

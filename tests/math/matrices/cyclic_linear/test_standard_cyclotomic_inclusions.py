@@ -139,6 +139,22 @@ def test_inclusion_rejects_nondividing_parent() -> None:
         )
 
 
+def test_native_apply_revalidates_model_constructed_inclusion() -> None:
+    source = RationalCyclotomicField(order=4)
+    target = RationalCyclotomicField(order=6)
+    forged = CyclotomicFieldInclusion.model_construct(
+        source=source,
+        target=target,
+        generator_image=(
+            CanonicalRational(num=0, den=1),
+            CanonicalRational(num=1, den=1),
+        ),
+    )
+
+    with pytest.raises(ValueError, match="valid cyclotomic values"):
+        apply_cyclotomic_field_inclusion(forged, _element(4, (0, 1), (1, 1)))
+
+
 def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:
     source = RationalCyclotomicField(order=3)
     target = RationalCyclotomicField(order=6)

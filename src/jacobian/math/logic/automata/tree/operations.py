@@ -55,6 +55,7 @@ from jacobian.math.logic.automata.tree.values import (
     TreeAutomatonTransition,
     TreeStateChartEntry,
     _build_reachable_state_profile,
+    _reachability_work_preflight,
     _reject_tree,
     accepted_tree_count_work_bound,
     ranked_tree_node_count,
@@ -425,6 +426,18 @@ def tree_context_transformation_monoid(
             message="max_elements must be an integer from 1 through 512",
         )
     _preflight_complete_automaton(automaton)
+    # The reachable-state profile is a mandatory phase, so admit its full
+    # preflight charge from the shared work envelope before the saturation
+    # executes; witness and generator bounds are checked afterwards.
+    reachability_work = _reachability_work_preflight(automaton)
+    if reachability_work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_context.monoid.reachability_work_bound",
+            message=(
+                "the mandatory reachable-state profile exceeds the monoid work bound"
+            ),
+        )
     profile = _build_reachable_state_profile(automaton)
     witness_trees = {witness.state: witness.tree for witness in profile.witnesses}
     reachable = profile.reachable_states
@@ -450,7 +463,7 @@ def tree_context_transformation_monoid(
                 rank_generators * (len(automaton.transitions) + states * rank)
                 + sibling_tree_nodes
             )
-    if generator_work > MAX_TREE_AUTOMATON_WORK:
+    if reachability_work + generator_work > MAX_TREE_AUTOMATON_WORK:
         raise OperationResourceAdmissionError(
             location=("automaton", "arity"),
             code="tree_context.monoid.generator_work_bound",
@@ -465,7 +478,7 @@ def tree_context_transformation_monoid(
     discovered: dict[tuple[int, ...], FiniteTreeContext] = {identity: identity_context}
     ordered_generators = tuple(sorted(generators.items()))
     frontier = [identity]
-    charged_work = generator_work
+    charged_work = reachability_work + generator_work
     total_context_nodes = 0
     cursor = 0
     while cursor < len(frontier):
@@ -623,14 +636,6 @@ def _complete_deterministic_rows(
             message="Boolean products require complete deterministic input automata",
         )
     return table
-
-
-_TREE_BOOLEAN_CONNECTIVES: tuple[str, ...] = (
-    "intersection",
-    "union",
-    "difference",
-    "symmetric_difference",
-)
 
 
 def _boolean_final(connective: str, left_final: bool, right_final: bool) -> bool:
@@ -805,36 +810,6 @@ def boolean_product_tree_automata(
     Completeness makes every product state pair total, so each Boolean language
     connective is represented by the corresponding final-state predicate.
     """
-    if connective not in _TREE_BOOLEAN_CONNECTIVES:
-        raise OperationDomainValidationError(
-            location=("connective",),
-            code="tree_automata.product_connective",
-            message=(
-                "connective must be one of " + ", ".join(_TREE_BOOLEAN_CONNECTIVES)
-            ),
-        )
-    admitted: dict[str, CompleteDeterministicBottomUpTreeAutomaton] = {}
-    for side, machine in (("left", left), ("right", right)):
-        if not isinstance(machine, CompleteDeterministicBottomUpTreeAutomaton):
-            raise OperationDomainValidationError(
-                location=(side,),
-                code="tree_automata.product_automaton_type",
-                message=(
-                    "Boolean products require complete deterministic input automata"
-                ),
-            )
-        try:
-            admitted[side] = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
-                machine.model_dump(), strict=True
-            )
-        except Exception as exc:
-            raise OperationDomainValidationError(
-                location=(side,),
-                code="tree_automata.product_automaton_shape",
-                message="inputs must satisfy the complete deterministic carrier shape",
-            ) from exc
-    left, right = admitted["left"], admitted["right"]
-
     if left.arity != right.arity:
         raise OperationDomainValidationError(
             location=("right", "arity"),
@@ -1159,30 +1134,11 @@ def _tree_automaton_minimization_partition(
     rows: dict[tuple[int, tuple[int, ...]], int],
 ) -> dict[int, int]:
     final_states = set(automaton.final_states)
-    # Every missing row behaves as a transition to one implicit rejecting
-    # sink (state id -1): a ground-tree context that gets stuck never
-    # accepts, so the sink joins the initial nonfinal block and missing rows
-    # compare by the sink's current class instead of a fixed sentinel.
-    classes: dict[int, int] = {
-        state: int(state in final_states) for state in reachable_states
-    }
-    classes[-1] = 0
-    context_combos = sum(
-        rank * len(reachable_states) ** (rank - 1)
-        for rank in automaton.arity
-        if rank > 0
-    )
-    combos_since_checkpoint = 0
+    classes = {state: int(state in final_states) for state in reachable_states}
     while True:
-        request_checkpoint("during tree-automaton partition refinement")
-        sink_class = classes[-1]
         refined_by_signature: dict[tuple[object, ...], list[int]] = {}
-        for state in classes:
+        for state in reachable_states:
             signature: list[object] = [state in final_states, classes[state]]
-            if state == -1:
-                signature.extend([sink_class] * context_combos)
-                refined_by_signature.setdefault(tuple(signature), []).append(state)
-                continue
             for symbol, rank in enumerate(automaton.arity):
                 for position in range(rank):
                     other_positions = tuple(
@@ -1196,47 +1152,15 @@ def _tree_automaton_minimization_partition(
                         ):
                             children[index] = other_state
                         target = rows.get((symbol, tuple(children)))
-                        signature.append(
-                            sink_class if target is None else classes[target]
-                        )
-                        combos_since_checkpoint += 1
-                        if combos_since_checkpoint >= 8192:
-                            request_checkpoint(
-                                "during tree-automaton partition refinement"
-                            )
-                            combos_since_checkpoint = 0
+                        signature.append(-1 if target is None else classes[target])
             refined_by_signature.setdefault(tuple(signature), []).append(state)
         blocks = sorted(refined_by_signature.values(), key=min)
         refined = {
             state: block_id for block_id, block in enumerate(blocks) for state in block
         }
-        if all(refined[state] == classes[state] for state in classes):
-            return {state: classes[state] for state in reachable_states}
+        if all(refined[state] == classes[state] for state in reachable_states):
+            return refined
         classes = refined
-
-
-def _deterministic_quotient_value(
-    *,
-    state_count: int,
-    arity: tuple[int, ...],
-    transitions: tuple[TreeAutomatonTransition, ...],
-    final_states: tuple[int, ...],
-) -> DeterministicBottomUpTreeAutomaton:
-    # A total quotient table carries the established completeness fact on the
-    # complete carrier, so it flows directly into complement and products.
-    if len(transitions) == sum(state_count**rank for rank in arity):
-        return CompleteDeterministicBottomUpTreeAutomaton(
-            state_count=state_count,
-            arity=arity,
-            transitions=transitions,
-            final_states=final_states,
-        )
-    return DeterministicBottomUpTreeAutomaton(
-        state_count=state_count,
-        arity=arity,
-        transitions=transitions,
-        final_states=final_states,
-    )
 
 
 def _tree_automaton_minimized_value(
@@ -1269,7 +1193,7 @@ def _tree_automaton_minimized_value(
                 "partition refinement did not produce a transition congruence"
             )
     final_states = set(automaton.final_states)
-    minimized = _deterministic_quotient_value(
+    minimized = DeterministicBottomUpTreeAutomaton(
         state_count=len(blocks),
         arity=automaton.arity,
         transitions=tuple(
@@ -1322,7 +1246,7 @@ def minimize_tree_automaton(
         for row in automaton.transitions
     )
     if not has_ground_tree_seed:
-        minimized = _deterministic_quotient_value(
+        minimized = DeterministicBottomUpTreeAutomaton(
             state_count=1, arity=automaton.arity, transitions=(), final_states=()
         )
         return TreeAutomatonMinimizeResult._from_kernel(
@@ -2174,16 +2098,14 @@ def _canonical_dfa(
     automaton: BottomUpTreeAutomaton,
     subsets: list[tuple[int, ...]],
     rows: dict[tuple[int, tuple[int, ...]], int],
-) -> tuple[DeterministicBottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
+) -> tuple[BottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
     """Order subsets lexicographically and build the deterministic machine."""
 
     order = sorted(range(len(subsets)), key=lambda index: subsets[index])
     renumber = {old: new for new, old in enumerate(order)}
     canonical = tuple(subsets[old] for old in order)
     source_finals = set(automaton.final_states)
-    # Subset construction rows are keyed by one (symbol, child-state) tuple,
-    # so the carrier records the established determinism.
-    deterministic = DeterministicBottomUpTreeAutomaton(
+    deterministic = BottomUpTreeAutomaton(
         state_count=max(1, len(canonical)),
         arity=automaton.arity,
         transitions=tuple(
@@ -2348,7 +2270,7 @@ def determinize_tree_automaton(
             sample_agreement=False,
         )
     if not subsets:
-        deterministic = DeterministicBottomUpTreeAutomaton(
+        deterministic = BottomUpTreeAutomaton(
             state_count=1, arity=automaton.arity, transitions=(), final_states=()
         )
         return TreeDeterminizeResult._from_kernel(

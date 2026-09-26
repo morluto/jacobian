@@ -1,6 +1,8 @@
 from itertools import product
+from unittest.mock import patch
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.automata.tree import (
@@ -8,6 +10,10 @@ from jacobian.math.logic.automata.tree import (
     TreeAutomatonTransition,
     map_tree_context_states,
     tree_context_transformation_monoid,
+    values,
+)
+from jacobian.math.logic.automata.tree._models import (
+    TreeContextTransformationMonoidResult,
 )
 from jacobian.math.logic.automata.tree.contexts import (
     FiniteTreeContext,
@@ -85,3 +91,58 @@ def test_multibranch_generators_use_reachable_sibling_witnesses() -> None:
 def test_exact_closure_refuses_when_element_cap_is_too_small() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         tree_context_transformation_monoid(_unary_automaton(), max_elements=1)
+
+
+def test_monoid_preflights_reachability_before_running_saturation() -> None:
+    # 63 states with one binary symbol needs 3970 complete transition rows, so
+    # the conservative preflight charge alone exceeds the monoid work envelope
+    # even though the exact saturation converges after a couple of scans.
+    automaton = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=63,
+        arity=(0, 2),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            *(
+                TreeAutomatonTransition(
+                    symbol=1, child_states=(left, right), target_state=left
+                )
+                for left in range(63)
+                for right in range(63)
+            ),
+        ),
+        final_states=(0,),
+    )
+    with (
+        patch.object(
+            values, "_priced_saturation", wraps=values._priced_saturation
+        ) as run,
+        pytest.raises(OperationResourceAdmissionError) as raised,
+    ):
+        tree_context_transformation_monoid(automaton, max_elements=8)
+
+    assert raised.value.errors()[0]["type"] == (
+        "tree_context.monoid.reachability_work_bound"
+    )
+    assert run.call_count == 0
+
+
+def test_monoid_charges_one_reachability_pass_before_closure() -> None:
+    with patch.object(
+        values, "_priced_saturation", wraps=values._priced_saturation
+    ) as run:
+        tree_context_transformation_monoid(_unary_automaton(), max_elements=8)
+
+    assert run.call_count == 1
+
+
+def test_monoid_rejects_witness_contexts_with_mismatched_signature() -> None:
+    result = tree_context_transformation_monoid(_unary_automaton(), max_elements=8)
+    payload = result.model_dump(mode="json")
+    payload["elements"][0]["context"]["arity"] = [0, 1, 1]
+
+    with pytest.raises(ValidationError) as raised:
+        TreeContextTransformationMonoidResult.model_validate(payload)
+
+    assert raised.value.errors()[0]["type"] == (
+        "tree_automata.context_monoid_signature"
+    )

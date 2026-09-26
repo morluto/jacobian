@@ -383,12 +383,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="intersect_complete_nullary_machines",
-                description=(
-                    "Build an intersection product of two complete one-state "
-                    "machines over one nullary symbol; Boolean products "
-                    "require complete deterministic inputs."
-                ),
+                name="intersect_partial_machines",
+                description="Build an intersection product over one nullary symbol.",
                 input={
                     "left": {
                         "state_count": 1,

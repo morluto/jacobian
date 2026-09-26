@@ -751,7 +751,7 @@ def _filtered_map_status_admitted(
         for degree, matrix in enumerate(request.maps):
             try:
                 parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
-            except (TypeError, ValueError, ZeroDivisionError) as exc:
+            except (TypeError, ValueError, ZeroDivisionError, RuntimeError) as exc:
                 raise OperationDomainValidationError(
                     location=("maps", degree),
                     code="filtered_chain_map.entry_invalid",

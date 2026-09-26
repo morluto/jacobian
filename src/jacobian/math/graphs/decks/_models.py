@@ -401,16 +401,18 @@ class VertexDeckAnonymousMultisetRequest(StrictModel):
 
     family: VertexDeletionFamily = Field(
         description=(
-            "A complete source-bound vertex-deletion family. The operation "
-            "forgets source labels after authenticating the family and returns "
-            "its anonymous graph-card multiset."
+            "A complete exact source-bound vertex-deletion family, including "
+            "all cards and aligned receipts. The operation forgets source labels "
+            "after authenticating the family and returns its anonymous graph-card "
+            "multiset; source order is limited by the exact permutation work "
+            "envelope (n * (n-1)! * (1 + (n-1) + binom(n-1, 2)) <= 2,000,000)."
         ),
     )
 
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_family(cls, value: Any) -> Any:
-        """Bound source order and output before nested card parsing."""
+        """Apply the cheap source-order cap before nested card parsing."""
         if not isinstance(value, dict):
             return value
         raw_family = value.get("family")
@@ -423,29 +425,6 @@ class VertexDeckAnonymousMultisetRequest(StrictModel):
         if not isinstance(vertices, (tuple, list)):
             return value
         source_order = len(vertices)
-        if source_order > MAX_UNLABELLED_DECK_VERTICES + 1:
-            raise _validation_error(
-                "anonymous_source_order_bound",
-                "anonymous vertex decks require card order at most ten",
-            )
-        card_order = max(source_order - 1, 0)
-        card_count = source_order
-        if (
-            _anonymous_canonicalization_work(card_order, card_count)
-            > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
-        ):
-            raise _validation_error(
-                "anonymous_source_work_bound",
-                "anonymous vertex-deck canonicalization exceeds its exact work bound",
-            )
-        if (
-            card_count * (64 + 16 * comb(card_order, 2))
-            > MAX_ANONYMOUS_CARD_RESULT_BYTES
-        ):
-            raise _validation_error(
-                "anonymous_source_output_bound",
-                "anonymous vertex-deck result exceeds its output bound",
-            )
         return value
 
 

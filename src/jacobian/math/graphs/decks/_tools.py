@@ -672,7 +672,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="forget_edge_source_labels",
                 description=(
-                    "Forget the source endpoint labels from the two cards of a one-edge graph."
+                    "Given the complete exact source-bound vertex-deletion family, "
+                    "including all cards and aligned receipts, forget source endpoint "
+                    "labels from the two cards of a one-edge graph."
                 ),
                 input={
                     "family": {

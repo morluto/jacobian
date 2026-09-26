@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -215,6 +216,8 @@ def _binary_family(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
     n = len(matrix.ground)
     rows = []
     for mask in range(1 << n):
+        if mask % 32 == 0:
+            request_checkpoint("binary delta-matroid principal-minor enumeration")
         idx = [i for i in range(n) if mask >> i & 1]
         if _det2([[matrix.entries[i][j] for j in idx] for i in idx]):
             rows.append(tuple(idx))
@@ -223,6 +226,7 @@ def _binary_family(matrix: BinarySymmetricMatrix) -> BinaryMatrixResult:
     # (1), ...).  Sorting is part of result construction, not a cosmetic
     # presentation step: the carrier rejects non-canonical rows.
     canonical_rows = tuple(sorted(rows)) or ((),)
+    request_checkpoint("binary delta-matroid result construction")
     return BinaryMatrixResult(
         matrix=matrix,
         delta_matroid=FiniteDeltaMatroid(ground=matrix.ground, feasible=canonical_rows),
@@ -242,6 +246,7 @@ def binary_matrix_twist(
 ) -> BinaryMatrixResult:
     """Return D(A)*T with the matrix presentation and twist retained."""
 
+    request_checkpoint("before binary matrix twist")
     if type(subset) is not tuple:
         raise OperationDomainValidationError(
             location=("subset",),
@@ -310,6 +315,7 @@ def binary_matrix_twist(
             for mask in target_masks
         )
     )
+    request_checkpoint("binary matrix twist result construction")
     return BinaryMatrixResult(
         matrix=matrix,
         twist=subset,

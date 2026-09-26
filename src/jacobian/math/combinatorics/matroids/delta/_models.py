@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Literal, Self
 
 from pydantic import ConfigDict, Field, model_validator
@@ -146,6 +147,23 @@ class DeltaMatroidDistanceProfileRequest(StrictModel):
             "subset/feasible-row evaluations."
         )
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_ground_axis(cls, data: object) -> object:
+        if isinstance(data, Mapping):
+            source = data.get("delta_matroid")
+            if isinstance(source, Mapping):
+                ground = source.get("ground")
+                if (
+                    isinstance(ground, (list, tuple))
+                    and len(ground) > MAX_DELTA_DISTANCE_PROFILE_STATES.bit_length() - 1
+                ):
+                    raise _validation_error(
+                        "distance_profile_states_exceeded",
+                        "the complete ground-subset profile exceeds the subset-state envelope",
+                    )
+        return data
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

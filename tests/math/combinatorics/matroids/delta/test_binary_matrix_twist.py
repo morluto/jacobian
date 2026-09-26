@@ -5,10 +5,12 @@ from __future__ import annotations
 import itertools
 import json
 from math import prod
+from threading import Event
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._execution import OperationExecutionCancelledError, request_cancellation
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids.delta.extra import (
@@ -115,6 +117,16 @@ def test_eight_axis_identity_matrix_reaches_the_admitted_output_boundary() -> No
             for mask in range(1 << size)
         )
     )
+
+
+def test_binary_matrix_twist_observes_pre_cancelled_native_request() -> None:
+    cancellation = Event()
+    cancellation.set()
+    matrix = BinarySymmetricMatrix(ground=(), entries=())
+    with request_cancellation(cancellation), pytest.raises(
+        OperationExecutionCancelledError
+    ):
+        binary_matrix_twist(matrix)
 
 
 def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None:

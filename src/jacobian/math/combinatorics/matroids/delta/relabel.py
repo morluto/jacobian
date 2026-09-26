@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Self
 
 from pydantic import ConfigDict, Field, StrictInt, model_validator
@@ -118,6 +119,40 @@ class DeltaMatroidRelabelRequest(StrictModel):
             "position; must have the same length as target_ground."
         ),
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_source_bounds(cls, data: object) -> object:
+        if not isinstance(data, Mapping):
+            return data
+        source = data.get("delta_matroid")
+        if not isinstance(source, Mapping):
+            return data
+
+        ground = source.get("ground")
+        if isinstance(ground, (list, tuple)) and len(ground) > MAX_DELTA_RELABEL_GROUND:
+            raise _error(
+                "ground_limit",
+                f"relabeling supports at most {MAX_DELTA_RELABEL_GROUND} ground elements",
+            )
+
+        rows = source.get("feasible")
+        if isinstance(rows, (list, tuple)):
+            if len(rows) > MAX_DELTA_MEMBERSHIPS + 1:
+                raise _error(
+                    "source_membership_limit",
+                    "source feasible-row count exceeds the relabel admission envelope",
+                )
+            memberships = 0
+            for row in rows:
+                if isinstance(row, (list, tuple)):
+                    memberships += len(row)
+                    if memberships > MAX_DELTA_MEMBERSHIPS:
+                        raise _error(
+                            "source_membership_limit",
+                            "source feasible-set memberships exceed the relabel admission envelope",
+                        )
+        return data
 
     @model_validator(mode="after")
     def require_bijection_and_bounded_labels(self) -> Self:

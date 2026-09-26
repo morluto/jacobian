@@ -65,22 +65,6 @@ class CubicalBoundaryResult(StrictModel):
     boundary_cells: tuple[CubicalCell, ...]
 
 
-class CubicalCellBoundaryRequest(StrictModel):
-    cell: CubicalCell
-
-
-class CubicalCellBoundaryTerm(StrictModel):
-    face: CubicalCell
-    coefficient: int
-    ambient_axis: int
-    endpoint: int
-
-
-class CubicalCellBoundaryResult(StrictModel):
-    cell: CubicalCell
-    terms: tuple[CubicalCellBoundaryTerm, ...]
-
-
 class RelativeCubicalHomologyRequest(StrictModel):
     cells: tuple[CubicalCell, ...] = Field(min_length=1)
     subcomplex_cells: tuple[CubicalCell, ...] = Field(min_length=1)
@@ -460,64 +444,6 @@ def boundary(cells: tuple[CubicalCell, ...]) -> CubicalBoundaryResult:
     )
 
 
-def cell_boundary(cell: CubicalCell) -> CubicalCellBoundaryResult:
-    """Return the signed codimension-one faces of one oriented elementary cube."""
-    max_coordinate_bits = max(
-        abs(coordinate).bit_length()
-        for interval in cell.intervals
-        for coordinate in interval
-    )
-    if max_coordinate_bits > 213:
-        raise OperationResourceAdmissionError(
-            location=("cell",),
-            code="cubical_complex.cell_boundary_coordinate_budget",
-            message="cell-boundary coordinates are limited to 64 decimal digits",
-        )
-    coordinate_digits = max(
-        len(str(abs(coordinate)))
-        for interval in cell.intervals
-        for coordinate in interval
-    )
-    if coordinate_digits > MAX_CUBICAL_CELL_BOUNDARY_COORDINATE_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("cell",),
-            code="cubical_complex.cell_boundary_coordinate_budget",
-            message="cell-boundary coordinates are limited to 64 decimal digits",
-        )
-
-    dimension = cell.dimension
-    term_count = 2 * dimension
-    # JSON encoding upper bound: a face stores at most two signed 64-digit
-    # coordinates per ambient axis, plus tuple/list punctuation and term fields.
-    face_bytes = 32 + len(cell.intervals) * (2 * (coordinate_digits + 1) + 5)
-    result_bytes = 128 + face_bytes + term_count * (face_bytes + 128)
-    if result_bytes > MAX_CUBICAL_CELL_BOUNDARY_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("terms",),
-            code="cubical_complex.cell_boundary_result_budget",
-            message="cell-boundary result exceeds the 32 KiB encoding bound",
-        )
-
-    axes = tuple(
-        axis for axis, (lower, upper) in enumerate(cell.intervals) if lower < upper
-    )
-    signed_faces = _boundary_terms(cell)
-    terms = tuple(
-        CubicalCellBoundaryTerm(
-            face=face,
-            coefficient=coefficient,
-            ambient_axis=axis,
-            endpoint=endpoint,
-        )
-        for index, axis in enumerate(axes)
-        for (face, coefficient), endpoint in zip(
-            signed_faces[2 * index : 2 * index + 2],
-            (cell.intervals[axis][1], cell.intervals[axis][0]),
-            strict=True,
-        )
-    )
-    return CubicalCellBoundaryResult(cell=cell, terms=terms)
-
 
 def _rank(matrix: list[list[int]], p: int) -> int:
     if not matrix or not matrix[0]:
@@ -839,9 +765,6 @@ __all__ = [
     "CubicalBoundaryRequest",
     "CubicalBoundaryResult",
     "CubicalBoundaryTerm",
-    "CubicalCellBoundaryRequest",
-    "CubicalCellBoundaryResult",
-    "CubicalCellBoundaryTerm",
     "CubicalTriangulationCellMap",
     "CubicalTriangulationRequest",
     "CubicalTriangulationResult",
@@ -850,7 +773,6 @@ __all__ = [
     "RelativeCubicalHomologyResult",
     "bitmap_to_complex",
     "boundary",
-    "cell_boundary",
     "relative_homology",
     "triangulate",
 ]

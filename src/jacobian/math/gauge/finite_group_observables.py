@@ -80,6 +80,16 @@ def finite_group_holonomy_conjugacy_profile(
             code="lattice_gauge.conjugacy.request_values",
             message="conjugacy request requires a finite-group field and oriented path",
         )
+    try:
+        request = FiniteGroupConjugacyProfileRequest.model_validate(
+            request.model_dump()
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="lattice_gauge.conjugacy.request_invalid",
+            message="conjugacy request must retain bounded canonical field and path values",
+        ) from exc
     loop = finite_group_gauge_holonomy(
         FiniteGroupGaugeHolonomyRequest(field=request.field, path=request.path)
     )

@@ -591,6 +591,37 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
     start: GaugeLabel
     end: GaugeLabel
 
+    @model_validator(mode="after")
+    def require_parent_bindings(self) -> Self:
+        if (
+            not isinstance(self.field, FiniteGroupGaugeField)
+            or not isinstance(self.field.lattice, GaugeLattice)
+            or not isinstance(self.field.group, FiniteGroupTable)
+            or type(self.field.group.multiplication) is not tuple
+            or not isinstance(self.path, OrientedGaugePath)
+            or not isinstance(self.holonomy, FiniteGroupTableElement)
+            or self.holonomy.group != self.field.group
+            or type(self.contributions) is not tuple
+            or len(self.contributions) != len(self.path.steps)
+        ):
+            raise _validation_error(
+                "finite_group_holonomy_parent",
+                "holonomy result carriers must retain one finite-group field parent",
+            )
+        for step, contribution in zip(self.path.steps, self.contributions, strict=True):
+            if (
+                not isinstance(contribution, FiniteGroupGaugeContribution)
+                or contribution.edge_id != step.edge_id
+                or contribution.forward is not step.forward
+                or not isinstance(contribution.value, FiniteGroupTableElement)
+                or contribution.value.group != self.field.group
+            ):
+                raise _validation_error(
+                    "finite_group_holonomy_contribution_parent",
+                    "every path contribution must use the retained field group",
+                )
+        return self
+
 
 class FiniteGroupGaugeBasepointTransportRequest(StrictModel):
     """Move a based finite-group loop along an exact lattice path."""
@@ -888,9 +919,13 @@ def _check_raw_loop_family_shape(value: object) -> None:
 
     if not isinstance(value, dict):
         return
+    if "loops" not in value:
+        return
     loops = value.get("loops")
     if type(loops) not in (tuple, list):
-        return
+        raise _validation_error(
+            "loop_family_container", "loops must be a built-in list or tuple"
+        )
     if len(loops) > MAX_GAUGE_LOOP_FAMILY_SIZE:
         raise _validation_error(
             "loop_family_count", "a loop family may contain at most 128 loops"
@@ -908,6 +943,11 @@ def _check_raw_loop_family_shape(value: object) -> None:
             else getattr(path, "steps", None)
         )
         if type(steps) not in (tuple, list):
+            if steps is not None:
+                raise _validation_error(
+                    "loop_family_path_container",
+                    "path steps must be a built-in list or tuple",
+                )
             continue
         if len(steps) > MAX_GAUGE_PATH_LENGTH:
             raise _validation_error(

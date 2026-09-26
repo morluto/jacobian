@@ -491,8 +491,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "degree": 1,
                         "terms": [
                             {
-                                "cell": {"intervals": [[0, 1]]},
-                                "coefficient": 2,
+                                "cell": {"intervals": [["0", "1"]]},
+                                "coefficient": "2",
                             }
                         ],
                     },
@@ -501,8 +501,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "degree": 1,
                         "terms": [
                             {
-                                "cell": {"intervals": [[3, 4]]},
-                                "coefficient": -3,
+                                "cell": {"intervals": [["3", "4"]]},
+                                "coefficient": "-3",
                             }
                         ],
                     },

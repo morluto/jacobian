@@ -1,6 +1,7 @@
 """Cubical complex operations."""
 
 from jacobian.math.topology.cubical_complexes._models import (
+    CubicalChainCell,
     CubicalChainProductRequest,
     CubicalChainTerm,
     CubicalChainValue,
@@ -32,6 +33,7 @@ from jacobian.math.topology.cubical_complexes.operations import (
 )
 
 __all__ = [
+    "CubicalChainCell",
     "CubicalChainProductRequest",
     "CubicalChainTerm",
     "CubicalChainValue",

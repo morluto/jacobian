@@ -76,6 +76,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalCellBasis,
     CubicalCellBirth,
     CubicalCellPosetElement,
+    CubicalChainCell,
     CubicalChainCoefficient,
     CubicalChainComplexResult,
     CubicalChainProductRequest,
@@ -932,7 +933,7 @@ def chain_product(request: CubicalChainProductRequest) -> CubicalChainValue:
     # each input axis is sorted, left-major pairs also keep output cells sorted.
     product_terms = tuple(
         CubicalChainTerm(
-            cell=CubicalCell(
+            cell=CubicalChainCell(
                 intervals=left_term.cell.intervals + right_term.cell.intervals
             ),
             coefficient=coefficient,

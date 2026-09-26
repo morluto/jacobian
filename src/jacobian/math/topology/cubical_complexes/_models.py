@@ -632,15 +632,26 @@ class CubicalChainCoefficient(StrEnum):
     PRIME_FIELD = "GF_p"
 
 
+CubicalChainCoordinate = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS)
+]
 CubicalChainCoefficientValue = Annotated[
     int, DecimalIntegerEncoding(max_digits=MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS)
 ]
 
 
+class CubicalChainCell(CubicalCell):
+    """Cubical cell coordinates encoded as bounded decimal strings on the wire."""
+
+    intervals: tuple[tuple[CubicalChainCoordinate, CubicalChainCoordinate], ...] = (
+        Field(min_length=1, max_length=MAX_DIM)
+    )
+
+
 class CubicalChainTerm(StrictModel):
     """One nonzero integer multiple of a canonically oriented cubical cell."""
 
-    cell: CubicalCell
+    cell: CubicalChainCell
     coefficient: CubicalChainCoefficientValue
 
 
@@ -1056,6 +1067,7 @@ __all__ = [
     "CubicalCellBasis",
     "CubicalCellBirth",
     "CubicalCellPosetElement",
+    "CubicalChainCell",
     "CubicalChainCoefficient",
     "CubicalChainComplexRequest",
     "CubicalChainComplexResult",

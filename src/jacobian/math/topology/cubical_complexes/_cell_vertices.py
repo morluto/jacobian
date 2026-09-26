@@ -56,6 +56,20 @@ def _result_size_bound(cell: CubicalCell, vertex_count: int) -> int:
 
 def cell_vertices(cell: CubicalCell) -> CubicalCellVerticesResult:
     """Return all vertices of an elementary integer-lattice cube exactly."""
+    if type(cell) is not CubicalCell:
+        raise OperationDomainValidationError(
+            location=("cell",),
+            code="cubical_complex.cell_vertices_invalid_cell",
+            message="cell vertices require a canonical cubical cell",
+        )
+    try:
+        cell = CubicalCell.model_validate(cell.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("cell",),
+            code="cubical_complex.cell_vertices_invalid_cell",
+            message="cell vertices require a canonical cubical cell",
+        ) from exc
     if len(cell.intervals) > MAX_DIM:
         raise OperationDomainValidationError(
             location=("cell",),

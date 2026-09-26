@@ -12,6 +12,7 @@ from jacobian._exact import (
     MAX_CANONICAL_RATIONAL_DIGITS,
     CanonicalRational,
     canonical_rational_component_digits,
+    format_canonical_integer,
 )
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -1521,7 +1522,7 @@ def _admit_sequence_linear_change(
     denominator_digits = (
         1
         + sum(
-            max(0, canonical_rational_component_digits(coefficient) - 1)
+            max(0, len(format_canonical_integer(coefficient.den)) - 1)
             for row in value.change_matrix
             for coefficient in row
         )

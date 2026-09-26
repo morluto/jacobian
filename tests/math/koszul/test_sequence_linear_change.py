@@ -171,6 +171,27 @@ def test_large_denominator_is_admitted_without_decimal_string_conversion(monkeyp
         )
 
 
+def test_large_integral_change_is_not_miscounted_as_denominator_growth():
+    source = _source(((q(1),),))
+    large_integer = 10**3000 + 7
+    result = module_koszul_sequence_linear_change(
+        ModuleKoszulSequenceLinearChangeRequest(
+            complex=source,
+            change_matrix=((CanonicalRational(num=large_integer, den=1),),),
+        )
+    )
+
+    assert result.target_complex.sequence == (
+        (CanonicalRational(num=large_integer, den=1),),
+    )
+    assert result.source_to_target[1].entries[0][2] == CanonicalRational(
+        num=1, den=large_integer
+    )
+    assert result.target_to_source[1].entries[0][2] == CanonicalRational(
+        num=large_integer, den=1
+    )
+
+
 def test_resource_bound_is_checked_before_matrix_inversion(monkeypatch):
     source = _source(((q(1),), (q(0),)))
 

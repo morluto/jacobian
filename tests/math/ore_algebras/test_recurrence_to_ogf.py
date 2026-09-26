@@ -226,6 +226,18 @@ def test_catalog_example_dispatches_the_typed_equation() -> None:
     assert _polynomial(result.forcing) == {0: Fraction(1)}
 
 
+def test_ogf_request_schema_documents_polynomial_coefficient_domain() -> None:
+    from jacobian.math.ore_algebras.recurrence_to_ogf._models import (
+        RecurrenceOGFEquationRequest,
+    )
+
+    schema = RecurrenceOGFEquationRequest.model_json_schema()
+    assert (
+        "polynomial coefficients in QQ[n]"
+        in schema["properties"]["recurrence"]["description"]
+    )
+
+
 def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -> None:
     with pytest.raises(OperationDomainValidationError, match="initial coefficient"):
         polynomial_recurrence_to_ogf_equation(

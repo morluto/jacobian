@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -27,7 +27,9 @@ def _is_polynomial_coefficient(value: RationalFunction) -> bool:
 class RecurrenceEGFEquationRequest(StrictModel):
     """A recurrence relation whose EGF differential operator is requested."""
 
-    recurrence: ShiftOreOperator
+    recurrence: ShiftOreOperator = Field(
+        description="A nonzero shift recurrence with polynomial coefficients in QQ[n]."
+    )
 
     @model_validator(mode="after")
     def require_polynomial_recurrence(self) -> Self:

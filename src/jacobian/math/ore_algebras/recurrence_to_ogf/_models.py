@@ -28,7 +28,9 @@ def _is_polynomial_coefficient(value: RationalFunction) -> bool:
 class RecurrenceOGFEquationRequest(StrictModel):
     """Transform a polynomial recurrence relation into its OGF equation."""
 
-    recurrence: ShiftOreOperator
+    recurrence: ShiftOreOperator = Field(
+        description="A nonzero shift recurrence with polynomial coefficients in QQ[n]."
+    )
     initial_coefficients: FiniteRationalSequence = Field(
         description=(
             "Provide exactly a_0 through a_(r-1), where r is the largest "

@@ -122,6 +122,18 @@ def test_catalog_example_dispatches_the_typed_egf_equation() -> None:
     assert [term.order for term in result.differential_operator.terms] == [0, 1, 2]
 
 
+def test_egf_request_schema_documents_polynomial_coefficient_domain() -> None:
+    from jacobian.math.ore_algebras.recurrence_to_egf._models import (
+        RecurrenceEGFEquationRequest,
+    )
+
+    schema = RecurrenceEGFEquationRequest.model_json_schema()
+    assert (
+        "polynomial coefficients in QQ[n]"
+        in schema["properties"]["recurrence"]["description"]
+    )
+
+
 def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> None:
     rational = _rf([(0, 1)])
     rational["denominator"] = {

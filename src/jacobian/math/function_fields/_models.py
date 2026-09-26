@@ -560,6 +560,13 @@ class FunctionFieldElementInverseRequest(StrictModel):
     element: FiniteFunctionFieldElement
 
 
+class FunctionFieldElementPowerRequest(StrictModel):
+    """A nonnegative integral power of one source-bound field element."""
+
+    element: FiniteFunctionFieldElement
+    exponent: Annotated[int, DecimalIntegerEncoding(max_digits=1234)] = Field(ge=0)
+
+
 class FunctionFieldTraceRequest(StrictModel):
     """One element whose field trace to GF(p)(x) is requested."""
 
@@ -690,6 +697,7 @@ __all__ = [
     "FunctionFieldElementInverseRequest",
     "FunctionFieldElementMultiplyRequest",
     "FunctionFieldElementMultiplyResult",
+    "FunctionFieldElementPowerRequest",
     "FunctionFieldPlace",
     "FunctionFieldPlaceValuationRequest",
     "FunctionFieldPlaceValuationResult",

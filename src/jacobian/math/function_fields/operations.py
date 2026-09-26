@@ -818,6 +818,247 @@ def function_field_element_multiply(
     )
 
 
+def function_field_element_power(
+    element: FiniteFunctionFieldElement, exponent: int
+) -> FiniteFunctionFieldElement:
+    """Return ``element**exponent`` by exact binary powering.
+
+    A conservative coefficient-degree and aggregate-work plan is checked for
+    every multiplication in the binary-power schedule before any coefficient
+    arithmetic.  Exponents are nonnegative; power zero is the parent unit,
+    including for the zero element.
+    """
+
+    if type(exponent) is not int or exponent < 0:
+        raise OperationDomainValidationError(
+            location=("exponent",),
+            code="function_field.power_exponent",
+            message="the exponent must be a nonnegative strict integer",
+        )
+    if exponent.bit_length() > 4101 or len(str(exponent)) > 1234:
+        raise OperationResourceAdmissionError(
+            location=("exponent",),
+            code="function_field.power_exponent_digits_exceed_envelope",
+            message="the exponent exceeds the admitted 1234 decimal-digit envelope",
+        )
+
+    field, canonical = _preflight_inverse_operand(element)
+    prime = field.characteristic
+    if exponent == 0:
+        _admit_field_algebra(field)
+        return _unit_element(field)
+    if exponent == 1:
+        _admit_field_algebra(field)
+        return canonical
+
+    internal = _internal_coordinates(canonical)
+    zero = all(coordinate == ZERO_RF for coordinate in internal)
+    unit = internal == _unit_internal(field.degree)
+    constant = None
+    if all(coordinate == ZERO_RF for coordinate in internal[1:]):
+        numerator, denominator = internal[0]
+        if len(numerator) == len(denominator) == 1:
+            constant = (
+                numerator[0]
+                * pow(denominator[0], field.characteristic - 2, field.characteristic)
+                % field.characteristic
+            )
+    if zero or unit or constant is not None:
+        _admit_field_algebra(field)
+        if zero or unit:
+            return canonical
+        scalar = pow(constant, exponent, field.characteristic)
+        coordinates = (
+            _from_internal_rational_function(
+                rf_normalize((scalar,), (1,), field.characteristic),
+                field.characteristic,
+            ),
+            *(
+                _from_internal_rational_function(ZERO_RF, field.characteristic)
+                for _ in range(field.degree - 1)
+            ),
+        )
+        return FiniteFunctionFieldElement.model_construct(
+            field=field, coordinates=coordinates
+        )
+
+    result_degree = _preflight_power_schedule(field, canonical, exponent)
+    _preflight_power_output(field, result_degree)
+    _admit_field_algebra(field)
+
+    base = _internal_coordinates(canonical)
+    result: tuple[RF, ...] | None = None
+    remaining = exponent
+    kpoly = _field_kpoly(field)
+    while remaining:
+        if remaining & 1:
+            result = (
+                base
+                if result is None
+                else _power_product(result, base, field, kpoly, prime)
+            )
+        remaining >>= 1
+        if remaining:
+            base = _power_product(base, base, field, kpoly, prime)
+    assert result is not None
+    return FiniteFunctionFieldElement.model_construct(
+        field=field,
+        coordinates=tuple(
+            _from_internal_rational_function(coordinate, prime) for coordinate in result
+        ),
+    )
+
+
+def _preflight_power_schedule(
+    field: FiniteFunctionField,
+    element: FiniteFunctionFieldElement,
+    exponent: int,
+) -> int:
+    """Bound all binary-power products before coefficient arithmetic."""
+
+    field_coefficient_degree = (
+        0
+        if field.degree == 1
+        else max(
+            coefficient.numerator.degree + coefficient.denominator.degree
+            for coefficient in field.defining_polynomial
+        )
+    )
+    polynomial_coefficients = all(
+        coordinate.denominator.degree == 0 for coordinate in element.coordinates
+    ) and all(
+        coefficient.denominator.degree == 0 for coefficient in field.defining_polynomial
+    )
+    initial_degree = max(
+        max(coordinate.numerator.degree, coordinate.denominator.degree)
+        for coordinate in element.coordinates
+    )
+    total_work = 0
+    remaining = exponent
+    power_degree = initial_degree
+    result_degree: int | None = None
+
+    def product_degree(left_degree: int, right_degree: int) -> int:
+        if field.degree == 1:
+            bound = left_degree + right_degree
+        elif polynomial_coefficients:
+            # A degree-n relation can contribute through n-1 successive
+            # reductions; each step can multiply by a defining coefficient.
+            bound = (
+                left_degree
+                + right_degree
+                + (field.degree - 1) * field_coefficient_degree
+            )
+        else:
+            # A common denominator can accumulate across each of the at most
+            # `degree` raw products and reduction contributions.
+            degree = field.degree
+            bound = (degree + 1) * (
+                degree * (left_degree + right_degree) + field_coefficient_degree
+            )
+        if bound > MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.power_coefficient_growth_exceeds_envelope",
+                message=(
+                    "the conservative powered coefficient-degree bound exceeds "
+                    f"{MAX_POLYNOMIAL_X_DEGREE}"
+                ),
+            )
+        return bound
+
+    def charge_product(degree_bound: int) -> None:
+        nonlocal total_work
+        if field.degree == 1:
+            work = 2 * (degree_bound + 1) ** 2
+        else:
+            work = (
+                (2 * field.degree - 1)
+                * (degree_bound + 1)
+                * (2 * field.degree * degree_bound + field.degree)
+            )
+        total_work += work
+        if total_work > MAX_MULTIPLICATION_WORK:
+            raise OperationResourceAdmissionError(
+                location=("exponent",),
+                code="function_field.power_work_exceeds_envelope",
+                message=(
+                    "binary powering exceeds the aggregate exact-work envelope "
+                    f"of {MAX_MULTIPLICATION_WORK}"
+                ),
+            )
+
+    while remaining:
+        if remaining & 1:
+            if result_degree is None:
+                result_degree = power_degree
+            else:
+                result_degree = product_degree(result_degree, power_degree)
+                charge_product(result_degree)
+        remaining >>= 1
+        if remaining:
+            power_degree = product_degree(power_degree, power_degree)
+            charge_product(power_degree)
+    assert result_degree is not None
+    return result_degree
+
+
+def _preflight_power_output(field: FiniteFunctionField, degree_bound: int) -> None:
+    prime = field.characteristic
+    output = {
+        "field": field.model_dump(mode="json"),
+        "coordinates": [
+            {
+                "numerator": {
+                    "characteristic": prime,
+                    "coefficients": [prime - 1] * (degree_bound + 1),
+                },
+                "denominator": {
+                    "characteristic": prime,
+                    "coefficients": [prime - 1] * (degree_bound + 1),
+                },
+            }
+            for _ in range(field.degree)
+        ],
+    }
+    if len(encode_strict_json(output)) > MAX_ELEMENT_VALUE_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.power_output_exceeds_envelope",
+            message=(
+                "the powered element exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
+            ),
+        )
+
+
+def _unit_internal(degree: int) -> tuple[RF, ...]:
+    return ((ONE_POLY, ONE_POLY),) + (ZERO_RF,) * (degree - 1)
+
+
+def _unit_element(field: FiniteFunctionField) -> FiniteFunctionFieldElement:
+    return FiniteFunctionFieldElement.model_construct(
+        field=field,
+        coordinates=tuple(
+            _from_internal_rational_function(coefficient, field.characteristic)
+            for coefficient in _unit_internal(field.degree)
+        ),
+    )
+
+
+def _power_product(
+    left: tuple[RF, ...],
+    right: tuple[RF, ...],
+    field: FiniteFunctionField,
+    kpoly: KPoly,
+    prime: int,
+) -> tuple[RF, ...]:
+    if field.degree == 1:
+        return (rf_mul(left[0], right[0], prime),)
+    product, _, _ = _multiply_internal(left, right, kpoly, prime)
+    return product
+
+
 def function_field_element_add(
     left: FiniteFunctionFieldElement,
     right: FiniteFunctionFieldElement,
@@ -2469,6 +2710,7 @@ __all__ = [
     "function_field_element_add",
     "function_field_element_inverse",
     "function_field_element_multiply",
+    "function_field_element_power",
     "function_field_element_trace",
     "function_field_genus",
     "function_field_place_uniformizer",

@@ -396,6 +396,44 @@ class VertexDeletionFamily(StrictModel):
         )
 
 
+class VertexDeckAnonymousMultisetRequest(StrictModel):
+    """Forget source identities from one complete vertex-deletion family."""
+
+    family: VertexDeletionFamily = Field(
+        description=(
+            "A complete exact source-bound vertex-deletion family, including "
+            "all cards and aligned receipts. The operation forgets source labels "
+            "after authenticating the family and returns its anonymous graph-card "
+            "multiset; source order is limited by the exact permutation work "
+            "envelope, including self-comparison closure: 2*n*(n-1)!* "
+            "((n-1) + 2*binom(n-1, 2)) <= 2,000,000 (n <= 7)."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_raw_family(cls, value: Any) -> Any:
+        """Apply the cheap source-order cap before nested card parsing."""
+        if not isinstance(value, dict):
+            return value
+        raw_family = value.get("family")
+        if not isinstance(raw_family, dict):
+            return value
+        raw_source = raw_family.get("source")
+        if not isinstance(raw_source, dict):
+            return value
+        vertices = raw_source.get("vertices")
+        if not isinstance(vertices, (tuple, list)):
+            return value
+        source_order = len(vertices)
+        if source_order > MAX_UNLABELLED_DECK_VERTICES + 1:
+            raise _validation_error(
+                "anonymous_source_order",
+                "source order exceeds the cheap structural envelope of 11 vertices",
+            )
+        return value
+
+
 class EdgeDeckRequest(StrictModel):
     """Compute one card for each source edge deletion."""
 
@@ -558,8 +596,9 @@ class UnlabelledVertexDeckRequest(StrictModel):
 
     deck: VertexDeletionFamily = Field(
         description=(
-            "A complete vertex-deletion family with at most 10 source vertices; "
-            "exact permutation canonicalization is bounded by 2000000 work units."
+            "A complete vertex-deletion family admitted through source order 8 "
+            "under n*(n-1)!*(1+(n-1)+binom(n-1, 2)) <= 2000000 exact "
+            "permutation-canonicalization work units."
         )
     )
 

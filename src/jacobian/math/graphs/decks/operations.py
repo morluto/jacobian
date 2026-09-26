@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.graphs.decks.anonymous_equality.operations import MAX_ANONYMOUS_DECK_EQUALITY_WORK
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
     MAX_ANONYMOUS_CARD_RESULT_UNITS,
@@ -56,6 +57,7 @@ __all__ = [
     "unlabelled_vertex_deck",
     "verify_edge_deletion_family",
     "verify_vertex_deletion_family",
+    "vertex_deck_anonymous_multiset",
     "vertex_deck_degree_multiset",
     "vertex_deck_edge_count",
     "vertex_deck_induced_subgraph_count",
@@ -218,6 +220,86 @@ def anonymous_graph_card_multiset(
         key = canonical.edges
         counts[key] = counts.get(key, 0) + 1
         representatives[key] = canonical
+    classes = tuple(
+        AnonymousGraphCardClass.model_construct(
+            representative=representatives[key], multiplicity=counts[key]
+        )
+        for key in sorted(counts)
+    )
+    return AnonymousGraphCardMultiset._from_kernel(card_order, classes)
+
+
+def vertex_deck_anonymous_multiset(
+    family: VertexDeletionFamily,
+) -> AnonymousGraphCardMultiset:
+    """Forget source labels and quotient a complete vertex family anonymously.
+
+    This is the typed bridge from a source-bound deletion result to the
+    source-free multiset consumed by anonymous deck operations such as exact
+    deck equality. The source-family relation and each card's graph-isomorphism
+    class are established at this trust boundary.
+    """
+    if type(family) is not VertexDeletionFamily:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code="graph_deck.anonymous_source_family",
+            message="family must be a VertexDeletionFamily",
+        )
+    source = getattr(family, "source", None)
+    if (
+        type(source) is not SimpleUndirectedGraph
+        or type(getattr(source, "vertices", None)) is not tuple
+        or type(getattr(source, "edges", None)) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("family", "source"),
+            code="graph_deck.anonymous_source_graph",
+            message="family source must be a bounded SimpleUndirectedGraph",
+        )
+    source_order = len(source.vertices)
+    if source_order > MAX_UNLABELLED_DECK_VERTICES + 1:
+        raise OperationResourceAdmissionError(
+            location=("family", "source", "vertices"),
+            code="graph_deck.anonymous_source_order_bound",
+            message="anonymous vertex decks require card order at most ten",
+        )
+    card_order = max(source_order - 1, 0)
+    card_count = source_order
+    work = _anonymous_canonicalization_work(card_order, card_count)
+    # Equality canonicalizes both operands, so ensure even self-comparison is
+    # admitted for every producer result, including the maximal class count.
+    equality_work = 2 * _anonymous_canonicalization_work(card_order, card_count)
+    output_units = card_count * (64 + 16 * comb(card_order, 2))
+    if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK or equality_work > MAX_ANONYMOUS_DECK_EQUALITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("family",),
+            code="graph_deck.anonymous_source_work_bound",
+            message="anonymous vertex-deck result cannot be compared within the exact work bound",
+        )
+    if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("family",),
+            code="graph_deck.anonymous_source_output_bound",
+            message="anonymous vertex-deck result exceeds its output bound",
+        )
+
+    _admit_anonymous_card(source, source_order, comb(source_order, 2), 0)
+    _admit_deck_graph(source)
+    if vertex_deletion_family(source) != family:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code="graph_deck.anonymous_source_relation",
+            message="family must contain every exact source vertex-deleted card",
+        )
+
+    counts: dict[tuple[tuple[str, str], ...], int] = {}
+    representatives: dict[tuple[tuple[str, str], ...], SimpleUndirectedGraph] = {}
+    for card in family.cards:
+        key = _canonical_card_edges(card.card.vertices, card.card.edges)
+        counts[key] = counts.get(key, 0) + 1
+        representatives[key] = SimpleUndirectedGraph(
+            vertices=tuple(f"v{i:02d}" for i in range(card_order)), edges=key
+        )
     classes = tuple(
         AnonymousGraphCardClass.model_construct(
             representative=representatives[key], multiplicity=counts[key]

@@ -13,11 +13,15 @@ are recovered from the card indices on the source edge axis. Isomorphism
 classes are determined by canonicalizing each card to the least adjacency bit
 word over all vertex permutations, a complete invariant rather than a degree
 sequence or hash approximation, so the aggregate exact permutation work is
-preflighted before any canonical form is computed. Quotienting is limited to at
-most 10 source vertices and a preflighted canonicalization work bound. The
-vertex quotient currently admits orders through eight; order nine and above
-exceed its exact permutation-canonicalization budget. The edge quotient
-admits per-card permutation canonicalization over the full source order.
+preflighted before any canonical form is computed. The edge quotient admits
+per-card permutation canonicalization over the full source order. The
+source-bound vertex quotient admits source orders through eight under
+`n*(n-1)!*(1+(n-1)+binom(n-1, 2)) <= 2,000,000` canonicalization work.
+
+`graph.deck.vertex.anonymous.compute` forgets labels after authenticating the
+complete source-bound family. It admits source orders through seven because it
+also reserves the work for a self-comparison:
+`2*n*(n-1)!*((n-1)+2*binom(n-1, 2)) <= 2,000,000`.
 
 `graph.deck.vertex.induced_subgraph_count.compute` reconstructs the number of
 induced copies of a caller-supplied pattern `H` when `|V(H)| < n`, where `n` is
@@ -66,6 +70,15 @@ These operations construct and summarize decks. They do not decide whether a
 graph can be reconstructed from its deck.
 
 ## Anonymous card multiset equality
+
+`graph.deck.vertex.anonymous.compute` is the typed bridge from
+`VertexDeletionFamily` to `AnonymousGraphCardMultiset`. It authenticates the
+complete source-bound family, forgets source vertex labels and deletion keys,
+then returns fixed-axis canonical isomorphism-class representatives with exact
+card multiplicities. The result composes unchanged with anonymous-deck
+operations, including equality; it retains no source graph and makes no deck
+realizability or reconstruction claim. Canonicalization work and result size
+are admitted before family replay or permutation search.
 
 `graph.deck.anonymous.equal.decide` compares two
 `AnonymousGraphCardMultiset` values. It returns true exactly when both values

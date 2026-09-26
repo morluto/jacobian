@@ -13,6 +13,7 @@ from jacobian.math.graphs.decks._models import (
     UnlabelledDeckRequest,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckRequest,
+    VertexDeckAnonymousMultisetRequest,
     VertexDeckDegreeMultisetRequest,
     VertexDeckEdgeCount,
     VertexDeckEdgeCountRequest,
@@ -28,6 +29,7 @@ from jacobian.math.graphs.decks.operations import (
     edge_deletion_family,
     unlabelled_deck,
     unlabelled_vertex_deck,
+    vertex_deck_anonymous_multiset,
     vertex_deck_degree_multiset,
     vertex_deck_edge_count,
     vertex_deck_induced_subgraph_count,
@@ -39,6 +41,12 @@ from jacobian.math.graphs.realization._models import DegreeSequence
 
 def _run_vertex_deleted(request: VertexDeckRequest) -> VertexDeletionFamily:
     return vertex_deletion_family(request.graph)
+
+
+def _run_vertex_anonymous(
+    request: VertexDeckAnonymousMultisetRequest,
+) -> AnonymousGraphCardMultiset:
+    return vertex_deck_anonymous_multiset(request.family)
 
 
 _PATH_3_EXAMPLE: dict[str, Any] = {
@@ -257,8 +265,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Group complete source-bound vertex-deletion cards by exact graph "
             "isomorphism, retaining a representative, exact multiplicity, and "
-            "source-card indices. Admits at most 10 source vertices and "
-            "2000000 exact permutation canonicalization work units."
+            "source-card indices. Admits source order through 8 under the "
+            "n*(n-1)!*(1+(n-1)+binom(n-1, 2)) 2000000-unit work bound."
         ),
         request_type=UnlabelledVertexDeckRequest,
         result_type=UnlabelledVertexDeck,
@@ -636,6 +644,63 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "card_count": 3,
                     },
                     "pattern": {"vertices": ["x", "y"], "edges": [["x", "y"]]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.vertex.anonymous.compute",
+        title="Forget source labels in a complete vertex deck",
+        description=(
+            "Authenticate a complete source-bound vertex-deletion family, "
+            "forget its source labels, and return the exact multiset of card "
+            "isomorphism classes. The result composes with anonymous deck "
+            "equality and makes no source-graph reconstruction claim. Exact "
+            "canonicalization work and output are admitted before card comparison."
+        ),
+        request_type=VertexDeckAnonymousMultisetRequest,
+        result_type=AnonymousGraphCardMultiset,
+        run=_run_vertex_anonymous,
+        tags=("graph", "deck", "vertex-deletion", "anonymous", "multiset", "exact"),
+        discovery_terms=(
+            "anonymize source-bound vertex deck",
+            "anonymous vertex deck",
+            "forget vertex deletion labels",
+            "vertex-deck equality input",
+        ),
+        examples=(
+            OperationExample(
+                name="forget_edge_source_labels",
+                description=(
+                    "Given the complete exact source-bound vertex-deletion family, "
+                    "including all cards and aligned receipts, forget source endpoint "
+                    "labels from the two cards of a one-edge graph."
+                ),
+                input={
+                    "family": {
+                        "source": {
+                            "vertices": ["a", "b"],
+                            "edges": [["a", "b"]],
+                        },
+                        "cards": [
+                            {
+                                "deleted_vertex": "a",
+                                "card": {"vertices": ["b"], "edges": []},
+                                "retained_vertices": ["b"],
+                                "retained_edge_count": 0,
+                                "deleted_edge_count": 1,
+                            },
+                            {
+                                "deleted_vertex": "b",
+                                "card": {"vertices": ["a"], "edges": []},
+                                "retained_vertices": ["a"],
+                                "retained_edge_count": 0,
+                                "deleted_edge_count": 1,
+                            },
+                        ],
+                        "edge_appearances": [0],
+                        "vertex_appearances": [1, 1],
+                    }
                 },
             ),
         ),

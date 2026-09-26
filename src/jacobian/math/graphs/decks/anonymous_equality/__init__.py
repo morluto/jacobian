@@ -1,6 +1,7 @@
 """Exact equality of anonymous graph-card multisets."""
 
 from jacobian.math.graphs.decks.anonymous_equality._models import (
+    AnonymousDeckEqualityRequest,
     AnonymousDeckEqualityResult,
 )
 from jacobian.math.graphs.decks.anonymous_equality.operations import (
@@ -8,6 +9,7 @@ from jacobian.math.graphs.decks.anonymous_equality.operations import (
 )
 
 __all__ = [
+    "AnonymousDeckEqualityRequest",
     "AnonymousDeckEqualityResult",
     "anonymous_deck_equality",
 ]

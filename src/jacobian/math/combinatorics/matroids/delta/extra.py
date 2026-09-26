@@ -179,7 +179,7 @@ class BinaryMatrixTwistRequest(StrictModel):
 class BinaryMatrixResult(StrictModel):
     matrix: BinarySymmetricMatrix
     delta_matroid: FiniteDeltaMatroid
-    twist: tuple[int, ...] = Field(default=(), max_length=MAX_BINARY_GROUND)
+    twist: tuple[StrictInt, ...] = Field(default=(), max_length=MAX_BINARY_GROUND)
 
     @model_validator(mode="after")
     def _source_binding(self) -> Self:

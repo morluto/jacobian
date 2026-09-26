@@ -176,3 +176,13 @@ def test_request_schema_publishes_exact_preflight_envelopes() -> None:
         "max_output_cells": 1_352,
         "max_output_ground_label_utf8_bytes": 4_096,
     }
+
+
+def test_result_twist_rejects_coerced_non_integer_indices() -> None:
+    payload = {
+        "matrix": {"ground": ["e0", "e1"], "entries": [[0, 0], [0, 0]]},
+        "delta_matroid": {"ground": ["e0", "e1"], "feasible": [[0, 1]]},
+        "twist": [True],
+    }
+    with pytest.raises(ValidationError):
+        BinaryMatrixResult.model_validate_json(json.dumps(payload))

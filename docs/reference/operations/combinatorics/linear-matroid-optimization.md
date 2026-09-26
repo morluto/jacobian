@@ -19,11 +19,9 @@ forest, with rank `|V| - c(G)` including isolated vertices.
 
 The result is an ordinary `LinearMatroid` and composes directly with keyed
 maximum-weight basis and independent-set operations. The constructor admits at
-most 256 vertices and 256 edges before allocating its incidence matrix, and
-bounds the retained endpoint-label axis at 65,536 Unicode codepoints counted
-once per edge endpoint. A deserialized matrix remains an ordinary represented
-matroid; consumers that need graph provenance should retain the original graph
-and its edge-label map.
+most 256 vertices and 256 edges before allocating its incidence matrix. A
+deserialized matrix remains an ordinary represented matroid; consumers that
+need graph provenance should retain the original graph and its edge-label map.
 
 ## Maximum-weight independent set
 
@@ -40,39 +38,15 @@ This differs from `matroid.basis.maximum_weight.compute`, which must return a
 basis even when some basis elements have negative weights.
 
 The current exact envelope admits at most 256 ground elements, 256 matrix
-rows, fewer than 12 decimal digits per weight, and a retained ground axis of
-at most 65,536 Unicode codepoints. Before rank calculations, the operation
-charges the number of positive-weight rank probes at the full
-representation-rank cost, plus the final selected-set rank and the retained
-index, weight-digit, and duplicated-axis label allocation, against the
-50,000,000-unit matroid work and result-output limits.
+rows, and fewer than 12 decimal digits per weight. Before rank calculations,
+the operation charges the number of positive-weight rank probes at the full
+representation-rank cost, plus the final selected-set rank and output size,
+against the 50,000,000-unit matroid work limit.
 
 The returned value can be independently replayed with
 `verify_maximum_weight_independent_set`. That replay recomputes the deterministic
 greedy result against the retained matrix and weights; a feasible but
 suboptimal subset does not verify.
-
-## Maximum-cardinality intersection
-
-`matroid.intersection.compute` returns one exact maximum-cardinality common
-independent set `I` of two represented matroids on the same labelled ground,
-with an Edmonds min-max witness
-`r₁(A) + r₂(E \\ A) = |I|`. The result retains the exact ranks of `I` in
-both sources as `rank_first_common` and `rank_second_common`; each must equal
-`cardinality`. These rank fields extend the serialized result schema while the
-existing operation ID and `{first, second}` request schema remain unchanged.
-
-Deserializing a result checks its shape and the equality of those rank fields
-with the cardinality without replaying matrix computations. Consumers that rely
-on the retained rank claims can call `replay_intersection_result`, which
-recomputes both common-set ranks and both min-max witness ranks against the
-retained matrices. The returned common set and matching min-max upper bound
-establish global maximality independently of the augmenting-path search.
-
-The request admits at most 256 ground elements and a derived 50,000,000-unit
-work envelope covering source ranks, exchange probes, common-set and witness
-rank checks, and result materialization. Requests outside this envelope fail
-admission; they do not establish a smaller maximum.
 
 ## Common basis of two matroids
 
@@ -85,19 +59,13 @@ has cardinality equal to both source ranks. `NO_COMMON_BASIS` includes a reason:
 maximum intersection cardinality. The latter decision is backed by the exact
 min-max witness.
 
-The result is bound to both represented matroids. Deserialization checks the
-shape and consistency of the returned ranks, status, reason, basis, and witness
-without repeating matrix computations. `verify_common_basis_result` replays
-the source ranks, feasibility ranks, and witness ranks against the retained
-matrices, including for values constructed outside the wire path. The admitted
-ground and work limits match maximum-cardinality matroid intersection:
-admission precomputes both source ranks, reuses them for the closed decision,
-bounds each retained ground axis at 65,536 Unicode codepoints, and charges the
-exchange search at the regime those ranks make reachable — at most
-`min(r₁, r₂) + 2` searches of cached probes on matrices of at most
-`min(r₁, r₂) + 1` columns. A rank-zero
-source is presolved exactly. Requests beyond the exact envelope fail
-admission; they do not produce a negative common-basis conclusion.
+The result is bound to both represented matroids. Deserializing it replays the
+source ranks, feasibility ranks, and witness ranks against those matrices;
+`verify_common_basis_result` independently checks the same claims for values
+constructed outside the wire path. The admitted ground and work limits match
+maximum-cardinality matroid intersection and include the two added full-source
+rank calculations. Requests beyond the exact envelope fail admission; they do
+not produce a negative common-basis conclusion.
 
 ## Supplied weighted-intersection certificate
 
@@ -124,16 +92,36 @@ arbitrary common-independent-set contract.
 
 The request and result retain the original weights, both split-weight
 single-matroid maximizers, and the candidate. The ground and row limits are
-256; each weight entry follows the existing fewer-than-12-decimal-digit
-contract. One aggregate 50,000,000-unit envelope covers both greedy scans and
-both candidate feasibility ranks; each source also carries the shared
-65,536-codepoint bound on its retained ground axis, and each greedy phase
-must fit the single-matroid index, weight-digit, and duplicated-axis output
-budget before any rank expansion.
+256; objective entries follow the fewer-than-12-digit contract, while split
+entries allow fewer than 15 digits. One aggregate 50,000,000-unit envelope covers both greedy scans and
+both candidate feasibility ranks; the source-bound result also has a
+conservative 8 MiB serialized-size bound that includes repeated axis labels.
 A serialized result can be independently recomputed with
 `verify_weighted_intersection_result`.
 This operation checks a supplied split; it does not find an optimum candidate
 or construct the split.
+
+## Computed maximum-weight intersection
+
+`matroid.intersection.maximum_weight.compute` computes an optimum and returns
+the same source-bound result type as the supplied split checker. After the
+augmenting optimizer selects its best common independent set, the operation
+builds its final exchange inequalities and solves their integer difference
+constraints with Bellman–Ford. The resulting split makes the selected set a
+maximum-weight independent set in each source separately; the two exact
+greedy maximizers are retained so `verify_weighted_intersection_result` can
+replay the witness. This constructs the split witness, not the rank-multiplier
+chains accepted by the separate rank-dual checker.
+
+The witness phase admits at most a quadratic number of additional exchange
+rank probes and a cubic number of exact Bellman–Ford relaxations. A simple
+shortest path bounds each split coordinate by `(2n+1)W`, where `n` is the
+ground size and `W` is the largest absolute input weight. Requests whose
+conservative split bound exceeds the fewer-than-15-digit split-witness
+envelope fail admission before rank expansion; caller objective weights keep
+the existing fewer-than-12-digit limit. Its aggregate work and output
+bounds include witness synthesis, both greedy scans, and the retained source
+matrices and axes.
 
 ## Supplied rank-dual certificate
 
@@ -171,10 +159,9 @@ Each side supplies at most `n` nonempty nested subsets, for at most `2n` terms
 overall. Multiplier entries are exact integers bounded by the objective and
 ground limits; zero-rank terms are supported for loop subsets and have zero
 dual cost. One aggregate 50,000,000-unit envelope covers every listed rank,
-both candidate feasibility ranks, one bounded source-prime check, and the
-elementwise coverage scan. The retained sources and derived split axes share
-the 65,536-codepoint retained-axis bound, so the result is rejected before any
-rank expansion when its label allocation cannot fit.
+both candidate feasibility ranks, and the elementwise coverage scan. A
+conservative 8 MiB result bound includes both sources, the dual terms, and the
+derived split.
 
 The result retains the source parents, candidate, rank terms, and a derived
 integral split `w=u+v`. The split is clipped to `0≤u_e≤max(0,w_e)`, so it stays
@@ -205,8 +192,7 @@ optimality witness. The algorithm and its correctness argument are in
 [Schrijver and Korte–Vygen, §13.7](https://www.mathematik.uni-muenchen.de/~kpanagio/KombOpt/book.pdf).
 
 The request admits at most 256 ground elements, the existing 11-decimal-digit
-weight limit, and the shared 65,536-codepoint retained ground-axis bound.
-Admission accounts for the
+weight limit, and an 8 MiB source-bound result. Admission accounts for the
 exchange rank calls, selected-matrix copies and residue validation, one
 bounded source-prime check, every reachable-graph and slack scan, and the
 maximum integer width of the private split before the first rank expansion. With `n`
@@ -221,10 +207,10 @@ scan. The scan bound is
 and uses the admitted-prime rank entry point for exchange probes. Each `κᵢ`
 charge dominates a selected-column matrix copy and canonical-residue checks.
 Requests exceeding the combined 50,000,000-unit
-rank-and-arithmetic envelope, the 1,024-digit intermediate cap, or the
-retained-axis codepoint bound are rejected before rank computation. This favors
-smaller grounds or low-row representations; the bound retains an exact finite
-envelope rather than a wall-clock timeout.
+rank-and-arithmetic envelope, the 1,024-digit intermediate cap, or output
+bound are rejected before rank computation. This favors smaller grounds or
+low-row representations; the bound retains an exact finite envelope rather
+than a wall-clock timeout.
 
 This optimizer currently returns the exact candidate and objective without a
 replayable rank-dual witness. Its internal Frank split only proves optimality

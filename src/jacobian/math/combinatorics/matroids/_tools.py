@@ -364,16 +364,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 )
 TOOLS = TOOLS + (  # noqa: RUF005
     MathTool(
-        operation_id="matroid.intersection.compute",
+        operation_id="matroid.intersection.maximum.compute",
         title="Compute a maximum common independent set",
         description=(
             "Compute an exact maximum-cardinality common independent set of "
             "two represented matroids on one labelled ground. Return both "
             "source ranks of the selected set and an Edmonds min-max rank "
-            "witness. Deserialization checks structure and scalar consistency "
-            "only; call replay_intersection_result when relying on "
-            "caller-authored rank claims to check them against the retained "
-            "source matroids."
+            "witness; serialized claims replay all four ranks against their "
+            "retained source matroids."
         ),
         request_type=MatroidIntersectionRequest,
         result_type=MatroidIntersectionResult,
@@ -481,8 +479,9 @@ TOOLS = TOOLS + (  # noqa: RUF005
             "Compute one exact maximum-weight set independent in both "
             "represented matroids. The empty set is a candidate, so the "
             "result can be empty when every feasible nonempty set has lower "
-            "weight. Separate weighted certificate operations check "
-            "caller-authored optimality witnesses."
+            "weight. The result retains an integral split-weight witness and "
+            "both single-matroid maximizers, so it composes with the supplied "
+            "certificate checker and can be independently replayed."
         ),
         request_type=MatroidWeightedIntersectionOptimizationRequest,
         result_type=MatroidWeightedIntersectionOptimizationResult,

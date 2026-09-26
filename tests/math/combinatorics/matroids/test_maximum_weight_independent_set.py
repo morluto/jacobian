@@ -17,6 +17,7 @@ from jacobian.math.combinatorics.matroids import (
     verify_maximum_weight_independent_set,
 )
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_SPLIT_WEIGHT_DIGITS,
     MaximumWeightIndependentSetRequest,
     MaximumWeightIndependentSetResult,
 )
@@ -181,8 +182,15 @@ def test_weight_digit_and_ground_bound_edges() -> None:
     )
     accepted = maximum_weight_independent_set_result(one_loop, accepted_weights)
     assert accepted.independent_set == ()
+    wider_split_carrier = MatroidWeightFunction(
+        ground_axis=one_loop.ground_axis, values=(10**12,)
+    )
+    with pytest.raises(OperationDomainValidationError, match="decimal digits"):
+        maximum_weight_independent_set_result(one_loop, wider_split_carrier)
     with pytest.raises(ValidationError, match="decimal digits"):
-        MatroidWeightFunction(ground_axis=one_loop.ground_axis, values=(10**12,))
+        MatroidWeightFunction(
+            ground_axis=one_loop.ground_axis, values=(10 ** (MAX_SPLIT_WEIGHT_DIGITS),)
+        )
 
     max_ground = _matroid(2, ((0,) * 256,))
     result = maximum_weight_independent_set_result(
@@ -191,6 +199,20 @@ def test_weight_digit_and_ground_bound_edges() -> None:
     assert result.independent_set == ()
     with pytest.raises(ValidationError):
         MatroidWeightFunction(ground_axis=max_ground.ground_axis, values=(1,) * 257)
+
+
+def test_widened_split_domain_replays_at_maximum_ground() -> None:
+    """A 15-digit split table stays consumable at the ground envelope."""
+    max_ground = _matroid(2, ((1,) + (0,) * 255,))
+    split_weights = _weights(max_ground, (10**14,) * 256)
+
+    result = maximum_weight_independent_set_result(
+        max_ground, split_weights, max_digits=MAX_SPLIT_WEIGHT_DIGITS
+    )
+
+    assert result.independent_set == (0,)
+    assert result.total_weight == 10**14
+    assert verify_maximum_weight_independent_set(result)
 
 
 def test_retained_labels_are_admitted_before_the_rank_kernel(

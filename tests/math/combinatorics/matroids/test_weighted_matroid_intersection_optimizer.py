@@ -1,23 +1,33 @@
 from __future__ import annotations
 
+import json
 from itertools import combinations, product
 
 import pytest
+from pydantic import ValidationError
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_SPLIT_WEIGHT_DIGITS,
     LinearMatroid,
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionOptimizationRequest,
     MatroidWeightedIntersectionOptimizationResult,
+    MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightFunction,
+    MaximumWeightBasisRequest,
+    MaximumWeightIndependentSetRequest,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
     maximum_weight_matroid_intersection,
     verify_weighted_intersection_rank_certificate,
+    verify_weighted_intersection_result,
     weighted_intersection_certificate,
     weighted_intersection_rank_certificate,
 )
@@ -89,6 +99,43 @@ def _request(
     )
 
 
+def test_catalog_optimizer_example_returns_replayable_checker_result() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation("matroid.intersection.maximum_weight.compute")
+    assert operation is not None
+    example = operation.examples[0]
+
+    result = invoke_operation(operation.operation_id, example.input, catalog)
+    decoded = operation.result_type.model_validate_json(json.dumps(result.output))
+
+    assert decoded.common_independent == (0,)
+    assert (
+        decoded.first_maximizer.total_weight + decoded.second_maximizer.total_weight
+        == 5
+    )
+    assert verify_weighted_intersection_result(decoded)
+
+
+def test_optimizer_wide_split_round_trips_and_verifies() -> None:
+    labels = ("a", "b", "c")
+    loops = _matroid(((0,), (0,), (0,)), labels)
+    one_nonloop = _matroid(((0,), (0,), (1,)), labels)
+    weight = 999_999_999_999
+    result = maximum_weight_matroid_intersection(
+        *_request(loops, one_nonloop, (-weight, -weight, weight))
+    )
+    decoded = MatroidWeightedIntersectionOptimizationResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert decoded.first_maximizer.weight_function.values == (weight, weight, weight)
+    from jacobian.math.combinatorics.matroids.operations import (
+        verify_maximum_weight_independent_set,
+    )
+
+    assert verify_maximum_weight_independent_set(decoded.first_maximizer)
+    assert verify_weighted_intersection_result(decoded)
+
+
 def test_weighted_intersection_matches_exhaustive_gf2_instances() -> None:
     """Compare all small represented matroid pairs with a coefficient oracle."""
     labels = ("a", "b", "c")
@@ -142,6 +189,61 @@ def test_finite_unit_slack_reweights_before_stopping() -> None:
         result.model_dump_json()
     )
     assert decoded == result
+    assert verify_weighted_intersection_result(result)
+
+
+def test_objective_request_models_enforce_twelve_digit_limit() -> None:
+    labels = ("a",)
+    matroid = _matroid(((1,),), labels)
+
+    def weight(value: int) -> dict[str, object]:
+        return {"ground_axis": labels, "values": (value,)}
+
+    requests = (
+        (MaximumWeightBasisRequest, {"matroid": matroid.model_dump(mode="json")}),
+        (
+            MaximumWeightIndependentSetRequest,
+            {"matroid": matroid.model_dump(mode="json")},
+        ),
+        (
+            MatroidWeightedIntersectionCertificateRequest,
+            {
+                "first": matroid.model_dump(mode="json"),
+                "second": matroid.model_dump(mode="json"),
+                "common_independent": (),
+                "first_split": weight(0),
+                "second_split": weight(0),
+            },
+        ),
+        (
+            MatroidWeightedIntersectionOptimizationRequest,
+            {
+                "first": matroid.model_dump(mode="json"),
+                "second": matroid.model_dump(mode="json"),
+            },
+        ),
+        (
+            MatroidWeightedIntersectionRankCertificateRequest,
+            {
+                "first": matroid.model_dump(mode="json"),
+                "second": matroid.model_dump(mode="json"),
+                "common_independent": (),
+                "first_rank_terms": (),
+                "second_rank_terms": (),
+            },
+        ),
+    )
+    for request_type, fields in requests:
+        accepted = {**fields, "weight_function": weight(10**12 - 1)}
+        request_type.model_validate_json(json.dumps(accepted))
+
+        rejected = {**fields, "weight_function": weight(10**12)}
+        with pytest.raises(ValidationError, match="objective weights"):
+            request_type.model_validate_json(json.dumps(rejected))
+
+    # The broader carrier supports 13 to 15 digit generated split values.
+    MatroidWeightFunction(ground_axis=labels, values=(10**12,))
+    MatroidWeightFunction(ground_axis=labels, values=(10**MAX_SPLIT_WEIGHT_DIGITS - 1,))
 
 
 def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -> None:
@@ -176,9 +278,25 @@ def test_loop_counterexample_has_rank_dual_even_when_terminal_split_does_not() -
     )
 
     assert optimum.common_independent == ()
+    assert (
+        optimum.first_maximizer.total_weight + optimum.second_maximizer.total_weight
+        == 0
+    )
     assert split_error.value.errors()[0]["type"] == (
         "matroid.weighted_intersection.optimality"
     )
+    supplied = weighted_intersection_certificate(
+        MatroidWeightedIntersectionCertificateRequest(
+            first=first,
+            second=second,
+            weight_function=weight_function,
+            common_independent=optimum.common_independent,
+            first_split=optimum.first_maximizer.weight_function,
+            second_split=optimum.second_maximizer.weight_function,
+        )
+    )
+    assert supplied == optimum
+    assert verify_weighted_intersection_result(optimum)
     assert certificate.total_weight == 0
     assert verify_weighted_intersection_rank_certificate(certificate)
 
@@ -266,6 +384,19 @@ def test_every_two_element_gf2_optimum_has_an_exhaustively_found_rank_dual() -> 
                 optimum = maximum_weight_matroid_intersection(
                     *_request(first, second, weights)
                 )
+                split_certificate = weighted_intersection_certificate(
+                    MatroidWeightedIntersectionCertificateRequest(
+                        first=first,
+                        second=second,
+                        weight_function=MatroidWeightFunction(
+                            ground_axis=labels, values=weights
+                        ),
+                        common_independent=optimum.common_independent,
+                        first_split=optimum.first_maximizer.weight_function,
+                        second_split=optimum.second_maximizer.weight_function,
+                    )
+                )
+                assert split_certificate == optimum
                 matching_terms = _find_tiny_rank_dual(
                     first, second, weights, optimum.total_weight, chains
                 )

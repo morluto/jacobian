@@ -29,36 +29,23 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 MAX_WEIGHT_DIGITS = 12
-"""Schema-visible cap on decimal digits of one matroid weight entry."""
+"""Admission cap on caller-supplied objective weights."""
+
+MAX_SPLIT_WEIGHT_DIGITS = MAX_WEIGHT_DIGITS + 3
+"""Room for the bounded split witness derived from input weights."""
+
+
+def _require_objective_weight_digits(weight_function: MatroidWeightFunction) -> None:
+    """Keep source objectives inside their advertised 12-digit domain."""
+    if any(abs(value) >= 10**MAX_WEIGHT_DIGITS for value in weight_function.values):
+        raise _validation_error(
+            "weights.objective_digits",
+            f"objective weights must have fewer than {MAX_WEIGHT_DIGITS} decimal digits",
+        )
+
 
 MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS = 1024
 """Maximum decimal digits admitted for private integral split intermediates."""
-
-MAX_GROUND_AXIS_CODEPOINTS = 65_536
-"""Allocation cap on the Unicode codepoints of one retained ground axis."""
-
-MAX_INDEPENDENT_SET_OUTPUT_UNITS = (
-    3 * MAX_GROUND_SIZE
-    + MAX_WEIGHT_DIGITS * MAX_GROUND_SIZE
-    + 2 * MAX_GROUND_AXIS_CODEPOINTS
-)
-"""Retained-index, weight-digit, and repeated-axis materialization budget for
-one maximum-weight independent-set phase: the selected-set, greedy-order, and
-witness index charges plus one sign-and-digit charge per weight, and the
-ground axis codepoints retained by both the source matroid and the canonical
-weight function."""
-
-
-def ground_axis_codepoints(matroid: LinearMatroid) -> int:
-    """Total Unicode codepoints of one matroid's retained ground axis.
-
-    Matrix residues and index tuples are cardinality- and digit-bounded by the
-    canonical model contracts above; the label text is the only quantity a
-    well-formed operand can carry without an explicit native bound, so result
-    admission charges it in codepoints rather than transport bytes.
-    """
-
-    return sum(len(label) for label in matroid.ground_axis)
 
 
 class GraphicMatroidRequest(StrictModel):
@@ -167,10 +154,11 @@ class MatroidWeightFunction(StrictModel):
                 "weights.ground_axis",
                 "weight values must cover one unique ground axis exactly once",
             )
-        if any(abs(value) >= 10**MAX_WEIGHT_DIGITS for value in self.values):
+        if any(abs(value) >= 10**MAX_SPLIT_WEIGHT_DIGITS for value in self.values):
             raise _validation_error(
                 "weights.digits",
-                f"weights must have fewer than {MAX_WEIGHT_DIGITS} decimal digits",
+                "weight tables must have fewer than "
+                f"{MAX_SPLIT_WEIGHT_DIGITS} decimal digits",
             )
         return self
 
@@ -292,6 +280,7 @@ class MaximumWeightBasisRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_ground_keyed_weights(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if set(self.weight_function.ground_axis) != set(self.matroid.ground_axis):
             raise _validation_error(
                 "weights.ground_coverage",
@@ -358,6 +347,7 @@ class MaximumWeightBasisResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_claim(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if set(self.weight_function.ground_axis) != set(self.matroid.ground_axis):
             raise _validation_error(
                 "weights.ground_coverage",
@@ -423,6 +413,7 @@ class MaximumWeightIndependentSetRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_ground_keyed_weights(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if self.weight_function.ground_axis != self.matroid.ground_axis:
             raise _validation_error(
                 "weights.ground_coverage",
@@ -524,14 +515,13 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
                 "max_ground_elements": MAX_GROUND_SIZE,
                 "max_representation_rows": MAX_REPRESENTATION_ROWS,
                 "max_weight_digits": MAX_WEIGHT_DIGITS,
+                "max_split_weight_digits": MAX_SPLIT_WEIGHT_DIGITS,
                 "max_aggregate_rank_work": 50_000_000,
-                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
-                "max_independent_set_output_units": MAX_INDEPENDENT_SET_OUTPUT_UNITS,
+                "max_result_bytes": 8 * 1024 * 1024,
                 "work_includes": [
                     "both split-weight greedy scans",
                     "both candidate feasibility ranks",
-                    "the source ranks precomputed during admission",
-                    "source-bound certificate result materialization",
+                    "source-bound certificate result serialization",
                 ],
             },
         }
@@ -546,6 +536,7 @@ class MatroidWeightedIntersectionCertificateRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_certificate_axes(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if (
             self.first.matrix.prime != self.second.matrix.prime
             or self.first.ground_axis != self.second.ground_axis
@@ -590,15 +581,18 @@ class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
                 "max_representation_rows": MAX_REPRESENTATION_ROWS,
                 "max_weight_digits": MAX_WEIGHT_DIGITS,
                 "max_dual_intermediate_digits": MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
+                "max_split_witness_digits": MAX_SPLIT_WEIGHT_DIGITS,
                 "max_aggregate_exact_work": 50_000_000,
-                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
+                "max_result_bytes": 8 * 1024 * 1024,
                 "work_includes": [
                     "rank-oracle exchange-circuit construction",
                     "reachable-set, tight-edge, and dual-slack scans",
                     "integral weight-split intermediate arithmetic",
+                    "final exchange inequalities and Bellman-Ford split synthesis",
                     "one bounded source-field primality check",
                     "selected-matrix copies and residue validation",
                     "final common-set feasibility ranks",
+                    "both split-weight greedy scans and candidate ranks",
                     "source-bound result serialization",
                 ],
             },
@@ -611,6 +605,7 @@ class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_optimizer_axes(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if (
             self.first.matrix.prime != self.second.matrix.prime
             or self.first.ground_axis != self.second.ground_axis
@@ -621,57 +616,6 @@ class MatroidWeightedIntersectionOptimizationRequest(StrictModel):
                 "sources and objective must share one labelled ground and field",
             )
         return self
-
-
-class MatroidWeightedIntersectionOptimizationResult(StrictModel):
-    """One exact source-bound maximum-weight common independent set."""
-
-    first: LinearMatroid
-    second: LinearMatroid
-    weight_function: MatroidWeightFunction
-    common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
-    total_weight: StrictInt
-
-    @model_validator(mode="after")
-    def require_result_context(self) -> Self:
-        request = MatroidWeightedIntersectionOptimizationRequest(
-            first=self.first,
-            second=self.second,
-            weight_function=self.weight_function,
-        )
-        n = request.first.ground_size
-        if self.common_independent != tuple(
-            sorted(set(self.common_independent))
-        ) or any(not 0 <= index < n for index in self.common_independent):
-            raise _validation_error(
-                "weighted_intersection.common_set",
-                "candidate indices must be sorted, distinct, and in range",
-            )
-        expected_weight = sum(
-            self.weight_function.values[index] for index in self.common_independent
-        )
-        if self.total_weight != expected_weight:
-            raise _validation_error(
-                "weighted_intersection.objective",
-                "candidate total must equal its exact source weight",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        *,
-        request: MatroidWeightedIntersectionOptimizationRequest,
-        common_independent: tuple[int, ...],
-        total_weight: int,
-    ) -> Self:
-        return cls.model_construct(
-            first=request.first,
-            second=request.second,
-            weight_function=request.weight_function,
-            common_independent=common_independent,
-            total_weight=total_weight,
-        )
 
 
 class MatroidRankMultiplier(StrictModel):
@@ -706,11 +650,7 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
                 "dual multipliers on the two matroids' rank inequalities. The "
                 "operation recomputes only the listed exact ranks, verifies the "
                 "elementwise dual cover and equality of primal and dual values, "
-                "and does not search for an optimum or construct the multipliers. "
-                "Each rank-term family is a nested chain: nonempty, sorted, "
-                "unique subsets ordered by increasing size then lexicographically, "
-                "with each subset contained in the next. The combined count of "
-                "both families is at most twice the ground size."
+                "and does not search for an optimum or construct the multipliers."
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_GROUND_SIZE,
@@ -718,12 +658,11 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
                 "max_weight_digits": MAX_WEIGHT_DIGITS,
                 "max_total_rank_terms": 2 * MAX_GROUND_SIZE,
                 "max_aggregate_rank_work": 50_000_000,
-                "max_ground_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
+                "max_result_bytes": 8 * 1024 * 1024,
                 "work_includes": [
                     "both candidate feasibility ranks",
                     "each supplied rank-inequality rank",
                     "elementwise dual cover and objective checks",
-                    "one bounded source-field primality check",
                     "source-bound certificate result serialization",
                 ],
             },
@@ -735,23 +674,15 @@ class MatroidWeightedIntersectionRankCertificateRequest(StrictModel):
     weight_function: MatroidWeightFunction
     common_independent: tuple[StrictInt, ...] = Field(max_length=MAX_GROUND_SIZE)
     first_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
-        max_length=MAX_GROUND_SIZE,
-        description=(
-            "Nested chain of first-source rank-inequality multipliers: nonempty, "
-            "sorted, unique subsets ordered by increasing size then "
-            "lexicographically, each contained in the next."
-        ),
+        max_length=MAX_GROUND_SIZE
     )
     second_rank_terms: tuple[MatroidRankMultiplier, ...] = Field(
-        max_length=MAX_GROUND_SIZE,
-        description=(
-            "Nested chain of second-source rank-inequality multipliers with the "
-            "same ordering and containment rules as first_rank_terms."
-        ),
+        max_length=MAX_GROUND_SIZE
     )
 
     @model_validator(mode="after")
     def require_certificate_axes(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         if (
             self.first.matrix.prime != self.second.matrix.prime
             or self.first.ground_axis != self.second.ground_axis
@@ -826,6 +757,7 @@ class MatroidWeightedIntersectionRankCertificateResult(StrictModel):
 
     @model_validator(mode="after")
     def require_result_context(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         request = MatroidWeightedIntersectionRankCertificateRequest(
             first=self.first,
             second=self.second,
@@ -901,6 +833,7 @@ class MatroidWeightedIntersectionResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_certificate_shape(self) -> Self:
+        _require_objective_weight_digits(self.weight_function)
         first = self.first_maximizer.matroid
         second = self.second_maximizer.matroid
         n = first.ground_size
@@ -974,25 +907,27 @@ class MatroidWeightedIntersectionResult(StrictModel):
         )
 
 
+# The optimizer returns the same canonical source-bound value as the supplied
+# certificate checker; optimization results therefore retain a replayable
+# witness instead of defining a second optimum carrier.
+MatroidWeightedIntersectionOptimizationResult = MatroidWeightedIntersectionResult
+
+
 class MatroidIntersectionRequest(StrictModel):
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
                 "Compute a maximum common independent set for two linear "
                 "matroids on one labelled ground. The exact exchange kernel "
-                "admits at most 256 ground elements, a 65,536-codepoint "
-                "retained ground axis, and a derived 50,000,000-unit bound "
-                "covering the two precomputed source ranks, exchange probes "
-                "in the regime those ranks make reachable, min-max witness "
+                "admits at most 256 ground elements and a derived "
+                "50,000,000-unit bound covering rank probes, min-max witness "
                 "work, representation rows, and O(n) result materialization "
                 "for the returned independent set and rank partition."
             ),
             "admission_limits": {
                 "max_ground_elements": 256,
                 "max_work_units": 50_000_000,
-                "max_retained_axis_codepoints": MAX_GROUND_AXIS_CODEPOINTS,
                 "work_includes": [
-                    "both precomputed source ranks",
                     "exchange rank probes",
                     "representation rows",
                     "min-max witness ranks",
@@ -1291,6 +1226,7 @@ class MatroidCommonBasisResult(StrictModel):
 
 
 __all__ = [
+    "MAX_SPLIT_WEIGHT_DIGITS",
     "ExchangeLedgerRow",
     "LinearMatroid",
     "MatroidClosureRequest",

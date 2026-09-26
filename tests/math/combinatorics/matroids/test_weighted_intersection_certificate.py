@@ -206,6 +206,45 @@ def test_certificate_rejects_inexact_split() -> None:
         )
 
 
+def test_split_witness_supports_bounded_extra_digits_for_cancellation() -> None:
+    labels = ("loop",)
+    loop = _matroid(((0,),), labels)
+    certificate = weighted_intersection_certificate(
+        MatroidWeightedIntersectionCertificateRequest(
+            first=loop,
+            second=loop,
+            weight_function=_weight(labels, (0,)),
+            common_independent=(),
+            first_split=_weight(labels, (10**12 + 1,)),
+            second_split=_weight(labels, (-(10**12 + 1),)),
+        )
+    )
+
+    assert certificate.total_weight == 0
+    assert certificate.first_maximizer.total_weight == 0
+    assert certificate.second_maximizer.total_weight == 0
+    decoded = MatroidWeightedIntersectionResult.model_validate_json(
+        certificate.model_dump_json()
+    )
+    assert verify_weighted_intersection_result(decoded)
+    from jacobian.math.combinatorics.matroids.operations import (
+        verify_maximum_weight_independent_set,
+    )
+
+    assert verify_maximum_weight_independent_set(decoded.first_maximizer)
+    replayed = weighted_intersection_certificate(
+        MatroidWeightedIntersectionCertificateRequest(
+            first=decoded.first,
+            second=decoded.second,
+            weight_function=decoded.weight_function,
+            common_independent=decoded.common_independent,
+            first_split=decoded.first_maximizer.weight_function,
+            second_split=decoded.second_maximizer.weight_function,
+        )
+    )
+    assert replayed == decoded
+
+
 def test_certificate_rejects_a_feasible_but_nonoptimal_candidate() -> None:
     labels = ("a", "b")
     matroid = _matroid(((1, 0), (0, 1)), labels)

@@ -1,6 +1,10 @@
 """Exact finite lattice-gauge values and native operations."""
 
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeContribution,
+    FiniteGroupGaugeEdgeLabel,
+    FiniteGroupGaugeField,
+    FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
     GaugeField,
     GaugeFieldEdgeLabel,
@@ -22,6 +26,7 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyResult,
     SU2WilsonTraceResult,
 )
+from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
@@ -35,6 +40,10 @@ from jacobian.math.gauge.su2 import (
 )
 
 __all__ = [
+    "FiniteGroupGaugeContribution",
+    "FiniteGroupGaugeEdgeLabel",
+    "FiniteGroupGaugeField",
+    "FiniteGroupGaugeHolonomyResult",
     "GaugeEdge",
     "GaugeField",
     "GaugeFieldEdgeLabel",
@@ -53,6 +62,7 @@ __all__ = [
     "SU2GaugeVertexValue",
     "SU2HolonomyResult",
     "SU2WilsonTraceResult",
+    "finite_group_gauge_holonomy",
     "gauge_transform",
     "path_holonomy",
     "permutation_wilson_trace",

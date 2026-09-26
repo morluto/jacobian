@@ -2,6 +2,8 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeHolonomyRequest,
+    FiniteGroupGaugeHolonomyResult,
     GaugeTransformRequest,
     GaugeTransformResult,
     HolonomyRequest,
@@ -15,6 +17,7 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyRequest,
     SU2HolonomyResult,
 )
+from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
 from jacobian.math.gauge.operations import (
     gauge_transform,
     path_holonomy,
@@ -36,6 +39,12 @@ def _run_plaquette(request: PlaquetteRequest) -> PlaquetteResult:
 
 def _run_holonomy(request: HolonomyRequest) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
+
+
+def _run_finite_group_holonomy(
+    request: FiniteGroupGaugeHolonomyRequest,
+) -> FiniteGroupGaugeHolonomyResult:
+    return finite_group_gauge_holonomy(request)
 
 
 def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformResult:
@@ -77,6 +86,22 @@ _TRIVIAL_FIELD = {
     "degree": 1,
     "edge_labels": [{"edge_id": "loop", "label": {"degree": 1, "image": [0]}}],
 }
+_CYCLIC_TWO_TABLE = {
+    "multiplication": [[0, 1], [1, 0]],
+    "identity": 0,
+    "inverse": [0, 1],
+}
+_FINITE_GROUP_FIELD = {
+    "lattice": {
+        "vertices": ["a", "b"],
+        "edges": [{"edge_id": "e1", "tail": "a", "head": "b"}],
+    },
+    "group": _CYCLIC_TWO_TABLE,
+    "edge_values": [
+        {"edge_id": "e1", "value": {"group": _CYCLIC_TWO_TABLE, "index": 1}},
+    ],
+}
+_FINITE_GROUP_PATH = {"steps": [{"edge_id": "e1", "forward": True}]}
 _SU2_IDENTITY = {
     "coordinates": [
         {"num": "1", "den": "1"},
@@ -249,6 +274,34 @@ TOOLS = (
                     "field": _TRIVIAL_FIELD,
                     "path": {"steps": [], "basepoint": "v"},
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.holonomy.compute",
+        title="Compute path holonomy in an exact finite group table",
+        description=(
+            "Compose table-indexed edge values along an oriented lattice path. "
+            "The field is bound to one complete finite multiplication table; "
+            "backward steps use that table's inverse and factors multiply in "
+            "path traversal order."
+        ),
+        request_type=FiniteGroupGaugeHolonomyRequest,
+        result_type=FiniteGroupGaugeHolonomyResult,
+        run=_run_finite_group_holonomy,
+        tags=("lattice-gauge", "finite-group", "holonomy", "exact"),
+        discovery_terms=(
+            "finite group lattice gauge holonomy",
+            "table group edge transport",
+        ),
+        examples=(
+            OperationExample(
+                name="cyclic_two_edge_holonomy",
+                description=(
+                    "Transport one non-identity C2 element along a single "
+                    "oriented edge; the ordered product is that element."
+                ),
+                input={"field": _FINITE_GROUP_FIELD, "path": _FINITE_GROUP_PATH},
             ),
         ),
     ),

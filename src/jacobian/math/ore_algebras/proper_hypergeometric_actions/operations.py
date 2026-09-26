@@ -97,7 +97,8 @@ def _term_count_bound(
         for index, (existing, degree) in enumerate(unique_coefficient_denominators):
             if existing == denominator:
                 unique_coefficient_denominators[index] = (
-                    existing, max(degree, coefficient_degree)
+                    existing,
+                    max(degree, coefficient_degree),
                 )
                 break
         else:
@@ -224,15 +225,21 @@ def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
     numerator_term_digits = []
     for term in operator.terms:
         exponent = term.exponent
-        shifted_num_digits = 1 if unit_shift_quotient else ratio_digits + ratio_num_degree * (
-            len(str(max(1, exponent))) + 1
-        ) + len(str(max(1, ratio_num_terms))) + len(
-            str(max(1, ratio_num_degree + 1))
+        shifted_num_digits = (
+            1
+            if unit_shift_quotient
+            else ratio_digits
+            + ratio_num_degree * (len(str(max(1, exponent))) + 1)
+            + len(str(max(1, ratio_num_terms)))
+            + len(str(max(1, ratio_num_degree + 1)))
         )
-        shifted_den_digits = 1 if unit_shift_quotient else ratio_digits + ratio_den_degree * (
-            len(str(max(1, exponent))) + 1
-        ) + len(str(max(1, ratio_den_terms))) + len(
-            str(max(1, ratio_den_degree + 1))
+        shifted_den_digits = (
+            1
+            if unit_shift_quotient
+            else ratio_digits
+            + ratio_den_degree * (len(str(max(1, exponent))) + 1)
+            + len(str(max(1, ratio_den_terms)))
+            + len(str(max(1, ratio_den_degree + 1)))
         )
         coefficient_digits = _coefficient_digits(term.coefficient)
         denominator_term_digits.append(

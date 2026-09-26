@@ -90,7 +90,9 @@ def run_action_worker(
         except (TypeError, ValueError) as exc:
             from jacobian._execution import BackendFailureReason, OperationBackendError
 
-            raise OperationBackendError(BackendFailureReason.MALFORMED_RESPONSE) from exc
+            raise OperationBackendError(
+                BackendFailureReason.MALFORMED_RESPONSE
+            ) from exc
     kind = response.get("kind")
     location = response.get("location")
     code = response.get("code")
@@ -102,7 +104,8 @@ def run_action_worker(
         and isinstance(message, str)
     ):
         error_type = (
-            OperationResourceAdmissionError if kind == "resource"
+            OperationResourceAdmissionError
+            if kind == "resource"
             else OperationDomainValidationError
         )
         raise error_type(location=tuple(location), code=code, message=message)

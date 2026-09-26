@@ -51,9 +51,7 @@ def main() -> int:
         raise SystemExit("hypergeometric action request exceeds its byte bound")
     payload = loads_strict_json(
         raw,
-        limits=CanonicalLimits(
-            max_input_bytes=_MAX_BYTES, max_output_bytes=_MAX_BYTES
-        ),
+        limits=CanonicalLimits(max_input_bytes=_MAX_BYTES, max_output_bytes=_MAX_BYTES),
     )
     if not isinstance(payload, dict):
         raise SystemExit("malformed hypergeometric action request")

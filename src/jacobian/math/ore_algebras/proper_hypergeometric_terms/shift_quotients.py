@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from jacobian._execution import request_checkpoint
 from pydantic import ValidationError
+
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,

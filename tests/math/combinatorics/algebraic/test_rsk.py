@@ -3,6 +3,7 @@
 import itertools
 
 import pytest
+
 from jacobian.math.combinatorics.algebraic import (
     FinitePermutation,
     inverse_permutation_rsk,
@@ -22,4 +23,3 @@ def test_permutation_rsk_round_trips_all_small_permutations(size: int) -> None:
 def test_permutation_rsk_requires_canonical_finite_permutation() -> None:
     with pytest.raises(Exception, match="finite permutation"):
         permutation_rsk((1, 2, 3))
-

@@ -50,6 +50,16 @@ def transport_point(
             code="elliptic_curve.finite_field.point_transport_point_type",
             message="point must be a finite-field elliptic point value",
         )
+    try:
+        isomorphism = FiniteFieldIsomorphismResult.model_validate(
+            isomorphism.model_dump()
+        )
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("isomorphism",),
+            code="elliptic_curve.finite_field.point_transport_isomorphism_invalid",
+            message="isomorphism must satisfy its complete result contract",
+        ) from exc
     source = _curve_admit(isomorphism.source)
     target = _curve_admit(isomorphism.target)
     if source.field != target.field:

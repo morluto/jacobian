@@ -96,16 +96,15 @@ def test_order_three_field_transport_matches_pari_hecke_matrix():
         request.space, request.index
     )
 
-    # PARI's exact basis is over Q(t), t^2+t+1=0, and its q^2 coefficient
-    # t+2 transports to 1+x in Jacobian's Q(x), x^2-x+1=0, via t=x-1.
+    # The helper returns coefficients in Jacobian's Q(x), x^2-x+1=0,
+    # transporting PARI's q^2 coefficient t+2 via t=x-1.
     raw = pari_character_basis(
         request.space,
         5,
         len(result.entries),
         character_request=_pari_character_request(request.space),
     )
-    assert raw[0][2] == (2, 1)
-    assert (raw[0][2][0] - raw[0][2][1], raw[0][2][1]) == (1, 1)
+    assert raw[0][2] == (1, 1)
 
     # In PARI's native basis T_2 is diagonal with eigenvalues t+2 and 2t+1.
     character_request = _pari_character_request(request.space)

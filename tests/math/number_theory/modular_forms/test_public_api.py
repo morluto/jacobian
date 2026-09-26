@@ -5,11 +5,17 @@ from jacobian.math.number_theory import modular_forms
 
 def test_exact_public_api_symbols() -> None:
     assert tuple(modular_forms.__all__) == (
+        "CyclotomicCharacterMap",
+        "CyclotomicIdentityFieldMap",
         "LevelOneModularQExpansion",
         "ModularCharacterBasis",
         "ModularCharacterBasisElement",
+        "ModularCharacterCommonTargetPrefix",
+        "ModularCharacterEqualityResult",
         "ModularCharacterHeckeMatrix",
         "ModularCharacterQExpansion",
+        "ModularCharacterSpaceInclusion",
+        "ModularCharacterTransportedForm",
         "ModularFormAtkinLehnerTarget",
         "ModularFormBasis",
         "ModularFormChangeOfBasisFrame",
@@ -26,9 +32,11 @@ def test_exact_public_api_symbols() -> None:
         "formal_q_series_v_operator",
         "level_one_named_q_expansion",
         "modular_character_basis_q_expansions",
+        "modular_character_coordinates_equal_in_common_space",
         "modular_character_coordinates_hecke",
         "modular_character_coordinates_product",
         "modular_character_coordinates_q_expansion",
+        "modular_character_coordinates_transport",
         "modular_character_hecke_matrix",
         "modular_form_atkin_lehner_target",
         "modular_form_basis_frame",
@@ -118,3 +126,5 @@ def test_q_series_operator_tools_do_not_claim_modular_space_membership() -> None
     assert "modular_form.character_coordinates.product.compute" in operations
     assert "modular_form.character_hecke_matrix.compute" in operations
     assert "modular_form.character_basis.compute" in operations
+    assert "modular_form.character_coordinates.transport.compute" in operations
+    assert "modular_form.character.equal.check" in operations

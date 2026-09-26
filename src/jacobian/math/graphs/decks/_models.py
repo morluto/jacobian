@@ -359,8 +359,7 @@ class AnonymousCardDegreeProfileRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def admit_combined_resources_before_nested_canonicalization(cls, value: Any) -> Any:
-        """Reject over-budget profiles before parsing canonical card classes."""
-        _admit_anonymous_profile_wire_resources(value)
+        """Normalize tuple fields before parsing canonical card classes."""
         return _normalize_anonymous_profile_json_tuples(value)
 
 

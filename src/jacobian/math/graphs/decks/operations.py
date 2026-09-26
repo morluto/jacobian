@@ -348,8 +348,8 @@ def _profile_from_admitted_multiset(
         counts[degree_multiset] = counts.get(degree_multiset, 0) + item.multiplicity
         total += item.multiplicity
     rows = tuple(
-        AnonymousCardDegreeFrequency.model_construct(
-            degrees=DegreeSequence.model_construct(degrees=degrees),
+        AnonymousCardDegreeFrequency(
+            degrees=DegreeSequence(degrees=degrees),
             multiplicity=counts[degrees],
         )
         for degrees in sorted(counts)
@@ -361,6 +361,7 @@ def anonymous_card_degree_profile(
     multiset: AnonymousGraphCardMultiset,
 ) -> AnonymousCardDegreeProfile:
     """Compute degree-multiset frequencies for a canonical card multiset."""
+    _admit_anonymous_profile_input(multiset)
     return _compute_anonymous_card_degree_profile(multiset)
 
 

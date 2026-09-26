@@ -69,8 +69,6 @@ def _run_unlabelled_vertex(
 def _run_anonymous_card_degree_profile(
     request: AnonymousCardDegreeProfileRequest,
 ) -> AnonymousCardDegreeProfile:
-    # The request's before-validator admits the combined envelope before nested
-    # card parsing; that parser then establishes canonical form exactly once.
     return anonymous_card_degree_profile(request.multiset)
 
 

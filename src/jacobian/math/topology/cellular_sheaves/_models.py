@@ -78,7 +78,9 @@ def sheaf_scalar_digit_work(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) ->
 
 def sheaf_scalar_json_bound(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
     """Conservative JSON character bound for exact scalar collections."""
-    return count * (digits + 2)
+    # Canonical rational JSON carries numerator and denominator as separate
+    # decimal strings plus object keys, quotes, and punctuation. Bound both.
+    return count * (2 * digits + 32)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -1003,10 +1005,10 @@ __all__ = [
     "MAX_SHEAF_MORPHISM_OUTPUT_CHARS",
     "MAX_SHEAF_PRIME",
     "MAX_SHEAF_RESTRICTION_CELLS",
-    "MAX_SHEAF_SIMPLICES",
-    "MAX_SHEAF_STALK_RANK",
     "MAX_SHEAF_SECTION_OUTPUT_CHARS",
     "MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS",
+    "MAX_SHEAF_SIMPLICES",
+    "MAX_SHEAF_STALK_RANK",
     "MAX_SHEAF_TOTAL_STALK_RANK",
     "BasisLabel",
     "CoverRestrictionMatrix",
@@ -1025,7 +1027,7 @@ __all__ = [
     "SheafObstruction",
     "SheafObstructionCode",
     "SheafOutcome",
-    "sheaf_scalar_json_bound",
     "SheafRestriction",
     "SheafStalk",
+    "sheaf_scalar_json_bound",
 ]

@@ -1040,6 +1040,19 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
     the source and target diagrams and establishes the naturality squares
     before assembling the direct-sum stalk maps in each cochain degree.
     """
+    if type(morphism_value) is not SheafMorphismResult:
+        raise _section_domain(
+            "cochain_map_morphism_type",
+            "an induced cochain map requires a sheaf morphism result",
+        )
+    fields = object.__getattribute__(morphism_value, "__dict__")
+    if not isinstance(fields.get("source"), FiniteCellularSheaf) or not isinstance(
+        fields.get("target"), FiniteCellularSheaf
+    ):
+        raise _section_domain(
+            "cochain_map_morphism_parent",
+            "a sheaf morphism must contain source and target cellular sheaves",
+        )
     checked = morphism(
         morphism_value.source, morphism_value.target, morphism_value.components
     )

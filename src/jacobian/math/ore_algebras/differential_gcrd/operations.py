@@ -109,7 +109,6 @@ def _admit_pair(
                     code="ore_algebra.differential_gcrd_constant_coefficients",
                     message="this GCRD slice accepts rational constant coefficients only",
                 )
-            value = numerator.get(0, Fraction(0)) / denominator[0]
             work += 1
 
     if work > _MAX_WORK_UNITS:

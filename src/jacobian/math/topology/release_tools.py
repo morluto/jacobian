@@ -18,6 +18,10 @@ def _run_graph_clique(r: GraphCliqueRequest) -> CliqueResult:
     return graph_clique_complex(r.graph)
 
 
+def _run_one_skeleton(r: OneSkeletonRequest) -> OneSkeletonResult:
+    return one_skeleton(r)
+
+
 def _run_orient(r: OrientabilityRequest) -> OrientabilityResult:
     return orientability(r)
 
@@ -35,7 +39,12 @@ TOOLS = (
     MathTool(
         operation_id="topology.simplicial_complex.face_poset.compute",
         title="Compute the face poset and order complex",
-        description="Return every nonempty face, strict inclusion relation, and the order complex of a finite simplicial complex; chains are represented by source face indices.",
+        description=(
+            "Return every nonempty face, its strict inclusion relation, and the "
+            "order complex. When at most 64 faces are present, the result also "
+            "includes a reusable FinitePoset value and face-element labels for "
+            "composition with topology.poset.order_complex.compute."
+        ),
         request_type=FacePosetRequest,
         result_type=FacePosetResult,
         run=_run_poset,

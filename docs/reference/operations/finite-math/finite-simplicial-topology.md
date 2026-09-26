@@ -12,8 +12,14 @@ exact direct operations:
 - `topology.simplicial_complex.face_enumerator.compute`
 - `topology.simplicial_complex.g_vector.compute`
 - `topology.simplicial_complex.clique_from_graph.compute`
+- `topology.poset.order_complex.compute`
 - `topology.simplicial_homology.compute`
 - `topology.simplicial_homology.integral.compute`
+
+The native-only `jacobian.math.topology.one_skeleton` helper projects a
+canonical finite simplicial complex to its indexed graph while retaining the
+vertex and edge-face axes. Catalog callers can use
+`topology.simplicial_complex.skeleton.compute` with `k=1` for the one-skeleton.
 
 The integral operation wraps the same chain-complex-owned `HomologyResult`
 returned by `chain_complex.homology.compute`. It retains the canonical `ZZ`
@@ -54,6 +60,11 @@ and checks the complete output face closure (at most 2048 nonempty faces).
 This allows low-output cases such as a 32-point discrete complex while
 rejecting a simplex whose order complex has too many maximal chains.
 
+The reusable `topology.poset.order_complex.compute` operation applies the same
+chain construction to any admitted `FinitePoset`, retaining the exact element
+labels on the output vertex axis. See the [order-complex contract](../topology/order-complex.md)
+for its exact face, dimension, maximal-chain, work, and output bounds.
+
 `induced_subcomplex.compute` selects a nonempty subset of the canonical
 vertex axis and returns the full subcomplex whose faces are exactly the source
 faces contained in that subset. Its face-image table maps retained faces to
@@ -90,3 +101,14 @@ represented domain, a full simplex has an empty minimal-nonface antichain.
 The cardinality bound follows from Sperner's theorem: an antichain of subsets
 of an `n`-element set has at most `binom(n, floor(n/2))` members ([MIT OCW
 combinatorics notes](https://ocw.mit.edu/courses/18-226-probabilistic-methods-in-combinatorics-fall-2022/mit18_226_f22_lec_full.pdf)).
+
+`jacobian.math.topology.one_skeleton` returns the exact graph on the
+canonical vertex axis as an `IndexedSimpleUndirectedGraph`, which graph
+operations can consume unchanged.
+The accompanying `vertex_labels` tuple maps graph indices to source labels,
+and `edge_faces` is aligned with the graph edge list, preserving the exact
+source 1-face for each edge. Isolated vertices remain in the graph axis. The
+source complex's 64-vertex bound implies at most `binom(64, 2) = 2,016` graph
+edges, below the indexed graph value's edge cap. Decoding checks that the
+vertex axes agree and that the edge map matches the source's stored 1-face
+axis; it does not replay the source complex's construction history.

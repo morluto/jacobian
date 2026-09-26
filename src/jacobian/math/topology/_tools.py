@@ -81,6 +81,11 @@ from jacobian.math.topology.operations import (
 from jacobian.math.topology.operations import (
     shelling_check as _shelling_check,
 )
+from jacobian.math.topology.release import (
+    OrderComplexRequest,
+    OrderComplexResult,
+    order_complex,
+)
 from jacobian.math.topology.release_tools import TOOLS as RELEASE_TOOLS
 
 __all__ = ["TOOLS"]
@@ -129,6 +134,10 @@ def compute_pseudomanifold_decision(
 
 def compute_shelling_check(request: ShellingCheckRequest) -> ShellingCheckResult:
     return _shelling_check(_canonical_complex(request.complex), request.facet_order)
+
+
+def compute_order_complex(request: OrderComplexRequest) -> OrderComplexResult:
+    return order_complex(request)
 
 
 TOPOLOGY_OPERATIONS: MathTools = (
@@ -747,6 +756,49 @@ _stanley_reisner_ideal_tool = MathTool(
     ),
 )
 
+_order_complex_tool = MathTool(
+    operation_id="topology.poset.order_complex.compute",
+    title="Compute the order complex of a finite poset",
+    description=(
+        "Return the canonical simplicial complex whose vertices retain the "
+        "poset element labels and whose faces are all nonempty chains. The "
+        "result includes the source poset and each maximal chain as a facet. "
+        "Exact chain, dimension, facet, work, and output bounds are checked "
+        "before chain enumeration."
+    ),
+    request_type=OrderComplexRequest,
+    result_type=OrderComplexResult,
+    run=compute_order_complex,
+    tags=("topology", "poset", "order-complex", "simplicial", "exact"),
+    discovery_terms=(
+        "finite poset order complex",
+        "simplicial complex of chains",
+        "barycentric subdivision of a face poset",
+    ),
+    examples=(
+        OperationExample(
+            name="two_element_chain_order_complex",
+            description="A two-element chain gives one edge and its two vertices.",
+            input={
+                "poset": {
+                    "elements": ["a", "b"],
+                    "strict_order_pairs": [{"lower": "a", "upper": "b"}],
+                    "cover_relations": [{"lower": "a", "upper": "b"}],
+                    "incomparable_pairs": [],
+                    "minimal_elements": ["a"],
+                    "maximal_elements": ["b"],
+                    "graded": True,
+                    "ranks": [
+                        {"element": "a", "rank": 0},
+                        {"element": "b", "rank": 1},
+                    ],
+                    "poset_digest": "sha256:501fec56e614e0c8e24b67bf7ad4f4872124cc902e4279671a0dbcc6a0999872",
+                }
+            },
+        ),
+    ),
+)
+
 TOOLS: MathTools = (
     *TOPOLOGY_OPERATIONS,
     *RELEASE_TOOLS,
@@ -765,4 +817,5 @@ TOOLS: MathTools = (
     _pseudomanifold_tool,
     _shelling_check_tool,
     _elementary_collapse_tool,
+    _order_complex_tool,
 )

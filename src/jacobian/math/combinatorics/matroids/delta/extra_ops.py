@@ -11,6 +11,7 @@ from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.extra import (
     MAX_BINARY_GROUND,
     MAX_TWIST_POLYNOMIAL_GROUND,
+    MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS,
     MAX_TWIST_POLYNOMIAL_STATES,
     MAX_TWIST_POLYNOMIAL_WORK,
     BinaryMatrixResult,
@@ -36,11 +37,23 @@ def _reject_oversized_twist_polynomial_axis(value: object) -> None:
     if type(value) is not FiniteDeltaMatroid:
         return
     ground = getattr(value, "ground", None)
-    if type(ground) is tuple and len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
+    if type(ground) is not tuple:
+        return
+    if len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
         raise OperationResourceAdmissionError(
             location=("delta_matroid", "ground"),
             code="delta_matroid.twist_polynomial_work",
             message="complete twist polynomial exceeds its subset-state envelope",
+        )
+    # Check cheap string lengths before model_dump, native revalidation, or
+    # UTF-8 encoding can copy an arbitrarily large retained ground axis.
+    if all(type(label) is str for label in ground) and sum(map(len, ground)) > (
+        MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "ground"),
+            code="delta_matroid.twist_polynomial_labels",
+            message="ground labels exceed the admitted native codepoint budget",
         )
 
 
@@ -135,10 +148,9 @@ def _check_twist_polynomial_source(d: FiniteDeltaMatroid) -> None:
 
     Labels never enter the mask sweep, so the recognition operation's
     2,048-byte label envelope does not describe this operation's kernel. This
-    check instead bounds the source memberships and symmetric-exchange work and
-    requires UTF-8 labels so the retained ground axis stays serializable, while
-    the operation's own state and histogram cardinalities bound the derived
-    result.
+    check instead bounds source memberships and exchange work. The native
+    preflight bounds label copying independently of recognition, so the source
+    can be checked for UTF-8 representability without an unbounded allocation.
     """
 
     try:

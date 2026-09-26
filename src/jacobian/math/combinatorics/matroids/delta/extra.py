@@ -17,6 +17,8 @@ MAX_BINARY_GROUND = 8
 MAX_BINARY_LABEL_BYTES = 2_048
 MAX_TWIST_POLYNOMIAL_STATES = 4_096
 MAX_TWIST_POLYNOMIAL_WORK = 262_144
+# Bound native label copying/validation independently of recognition's byte cap.
+MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS = 1_000_000
 MAX_TWIST_POLYNOMIAL_GROUND = MAX_TWIST_POLYNOMIAL_STATES.bit_length() - 1
 MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES = MAX_TWIST_POLYNOMIAL_GROUND + 1
 MAX_TWIST_POLYNOMIAL_SOURCE_ROWS = MAX_DELTA_MEMBERSHIPS + 1
@@ -137,7 +139,9 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
                 "IntegerPolynomial coefficients. Admission permits at most "
                 f"{MAX_TWIST_POLYNOMIAL_GROUND} ground elements, "
                 f"{MAX_TWIST_POLYNOMIAL_STATES} twist masks, and "
-                f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. "
+                f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations, "
+                f"and {MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS} aggregate ground-label "
+                "codepoints for native allocation and source validation. "
                 f"The result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
                 "histogram entries and coefficients with at most "
                 f"{MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS} decimal digits. "
@@ -146,6 +150,7 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
             ),
             "admission_limits": {
                 "max_ground_elements": MAX_TWIST_POLYNOMIAL_GROUND,
+                "max_ground_label_codepoints": MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS,
                 "max_twist_masks": MAX_TWIST_POLYNOMIAL_STATES,
                 "max_mask_feasible_set_evaluations": MAX_TWIST_POLYNOMIAL_WORK,
                 "max_histogram_entries": MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
@@ -216,6 +221,7 @@ __all__ = [
     "MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS",
     "MAX_TWIST_POLYNOMIAL_GROUND",
     "MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES",
+    "MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS",
     "MAX_TWIST_POLYNOMIAL_SOURCE_ROWS",
     "MAX_TWIST_POLYNOMIAL_STATES",
     "MAX_TWIST_POLYNOMIAL_WORK",

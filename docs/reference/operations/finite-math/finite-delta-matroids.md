@@ -52,9 +52,11 @@ histogram entries, with each coefficient at most 4,096 (four decimal digits).
 The kernel holds at most one bit mask per admitted feasible row; source
 admission limits memberships to 16,384, so at most 16,385 rows (including the
 unique empty row) are materialized as masks. Labels never enter the mask sweep,
-so the recognition operation's 2,048-byte label envelope does not apply here:
-labels must be UTF-8-representable and unique, but their size is not itself a
-mathematical work or cardinality limit.
+so the recognition operation's 2,048-byte label envelope does not apply here.
+Native source revalidation and UTF-8 checks copy retained labels, however, so
+this operation admits at most 1,000,000 aggregate ground-label codepoints
+before copying them. Labels must remain unique and UTF-8-representable;
+wire-byte limits belong to the delivery boundary.
 
 `delta_matroid.distance_interlace_polynomial.compute` returns the exact
 distance histogram and the polynomial

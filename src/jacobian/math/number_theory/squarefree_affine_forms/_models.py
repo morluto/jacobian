@@ -188,7 +188,9 @@ def admit_infinite_product(source: SquarefreeAffineFamily, cutoff: int) -> None:
 
     admit_family(source)
     if type(cutoff) is not int:
-        raise _domain_error("infinite_product_cutoff", "prime cutoff must be an integer")
+        raise _domain_error(
+            "infinite_product_cutoff", "prime cutoff must be an integer"
+        )
     if not 1 <= cutoff <= MAX_INFINITE_PRODUCT_CUTOFF:
         raise _resource_error(
             "infinite_product_cutoff_budget",
@@ -225,7 +227,9 @@ def admit_admissibility_cutoff(cutoff: int) -> None:
     """Require a checkable cutoff inside the prime envelope."""
 
     if type(cutoff) is not int:
-        raise _domain_error("cutoff_type", "the admissibility cutoff must be an integer")
+        raise _domain_error(
+            "cutoff_type", "the admissibility cutoff must be an integer"
+        )
     if cutoff < 1:
         raise _domain_error(
             "cutoff_positive", "the admissibility cutoff is at least one"

@@ -16,6 +16,8 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraWordSubstitution,
     FreeWordImageInterval,
     GroebnerShirshovResult,
+    TruncatedFreeAlgebraQuotient,
+    TruncatedFreeAlgebraQuotientRequest,
 )
 from jacobian.math.free_algebras.operations import (
     add,
@@ -31,6 +33,7 @@ from jacobian.math.free_algebras.operations import (
     reverse_word,
     substitute_polynomial,
     substitute_word,
+    truncated_quotient_algebra,
     word_factors,
     word_overlaps,
     word_prefixes,
@@ -53,6 +56,8 @@ __all__ = [
     "FreeAlgebraWordSubstitution",
     "FreeWordImageInterval",
     "GroebnerShirshovResult",
+    "TruncatedFreeAlgebraQuotient",
+    "TruncatedFreeAlgebraQuotientRequest",
     "add",
     "compare_words",
     "concatenate_words",
@@ -66,6 +71,7 @@ __all__ = [
     "reverse_word",
     "substitute_polynomial",
     "substitute_word",
+    "truncated_quotient_algebra",
     "word_factors",
     "word_overlaps",
     "word_prefixes",

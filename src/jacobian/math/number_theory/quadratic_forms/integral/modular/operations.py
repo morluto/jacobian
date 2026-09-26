@@ -148,6 +148,12 @@ def reduce_integral_form_modulus(
         raise _domain_error(
             "request_type", "expected a typed modular reduction request"
         )
+    try:
+        request = ModularReductionRequest.model_validate(request.model_dump())
+    except Exception as exc:
+        raise _domain_error(
+            "request_shape", "modular reduction request must be canonical"
+        ) from exc
     target = _reduce_integral_form_modulus_value(request.form, request.modulus)
     return ModularQuadraticReduction(source=request.form, target=target)
 

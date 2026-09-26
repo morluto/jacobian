@@ -5,7 +5,6 @@ from itertools import combinations, product
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
-
 from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
     MatroidWeightedIntersectionOptimizationRequest,

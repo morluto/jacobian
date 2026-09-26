@@ -212,6 +212,29 @@ def test_profile_value_rejects_open_retained_holonomy():
     )
     assert (decoded.loop.start, decoded.loop.end) == ("v", "v")
 
+    mutable_field = FiniteGroupGaugeField.model_construct(
+        lattice=open_walk.field.lattice,
+        group=group,
+        edge_values=list(open_walk.field.edge_values),
+    )
+    mutable_loop = FiniteGroupGaugeHolonomyResult.model_construct(
+        field=mutable_field,
+        path=open_walk.path,
+        holonomy=open_walk.holonomy,
+        contributions=open_walk.contributions,
+        start="v",
+        end="v",
+    )
+    with pytest.raises(ValueError, match="canonical loop"):
+        FiniteGroupConjugacyProfile.model_validate(
+            {
+                "loop": mutable_loop,
+                "conjugate_indices": [index[(1, 0, 2)]],
+                "class_representative_index": index[(1, 0, 2)],
+                "class_size": 1,
+            }
+        )
+
 
 def test_forged_request_nested_values_are_domain_rejected():
     with pytest.raises(OperationDomainValidationError, match="requires a finite-group"):

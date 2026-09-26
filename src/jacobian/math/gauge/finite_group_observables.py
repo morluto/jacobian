@@ -38,10 +38,24 @@ class FiniteGroupConjugacyProfile(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_summary(self) -> FiniteGroupConjugacyProfile:
+        authored = self.loop
+        if (
+            type(authored) is not FiniteGroupGaugeHolonomyResult
+            or type(authored.field.edge_values) is not tuple
+            or type(authored.field.lattice.vertices) is not tuple
+            or type(authored.field.lattice.edges) is not tuple
+            or type(authored.field.group.multiplication) is not tuple
+            or type(authored.field.group.inverse) is not tuple
+            or type(authored.path.steps) is not tuple
+            or type(authored.contributions) is not tuple
+        ):
+            raise ValueError("conjugacy profile must retain a canonical loop")
         try:
-            loop = FiniteGroupGaugeHolonomyResult.model_validate(self.loop.model_dump())
+            loop = FiniteGroupGaugeHolonomyResult.model_validate(authored.model_dump())
         except (AttributeError, TypeError, ValueError, ValidationError):
             raise ValueError("conjugacy profile must retain a canonical loop") from None
+        if loop != self.loop:
+            raise ValueError("conjugacy profile must retain a canonical loop")
         if loop.start != loop.end or (
             loop.path.basepoint is not None and loop.path.basepoint != loop.start
         ):

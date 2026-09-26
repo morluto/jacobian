@@ -1062,11 +1062,20 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                 "loop_family_parent", "loop-family entries must be canonical values"
             )
         try:
+            if (
+                type(self.field) is not GaugeField
+                or type(self.field.edge_labels) is not tuple
+                or type(self.field.lattice.vertices) is not tuple
+                or type(self.field.lattice.edges) is not tuple
+            ):
+                raise ValueError("source field is not immutable")
             field = GaugeField.model_validate(self.field.model_dump())
             loops = tuple(
                 GaugeLoopHolonomy.model_validate(entry.model_dump())
                 for entry in self.loops
             )
+            if field != self.field or loops != self.loops:
+                raise ValueError("loop-family carriers are not canonical")
         except (AttributeError, TypeError, ValueError, ValidationError):
             raise _validation_error(
                 "loop_family_parent", "loop-family source is malformed"

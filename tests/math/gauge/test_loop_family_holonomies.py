@@ -226,6 +226,21 @@ def test_family_result_rejects_mutable_nested_path_before_revalidation() -> None
         )
 
 
+def test_family_result_rejects_mutable_source_field_before_revalidation() -> None:
+    field = _self_loop_field()
+    valid = loop_family_holonomies(field, (_path(("loop", True)),))
+    forged_field = GaugeField.model_construct(
+        lattice=field.lattice,
+        degree=field.degree,
+        edge_labels=list(field.edge_labels),
+    )
+
+    with pytest.raises(ValueError, match="loop-family source is malformed"):
+        GaugeLoopFamilyHolonomies.model_validate(
+            {"field": forged_field, "loops": valid.loops}
+        )
+
+
 def test_output_envelope_is_checked_before_any_permutation_product(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.quantum import (
     PauliFamilyCommutationRequest,
-    PauliFamilyCommutationResult,
     PauliFamilyEntry,
     PhaseFreeQubitPauli,
     QubitRegister,
@@ -33,7 +32,9 @@ def test_family_matrix_matches_independent_local_label_oracle() -> None:
         PauliFamilyEntry(pauli_id="xz", pauli=_value(register, (1, 0), (0, 1))),
     )
     request = PauliFamilyCommutationRequest(family=family)
-    matrix = pauli_family_commutation_matrix(family)
+    result = pauli_family_commutation_matrix(family)
+    assert result.source == request
+    matrix = result.commutation_matrix
 
     # At one qubit, distinct nonidentity Pauli labels anticommute. Tensor
     # products commute iff the number of locally anticommuting factors is even.
@@ -63,8 +64,6 @@ def test_family_matrix_matches_independent_local_label_oracle() -> None:
     assert matrix == tuple(expected)
     assert matrix == tuple(zip(*matrix, strict=True))
     assert all(matrix[i][i] == 0 for i in range(4))
-    result = PauliFamilyCommutationResult(source=request, commutation_matrix=matrix)
-    assert result.source == request
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
@@ -115,6 +114,7 @@ def test_maximum_admitted_family_and_register_complete() -> None:
     register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(32)))
     row = _value(register, (0,) * 32, (0,) * 32)
     family = tuple(PauliFamilyEntry(pauli_id=f"p{i}", pauli=row) for i in range(64))
-    matrix = pauli_family_commutation_matrix(family)
-    assert len(matrix) == 64
-    assert all(not any(row) for row in matrix)
+    result = pauli_family_commutation_matrix(family)
+    assert result.source.family == family
+    assert len(result.commutation_matrix) == 64
+    assert all(not any(row) for row in result.commutation_matrix)

@@ -18,6 +18,7 @@ that need more context than an operation card:
 - [Exact quadratic forms](quadratic-forms.md)
 - [Exact qubit stabilizer groups](quantum-exact-stabilizer-groups.md)
 - [Stabilizer code spaces](quantum-stabilizer-code-space.md)
+- [Pauli measurement on stabilizer states](quantum-stabilizer-state-measurement.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)

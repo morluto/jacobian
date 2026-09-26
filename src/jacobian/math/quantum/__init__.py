@@ -33,6 +33,9 @@ from jacobian.math.quantum._models import (
     StabilizerErrorCosetRequest,
     StabilizerErrorEquivalenceRequest,
     StabilizerErrorEquivalenceResult,
+    StabilizerMeasurementBranch,
+    StabilizerStatePauliMeasurementRequest,
+    StabilizerStatePauliMeasurementResult,
     StabilizerSyndromeRequest,
     StabilizerSyndromeResult,
 )
@@ -54,6 +57,7 @@ from jacobian.math.quantum.operations import (
     stabilizer_group_from_generators,
     stabilizer_logical_frame,
     stabilizer_normalizer,
+    stabilizer_state_measure_pauli,
     stabilizer_syndrome,
 )
 
@@ -90,6 +94,9 @@ __all__ = [
     "StabilizerErrorCosetRequest",
     "StabilizerErrorEquivalenceRequest",
     "StabilizerErrorEquivalenceResult",
+    "StabilizerMeasurementBranch",
+    "StabilizerStatePauliMeasurementRequest",
+    "StabilizerStatePauliMeasurementResult",
     "StabilizerSyndromeRequest",
     "StabilizerSyndromeResult",
     "canonicalize_check_space",
@@ -109,5 +116,6 @@ __all__ = [
     "stabilizer_group_from_generators",
     "stabilizer_logical_frame",
     "stabilizer_normalizer",
+    "stabilizer_state_measure_pauli",
     "stabilizer_syndrome",
 ]

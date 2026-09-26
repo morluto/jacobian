@@ -22,12 +22,14 @@ from jacobian.math.number_theory.elliptic_curves import (
 )
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
+    FiniteFieldQuadraticTwistRelation,
     FiniteFieldShortWeierstrassCurve,
     FiniteFieldZetaFunctionResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
     finite_field_discriminant,
     finite_field_extension_counts,
+    finite_field_frobenius,
     finite_field_group_structure,
     finite_field_isogeny_class,
     finite_field_isomorphism,
@@ -38,6 +40,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_quadratic_twist_relation,
     finite_field_zeta_function,
     finite_field_zeta_polynomial,
 )
@@ -61,6 +64,56 @@ def test_finite_field_group_identities_and_cardinality() -> None:
     result = finite_field_cardinality(curve)
     assert result.cardinality == len(points)
     assert result.trace == 5 + 1 - len(points)
+
+
+def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def curve(a: int, b: int) -> FiniteFieldShortWeierstrassCurve:
+        return FiniteFieldShortWeierstrassCurve(
+            field=field,
+            coefficient_a=FiniteFieldElement(presentation=field, coordinates=(a,)),
+            coefficient_b=FiniteFieldElement(presentation=field, coordinates=(b,)),
+        )
+
+    def direct_count(a: int, b: int) -> int:
+        return 1 + sum(
+            1
+            for x in range(5)
+            for y in range(5)
+            if (y * y - x * x * x - a * x - b) % 5 == 0
+        )
+
+    for coefficients in ((1, 1), (0, 1), (2, 1)):
+        a, b = coefficients
+        result = finite_field_frobenius(curve(a, b))
+        count = direct_count(a, b)
+        trace = 6 - count
+        assert result.curve == curve(a, b)
+        assert result.cardinality == count
+        assert result.trace == trace
+        assert result.determinant == 5
+        assert result.characteristic_polynomial.coefficients == (1, -trace, 5)
+        assert result.discriminant == trace * trace - 20
+        assert result.classification == (
+            "SUPERSINGULAR" if trace % 5 == 0 else "ORDINARY"
+        )
+
+
+def test_frobenius_accepts_field_5003_with_admitted_character_sum() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5003, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    result = finite_field_frobenius(
+        FiniteFieldShortWeierstrassCurve(
+            field=field, coefficient_a=one, coefficient_b=one
+        )
+    )
+    assert result.cardinality > 0
+    assert result.characteristic_polynomial.coefficients[-1] == 5003
 
 
 def test_isogeny_class_decision_matches_independent_finite_field_counts() -> None:
@@ -220,6 +273,63 @@ def test_quadratic_twist_composes_with_extension_count_consumer() -> None:
     twist_count = finite_field_cardinality(twist)
     assert source_count.trace + twist_count.trace == 0
     assert source_count.cardinality + twist_count.cardinality == 2 * (25 + 1)
+
+
+def test_quadratic_twist_relation_retains_parameter_and_composes() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    relation = finite_field_quadratic_twist_relation(curve)
+
+    assert relation.source_curve == curve
+    assert relation.parameter.coordinates == (2,)
+    d = relation.parameter.coordinates[0]
+    assert pow(d, (5 - 1) // 2, 5) == 4  # Euler criterion: d is nonsquare.
+    assert relation.twisted_curve.coefficient_a.coordinates == ((d * d) % 5,)
+    assert relation.twisted_curve.coefficient_b.coordinates == ((d * d * d) % 5,)
+    assert finite_field_quadratic_twist(curve) == relation.twisted_curve
+
+    restored = FiniteFieldQuadraticTwistRelation.model_validate_json(
+        relation.model_dump_json()
+    )
+    assert restored == relation
+
+    def direct_count(a: int, b: int) -> int:
+        return 1 + sum(
+            (y * y - x * x * x - a * x - b) % 5 == 0 for x in range(5) for y in range(5)
+        )
+
+    source_count = direct_count(1, 1)
+    twist_count = direct_count(
+        relation.twisted_curve.coefficient_a.coordinates[0],
+        relation.twisted_curve.coefficient_b.coordinates[0],
+    )
+    assert (source_count, twist_count) == (9, 3)
+    assert source_count + twist_count == 2 * (5 + 1)
+
+    source_frobenius = finite_field_frobenius(curve)
+    twist_frobenius = finite_field_frobenius(relation.twisted_curve)
+    assert source_frobenius.trace == 5 + 1 - source_count
+    assert twist_frobenius.trace == 5 + 1 - twist_count
+    assert source_frobenius.trace + twist_frobenius.trace == 0
+
+
+def test_quadratic_twist_relation_public_example_dispatches() -> None:
+    catalog = Catalog.open()
+    operation = catalog.operation(
+        "elliptic_curve.finite_field.quadratic_twist_relation.compute"
+    )
+    assert operation is not None
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, catalog
+    )
+    assert result.output["parameter"]["coordinates"] == ["2"]
+    assert result.output["source_curve"]["coefficient_a"]["coordinates"] == ["1"]
+    assert result.output["twisted_curve"]["coefficient_a"]["coordinates"] == ["4"]
 
 
 def test_quadratic_twist_rejects_field_order_before_search(monkeypatch) -> None:
@@ -927,6 +1037,23 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     assert error.value.errors()[0]["type"] == (
         "finite_field.embedding_generator_not_root"
     )
+
+
+def test_base_change_public_example_is_advertised_and_runs() -> None:
+    operation = Catalog.open().operation(
+        "elliptic_curve.finite_field.base_change.compute"
+    )
+    assert operation is not None
+    assert operation.examples[0].name == "base_change_f5_to_f25"
+    result = invoke_operation(
+        operation.operation_id, operation.examples[0].input, Catalog.open()
+    )
+    assert result.output["curve"]["field"]["modulus_coefficients"] == [
+        "2",
+        "0",
+        "1",
+    ]
+    assert result.output["point"] is None
 
 
 @pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])

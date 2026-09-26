@@ -597,6 +597,39 @@ class FiniteFieldCardinalityResult(StrictModel):
     frobenius_polynomial: tuple[int, int, int]
 
 
+class FiniteFieldFrobeniusResult(StrictModel):
+    """Exact Frobenius polynomial and ordinary/supersingular class."""
+
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    determinant: int = Field(ge=1)
+    characteristic_polynomial: IntegerPolynomial
+    discriminant: int
+    classification: Literal["ORDINARY", "SUPERSINGULAR"]
+
+    @model_validator(mode="after")
+    def require_claim_consistency(self) -> Self:
+        q = self.curve.field.characteristic**self.curve.field.degree
+        if (
+            self.determinant != q
+            or self.trace != q + 1 - self.cardinality
+            or self.characteristic_polynomial.coefficients != (1, -self.trace, q)
+            or self.discriminant != self.trace * self.trace - 4 * q
+            or self.classification
+            != (
+                "SUPERSINGULAR"
+                if self.trace % self.curve.field.characteristic == 0
+                else "ORDINARY"
+            )
+        ):
+            raise _validation_error(
+                "frobenius_claim_mismatch",
+                "Frobenius data must agree with the curve field and trace",
+            )
+        return self
+
+
 class FiniteFieldZetaPolynomialResult(StrictModel):
     """Numerator of the zeta function of one finite-field elliptic curve.
 
@@ -662,16 +695,15 @@ class FiniteFieldZetaFunctionResult(StrictModel):
     zeta_function: RationalFunction
 
     @model_validator(mode="after")
-    def require_curve_identity(self) -> Self:
+    def require_source_bound_zeta_function(self) -> Self:
         q = int(self.curve.field.characteristic**self.curve.field.degree)
-        if self.trace != q + 1 - self.cardinality:
-            raise _validation_error(
-                "zeta_function_identity", "trace must match the exact curve cardinality"
-            )
-        if self.zeta_function != _zeta_rational_function(q, self.trace):
+        if self.trace != q + 1 - self.cardinality or self.zeta_function != (
+            _zeta_rational_function(q, self.trace)
+        ):
             raise _validation_error(
                 "zeta_function_identity",
-                "zeta function must be the canonical function for the exact curve count",
+                "zeta function must equal (1 - trace*T + q*T^2)/((1-T)(1-q*T)) "
+                "for the bound curve count",
             )
         return self
 
@@ -694,6 +726,32 @@ class FiniteFieldGroupStructureResult(StrictModel):
             raise _validation_error(
                 "group_generator_curve_mismatch",
                 "group generators must retain the exact source curve",
+            )
+        return self
+
+
+class FiniteFieldQuadraticTwistRelation(StrictModel):
+    """A canonical nonsquare parameter and its source-bound twist model.
+
+    The producer establishes that ``parameter`` is a nonsquare and that the
+    target coefficients are ``d^2*A`` and ``d^3*B``. This carrier preserves
+    those exact inputs for consumers that need to use the twist relation; its
+    structural validation intentionally does not replay field arithmetic.
+    """
+
+    source_curve: FiniteFieldShortWeierstrassCurve
+    twisted_curve: FiniteFieldShortWeierstrassCurve
+    parameter: FiniteFieldElement
+
+    @model_validator(mode="after")
+    def require_one_field_presentation(self) -> Self:
+        if (
+            self.source_curve.field != self.twisted_curve.field
+            or self.parameter.presentation != self.source_curve.field
+        ):
+            raise _validation_error(
+                "twist_relation_field_mismatch",
+                "twist relation curves and parameter must share one field presentation",
             )
         return self
 
@@ -1290,15 +1348,16 @@ def _curve_admit(
     return curve
 
 
-def finite_field_quadratic_twist(
+def _finite_field_quadratic_twist_components(
     curve: FiniteFieldShortWeierstrassCurve,
-) -> FiniteFieldShortWeierstrassCurve:
-    """Return the canonical nontrivial quadratic twist over the same field.
-
-    The twisting parameter is the first nonsquare in the field's canonical
-    base-p coordinate order. For that nonsquare ``d``, the twist is
-    ``y^2 = x^3 + d^2 A x + d^3 B``.
-    """
+    *,
+    include_relation: bool,
+) -> tuple[
+    FiniteFieldShortWeierstrassCurve,
+    FiniteFieldShortWeierstrassCurve,
+    FiniteFieldElement,
+]:
+    """Compute shared twist components after operation-specific admission."""
 
     if not isinstance(curve, FiniteFieldShortWeierstrassCurve):
         raise OperationDomainValidationError(
@@ -1336,19 +1395,23 @@ def finite_field_quadratic_twist(
             code="elliptic_curve.finite_field.twist_work_bound",
             message="canonical quadratic twist search exceeds its exact work envelope",
         )
-    source_shape = admitted.model_dump(mode="json")
-    source_bytes = len(rfc8785.dumps(source_shape))
-    source_coordinate_digits = sum(
-        len(str(value))
-        for coefficient in (coefficient_a, coefficient_b)
-        for value in coefficient.coordinates
+    max_element = _element(field, (field.characteristic - 1,) * field.degree)
+    max_curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=max_element, coefficient_b=max_element
     )
-    output_bound = (
-        source_bytes
-        - source_coordinate_digits
-        + 2 * field.degree * len(str(field.characteristic - 1))
-        + 64
-    )
+    if include_relation:
+        maximum_result = FiniteFieldQuadraticTwistRelation.model_construct(
+            source_curve=admitted,
+            twisted_curve=max_curve,
+            parameter=max_element,
+        )
+    else:
+        maximum_result = max_curve
+    output_bound = len(rfc8785.dumps(maximum_result.model_dump(mode="json")))
+    if not include_relation:
+        # Retain the original curve-only admission margin for transport
+        # overhead; the relation operation admits its complete exact shape.
+        output_bound += 64
     if output_bound > CanonicalLimits().max_output_bytes:
         raise OperationResourceAdmissionError(
             location=("curve",),
@@ -1383,11 +1446,41 @@ def finite_field_quadratic_twist(
     cube = _multiply(field, square, nonsquare)
     twisted_a = _multiply(field, square, a)
     twisted_b = _multiply(field, cube, b)
-    return FiniteFieldShortWeierstrassCurve(
+    twisted_curve = FiniteFieldShortWeierstrassCurve(
         field=field,
         coefficient_a=_element(field, twisted_a),
         coefficient_b=_element(field, twisted_b),
     )
+    return admitted, twisted_curve, _element(field, nonsquare)
+
+
+def finite_field_quadratic_twist_relation(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldQuadraticTwistRelation:
+    """Return the canonical twist model together with its nonsquare parameter.
+
+    The twisting parameter is the first nonsquare in the field's canonical
+    base-p coordinate order. For that nonsquare ``d``, the twist is
+    ``y^2 = x^3 + d^2 A x + d^3 B``.
+    """
+    admitted, twisted_curve, parameter = _finite_field_quadratic_twist_components(
+        curve, include_relation=True
+    )
+    return FiniteFieldQuadraticTwistRelation(
+        source_curve=admitted,
+        twisted_curve=twisted_curve,
+        parameter=parameter,
+    )
+
+
+def finite_field_quadratic_twist(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldShortWeierstrassCurve:
+    """Return the canonical nontrivial quadratic twist model."""
+    _, twisted_curve, _ = _finite_field_quadratic_twist_components(
+        curve, include_relation=False
+    )
+    return twisted_curve
 
 
 def _canonical_point(
@@ -1865,6 +1958,47 @@ def finite_field_cardinality(
     return _cardinality_from_points(curve, points, q)
 
 
+def finite_field_frobenius(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldFrobeniusResult:
+    """Compute the exact Frobenius polynomial and p-rank class over F_q.
+
+    For elliptic curves over a finite field of characteristic p, the curve is
+    supersingular exactly when p divides the Frobenius trace; otherwise it is
+    ordinary. The trace is obtained by the admitted exact quadratic-character
+    sum used by the count-only operation.
+    """
+    curve = _curve_admit(curve)
+    q = int(curve.field.characteristic**curve.field.degree)
+    character_sum_work = q * curve.field.degree**2 * (8 + 2 * q.bit_length())
+    if character_sum_work > MAX_FROBENIUS_CHARACTER_SUM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("curve", "field"),
+            code="elliptic_curve.finite_field.frobenius_work_bound",
+            message=(
+                "Frobenius trace exceeds the admitted quadratic-character "
+                "sum work envelope"
+            ),
+        )
+    count = _cardinality_from_character_sum(curve, q)
+    trace = count.trace
+    return FiniteFieldFrobeniusResult(
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=trace,
+        determinant=q,
+        characteristic_polynomial=IntegerPolynomial(
+            coefficients=(1, -trace, q),
+        ),
+        discriminant=trace * trace - 4 * q,
+        classification=(
+            "SUPERSINGULAR"
+            if trace % count.curve.field.characteristic == 0
+            else "ORDINARY"
+        ),
+    )
+
+
 def finite_field_zeta_polynomial(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> FiniteFieldZetaPolynomialResult:
@@ -1888,7 +2022,7 @@ def finite_field_zeta_function(
     """Return the exact rational zeta function from one admitted base count."""
     count = finite_field_zeta_polynomial(curve)
     q = int(count.curve.field.characteristic**count.curve.field.degree)
-    return FiniteFieldZetaFunctionResult.model_construct(
+    return FiniteFieldZetaFunctionResult(
         curve=count.curve,
         cardinality=count.cardinality,
         trace=count.trace,
@@ -1974,6 +2108,7 @@ __all__ = [
     "FiniteFieldExtensionCount",
     "FiniteFieldExtensionCountsRequest",
     "FiniteFieldExtensionCountsResult",
+    "FiniteFieldFrobeniusResult",
     "FiniteFieldGroupStructureResult",
     "FiniteFieldIsogenyClassRequest",
     "FiniteFieldIsogenyClassResult",
@@ -1987,6 +2122,7 @@ __all__ = [
     "FiniteFieldPointRequest",
     "FiniteFieldPointResult",
     "FiniteFieldPointSet",
+    "FiniteFieldQuadraticTwistRelation",
     "FiniteFieldScalarRequest",
     "FiniteFieldShortWeierstrassCurve",
     "FiniteFieldZetaFunctionResult",
@@ -1995,6 +2131,7 @@ __all__ = [
     "finite_field_curve_base_change",
     "finite_field_discriminant",
     "finite_field_extension_counts",
+    "finite_field_frobenius",
     "finite_field_group_structure",
     "finite_field_isogeny_class",
     "finite_field_isomorphism",
@@ -2005,6 +2142,7 @@ __all__ = [
     "finite_field_point_scalar",
     "finite_field_points",
     "finite_field_quadratic_twist",
+    "finite_field_quadratic_twist_relation",
     "finite_field_zeta_function",
     "finite_field_zeta_polynomial",
     "require_discriminant_admission",

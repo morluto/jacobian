@@ -176,25 +176,8 @@ def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
     total_work = admitted.strand_count
     for letter in reduced_braid:
         i = letter.generator - 1
-        first, second = images[i], images[i + 1]
-        if letter.exponent == 1:
-            inverse_first = tuple(
-                WordLetter(generator=item.generator, exponent=-item.exponent)
-                for item in reversed(first)
-            )
-            candidate = _reduce_free_word(first + second + inverse_first)
-            replacement = first
-            target = i
-        else:
-            inverse_second = tuple(
-                WordLetter(generator=item.generator, exponent=-item.exponent)
-                for item in reversed(second)
-            )
-            candidate = _reduce_free_word(inverse_second + first + second)
-            replacement = second
-            target = i + 1
-        total_work += len(first) + len(second) + len(candidate) + len(replacement)
-        if len(candidate) > 128 or total_work > 100_000:
+        upper_work = sum(7 * len(image) for image in images)
+        if total_work + upper_work > 100_000:
             raise OperationResourceAdmissionError(
                 location=("word", "letters"),
                 code="link_diagram.artin_action_expansion_bound",
@@ -203,8 +186,63 @@ def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
                     "or 100000-letter cumulative substitution envelope"
                 ),
             )
-        images[target] = candidate
-        images[i + 1 if target == i else i] = replacement
+        substituted: list[tuple[WordLetter, ...]] = []
+        for image in images:
+            expanded: list[WordLetter] = []
+            for item in image:
+                if letter.exponent == 1:
+                    if item.generator == i:
+                        image_of_generator = (
+                            WordLetter(generator=i, exponent=1),
+                            WordLetter(generator=i + 1, exponent=1),
+                            WordLetter(generator=i, exponent=-1),
+                        )
+                    elif item.generator == i + 1:
+                        image_of_generator = (WordLetter(generator=i, exponent=1),)
+                    else:
+                        image_of_generator = (
+                            WordLetter(generator=item.generator, exponent=1),
+                        )
+                elif item.generator == i:
+                    image_of_generator = (WordLetter(generator=i + 1, exponent=1),)
+                elif item.generator == i + 1:
+                    image_of_generator = (
+                        WordLetter(generator=i + 1, exponent=-1),
+                        WordLetter(generator=i, exponent=1),
+                        WordLetter(generator=i + 1, exponent=1),
+                    )
+                else:
+                    image_of_generator = (
+                        WordLetter(generator=item.generator, exponent=1),
+                    )
+                if item.exponent == -1:
+                    image_of_generator = tuple(
+                        WordLetter(generator=part.generator, exponent=-part.exponent)
+                        for part in reversed(image_of_generator)
+                    )
+                expanded.extend(image_of_generator)
+            candidate = _reduce_free_word(expanded)
+            if len(candidate) > 128:
+                raise OperationResourceAdmissionError(
+                    location=("word", "letters"),
+                    code="link_diagram.artin_action_expansion_bound",
+                    message=(
+                        "the reduced braid action exceeds the 128-letter per-image "
+                        "or 100000-letter cumulative substitution envelope"
+                    ),
+                )
+            total_work += len(image) + len(expanded) + len(candidate)
+            substituted.append(candidate)
+        images = substituted
+        if total_work > 100_000:
+            raise OperationResourceAdmissionError(
+                location=("word", "letters"),
+                code="link_diagram.artin_action_expansion_bound",
+                message=(
+                    "the reduced braid action exceeds the 128-letter per-image "
+                    "or 100000-letter cumulative substitution envelope"
+                ),
+            )
 
     return BraidArtinActionResult(
         word=admitted,

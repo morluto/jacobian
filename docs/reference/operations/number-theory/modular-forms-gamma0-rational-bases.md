@@ -32,8 +32,9 @@ arithmetic, compares that dimension with PARI, and checks that the returned
 prefix has the full expected rank before publishing a basis. The
 `S_2(Gamma0(13), chi)` one-dimensional order-six bases retain their established
 identifier, which existing character-coordinate operations consume. The
-generalized bases do not imply coordinate, operator, transport, or equality
-support outside that original parent. The formula follows Quer, “Dimensions
+generalized bases support canonical coordinate equality in their exact parent
+spaces; other operations remain limited to the explicitly documented slices.
+The formula follows Quer, “Dimensions
 of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
 ([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
 For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension

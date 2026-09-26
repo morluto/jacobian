@@ -130,7 +130,10 @@ def _admit_coordinate_space(space: object) -> _CoordinateSpace:
             message="character coordinates require a canonical modular-form space",
         )
     _admit_space_work(space)
-    space, field, _ = _require_basis_space(space)
+    # Equality admission has already checked the complete native space shape
+    # above. Do not replay the level-13 PARI character admission here; the
+    # generic coordinate contract uses the canonical field carried by space.
+    field = space.coefficient_domain
     character = space.character
     if type(character) is not DirichletCharacter:
         raise OperationDomainValidationError(

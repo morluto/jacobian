@@ -41,14 +41,30 @@ def _term_degree(term: ProperHypergeometricTerm) -> int:
 
 def _shifted_polynomial_term_bound(term: ProperHypergeometricTerm, axis: int) -> int:
     return sum(
-        (monomial.exponents[axis] + 1) * (monomial.exponents[1 - axis] + 1)
-        for monomial in term.polynomial.polynomial.terms
+        monomial.exponents[axis] + 1 for monomial in term.polynomial.polynomial.terms
     )
 
 
 def _factorial_ratio_degree(term: ProperHypergeometricTerm, axis: int) -> int:
     return sum(
         abs((factor.n_coefficient, factor.k_coefficient)[axis]) * abs(factor.power)
+        for factor in term.factorial_factors
+    )
+
+
+def _factorial_offset_excess_digits(term: ProperHypergeometricTerm, axis: int) -> int:
+    """Bound decimal growth from affine offsets wider than three digits.
+
+    ``factorial_degree * 5`` already reserves three decimal digits of affine
+    coefficient per unit of quotient degree.  An integer offset is unbounded in
+    the carrier and multiplies through every shifted affine factor, so charge
+    its excess width on the factor that carries it.
+    """
+
+    return sum(
+        abs((factor.n_coefficient, factor.k_coefficient)[axis])
+        * abs(factor.power)
+        * max(0, decimal_digit_width(factor.offset) - 3)
         for factor in term.factorial_factors
     )
 
@@ -72,14 +88,6 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             message="the polynomial prefactor exceeds the shift-quotient envelope",
         )
     factorial_degree = _factorial_ratio_degree(term, axis)
-    offset_digits = max(
-        (
-            decimal_digit_width(abs(factor.offset))
-            for factor in term.factorial_factors
-            if (factor.n_coefficient, factor.k_coefficient)[axis] != 0
-        ),
-        default=1,
-    )
     if factorial_degree > _MAX_FACTORIAL_RATIO_DEGREE:
         raise OperationResourceAdmissionError(
             location=("term", "factorial_factors"),
@@ -97,24 +105,25 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             code="ore_algebra.hypergeometric_quotient_expansion_budget",
             message="the exact quotient numerator or denominator may exceed 256 terms",
         )
-    coefficient_digits = max(
-        (
-            max(
-                len(str(abs(numerator))),
-                len(str(denominator)),
-            )
-            for monomial in polynomial.terms
-            for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
-        ),
-        default=1,
+    coefficient_digits = sum(
+        max(
+            decimal_digit_width(numerator),
+            decimal_digit_width(denominator),
+        )
+        for monomial in polynomial.terms
+        for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
     )
     base = term.n_base if axis == 0 else term.k_base
     base_numerator, base_denominator = base.as_integer_ratio()
-    base_digits = max(len(str(abs(base_numerator))), len(str(base_denominator)))
+    base_digits = max(
+        decimal_digit_width(base_numerator),
+        decimal_digit_width(base_denominator),
+    )
     conservative_digits = (
         2 * coefficient_digits
         + 2 * base_digits
-        + factorial_degree * (offset_digits + 4)
+        + factorial_degree * 5
+        + _factorial_offset_excess_digits(term, axis)
         + _term_degree(term)
         + len(str(max(1, shifted_terms * factorial_terms)))
     )
@@ -187,8 +196,8 @@ def _quotient(term: ProperHypergeometricTerm, axis: int) -> RationalFunction:
     request_checkpoint("after hypergeometric shift quotient normalization")
     if any(
         max(
-            len(str(abs(coefficient.as_fraction().numerator))),
-            len(str(coefficient.as_fraction().denominator)),
+            decimal_digit_width(coefficient.as_fraction().numerator),
+            decimal_digit_width(coefficient.as_fraction().denominator),
         )
         > _MAX_OUTPUT_DIGITS
         for polynomial_part in (result.numerator, result.denominator)

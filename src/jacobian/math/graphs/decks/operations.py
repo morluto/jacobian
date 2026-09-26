@@ -34,7 +34,6 @@ from jacobian.math.graphs.decks._models import (
     UnlabelledDeckClass,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckClass,
-    VertexDeckAnonymousMultisetRequest,
     VertexDeckEdgeCount,
     VertexDeckInducedSubgraphContribution,
     VertexDeckInducedSubgraphCount,
@@ -231,7 +230,7 @@ def anonymous_graph_card_multiset(
 
 
 def vertex_deck_anonymous_multiset(
-    request: VertexDeckAnonymousMultisetRequest,
+    family: VertexDeletionFamily,
 ) -> AnonymousGraphCardMultiset:
     """Forget source labels and quotient a complete vertex family anonymously.
 
@@ -240,13 +239,6 @@ def vertex_deck_anonymous_multiset(
     deck equality. The source-family relation and each card's graph-isomorphism
     class are established at this trust boundary.
     """
-    if type(request) is not VertexDeckAnonymousMultisetRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.anonymous_source_request",
-            message="request must be a VertexDeckAnonymousMultisetRequest",
-        )
-    family = getattr(request, "family", None)
     if type(family) is not VertexDeletionFamily:
         raise OperationDomainValidationError(
             location=("family",),

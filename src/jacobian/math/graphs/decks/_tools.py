@@ -46,7 +46,7 @@ def _run_vertex_deleted(request: VertexDeckRequest) -> VertexDeletionFamily:
 def _run_vertex_anonymous(
     request: VertexDeckAnonymousMultisetRequest,
 ) -> AnonymousGraphCardMultiset:
-    return vertex_deck_anonymous_multiset(request)
+    return vertex_deck_anonymous_multiset(request.family)
 
 
 _PATH_3_EXAMPLE: dict[str, Any] = {

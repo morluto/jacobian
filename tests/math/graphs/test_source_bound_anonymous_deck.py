@@ -85,9 +85,7 @@ def test_source_bound_deck_maps_to_exact_anonymous_isomorphism_multiset(
     order: int, edge_mask: int
 ) -> None:
     source = _graph(order, edge_mask)
-    result = vertex_deck_anonymous_multiset(
-        VertexDeckAnonymousMultisetRequest(family=vertex_deletion_family(source))
-    )
+    result = vertex_deck_anonymous_multiset(vertex_deletion_family(source))
 
     assert _actual_deck(result) == _expected_deck(source)
 
@@ -107,9 +105,7 @@ def test_anonymous_result_composes_with_global_deck_equality() -> None:
     )
 
     def anonymous(graph: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
-        return vertex_deck_anonymous_multiset(
-            VertexDeckAnonymousMultisetRequest(family=vertex_deletion_family(graph))
-        )
+        return vertex_deck_anonymous_multiset(vertex_deletion_family(graph))
 
     left, same, other = map(anonymous, (left_graph, relabelled, different))
     assert anonymous_deck_equality(left, same).equal
@@ -126,16 +122,14 @@ def test_source_family_replay_rejects_forged_card_before_canonicalizing() -> Non
         OperationDomainValidationError,
         match="every exact source vertex-deleted card",
     ):
-        request = VertexDeckAnonymousMultisetRequest.model_construct(family=forged)
-        vertex_deck_anonymous_multiset(request)
+        vertex_deck_anonymous_multiset(forged)
 
 
 def test_canonicalization_bound_is_checked_before_source_family_replay() -> None:
     source = _graph(9, 0)
     family = vertex_deletion_family(source)
-    request = VertexDeckAnonymousMultisetRequest(family=family)
     with pytest.raises(OperationResourceAdmissionError):
-        vertex_deck_anonymous_multiset(request)
+        vertex_deck_anonymous_multiset(family)
 
 
 def test_raw_request_keeps_semantic_admission_in_operation_path() -> None:
@@ -176,7 +170,7 @@ def test_max_admitted_source_order_composes_with_equality() -> None:
         edges=(),
     )
     result = vertex_deck_anonymous_multiset(
-        VertexDeckAnonymousMultisetRequest(family=vertex_deletion_family(graph))
+        vertex_deletion_family(graph)
     )
     comparison = anonymous_deck_equality(result, result)
     assert comparison.equal

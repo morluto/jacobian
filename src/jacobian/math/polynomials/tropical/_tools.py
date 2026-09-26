@@ -576,7 +576,9 @@ TOOLS: MathTools = (
             "The result retains the source, equivalent subpolynomial, all lifted "
             "facet incidences, affine-rank equations, and complete finite-normal "
             "lower/upper face incidence. This bounded exact hull transform is not "
-            "the unique-region functional normal form."
+            "the unique-region functional normal form. Inputs admit at most 4 "
+            "variables, 64 terms, and 32 decimal digits per coefficient. The "
+            "complete face-closure work is bounded before hull expansion."
         ),
         request_type=EssentialPartRequest,
         result_type=TropicalPolynomialEssentialPart,
@@ -585,7 +587,11 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="tie_inclusive_square_support",
-                description="Retain all four square terms and the center term because they tie at the origin.",
+                description=(
+                    "Retain all four square terms and the center term because they "
+                    "tie at the origin. Essential-part inputs are limited to 4 "
+                    "variables, 64 terms, and 32 decimal digits per coefficient."
+                ),
                 input={
                     "polynomial": {
                         "semiring": _s(),

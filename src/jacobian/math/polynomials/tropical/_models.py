@@ -514,9 +514,14 @@ class BivariateRegularSubdivisionRequest(StrictModel):
 
 
 class EssentialPartRequest(StrictModel):
-    """Compute the bounded exact attained-term transform."""
+    """Compute attained terms within the essential-part specific input envelope."""
 
-    polynomial: TropicalPolynomial
+    polynomial: TropicalPolynomial = Field(
+        description=(
+            "Canonical tropical polynomial with at most 4 variables and 64 terms; "
+            "each finite coefficient is limited to 32 decimal digits."
+        )
+    )
 
 
 class BivariateHypersurfaceRequest(StrictModel):

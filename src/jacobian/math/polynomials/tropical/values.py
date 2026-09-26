@@ -597,7 +597,8 @@ class TropicalPolynomialEssentialPart(StrictModel):
         if any(
             tuple(sorted(set(face.source_term_indices))) != face.source_term_indices
             or any(
-                index >= len(self.source.terms) for index in face.source_term_indices
+                index < 0 or index >= len(self.source.terms)
+                for index in face.source_term_indices
             )
             for face in (*self.hull_facets, *self.finite_faces)
         ):
@@ -608,14 +609,21 @@ class TropicalPolynomialEssentialPart(StrictModel):
         if any(
             not face.maximal_finite_face_indices
             or any(
-                index >= len(self.finite_faces)
+                index < 0 or index >= len(self.finite_faces)
                 for index in face.maximal_finite_face_indices
             )
             or tuple(sorted(set(face.maximal_finite_face_indices)))
             != face.maximal_finite_face_indices
             or tuple(sorted(set(face.source_term_indices))) != face.source_term_indices
             or any(
-                index >= len(self.source.terms) for index in face.source_term_indices
+                index < 0 or index >= len(self.source.terms)
+                for index in face.source_term_indices
+            )
+            or any(
+                not set(face.source_term_indices).issubset(
+                    self.finite_faces[index].source_term_indices
+                )
+                for index in face.maximal_finite_face_indices
             )
             for face in self.face_incidence
         ):

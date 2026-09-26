@@ -7,6 +7,7 @@ from math import comb
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
+    OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.polytopes._polyhedral_conversion import (
@@ -39,6 +40,9 @@ from jacobian.math.polynomials.tropical.values import (
     TropicalEssentialLiftedFace,
     TropicalPolynomial,
     TropicalPolynomialEssentialPart,
+    TropicalPolynomialTerm,
+    TropicalScalar,
+    TropicalSemiring,
 )
 
 
@@ -135,8 +139,26 @@ def _lifted_hull_bounds(
 def _preflight(
     poly: TropicalPolynomial,
 ) -> tuple[tuple[tuple[Fraction, ...], ...], int, int, int, int, int]:
-    _admit_polynomial(poly)
-    variable_count, term_count = len(poly.variables), len(poly.terms)
+    if not isinstance(poly, TropicalPolynomial):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="tropical.essential_part_polynomial_shape",
+            message="essential-part input must be a tropical polynomial",
+        )
+    raw_semiring = getattr(poly, "semiring", None)
+    raw_variables = getattr(poly, "variables", None)
+    raw_terms = getattr(poly, "terms", None)
+    if (
+        not isinstance(raw_semiring, TropicalSemiring)
+        or type(raw_variables) is not tuple
+        or type(raw_terms) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="tropical.essential_part_polynomial_shape",
+            message="essential-part input must use canonical polynomial containers",
+        )
+    variable_count, term_count = len(raw_variables), len(raw_terms)
     if variable_count > MAX_TROPICAL_ESSENTIAL_VARIABLES:
         _reject(
             ("polynomial", "variables"),
@@ -149,6 +171,30 @@ def _preflight(
             "tropical.essential_part_term_bound",
             f"essential-part hulls admit at most {MAX_TROPICAL_ESSENTIAL_TERMS} terms",
         )
+    for term in raw_terms:
+        if (
+            not isinstance(term, TropicalPolynomialTerm)
+            or type(term.exponents) is not tuple
+            or len(term.exponents) != variable_count
+            or not isinstance(term.coefficient, TropicalScalar)
+        ):
+            raise OperationDomainValidationError(
+                location=("polynomial", "terms"),
+                code="tropical.essential_part_polynomial_shape",
+                message="essential-part terms must match the bounded variable axis",
+            )
+        value = term.coefficient.value
+        if value is not None and (
+            not isinstance(value, CanonicalRational)
+            or type(value.num) is not int
+            or type(value.den) is not int
+        ):
+            raise OperationDomainValidationError(
+                location=("polynomial", "terms", "coefficient"),
+                code="tropical.essential_part_coefficient",
+                message="finite coefficients must use canonical exact rationals",
+            )
+    _admit_polynomial(poly)
     coefficient_digits = max(
         (
             max(
@@ -165,6 +211,14 @@ def _preflight(
             "tropical.essential_part_height_bound",
             "coefficient heights exceed the exact lifted-hull envelope",
         )
+    try:
+        poly = TropicalPolynomial.model_validate(poly.model_dump(mode="python"))
+    except (TypeError, ValueError, AttributeError) as error:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="tropical.essential_part_polynomial_shape",
+            message="essential-part input must be a canonical tropical polynomial",
+        ) from error
     dimension = variable_count + 1
     component_digits = max(coefficient_digits, len(str(MAX_TROPICAL_EXPONENT)))
     points = tuple(

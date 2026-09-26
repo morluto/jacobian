@@ -51,6 +51,28 @@ growth, and serialized result size. The returned model checks coordinate axis
 and shape during deserialization; consumers that rely on table mathematics
 must reconstruct the canonical table from its group.
 
+## Tensoring virtual characters
+
+`character.tensor_product.compute` multiplies two `CharacterRingElement`
+values in the representation ring and returns their exact irreducible
+multiplicities. It requires both values to retain the same canonical table for
+the same group. The operation expands their coordinates into class values,
+uses the pointwise product (the character of the tensor product), and computes
+the exact Hermitian inner product with every irreducible row. It checks that
+the resulting coordinates reconstruct the product exactly. Signed input
+coordinates remain valid and can produce signed output coordinates.
+
+The supported canonical tables are for the trivial group, cyclic groups of
+order at most 60, and `S3`. This is a bounded supported-family contract, not a
+claim about arbitrary finite groups. Symmetric and exterior powers and Adams
+operations remain separate unimplemented capabilities. GAP describes
+class-function multiplication and scalar products in its
+[class-function reference](https://gap-system.github.io/gap/doc/ref/chap72_mj.html).
+The source permutation presentation has its own work bound before group-order
+computation. The operation derives the order from the source permutations and
+stops group-closure enumeration after finding a 61st element; a forged table
+partition cannot reduce this bound.
+
 ## Scaling a class function
 
 `class_function.scale.compute` multiplies every value by one exact scalar in

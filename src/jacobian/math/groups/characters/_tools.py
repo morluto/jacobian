@@ -6,10 +6,12 @@ from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.groups.characters._models import (
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
+    CharacterRingElement,
     CharacterTableRequest,
     CharacterTableResult,
     CharacterTensorDecompositionRequest,
     CharacterTensorDecompositionResult,
+    CharacterTensorProductRequest,
     ClassFunctionAddRequest,
     ClassFunctionConjugateRequest,
     ClassFunctionInductionRequest,
@@ -43,6 +45,7 @@ from jacobian.math.groups.characters.operations import (
     restrict_cyclic_character,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_tensor_product,
     class_function_character_decomposition,
 )
 
@@ -61,6 +64,12 @@ def _run_character_ring_decomposition(
     request: CharacterRingDecompositionRequest,
 ) -> CharacterRingDecompositionResult:
     return class_function_character_decomposition(request)
+
+
+def _run_character_tensor_product(
+    request: CharacterTensorProductRequest,
+) -> CharacterRingElement:
+    return character_tensor_product(request)
 
 
 def _run_tensor_decomposition(
@@ -194,6 +203,13 @@ def _s3_character_table() -> dict[str, Any]:
             },
         ],
         "degree_square_sum": 6,
+    }
+
+
+def _s3_ring_element(coordinates: list[int]) -> dict[str, Any]:
+    return {
+        "table": _s3_character_table(),
+        "irreducible_multiplicities": coordinates,
     }
 
 
@@ -565,6 +581,45 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "Express the standard S3 character in the complete irreducible basis."
                 ),
                 input={"class_function": _s3_standard_class_function()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.tensor_product.compute",
+        title="Decompose a bounded virtual-character tensor product",
+        description=(
+            "Multiply two table-bound virtual characters pointwise and return "
+            "their exact irreducible multiplicities. Inputs must use the same "
+            "canonical character table. Supported groups currently are the "
+            "trivial group, cyclic groups through order 60, and S3. Signed "
+            "coordinates are preserved for virtual characters."
+        ),
+        request_type=CharacterTensorProductRequest,
+        result_type=CharacterRingElement,
+        run=_run_character_tensor_product,
+        tags=(
+            "finite-group",
+            "character",
+            "tensor-product",
+            "representation-ring",
+            "exact",
+        ),
+        discovery_terms=(
+            "tensor product virtual characters decompose irreducible multiplicities",
+            "finite group representation ring product",
+            "character table tensor product decomposition",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_tensor_square",
+                description=(
+                    "The standard two-dimensional S3 representation tensored "
+                    "with itself decomposes as trivial plus sign plus standard."
+                ),
+                input={
+                    "left": _s3_ring_element([0, 0, 1]),
+                    "right": _s3_ring_element([0, 0, 1]),
+                },
             ),
         ),
     ),

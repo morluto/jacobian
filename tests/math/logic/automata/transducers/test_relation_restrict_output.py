@@ -188,6 +188,29 @@ def test_decoded_result_rejects_false_in_range_edge_transport() -> None:
         RestrictRationalOutputResult.model_validate(forged.model_dump())
 
 
+@pytest.mark.parametrize(
+    "transport_patch",
+    [
+        {"source_edge": 4095},
+        {"restricted_edge": 4095},
+    ],
+)
+def test_decoded_result_rejects_out_of_range_edge_transport(
+    transport_patch: dict[str, int],
+) -> None:
+    result = _restrict(
+        RestrictRationalOutputRequest(
+            transducer=_source(),
+            output_language=_output_language(),
+            output_alphabet=FiniteAlphabet(symbols=("x", "y")),
+        )
+    )
+    payload = result.model_dump()
+    payload["edge_sources"][0].update(transport_patch)
+    with pytest.raises(ValidationError):
+        RestrictRationalOutputResult.model_validate(payload)
+
+
 def test_output_restriction_rejects_mismatched_alphabet_context() -> None:
     source = _source().model_copy(
         update={"output_alphabet": FiniteAlphabet(symbols=("a", "b"))}

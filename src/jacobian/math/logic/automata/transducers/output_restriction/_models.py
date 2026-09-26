@@ -24,10 +24,12 @@ def _error(reason: str, message: str) -> PydanticCustomError:
 
 
 def _output_edge_advances_language(
-    language: DFA, initial: int, label: tuple[int, ...], target: int
+    transitions: dict[tuple[int, int], int],
+    initial: int,
+    label: tuple[int, ...],
+    target: int,
 ) -> bool:
     state = initial
-    transitions = {(row.source, row.symbol): row.target for row in language.transitions}
     for symbol in label:
         next_state = transitions.get((state, symbol))
         if next_state is None:
@@ -86,6 +88,57 @@ class RestrictOutputEdgeSource(StrictModel):
     source_edge: int = Field(ge=0, le=4095)
 
 
+def _require_transport_indices(result: RestrictRationalOutputResult) -> None:
+    source_edges = result.source.edges
+    restricted_edges = result.restricted.edges
+    product_rows = result.product_states
+    if len(product_rows) != result.restricted.state_count:
+        raise _error(
+            "product_state_transport_mismatch",
+            "every restricted state must have one product-state transport",
+        )
+    if tuple(row.product_state for row in product_rows) != tuple(
+        range(result.restricted.state_count)
+    ):
+        raise _error(
+            "product_state_transport_order",
+            "product-state transports must follow restricted state order",
+        )
+    if len(result.edge_sources) != len(restricted_edges):
+        raise _error(
+            "edge_transport_mismatch",
+            "every restricted edge must have one source-edge transport",
+        )
+    if tuple(row.restricted_edge for row in result.edge_sources) != tuple(
+        range(len(restricted_edges))
+    ):
+        raise _error(
+            "edge_transport_order", "edge transports must follow restricted edge order"
+        )
+    if any(
+        row.transducer_state >= result.source.state_count
+        or row.language_state >= result.output_language.state_count
+        for row in product_rows
+    ):
+        raise _error(
+            "product_state_transport_out_of_range",
+            "product-state transport leaves an embedded source axis",
+        )
+    if any(row.source_edge >= len(source_edges) for row in result.edge_sources):
+        raise _error(
+            "edge_transport_out_of_range",
+            "edge transport leaves the embedded source relation",
+        )
+    if any(
+        edge.source >= len(product_rows) or edge.target >= len(product_rows)
+        for edge in restricted_edges
+    ):
+        raise _error(
+            "edge_endpoint_out_of_range",
+            "restricted edge endpoint leaves the product-state axis",
+        )
+
+
 class RestrictRationalOutputResult(StrictModel):
     """Exact product relation ``R ∩ (A* x L)`` with source transports."""
 
@@ -100,9 +153,14 @@ class RestrictRationalOutputResult(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_transports(self) -> Self:
+        _require_transport_indices(self)
         source_edges = self.source.edges
         restricted_edges = self.restricted.edges
         product_rows = self.product_states
+        transitions = {
+            (row.source, row.symbol): row.target
+            for row in self.output_language.transitions
+        }
         for transport in self.edge_sources:
             restricted_edge = restricted_edges[transport.restricted_edge]
             source_edge = source_edges[transport.source_edge]
@@ -114,7 +172,7 @@ class RestrictRationalOutputResult(StrictModel):
                 or restricted_edge.input_label != source_edge.input_label
                 or restricted_edge.output_label != source_edge.output_label
                 or not _output_edge_advances_language(
-                    self.output_language,
+                    transitions,
                     source_state.language_state,
                     source_edge.output_label,
                     target_state.language_state,

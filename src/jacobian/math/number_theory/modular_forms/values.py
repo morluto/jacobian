@@ -220,18 +220,9 @@ class ModularFormSpace(StrictModel):
                 raise _validation_error(
                     "character_coordinates", "character coordinates must be canonical"
                 )
-            # The group decomposition is caller-supplied mathematical data.
-            # Validate it before relying on the claimed generator orders.
-            try:
-                from jacobian.math.number_theory.characters.operations import (
-                    require_complete_character_group,
-                )
-
-                require_complete_character_group(character.group)
-            except (ValueError, TypeError) as error:
-                raise _validation_error(
-                    "character_group", "character unit-group presentation is invalid"
-                ) from error
+            # The complete unit-group proof (factoring the modulus and replaying
+            # every unit-coordinate identity) lives in the relying operation that
+            # consumes the authored group claim, not in this value validator.
             from math import gcd, lcm
 
             character_order = 1
@@ -345,6 +336,12 @@ def natural_gamma0_inclusion_issue(
         return "inclusion_kind_tag", "inclusion map kind is not canonical"
     if type(source) is not ModularFormSpace or type(target) is not ModularFormSpace:
         return "inclusion_space_type", "inclusion parents must be exact modular spaces"
+    if any(
+        not hasattr(space, field)
+        for space in (source, target)
+        for field in ("group", "character", "coefficient_domain", "level", "weight", "kind")
+    ):
+        return "inclusion_space_incomplete", "inclusion spaces must contain all required fields"
     if (
         source.group != "GAMMA0"
         or target.group != "GAMMA0"

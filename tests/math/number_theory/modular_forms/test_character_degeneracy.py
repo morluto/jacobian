@@ -31,7 +31,7 @@ from jacobian.math.number_theory.modular_forms.character_degeneracy import (
 from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
     ModularCharacterVDegeneracyRequest,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
 )
 from jacobian.math.number_theory.modular_forms.values import (

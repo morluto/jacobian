@@ -19,10 +19,10 @@ from jacobian.math.number_theory.modular_forms._models import (
 )
 from jacobian.math.number_theory.modular_forms.kernel import expected_coefficients
 from jacobian.math.number_theory.modular_forms.operations import space_dimension
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     MAX_PARI_BASIS_DIMENSION,
     MAX_PARI_BASIS_LEVEL,
-    MAX_PARI_BASIS_OUTPUT_BYTES,
+    MAX_PARI_BASIS_ALLOCATION_BYTES,
     MAX_PARI_BASIS_PRECISION,
     MAX_PARI_BASIS_WEIGHT,
     MAX_PARI_BASIS_WORK,
@@ -64,7 +64,7 @@ GAMMA0_FOUR_BASIS_ID = "gamma0-four-weight-2-generators-v1"
 GAMMA0_FOUR_CHI4_WEIGHT_ONE_BASIS_ID = "gamma0-four-chi4-weight-one-v1"
 GAMMA0_FOUR_CHI4_WEIGHT_THREE_BASIS_ID = "gamma0-four-chi4-weight-three-v1"
 MAX_LEVEL_ONE_BASIS_WORK = 4_000_000
-MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES = 8 * 1024 * 1024
 MAX_COORDINATE_RESULT_DIGITS = 4_096
 MAX_COORDINATE_HECKE_WORK = 4_000_000
 MAX_HECKE_MATRIX_OUTPUT_BYTES = 8 * 1024 * 1024
@@ -455,7 +455,7 @@ def _admit_basis(
     output_digits = dimension * precision * (coefficient_digits + 8)
     if (
         coefficient_digits > MAX_COORDINATE_RESULT_DIGITS
-        or output_digits > MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES
+        or output_digits > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("space", "weight"),
@@ -544,7 +544,7 @@ def _admit_pari_basis(
             message="PARI modular-form basis work exceeds its exact envelope",
         )
     output_bytes = dimension * precision * (2 * rref_digits + 32)
-    if output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if output_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.pari_basis_output_bound",
@@ -1437,7 +1437,7 @@ def modular_form_coordinates_equal(
             code="modular_form.equality_work_bound",
             message="combined equality basis and coefficient work exceeds its envelope",
         )
-    if combined_basis_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if combined_basis_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=(),
             code="modular_form.equality_basis_output_bound",
@@ -1471,7 +1471,7 @@ def modular_form_coordinates_equal(
             code="modular_form.equality_coefficient_growth",
             message="common Sturm prefix coefficient growth exceeds its exact envelope",
         )
-    if combined_expansion_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if combined_expansion_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=(),
             code="modular_form.equality_output_bound",
@@ -1519,8 +1519,11 @@ def modular_form_space_inclusion(
     )
     if issue is not None:
         reason, message = issue
+        location = ("source_space",)
+        if reason == "inclusion_weight" or reason == "inclusion_level":
+            location = ("target_space",)
         raise OperationDomainValidationError(
-            location=("source_space",),
+            location=location,
             code=f"modular_form.inclusion_{reason}",
             message=message,
         )
@@ -1552,6 +1555,13 @@ def modular_form_coordinates_transport(
             location=("inclusion",),
             code="modular_form.transport_inclusion_type",
             message="inclusion must be an exact modular-form space inclusion value",
+        )
+    required_fields = ("map_kind", "source_space", "target_space")
+    if any(not hasattr(inclusion, field) for field in required_fields):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="modular_form.transport_inclusion_incomplete",
+            message="inclusion must contain its map kind, source space, and target space",
         )
     source_space = form.space
     issue = natural_gamma0_inclusion_issue(
@@ -1593,7 +1603,7 @@ def modular_form_coordinates_transport(
     total_work += solve_work
     if total_work > MAX_PARI_BASIS_WORK:
         raise OperationResourceAdmissionError(
-            location=("target_space",),
+            location=("inclusion", "target_space"),
             code="modular_form.transport_work_bound",
             message="combined source and target basis work exceeds the transport envelope",
         )
@@ -1628,9 +1638,9 @@ def modular_form_coordinates_transport(
             message="transport coordinate growth exceeds its exact digit envelope",
         )
     result_bytes = target_plan.dimension * (2 * result_digit_bound + 32) + 512
-    if result_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if result_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
-            location=("target_space",),
+            location=("inclusion", "target_space"),
             code="modular_form.transport_output_bound",
             message="transport coordinates exceed the exact output-byte envelope",
         )
@@ -1833,7 +1843,7 @@ def modular_form_coordinates_product(
         + target_dimension * (2 * result_digits + 64)
         + 1024
     )
-    if result_bytes > MAX_LEVEL_ONE_BASIS_OUTPUT_BYTES:
+    if result_bytes > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=(),
             code="modular_form.product_output_bound",
@@ -2241,7 +2251,7 @@ def modular_form_coordinates_atkin_lehner(
         dimension * precision * (2 * max(1, plan.coefficient_digits) + 32) + 512
     )
     output_bytes = matrix_output_bytes + coordinate_output_bytes
-    if basis_input_bytes + matrix_output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if basis_input_bytes + matrix_output_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("form", "space"),
             code="modular_form.atkin_lehner_backend_output_bound",
@@ -2288,7 +2298,7 @@ def modular_form_coordinates_atkin_lehner(
             code="modular_form.atkin_lehner_work_bound",
             message="Atkin-Lehner work exceeds its admitted envelope",
         )
-    if output_bytes > MAX_PARI_BASIS_OUTPUT_BYTES:
+    if output_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("form", "space"),
             code="modular_form.atkin_lehner_output_bound",

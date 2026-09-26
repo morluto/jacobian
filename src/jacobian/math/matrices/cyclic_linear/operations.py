@@ -18,7 +18,10 @@ from jacobian._execution import (
     request_checkpoint,
     request_execution,
 )
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     MAX_CYCLIC_FIELD_WORK,
@@ -47,12 +50,19 @@ _CYCLIC_PROFILE_WALL_SECONDS = 3_600.0
 _ADMISSION_CHECK_INTERVAL = 256
 
 
-class CyclicRankKernelAdmissionError(ValueError):
+class CyclicRankKernelAdmissionError(OperationDomainValidationError):
     """A proved owner-local resource rejection before exact elimination."""
 
     def __init__(self, reason: str, message: str) -> None:
         self.reason = reason
-        super().__init__(message)
+        error_type = (
+            OperationResourceAdmissionError
+            if reason in {"field_work_bound", "element_height_bound"}
+            else OperationDomainValidationError
+        )
+        error_type.__init__(
+            self, location=(), code=f"matrix.cyclic.{reason}", message=message
+        )
 
 
 def _inclusion_poly(order: int, target_order: int) -> tuple[Fraction, ...]:

@@ -243,7 +243,30 @@ def _coordinates(
 
 def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
     """Compute the categorical kernel in finite-dimensional based stalks."""
+    if type(value) is not SheafMorphismResult:
+        raise _fail_domain("morphism_type", "morphism must be a canonical sheaf map")
+    if type(value.source) is not FiniteCellularSheaf or type(value.target) is not FiniteCellularSheaf:
+        raise _fail_domain("parent_type", "morphism endpoints must be cellular sheaves")
     source, target = value.source, value.target
+    if not isinstance(value.components, tuple) or any(
+        not isinstance(component, tuple)
+        or len(component) != 2
+        or not isinstance(component[1], (tuple, list))
+        or not (
+            isinstance(component[0], str)
+            or (
+                isinstance(component[0], tuple)
+                and all(isinstance(label, str) for label in component[0])
+            )
+        )
+        for component in value.components
+    ):
+        raise _fail_domain(
+            "component_structure",
+            "morphism components must be keyed (simplex, matrix) pairs",
+        )
+    _readmit_parent_sheaf(source, role="source")
+    _readmit_parent_sheaf(target, role="target")
     field = _admit_field(source.coefficient_field, source.prime)
     target_field = _admit_field(target.coefficient_field, target.prime)
     if (
@@ -259,16 +282,6 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
     _admit_section_plan(target)
     # Authored Pydantic models can bypass validation via model_construct/model_copy;
     # reject malformed pair structure before the shared scalar/resource scan.
-    if not isinstance(value.components, tuple) or any(
-        not isinstance(component, tuple)
-        or len(component) != 2
-        or not isinstance(component[1], (tuple, list))
-        for component in value.components
-    ):
-        raise _fail_domain(
-            "component_structure",
-            "morphism components must be a tuple of (simplex key, matrix) pairs",
-        )
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )
@@ -343,8 +356,6 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
 
     # Reconstruct both complete parent functors only after the combined input,
     # arithmetic, and output envelope has been admitted.
-    _readmit_parent_sheaf(source, role="source")
-    _readmit_parent_sheaf(target, role="target")
 
     # Do not trust the serialized natural flag until both parent diagrams have
     # been reconstructed and shown equal to their cover-map presentations.

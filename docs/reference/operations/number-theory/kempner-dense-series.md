@@ -1,8 +1,9 @@
-# Dense Kempner reciprocal-series enclosures
+# `number_theory.kempner_series.enclose_decimal`
 
-The private fixed-point kernel used by `enclose_kempner_series` encloses the infinite
-reciprocal series for a proper base-b digit family without constructing
-the potentially enormous common denominator of its finite partial sum.
+This operation encloses the infinite reciprocal series for a proper base-b
+digit family without constructing the potentially enormous common denominator
+of its finite partial sum. Native callers can import
+`enclose_kempner_series_decimal` from `jacobian.math.number_theory.kempner`.
 
 For a requested cutoff D and decimal precision q, each accepted positive
 integer n with at most D digits contributes

@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.dispatch import invoke_operation
+from jacobian.math.free_algebras import polynomial_subtract
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_ADDITION_TERMS,
     FreeAlgebraPolynomial,
@@ -25,6 +26,11 @@ from jacobian.math.free_algebras.polynomial_subtract import operations
 from jacobian.math.free_algebras.polynomial_subtract.operations import subtract
 
 OPERATION_ID = "free_algebra.polynomial.subtract.compute"
+
+
+def test_package_exports_only_the_native_subtraction_operation() -> None:
+    assert polynomial_subtract.__all__ == ["subtract"]
+    assert not hasattr(polynomial_subtract, "FreeAlgebraPolynomialSubtractionRequest")
 
 
 def _polynomial(
@@ -150,7 +156,7 @@ def test_common_denominator_factor_is_accounted_for_exactly() -> None:
 
 def test_output_cell_estimate_sums_actual_word_lengths() -> None:
     long_word = ("x",) * 64
-    words = (long_word,) + _words(("x", "y"), 35)
+    words = (long_word, *_words(("x", "y"), 35))
     value = _polynomial(("x", "y"), dict.fromkeys(words, 1))
 
     assert subtract(value, _polynomial(("x", "y"), {})) == value

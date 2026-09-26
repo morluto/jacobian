@@ -18,9 +18,6 @@ from jacobian.math.graphs.decks import (
     vertex_deck_anonymous_multiset,
     vertex_deletion_family,
 )
-from jacobian.math.graphs.decks.anonymous_equality._models import (
-    AnonymousDeckEqualityRequest,
-)
 from jacobian.math.graphs.decks.anonymous_equality.operations import (
     anonymous_deck_equality,
 )
@@ -169,9 +166,7 @@ def test_max_admitted_source_order_composes_with_equality() -> None:
         vertices=tuple("abcdefg"),
         edges=(),
     )
-    result = vertex_deck_anonymous_multiset(
-        vertex_deletion_family(graph)
-    )
+    result = vertex_deck_anonymous_multiset(vertex_deletion_family(graph))
     comparison = anonymous_deck_equality(result, result)
     assert comparison.equal
 

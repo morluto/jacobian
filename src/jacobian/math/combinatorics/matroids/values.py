@@ -110,8 +110,19 @@ def _preflight_raw_envelope(data: object) -> None:
 
     if not isinstance(data, Mapping):
         return
-    _preflight_ground_axis(data.get("ground"))
-    _preflight_basis_family(data.get("bases"))
+    unknown = set(data) - {"ground", "bases"}
+    if unknown:
+        raise _validation_error(
+            "unknown_field", "matroid input contains an unknown field"
+        )
+    ground = data.get("ground")
+    bases = data.get("bases")
+    if not isinstance(ground, (list, tuple)):
+        raise _validation_error("ground_type", "ground must be a list or tuple")
+    if not isinstance(bases, (list, tuple)):
+        raise _validation_error("bases_type", "bases must be a list or tuple")
+    _preflight_ground_axis(ground)
+    _preflight_basis_family(bases)
 
 
 class FiniteBasisMatroid(StrictModel):
@@ -163,12 +174,6 @@ class FiniteBasisMatroid(StrictModel):
     @classmethod
     def preflight_raw_envelope(cls, data: object) -> object:
         _preflight_raw_envelope(data)
-        if isinstance(data, Mapping):
-            unknown = set(data) - {"ground", "bases"}
-            if unknown:
-                raise _validation_error(
-                    "unknown_field", "matroid input contains an unknown field"
-                )
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
@@ -229,6 +234,10 @@ class FiniteBasisMatroid(StrictModel):
     def require_basis_exchange(self) -> None:
         # This is a public trust boundary: model_construct and other unchecked
         # construction paths can bypass Pydantic's canonical-structure validator.
+        if type(self.ground) is not tuple or type(self.bases) is not tuple:
+            raise _validation_error(
+                "container_type", "ground and bases must be immutable tuples"
+            )
         _preflight_ground_axis(self.ground)
         _preflight_basis_family(self.bases)
         self.require_canonical_basis_matroid()

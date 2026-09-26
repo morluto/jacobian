@@ -62,7 +62,7 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
         (("a", "b"), ((1, 0),), "basis_canonical"),
         (("a", "b"), ((0,), (0,)), "basis_family_canonical"),
         (("a", "a"), ((0,),), "ground_duplicate"),
-        (("a",), ((True,),), "int_type"),
+        (("a",), ((True,),), "basis_index"),
         (("a",), (), "at least 1 item"),
     ],
 )
@@ -179,3 +179,29 @@ def test_utf8_label_limits_apply_per_label_and_in_aggregate() -> None:
         FiniteBasisMatroid.model_validate_json(
             json.dumps({"ground": over_aggregate, "bases": [[]]})
         )
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"ground": ["a"], "bases": {"junk": [0] * 100_000}},
+        {"ground": [[0] * 100_000], "bases": [[]]},
+        {"ground": ["a"], "bases": [[[0] * 100_000]]},
+    ],
+)
+def test_rejects_malformed_containers_before_recursive_canonicalization(
+    payload,
+) -> None:
+    with pytest.raises(ValidationError):
+        FiniteBasisMatroid.model_validate(payload)
+
+
+def test_exchange_verifier_rejects_mutable_ground_and_forged_negative_index() -> None:
+    valid = FiniteBasisMatroid(ground=("a",), bases=((0,),))
+    mutable_ground = valid.model_copy(update={"ground": ["a"]})
+    with pytest.raises(Exception, match="immutable tuples"):
+        mutable_ground.require_basis_exchange()
+
+    forged = FiniteBasisMatroid.model_construct(ground=("a", "b"), bases=((-1,),))
+    with pytest.raises(Exception, match="basis indices"):
+        forged.require_basis_exchange()

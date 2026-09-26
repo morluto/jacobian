@@ -407,6 +407,20 @@ class RSKWordInverseTraceResult(StrictModel):
                 "algebraic_combinatorics.rsk_reverse_trace_letters",
                 "each event letter must match its reconstructed word position",
             )
+        rank_by_letter = {
+            letter: rank
+            for rank, letter in enumerate(self.tableau_pair.alphabet, start=1)
+        }
+        if any(
+            event.removed_entry > len(rank_by_letter)
+            or event.output_entry > len(rank_by_letter)
+            or rank_by_letter.get(event.letter) != event.output_entry
+            for event in self.reverse_insertion_events
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_ranks",
+                "event ranks must belong to the retained alphabet and identify the emitted letter",
+            )
         return self
 
     @classmethod

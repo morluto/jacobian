@@ -213,6 +213,16 @@ class RSKReverseInsertionEvent(StrictModel):
                 "algebraic_combinatorics.rsk_reverse_trace_cell",
                 "the removed cell row is outside the prior shape",
             )
+        expected_removed_column = (
+            self.row_lengths[self.removed_row]
+            if self.removed_row < len(self.row_lengths)
+            else 0
+        )
+        if self.removed_column != expected_removed_column:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_cell",
+                "the removed column must be the corner immediately beyond the resulting row",
+            )
         if any(
             step.row >= len(self.row_lengths)
             or step.column >= self.row_lengths[step.row]

@@ -170,12 +170,8 @@ def test_inverse_trace_revalidates_forged_pair_shape_before_indexing() -> None:
 
 
 def test_inverse_trace_executes_against_canonicalized_pair() -> None:
-    original = row_insertion_rsk(
-        FiniteWord(alphabet=("a", "b"), letters=("b", "a"))
-    )
-    forged = original.model_copy(
-        update={"insertion_tableau": {"rows": [[1], [2]]}}
-    )
+    original = row_insertion_rsk(FiniteWord(alphabet=("a", "b"), letters=("b", "a")))
+    forged = original.model_copy(update={"insertion_tableau": {"rows": [[1], [2]]}})
     result = inverse_row_insertion_rsk_trace(forged)
     assert result.word == FiniteWord(alphabet=("a", "b"), letters=("b", "a"))
     assert row_insertion_rsk(result.word) == original
@@ -188,4 +184,25 @@ def test_inverse_trace_deserialization_rejects_missing_event() -> None:
     payload = result.model_dump(mode="python")
     payload["reverse_insertion_events"] = payload["reverse_insertion_events"][:-1]
     with pytest.raises(ValidationError, match="rsk_reverse_trace_positions"):
+        RSKWordInverseTraceResult.model_validate(payload)
+
+
+def test_inverse_trace_deserialization_rejects_impossible_corner() -> None:
+    result = inverse_row_insertion_rsk_trace(
+        row_insertion_rsk(FiniteWord(alphabet=("a",), letters=("a",)))
+    )
+    payload = result.model_dump(mode="python")
+    payload["reverse_insertion_events"][0]["removed_column"] = 499
+    with pytest.raises(ValidationError, match="rsk_reverse_trace_cell"):
+        RSKWordInverseTraceResult.model_validate(payload)
+
+
+def test_inverse_trace_deserialization_rejects_unbound_emitted_rank() -> None:
+    result = inverse_row_insertion_rsk_trace(
+        row_insertion_rsk(FiniteWord(alphabet=("a",), letters=("a",)))
+    )
+    payload = result.model_dump(mode="python")
+    payload["reverse_insertion_events"][0]["removed_entry"] = 50
+    payload["reverse_insertion_events"][0]["output_entry"] = 50
+    with pytest.raises(ValidationError, match="rsk_reverse_trace_ranks"):
         RSKWordInverseTraceResult.model_validate(payload)

@@ -143,6 +143,17 @@ def test_antidominant_representative_is_a_published_operation() -> None:
     )
 
 
+def test_large_non_antidominant_g2_weight_uses_executed_path_bound() -> None:
+    weight = (1_801_439_850_948_198, 1_801_439_850_948_198)
+    matrix = ((2, -3), (-1, 2))
+
+    result = weyl_antidominant_representative(matrix, weight)
+
+    assert result.antidominant_weight == (-weight[0], -weight[1])
+    assert result.element.root_action.entries != _identity(2)
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
 def test_large_antidominant_g2_weight_skips_orbit_wide_bound() -> None:
     weight = (-1_801_439_850_948_198, -1_801_439_850_948_198)
     matrix = ((2, -3), (-1, 2))

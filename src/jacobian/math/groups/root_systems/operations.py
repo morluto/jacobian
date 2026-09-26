@@ -1840,15 +1840,9 @@ def weyl_antidominant_representative(
             cartan, weight, weight, element
         )
 
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.antidominant_representative_coordinate_bound",
-            message=(
-                "some Weyl image coordinate may exceed the interoperable integer bound"
-            ),
-        )
+    # Each performed reflection checks its actual resulting coordinates in
+    # _weight_reflect. An orbit-wide norm estimate is only an upper bound and
+    # can reject a representable chamber-normalization path.
     longest_word_work_bound = (
         (MAX_POSITIVE_ROOTS + 1) * rank * MAX_POSITIVE_ROOTS * rank
     )

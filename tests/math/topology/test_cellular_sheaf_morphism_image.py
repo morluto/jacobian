@@ -240,3 +240,13 @@ def test_image_rejects_non_natural_candidate_even_if_flag_claims_true() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="natural"):
         image_of_morphism(forged)
+
+    malformed = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=((source.canonical_face_order[0], (1,)),),
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError, match="simplex, matrix"):
+        image_of_morphism(malformed)

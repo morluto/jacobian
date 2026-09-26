@@ -86,9 +86,9 @@ class SheafMorphismImageResult(StrictModel):
                 len(row) != source_ranks[cell] for row in matrix
             ):
                 raise ValueError("morphism matrices must match the stalk axes")
-        for map_ in (self.inclusion, self.factor):
+        for map_ in (self.morphism, self.inclusion, self.factor):
             if not map_.natural or map_.obstruction is not None:
-                raise ValueError("image factorization maps must be natural")
+                raise ValueError("image factorization morphisms must be natural")
             if tuple(key for key, _matrix in map_.components) != cells:
                 raise ValueError(
                     "image factorization components must retain simplex axes"
@@ -199,6 +199,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         not isinstance(component, tuple)
         or len(component) != 2
         or not isinstance(component[1], (tuple, list))
+        or any(not isinstance(row, (tuple, list)) for row in component[1])
         for component in value.components
     ):
         raise _domain(

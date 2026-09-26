@@ -338,14 +338,18 @@ def test_canonicalization_preserves_256_vertex_relabeling_envelope() -> None:
         f"c{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)
     )
     oversized = _graph(oversized_vertices, (), vertex_colors=oversized_colors)
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    with pytest.raises(ValidationError) as request_error:
         ColoredGraphCanonicalizationRequest(colored_graph=oversized)
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    assert (
+        request_error.value.errors()[0]["type"]
+        == "graph.colored_canonicalization.vertex_bound"
+    )
+    with pytest.raises(ValidationError) as native_error:
         canonicalize_colored_graph(oversized)
+    assert (
+        native_error.value.errors()[0]["type"]
+        == "graph.colored_canonicalization.vertex_bound"
+    )
 
 
 def test_request_rejects_edge_key_work_before_enumeration() -> None:

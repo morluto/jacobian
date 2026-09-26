@@ -78,14 +78,18 @@ def _admit_deck(
             )
         graph = getattr(item, "representative", None)
         multiplicity = getattr(item, "multiplicity", None)
-        # Read nested fields defensively: a schema-bypassed model_construct
-        # value has no attributes, and direct access would leak AttributeError
-        # instead of the declared domain diagnostic.
+        if type(graph) is not SimpleUndirectedGraph:
+            raise OperationDomainValidationError(
+                location=("deck", "classes", index),
+                code="graph_deck.component_profile_class",
+                message="each class needs a fixed-axis graph and positive bounded multiplicity",
+            )
+        # Only inspect fields on the exact graph carrier; a forged arbitrary
+        # object could expose hostile or unbounded descriptors here.
         vertices = getattr(graph, "vertices", None)
         edges = getattr(graph, "edges", None)
         if (
-            type(graph) is not SimpleUndirectedGraph
-            or type(vertices) is not tuple
+            type(vertices) is not tuple
             or vertices != expected_vertices
             or type(edges) is not tuple
             or len(edges) > pair_count

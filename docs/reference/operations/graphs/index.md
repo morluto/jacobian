@@ -22,4 +22,3 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Induced edge-deletion profiles](induced-edge-deletion-profile.md)
 - [Exact graph deletion decks](graph-decks.md)
 - [Anonymous graph-card multiset equality](graph-decks.md#anonymous-card-multiset-equality)
-- [Cardwise graph-deck component profiles](graph-decks.md#cardwise-connected-component-profile)

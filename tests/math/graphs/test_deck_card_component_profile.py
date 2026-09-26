@@ -182,6 +182,28 @@ def test_schema_bypassed_representative_reports_domain_error(
         card_component_profile(deck)
 
 
+def test_non_graph_representative_is_rejected_without_field_access() -> None:
+    class HostileRepresentative:
+        @property
+        def vertices(self) -> tuple[str, ...]:
+            raise AssertionError("invalid carrier field was accessed")
+
+        @property
+        def edges(self) -> tuple[tuple[str, str], ...]:
+            raise AssertionError("invalid carrier field was accessed")
+
+    deck = AnonymousGraphCardMultiset.model_construct(
+        card_order=0,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=HostileRepresentative(), multiplicity=1
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        card_component_profile(deck)
+
+
 def test_long_edge_labels_are_rejected_before_label_comparison() -> None:
     # Direct native callers can bypass Pydantic; reject oversized labels before
     # comparing two attacker-controlled common prefixes.

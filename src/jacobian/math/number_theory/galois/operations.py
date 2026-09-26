@@ -879,9 +879,17 @@ def _canonical_automorphism_subgroup(
     )
 
 
-def galois_subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
+def galois_subgroup(
+    field: QQSplittingField | GaloisSubgroupRequest,
+    elements: tuple[QQFieldAutomorphism, ...] | None = None,
+) -> GaloisAutomorphismSubgroup:
     """Admit a complete subgroup of the exact supported automorphism group."""
     try:
+        request = (
+            field
+            if isinstance(field, GaloisSubgroupRequest)
+            else GaloisSubgroupRequest(field=field, elements=elements)
+        )
         canonical_request = GaloisSubgroupRequest.model_validate(request.model_dump())
         field = _canonical_splitting_field(canonical_request.field, location=("field",))
         candidate = GaloisAutomorphismSubgroup(
@@ -903,10 +911,15 @@ def galois_subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgrou
 
 
 def galois_fixed_field(
-    request: GaloisFixedFieldRequest,
+    subgroup: GaloisAutomorphismSubgroup | GaloisFixedFieldRequest,
 ) -> GaloisFixedFieldResult:
     """Return the exact embedded fixed field of a supported QQ subgroup."""
     try:
+        request = (
+            subgroup
+            if isinstance(subgroup, GaloisFixedFieldRequest)
+            else GaloisFixedFieldRequest(subgroup=subgroup)
+        )
         canonical_request = GaloisFixedFieldRequest.model_validate(request.model_dump())
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
@@ -1064,10 +1077,16 @@ def galois_correspondence(
 
 
 def intermediate_field_stabilizer(
-    request: IntermediateFieldStabilizerRequest,
+    field: QQSplittingField | IntermediateFieldStabilizerRequest,
+    inclusion: SimpleNumberFieldEmbedding | None = None,
 ) -> IntermediateFieldStabilizerResult:
     """Return automorphisms fixing a supplied embedded intermediate field."""
     try:
+        request = (
+            field
+            if isinstance(field, IntermediateFieldStabilizerRequest)
+            else IntermediateFieldStabilizerRequest(field=field, inclusion=inclusion)
+        )
         canonical_request = IntermediateFieldStabilizerRequest.model_validate(
             request.model_dump()
         )

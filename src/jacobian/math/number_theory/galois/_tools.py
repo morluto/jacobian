@@ -111,11 +111,11 @@ def _element_orbit(
 
 
 def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
-    return galois_subgroup(request)
+    return galois_subgroup(request.field, request.elements)
 
 
 def _fixed_field(request: GaloisFixedFieldRequest) -> GaloisFixedFieldResult:
-    return galois_fixed_field(request)
+    return galois_fixed_field(request.subgroup)
 
 
 def _correspondence(
@@ -127,7 +127,7 @@ def _correspondence(
 def _intermediate_stabilizer(
     request: IntermediateFieldStabilizerRequest,
 ) -> IntermediateFieldStabilizerResult:
-    return intermediate_field_stabilizer(request)
+    return intermediate_field_stabilizer(request.field, request.inclusion)
 
 
 def _discriminant(

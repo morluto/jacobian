@@ -164,24 +164,20 @@ def _source_rows(source: LocalPolynomialInSeries) -> tuple[_SourceRow, ...]:
 
 
 def _admit_source_common_denominator(
-    source_rows: tuple[_SourceRow, ...],
+    characteristic: NewtonEdgeCharacteristicResult,
 ) -> int:
-    """Bound the shared source denominator before evaluating an edge root."""
+    """Bound only coefficients used to evaluate the selected edge polynomial."""
     common_denominator = 1
-    for row in source_rows:
-        for coefficient in row.series.coefficients:
-            common_denominator = lcm(
-                common_denominator, coefficient.as_fraction().denominator
+    for term in characteristic.terms:
+        common_denominator = lcm(
+            common_denominator, term.leading_coefficient.as_fraction().denominator
+        )
+        if decimal_digit_width(common_denominator) > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
+            _resource(
+                "coefficient_bound",
+                "edge polynomial denominator exceeds the coefficient limit",
+                ("polynomial", "coefficients"),
             )
-            if (
-                decimal_digit_width(common_denominator)
-                > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS
-            ):
-                _resource(
-                    "coefficient_bound",
-                    "common source denominator exceeds the output coefficient limit",
-                    ("polynomial", "coefficients"),
-                )
     return common_denominator
 
 
@@ -231,9 +227,7 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
             edge_index=request.edge_index,
         )
     )
-    source_common_denominator = _admit_source_common_denominator(
-        _source_rows(characteristic.source)
-    )
+    source_common_denominator = _admit_source_common_denominator(characteristic)
     _admit_edge_root_powers(characteristic, root)
     polynomial_value, polynomial_derivative = _edge_polynomial_value(
         characteristic, root
@@ -370,6 +364,37 @@ def _admit_coefficient_digits(
     return coefficient_digits
 
 
+def _admit_retained_common_denominator(
+    source_rows: tuple[_SourceRow, ...],
+    geometry: _TransformGeometry,
+    output_precisions: tuple[int, ...],
+) -> int:
+    """Bound denominators of source coefficients that can reach retained slots."""
+    common_denominator = 1
+    for row in source_rows:
+        for offset, coefficient in enumerate(row.series.coefficients):
+            value = coefficient.as_fraction()
+            if not value:
+                continue
+            exponent = (
+                geometry.ramification_index * (row.series.valuation_lower + offset)
+                + geometry.ordinate_power * row.y_degree
+                - geometry.removed_valuation
+            )
+            if any(
+                exponent < output_precisions[degree]
+                for degree in range(row.y_degree + 1)
+            ):
+                common_denominator = lcm(common_denominator, value.denominator)
+                if decimal_digit_width(common_denominator) > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
+                    _resource(
+                        "coefficient_bound",
+                        "retained source denominator exceeds the output coefficient limit",
+                        ("polynomial", "coefficients"),
+                    )
+    return common_denominator
+
+
 def _admit(request: NewtonTransformRequest) -> _Admission:
     geometry = _admit_geometry(request)
 
@@ -384,16 +409,6 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
         _resource(
             "output_rows_bound",
             f"Newton transform exceeds {MAX_LOCAL_POLYNOMIAL_ROWS} dense output rows",
-            ("polynomial", "coefficients"),
-        )
-
-    work = sum(
-        len(row.series.coefficients) * (row.y_degree + 1) for row in source_rows
-    )
-    if work > MAX_NEWTON_TRANSFORM_WORK:
-        _resource(
-            "work_bound",
-            f"Newton transform exceeds {MAX_NEWTON_TRANSFORM_WORK} source-term products",
             ("polynomial", "coefficients"),
         )
 
@@ -424,12 +439,38 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
     output_precisions, output_slots = _admit_output_windows(
         source_rows, largest_degree, geometry
     )
+    retained_denominator = _admit_retained_common_denominator(
+        source_rows, geometry, output_precisions
+    )
+    work = 0
+    for row in source_rows:
+        for offset, coefficient in enumerate(row.series.coefficients):
+            if not coefficient.as_fraction():
+                continue
+            target_exponent = (
+                geometry.ramification_index * (row.series.valuation_lower + offset)
+                + geometry.ordinate_power * row.y_degree
+                - geometry.removed_valuation
+            )
+            if target_exponent < 0:
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+            if any(
+                target_exponent < output_precisions[degree]
+                for degree in range(row.y_degree + 1)
+            ):
+                work += row.y_degree + 1
+                if work > MAX_NEWTON_TRANSFORM_WORK:
+                    _resource(
+                        "work_bound",
+                        f"Newton transform exceeds {MAX_NEWTON_TRANSFORM_WORK} retained source-term products",
+                        ("polynomial", "coefficients"),
+                    )
     coefficient_digits = _admit_coefficient_digits(
         source_rows,
         source_slots,
         largest_degree,
         geometry.root,
-        geometry.source_common_denominator,
+        retained_denominator,
     )
 
     output_bytes = (

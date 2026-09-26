@@ -152,6 +152,7 @@ def _admit_product(
     right: FreeAlgebraPolynomial,
     *,
     operand_term_limit: int = MAX_FREE_ALGEBRA_OPERAND_TERMS,
+    operand_word_length_limit: int = MAX_FREE_ALGEBRA_WORD_LENGTH,
 ) -> tuple[FreeAlgebraPolynomial, FreeAlgebraPolynomial]:
     """Admit one product request before any word-pair expansion.
 
@@ -182,12 +183,12 @@ def _admit_product(
                 f"{operand_term_limit}-term multiplication budget",
             )
         for index, term in enumerate(polynomial.terms):
-            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            if len(term.word) > operand_word_length_limit:
                 _reject_resource(
                     (side, "terms", index, "word"),
                     "operand_word_length_budget",
                     f"{side} operand word exceeds the "
-                    f"{MAX_FREE_ALGEBRA_WORD_LENGTH}-letter multiplication "
+                    f"{operand_word_length_limit}-letter multiplication "
                     "budget",
                 )
 
@@ -252,6 +253,16 @@ def _admit_product(
             "result_term_budget",
             "product support exceeds the "
             f"{MAX_FREE_ALGEBRA_RESULT_TERMS}-term result budget",
+        )
+    if any(
+        word_length > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+        for word_length, _word_code_value in support_bounds
+    ):
+        _reject_resource(
+            ("left", "terms"),
+            "result_word_length_budget",
+            "product word exceeds the "
+            f"{MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH}-letter result bound",
         )
 
     coefficient_digit_bounds = tuple(
@@ -440,6 +451,7 @@ def _multiply_for_power(
         left,
         right,
         operand_term_limit=MAX_FREE_ALGEBRA_RESULT_TERMS,
+        operand_word_length_limit=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
     )
     product, _ledger = multiply_sparse(left, right)
     return product

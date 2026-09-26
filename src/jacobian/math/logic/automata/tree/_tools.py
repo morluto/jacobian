@@ -9,6 +9,8 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
+    AcceptedTreeHeightProfileRequest,
+    AcceptedTreeHeightProfileResult,
     NondeterministicRunCountsRequest,
     NondeterministicRunCountsResult,
     RankedTreePositionsRequest,
@@ -37,6 +39,7 @@ from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
     _nondeterministic_run_counts_admitted,
     _tree_state_chart_unchecked,
+    accepted_tree_height_profile,
     boolean_product_tree_automata,
     complement_tree_automaton,
     complete_deterministic_tree_automaton,
@@ -84,6 +87,17 @@ def compute_accepted_tree_count(
         request,
         count=_accepted_tree_count_admitted(request.automaton, request.tree_size),
         estimated_work_bound=estimated_work_bound,
+    )
+
+
+def compute_accepted_tree_height_profile(
+    request: AcceptedTreeHeightProfileRequest,
+) -> AcceptedTreeHeightProfileResult:
+    return AcceptedTreeHeightProfileResult._from_kernel(
+        request,
+        counts_by_height=accepted_tree_height_profile(
+            request.automaton, request.max_height
+        ),
     )
 
 
@@ -518,6 +532,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "automaton": _RUN_EXAMPLE["automaton"],
                     "tree_size": 1,
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.accepted_tree_height_profile.compute",
+        title="Count accepted trees through each height",
+        description=(
+            "Return the exact number of distinct accepted ranked trees of height "
+            "at most h for every h from zero through max_height. Leaves have "
+            "height zero. The operation requires a complete deterministic "
+            "bottom-up automaton; transition work, exact integer digits, and "
+            "aggregate output bytes are admitted before the recurrence runs."
+        ),
+        request_type=AcceptedTreeHeightProfileRequest,
+        result_type=AcceptedTreeHeightProfileResult,
+        run=compute_accepted_tree_height_profile,
+        tags=("tree-automata", "counting", "height", "exact"),
+        discovery_terms=(
+            "accepted ranked trees by height",
+            "tree language height count",
+        ),
+        examples=(
+            OperationExample(
+                name="count_through_height_one",
+                description="Count accepted trees with zero or one edge below the root.",
+                input={"automaton": _RUN_EXAMPLE["automaton"], "max_height": 1},
             ),
         ),
     ),

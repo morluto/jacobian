@@ -215,6 +215,24 @@ def test_consistency_result_rejects_forged_structural_claims() -> None:
         CspDomainConsistency.model_validate(payload)
 
 
+def test_unsorted_false_nullary_ids_produce_canonical_result() -> None:
+    template = FiniteRelationalStructure(
+        carrier_size=1,
+        signature=(FiniteRelationSymbol(symbol_id="R", arity=0),),
+        relation_tables=((),),
+    )
+    instance = FiniteCspInstance(
+        template=template,
+        variable_count=0,
+        constraints=(
+            FiniteCspConstraint(constraint_id="z", symbol_id="R", scope=()),
+            FiniteCspConstraint(constraint_id="a", symbol_id="R", scope=()),
+        ),
+    )
+    result = generalized_arc_consistency(CspDomainRequest(instance=instance, domains=()))
+    assert result.false_nullary_constraint_ids == ("a", "z")
+
+
 def test_operation_manifest_uses_typed_carriers() -> None:
     assert len(TOOLS) == 1
     declaration = TOOLS[0]

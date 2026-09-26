@@ -33,8 +33,7 @@ def generalized_arc_consistency(request: CspDomainRequest) -> CspDomainConsisten
     variables in that scope.
     """
 
-    _admit_domain_request(request)
-    instance = request.instance
+    instance = _admit_domain_request(request)
     relation_index = {
         symbol.symbol_id: i for i, symbol in enumerate(instance.template.signature)
     }
@@ -71,16 +70,22 @@ def generalized_arc_consistency(request: CspDomainRequest) -> CspDomainConsisten
         empty_domain_variables=tuple(
             variable for variable, domain in enumerate(final_domains) if not domain
         ),
-        false_nullary_constraint_ids=tuple(false_nullary),
+        false_nullary_constraint_ids=tuple(sorted(false_nullary)),
     )
 
 
-def _admit_domain_request(request: CspDomainRequest) -> None:
+def _admit_domain_request(request: CspDomainRequest) -> FiniteCspInstance:
     if type(request) is not CspDomainRequest:
         raise OperationDomainValidationError(
             location=("request",),
             code="relational.csp.consistency.request_type",
             message="request must be a canonical finite CSP domain request",
+        )
+    if not hasattr(request, "instance") or not hasattr(request, "domains"):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.csp.consistency.request_fields",
+            message="request must include instance and domains",
         )
     instance = request.instance
     if type(instance) is not FiniteCspInstance:
@@ -118,6 +123,7 @@ def _admit_domain_request(request: CspDomainRequest) -> None:
                 "for each CSP variable"
             ),
         )
+    return instance
 
 
 def _unique_constraint_profiles(

@@ -62,10 +62,14 @@ class CspDomainConsistency(StrictModel):
         count = self.instance.variable_count
         if len(self.initial_domains) != count or len(self.domains) != count:
             raise _error("result_axis", "domain axes must match the instance variable count")
+        carrier_size = self.instance.template.carrier_size
         if any(
-            tuple(sorted(set(domain))) != domain
+            len(initial) > carrier_size
+            or tuple(sorted(set(initial))) != initial
+            or any(not 0 <= value < carrier_size for value in initial)
+            or tuple(sorted(set(domain))) != domain
             or not set(domain).issubset(initial)
-            or any(not 0 <= value < self.instance.template.carrier_size for value in domain)
+            or any(not 0 <= value < carrier_size for value in domain)
             for domain, initial in zip(self.domains, self.initial_domains, strict=True)
         ):
             raise _error("result_domains", "final domains must be canonical subsets of initial domains")

@@ -30,7 +30,9 @@ class CoaccessibleStateWitness(StrictModel):
     state_trace: tuple[int, ...] = Field(max_length=MAX_FST_STATES)
     transition_indices: tuple[int, ...] = Field(max_length=MAX_FST_STATES - 1)
     final_state: int = Field(ge=0, lt=MAX_FST_STATES)
-    output_word: tuple[int, ...] = Field(max_length=MAX_FST_RESULT_WORD_LENGTH)
+    output_word: tuple[int, ...] = Field(
+        max_length=MAX_FST_STATES * MAX_FST_RESULT_WORD_LENGTH
+    )
 
     @model_validator(mode="after")
     def require_well_shaped_witness(self) -> Self:

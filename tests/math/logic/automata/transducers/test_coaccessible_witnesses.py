@@ -161,7 +161,7 @@ def test_deserialization_rejects_negative_source_indices(
         type(coaccessible_state_witnesses(_machine())).model_validate(result)
 
 
-def test_output_growth_is_rejected_before_output_materialization() -> None:
+def test_longer_than_generic_result_word_bound_witness_is_accepted() -> None:
     transducer = SubsequentialTransducer(
         input_alphabet_size=1,
         output_alphabet_size=1,
@@ -178,11 +178,8 @@ def test_output_growth_is_rejected_before_output_materialization() -> None:
         ),
         final_outputs=(SubseqFinalOutput(state=9, output=(0,) * 512),),
     )
-    with pytest.raises(OperationResourceAdmissionError) as error:
-        coaccessible_state_witnesses(transducer)
-    assert error.value.errors()[0]["type"] == (
-        "finite_state_transducer.coaccessible_witness_output_exceeded"
-    )
+    result = coaccessible_state_witnesses(transducer)
+    assert len(result.witnesses[0].output_word) == 5120
 
 
 def test_maximum_admitted_witness_output_length_is_accepted() -> None:

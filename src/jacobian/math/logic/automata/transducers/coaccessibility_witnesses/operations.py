@@ -91,10 +91,10 @@ def coaccessible_state_witnesses(
         terminal_output = finals[state]
         parts.append(terminal_output)
         output_length = sum(map(len, parts))
-        if output_length > MAX_FST_RESULT_WORD_LENGTH:
+        if output_length > MAX_COACCESSIBLE_OUTPUT_SYMBOLS:
             raise _resource_error(
                 "coaccessible_witness_output_exceeded",
-                "a successful continuation output exceeds the result word bound",
+                "a successful continuation output exceeds the witness symbol bound",
             )
         paths.append((start, tuple(suffix), tuple(trace)))
         output_parts.append(tuple(parts))

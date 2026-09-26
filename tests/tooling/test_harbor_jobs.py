@@ -349,7 +349,26 @@ def test_agent_eval_validate_dispatches_to_observation_results(tmp_path: Path) -
     ]
 
 
-def test_agent_eval_maps_host_proxy_defaults_for_harbor(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("http_proxy", "https_proxy", "all_proxy", "expected_upstream"),
+    [
+        (
+            "http://127.0.0.1:7890",
+            "https://localhost:7891",
+            "socks5://127.0.0.1:7892",
+            "https://host.docker.internal:7891",
+        ),
+        ("", "", "socks5://127.0.0.1:7892", "socks5://host.docker.internal:7892"),
+        ("http://127.0.0.1:7890", "", "", "http://host.docker.internal:7890"),
+    ],
+)
+def test_agent_eval_maps_host_proxy_defaults_for_harbor(
+    tmp_path: Path,
+    http_proxy: str,
+    https_proxy: str,
+    all_proxy: str,
+    expected_upstream: str,
+) -> None:
     env_trace = tmp_path / "harbor-proxy-defaults.txt"
     uv_trace = tmp_path / "uv-upstream-proxy.txt"
     gost_config = tmp_path / "gost.yaml"
@@ -371,9 +390,9 @@ def test_agent_eval_maps_host_proxy_defaults_for_harbor(tmp_path: Path) -> None:
     environment = os.environ | {
         "TRACE": str(env_trace),
         "UV_TRACE": str(uv_trace),
-        "HTTP_PROXY": "http://127.0.0.1:7890",
-        "HTTPS_PROXY": "https://localhost:7891",
-        "ALL_PROXY": "socks5://127.0.0.1:7892",
+        "HTTP_PROXY": http_proxy,
+        "HTTPS_PROXY": https_proxy,
+        "ALL_PROXY": all_proxy,
         "JACOBIAN_MODEL": "test-model",
     }
     for name in (
@@ -404,13 +423,19 @@ def test_agent_eval_maps_host_proxy_defaults_for_harbor(tmp_path: Path) -> None:
     assert completed.status is ToolCommandStatus.EXITED
     assert completed.exit_code == 0, completed.stderr.decode("utf-8", errors="replace")
     assert env_trace.read_text(encoding="utf-8").splitlines() == [
-        "http://host.docker.internal:7890",
-        "https://host.docker.internal:7891",
-        "socks5://host.docker.internal:7892",
+        http_proxy.replace("127.0.0.1", "host.docker.internal").replace(
+            "localhost", "host.docker.internal"
+        ),
+        https_proxy.replace("127.0.0.1", "host.docker.internal").replace(
+            "localhost", "host.docker.internal"
+        ),
+        all_proxy.replace("127.0.0.1", "host.docker.internal").replace(
+            "localhost", "host.docker.internal"
+        ),
     ]
     assert uv_trace.read_text(encoding="utf-8").splitlines() == [
         "python -m benchmarks.tooling.harbor_proxy --output "
-        f"{gost_config}|https://host.docker.internal:7891"
+        f"{gost_config}|{expected_upstream}"
     ]
 
 

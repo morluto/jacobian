@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import TypedDict, cast
+from urllib.parse import urlsplit
 
 import yaml
 
@@ -193,6 +194,15 @@ def test_observation_compose_overlay_declares_jacobian_service() -> None:
     port = command[command.index("--port") + 1]
     assert "socket.create_connection" in check[3]
     assert f"'127.0.0.1', {port})" in check[3]
+    assert port == "8000"
+    config = _read_json(ROOT / "benchmarks" / "config" / "jacobian.mcp.json")
+    mcp_servers = config["mcp_servers"]
+    assert isinstance(mcp_servers, list)
+    server = mcp_servers[0]
+    assert isinstance(server, dict)
+    url = server["url"]
+    assert isinstance(url, str)
+    assert urlsplit(url).port == int(port)
     assert "networks" not in jacobian
     assert "--state-dir" not in command
     assert not jacobian.get("volumes")

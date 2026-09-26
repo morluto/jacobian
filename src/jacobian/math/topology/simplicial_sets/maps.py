@@ -1108,6 +1108,35 @@ def compose_simplicial_homology_maps(
             code="simplicial_set.homology_map_composition_mismatch",
             message="the first target homology must equal the second source homology",
         )
+    # Admit the union of both endpoint computations before either computes
+    # normalized homology. Reuse plans for equal complexes, including the
+    # shared middle complex.
+    first_chain = induced_normalized_chain_map(first.simplicial_map)
+    second_chain = induced_normalized_chain_map(second.simplicial_map)
+    plans = []
+    for complex_value in (
+        first_chain.source,
+        first_chain.target,
+        second_chain.source,
+        second_chain.target,
+    ):
+        if not any(existing == complex_value for existing, _ in plans):
+            plans.append((complex_value, admit_integral_homology(complex_value)))
+    if sum(plan.total_work for _, plan in plans) > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("homology_map",),
+            code="simplicial_set.induced_homology_endpoint_work_budget_exceeded",
+            message="combined endpoint homology work exceeds its admitted envelope",
+        )
+    if (
+        sum(plan.output_scalar_count for _, plan in plans)
+        > MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("homology_map",),
+            code="simplicial_set.induced_homology_endpoint_output_budget_exceeded",
+            message="combined endpoint homology output exceeds its admitted envelope",
+        )
     # Authenticate the authored coordinates before using them as operands.
     checked_first = induced_normalized_homology_map(first.simplicial_map)
     checked_second = induced_normalized_homology_map(second.simplicial_map)
@@ -1151,6 +1180,7 @@ def compose_simplicial_homology_maps(
                     abs(value).bit_length()
                     for value in (*coordinates.free, *coordinates.torsion)
                 ),
+                0,
             )
     if composition_work > MAX_HOMOLOGY_MAP_COMPOSITION_WORK:
         raise OperationResourceAdmissionError(

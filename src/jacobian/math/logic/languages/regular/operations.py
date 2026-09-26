@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.transducers.values import SubsequentialTransducer
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.regular._models import CountResult, RunResult
 from jacobian.math.logic.languages.regular._profile_admission import (
     TransitionParikhAdmissionPlan,
@@ -29,7 +30,6 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_DFA_EQUIVALENCE_TRACE_ROWS,
     MAX_DFA_EQUIVALENCE_WITNESS_LENGTH,
     MAX_DFA_EQUIVALENCE_WORK,
-    MAX_DFA_PREIMAGE_OUTPUT_BYTES,
     MAX_DFA_PREIMAGE_PRODUCT_STATES,
     MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS,
     MAX_DFA_PREIMAGE_WORK,
@@ -45,7 +45,6 @@ from jacobian.math.logic.languages.regular.values import (
     NFA,
     AutomatonTransition,
     DFATransition,
-    FiniteAlphabet,
     FiniteLabeledAutomaton,
     NFATransition,
     TransitionParikhCell,
@@ -125,6 +124,14 @@ def _validate_nfa_membership_input(nfa: object, word: object) -> None:
             code="regular_language.nfa_membership.noncanonical_nfa",
             message="membership requires a canonical NFA value",
         )
+    try:
+        nfa = NFA.model_validate(nfa.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("nfa",),
+            code="regular_language.nfa_membership.invalid_nfa",
+            message="membership requires a valid explicitly parented NFA carrier",
+        ) from exc
     if (
         type(nfa.state_count) is not int
         or not 1 <= nfa.state_count <= MAX_NFA_STATES
@@ -132,8 +139,9 @@ def _validate_nfa_membership_input(nfa: object, word: object) -> None:
         or not 0 <= nfa.alphabet_size <= MAX_DFA_ALPHABET
         or type(nfa.initial_state) is not int
         or not 0 <= nfa.initial_state < nfa.state_count
-        or type(nfa.alphabet) is not FiniteAlphabet
-        or len(nfa.alphabet.symbols) != nfa.alphabet_size
+        or (nfa.alphabet is None and nfa.alphabet_size != 0)
+        or (nfa.alphabet is not None and type(nfa.alphabet) is not FiniteAlphabet)
+        or (nfa.alphabet is not None and len(nfa.alphabet.symbols) != nfa.alphabet_size)
         or (
             nfa.alphabet_id is not None
             and (
@@ -155,6 +163,15 @@ def _validate_nfa_membership_input(nfa: object, word: object) -> None:
             code="regular_language.nfa_membership.invalid_nfa",
             message="membership requires a valid explicitly parented NFA carrier",
         )
+    if nfa.alphabet is not None:
+        try:
+            FiniteAlphabet.model_validate(nfa.alphabet.model_dump(), strict=True)
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("nfa", "alphabet"),
+                code="regular_language.nfa_membership.invalid_alphabet",
+                message="membership requires a canonical finite alphabet",
+            ) from exc
     if any(type(edge) is not NFATransition for edge in nfa.transitions):
         raise OperationDomainValidationError(
             location=("nfa", "transitions"),
@@ -425,40 +442,66 @@ def _admit_subsequential_preimage(
 ) -> tuple[int, int]:
     request_checkpoint("before subsequential preimage admission")
     input_size = transducer.input_alphabet_size
-    product_state_bound = transducer.state_count * dfa.state_count
-    # Any omitted transducer transition may require one additional rejecting
-    # sink in the total DFA result. Reserve it before product exploration.
-    has_undefined_transitions = len(transducer.transitions) < (
-        transducer.state_count * input_size
-    )
-    product_bound = product_state_bound + int(has_undefined_transitions)
-    product_transition_bound = product_bound * input_size
-    max_output = max(
-        (
-            len(item.output)
-            for item in (*transducer.transitions, *transducer.final_outputs)
-        ),
-        default=0,
-    )
-    work_bound = product_bound * (input_size + max_output * (input_size + 1))
-    output_transition_bound = MAX_DFA_STATES * input_size
-    output_bytes_bound = 4096 + output_transition_bound * 128
+    # Explore only reachable product states before admitting their exact output
+    # carrier. This presolve is bounded by the same reachable state/work caps.
+    edges = {(edge.source, edge.input_symbol): edge for edge in transducer.transitions}
+    dfa_edges = _transition_map(dfa)
+    initial = (transducer.initial_state, dfa.initial_state)
+    pairs = [initial]
+    seen = {initial}
+    cursor = 0
+    undefined = False
+    output_work = 0
+    final_outputs = {item.state: item.output for item in transducer.final_outputs}
+    final_output_work = 0
+    while cursor < len(pairs):
+        request_checkpoint("during subsequential preimage admission presolve")
+        state, dstate = pairs[cursor]
+        final_output = final_outputs.get(state)
+        if final_output is not None:
+            final_output_work += len(final_output)
+        for symbol in range(input_size):
+            edge = edges.get((state, symbol))
+            if edge is None:
+                undefined = True
+                continue
+            output_work += len(edge.output)
+            target = (
+                edge.target,
+                _consume_dfa_output(
+                    dfa_edges,
+                    dstate,
+                    edge.output,
+                    OperationWorkLedger(MAX_DFA_PREIMAGE_WORK),
+                ),
+            )
+            if target not in seen:
+                seen.add(target)
+                pairs.append(target)
+                if len(pairs) > MAX_DFA_PREIMAGE_PRODUCT_STATES:
+                    raise OperationResourceAdmissionError(
+                        location=("transducer", "dfa"),
+                        code="regular_language.preimage_resource_bound",
+                        message="reachable preimage product exceeds its state bound",
+                    )
+        cursor += 1
+    product_bound = len(pairs) + int(undefined)
+    transition_bound = product_bound * input_size
+    work_bound = product_bound * input_size + output_work + final_output_work
     if (
         product_bound > MAX_DFA_PREIMAGE_PRODUCT_STATES
-        or product_transition_bound > MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS
+        or transition_bound > MAX_DFA_PREIMAGE_PRODUCT_TRANSITIONS
         or work_bound > MAX_DFA_PREIMAGE_WORK
-        or output_transition_bound > MAX_DFA_TRANSITIONS
-        or output_bytes_bound > MAX_DFA_PREIMAGE_OUTPUT_BYTES
+        or product_bound > MAX_DFA_STATES
+        or transition_bound > MAX_DFA_TRANSITIONS
     ):
         raise OperationResourceAdmissionError(
             location=("transducer", "dfa"),
             code="regular_language.preimage_resource_bound",
-            message="subsequential preimage exceeds its product, work, or output bound",
+            message="subsequential preimage exceeds its reachable product, work, or output bound",
         )
-    # Admission uses the complete product bound, not the reachable subset, so
-    # every accepted request fits the result carrier before expansion starts.
     request_checkpoint("after subsequential preimage admission")
-    return work_bound, output_transition_bound
+    return work_bound, transition_bound
 
 
 def _admit_cross_domain_dfa(dfa: DFA, operation: str) -> DFA:

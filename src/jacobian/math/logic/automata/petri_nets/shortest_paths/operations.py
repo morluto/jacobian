@@ -194,6 +194,24 @@ def _enumerate_shortest_paths(
     return tuple(sequences)
 
 
+def _shortest_prefix_counts(
+    labeled: list[list[tuple[int, int]]],
+    distance: list[int],
+    counts: list[int],
+    target: int,
+) -> list[int]:
+    """Count prefixes that can still reach the target in the shortest DAG."""
+    prefixes = [0] * len(labeled)
+    prefixes[0] = 1
+    for state in sorted(range(len(labeled)), key=distance.__getitem__):
+        if not prefixes[state] or state == target:
+            continue
+        for _, successor in labeled[state]:
+            if counts[successor] and distance[successor] == distance[state] + 1:
+                prefixes[successor] += prefixes[state]
+    return prefixes
+
+
 def shortest_firing_sequences(
     source_graph: ReachabilityResult, target_marking: Marking
 ) -> ShortestFiringSequencesResult:
@@ -223,6 +241,17 @@ def shortest_firing_sequences(
             message="target marking must belong to the source graph place axis",
         )
 
+    try:
+        source_graph = ReachabilityResult.model_validate(
+            source_graph.model_dump(), strict=True
+        )
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.shortest_sequences.graph_shape",
+            message="source graph must satisfy its bounded canonical axes",
+        ) from exc
+
     context_size = _source_context_size(source_graph, target_marking)
     if context_size > MAX_SHORTEST_PATH_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
@@ -240,17 +269,6 @@ def shortest_firing_sequences(
             shortest_length=None,
             sequences=(),
         )
-
-    try:
-        source_graph = ReachabilityResult.model_validate(
-            source_graph.model_dump(), strict=True
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("source_graph",),
-            code="petri_net.shortest_sequences.graph_shape",
-            message="source graph must satisfy its bounded canonical axes",
-        ) from exc
 
     labeled = _labeled_adjacency(source_graph)
     distance = _shortest_distances(labeled)
@@ -302,10 +320,11 @@ def shortest_firing_sequences(
         )
     # Enumeration scans each state's whole outgoing list once per shortest
     # prefix reaching it; count those scans before materializing the family.
+    prefix_counts = _shortest_prefix_counts(labeled, distance, counts, target)
     scan_work = sum(
-        counts[state] * len(labeled[state])
+        prefix_counts[state] * len(labeled[state])
         for state in range(len(labeled))
-        if state != target and counts[state]
+        if state != target and prefix_counts[state]
     )
     if work + total_steps[0] + scan_work > MAX_SHORTEST_PATH_WORK:
         raise OperationResourceAdmissionError(

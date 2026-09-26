@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.petri_nets._models import (
     FiringSequenceReplayRequest,
     FiringSequenceReplayResult,
@@ -94,6 +97,24 @@ class TestAdversarial:
         )
         with pytest.raises(OperationDomainValidationError):
             compute_firing_sequence_replay(request)
+
+    def test_parent_bound_ledger_is_admitted_before_prefix_construction(
+        self,
+    ) -> None:
+        long_id = "p" + "x" * 40_000
+        net = PetriNet(
+            place_count=1,
+            transition_count=1,
+            place_ids=(long_id,),
+            pre=((0,),),
+            post=((0,),),
+        )
+        bound = Marking(tokens=(0,), net=net)
+        with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+            replay_firing_sequence(net, bound, (0,) * 1024)
+        result = replay_firing_sequence(net, bound, (0, 0))
+        assert result.status == "FIRES"
+        assert len(result.prefix_markings) == 2
 
 
 class TestDefiningInvariant:

@@ -32,6 +32,8 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
+    WeylAntidominantRepresentativeRequest,
+    WeylAntidominantRepresentativeResult,
     WeylDescentsResult,
     WeylDimensionRequest,
     WeylDimensionResult,
@@ -75,6 +77,7 @@ from jacobian.math.groups.root_systems.operations import (
     simple_reflection,
     simple_reflections,
     weight_lattice_vector,
+    weyl_antidominant_representative,
     weyl_dominant_representative,
     weyl_element_compose,
     weyl_element_descents,
@@ -255,6 +258,12 @@ def _run_weyl_dominant_representative(
     request: WeylDominantRepresentativeRequest,
 ) -> WeylDominantRepresentativeResult:
     return weyl_dominant_representative(request.matrix, request.weight)
+
+
+def _run_weyl_antidominant_representative(
+    request: WeylAntidominantRepresentativeRequest,
+) -> WeylAntidominantRepresentativeResult:
+    return weyl_antidominant_representative(request.matrix, request.weight)
 
 
 def _run_weyl_dimension(request: WeylDimensionRequest) -> WeylDimensionResult:
@@ -1221,6 +1230,36 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "Map the A2 weight (-1, 1) to its dominant orbit "
                     "representative (1, 0)."
+                ),
+                input={**_A2, "weight": [-1, 1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.antidominant_representative.compute",
+        title="Compute the antidominant representative of a Weyl weight orbit",
+        description=(
+            "Return the unique antidominant integral weight in the orbit of the "
+            "supplied weight, together with the exact Weyl element mapping the "
+            "source to it. The finite Cartan datum, chamber-normalization word, "
+            "longest-element action, and output are bounded before expansion."
+        ),
+        request_type=WeylAntidominantRepresentativeRequest,
+        result_type=WeylAntidominantRepresentativeResult,
+        run=_run_weyl_antidominant_representative,
+        tags=("algebra", "root-system", "weyl-group", "weight", "normal-form", "exact"),
+        discovery_terms=(
+            "antidominant representative of a Weyl orbit",
+            "move weight to antidominant chamber",
+            "Weyl orbit antidominant weight",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_antidominant_representative",
+                description=(
+                    "Map the A2 weight (-1, 1) to its unique antidominant "
+                    "orbit representative. The weight tuple must have one "
+                    "coordinate per row of the Cartan matrix."
                 ),
                 input={**_A2, "weight": [-1, 1]},
             ),

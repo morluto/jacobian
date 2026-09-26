@@ -1347,6 +1347,61 @@ class WeylDominantRepresentativeResult(StrictModel):
         )
 
 
+class WeylAntidominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight with one fundamental-weight coordinate per Cartan row."""
+
+    weight: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description="Integral fundamental-weight coordinates; length must equal the number of Cartan matrix rows.",
+    )
+
+
+class WeylAntidominantRepresentativeResult(StrictModel):
+    """The antidominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    antidominant_weight: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_RANK
+    )
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_antidominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            len(self.weight) != rank
+            or len(self.antidominant_weight) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.weight, *self.antidominant_weight)
+            )
+            or any(value > 0 for value in self.antidominant_weight)
+        ):
+            raise _validation_error(
+                "antidominant_representative_shape",
+                "the source, antidominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: tuple[int, ...],
+        antidominant_weight: tuple[int, ...],
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            antidominant_weight=antidominant_weight,
+            element=element,
+        )
+
+
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 

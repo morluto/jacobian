@@ -1,6 +1,7 @@
 from collections.abc import Iterable
 from fractions import Fraction
 from math import factorial
+from typing import cast
 
 import pytest
 
@@ -116,6 +117,45 @@ def test_shifted_factorial_and_polynomial_prefactor_match_direct_evaluation() ->
     source = _direct(term, n, k)
     assert _eval_rf(result.n_ratio, n, k) == _direct(term, n + 1, k) / source
     assert _eval_rf(result.k_ratio, n, k) == _direct(term, n, k + 1) / source
+
+
+@pytest.mark.parametrize("axis", (0, 1))
+def test_aligned_factorials_admit_the_exact_univariate_quotient(axis: int) -> None:
+    prefactor_exponents = (15, 0) if axis == 0 else (0, 15)
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial([(prefactor_exponents, 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=int(axis == 0),
+                k_coefficient=int(axis == 1),
+                offset=0,
+                power=5,
+            ),
+        ),
+    )
+    result = proper_hypergeometric_shift_quotients(term)
+    active = result.n_ratio if axis == 0 else result.k_ratio
+    inactive = result.k_ratio if axis == 0 else result.n_ratio
+    assert len(active.numerator.terms) == 21
+    assert len(active.denominator.terms) == 1
+    assert active.denominator.terms[0].exponents == prefactor_exponents
+    assert _eval_rf(inactive, 2, 3) == 1
+    for n, k in ((2, 3), (4, 5)):
+        source = _direct(term, n, k)
+        shifted = _direct(term, n + int(axis == 0), k + int(axis == 1))
+        assert _eval_rf(active, n, k) == shifted / source
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_native_entry_rejects_malformed_term_without_raw_validation_errors() -> None:
+    forged = ProperHypergeometricTerm.model_construct(polynomial=None)
+    for malformed in (cast(ProperHypergeometricTerm, {}), forged):
+        with pytest.raises(OperationDomainValidationError) as error:
+            proper_hypergeometric_shift_quotients(malformed)
+        assert error.value.errors()[0]["type"] in {
+            "ore_algebra.hypergeometric_term_type",
+            "ore_algebra.hypergeometric_term_invalid",
+        }
 
 
 def test_zero_term_has_no_generic_shift_quotients() -> None:

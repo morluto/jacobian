@@ -13,12 +13,23 @@ from jacobian.math.logic.automata.transducers.output_length._models import (
     SubsequentialOutputLengthRequest,
     SubsequentialOutputLengthResult,
 )
+from jacobian.math.logic.automata.transducers.values import SubsequentialTransducer
 
 
 def subsequential_output_length(
-    request: SubsequentialOutputLengthRequest,
+    request: SubsequentialOutputLengthRequest | SubsequentialTransducer,
+    word: tuple[int, ...] | None = None,
 ) -> SubsequentialOutputLengthResult:
     """Return exact emitted-word length without constructing the word itself."""
+
+    if isinstance(request, SubsequentialTransducer):
+        if word is None:
+            raise OperationDomainValidationError(
+                location=("word",),
+                code="finite_state_transducer.output_length_word_required",
+                message="a word is required when passing a transducer directly",
+            )
+        request = SubsequentialOutputLengthRequest(transducer=request, word=word)
 
     if not isinstance(request, SubsequentialOutputLengthRequest):
         raise OperationDomainValidationError(

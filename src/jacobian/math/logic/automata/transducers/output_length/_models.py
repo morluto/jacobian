@@ -27,7 +27,10 @@ class SubsequentialOutputLengthRequest(StrictModel):
     """A bounded input word whose output length is queried."""
 
     transducer: SubsequentialTransducer
-    word: tuple[int, ...] = Field(max_length=MAX_FST_WORD_LENGTH)
+    word: tuple[int, ...] = Field(
+        max_length=MAX_FST_WORD_LENGTH,
+        description="Input symbols; every symbol must be in the transducer input alphabet.",
+    )
 
     @model_validator(mode="after")
     def require_input_symbols_in_alphabet(self) -> Self:

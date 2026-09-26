@@ -4,12 +4,21 @@ The gauge catalog has a distinct exact SU(2) carrier built from rational unit
 quaternions. `lattice_gauge.su2.gauge_transform.compute` applies
 \(U'_{u\to v}=g_u U_{u\to v}g_v^{-1}\) to every oriented edge and preserves
 the source lattice and frame values. `lattice_gauge.su2.holonomy.compute`
-composes an oriented path in traversal order. `lattice_gauge.su2.wilson_trace.compute`
-accepts a closed, source-bound holonomy and returns the fundamental trace
-\(2\operatorname{Re}(U)\) as an exact rational.
+composes an oriented path in traversal order. The native helper
+`jacobian.math.gauge.su2_wilson_trace` accepts a closed, source-bound
+holonomy, recomputes the ordered product from that field and path, and
+returns the fundamental trace \(2\operatorname{Re}(U)\) as an exact rational;
+it rejects a caller-authored quaternion that differs from the recomposition.
+This deterministic projection of the published holonomy is native API rather
+than a catalog operation; the Wilson loop trace is discovered through
+`lattice_gauge.su2.holonomy.compute`.
 
-The quaternion multiplication, inverse, conjugate, and scalar-part operations
-are independently available under `quaternion.rational_unit.*`. These compose
+On the advertised norm-one domain, quaternion conjugation and group inversion
+are the same map, so one catalog operation
+(`quaternion.rational_unit.conjugate.compute`, with inverse discovery
+vocabulary) publishes both names; the scalar-part accessor is likewise a
+native helper. The multiplication and conjugation operations are
+independently available under `quaternion.rational_unit.*`. These compose
 with the gauge values through the same canonical quaternion representation.
 Components are reduced rationals; exact unit norm is required. Coordinate
 growth and multiplication work are bounded before expansion.

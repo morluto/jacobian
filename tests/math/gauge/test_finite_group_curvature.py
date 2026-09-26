@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge import (
+    FiniteGroupGaugeComplex,
     FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeCurvatureRequest,
     FiniteGroupGaugeEdgeLabel,
@@ -270,3 +271,19 @@ def test_curvature_consumer_rejects_forged_open_face_walk():
             )
         )
     assert error.value.errors()[0]["type"] == "lattice_gauge.complex.face_closed"
+
+
+def test_curvature_consumer_rejects_missing_forged_complex_fields():
+    group, index = _s3()
+    lattice, field, _ = _triangle(group, index)
+    forged = FiniteGroupGaugeComplex.model_construct(lattice=lattice)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_group_gauge_curvature(
+            FiniteGroupGaugeCurvatureRequest.model_construct(
+                complex=forged, field=field
+            )
+        )
+    assert error.value.errors()[0]["type"] == (
+        "lattice_gauge.finite_group.curvature_parent_mismatch"
+    )

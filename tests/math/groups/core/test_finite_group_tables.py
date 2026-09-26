@@ -45,7 +45,9 @@ def test_table_rejects_non_square_shape_and_wrong_identity() -> None:
             FiniteGroupTableRequest(identity=0, multiplication=((0, 1),))
         )
     with pytest.raises(OperationDomainValidationError, match="two-sided"):
-        construct_finite_group_table(FiniteGroupTableRequest(identity=1, multiplication=S3))
+        construct_finite_group_table(
+            FiniteGroupTableRequest(identity=1, multiplication=S3)
+        )
 
 
 def test_table_rejects_nonassociative_loop() -> None:
@@ -97,3 +99,20 @@ def test_table_rejects_forged_inverse_map_from_construct_and_json() -> None:
                 }
             )
         )
+
+
+def test_construct_readmits_bypass_constructed_request_before_group_laws() -> None:
+    # ``model_construct`` skips the request validators, so a boolean leaf can
+    # compare equal to 0 and slip past the numeric group-law checks. The
+    # producer must re-admit the request before computing, otherwise it
+    # publishes a table whose boolean leaves the holonomy consumer rejects.
+    forged = FiniteGroupTableRequest.model_construct(
+        multiplication=((False,),),
+        identity=0,
+    )
+    with pytest.raises(OperationDomainValidationError, match="request"):
+        construct_finite_group_table(forged)
+
+    missing = FiniteGroupTableRequest.model_construct(identity=0)
+    with pytest.raises(OperationDomainValidationError, match="request"):
+        construct_finite_group_table(missing)

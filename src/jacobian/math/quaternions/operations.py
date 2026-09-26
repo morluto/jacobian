@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import lcm
-from typing import cast
+from typing import NoReturn, cast
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -22,15 +21,8 @@ from jacobian.math.quaternions._models import (
 MAX_RATIONAL_UNIT_QUATERNION_MULTIPLY_WORK = 20_000_000
 """Maximum admitted decimal digit-square units for one Hamilton product."""
 
-_PRODUCT_TERMS: tuple[tuple[tuple[int, int, int], ...], ...] = (
-    ((0, 0, 1), (1, 1, -1), (2, 2, -1), (3, 3, -1)),
-    ((0, 1, 1), (1, 0, 1), (2, 3, 1), (3, 2, -1)),
-    ((0, 2, 1), (1, 3, -1), (2, 0, 1), (3, 1, 1)),
-    ((0, 3, 1), (1, 2, 1), (2, 1, -1), (3, 0, 1)),
-)
 
-
-def _domain_error(location: str, reason: str, message: str) -> None:
+def _domain_error(location: str, reason: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,),
         code=f"quaternion.rational_unit.{reason}",
@@ -38,7 +30,7 @@ def _domain_error(location: str, reason: str, message: str) -> None:
     )
 
 
-def _resource_error(location: str, reason: str, message: str) -> None:
+def _resource_error(location: str, reason: str, message: str) -> NoReturn:
     raise OperationResourceAdmissionError(
         location=(location,),
         code=f"quaternion.rational_unit.{reason}",
@@ -90,20 +82,9 @@ def _fraction(value: CanonicalRational) -> Fraction:
     return value.as_fraction()
 
 
-def _bounded_integer_digits(value: int, location: str) -> int:
-    digits = _integer_digit_count(value)
-    if digits > MAX_RATIONAL_UNIT_QUATERNION_COMPONENT_DIGITS:
-        _resource_error(
-            location,
-            "product_growth_exceeds_envelope",
-            "predicted exact quaternion coordinate exceeds the 512-digit envelope",
-        )
-    return digits
-
-
-def _preflight_product(
+def _admit_product_work(
     left: RationalUnitQuaternion, right: RationalUnitQuaternion
-) -> tuple[int, int, int]:
+) -> None:
     left_digits = max(
         max(_integer_digit_count(value.num), _integer_digit_count(value.den))
         for value in left.coordinates
@@ -114,6 +95,10 @@ def _preflight_product(
     )
     # Four output coordinates each sum at most four rational products. The
     # factor 64 covers those 16 products and the exact gcd/addition work.
+    # Every admitted operand is already bounded at 512 digits, so unreduced
+    # intermediate denominators are bounded polynomially and exact cancellations
+    # never expand past that ceiling; the reduced output itself is admitted
+    # after canonicalization below.
     work = 64 * left_digits * right_digits
     if work > MAX_RATIONAL_UNIT_QUATERNION_MULTIPLY_WORK:
         _resource_error(
@@ -122,53 +107,20 @@ def _preflight_product(
             "exact quaternion multiplication exceeds its 20,000,000-unit work envelope",
         )
 
-    maximum_result_digits = 1
-    for terms in _PRODUCT_TERMS:
-        term_denominators: list[tuple[int, int, int]] = []
-        for left_index, right_index, _sign in terms:
-            left_coordinate = left.coordinates[left_index]
-            right_coordinate = right.coordinates[right_index]
-            if left_coordinate.num == 0 or right_coordinate.num == 0:
-                continue
-            denominator = left_coordinate.den * right_coordinate.den
-            _bounded_integer_digits(denominator, "operands")
-            term_denominators.append((left_index, right_index, denominator))
-        if not term_denominators:
-            continue
 
-        common_denominator = lcm(*(entry[2] for entry in term_denominators))
-        output_denominator_digits = _bounded_integer_digits(
-            common_denominator, "operands"
+def _admit_reduced_output(value: Fraction) -> None:
+    if (
+        max(
+            _integer_digit_count(value.numerator),
+            _integer_digit_count(value.denominator),
         )
-        term_numerator_digits = []
-        for left_index, right_index, denominator in term_denominators:
-            left_coordinate = left.coordinates[left_index]
-            right_coordinate = right.coordinates[right_index]
-            scale = common_denominator // denominator
-            numerator_digits = (
-                _integer_digit_count(left_coordinate.num)
-                + _integer_digit_count(right_coordinate.num)
-                + _integer_digit_count(scale)
-            )
-            term_numerator_digits.append(numerator_digits)
-        addition_digits = (
-            len(str(len(term_numerator_digits) - 1))
-            if len(term_numerator_digits) > 1
-            else 0
+        > MAX_RATIONAL_UNIT_QUATERNION_COMPONENT_DIGITS
+    ):
+        _resource_error(
+            "result",
+            "product_growth_exceeds_envelope",
+            "exact quaternion product coordinate exceeds the 512-digit envelope",
         )
-        output_numerator_digits = max(term_numerator_digits) + addition_digits
-        if output_numerator_digits > MAX_RATIONAL_UNIT_QUATERNION_COMPONENT_DIGITS:
-            _resource_error(
-                "operands",
-                "product_growth_exceeds_envelope",
-                "predicted exact quaternion coordinate exceeds the 512-digit envelope",
-            )
-        maximum_result_digits = max(
-            maximum_result_digits,
-            output_numerator_digits,
-            output_denominator_digits,
-        )
-    return work, left_digits, right_digits
 
 
 def _trusted_rational(value: Fraction) -> CanonicalRational:
@@ -181,7 +133,7 @@ def multiply_rational_unit_quaternions(
     """Return the exact Hamilton product, with digit and work admission first."""
     left = _admit_operand(left, "left")
     right = _admit_operand(right, "right")
-    _preflight_product(left, right)
+    _admit_product_work(left, right)
     a, b, c, d = tuple(_fraction(value) for value in left.coordinates)
     e, f, g, h = tuple(_fraction(value) for value in right.coordinates)
     product = (
@@ -190,6 +142,8 @@ def multiply_rational_unit_quaternions(
         a * g - b * h + c * e + d * f,
         a * h + b * g - c * f + d * e,
     )
+    for value in product:
+        _admit_reduced_output(value)
     coordinates = cast(
         QuaternionCoordinates, tuple(_trusted_rational(value) for value in product)
     )

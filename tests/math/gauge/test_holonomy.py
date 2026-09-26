@@ -281,3 +281,33 @@ class TestNativeVsCatalogParity:
         assert restored.path == path
         assert restored.holonomy == result.holonomy
         assert restored.contributions == result.contributions
+
+
+class TestNativePermutationWilsonTrace:
+    def test_closed_loop_trace_equals_fixed_point_count(self) -> None:
+        from jacobian.math.gauge.observables import permutation_wilson_trace
+
+        field = _triangle_field()
+        path = _path(("ab", True), ("bc", True), ("ca", True))
+        result = permutation_wilson_trace(field, path)
+        holonomy = path_holonomy(field, path)
+        # Three 3-cycles compose to the identity, which fixes all three points.
+        assert tuple(holonomy.holonomy.image) == (0, 1, 2)
+        assert result.trace == sum(
+            point == image for point, image in enumerate(holonomy.holonomy.image)
+        )
+        assert result.trace == 3
+        assert result.holonomy == holonomy.holonomy
+
+    def test_open_path_is_rejected(self) -> None:
+        from jacobian.math.gauge.observables import permutation_wilson_trace
+
+        with pytest.raises(OperationDomainValidationError):
+            permutation_wilson_trace(
+                _triangle_field(), _path(("ab", True), ("bc", True))
+            )
+
+    def test_wilson_trace_is_a_native_helper_not_a_catalog_operation(self) -> None:
+        assert "lattice_gauge.permutation.wilson_trace.compute" not in {
+            tool.operation_id for tool in TOOLS
+        }

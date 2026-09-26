@@ -91,6 +91,20 @@ def construct_finite_group_table(
     request: FiniteGroupTableRequest,
 ) -> FiniteGroupTableResult:
     """Publish one validated indexed group table as a parent-bound value."""
+    if not isinstance(request, FiniteGroupTableRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="finite_group.table.invalid_request",
+            message="request must be a finite-group table request value",
+        )
+    try:
+        request = FiniteGroupTableRequest.model_validate(request.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="finite_group.table.invalid_request",
+            message="request must satisfy the finite-group table request bounds",
+        ) from error
     table = request.multiplication
     identity = request.identity
     order = len(table)
@@ -100,7 +114,7 @@ def construct_finite_group_table(
             code="finite_group.table.table_shape",
             message="multiplication table must be square",
         )
-    if any(value < 0 or value >= order for row in table for value in row):
+    if any(value >= order for row in table for value in row):
         raise OperationDomainValidationError(
             location=("multiplication",),
             code="finite_group.table.entry_range",
@@ -112,10 +126,7 @@ def construct_finite_group_table(
             code="finite_group.table.identity_range",
             message="identity index must name a table element",
         )
-    if any(
-        table[identity][i] != i or table[i][identity] != i
-        for i in range(order)
-    ):
+    if any(table[identity][i] != i or table[i][identity] != i for i in range(order)):
         raise OperationDomainValidationError(
             location=("identity",),
             code="finite_group.table.identity_law",

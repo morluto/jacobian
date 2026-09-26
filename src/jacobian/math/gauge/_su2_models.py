@@ -58,11 +58,13 @@ class SU2GaugeTransformRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_complete_frames(self) -> Self:
-        if (
-            tuple(value.vertex for value in self.vertex_values)
-            != self.field.lattice.vertices
-        ):
-            raise _error("transform_vertices", "frames must match lattice vertex order")
+        vertices = self.field.lattice.vertices
+        labels = tuple(value.vertex for value in self.vertex_values)
+        if set(labels) != set(vertices) or len(labels) != len(vertices):
+            raise _error(
+                "transform_vertices",
+                "frames must label every lattice vertex exactly once",
+            )
         return self
 
 

@@ -55,6 +55,7 @@ class FiniteGroupTable(StrictModel):
             or len(self.inverse) != order
             or self.identity >= order
             or any(value >= order for row in self.multiplication for value in row)
+            or any(value >= order for row in self.multiplication for value in row)
             or any(index >= order for index in self.inverse)
         ):
             raise PydanticCustomError(
@@ -73,7 +74,6 @@ class FiniteGroupTable(StrictModel):
         return self
 
 
-
 class FiniteGroupTableElement(StrictModel):
     """One element index bound to its complete finite-group table."""
 
@@ -88,6 +88,7 @@ class FiniteGroupTableElement(StrictModel):
                 "element index must belong to its table group",
             )
         return self
+
 
 class FiniteGroupTableResult(StrictModel):
     """A validated group table with its canonical parent-bound identity."""

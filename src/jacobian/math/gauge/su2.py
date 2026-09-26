@@ -3,20 +3,28 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from typing import NoReturn
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian._exact import (
+    MAX_CANONICAL_RATIONAL_DIGITS,
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.gauge._models import GaugeLattice, GaugePathStep, OrientedGaugePath
+from jacobian.math.gauge._models import (
+    MAX_GAUGE_LABEL_LENGTH,
+    GaugeLattice,
+    GaugePathStep,
+    OrientedGaugePath,
+)
 from jacobian.math.gauge._su2_models import (
     SU2GaugeEdgeValue,
     SU2GaugeField,
-    SU2GaugeTransformRequest,
     SU2GaugeTransformResult,
     SU2GaugeVertexValue,
-    SU2HolonomyRequest,
     SU2HolonomyResult,
     SU2WilsonTraceResult,
 )
@@ -31,7 +39,7 @@ MAX_SU2_GAUGE_AGGREGATE_WORK = 100_000_000
 
 def _value_digits(value: RationalUnitQuaternion) -> int:
     return max(
-        max(len(str(abs(coordinate.num))), len(str(coordinate.den)))
+        canonical_rational_component_digits(coordinate)
         for coordinate in value.coordinates
     )
 
@@ -57,6 +65,7 @@ def _admit_su2_path(
     edges = {edge.edge_id: edge for edge in field.lattice.edges}
     aggregate_work = 0
     accumulated_digits = 1
+    previous: tuple[str, bool] | None = None
     cursor: str | None = None
     start: str | None = None
     for step in path.steps:
@@ -76,20 +85,61 @@ def _admit_su2_path(
             start = tail
         cursor = head
         step_digits = _value_digits(labels[step.edge_id])
+        traversal = (step.edge_id, step.forward)
+        if (
+            previous is not None
+            and previous[0] == step.edge_id
+            and previous[1] != step.forward
+        ):
+            accumulated_digits = 1
         aggregate_work += 64 * accumulated_digits * step_digits
         accumulated_digits += step_digits + 1
+        previous = traversal
     _admit_aggregate_work(aggregate_work, "path")
     if not path.steps:
-        basepoint = getattr(path, "basepoint", None)
-        if type(basepoint) is not str or basepoint not in field.lattice.vertices:
+        basepoint: object = getattr(path, "basepoint", None)
+        if not isinstance(basepoint, str) or type(basepoint) is not str:
+            _reject("empty_path_basepoint", "empty path needs a lattice basepoint")
+        if basepoint not in field.lattice.vertices:
             _reject("empty_path_basepoint", "empty path needs a lattice basepoint")
         return basepoint, basepoint
+    if start is None or cursor is None:
+        _reject("disconnected_path", "admitted path steps produced no endpoints")
     if path.basepoint is not None and path.basepoint != start:
         _reject("basepoint_mismatch", "path basepoint must equal its first vertex")
-    return start or "", cursor or ""
+    return start, cursor
 
 
-def _reject(code: str, message: str) -> None:
+def _identity_quaternion() -> RationalUnitQuaternion:
+    zero = CanonicalRational(num=0, den=1)
+    return RationalUnitQuaternion(
+        coordinates=(CanonicalRational(num=1, den=1), zero, zero, zero)
+    )
+
+
+def _compose_path(
+    path: OrientedGaugePath,
+    labels: dict[str, RationalUnitQuaternion],
+) -> RationalUnitQuaternion:
+    """Compose the exact ordered product along one admitted oriented path."""
+    result = _identity_quaternion()
+    for step in path.steps:
+        factor = labels[step.edge_id]
+        if not step.forward:
+            factor = inverse_rational_unit_quaternion(factor)
+        result = multiply_rational_unit_quaternions(result, factor)
+    return result
+
+
+def _valid_label(value: object) -> bool:
+    return (
+        type(value) is str
+        and 1 <= len(value) <= MAX_GAUGE_LABEL_LENGTH
+        and not any(0xD800 <= ord(character) <= 0xDFFF for character in value)
+    )
+
+
+def _reject(code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=("field",), code=f"lattice_gauge.su2.{code}", message=message
     )
@@ -107,9 +157,7 @@ def _admit_field(field: object) -> SU2GaugeField:
     if (
         not isinstance(vertices, tuple)
         or not 1 <= len(vertices) <= 64
-        or any(
-            type(vertex) is not str or not 1 <= len(vertex) <= 64 for vertex in vertices
-        )
+        or any(not _valid_label(vertex) for vertex in vertices)
         or len(set(vertices)) != len(vertices)
         or not isinstance(edges, tuple)
         or not 1 <= len(edges) <= 128
@@ -117,9 +165,9 @@ def _admit_field(field: object) -> SU2GaugeField:
         _reject("field_shape", "SU(2) gauge lattice is malformed")
     for edge in edges:
         if (
-            type(getattr(edge, "edge_id", None)) is not str
-            or type(getattr(edge, "tail", None)) is not str
-            or type(getattr(edge, "head", None)) is not str
+            not _valid_label(getattr(edge, "edge_id", None))
+            or not _valid_label(getattr(edge, "tail", None))
+            or not _valid_label(getattr(edge, "head", None))
             or edge.tail not in vertices
             or edge.head not in vertices
         ):
@@ -140,24 +188,30 @@ def _admit_field(field: object) -> SU2GaugeField:
     return field
 
 
-def su2_gauge_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformResult:
+def su2_gauge_transform(
+    field: SU2GaugeField,
+    vertex_values: tuple[SU2GaugeVertexValue, ...],
+) -> SU2GaugeTransformResult:
     """Apply ``U'_(u->v) = g_u U_(u->v) g_v^-1`` edgewise."""
-    if not isinstance(request, SU2GaugeTransformRequest):
-        _reject("transform_request", "expected a typed SU(2) transform request")
-    field = _admit_field(request.field)
-    vertex_values = getattr(request, "vertex_values", None)
-    if not isinstance(vertex_values, tuple) or any(
-        not isinstance(entry, SU2GaugeVertexValue) for entry in vertex_values
+    field = _admit_field(field)
+    if (
+        not isinstance(vertex_values, tuple)
+        or len(vertex_values) > len(field.lattice.vertices)
+        or any(not isinstance(entry, SU2GaugeVertexValue) for entry in vertex_values)
     ):
         _reject("transform_vertices", "gauge frames are malformed")
-    frames = {entry.vertex: entry.value for entry in vertex_values}
+    frames: dict[str, RationalUnitQuaternion] = {}
+    for entry in vertex_values:
+        frames[entry.vertex] = entry.value
     vertices = field.lattice.vertices
     if set(frames) != set(vertices) or len(frames) != len(vertex_values):
         _reject("transform_vertices", "gauge frames must cover every lattice vertex")
     for value in frames.values():
         inverse_rational_unit_quaternion(value)
     transformed = []
-    source_by_id = {entry.edge_id: entry.value for entry in field.edge_values}
+    source_by_id: dict[str, RationalUnitQuaternion] = {}
+    for link in field.edge_values:
+        source_by_id[link.edge_id] = link.value
     aggregate_work = 0
     for edge in field.lattice.edges:
         left_digits = _value_digits(frames[edge.tail])
@@ -175,42 +229,43 @@ def su2_gauge_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformR
         )
         transformed.append(SU2GaugeEdgeValue(edge_id=edge.edge_id, value=value))
     output = SU2GaugeField(lattice=field.lattice, edge_values=tuple(transformed))
+    canonical_frames = tuple(
+        SU2GaugeVertexValue(vertex=vertex, value=frames[vertex])
+        for vertex in field.lattice.vertices
+    )
     return SU2GaugeTransformResult(
-        source=field, transformed=output, vertex_values=vertex_values
+        source=field, transformed=output, vertex_values=canonical_frames
     )
 
 
-def su2_path_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
+def su2_path_holonomy(
+    field: SU2GaugeField, path: OrientedGaugePath
+) -> SU2HolonomyResult:
     """Compose exact SU(2) edge labels along one oriented lattice path."""
-    if not isinstance(request, SU2HolonomyRequest):
-        _reject("holonomy_request", "expected a typed SU(2) holonomy request")
-    field = _admit_field(request.field)
-    path = request.path
-    labels = {entry.edge_id: entry.value for entry in field.edge_values}
+    field = _admit_field(field)
+    labels: dict[str, RationalUnitQuaternion] = {}
+    for entry in field.edge_values:
+        labels[entry.edge_id] = entry.value
     start, end = _admit_su2_path(field, path, labels)
-    identity = RationalUnitQuaternion(
-        coordinates=(
-            CanonicalRational(num=1, den=1),
-            *tuple(CanonicalRational(num=0, den=1) for _ in range(3)),
-        )
-    )
-    result = identity
-    for step in path.steps:
-        factor = labels[step.edge_id]
-        if not step.forward:
-            factor = inverse_rational_unit_quaternion(factor)
-        result = multiply_rational_unit_quaternions(result, factor)
+    result = _compose_path(path, labels)
     return SU2HolonomyResult(
         field=field, path=path, holonomy=result, start=start, end=end
     )
 
 
 def su2_wilson_trace(holonomy: SU2HolonomyResult) -> SU2WilsonTraceResult:
-    """Return the exact fundamental-representation trace ``2 Re(U)``."""
+    """Return the exact fundamental-representation trace ``2 Re(U)``.
+
+    The caller-authored holonomy quaternion is never trusted: the ordered
+    product is recomputed from the source-bound field and path and the trace
+    is taken of that exact composition.
+    """
     if not isinstance(holonomy, SU2HolonomyResult):
         _reject("wilson_parent", "Wilson trace requires a typed SU(2) holonomy")
     field = _admit_field(holonomy.field)
-    labels = {entry.edge_id: entry.value for entry in field.edge_values}
+    labels: dict[str, RationalUnitQuaternion] = {}
+    for entry in field.edge_values:
+        labels[entry.edge_id] = entry.value
     start, end = _admit_su2_path(
         field,
         holonomy.path,
@@ -223,7 +278,18 @@ def su2_wilson_trace(holonomy: SU2HolonomyResult) -> SU2WilsonTraceResult:
         )
     if start != end:
         _reject("wilson_open_path", "Wilson trace requires a closed path")
-    real_part = holonomy.holonomy.coordinates[0]
+    authored = holonomy.holonomy
+    if not isinstance(authored, RationalUnitQuaternion) or not isinstance(
+        authored.coordinates, tuple
+    ):
+        _reject("wilson_parent", "holonomy carries a malformed quaternion")
+    recomputed = _compose_path(holonomy.path, labels)
+    if recomputed.coordinates != authored.coordinates:
+        _reject(
+            "holonomy_composition_mismatch",
+            "holonomy quaternion must equal the ordered product of its source path",
+        )
+    real_part = recomputed.coordinates[0]
     numerator = real_part.num * 2
     if len(str(abs(numerator))) > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(

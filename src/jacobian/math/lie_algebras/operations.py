@@ -8,6 +8,7 @@ from fractions import Fraction
 from math import factorial
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -85,11 +86,16 @@ class _BracketPlan:
 def _as_algebra(
     value: FiniteDimensionalLieAlgebra | Mapping[str, Any],
 ) -> FiniteDimensionalLieAlgebra:
-    return (
-        value
-        if isinstance(value, FiniteDimensionalLieAlgebra)
-        else FiniteDimensionalLieAlgebra.model_validate(value)
-    )
+    if isinstance(value, FiniteDimensionalLieAlgebra):
+        return value
+    try:
+        return FiniteDimensionalLieAlgebra.model_validate(value)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code="lie_algebra.input",
+            message="algebra must be a valid finite-dimensional Lie algebra",
+        ) from exc
 
 
 def _as_element(value: LieAlgebraElement | Mapping[str, Any]) -> LieAlgebraElement:
@@ -548,11 +554,7 @@ def lie_algebra_is_semisimple(
     computes the exact nullspace; only the resulting decision is returned.
     """
 
-    canonical_algebra = (
-        algebra
-        if isinstance(algebra, FiniteDimensionalLieAlgebra)
-        else FiniteDimensionalLieAlgebra.model_validate(algebra)
-    )
+    canonical_algebra = _as_algebra(algebra)
     killing_radical = lie_killing_form_radical(canonical_algebra)
     return LieSemisimplicityResult(
         algebra=canonical_algebra,
@@ -857,13 +859,42 @@ def lie_generated_subalgebra(
     # output checks, so its canonical rank is known before closure. Each
     # closure round either strictly increases the rank or terminates, so at
     # most dimension - rank + 1 rounds of worst-case growth can occur.
-    _admit_generated_closure_height(
-        dimension=dimension,
-        rank_lower_bound=len(rows),
-        initial_height=initial_rref_height,
-        term_count=term_count,
-        structure_digits=structure_digits,
-    )
+    # A one-round closure probe distinguishes an already-closed proper span
+    # from the worst-case rank-growth envelope. Admit each actual round before
+    # expanding it; retain the conservative bound only after observed growth.
+    if len(rows) > 1:
+        first_brackets = _subspace_bracket_vectors(rows, rows, table, dimension)
+        first_reduced = None
+        if first_brackets:
+            first_reduced = rref_result(
+                rational_matrix_from_fractions(
+                    rows + first_brackets, column_count=dimension
+                )
+            )
+            first_rows = tuple(
+                tuple(v.as_fraction() for v in row)
+                for row in first_reduced.reduced_matrix.entries[: first_reduced.rank]
+            )
+        else:
+            first_rows = rows
+        if first_rows == rows:
+            _admit_generated_closure_height(
+                dimension=dimension,
+                rank_lower_bound=dimension,
+                initial_height=initial_rref_height,
+                term_count=0,
+                structure_digits=structure_digits,
+            )
+            rows = first_rows
+        else:
+            _admit_generated_closure_height(
+                dimension=dimension,
+                rank_lower_bound=len(rows),
+                initial_height=initial_rref_height,
+                term_count=term_count,
+                structure_digits=structure_digits,
+            )
+            rows = first_rows
 
     while len(rows) > 1:
         brackets = _subspace_bracket_vectors(rows, rows, table, dimension)
@@ -1563,7 +1594,7 @@ def _induced_subalgebra_constants(
             message="subalgebra construction exceeds its admitted exact work envelope",
         )
     pivots = _rref_pivots(rows)
-    constants: list[StructureConstant] = []
+    raw_constants: list[tuple[int, int, int, Fraction]] = []
     for left_index, left in enumerate(rows):
         for right_index in range(left_index + 1, len(rows)):
             right = rows[right_index]
@@ -1588,22 +1619,34 @@ def _induced_subalgebra_constants(
                     code="lie_algebra.not_a_subalgebra",
                     message="candidate bracket escapes its span",
                 )
-            constants.extend(
-                _induced_structure_constant(
-                    left_index, right_index, output_index, bracket[pivot]
-                )
+            raw_constants.extend(
+                (left_index, right_index, output_index, bracket[pivot])
                 for output_index, pivot in enumerate(pivots)
                 if bracket[pivot]
             )
-    return tuple(constants)
+    # Admit the complete exact output envelope before materializing any of its
+    # canonical value objects.
+    for left_index, right_index, output_index, coefficient in raw_constants:
+        _require_induced_structure_coefficient_bound(
+            left_index, right_index, output_index, coefficient
+        )
+    return tuple(
+        StructureConstant.model_construct(
+            i=left_index,
+            j=right_index,
+            k=output_index,
+            coefficient=CanonicalRational.from_fraction(coefficient),
+        )
+        for left_index, right_index, output_index, coefficient in raw_constants
+    )
 
 
-def _induced_structure_constant(
+def _require_induced_structure_coefficient_bound(
     left_index: int,
     right_index: int,
     output_index: int,
     coefficient: Fraction,
-) -> StructureConstant:
+) -> None:
     """Admit the narrower algebra coefficient ceiling before canonicalization."""
 
     if (
@@ -1625,12 +1668,6 @@ def _induced_structure_constant(
                 f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
             ),
         )
-    return StructureConstant.model_construct(
-        i=left_index,
-        j=right_index,
-        k=output_index,
-        coefficient=CanonicalRational.from_fraction(coefficient),
-    )
 
 
 def lie_subalgebra(

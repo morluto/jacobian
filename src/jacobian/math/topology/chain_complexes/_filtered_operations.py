@@ -700,6 +700,15 @@ def associated_graded(
 ) -> AssociatedGradedResult:
     """Compute Gr_p C with induced differentials for an admitted filtration."""
     admission = _admit_filtered_semantics(complex_value, filtration)
+    return _associated_graded_admitted(complex_value, filtration, admission)
+
+
+def _associated_graded_admitted(
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
+    admission: _FilteredAdmission,
+) -> AssociatedGradedResult:
+    """Build Gr C from already admitted filtered semantics."""
     prime = complex_value.prime
     degree_count = len(complex_value.basis_sizes)
     differentials = admission.differentials
@@ -740,9 +749,10 @@ def associated_graded(
             block: Matrix = [
                 [_parse_entry(0, prime) for _ in range(columns)] for _ in range(rows)
             ]
+            combined_basis = lower[index] + rep_rows[index]
             for column, rep in enumerate(rep_rows[index + 1]):
                 image = _mat_vec(differentials[index], rep, prime)
-                coords = _coordinates(upper[index], image, prime)
+                coords = _coordinates(combined_basis, image, prime)
                 for row in range(rows):
                     block[row][column] = coords[len(lower[index]) + row]
             scalar_diffs.append(block)

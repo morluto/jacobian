@@ -5,27 +5,46 @@ from __future__ import annotations
 from itertools import permutations, product
 from math import factorial, isqrt
 
-from jacobian._exact import canonical_rational_component_digits
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    MAX_THETA_PREFIX_CUTOFF,
     MAX_THETA_PREFIX_DIMENSION,
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
-    MAX_THETA_SELECTED_INDEX,
-    MAX_THETA_SELECTED_INDICES,
+    MAX_THETA_REPRESENTATION_VECTOR_COUNT,
+    ThetaRepresentingVectorsRequest,
+    ThetaRepresentingVectorsResult,
+    ThetaRepresentingVectorsRow,
     ThetaSelectedCoefficient,
+    ThetaSelectedCoefficientsRequest,
     ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    RationalCoordinateVector,
     RationalQuadraticForm,
 )
+
+
+def _revalidate_request(request: object, request_type: type, label: str):
+    """Re-establish bounded request invariants for native callers too."""
+    try:
+        return request_type.model_validate(
+            request.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=(label,),
+            code="quadratic_form.theta_invalid_request",
+            message="theta request must satisfy its canonical bounded schema",
+        ) from exc
 
 
 def _determinant(rows: tuple[tuple[int, ...], ...]) -> int:
@@ -159,20 +178,23 @@ def _positive_definite_matrix(
 
 
 def _admit_box_and_output(
-    *,
-    form: RationalQuadraticForm,
-    cutoff: int,
-    request_location: tuple[str, ...],
-    coefficient_count: int,
-    index_digits: int,
+    request: (
+        ThetaSeriesPrefixRequest
+        | ThetaSelectedCoefficientsRequest
+        | ThetaRepresentingVectorsRequest
+    ),
     support: int,
     determinant_work: int,
     cofactor_work: int,
     determinant: int,
     diagonal_cofactors: tuple[int, ...],
 ) -> tuple[int, ...]:
+    request_location = (
+        ("cutoff",) if isinstance(request, ThetaSeriesPrefixRequest) else ("indices",)
+    )
     radii = tuple(
-        isqrt((2 * cutoff * cofactor) // determinant) for cofactor in diagonal_cofactors
+        isqrt((2 * request.cutoff * cofactor) // determinant)
+        for cofactor in diagonal_cofactors
     )
     vector_count = 1
     for radius in radii:
@@ -197,6 +219,7 @@ def _admit_box_and_output(
     # The result retains the source form and the coefficient prefix. Bound
     # both by their aggregate decimal digits; per-entry serialization
     # structure scales with the already bounded coefficient count.
+    form = request.form
     source_digits = sum(len(label) for label in form.axis) + 2 * sum(
         canonical_rational_component_digits(value)
         for value in (
@@ -204,15 +227,33 @@ def _admit_box_and_output(
             *(term.coefficient for term in form.cross_terms),
         )
     )
-    output_digits = (
-        source_digits + coefficient_count * (count_digits + 1) + index_digits
+    coefficient_count = (
+        request.cutoff + 1
+        if isinstance(request, ThetaSeriesPrefixRequest)
+        else len(request.indices)
     )
-    if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=request_location,
-            code="quadratic_form.theta_output_bound",
-            message="theta prefix exceeds its admitted aggregate output digit envelope",
+    index_digits = (
+        0
+        if isinstance(request, ThetaSeriesPrefixRequest)
+        else sum(len(str(index)) for index in request.indices)
+    )
+    if isinstance(request, ThetaRepresentingVectorsRequest):
+        if vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT:
+            raise OperationResourceAdmissionError(
+                location=request_location,
+                code="quadratic_form.theta_representation_vector_bound",
+                message="representation vectors exceed their admitted cardinality bound",
+            )
+    else:
+        output_digits = (
+            source_digits + coefficient_count * (count_digits + 1) + index_digits
         )
+        if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=request_location,
+                code="quadratic_form.theta_output_bound",
+                message="theta prefix exceeds its admitted aggregate output digit envelope",
+            )
     return radii
 
 
@@ -226,30 +267,17 @@ def theta_series_prefix(
     x_i^2 <= (C^-1)_ii * x^T C x <= 2N*(C^-1)_ii for every vector with
     Q(x)<=N. The exact adjugate diagonal therefore yields a complete box.
     """
+    request = _revalidate_request(request, ThetaSeriesPrefixRequest, "request")
     form = request.form
-    if (
-        not isinstance(request.cutoff, int)
-        or isinstance(request.cutoff, bool)
-        or not 0 <= request.cutoff <= MAX_THETA_PREFIX_CUTOFF
-    ):
-        raise OperationDomainValidationError(
-            location=("cutoff",),
-            code="quadratic_form.theta.cutoff_bound",
-            message=f"cutoff must be an integer from 0 through {MAX_THETA_PREFIX_CUTOFF}",
-        )
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
-        form=form,
-        cutoff=request.cutoff,
-        request_location=("cutoff",),
-        coefficient_count=request.cutoff + 1,
-        index_digits=0,
-        support=support,
-        determinant_work=determinant_work,
-        cofactor_work=cofactor_work,
-        determinant=determinant,
-        diagonal_cofactors=diagonal_cofactors,
+        request,
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
     )
 
     table = [0] * (request.cutoff + 1)
@@ -275,69 +303,31 @@ def theta_series_prefix(
 
 
 def theta_selected_coefficients(
-    form: RationalQuadraticForm,
-    indices: tuple[int, ...],
+    form: RationalQuadraticForm | ThetaSelectedCoefficientsRequest,
+    indices: tuple[int, ...] | None = None,
 ) -> ThetaSelectedCoefficientsResult:
     """Return only requested r_Q(n), without constructing intervening terms."""
-    if not isinstance(form, RationalQuadraticForm):
-        raise OperationDomainValidationError(
-            location=("form",),
-            code="quadratic_form.theta_invalid_form",
-            message="selected theta coefficients require a rational quadratic form",
+    if isinstance(form, ThetaSelectedCoefficientsRequest) and indices is None:
+        request = form
+    else:
+        request = ThetaSelectedCoefficientsRequest.model_construct(
+            form=form, indices=indices
         )
-    if (
-        type(indices) is not tuple
-        or not 1 <= len(indices) <= MAX_THETA_SELECTED_INDICES
-        or any(
-            type(index) is not int or not 0 <= index <= MAX_THETA_SELECTED_INDEX
-            for index in indices
-        )
-        or tuple(sorted(set(indices))) != indices
-    ):
-        raise OperationDomainValidationError(
-            location=("indices",),
-            code="quadratic_form.theta_invalid_selected_indices",
-            message="selected theta indices must be bounded and strictly increasing",
-        )
-    if not (
-        isinstance(form.axis, tuple)
-        and isinstance(form.diagonal_coefficients, tuple)
-        and isinstance(form.cross_terms, tuple)
-        and len(form.axis) <= MAX_THETA_PREFIX_DIMENSION
-        and len(form.diagonal_coefficients) == len(form.axis)
-        and len(form.cross_terms)
-        <= MAX_THETA_PREFIX_DIMENSION * (MAX_THETA_PREFIX_DIMENSION + 1) // 2
-    ):
-        raise OperationDomainValidationError(
-            location=("form",),
-            code="quadratic_form.theta_invalid_form",
-            message="selected theta coefficients require a bounded canonical form",
-        )
-    try:
-        form = RationalQuadraticForm.model_validate(form.model_dump(), strict=True)
-    except Exception as error:
-        raise OperationDomainValidationError(
-            location=("form",),
-            code="quadratic_form.theta_invalid_form",
-            message="selected theta coefficients received a structurally invalid form",
-        ) from error
+    request = _revalidate_request(request, ThetaSelectedCoefficientsRequest, "request")
+    form = request.form
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
-        form=form,
-        cutoff=indices[-1],
-        request_location=("indices",),
-        coefficient_count=len(indices),
-        index_digits=sum(len(str(index)) for index in indices),
-        support=support,
-        determinant_work=determinant_work,
-        cofactor_work=cofactor_work,
-        determinant=determinant,
-        diagonal_cofactors=diagonal_cofactors,
+        request,
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
     )
 
-    wanted = set(indices)
-    counts = dict.fromkeys(indices, 0)
+    wanted = set(request.indices)
+    counts = dict.fromkeys(request.indices, 0)
     diagonal = tuple(value.num for value in form.diagonal_coefficients)
     crosses = tuple(
         (term.left, term.right, term.coefficient.num) for term in form.cross_terms
@@ -358,9 +348,69 @@ def theta_selected_coefficients(
         form=form,
         coefficients=tuple(
             ThetaSelectedCoefficient(index=index, coefficient=counts[index])
-            for index in indices
+            for index in request.indices
         ),
     )
 
 
-__all__ = ["theta_selected_coefficients", "theta_series_prefix"]
+def theta_representing_vectors(
+    request: ThetaRepresentingVectorsRequest,
+) -> ThetaRepresentingVectorsResult:
+    """Return every integer vector at each selected value, in axis order."""
+    request = _revalidate_request(request, ThetaRepresentingVectorsRequest, "request")
+    form = request.form
+    dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
+    _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
+    radii = _admit_box_and_output(
+        request,
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
+    )
+
+    vectors_by_value: dict[int, list[RationalCoordinateVector]] = {
+        index: [] for index in request.indices
+    }
+    diagonal = tuple(value.num for value in form.diagonal_coefficients)
+    crosses = tuple(
+        (term.left, term.right, term.coefficient.num) for term in form.cross_terms
+    )
+    ranges = tuple(range(-radius, radius + 1) for radius in radii)
+    for vector in product(*ranges):
+        value = sum(
+            coefficient * coordinate * coordinate
+            for coefficient, coordinate in zip(diagonal, vector, strict=True)
+        )
+        value += sum(
+            coefficient * vector[left] * vector[right]
+            for left, right, coefficient in crosses
+        )
+        selected = vectors_by_value.get(value)
+        if selected is not None:
+            selected.append(
+                RationalCoordinateVector(
+                    axis=form.axis,
+                    coordinates=tuple(
+                        CanonicalRational.from_integer_ratio(coordinate, 1)
+                        for coordinate in vector
+                    ),
+                )
+            )
+    return ThetaRepresentingVectorsResult(
+        form=form,
+        rows=tuple(
+            ThetaRepresentingVectorsRow(
+                index=index, vectors=tuple(vectors_by_value[index])
+            )
+            for index in request.indices
+        ),
+    )
+
+
+__all__ = [
+    "theta_representing_vectors",
+    "theta_selected_coefficients",
+    "theta_series_prefix",
+]

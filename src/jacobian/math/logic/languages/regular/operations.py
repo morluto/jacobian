@@ -85,7 +85,7 @@ def dfa_run(dfa: DFA, word: tuple[int, ...]) -> tuple[bool, int]:
 
 def nfa_membership(nfa: NFA, word: tuple[int, ...]) -> bool:
     """Decide membership by bounded state-set propagation with epsilon closure."""
-    _validate_nfa_membership_input(nfa, word)
+    nfa, word = _validate_nfa_membership_input(nfa, word)
     work_bound = (2 * len(word) + 1) * (nfa.state_count + len(nfa.transitions))
     work_bound += len(nfa.transitions)
     if work_bound > MAX_NFA_MEMBERSHIP_WORK:
@@ -117,7 +117,9 @@ def nfa_membership(nfa: NFA, word: tuple[int, ...]) -> bool:
     return not active.isdisjoint(nfa.accepting_states)
 
 
-def _validate_nfa_membership_input(nfa: object, word: object) -> None:
+def _validate_nfa_membership_input(
+    nfa: object, word: object
+) -> tuple[NFA, tuple[int, ...]]:
     if type(nfa) is not NFA:
         raise OperationDomainValidationError(
             location=("nfa",),
@@ -219,6 +221,7 @@ def _validate_nfa_membership_input(nfa: object, word: object) -> None:
             code="regular_language.nfa_membership.invalid_word",
             message="word symbols must be in the NFA alphabet and within the word bound",
         )
+    return nfa, word
 
 
 def _nfa_epsilon_closure(

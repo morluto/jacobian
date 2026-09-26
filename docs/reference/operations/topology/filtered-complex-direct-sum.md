@@ -7,9 +7,11 @@ filtration levels. At each degree and filtration level, the output subspace is
 the direct sum of the two input subspaces; the output boundary is block
 diagonal.
 
-The result contains a `FilteredChainComplexRequest`, so it can be passed
-unchanged to the associated-graded, spectral-page, filtered-homology, and
-abutment operations. It also returns the two coordinate inclusions. The
+The result contains a `FilteredChainComplexRequest`, which can be passed
+unchanged to the associated-graded and abutment operations. For spectral-page
+computation, pass its `complex` and `filtration` fields and supply the required
+`page` field. Filtered-homology composition is supported when the shared
+coefficient field is a prime field; `QQ` results are not accepted there. It also returns the two coordinate inclusions. The
 accepted coefficient fields are `QQ` and prime fields; integral filtered
 complexes remain outside this operation's contract.
 

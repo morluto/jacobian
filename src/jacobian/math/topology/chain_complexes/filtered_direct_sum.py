@@ -25,6 +25,7 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
 )
 from jacobian.math.topology.chain_complexes.values import (
     MAX_MATRIX_ENTRY_CHARS,
+    ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
 )
@@ -41,8 +42,8 @@ class FilteredDirectSumRequest(StrictModel):
 
 
 def _require_canonical_inclusions(
-    left_maps: tuple[tuple[tuple[int, ...], ...], ...],
-    right_maps: tuple[tuple[tuple[int, ...], ...], ...],
+    left_maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
+    right_maps: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
     left_sizes: tuple[int, ...],
     right_sizes: tuple[int, ...],
     output_sizes: tuple[int, ...],
@@ -153,8 +154,8 @@ class FilteredDirectSumResult(StrictModel):
     left: FilteredChainComplexRequest
     right: FilteredChainComplexRequest
     filtered_complex: FilteredChainComplexRequest
-    left_inclusions: tuple[tuple[tuple[int, ...], ...], ...]
-    right_inclusions: tuple[tuple[tuple[int, ...], ...], ...]
+    left_inclusions: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
+    right_inclusions: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
 
     @model_validator(mode="after")
     def require_inclusion_axes(self) -> Self:
@@ -522,7 +523,7 @@ def filtered_direct_sum(
     )
     # The block-diagonal boundary and componentwise subspaces prove the output
     # chain and filtration laws from the already admitted summands.
-    return FilteredDirectSumResult(
+    return FilteredDirectSumResult.model_construct(
         left=left,
         right=right,
         filtered_complex=output,

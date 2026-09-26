@@ -95,6 +95,7 @@ to another polynomial operation.
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)
 - [Exact rational Laurent-polynomial multiplication](rational-laurent-polynomials.md)
 - [Exact Puiseux window values](local-series-values.md)
+- [Pairwise contact profiles of finite Puiseux prefixes](local-series-contact-profile.md)
 - [Power-series and Laurent conversions](local-series-power-series-conversions.md)
 - [Rational functions to Laurent prefixes](local-series-rational-expansion.md)
 - [Newton polygons for local-series polynomials](local-series-newton-polygon.md)

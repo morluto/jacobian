@@ -31,6 +31,11 @@ from .arithmetic_models import (
     RationalFunctionExpansionResult,
     RationalFunctionInfinityExpansionRequest,
 )
+from .contact_profile import (
+    PuiseuxContactProfile,
+    PuiseuxContactRequest,
+    puiseux_contact_profile,
+)
 from .newton_polygon import (
     LocalPolynomialInSeries,
     LocalPolynomialNewtonPolygonResult,
@@ -40,6 +45,11 @@ from .newton_polygon import (
     local_polynomial_newton_polygon,
     newton_edge_characteristic_polynomial,
     newton_edge_characteristic_roots,
+)
+from .newton_transform import (
+    NewtonTransformRequest,
+    NewtonTransformResult,
+    newton_transform,
 )
 from .operations import (
     add_puiseux,
@@ -339,6 +349,65 @@ TOOLS: MathTools = (
                         ],
                     },
                     "edge_index": 0,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.polynomial.newton_transform.compute",
+        title="Apply one exact Newton edge transform",
+        description=(
+            "Apply the selected Newton edge substitution at a caller-supplied "
+            "simple rational characteristic root, retaining exact truncated "
+            "coefficient windows and the source-bound edge."
+        ),
+        request_type=NewtonTransformRequest,
+        result_type=NewtonTransformResult,
+        run=newton_transform,
+        tags=("local-series", "polynomial", "newton-polygon", "exact"),
+        examples=(
+            OperationExample(
+                name="simple_rational_edge_root",
+                description=(
+                    "For y^2 - t^2(1+t), substituting y=t(1+z) and "
+                    "dividing by t^2 gives z^2 + 2z - t."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t", "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 2, "precision": 4,
+                                    "coefficients": [
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "-1", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t", "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0, "precision": 4,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "edge_index": 0,
+                    "initial_root": {"num": "1", "den": "1"},
                 },
             ),
         ),
@@ -988,6 +1057,35 @@ TOOLS: MathTools = (
                         ),
                     ).model_dump(mode="json")
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.puiseux.contact_profile.compute",
+        title="Profile pairwise contact of Puiseux prefixes",
+        description=(
+            "Return the first differing rational exponent for each pair of "
+            "Puiseux prefixes on a shared known window, or mark agreement "
+            "through the finite cutoff unresolved. This compares formal values; "
+            "it does not assert branch validity or family completeness."
+        ),
+        request_type=PuiseuxContactRequest,
+        result_type=PuiseuxContactProfile,
+        run=puiseux_contact_profile,
+        tags=("local-series", "puiseux", "contact-order", "exact"),
+        discovery_terms=(
+            "compare Puiseux branch prefixes",
+            "contact order of truncated Puiseux series",
+            "first exponent where two local expansions differ",
+        ),
+        examples=(
+            OperationExample(
+                name="fractional_contact_order",
+                description=(
+                    "The prefixes t^(1/2)+O(t^2) and 2t^(1/2)+O(t^2) "
+                    "first differ at exponent 1/2."
+                ),
+                input={"prefixes": [_example_puiseux(1), _example_puiseux(2)]},
             ),
         ),
     ),

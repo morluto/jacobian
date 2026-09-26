@@ -9,6 +9,12 @@ from jacobian.math.polynomials.local_series.arithmetic_models import (
     PuiseuxResidueResult,
     RationalFunctionExpansionResult,
 )
+from jacobian.math.polynomials.local_series.contact_profile import (
+    PuiseuxContactPair,
+    PuiseuxContactProfile,
+    PuiseuxContactRequest,
+    puiseux_contact_profile,
+)
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
@@ -23,6 +29,11 @@ from jacobian.math.polynomials.local_series.newton_polygon import (
     local_polynomial_newton_polygon,
     newton_edge_characteristic_polynomial,
     newton_edge_characteristic_roots,
+)
+from jacobian.math.polynomials.local_series.newton_transform import (
+    NewtonTransformRequest,
+    NewtonTransformResult,
+    newton_transform,
 )
 from jacobian.math.polynomials.local_series.operations import (
     add,
@@ -77,7 +88,12 @@ __all__ = [
     "NewtonEdgeCharacteristicTerm",
     "NewtonPolygonEdge",
     "NewtonPolygonPoint",
+    "NewtonTransformRequest",
+    "NewtonTransformResult",
     "NonzeroValuation",
+    "PuiseuxContactPair",
+    "PuiseuxContactProfile",
+    "PuiseuxContactRequest",
     "PuiseuxResidueResult",
     "PuiseuxTerm",
     "RationalFunctionExpansionResult",
@@ -106,8 +122,10 @@ __all__ = [
     "multiply_puiseux",
     "newton_edge_characteristic_polynomial",
     "newton_edge_characteristic_roots",
+    "newton_transform",
     "power",
     "principal_part",
+    "puiseux_contact_profile",
     "ramify",
     "rational_function_at_infinity",
     "rational_function_at_point",

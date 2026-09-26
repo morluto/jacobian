@@ -214,8 +214,7 @@ def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
             term.coefficient.as_integer_ratio()[1] for term in polynomial.terms
         )
         coefficient_norm = sum(
-            abs(term.coefficient.as_fraction())
-            * (1 + abs(amount)) ** term.exponents[0]
+            abs(term.coefficient.as_fraction()) * (1 + abs(amount)) ** term.exponents[0]
             for term in polynomial.terms
         )
         integer_bound = coefficient_norm * common_denominator
@@ -237,9 +236,7 @@ def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
             for amount in range(exponent)
         )
         coefficient_digits = _coefficient_digits(term.coefficient)
-        denominator_term_digits.append(
-            coefficient_digits + shifted_den_digits
-        )
+        denominator_term_digits.append(coefficient_digits + shifted_den_digits)
         numerator_term_digits.append(coefficient_digits + shifted_num_digits)
     denominator_digits = sum(denominator_term_digits)
     numerator_digits = max(

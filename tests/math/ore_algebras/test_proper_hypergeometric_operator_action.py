@@ -209,9 +209,10 @@ def test_tenth_shift_of_twelfth_factorial_power_fits_admitted_bounds():
 
     assert len(result.relative_multiplier.numerator.terms) == 121
     assert len(result.relative_multiplier.denominator.terms) == 1
-    assert _rf_value(result.relative_multiplier, 3, 7) == (
-        factorial(13) // factorial(3)
-    ) ** 12
+    assert (
+        _rf_value(result.relative_multiplier, 3, 7)
+        == (factorial(13) // factorial(3)) ** 12
+    )
 
 
 def test_n_action_does_not_require_admission_of_the_k_quotient():

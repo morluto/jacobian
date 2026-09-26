@@ -15,7 +15,7 @@ from jacobian._exact import (
 )
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import CanonicalLimits, decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -107,7 +107,51 @@ def _domain(code: str, message: str, location: tuple[str | int, ...]) -> NoRetur
 
 
 def _fraction_digits(value: Fraction) -> int:
-    return max(len(str(abs(value.numerator))), len(str(value.denominator)))
+    return max(
+        decimal_digit_width(value.numerator),
+        decimal_digit_width(value.denominator),
+    )
+
+
+def _admit_edge_root_powers(
+    characteristic: NewtonEdgeCharacteristicResult, root: Fraction
+) -> None:
+    """Bound exact root powers before evaluating the edge polynomial."""
+    if abs(root) == 1:
+        return
+    largest_exponent = max(
+        (
+            term.exponents[0]
+            for term in characteristic.characteristic_polynomial.polynomial.terms
+        ),
+        default=0,
+    )
+
+    def power_digits(value: int) -> int:
+        if abs(value) == 1 or largest_exponent == 0:
+            return 1
+        # log10(2) < 30103/100000 gives a cheap integer-only upper bound.
+        scaled_bits = abs(value).bit_length() * largest_exponent * 30_103
+        return (scaled_bits + 99_999) // 100_000
+
+    root_power_digits = max(
+        power_digits(root.numerator), power_digits(root.denominator)
+    )
+    term_count_digits = decimal_digit_width(
+        len(characteristic.characteristic_polynomial.polynomial.terms)
+    )
+    projected_digits = (
+        root_power_digits
+        + MAX_NEWTON_POLYGON_SCALAR_DIGITS
+        + term_count_digits
+        + decimal_digit_width(largest_exponent)
+    )
+    if projected_digits > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
+        _resource(
+            "root_power_bound",
+            "edge-root evaluation exceeds the admitted exact coefficient digit limit",
+            ("initial_root",),
+        )
 
 
 def _source_rows(source: LocalPolynomialInSeries) -> tuple[_SourceRow, ...]:
@@ -164,6 +208,7 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
             edge_index=request.edge_index,
         )
     )
+    _admit_edge_root_powers(characteristic, root)
     polynomial_value, polynomial_derivative = _edge_polynomial_value(
         characteristic, root
     )
@@ -265,22 +310,29 @@ def _admit_coefficient_digits(
     root: Fraction,
 ) -> int:
     common_denominator = 1
-    max_lifted_numerator_digits = 1
     for row in source_rows:
         for coefficient in row.series.coefficients:
             value = coefficient.as_fraction()
             common_denominator = lcm(common_denominator, value.denominator)
-            if len(str(common_denominator)) > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
+            if (
+                decimal_digit_width(common_denominator)
+                > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS
+            ):
                 _resource(
                     "coefficient_bound",
                     "common source denominator exceeds the output coefficient limit",
                     ("polynomial", "coefficients"),
                 )
-            max_lifted_numerator_digits = max(
-                max_lifted_numerator_digits,
-                len(str(abs(value.numerator)))
-                + len(str(common_denominator // value.denominator)),
-            )
+    max_lifted_numerator_digits = max(
+        (
+            decimal_digit_width(value.numerator)
+            + decimal_digit_width(common_denominator // value.denominator)
+            for row in source_rows
+            for coefficient in row.series.coefficients
+            for value in (coefficient.as_fraction(),)
+        ),
+        default=1,
+    )
     root_digits = _fraction_digits(root)
     term_digits = (
         max_lifted_numerator_digits
@@ -288,8 +340,8 @@ def _admit_coefficient_digits(
         + largest_degree
         + 1
     )
-    denominator_digits = len(str(common_denominator)) + largest_degree * len(
-        str(root.denominator)
+    denominator_digits = decimal_digit_width(common_denominator) + largest_degree * (
+        decimal_digit_width(root.denominator)
     )
     coefficient_digits = max(
         term_digits + len(str(source_slots)) + 1,

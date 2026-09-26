@@ -558,6 +558,8 @@ TOOLS: MathTools = (
         discovery_terms=(
             "enumerate all CSP solutions",
             "complete satisfying assignments",
+            "finite constraint satisfaction solution relation",
+            "CSP solutions as homomorphisms",
         ),
         examples=(
             OperationExample(

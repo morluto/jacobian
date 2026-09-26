@@ -194,6 +194,16 @@ def compute_assignment(request: MatrixAssignmentRequest) -> AssignmentResult:
     )
 
 
+def compute_minor_assignments(
+    request: MatrixMinorAssignmentsRequest,
+) -> MatrixMinorAssignmentsResult:
+    return MatrixMinorAssignmentsResult._from_kernel(
+        matrix=request.matrix,
+        sizes=request.sizes,
+        minors=tropical_matrix_minor_assignment_profiles(request.matrix, request.sizes),
+    )
+
+
 _EX = OperationExample(
     name="min_plus_finite",
     description="Compute min(3,5)=3; both finite scalars must carry the same MIN_PLUS semiring.",
@@ -705,6 +715,22 @@ TOOLS: MathTools = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="tropical.matrix.minor_assignment_profiles.compute",
+        title="Compute tropical minor assignment profiles",
+        description="Compute every min-plus or max-plus assignment profile for selected square-minor sizes; permutations index each profile's selected columns.",
+        request_type=MatrixMinorAssignmentsRequest,
+        result_type=MatrixMinorAssignmentsResult,
+        run=compute_minor_assignments,
+        tags=("tropical", "matrix", "minors", "exact"),
+        examples=(
+            OperationExample(
+                name="selected_minor_profiles",
+                description="Return assignment profiles for every 1 by 1 and 2 by 2 minor.",
+                input={"matrix": _matrix(((0, 4), (3, 1))), "sizes": [1, 2]},
+            ),
+        ),
+    ),
 )
 __all__ = [
     "TOOLS",
@@ -712,6 +738,7 @@ __all__ = [
     "compute_finite_power_sum",
     "compute_matrix_multiply",
     "compute_matrix_power",
+    "compute_minor_assignments",
     "compute_polynomial_add",
     "compute_polynomial_evaluate",
     "compute_polynomial_multiply",

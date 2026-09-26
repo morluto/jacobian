@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import unicodedata
 from fractions import Fraction
-from itertools import pairwise, permutations
+from itertools import combinations, pairwise, permutations
+from math import comb, factorial
 from typing import Literal
 
 from jacobian._exact import CanonicalRational
@@ -23,6 +24,7 @@ from jacobian.math.polynomials.tropical._models import (
     PolynomialActiveTermsResult,
     ScalarDualResult,
     TropicalActiveTerm,
+    TropicalMinorAssignment,
 )
 from jacobian.math.polynomials.tropical.values import (
     MAX_TROPICAL_ACTIVE_RESULT_BYTES,
@@ -131,8 +133,13 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
             code="tropical.matrix_type",
             message="expected a tropical matrix",
         )
-    if len(matrix.row_axis) != len(matrix.entries) or any(
-        len(row) != len(matrix.column_axis) for row in matrix.entries
+    if (
+        len(matrix.row_axis) != len(matrix.entries)
+        or len(set(matrix.row_axis)) != len(matrix.row_axis)
+        or len(set(matrix.column_axis)) != len(matrix.column_axis)
+        or len(matrix.row_axis) > 128
+        or len(matrix.column_axis) > 128
+        or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
     ):
         raise OperationDomainValidationError(
             location=("matrix",),
@@ -1833,9 +1840,128 @@ def tropical_assignment_profile(
     ), tuple(p for p, v in finite if v == optimum)
 
 
+def tropical_matrix_minor_assignment_profiles(
+    matrix: TropicalMatrix, sizes: tuple[int, ...]
+) -> tuple[TropicalMinorAssignment, ...]:
+    """Return every assignment profile for each requested minor order.
+
+    The assignment value is the min-plus/minimum or max-plus/maximum over
+    bijections between the selected row and column indices. It is not a signed
+    determinant; tied optimal bijections are all retained.
+    """
+    _admit_matrix(matrix)
+    if not isinstance(sizes, tuple) or any(type(size) is not int for size in sizes):
+        raise OperationDomainValidationError(
+            location=("sizes",),
+            code="tropical.minor_sizes",
+            message="minor sizes must be a tuple of native integers",
+        )
+    if not sizes or len(set(sizes)) != len(sizes):
+        raise OperationDomainValidationError(
+            location=("sizes",),
+            code="tropical.minor_sizes",
+            message="minor sizes must be nonempty and distinct",
+        )
+    rows, columns = len(matrix.row_axis), len(matrix.column_axis)
+    if any(
+        type(size) is not int or size < 1 or size > 8 or size > min(rows, columns)
+        for size in sizes
+    ):
+        raise OperationDomainValidationError(
+            location=("sizes",),
+            code="tropical.minor_size_domain",
+            message="minor sizes must be between one and eight and fit the matrix",
+        )
+
+    minor_count = sum(comb(rows, size) * comb(columns, size) for size in sizes)
+    permutation_count = sum(
+        comb(rows, size) * comb(columns, size) * factorial(size) for size in sizes
+    )
+    if minor_count > 256 or permutation_count > 40_320:
+        raise OperationResourceAdmissionError(
+            location=("sizes",),
+            code="tropical.minor_assignment_work",
+            message="selected minors exceed the 256-minor or 40,320-assignment bound",
+        )
+
+    # Include the source once, then conservatively charge every minor scalar
+    # at the full tropical scalar digit envelope and every candidate witness.
+    source_bytes = len(encode_strict_json(matrix.model_dump(mode="json")))
+    result_bytes = (
+        source_bytes
+        + minor_count * (2 * MAX_TROPICAL_SCALAR_DIGITS + 256)
+        + permutation_count * (8 * 4 + 24)
+        + 4_096
+    )
+    if result_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("sizes",),
+            code="tropical.minor_assignment_output",
+            message="minor profiles exceed the canonical output byte limit",
+        )
+
+    profiles: list[TropicalMinorAssignment] = []
+    for size in sizes:
+        for row_indices in combinations(range(rows), size):
+            for column_indices in combinations(range(columns), size):
+                scores: list[tuple[tuple[int, ...], Fraction | None]] = []
+                for permutation in permutations(range(size)):
+                    total = Fraction(0)
+                    finite = True
+                    for local_row, local_column in enumerate(permutation):
+                        entry = matrix.entries[row_indices[local_row]][
+                            column_indices[local_column]
+                        ]
+                        if entry.kind != "FINITE":
+                            finite = False
+                            break
+                        term = _finite_value(entry).as_fraction()
+                        total = (
+                            term if total == 0 else _sum_fractions_checked(total, term)
+                        )
+                    scores.append((permutation, total if finite else None))
+
+                finite_scores = [
+                    (perm, value) for perm, value in scores if value is not None
+                ]
+                if not finite_scores:
+                    value = TropicalScalar._from_kernel(
+                        semiring=matrix.semiring,
+                        kind="POSITIVE_INFINITY"
+                        if matrix.semiring.convention == "MIN_PLUS"
+                        else "NEGATIVE_INFINITY",
+                        value=None,
+                    )
+                    winners = tuple(perm for perm, _ in scores)
+                else:
+                    optimum = (
+                        min(score for _, score in finite_scores)
+                        if matrix.semiring.convention == "MIN_PLUS"
+                        else max(score for _, score in finite_scores)
+                    )
+                    value = TropicalScalar._from_kernel(
+                        semiring=matrix.semiring,
+                        kind="FINITE",
+                        value=CanonicalRational.from_fraction(optimum),
+                    )
+                    winners = tuple(
+                        perm for perm, score in finite_scores if score == optimum
+                    )
+                profiles.append(
+                    TropicalMinorAssignment(
+                        row_indices=row_indices,
+                        column_indices=column_indices,
+                        value=value,
+                        permutations=winners,
+                    )
+                )
+    return tuple(profiles)
+
+
 __all__ = [
     "tropical_assignment_profile",
     "tropical_matrix_finite_power_sum",
+    "tropical_matrix_minor_assignment_profiles",
     "tropical_matrix_multiply",
     "tropical_matrix_power",
     "tropical_polynomial_active_terms",

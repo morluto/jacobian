@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from itertools import combinations
+from math import comb
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -584,6 +586,39 @@ class MatrixAssignmentRequest(StrictModel):
         return self
 
 
+class MatrixMinorAssignmentsRequest(StrictModel):
+    """Compute every square minor for each selected order."""
+
+    matrix: TropicalMatrix
+    sizes: tuple[Annotated[StrictInt, Field(ge=1, le=8)], ...] = Field(
+        min_length=1,
+        max_length=8,
+        description=(
+            "Distinct minor orders that fit both matrix dimensions. The selected "
+            "orders must produce at most 256 minors and 40,320 candidate assignments."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_admissible_sizes(self) -> Self:
+        if len(set(self.sizes)) != len(self.sizes):
+            raise _validation_error(
+                "minor_sizes_unique", "minor sizes must be distinct"
+            )
+        if any(size < 1 or size > 8 for size in self.sizes):
+            raise _validation_error(
+                "minor_size_bound", "minor sizes must be between one and eight"
+            )
+        if any(
+            size > min(len(self.matrix.row_axis), len(self.matrix.column_axis))
+            for size in self.sizes
+        ):
+            raise _validation_error(
+                "minor_size_dimension", "minor size exceeds a matrix dimension"
+            )
+        return self
+
+
 class MatrixResult(StrictModel):
     result: TropicalMatrix
 
@@ -653,6 +688,91 @@ class AssignmentResult(StrictModel):
         )
 
 
+class TropicalMinorAssignment(StrictModel):
+    """Profile one submatrix; permutation entries index its selected columns."""
+
+    row_indices: tuple[int, ...]
+    column_indices: tuple[int, ...]
+    value: TropicalScalar
+    permutations: tuple[tuple[int, ...], ...]
+
+
+class MatrixMinorAssignmentsResult(StrictModel):
+    """All selected minor profiles, indexed against the source matrix axes."""
+
+    matrix: TropicalMatrix
+    sizes: tuple[int, ...]
+    minors: tuple[TropicalMinorAssignment, ...] = Field(max_length=256)
+
+    @model_validator(mode="after")
+    def require_source_bound_profiles(self) -> Self:
+        rows, columns = len(self.matrix.row_axis), len(self.matrix.column_axis)
+        if (
+            not self.sizes
+            or any(
+                type(size) is not int
+                or size < 1
+                or size > 8
+                or size > min(rows, columns)
+                for size in self.sizes
+            )
+            or len(set(self.sizes)) != len(self.sizes)
+        ):
+            raise _validation_error(
+                "minor_sizes", "sizes must be distinct valid minor orders"
+            )
+        count = sum(comb(rows, size) * comb(columns, size) for size in self.sizes)
+        if count > 256:
+            raise _validation_error(
+                "minor_profile_coverage", "profile coverage exceeds the result bound"
+            )
+        expected = tuple(
+            (row_indices, column_indices)
+            for size in self.sizes
+            for row_indices in combinations(range(rows), size)
+            for column_indices in combinations(range(columns), size)
+        )
+        if len(expected) != len(self.minors):
+            raise _validation_error(
+                "minor_profile_coverage", "profiles must cover every selected minor"
+            )
+        for (row_indices, column_indices), profile in zip(
+            expected, self.minors, strict=True
+        ):
+            if (profile.row_indices, profile.column_indices) != (
+                row_indices,
+                column_indices,
+            ):
+                raise _validation_error(
+                    "minor_profile_indices",
+                    "profile indices must match source subsets in canonical order",
+                )
+            size = len(row_indices)
+            if (
+                profile.value.semiring != self.matrix.semiring
+                or not profile.permutations
+                or any(
+                    len(permutation) != size or set(permutation) != set(range(size))
+                    for permutation in profile.permutations
+                )
+            ):
+                raise _validation_error(
+                    "minor_profile_shape",
+                    "profile values and permutations must match the source minor",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        matrix: TropicalMatrix,
+        sizes: tuple[int, ...],
+        minors: tuple[TropicalMinorAssignment, ...],
+    ) -> Self:
+        return cls.model_construct(matrix=matrix, sizes=sizes, minors=minors)
+
+
 __all__ = [
     "AddBranch",
     "AssignmentResult",
@@ -662,6 +782,8 @@ __all__ = [
     "InfinityCase",
     "MatrixAssignmentRequest",
     "MatrixFinitePowerSumRequest",
+    "MatrixMinorAssignmentsRequest",
+    "MatrixMinorAssignmentsResult",
     "MatrixMultiplyRequest",
     "MatrixPowerRequest",
     "MatrixResult",
@@ -681,6 +803,7 @@ __all__ = [
     "ScalarPowerRequest",
     "ScalarResult",
     "TropicalActiveTerm",
+    "TropicalMinorAssignment",
     "UnivariateNewtonPolygonRequest",
     "UnivariateNewtonPolygonResult",
     "UnivariateRootsRequest",

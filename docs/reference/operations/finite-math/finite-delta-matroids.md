@@ -31,15 +31,37 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-This initial operation deliberately does not construct twists, minors, binary
-matrix presentations, graph conversions, or interlace polynomials. Those are
-separate mathematical postconditions rather than fields of the recognition
-result.
-
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
-Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
-not a catalog operation. It scans every retained feasible-row length of the
-canonical value and has no extra row ceiling.
+The native `lower_matroid` and `upper_matroid` conversions return
+`DeltaMatroidExtremalMatroidResult` values. The canonical `FiniteBasisMatroid`
+is in `.matroid`; its bases are, respectively, all minimum-cardinality or all
+maximum-cardinality feasible sets. Pass that field to basis-matroid consumers.
+These deterministic projections remain available through the Python API
+without catalog declarations. The wrapper preserves the source ground axis and
+includes `source_feasible_indices`, aligned with the result bases, as an exact
+map back to the source's canonical feasible rows. The source
+symmetric-exchange axiom is replayed at each operation boundary. The
+the extremal-bases theorem establishes basis exchange for these conversion
+results. Constructing or deserializing a generic `FiniteBasisMatroid` checks its
+canonical structure and cardinalities only; consumers of authored carriers
+must call `require_basis_exchange()` before relying on the matroid claim.
+The lower/upper matroid theorem is stated in Section 6.1 of Dupont, Fink, and
+Moci, [*Universal Tutte characters via combinatorial coalgebras*](https://doi.org/10.5802/alco.35).
+
+These conversions retain the 16,384 source-membership, 2,048 UTF-8 source-label,
+and 250,000 source exchange-work limits. The target `FiniteBasisMatroid` admits
+at most 64 ground labels, 4,096 basis rows, 65,536 basis memberships, 1,024
+UTF-8 bytes per label, 16,384 aggregate label bytes, and 2,000,000 worst-case
+basis-exchange candidate checks. Output bounds are checked before materializing
+the selected basis family. A source with more than 64 ground elements remains a
+valid delta-matroid input but is refused for these conversions because the
+canonical basis carrier cannot represent that output size.
+
+Width `max(|F|)-min(|F|)` is also available as
+`delta_matroid.width.compute`; it scans each retained feasible-row length.
+Width `max(|F|)-min(|F|)` is also a native projection of the feasible family;
+it scans every retained feasible-row length of the canonical value and has no
+extra row ceiling.
 
 `delta_matroid.distance_interlace_polynomial.compute` returns the exact
 distance histogram and the polynomial

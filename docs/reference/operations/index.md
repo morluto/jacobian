@@ -18,7 +18,6 @@ that need more context than an operation card:
 - [Exact quadratic forms](quadratic-forms.md)
 - [Exact qubit stabilizer groups](quantum-exact-stabilizer-groups.md)
 - [Stabilizer code spaces](quantum-stabilizer-code-space.md)
-- [Stabilizer logical Pauli quotient spaces](quantum-stabilizer-logical-pauli-space.md)
 - [Exact elementary Clifford Pauli conjugation](quantum-pauli-clifford-conjugation.md)
 - [Exact Clifford transport of stabilizer groups](quantum-stabilizer-clifford-transport.md)
 - [Finite Clifford sequences on stabilizer groups](quantum-stabilizer-clifford-sequences.md)

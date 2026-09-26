@@ -24,7 +24,7 @@ class PauliCliffordConjugationRequest(StrictModel):
                 "max_qubits": 32,
                 "max_gate_count": 1,
                 "max_work_units": 4096,
-                "max_result_compact_json_bytes": 16384,
+                "max_result_cells": 96,
             }
         }
     )

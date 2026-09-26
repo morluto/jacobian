@@ -16,9 +16,7 @@ from jacobian.math.quantum._models import (
 )
 from jacobian.math.quantum.stabilizer_clifford_sequence._models import (
     CliffordGate,
-    CliffordSequenceCompositionRequest,
     StabilizerCliffordSequence,
-    StabilizerCliffordSequenceApplyRequest,
 )
 from jacobian.math.quantum.stabilizer_clifford_sequence._tools import TOOLS
 from jacobian.math.quantum.stabilizer_clifford_sequence.operations import (
@@ -166,9 +164,7 @@ def test_sequence_action_matches_independent_exact_matrix_conjugation():
             CliffordGate(gate="S", qubits=("q0",)),
         ),
     )
-    result = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=group, sequence=sequence)
-    )
+    result = apply_stabilizer_clifford_sequence(group, sequence)
 
     unitary, hadamard_count = _sequence_unitary(sequence)
     normalization = 1 << hadamard_count
@@ -210,9 +206,9 @@ def test_sequence_composition_has_empty_identity_and_application_order():
         gates=(CliffordGate(gate="S", qubits=("q1",)),),
     )
     compose = compose_stabilizer_clifford_sequences
-    assert compose(CliffordSequenceCompositionRequest(left=empty, right=left)) == left
-    assert compose(CliffordSequenceCompositionRequest(left=left, right=empty)) == left
-    combined = compose(CliffordSequenceCompositionRequest(left=left, right=right))
+    assert compose(empty, left) == left
+    assert compose(left, empty) == left
+    combined = compose(left, right)
     assert combined.gates == (*left.gates, *right.gates)
     assert (
         StabilizerCliffordSequence.model_validate_json(combined.model_dump_json())
@@ -222,15 +218,8 @@ def test_sequence_composition_has_empty_identity_and_application_order():
         register=register,
         gates=(CliffordGate(gate="CNOT", qubits=("q0", "q1")),),
     )
-    left_associated = compose(
-        CliffordSequenceCompositionRequest(left=combined, right=third)
-    )
-    right_associated = compose(
-        CliffordSequenceCompositionRequest(
-            left=left,
-            right=compose(CliffordSequenceCompositionRequest(left=right, right=third)),
-        )
-    )
+    left_associated = compose(combined, third)
+    right_associated = compose(left, compose(right, third))
     assert left_associated == right_associated
 
 
@@ -251,18 +240,10 @@ def test_composed_action_matches_sequential_group_action():
         register=register,
         gates=(CliffordGate(gate="CNOT", qubits=("q0", "q1")),),
     )
-    combined = compose_stabilizer_clifford_sequences(
-        CliffordSequenceCompositionRequest(left=left, right=right)
-    )
-    combined_group = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=source, sequence=combined)
-    )
-    after_left = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=source, sequence=left)
-    )
-    after_both = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=after_left, sequence=right)
-    )
+    combined = compose_stabilizer_clifford_sequences(left, right)
+    combined_group = apply_stabilizer_clifford_sequence(source, combined)
+    after_left = apply_stabilizer_clifford_sequence(source, left)
+    after_both = apply_stabilizer_clifford_sequence(after_left, right)
     assert _generated_group(
         tuple(_pauli_matrix(row) for row in combined_group.generators)
     ) == (_generated_group(tuple(_pauli_matrix(row) for row in after_both.generators)))
@@ -276,9 +257,7 @@ def test_redundant_rows_are_canonicalized_before_result_size_admission():
     group = ExactStabilizerGroup(qubit_register=register, generators=(generator,) * 4)
     sequence = StabilizerCliffordSequence(register=register, gates=())
 
-    result = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=group, sequence=sequence)
-    )
+    result = apply_stabilizer_clifford_sequence(group, sequence)
 
     assert result.generators == (generator,)
     assert ExactStabilizerGroup.model_validate_json(result.model_dump_json()) == result
@@ -293,9 +272,7 @@ def test_empty_group_with_many_gates_does_not_charge_register_bytes_per_gate():
         register=register,
         gates=(CliffordGate(gate="H", qubits=(register.qubit_ids[0],)),) * 30,
     )
-    result = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=group, sequence=sequence)
-    )
+    result = apply_stabilizer_clifford_sequence(group, sequence)
     assert result.generators == ()
     assert result.qubit_register == register
 
@@ -311,11 +288,7 @@ def test_malformed_native_sequence_fields_raise_domain_error(sequence):
     register = QubitRegister(qubit_ids=("q0",))
     group = ExactStabilizerGroup(qubit_register=register, generators=())
     with pytest.raises(OperationDomainValidationError) as error:
-        apply_stabilizer_clifford_sequence(
-            StabilizerCliffordSequenceApplyRequest.model_construct(
-                group=group, sequence=sequence
-            )
-        )
+        apply_stabilizer_clifford_sequence(group, sequence)
     assert error.value.errors()[0]["type"] == (
         "quantum.stabilizer_clifford_sequence.invalid_register"
     )
@@ -331,9 +304,7 @@ def test_empty_sequence_is_identity_on_a_stabilizer_group():
         ),
     )
     identity = StabilizerCliffordSequence(register=register, gates=())
-    result = apply_stabilizer_clifford_sequence(
-        StabilizerCliffordSequenceApplyRequest(group=group, sequence=identity)
-    )
+    result = apply_stabilizer_clifford_sequence(group, identity)
     assert _generated_group(tuple(_pauli_matrix(row) for row in result.generators)) == (
         _generated_group(tuple(_pauli_matrix(row) for row in group.generators))
     )
@@ -345,9 +316,7 @@ def test_composition_rejects_sequence_longer_than_admitted_bound():
     left = StabilizerCliffordSequence(register=register, gates=(h,) * 65)
     right = StabilizerCliffordSequence(register=register, gates=(h,) * 64)
     with pytest.raises(OperationResourceAdmissionError):
-        compose_stabilizer_clifford_sequences(
-            CliffordSequenceCompositionRequest(left=left, right=right)
-        )
+        compose_stabilizer_clifford_sequences(left, right)
 
 
 def test_owner_local_manifest_publishes_both_sequence_operations():

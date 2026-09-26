@@ -94,8 +94,7 @@ def _admit_check_space(value: object) -> tuple[CheckSpaceValue, int, int, int]:
             or len(x_bits) != width
             or len(z_bits) != width
             or any(
-                type(bit) is not int or bit not in (0, 1)
-                for bit in (*x_bits, *z_bits)
+                type(bit) is not int or bit not in (0, 1) for bit in (*x_bits, *z_bits)
             )
         ):
             _reject(

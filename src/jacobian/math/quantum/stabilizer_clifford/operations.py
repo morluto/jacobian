@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import NoReturn
+from typing import Any, NoReturn, cast
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -29,6 +29,29 @@ MAX_STABILIZER_CLIFFORD_RESULT_BYTES = 65_536
 def _reject(location: str, code: str, message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=(location,), code=code, message=message
+    )
+
+
+def _is_admitted_generator(value: object, register: QubitRegister, width: int) -> bool:
+    """Check one nested generator without dereferencing forged model fields."""
+
+    if not isinstance(value, ExactQubitPauli):
+        return False
+    phase_free = getattr(value, "phase_free", None)
+    if not isinstance(phase_free, PhaseFreeQubitPauli):
+        return False
+    x_bits = getattr(phase_free, "x_bits", None)
+    z_bits = getattr(phase_free, "z_bits", None)
+    phase = getattr(value, "phase", None)
+    return (
+        getattr(phase_free, "qubit_register", None) == register
+        and type(phase) is int
+        and 0 <= phase < 4
+        and isinstance(x_bits, tuple)
+        and isinstance(z_bits, tuple)
+        and len(x_bits) == width
+        and len(z_bits) == width
+        and all(type(bit) is int and bit in (0, 1) for bit in (*x_bits, *z_bits))
     )
 
 
@@ -69,10 +92,13 @@ def conjugate_stabilizer_group(
 ) -> ExactStabilizerGroup:
     """Return the exact group ``U S U†`` for one H, S, or directed CNOT gate.
 
-    Input group claims are independently checked and canonicalized before the
-    automorphism is applied. Clifford conjugation preserves Hermiticity,
-    commutation, and independence, so the canonical result remains a
-    phase-consistent exact stabilizer group.
+    The supplied generators are independently re-admitted and reduced to an
+    independent family in their given order before the automorphism is applied
+    to each retained generator. Clifford conjugation preserves Hermiticity,
+    commutation, and independence, so the result is again a phase-consistent
+    exact stabilizer group. The retained family is a valid presentation, not a
+    canonical one: equal subgroups may serialize with different generator
+    order, so callers must not use serialization as group identity.
     """
     if not isinstance(request, StabilizerCliffordTransportRequest):
         _reject(
@@ -80,24 +106,33 @@ def conjugate_stabilizer_group(
             "quantum.stabilizer_clifford.invalid_request",
             "request must contain a typed group and one elementary gate",
         )
-    group = request.group
+    group = getattr(request, "group", None)
     if not isinstance(group, ExactStabilizerGroup):
         _reject(
             "group",
             "quantum.stabilizer_clifford.invalid_group",
             "input must be an exact stabilizer group",
         )
-    register = group.qubit_register
-    if not isinstance(register, QubitRegister):
+    register_field: object = getattr(group, "qubit_register", None)
+    if not isinstance(register_field, QubitRegister):
         _reject(
             "group",
             "quantum.stabilizer_clifford.invalid_register",
             "group register must be typed",
         )
-    ids = register.qubit_ids
-    width = len(ids) if isinstance(ids, tuple) else 0
-    generators = group.generators
-    count = len(generators) if isinstance(generators, tuple) else -1
+    register = register_field
+    ids: tuple[Any, ...] = ()
+    ids_field: object = getattr(register, "qubit_ids", None)
+    if isinstance(ids_field, tuple):
+        ids = ids_field
+    width = len(ids)
+    generators: tuple[Any, ...] = ()
+    generators_field: object = getattr(group, "generators", None)
+    if isinstance(generators_field, tuple):
+        generators = generators_field
+        count = len(generators)
+    else:
+        count = -1
     if not 1 <= width <= MAX_QUBITS or not 0 <= count <= MAX_CHECK_ROWS:
         _reject(
             "group",
@@ -113,38 +148,35 @@ def conjugate_stabilizer_group(
             for q in ids
         )
         or len(set(ids)) != width
-        or any(
-            not isinstance(g, ExactQubitPauli)
-            or not isinstance(g.phase_free, PhaseFreeQubitPauli)
-            or g.register != register
-            or type(g.phase) is not int
-            or not 0 <= g.phase < 4
-            or len(g.phase_free.x_bits) != width
-            or len(g.phase_free.z_bits) != width
-            or any(
-                type(bit) is not int or bit not in (0, 1)
-                for bit in (*g.phase_free.x_bits, *g.phase_free.z_bits)
-            )
-            for g in generators
-        )
+        or any(not _is_admitted_generator(g, register, width) for g in generators)
     ):
         _reject(
             "group",
             "quantum.stabilizer_clifford.invalid_group",
             "group generators must be exact Paulis on the identical register",
         )
-    if request.gate not in ("H", "S", "CNOT"):
+    gate_field: object = getattr(request, "gate", None)
+    if gate_field not in ("H", "S", "CNOT"):
         _reject(
             "gate",
             "quantum.stabilizer_clifford.invalid_gate",
             "gate must be H, S, or CNOT",
         )
-    arity = 2 if request.gate == "CNOT" else 1
+    gate = gate_field
+    arity = 2 if gate == "CNOT" else 1
+    axes_field: object = getattr(request, "qubits", None)
+    if type(axes_field) is not tuple:
+        _reject(
+            "qubits",
+            "quantum.stabilizer_clifford.invalid_axes",
+            "gate axes must name distinct qubits in the group's register",
+        )
+    axes = cast("tuple[str, ...]", axes_field)
     if (
-        type(request.qubits) is not tuple
-        or len(request.qubits) != arity
-        or len(set(request.qubits)) != arity
-        or any(q not in ids for q in request.qubits)
+        len(axes) != arity
+        or any(type(q) is not str for q in axes)
+        or len(set(axes)) != arity
+        or any(q not in ids for q in axes)
     ):
         _reject(
             "qubits",
@@ -152,8 +184,7 @@ def conjugate_stabilizer_group(
             "gate axes must name distinct qubits in the group's register",
         )
 
-    # Bound complete source semantic validation plus all gate transformations
-    # and compact output before canonicalization or transformed row allocation.
+    # Bound full source validation before canonicalizing caller-supplied rows.
     pair_count = count * (count - 1) // 2
     source_validation = (
         2 * pair_count * width
@@ -163,8 +194,24 @@ def conjugate_stabilizer_group(
         + count * width
     )
     label_bytes = sum(6 * len(q) + 4 for q in ids)
-    gate_work = count * (12 * width + label_bytes + 32)
-    output_bound = (count + 1) * label_bytes + count * (24 * width + 128) + 256
+    if source_validation > MAX_STABILIZER_CLIFFORD_WORK:
+        raise OperationResourceAdmissionError(
+            location=("group",),
+            code="quantum.stabilizer_clifford.over_envelope",
+            message="source group validation exceeds its exact work envelope",
+        )
+
+    canonical = stabilizer_group_from_generators(
+        ExactStabilizerGroupRequest(
+            register=register,
+            generators=generators,
+        )
+    )
+    canonical_count = len(canonical.generators)
+    gate_work = canonical_count * (12 * width + label_bytes + 32)
+    output_bound = (
+        (canonical_count + 1) * label_bytes + canonical_count * (24 * width + 128) + 256
+    )
     if (
         source_validation + gate_work > MAX_STABILIZER_CLIFFORD_WORK
         or output_bound > MAX_STABILIZER_CLIFFORD_RESULT_BYTES
@@ -174,18 +221,10 @@ def conjugate_stabilizer_group(
             code="quantum.stabilizer_clifford.over_envelope",
             message="group validation or exact transported result exceeds its envelope",
         )
-
-    canonical = stabilizer_group_from_generators(
-        ExactStabilizerGroupRequest(
-            qubit_register=register,
-            generators=generators,
-        )
-    )
     transported = tuple(
-        _transport_pauli(pauli, request.gate, request.qubits)
-        for pauli in canonical.generators
+        _transport_pauli(pauli, gate, axes) for pauli in canonical.generators
     )
-    return ExactStabilizerGroup(qubit_register=register, generators=transported)
+    return ExactStabilizerGroup(register=register, generators=transported)
 
 
 __all__ = ["conjugate_stabilizer_group"]

@@ -223,9 +223,6 @@ class LogicalPauliSpace(StrictModel):
                 "symplectic_form_alternating",
                 "induced symplectic form must be alternating",
             )
-        self._require_semantic_relations(
-            width, normalizer_dimension, quotient_dimension
-        )
         return self
 
     def _require_semantic_relations(

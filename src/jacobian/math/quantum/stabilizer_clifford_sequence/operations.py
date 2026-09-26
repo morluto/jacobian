@@ -22,9 +22,7 @@ from jacobian.math.quantum.operations import stabilizer_group_from_generators
 from jacobian.math.quantum.stabilizer_clifford_sequence._models import (
     MAX_CLIFFORD_SEQUENCE_GATES,
     CliffordGate,
-    CliffordSequenceCompositionRequest,
     StabilizerCliffordSequence,
-    StabilizerCliffordSequenceApplyRequest,
 )
 
 MAX_SEQUENCE_WORK = 1_500_000
@@ -131,8 +129,9 @@ def _resolve_gates(
     sequence: StabilizerCliffordSequence,
 ) -> tuple[tuple[str, tuple[int, ...]], ...]:
     ids = sequence.register.qubit_ids
+    id_to_index = {label: index for index, label in enumerate(ids)}
     return tuple(
-        (gate.gate, tuple(ids.index(axis) for axis in gate.qubits))
+        (gate.gate, tuple(id_to_index[axis] for axis in gate.qubits))
         for gate in sequence.gates
     )
 
@@ -144,8 +143,8 @@ def _admit_group(value: object) -> tuple[ExactStabilizerGroup, int, int]:
             "quantum.stabilizer_clifford_sequence.invalid_group",
             "input must be an exact stabilizer group",
         )
-    register = _admit_register(value.qubit_register, "group.register")
-    generators = value.generators
+    register = _admit_register(getattr(value, "qubit_register", None), "group.register")
+    generators = getattr(value, "generators", None)
     count = len(generators) if isinstance(generators, tuple) else -1
     width = len(register.qubit_ids)
     if not 0 <= count <= MAX_CHECK_ROWS:
@@ -154,22 +153,28 @@ def _admit_group(value: object) -> tuple[ExactStabilizerGroup, int, int]:
             "quantum.stabilizer_clifford_sequence.invalid_group_size",
             "generator family exceeds its admitted row count",
         )
-    if any(
-        not isinstance(generator, ExactQubitPauli)
-        or not isinstance(generator.phase_free, PhaseFreeQubitPauli)
-        or generator.register != register
-        or type(generator.phase) is not int
-        or not 0 <= generator.phase < 4
-        or type(generator.phase_free.x_bits) is not tuple
-        or type(generator.phase_free.z_bits) is not tuple
-        or len(generator.phase_free.x_bits) != width
-        or len(generator.phase_free.z_bits) != width
-        or any(
-            type(bit) is not int or bit not in (0, 1)
-            for bit in (*generator.phase_free.x_bits, *generator.phase_free.z_bits)
+
+    def is_admitted_generator(generator: object) -> bool:
+        if not isinstance(generator, ExactQubitPauli):
+            return False
+        phase_free = getattr(generator, "phase_free", None)
+        if not isinstance(phase_free, PhaseFreeQubitPauli):
+            return False
+        x_bits = getattr(phase_free, "x_bits", None)
+        z_bits = getattr(phase_free, "z_bits", None)
+        phase = getattr(generator, "phase", None)
+        return (
+            getattr(phase_free, "qubit_register", None) == register
+            and type(phase) is int
+            and 0 <= phase < 4
+            and isinstance(x_bits, tuple)
+            and isinstance(z_bits, tuple)
+            and len(x_bits) == width
+            and len(z_bits) == width
+            and all(type(bit) is int and bit in (0, 1) for bit in (*x_bits, *z_bits))
         )
-        for generator in generators
-    ):
+
+    if any(not is_admitted_generator(generator) for generator in generators):
         _reject(
             "group.generators",
             "quantum.stabilizer_clifford_sequence.invalid_group",
@@ -187,17 +192,12 @@ def _admit_group(value: object) -> tuple[ExactStabilizerGroup, int, int]:
 
 
 def compose_stabilizer_clifford_sequences(
-    request: CliffordSequenceCompositionRequest,
+    left_value: StabilizerCliffordSequence,
+    right_value: StabilizerCliffordSequence,
 ) -> StabilizerCliffordSequence:
     """Compose two exact gate sequences, applying ``left`` before ``right``."""
-    if not isinstance(request, CliffordSequenceCompositionRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer_clifford_sequence.invalid_request",
-            "request must contain two typed Clifford sequences",
-        )
-    left, left_count = _admit_sequence_shape(request.left, "left")
-    right, right_count = _admit_sequence_shape(request.right, "right", left.register)
+    left, left_count = _admit_sequence_shape(left_value, "left")
+    right, right_count = _admit_sequence_shape(right_value, "right", left.register)
     total_count = left_count + right_count
     if total_count > MAX_CLIFFORD_SEQUENCE_GATES:
         raise OperationResourceAdmissionError(
@@ -257,26 +257,19 @@ def _conjugate_bits(
 
 
 def apply_stabilizer_clifford_sequence(
-    request: StabilizerCliffordSequenceApplyRequest,
+    group_value: ExactStabilizerGroup,
+    sequence_value: StabilizerCliffordSequence,
 ) -> ExactStabilizerGroup:
     """Apply a bounded finite Clifford sequence by exact group conjugation."""
-    if not isinstance(request, StabilizerCliffordSequenceApplyRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer_clifford_sequence.invalid_request",
-            "request must contain an exact group and typed finite sequence",
-        )
-    group, _generator_count, source_validation = _admit_group(request.group)
+    group, _generator_count, source_validation = _admit_group(group_value)
     register = group.register
-    sequence, gate_count = _admit_sequence_shape(request.sequence, "sequence", register)
+    sequence, gate_count = _admit_sequence_shape(sequence_value, "sequence", register)
     width = len(register.qubit_ids)
     register_bytes = _register_label_bytes(register)
     gate_axis_bytes = sum(
         6 * len(axis) + 4 for gate in sequence.gates for axis in gate.qubits
     )
-    axis_resolution_work = (
-        gate_count * (4 * width + 4 * (width + gate_axis_bytes)) + gate_axis_bytes
-    )
+    axis_resolution_work = register_bytes + gate_axis_bytes + 8 * gate_count
     if (
         source_validation > 1_000_000
         or source_validation + axis_resolution_work > MAX_SEQUENCE_WORK

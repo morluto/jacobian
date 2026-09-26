@@ -12,6 +12,19 @@ from jacobian.math.quantum.stabilizer_clifford_sequence.operations import (
     compose_stabilizer_clifford_sequences,
 )
 
+
+def _run_compose(
+    request: CliffordSequenceCompositionRequest,
+) -> StabilizerCliffordSequence:
+    return compose_stabilizer_clifford_sequences(request.left, request.right)
+
+
+def _run_apply(
+    request: StabilizerCliffordSequenceApplyRequest,
+) -> ExactStabilizerGroup:
+    return apply_stabilizer_clifford_sequence(request.group, request.sequence)
+
+
 _REGISTER = {"qubit_ids": ["q0", "q1"]}
 _Z0 = {
     "phase_free": {"register": _REGISTER, "x_bits": [0, 0], "z_bits": [1, 0]},
@@ -29,7 +42,7 @@ TOOLS: MathTools = (
         ),
         request_type=CliffordSequenceCompositionRequest,
         result_type=StabilizerCliffordSequence,
-        run=compose_stabilizer_clifford_sequences,
+        run=_run_compose,
         tags=("quantum", "stabilizer", "clifford", "composition", "exact"),
         examples=(
             OperationExample(
@@ -59,7 +72,7 @@ TOOLS: MathTools = (
         ),
         request_type=StabilizerCliffordSequenceApplyRequest,
         result_type=ExactStabilizerGroup,
-        run=apply_stabilizer_clifford_sequence,
+        run=_run_apply,
         tags=("quantum", "stabilizer", "clifford", "transport", "exact"),
         examples=(
             OperationExample(

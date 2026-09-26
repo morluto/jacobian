@@ -34,9 +34,7 @@ advertised envelope rather than a universal result-construction rule.
 The recognition result itself deliberately does not carry twists, minors,
 binary matrix presentations, graph conversions, or interlace polynomials.
 Those are separate mathematical postconditions rather than fields of the
-recognition result. Graph conversions, interlace and transition polynomials,
-lower/upper matroids, and graph local-complement profiles remain outside the
-current contract.
+recognition result.
 
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 `delta_matroid.width.compute`, `delta_matroid.dual.compute`,
@@ -59,6 +57,23 @@ family over too many ground elements exceeds the state bound, and a larger
 family on an otherwise admissible ground set can exceed the distance-work
 bound. The empty-ground delta-matroid has one mask and distance zero.
 
+`delta_matroid.binary.from_matrix_twist.compute` constructs `D(A)*T` from a
+labelled symmetric matrix `A` over GF(2) and a sorted ground-index subset `T`.
+The convention is `X` feasible in `D(A)` exactly when the principal matrix
+`A[X]` is nonsingular, with the empty principal matrix nonsingular; the twist
+then maps each feasible index set `X` to `X symmetric_difference T`. The
+returned binary presentation retains `A`, `T`, and the complete resulting
+`FiniteDeltaMatroid` on the same labelled ground axis.
+
+The principal-minor kernel admits at most eight ground elements and 250,000
+elimination work units before enumerating subsets. The twist transport is
+bounded by `2^n (1 + 2n + n^2)` work units, at most 256 rows, and at most
+`n 2^(n-1) <= 1,024` feasible-row memberships (`0` memberships for the empty
+ground). The retained result has at most 1,352 matrix, row, membership, and
+twist cells and at most 4,096 aggregate ground-label bytes across its matrix
+and delta-matroid axes. These are mathematical allocation bounds; they are not
+a deployment wire-byte ceiling.
+
 `delta_matroid.relabel.compute` renames and reorders the ground axis through a
 bijective `target_to_source` map. Each feasible subset is transported by the
 inverse `source_to_target` map, with its indices sorted in the target axis; the
@@ -75,5 +90,9 @@ a bijection preserves symmetric difference and membership.
 `delta_matroid.distance_interlace_polynomial.compute` returns the exact
 distance histogram and `Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
 `d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
-integers in descending-degree order. Admission bounds subset-feasible
-comparisons, output terms, and coefficient bit lengths before enumeration.
+integers in descending-degree order, using the shared `IntegerPolynomial`
+value. This is the distance specialization in [Brijder and Hoogeboom's
+delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
+with the variable shift fixed as `y = x - 1`. Admission validates the complete
+source and bounds subset-feasible comparisons, output terms, and coefficient
+bit lengths before enumerating subsets.

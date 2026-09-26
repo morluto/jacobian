@@ -56,3 +56,18 @@ canonical basis carrier cannot represent that output size.
 
 Width `max(|F|)-min(|F|)` is also available as
 `delta_matroid.width.compute`; it scans each retained feasible-row length.
+Width `max(|F|)-min(|F|)` is also a native projection of the feasible family;
+it scans every retained feasible-row length of the canonical value and has no
+extra row ceiling.
+
+`delta_matroid.distance_interlace_polynomial.compute` returns the exact
+distance histogram and the polynomial
+`Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+`d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
+integers in descending-degree order, using the shared `IntegerPolynomial`
+value. This is the distance specialization in [Brijder and Hoogeboom's
+delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
+with the variable shift fixed as `y = x - 1`; it does not imply any other
+interlace polynomial convention. Admission validates the complete source,
+then bounds `2^|E| * |F|` subset-feasible comparisons, the number of
+output terms, and coefficient bit lengths before enumerating subsets.

@@ -227,3 +227,16 @@ def test_smooth_branch_rejects_rational_growth_before_evaluation() -> None:
         )
 
     assert "intermediate bound" in str(error.value)
+
+
+def test_zero_root_nonzero_slope_uses_canonical_laurent_valuation() -> None:
+    source = _polynomial(((0, _series(0, -1)), (1, _series(1, 0))))
+
+    result = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(polynomial=source, initial_root=_rational(0))
+    )
+
+    assert result.series.valuation_lower == 1
+    assert result.series.coefficients == (_rational(1),)
+    decoded = SmoothBranchFirstJetResult.model_validate_json(result.model_dump_json())
+    assert decoded == result

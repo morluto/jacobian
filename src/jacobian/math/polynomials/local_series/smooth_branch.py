@@ -68,13 +68,11 @@ class SmoothBranchFirstJetResult(StrictModel):
             self.series.place,
             self.series.center,
             self.series.precision,
-            self.series.valuation_lower,
         ) != (
             self.source.variable,
             self.source.place,
             self.source.center,
             self.residual_precision,
-            0,
         ):
             raise _error(
                 "result_parent",
@@ -82,7 +80,16 @@ class SmoothBranchFirstJetResult(StrictModel):
             )
         if self.residual_precision != 2 or not self.series.coefficients:
             raise _error("result_precision", "a first jet has precision exactly two")
-        if self.series.coefficients[0].as_fraction() != self.initial_root.as_fraction():
+        root = self.initial_root.as_fraction()
+        if self.series.valuation_lower > 1 or self.series.valuation_lower < 0:
+            raise _error(
+                "result_valuation", "a first jet must retain exponents zero and one"
+            )
+        if self.series.valuation_lower == 0:
+            constant = self.series.coefficients[0].as_fraction()
+        else:
+            constant = Fraction(0)
+        if constant != root:
             raise _error(
                 "result_root", "the branch constant must equal its supplied root"
             )
@@ -394,11 +401,22 @@ def smooth_branch_first_jet(
         variable=source.variable,
         place=source.place,
         center=source.center,
-        valuation_lower=0,
+        valuation_lower=(0 if root else (0 if not slope else 1)),
         precision=2,
         coefficients=(
-            CanonicalRational.from_fraction(root),
-            CanonicalRational.from_fraction(slope),
+            (
+                CanonicalRational.from_fraction(root),
+                CanonicalRational.from_fraction(slope),
+            )
+            if root
+            else (
+                (CanonicalRational.from_fraction(slope),)
+                if slope
+                else (
+                    CanonicalRational.from_fraction(0),
+                    CanonicalRational.from_fraction(0),
+                )
+            )
         ),
     )
     return SmoothBranchFirstJetResult._from_kernel(

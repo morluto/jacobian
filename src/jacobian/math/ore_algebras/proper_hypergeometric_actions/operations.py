@@ -83,9 +83,29 @@ def _term_count_bound(
             )
         )
 
-    common_denominator_degrees = tuple(
-        sum(degrees[axis] for degrees in denominator_term_degrees)
-        for axis in (0, 1)
+    # Every term uses the same shift quotient denominator. Reuse its largest
+    # required power, and likewise count identical coefficient denominators once.
+    shared_ratio_denominator = max(
+        (term.exponent for term in operator.terms), default=0
+    )
+    unique_coefficient_denominators: list[tuple[object, int]] = []
+    for term in operator.terms:
+        denominator = term.coefficient.denominator
+        coefficient_degree = max(
+            (item.exponents[0] for item in denominator.terms), default=0
+        )
+        for index, (existing, degree) in enumerate(unique_coefficient_denominators):
+            if existing == denominator:
+                unique_coefficient_denominators[index] = (
+                    existing, max(degree, coefficient_degree)
+                )
+                break
+        else:
+            unique_coefficient_denominators.append((denominator, coefficient_degree))
+    common_denominator_degrees = (
+        ratio_denominator_degrees[0] * shared_ratio_denominator
+        + sum(degree for _, degree in unique_coefficient_denominators),
+        ratio_denominator_degrees[1] * shared_ratio_denominator,
     )
     common_numerator_degrees = tuple(
         common_denominator_degrees[axis]
@@ -183,6 +203,14 @@ def _coefficient_digits(value: RationalFunction) -> int:
 
 
 def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
+    unit_shift_quotient = (
+        len(n_ratio.numerator.terms) == 1
+        and len(n_ratio.denominator.terms) == 1
+        and not n_ratio.numerator.terms[0].exponents
+        and n_ratio.numerator.terms[0].coefficient.as_fraction() == 1
+        and not n_ratio.denominator.terms[0].exponents
+        and n_ratio.denominator.terms[0].coefficient.as_fraction() == 1
+    )
     ratio_digits = _coefficient_digits(n_ratio)
     ratio_num_degree = max(
         (sum(item.exponents) for item in n_ratio.numerator.terms), default=0
@@ -196,12 +224,12 @@ def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
     numerator_term_digits = []
     for term in operator.terms:
         exponent = term.exponent
-        shifted_num_digits = ratio_digits + ratio_num_degree * (
+        shifted_num_digits = 1 if unit_shift_quotient else ratio_digits + ratio_num_degree * (
             len(str(max(1, exponent))) + 1
         ) + len(str(max(1, ratio_num_terms))) + len(
             str(max(1, ratio_num_degree + 1))
         )
-        shifted_den_digits = ratio_digits + ratio_den_degree * (
+        shifted_den_digits = 1 if unit_shift_quotient else ratio_digits + ratio_den_degree * (
             len(str(max(1, exponent))) + 1
         ) + len(str(max(1, ratio_den_terms))) + len(
             str(max(1, ratio_den_degree + 1))

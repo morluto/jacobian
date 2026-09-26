@@ -147,6 +147,24 @@ def test_forged_native_request_fields_are_rejected_without_helper_errors() -> No
             stabilizer_erasure_correctability(request)
 
 
+def test_uncorrectable_result_rejects_identity_witness() -> None:
+    value = _value(1, ())
+    request = StabilizerErasureCorrectabilityRequest(
+        check_space=value, erased_qubit_ids=("q0",)
+    )
+    with pytest.raises(ValueError, match="nontrivial"):
+        StabilizerErasureCorrectabilityResult(
+            source=request,
+            supported_normalizer_dimension=2,
+            supported_stabilizer_dimension=0,
+            supported_logical_dimension=2,
+            correctable=False,
+            witness=PhaseFreeQubitPauli(
+                register=value.qubit_register, x_bits=(0,), z_bits=(0,)
+            ),
+        )
+
+
 def test_nonisotropic_check_space_is_rejected() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     x = PhaseFreeQubitPauli(register=register, x_bits=(1,), z_bits=(0,))

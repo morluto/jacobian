@@ -1162,6 +1162,10 @@ class StabilizerErasureCorrectabilityResult(StrictModel):
                 )
             register = self.source.check_space.qubit_register
             erased = set(self.source.erased_qubit_ids)
+            if not any(self.witness.x_bits) and not any(self.witness.z_bits):
+                raise _validation_error(
+                    "erasure_witness", "a logical witness must be nontrivial"
+                )
             if self.witness.qubit_register != register or any(
                 (x or z) and qubit_id not in erased
                 for qubit_id, x, z in zip(

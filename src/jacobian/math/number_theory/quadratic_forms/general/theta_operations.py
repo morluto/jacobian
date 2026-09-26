@@ -36,7 +36,9 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 def _revalidate_request(request: object, request_type: type, label: str):
     """Re-establish bounded request invariants for native callers too."""
     try:
-        return request_type.model_validate(request.model_dump(mode="python"))
+        return request_type.model_validate(
+            request.model_dump(mode="python"), strict=True
+        )
     except (AttributeError, TypeError, ValueError, ValidationError) as exc:
         raise OperationDomainValidationError(
             location=(label,),

@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from math import gcd
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational, require_bounded_rational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
     MAX_QUADRATIC_SCALE_AXIS,
     MAX_QUADRATIC_SCALE_SUPPORT,
@@ -113,6 +118,16 @@ def scale_rational_quadratic_form(
 ) -> QuadraticFormScaleResult:
     """Return ``factor * Q`` on the same ordered coordinate axis."""
 
+    try:
+        request = QuadraticFormScaleRequest.model_validate(
+            request.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.scale_invalid_request",
+            message="quadratic-form scaling requires a canonical bounded request",
+        ) from error
     require_scale_budget(request)
     source = request.form
     factor = request.factor

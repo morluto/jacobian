@@ -1034,6 +1034,23 @@ def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:
     return result
 
 
+def _admit_page_map_request(request: Any) -> FilteredChainMapPageRequest:
+    if not isinstance(request, FilteredChainMapPageRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="filtered_chain_map.page_request_invalid",
+            message="page-map input must be a FilteredChainMapPageRequest",
+        )
+    if type(request.page) is not int:
+        raise OperationDomainValidationError(
+            location=("page",),
+            code="filtered_chain_map.page_invalid",
+            message="the requested spectral page must be an integer",
+        )
+    admit_spectral_page(request.page)
+    return request
+
+
 def filtered_chain_map_page(
     request: FilteredChainMapPageRequest,
 ) -> FilteredChainMapPageResult:
@@ -1043,6 +1060,7 @@ def filtered_chain_map_page(
     source page representatives in ambient coordinates, reduces them modulo
     the target page denominators, and checks naturality against every d^r.
     """
+    request = _admit_page_map_request(request)
     authored = request.map
     chain_map_request = FilteredChainMapRequest(
         source=authored.source,
@@ -1117,7 +1135,6 @@ def filtered_chain_map_page(
             message="the conservative page-map output bound exceeds the admitted result size",
         )
 
-    admit_spectral_page(request.page)
     if request.page == 0:
         source_page = _spectral_zero_page(
             _associated_graded_admitted(

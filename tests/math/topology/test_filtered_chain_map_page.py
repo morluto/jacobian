@@ -175,6 +175,14 @@ def test_zero_page_map_preserves_empty_page_axes() -> None:
 MAX_PAGE = 4
 
 
+def test_page_map_rejects_malformed_native_page_before_arithmetic() -> None:
+    request = FilteredChainMapPageRequest(map=_map(1), page=1).model_copy(
+        update={"page": "1"}
+    )
+    with pytest.raises(ValueError, match="spectral page must be an integer"):
+        filtered_chain_map_page(request)
+
+
 def test_page_map_rejects_a_false_chain_map_claim() -> None:
     authored = _map(1).model_copy(update={"maps": (((1,),), ((2,),))})
     with pytest.raises(ValueError, match="chain map"):

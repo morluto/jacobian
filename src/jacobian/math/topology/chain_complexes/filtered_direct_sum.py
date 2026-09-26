@@ -458,10 +458,24 @@ def filtered_direct_sum(
     left_value: FilteredChainComplexRequest,
     right_value: FilteredChainComplexRequest,
 ) -> FilteredDirectSumResult:
+    if (
+        type(left_value) is not FilteredChainComplexRequest
+        or type(right_value) is not FilteredChainComplexRequest
+    ):
+        raise _fail(("request",), "filtered_chain_complex.type_invalid", "expected two filtered chain complexes")
+    try:
+        # Price the combined payload before dumping/rebuilding either nested
+        # filtration. A rejection can then happen without duplicating its scalars.
+        _preflight(left_value, right_value)
+    except OperationDomainValidationError:
+        raise
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise _fail(
+            ("request",), "filtered_chain_complex.structure_invalid", str(exc)
+        ) from exc
     left = _revalidate(left_value, "left")
     right = _revalidate(right_value, "right")
 
-    _preflight(left, right)
     _admit_filtered_semantics(left.complex, left.filtration)
     _admit_filtered_semantics(right.complex, right.filtration)
     a = left.complex

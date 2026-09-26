@@ -5,7 +5,6 @@ from __future__ import annotations
 from fractions import Fraction
 from math import gcd
 
-
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.models import (
@@ -24,30 +23,23 @@ MAX_COORDINATE_ADDITION_DIGITS = MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
 MAX_COORDINATE_ADDITION_CELLS = MAX_LEVEL_ONE_BASIS_COORDINATES
 MAX_COORDINATE_ADDITION_WORK = 3 * MAX_LEVEL_ONE_BASIS_COORDINATES
 MAX_COORDINATE_ADDITION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
-MAX_COORDINATE_SCALAR_DIGITS = 2 * MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
-MAX_COORDINATE_SCALAR_CELLS = MAX_LEVEL_ONE_BASIS_COORDINATES
-MAX_COORDINATE_SCALAR_WORK = 2 * MAX_LEVEL_ONE_BASIS_COORDINATES
-MAX_COORDINATE_SCALAR_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _digits(value: int) -> int:
     return len(str(abs(value)))
 
 
-def _integer_digit_upper_bound(value: int) -> int:
-    """Return an exact decimal digit count using a bit-length fast estimate."""
-    magnitude = abs(value)
-    bits = magnitude.bit_length()
-    estimate = (bits * 30_103 + 99_999) // 100_000 if bits else 1
-    if estimate <= 1:
-        return estimate
-    threshold = 10 ** (estimate - 1)
-    return estimate if magnitude >= threshold else estimate - 1
-
-
 def _require_same_parent(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> None:
+    if not isinstance(left.space, ModularFormSpace) or not isinstance(
+        right.space, ModularFormSpace
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "space"),
+            code="modular_form.coordinate_add_space_invalid",
+            message="both coordinate values must contain valid modular spaces",
+        )
     if left.space != right.space:
         raise OperationDomainValidationError(
             location=("right", "space"),
@@ -69,15 +61,8 @@ def _require_same_parent(
 
 
 def _projected_digit_bound(left: Fraction, right: Fraction) -> int:
-    numerator_bound = (
-        max(
-            _digits(left.numerator) + _digits(right.denominator),
-            _digits(right.numerator) + _digits(left.denominator),
-        )
-        + 1
-    )
-    denominator_bound = _digits(left.denominator) + _digits(right.denominator)
-    return max(numerator_bound, denominator_bound)
+    result = left + right
+    return max(_digits(result.numerator), _digits(result.denominator))
 
 
 def modular_form_coordinates_add(
@@ -132,8 +117,8 @@ def modular_form_coordinates_add(
         (
             max(
                 _projected_digit_bound(a, b),
-                len(str(abs((a + b).numerator))),
-                len(str((a + b).denominator)),
+                _digits((a + b).numerator),
+                _digits((a + b).denominator),
             )
             for a, b in zip(left_values, right_values, strict=True)
         ),
@@ -149,7 +134,10 @@ def modular_form_coordinates_add(
     parent_bytes = len(encode_strict_json(left.space.model_dump(mode="json")))
     basis_bytes = len(encode_strict_json(left.basis_id))
     output_bytes = (
-        256 + parent_bytes + basis_bytes + output_cells * (2 * projected_digits + 80)
+        256
+        + parent_bytes
+        + basis_bytes
+        + output_cells * (2 * projected_digits + 80)
     )
     if output_bytes > MAX_COORDINATE_ADDITION_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
@@ -166,136 +154,10 @@ def modular_form_coordinates_add(
     )
 
 
-def modular_form_coordinates_scalar_multiply(
-    form: ModularFormCoordinates, scalar: CanonicalRational
-) -> ModularFormCoordinates:
-    """Scale a rational coordinate vector, preserving its exact parent and axes."""
-    if not isinstance(form, ModularFormCoordinates) or not isinstance(
-        scalar, CanonicalRational
-    ):
-        raise OperationDomainValidationError(
-            location=(),
-            code="modular_form.coordinate_scalar_input_type",
-            message="scaling requires exact modular-form coordinates and a rational scalar",
-        )
-    try:
-        if (
-            type(scalar.num) is not int
-            or type(scalar.den) is not int
-            or scalar.den <= 0
-            or gcd(abs(scalar.num), scalar.den) != 1
-        ):
-            raise ValueError("noncanonical rational")
-    except (ValueError, TypeError, ZeroDivisionError) as exc:
-        raise OperationDomainValidationError(
-            location=("scalar",),
-            code="modular_form.coordinate_scalar_invalid_rational",
-            message="scalar must have canonical integer components and be reduced",
-        ) from exc
-    space = getattr(form, "space", None)
-    if not isinstance(space, ModularFormSpace):
-        raise OperationDomainValidationError(
-            location=("form", "space"),
-            code="modular_form.coordinate_scalar_coefficient_domain",
-            message="coordinate scaling requires an exact modular-form space parent",
-        )
-    if space.coefficient_domain != "QQ":
-        raise OperationDomainValidationError(
-            location=("form", "space", "coefficient_domain"),
-            code="modular_form.coordinate_scalar_coefficient_domain",
-            message="coordinate scaling currently supports rational QQ coefficients",
-        )
-
-    plan, values = _admit_coordinates(
-        form,
-        1,
-        materialize_pari=False,
-        check_expansion_growth=False,
-        allow_short_prefix=True,
-    )
-    numerator, denominator = scalar.as_integer_ratio()
-    scalar_digits = max(
-        _integer_digit_upper_bound(numerator),
-        _integer_digit_upper_bound(denominator),
-    )
-    if scalar_digits > MAX_COORDINATE_SCALAR_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("scalar",),
-            code="modular_form.coordinate_scalar_digit_bound",
-            message="scalar exceeds the admitted rational digit bound",
-        )
-    max_coordinate_digits = max(
-        (
-            max(_digits(value.numerator), _digits(value.denominator))
-            for value in values
-        ),
-        default=1,
-    )
-    if max_coordinate_digits + scalar_digits > 2 * MAX_COORDINATE_SCALAR_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("scalar",),
-            code="modular_form.coordinate_scalar_digit_bound",
-            message="scalar-coordinate intermediate growth exceeds the scaling envelope",
-        )
-
-    scalar_value = Fraction(numerator, denominator)
-
-    dimension = plan.dimension
-    if (
-        dimension > MAX_COORDINATE_SCALAR_CELLS
-        or 2 * dimension > MAX_COORDINATE_SCALAR_WORK
-    ):
-        raise OperationResourceAdmissionError(
-            location=("form", "coordinates"),
-            code="modular_form.coordinate_scalar_work_bound",
-            message="coordinate scaling exceeds the admitted exact work bound",
-        )
-    projected_digits = max(
-        (
-            max(
-                _digits((value * scalar_value).numerator),
-                _digits((value * scalar_value).denominator),
-            )
-            for value in values
-        ),
-        default=1,
-    )
-    if projected_digits > MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("form", "coordinates"),
-            code="modular_form.coordinate_scalar_digit_bound",
-            message="predicted rational coordinate growth exceeds the scaling envelope",
-        )
-
-    parent_bytes = len(encode_strict_json(form.space.model_dump(mode="json")))
-    basis_bytes = len(encode_strict_json(form.basis_id))
-    output_bytes = (
-        256 + parent_bytes + basis_bytes + dimension * (2 * projected_digits + 80)
-    )
-    if output_bytes > MAX_COORDINATE_SCALAR_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("form", "coordinates"),
-            code="modular_form.coordinate_scalar_output_bound",
-            message="predicted coordinate result exceeds the canonical output limit",
-        )
-
-    result = tuple(value * scalar_value for value in values)
-    return ModularFormCoordinates(
-        space=form.space,
-        basis_id=form.basis_id,
-        coordinates=tuple(CanonicalRational.from_fraction(value) for value in result),
-    )
-
-
 __all__ = [
     "MAX_COORDINATE_ADDITION_CELLS",
     "MAX_COORDINATE_ADDITION_DIGITS",
     "MAX_COORDINATE_ADDITION_OUTPUT_BYTES",
     "MAX_COORDINATE_ADDITION_WORK",
-    "MAX_COORDINATE_SCALAR_CELLS",
-    "MAX_COORDINATE_SCALAR_DIGITS",
-    "MAX_COORDINATE_SCALAR_OUTPUT_BYTES",
-    "MAX_COORDINATE_SCALAR_WORK",
     "modular_form_coordinates_add",
-    "modular_form_coordinates_scalar_multiply",
 ]

@@ -125,9 +125,13 @@ def test_cutoff_digit_bound_is_typed() -> None:
     source = _source([(2, [0])])
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"at most {MAX_PREFIX_CUTOFF_DIGITS} digits",
-    ):
+    ) as exc_info:
         compute_periodic_union_prefix_count(source, 10**MAX_PREFIX_CUTOFF_DIGITS)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "number_theory.periodic_prefix.cutoff_digit_bound"
+    )
 
 
 def test_scalar_cutoff_can_exceed_period_digit_bound() -> None:

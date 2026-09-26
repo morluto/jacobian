@@ -18,6 +18,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES,
     MAX_MARKING_COMMUTATION_PROFILE_WORK,
     MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES,
+    MAX_MARKING_EQUATION_FORMAL_TARGET_ABS,
+    MAX_MARKING_EQUATION_OUTPUT_BYTES,
     MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES,
     MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES,
     MAX_SIPHON_TRAP_PLACES,
@@ -32,6 +34,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     IncidenceMatrixResult,
     MarkingCommutationProfileResult,
     MarkingConflictProfileResult,
+    MarkingEquationResult,
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
@@ -83,6 +86,7 @@ __all__ = [
     "fire_transition",
     "marking_commutation_profile",
     "marking_conflict_profile",
+    "marking_equation",
     "marking_reachability",
     "petri_invariants",
     "petri_net_matrices",
@@ -999,6 +1003,106 @@ def state_equation_target(
         marking=marking,
         transition_counts=transition_counts,
         target=target,
+    )
+
+
+def marking_equation(
+    net: PetriNet,
+    source_marking: Marking,
+    target_marking: Marking,
+    transition_counts: tuple[int, ...],
+) -> MarkingEquationResult:
+    """Compare a target with M0 + Cx over Z; this is not a reachability test."""
+    net = _admit_net(net)
+    source_marking = _require_marking_size(net, source_marking)
+    target_marking = _require_marking_size(net, target_marking)
+    if (
+        not isinstance(transition_counts, tuple)
+        or len(transition_counts) != net.transition_count
+        or any(type(count) is not int or count < 0 for count in transition_counts)
+    ):
+        raise OperationDomainValidationError(
+            location=("transition_counts",),
+            code="petri_net.state_equation_transition_axis",
+            message="transition counts must be nonnegative integers on the net axis",
+        )
+    if (
+        any(count > MAX_STATE_EQUATION_OCCURRENCES for count in transition_counts)
+        or sum(transition_counts) > MAX_STATE_EQUATION_OCCURRENCES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transition_counts",),
+            code="petri_net.state_equation_occurrence_bound",
+            message="total transition count exceeds the admitted bound",
+        )
+    # A shape-based upper bound admits serialization before allocating either
+    # computed vector; input axes cap each vector at 64 coordinates.
+    max_coordinate_digits = len(str(MAX_MARKING_EQUATION_FORMAL_TARGET_ABS)) + 1
+
+    def vector_size(coordinates: tuple[int, ...], *, bounded: bool = False) -> int:
+        return (
+            2
+            + max(0, len(coordinates) - 1)
+            + sum(
+                max_coordinate_digits if bounded else len(str(value))
+                for value in coordinates
+            )
+        )
+
+    def marking_size(marking: Marking) -> int:
+        return strict_json_object_size(
+            (
+                ("tokens", vector_size(marking.tokens)),
+                (
+                    "net",
+                    4 if marking.net is None else _petri_net_reverse_output_bound(net),
+                ),
+            )
+        )
+
+    formal_vector_bound = vector_size(source_marking.tokens, bounded=True)
+    residual_vector_bound = vector_size(target_marking.tokens, bounded=True)
+    output_bound = strict_json_object_size(
+        (
+            ("net", _petri_net_reverse_output_bound(net)),
+            ("source_marking", marking_size(source_marking)),
+            ("target_marking", marking_size(target_marking)),
+            (
+                "transition_counts",
+                2 + max(0, net.transition_count - 1) + net.transition_count * 4,
+            ),
+            ("formal_target", formal_vector_bound),
+            ("residual", residual_vector_bound),
+            ("satisfies_equation", 5),
+        )
+    )
+    if output_bound > MAX_MARKING_EQUATION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="petri_net.marking_equation_output_bound",
+            message="marking-equation result exceeds the admitted output bound",
+        )
+    formal_target = tuple(
+        source_marking.tokens[place]
+        + sum(
+            (net.post[place][transition] - net.pre[place][transition])
+            * transition_counts[transition]
+            for transition in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    residual = tuple(
+        target_marking.tokens[place] - formal_target[place]
+        for place in range(net.place_count)
+    )
+    return MarkingEquationResult(
+        net=net,
+        source_marking=source_marking,
+        target_marking=target_marking,
+        transition_counts=transition_counts,
+        formal_target=formal_target,
+        residual=residual,
+        satisfies_equation=all(value == 0 for value in residual),
     )
 
 

@@ -12,6 +12,7 @@ from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
+    RationalVPolytope,
     _filter_redundant_vertices,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
@@ -26,6 +27,16 @@ MAX_ADJACENCY_RESULT_COMPONENT_DIGITS = 1_024
 
 MAX_ADJACENCY_RESULT_COORDINATE_BITS = 10_000_000
 """Aggregate exact-coordinate bit budget for result-value validation."""
+
+
+class PolytopalAdjacencyRequest(StrictModel):
+    """Bounded maximal-cell input for the adjacency operation."""
+
+    cells: tuple[RationalVPolytope, ...] = Field(
+        min_length=1,
+        max_length=16,
+        description="Between 1 and 16 maximal rational cells in one ambient space.",
+    )
 
 
 def _facet_support_sides(
@@ -294,6 +305,7 @@ class PolytopalComplexAdjacencyGraph(StrictModel):
 
 
 __all__ = [
+    "PolytopalAdjacencyRequest",
     "PolytopalAdjacencyCell",
     "PolytopalComplexAdjacencyGraph",
     "PolytopalFacetAdjacency",

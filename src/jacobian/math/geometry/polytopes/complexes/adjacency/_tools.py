@@ -3,11 +3,9 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.geometry.polytopes.complexes._models import (
-    PolytopalComplexClosureRequest,
-)
 from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
     PolytopalComplexAdjacencyGraph,
+    PolytopalAdjacencyRequest,
 )
 from jacobian.math.geometry.polytopes.complexes.adjacency.operations import (
     MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES,
@@ -90,7 +88,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             f"{MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES} coordinate values, "
             f"and {MAX_POLYTOPAL_ADJACENCY_RESULT_DIGITS} exact digits."
         ),
-        request_type=PolytopalComplexClosureRequest,
+        request_type=PolytopalAdjacencyRequest,
         result_type=PolytopalComplexAdjacencyGraph,
         run=lambda request: polytopal_complex_adjacency_graph(request.cells),
         tags=("polytope", "polytopal-complex", "adjacency", "exact-rational"),

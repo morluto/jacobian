@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import gcd
 
 from jacobian._exact import (
     CanonicalRational,
@@ -26,6 +27,7 @@ from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     WeightedMonotonicity,
     WeightedOrderedWord,
 )
+from jacobian.math.logic.languages.words.values import FiniteWord
 
 __all__ = ["compute_endpoint_profile"]
 
@@ -118,6 +120,12 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             message="source must be a WeightedOrderedWord value",
         )
     word = source.word
+    if not isinstance(word, FiniteWord):
+        raise OperationDomainValidationError(
+            location=("source", "word"),
+            code="weighted_word.invalid_source",
+            message="source word must be a FiniteWord value",
+        )
     n = len(word.letters)
     if n > 500 or len(source.weights) != n:
         raise OperationDomainValidationError(
@@ -134,7 +142,7 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             message="source must retain a canonical explicitly ordered word",
         )
     numerator_digits = 1
-    denominators: set[int] = set()
+    denominator_lcm = 1
     source_digits = 0
     for weight in source.weights:
         if (
@@ -172,17 +180,21 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             )
         numerator_digits = max(numerator_digits, num_digits)
         if weight.den != 1:
-            denominators.add(weight.den)
+            denominator_lcm = (
+                denominator_lcm // gcd(denominator_lcm, weight.den) * weight.den
+            )
 
     # A common denominator is the LCM of distinct input denominators. Repeated
     # equal denominators do not multiply growth; use their product as a safe
     # bound while retaining this important common-denominator case.
-    denominator_product_digits = sum(decimal_digit_width(d) for d in denominators)
+    denominator_lcm_digits = (
+        decimal_digit_width(denominator_lcm) if denominator_lcm != 1 else 0
+    )
     # Every witness sum is at most n times the largest input numerator over
     # the product of distinct nonunit input denominators. This bounds both Fraction
     # operands before any dynamic-programming state is materialized.
     carry_digits = decimal_digit_width(max(n, 1))
-    growth_digits = numerator_digits + denominator_product_digits + carry_digits
+    growth_digits = numerator_digits + denominator_lcm_digits + carry_digits
     if growth_digits > MAX_WEIGHTED_MONOTONE_RESULT_COMPONENT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("source", "weights"),

@@ -278,3 +278,21 @@ def test_serialized_result_composes_through_its_typed_contract() -> None:
     )
     assert request.source == source
     assert decoded.weight.as_fraction() == Fraction(5, 4)
+
+
+def test_shared_factor_denominators_use_lcm_growth_bound() -> None:
+    q = 10**255 + 7
+    source = _word(("a",), ("a",) * 4, tuple(Fraction(1, k * q) for k in (1, 2, 3, 5)))
+    result = maximum_weight_nondecreasing_subsequence(source)
+    assert result.indices == (0, 1, 2, 3)
+    assert result.weight.as_fraction() == sum(
+        (Fraction(1, k * q) for k in (1, 2, 3, 5)), Fraction()
+    )
+
+
+def test_result_deserialization_rejects_impossible_witness_shape() -> None:
+    source = _word(("a",), ("a",), (1,))
+    result = maximum_weight_nondecreasing_subsequence(source).model_dump(mode="json")
+    result["values"] = []
+    with pytest.raises(ValidationError):
+        WeightedMaximumResult.model_validate(result)

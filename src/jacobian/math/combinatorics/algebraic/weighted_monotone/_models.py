@@ -144,6 +144,30 @@ class WeightedMaximumResult(StrictModel):
     indices: tuple[int, ...] = Field(max_length=500)
     values: tuple[str, ...] = Field(max_length=500)
 
+    @model_validator(mode="after")
+    def validate_witness_structure(self) -> Self:
+        if len(self.indices) != len(self.values):
+            raise PydanticCustomError(
+                "weighted_maximum.witness_shape",
+                "indices and values must have equal length",
+            )
+        if any(
+            i < 0 or i >= len(self.source.word.letters) for i in self.indices
+        ) or any(a >= b for a, b in zip(self.indices, self.indices[1:], strict=True)):
+            raise PydanticCustomError(
+                "weighted_maximum.witness_indices",
+                "witness indices must be strictly increasing source positions",
+            )
+        if any(
+            self.source.word.letters[i] != value
+            for i, value in zip(self.indices, self.values, strict=True)
+        ):
+            raise PydanticCustomError(
+                "weighted_maximum.witness_values",
+                "witness values must match the indexed source letters",
+            )
+        return self
+
     @classmethod
     def _from_kernel(
         cls,

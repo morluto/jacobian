@@ -59,19 +59,19 @@ TOOLS = (
                             {
                                 "n_coefficient": 0,
                                 "k_coefficient": 1,
-                                "offset": 0,
+                                "offset": "0",
                                 "power": -1,
                             },
                             {
                                 "n_coefficient": 1,
                                 "k_coefficient": -1,
-                                "offset": 0,
+                                "offset": "0",
                                 "power": -1,
                             },
                             {
                                 "n_coefficient": 1,
                                 "k_coefficient": 0,
-                                "offset": 0,
+                                "offset": "0",
                                 "power": 1,
                             },
                         ],

@@ -178,6 +178,15 @@ def test_request_schema_publishes_exact_preflight_envelopes() -> None:
     }
 
 
+@pytest.mark.parametrize("entry", [True, "1", 1.0])
+def test_native_twist_rejects_forged_coerced_matrix_entries(entry: object) -> None:
+    matrix = BinarySymmetricMatrix.model_construct(
+        ground=("e0",), entries=((entry,),)
+    )
+    with pytest.raises(Exception, match="canonical symmetric binary matrix"):
+        binary_matrix_twist(matrix)
+
+
 def test_result_twist_rejects_coerced_non_integer_indices() -> None:
     payload = {
         "matrix": {"ground": ["e0", "e1"], "entries": [[0, 0], [0, 0]]},

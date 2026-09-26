@@ -179,7 +179,7 @@ def _canonical_binary_matrix(matrix: BinarySymmetricMatrix) -> BinarySymmetricMa
         )
     try:
         matrix = BinarySymmetricMatrix.model_validate(
-            {"ground": matrix.ground, "entries": matrix.entries}
+            {"ground": matrix.ground, "entries": matrix.entries}, strict=True
         )
     except Exception as exc:
         raise OperationDomainValidationError(

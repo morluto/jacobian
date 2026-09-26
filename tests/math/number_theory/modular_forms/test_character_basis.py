@@ -229,6 +229,56 @@ def test_inflated_character_basis_has_independent_dimension_and_sturm_rank(
             )
 
 
+@pytest.mark.parametrize(
+    ("level", "coordinate", "kind", "dimension", "precision"),
+    [
+        (13, 4, "S", 0, 3),
+        (13, 4, "M", 2, 3),
+        (26, 4, "S", 1, 8),
+        (26, 8, "M", 5, 8),
+        (39, 8, "S", 3, 10),
+    ],
+)
+def test_conductor_thirteen_order_three_character_basis(
+    level: int,
+    coordinate: int,
+    kind: str,
+    dimension: int,
+    precision: int,
+) -> None:
+    """Order-three characters use the exact Q(zeta_6) basis path too."""
+    character = _inflated_character(level, coordinate)
+    space = ModularFormSpace(
+        level=level,
+        weight=2,
+        kind=kind,
+        character=character,
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+    basis = modular_character_basis_q_expansions(space)
+
+    # Cohen--Oesterle dimensions independently distinguish this order-three
+    # family from the order-six family, including the zero-dimensional cusp
+    # space at level 13 and the multidimensional inflated targets.
+    assert len(basis.elements) == dimension
+    assert basis.precision == precision
+    assert basis.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1"
+    restored = TypeAdapter(ModularCharacterBasis).validate_json(basis.model_dump_json())
+    assert restored == basis
+    vectors = tuple(
+        tuple(
+            tuple(
+                Fraction(value.num, value.den) for value in item.coefficients_ascending
+            )
+            for item in element.expansion.coefficients
+        )
+        for element in basis.elements
+    )
+    assert character_basis_module._rref_character_prefix(
+        vectors, space.coefficient_domain, precision
+    ) == tuple(element.expansion.coefficients for element in basis.elements)
+
+
 @pytest.mark.parametrize("coordinates", [(12,), ("2",)])
 def test_forged_character_coordinates_are_rejected_before_pari(
     monkeypatch: pytest.MonkeyPatch, coordinates: tuple[object, ...]

@@ -42,7 +42,16 @@ def _as_fraction_pair(value: Any) -> list[str]:
     return [format_canonical_integer(numerator), format_canonical_integer(denominator)]
 
 
-def _as_cyclotomic_coordinates(pari: Any, value: Any, order: int) -> list[list[str]]:
+def _format_fraction_pair(value: Fraction) -> list[str]:
+    numerator, denominator = value.numerator, value.denominator
+    if max(len(str(abs(numerator))), len(str(denominator))) > _MAX_COEFFICIENT_DIGITS:
+        raise RuntimeError("PARI modular-form coefficient exceeds its digit envelope")
+    return [format_canonical_integer(numerator), format_canonical_integer(denominator)]
+
+
+def _as_cyclotomic_coordinates(
+    pari: Any, value: Any, order: int, character_order: int
+) -> list[list[str]]:
     """Encode a PARI algebraic coefficient in its declared power basis."""
     polynomial = pari.lift(value)
     degree = sum(math.gcd(index, order) == 1 for index in range(1, order + 1))
@@ -55,10 +64,23 @@ def _as_cyclotomic_coordinates(pari: Any, value: Any, order: int) -> list[list[s
         ):
             raise RuntimeError("PARI character coefficient exceeds its admitted height")
         coefficients.append(pair)
+    if character_order == 3:
+        if order != 6 or len(coefficients) != 2:
+            raise RuntimeError(
+                "PARI order-three coefficients need the declared Q(zeta_6) basis"
+            )
+        # PARI expresses these coefficients in x = zeta_3. The public field
+        # uses zeta_6, with zeta_3 = zeta_6^2 = zeta_6 - 1; thus
+        # a + b*zeta_3 maps to (a-b) + b*zeta_6.
+        real = Fraction(int(coefficients[0][0]), int(coefficients[0][1]))
+        zeta = Fraction(int(coefficients[1][0]), int(coefficients[1][1]))
+        return [_format_fraction_pair(real - zeta), _format_fraction_pair(zeta)]
     return coefficients
 
 
-def _character_vector(pari: Any, raw: object, field_order: object) -> tuple[Any, Any]:
+def _character_vector(
+    pari: Any, raw: object, field_order: object
+) -> tuple[Any, Any, int]:
     """Build PARI's standard-generator character and verify it on every unit."""
 
     if (
@@ -196,11 +218,16 @@ def _character_vector(pari: Any, raw: object, field_order: object) -> tuple[Any,
             raise RuntimeError(
                 "PARI character conversion disagrees with Jacobian on a unit residue"
             )
-    return pari_group, pari_character_vector
+    return pari_group, pari_character_vector, character_order
 
 
 def _character_basis_vectors(
-    pari: Any, pari_space: Any, precision: int, dimension: int, field_order: int
+    pari: Any,
+    pari_space: Any,
+    precision: int,
+    dimension: int,
+    field_order: int,
+    character_order: int,
 ) -> list[list[list[list[str]]]]:
     """Normalize and encode the admitted character basis prefix."""
     if not 3 <= precision <= _MAX_PRECISION:
@@ -224,7 +251,7 @@ def _character_basis_vectors(
         normalized_coefficients = [value / pivot for value in raw_coefficients]
         vectors.append(
             [
-                _as_cyclotomic_coordinates(pari, value, field_order)
+                _as_cyclotomic_coordinates(pari, value, field_order, character_order)
                 for value in normalized_coefficients
             ]
         )
@@ -281,7 +308,7 @@ def main() -> int:
             or character_request.get("modulus") != level
         ):
             raise ValueError("PARI character modulus differs from modular-form level")
-        pari_group, pari_character = _character_vector(
+        pari_group, pari_character, character_order = _character_vector(
             pari, character_request, request["coefficient_field_order"]
         )
         character_parent = [pari_group, pari_character]
@@ -302,7 +329,7 @@ def main() -> int:
         else:
             field_order = request["coefficient_field_order"]
             vectors = _character_basis_vectors(
-                pari, pari_space, precision, dimension, field_order
+                pari, pari_space, precision, dimension, field_order, character_order
             )
             response = {
                 "kind": "character_complete",

@@ -146,7 +146,7 @@ def _require_basis_space(
         or getattr(getattr(character, "group", None), "modulus", None) != level
     ):
         _domain(
-            "character basis supports weight-two order-six character spaces at levels 13, 26, and 39 over Q(zeta_6)"
+            "character basis supports weight-two conductor-13 characters at levels 13, 26, and 39 over Q(zeta_6)"
         )
     request = _pari_character_request(space)
     return space, field, request
@@ -275,7 +275,9 @@ def _character_basis_from_admission(
             code="modular_form.character_basis_height_admission",
             message="normalized character coefficients exceed the exact height envelope",
         )
-    allocation_bytes = precision * field.degree * (2 * normalized_digits + 32)
+    allocation_bytes = (
+        max(1, dimension) * precision * field.degree * (2 * normalized_digits + 32)
+    )
     if work > _MAX_WORK or allocation_bytes > _MAX_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
@@ -346,7 +348,12 @@ def _character_basis_from_admission(
         )
     basis_id = (
         CHARACTER_BASIS_ID
-        if space.level == 13 and space.kind == "S"
+        if (
+            space.level == 13
+            and space.kind == "S"
+            and type(space.character) is DirichletCharacter
+            and space.character.coordinates in ((2,), (10,))
+        )
         else "gamma0-cyclotomic-character-sturm-rref-v1"
     )
     elements = tuple(

@@ -80,6 +80,18 @@ def test_triangle_matches_independent_oriented_boundary_blocks() -> None:
     assert SheafCochainComplex.model_validate_json(result.model_dump_json()) == result
 
 
+def test_cohomology_does_not_materialize_discarded_cochain_value(monkeypatch) -> None:
+    sheaf = _constant_triangle()
+    expected = sheaf_cochain_complex(sheaf).coboundary_matrices
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("cohomology must not build an unused typed complex")
+
+    monkeypatch.setattr(SheafCochainComplex, "_from_kernel", forbidden)
+    result = sheaf_cohomology(sheaf)
+    assert result.coboundary_matrices == expected
+
+
 def test_published_operation_example_runs_without_catalog_boot() -> None:
     tool = next(
         declaration

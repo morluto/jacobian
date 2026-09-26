@@ -764,7 +764,9 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
 
 def _assemble_sheaf_cochain_complex(  # noqa: C901
     sheaf: FiniteCellularSheaf,
-) -> tuple[SheafCochainComplex, _ExactField, list[list[list[Scalar]]]]:
+    *,
+    build_value: bool = True,
+) -> tuple[SheafCochainComplex | None, _ExactField, list[list[list[Scalar]]]]:
     """Admit once, assemble signed incidence blocks, and establish delta squared zero."""
     field = _cohomology_admission(sheaf)
     basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
@@ -865,30 +867,44 @@ def _assemble_sheaf_cochain_complex(  # noqa: C901
                 "the cellular coboundary must square to zero",
                 ("sheaf",),
             )
-    result = SheafCochainComplex._from_kernel(
-        sheaf=sheaf,
-        cochain_dimensions=tuple(cochain_sizes),
-        cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
-        coboundary_matrices=tuple(
-            tuple(tuple(field.typed(value) for value in row) for row in block)
-            for block in scalar_coboundaries
-        ),
-    )
+    result = None
+    if build_value:
+        result = SheafCochainComplex._from_kernel(
+            sheaf=sheaf,
+            cochain_dimensions=tuple(cochain_sizes),
+            cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
+            coboundary_matrices=tuple(
+                tuple(tuple(field.typed(value) for value in row) for row in block)
+                for block in scalar_coboundaries
+            ),
+        )
     return result, field, scalar_coboundaries
 
 
 def sheaf_cochain_complex(sheaf: FiniteCellularSheaf) -> SheafCochainComplex:
     """Return the checked signed-incidence cellular sheaf cochain complex."""
-    return _assemble_sheaf_cochain_complex(sheaf)[0]
+    result = _assemble_sheaf_cochain_complex(sheaf)[0]
+    assert result is not None
+    return result
 
 
 def sheaf_cohomology(
     sheaf: FiniteCellularSheaf,
 ) -> SheafCohomologyResult:
     """Compute cohomology from the checked cellular sheaf cochain complex."""
-    cochain_complex, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(sheaf)
-    cochain_sizes = list(cochain_complex.cochain_dimensions)
-    cochain_bases = [list(basis) for basis in cochain_complex.cochain_bases]
+    _, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(
+        sheaf, build_value=False
+    )
+    basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
+    cochain_bases = [
+        [
+            SheafCochainCoordinate(simplex=face, basis_label=label)
+            for face in group.faces
+            for label in basis_for[face]
+        ]
+        for group in sheaf.complex.faces_by_dimension
+    ]
+    cochain_sizes = [len(basis) for basis in cochain_bases]
     dimension = sheaf.complex.dimension
     ledger = [
         SheafCoboundaryLedgerEntry(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from itertools import product
+from math import comb
 
 from pydantic import ValidationError
 
@@ -32,6 +33,7 @@ from jacobian.math.function_fields._gfpx import (
     poly_gcd,
     poly_mul,
     poly_powmod,
+    poly_sub,
     rf_add,
     rf_evaluate,
     rf_inv,
@@ -66,14 +68,19 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisorEffectivePartsResult,
     FunctionFieldDivisorTerm,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldFiniteValuation,
     FunctionFieldGenusResult,
     FunctionFieldPlace,
     FunctionFieldPlaceEnumerationResult,
+    FunctionFieldPositiveInfinityValuation,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
+    FunctionFieldValuation,
+    HyperellipticAffinePlace,
+    HyperellipticAffinePlaceValuationResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -1316,6 +1323,287 @@ def function_field_place_valuation(
     return _rf_valuation(coordinate, place)
 
 
+def _function_field_valuation(value: int | None) -> FunctionFieldValuation:
+    if value is None:
+        return FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
+    return FunctionFieldFiniteValuation(kind="FINITE", value=value)
+
+
+def _affine_shift(
+    polynomial: tuple[int, ...], point: int, length: int, prime: int
+) -> list[int]:
+    """Return coefficients of polynomial(point+t) through the requested order."""
+
+    return [
+        sum(
+            coefficient * comb(degree, power) * pow(point, degree - power, prime)
+            for degree, coefficient in enumerate(polynomial)
+            if degree >= power
+        )
+        % prime
+        for power in range(length)
+    ]
+
+
+def _affine_series_product(left: list[int], right: list[int], prime: int) -> list[int]:
+    return [
+        sum(left[index] * right[power - index] for index in range(power + 1)) % prime
+        for power in range(len(left))
+    ]
+
+
+def _affine_polynomial_at_series(
+    polynomial: tuple[int, ...], argument: list[int], prime: int
+) -> list[int]:
+    value = [0] * len(argument)
+    for coefficient in reversed(polynomial):
+        value = _affine_series_product(value, argument, prime)
+        value[0] = (value[0] + coefficient) % prime
+    return value
+
+
+def _affine_point_order(polynomial: tuple[int, ...], point: int, prime: int) -> int:
+    if not polynomial:
+        raise ValueError("the zero polynomial has infinite order")
+    for order, coefficient in enumerate(
+        _affine_shift(polynomial, point, len(polynomial), prime)
+    ):
+        if coefficient:
+            return order
+    raise ArithmeticError("polynomial translation lost its nonzero leading term")
+
+
+def _hyperelliptic_numerator_series(
+    u: tuple[int, ...],
+    v: tuple[int, ...],
+    branch: tuple[int, ...],
+    place: HyperellipticAffinePlace,
+    order_bound: int,
+    prime: int,
+) -> list[int]:
+    size = order_bound + 1
+    if place.local_parameter == "x_minus_x0":
+        y_series = [place.y] + [0] * order_bound
+        branch_series = _affine_shift(branch, place.x, size, prime)
+        inverse_two_y = pow(2 * place.y, -1, prime)
+        for degree in range(1, size):
+            lower_terms = sum(
+                y_series[i] * y_series[degree - i] for i in range(1, degree)
+            )
+            y_series[degree] = (
+                (branch_series[degree] - lower_terms) * inverse_two_y
+            ) % prime
+        u_series = _affine_shift(u, place.x, size, prime)
+        v_series = _affine_shift(v, place.x, size, prime)
+        return [
+            (
+                u_series[degree]
+                + sum(v_series[i] * y_series[degree - i] for i in range(degree + 1))
+            )
+            % prime
+            for degree in range(size)
+        ]
+
+    derivative = poly_derivative(branch, prime)
+    slope = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(derivative)
+        )
+        % prime
+    )
+    if not slope:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.affine_point_singular",
+            message="a branch point must be a simple root of f(x)",
+        )
+    x_series = [0] * size
+    inverse_slope = pow(slope, -1, prime)
+    # Write f(x0+X) as a polynomial in X. Its linear coefficient is
+    # f'(x0), so each new X_n depends only on already-computed terms.
+    taylor = _affine_shift(branch, place.x, len(branch), prime)
+    powers = [[0] * size for _ in range(len(branch))]
+    powers[0][0] = 1
+    powers[1] = x_series.copy()
+    # Here y is t and x-x0 starts at t^2. Solve f(x(t))=t^2 in O(d*N^2).
+    for degree in range(2, size):
+        for exponent in range(2, len(branch)):
+            powers[exponent][degree] = (
+                sum(
+                    x_series[index] * powers[exponent - 1][degree - index]
+                    for index in range(2, degree + 1)
+                )
+                % prime
+            )
+        known = (
+            sum(
+                taylor[exponent] * powers[exponent][degree]
+                for exponent in range(2, len(branch))
+            )
+            % prime
+        )
+        target = 1 if degree == 2 else 0
+        x_series[degree] = ((target - known) * inverse_slope) % prime
+        powers[1][degree] = x_series[degree]
+    x_series[0] = place.x
+    u_series = _affine_polynomial_at_series(u, x_series, prime)
+    v_series = _affine_polynomial_at_series(v, x_series, prime)
+    return [
+        (u_series[degree] + (v_series[degree - 1] if degree else 0)) % prime
+        for degree in range(size)
+    ]
+
+
+def function_field_hyperelliptic_affine_valuation(
+    place: HyperellipticAffinePlace,
+    element: FiniteFunctionFieldElement,
+) -> HyperellipticAffinePlaceValuationResult:
+    """Compute a rational affine valuation on an odd-characteristic y^2=f(x) model.
+
+    The norm of the polynomial numerator gives a finite expansion bound. Only
+    GF(p)-rational affine points are represented; infinity and nonrational
+    places require distinct carriers and are not inferred here.
+    """
+
+    if not isinstance(place, HyperellipticAffinePlace):
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.affine_place_type",
+            message="place must be a typed rational hyperelliptic affine point",
+        )
+    try:
+        place = HyperellipticAffinePlace.model_validate(place.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.invalid_affine_place",
+            message="affine place has malformed parent, coordinates, or residue data",
+        ) from exc
+    field = _canonical_field(_validated_field(place.field))
+    place = HyperellipticAffinePlace.model_construct(
+        field=field,
+        x=place.x,
+        y=place.y,
+        local_parameter=place.local_parameter,
+        residue_field=place.residue_field,
+    )
+    _admit_field(field)
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None:
+        raise OperationDomainValidationError(
+            location=("place", "field"),
+            code="function_field.affine_place_requires_hyperelliptic_model",
+            message="affine places require an odd-characteristic squarefree y^2=f(x) model",
+        )
+    prime = field.characteristic
+    curve_value = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(branch)
+        )
+        % prime
+    )
+    if place.y * place.y % prime != curve_value:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.affine_point_not_on_curve",
+            message="retained affine coordinates must satisfy y^2=f(x)",
+        )
+    if place.local_parameter == "y":
+        slope = (
+            sum(
+                coefficient * pow(place.x, degree, prime)
+                for degree, coefficient in enumerate(poly_derivative(branch, prime))
+            )
+            % prime
+        )
+        if slope == 0:
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.affine_point_singular",
+                message="a branch point must be a simple root of f(x)",
+            )
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    element_field = _canonical_field(_validated_field(element.field))
+    if element_field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="place and element must retain the identical function field",
+        )
+    element = _canonical_element(element, field)
+    first, second = (
+        _to_internal_rational_function(coordinate) for coordinate in element.coordinates
+    )
+    denominator_degree = (len(first[1]) - 1) + (len(second[1]) - 1)
+    u_degree = (len(first[0]) - 1) + (len(second[1]) - 1)
+    v_degree = (len(second[0]) - 1) + (len(first[1]) - 1)
+    norm_degree_bound = max(2 * u_degree, 2 * v_degree + len(branch) - 1)
+    if (
+        max(denominator_degree, u_degree, v_degree, norm_degree_bound)
+        > 4 * MAX_POLYNOMIAL_X_DEGREE + 12
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.affine_valuation_growth_exceeds_envelope",
+            message="norm and common-coordinate growth exceed the admitted envelope",
+        )
+    admitted_work = (len(branch) + max(u_degree, v_degree) + 1) * (
+        norm_degree_bound + 1
+    ) ** 2
+    if admitted_work > 1_000_000:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.affine_valuation_work_exceeds_envelope",
+            message="local-series valuation work exceeds the admitted envelope",
+        )
+    denominator = poly_mul(first[1], second[1], prime)
+    u = poly_mul(first[0], second[1], prime)
+    v = poly_mul(second[0], first[1], prime)
+    norm = poly_sub(
+        poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime
+    )
+    if not norm:
+        return HyperellipticAffinePlaceValuationResult(
+            place=place,
+            element=element,
+            valuation=_function_field_valuation(None),
+        )
+    order_bound = _affine_point_order(norm, place.x, prime)
+    numerator_series = _hyperelliptic_numerator_series(
+        u, v, branch, place, order_bound, prime
+    )
+    numerator_order = next(
+        (index for index, coefficient in enumerate(numerator_series) if coefficient),
+        None,
+    )
+    if numerator_order is None:
+        raise ArithmeticError("norm-bound local expansion missed a nonzero term")
+    denominator_order = _affine_point_order(denominator, place.x, prime)
+    ramification_index = 1 if place.local_parameter == "x_minus_x0" else 2
+    return HyperellipticAffinePlaceValuationResult(
+        place=place,
+        element=element,
+        valuation=_function_field_valuation(
+            numerator_order - ramification_index * denominator_order
+        ),
+    )
+
+
 def function_field_place_residue(
     place: FunctionFieldPlace, element: FiniteFunctionFieldElement
 ) -> FunctionFieldResidueResult:
@@ -1871,7 +2159,7 @@ def function_field_divisor_effective_parts(
 def function_field_genus(field: FiniteFunctionField) -> FunctionFieldGenusResult:
     """Return genus for GF(p)(x) or a squarefree odd-characteristic hyperelliptic model."""
 
-    field = _validated_field(field)
+    field = _canonical_field(_validated_field(field))
     # The shape and work envelope are admitted before recognizing either
     # supported model. A squarefree branch polynomial proves irreducibility
     # and separability for the accepted hyperelliptic family below.

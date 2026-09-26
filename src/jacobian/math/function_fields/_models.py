@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.math.finite_fields.values import FiniteFieldElement
+from jacobian.math.finite_fields.values import (
+    FiniteFieldElement,
+    FiniteFieldPresentation,
+)
 
 MAX_CHARACTERISTIC = 257
 MAX_EXTENSION_DEGREE = 6
@@ -207,6 +210,100 @@ class FunctionFieldPlace(StrictModel):
         return self
 
 
+class HyperellipticAffinePlace(StrictModel):
+    """A rational affine point on a supported odd-characteristic y^2=f(x) model."""
+
+    field: FiniteFunctionField
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    local_parameter: Literal["x_minus_x0", "y"]
+    residue_field: FiniteFieldPresentation
+
+    @model_validator(mode="after")
+    def require_canonical_point_shape(self) -> Self:
+        prime = self.field.characteristic
+        if self.x >= prime or self.y >= prime:
+            raise _validation_error(
+                "affine_point_coordinates",
+                "affine coordinates must be canonical residues of the characteristic",
+            )
+        if (
+            self.residue_field.characteristic != prime
+            or self.residue_field.modulus_coefficients != (0, 1)
+            or self.residue_field.generator != "a"
+        ):
+            raise _validation_error(
+                "affine_place_residue_parent",
+                "a rational affine point has residue parent GF(p) with modulus z",
+            )
+        if (self.y == 0) != (self.local_parameter == "y"):
+            raise _validation_error(
+                "affine_place_uniformizer",
+                "use y at a branch point and x-x0 when y is nonzero",
+            )
+        return self
+
+
+class HyperellipticAffinePlaceValuationRequest(StrictModel):
+    place: HyperellipticAffinePlace
+    element: FiniteFunctionFieldElement
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        from jacobian.math.function_fields.operations import _canonical_field
+
+        try:
+            place_field = FiniteFunctionField.model_validate(self.place.field.model_dump())
+            element_field = FiniteFunctionField.model_validate(
+                self.element.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "affine_valuation_parent_malformed",
+                "the point and function element fields must be valid",
+            ) from error
+        if _canonical_field(place_field) != _canonical_field(element_field):
+            raise _validation_error(
+                "affine_valuation_parent_mismatch",
+                "the point and function element must share the exact function field",
+            )
+        return self
+
+
+class FunctionFieldFiniteValuation(StrictModel):
+    """A finite integer valuation, including finite value zero."""
+
+    kind: Literal["FINITE"]
+    value: int
+
+
+class FunctionFieldPositiveInfinityValuation(StrictModel):
+    """The valuation of the zero field element; it carries no numeric value."""
+
+    kind: Literal["POSITIVE_INFINITY"]
+
+
+FunctionFieldValuation = Annotated[
+    FunctionFieldFiniteValuation | FunctionFieldPositiveInfinityValuation,
+    Field(discriminator="kind"),
+]
+
+
+class HyperellipticAffinePlaceValuationResult(StrictModel):
+    place: HyperellipticAffinePlace
+    element: FiniteFunctionFieldElement
+    valuation: FunctionFieldValuation
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "affine_valuation_parent_mismatch",
+                "the point and function element must retain the exact function field",
+            )
+        return self
+
+
 class FunctionFieldDivisorTerm(StrictModel):
     place: FunctionFieldPlace
     multiplicity: DivisorMultiplicity
@@ -247,7 +344,7 @@ class FunctionFieldPlaceValuationRequest(StrictModel):
 class FunctionFieldPlaceValuationResult(StrictModel):
     place: FunctionFieldPlace
     element: FiniteFunctionFieldElement
-    valuation: int | None
+    valuation: FunctionFieldValuation
 
 
 class FunctionFieldPrincipalDivisorRequest(StrictModel):

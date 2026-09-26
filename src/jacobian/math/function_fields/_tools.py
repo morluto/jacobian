@@ -19,18 +19,22 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementInverseRequest,
     FunctionFieldElementMultiplyRequest,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldFiniteValuation,
     FunctionFieldGenusRequest,
     FunctionFieldGenusResult,
     FunctionFieldPlaceEnumerationRequest,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPlaceValuationRequest,
     FunctionFieldPlaceValuationResult,
+    FunctionFieldPositiveInfinityValuation,
     FunctionFieldPrincipalDivisorRequest,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldResidueRequest,
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
+    HyperellipticAffinePlaceValuationRequest,
+    HyperellipticAffinePlaceValuationResult,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -44,6 +48,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_inverse,
     function_field_element_multiply,
     function_field_genus,
+    function_field_hyperelliptic_affine_valuation,
     function_field_place_residue,
     function_field_place_valuation,
     function_field_principal_divisor,
@@ -70,10 +75,12 @@ def _run_element_inverse(
     return function_field_element_inverse(request.element)
 
 
-def _rational_function(numerator: list[int], denominator: list[int]) -> dict[str, Any]:
+def _rational_function(
+    numerator: list[int], denominator: list[int], characteristic: int = 2
+) -> dict[str, Any]:
     return {
-        "numerator": {"characteristic": 2, "coefficients": numerator},
-        "denominator": {"characteristic": 2, "coefficients": denominator},
+        "numerator": {"characteristic": characteristic, "coefficients": numerator},
+        "denominator": {"characteristic": characteristic, "coefficients": denominator},
     }
 
 
@@ -178,10 +185,23 @@ _X_DIVISOR = {
 def _run_place_valuation(
     request: FunctionFieldPlaceValuationRequest,
 ) -> FunctionFieldPlaceValuationResult:
+    valuation = function_field_place_valuation(request.place, request.element)
     return FunctionFieldPlaceValuationResult(
         place=request.place,
         element=request.element,
-        valuation=function_field_place_valuation(request.place, request.element),
+        valuation=(
+            FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
+            if valuation is None
+            else FunctionFieldFiniteValuation(kind="FINITE", value=valuation)
+        ),
+    )
+
+
+def _run_hyperelliptic_affine_valuation(
+    request: HyperellipticAffinePlaceValuationRequest,
+) -> HyperellipticAffinePlaceValuationResult:
+    return function_field_hyperelliptic_affine_valuation(
+        request.place, request.element
     )
 
 
@@ -428,7 +448,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="function_field.place.valuation.compute",
         title="Compute a function-field valuation",
-        description="Compute the exact discrete valuation of a rational-function element at a finite or infinite place; the place and element must share the same rational function field.",
+        description=(
+            "Compute the exact discrete valuation of a rational-function element "
+            "at a finite or infinite place of GF(p)(x). A finite result is tagged "
+            "FINITE and carries an integer (including zero); the zero element has "
+            "the structural POSITIVE_INFINITY result."
+        ),
         request_type=FunctionFieldPlaceValuationRequest,
         result_type=FunctionFieldPlaceValuationResult,
         run=_run_place_valuation,
@@ -448,6 +473,49 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "degree": 1,
                     },
                     "element": _RATIONAL_X,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.hyperelliptic_affine_place.valuation.compute",
+        title="Compute a rational affine hyperelliptic valuation",
+        description=(
+            "Compute an exact valuation at one GF(p)-rational affine point of "
+            "an odd-characteristic squarefree model y^2=f(x). The point retains "
+            "its curve, coordinates, GF(p) residue parent, and local parameter "
+            "(x-x0 off the branch locus, y at a branch point). Infinity and "
+            "points over extension residue fields are not represented. Finite "
+            "valuations carry an integer; the zero element returns the structural "
+            "POSITIVE_INFINITY branch without a numeric value."
+        ),
+        request_type=HyperellipticAffinePlaceValuationRequest,
+        result_type=HyperellipticAffinePlaceValuationResult,
+        run=_run_hyperelliptic_affine_valuation,
+        tags=("function-field", "hyperelliptic", "affine-place", "valuation", "exact"),
+        examples=(
+            OperationExample(
+                name="branch_uniformizer_at_origin",
+                description="On y^2=x^3-x over GF(5), y is the uniformizer at (0,0) and has valuation one.",
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "x": 0,
+                        "y": 0,
+                        "local_parameter": "y",
+                        "residue_field": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["0", "1"],
+                            "generator": "z",
+                        },
+                    },
+                    "element": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "coordinates": [
+                            _rational_function([0], [1], characteristic=5),
+                            _rational_function([1], [1], characteristic=5),
+                        ],
+                    },
                 },
             ),
         ),

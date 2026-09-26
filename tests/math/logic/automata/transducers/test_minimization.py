@@ -90,8 +90,8 @@ def _run_from(
     two undefined runs as a separation, so collapse to definedness.
     """
     relocated = transducer.model_copy(update={"initial_state": state})
-    status, output, _, _, _ = run_subsequential(relocated, word)
-    return status == "OUTPUT", output
+    outcome = run_subsequential(relocated, word)
+    return outcome.status == "OUTPUT", outcome.output
 
 
 def _nonfinal_target_machine() -> SubsequentialTransducer:
@@ -171,13 +171,11 @@ class TestPreservationReplay:
         for length in range(7):
             for raw in product((0, 1), repeat=length):
                 word = tuple(raw)
-                source_status, source_output, _, _, _ = run_subsequential(source, word)
-                minimized_status, minimized_output, _, _, _ = run_subsequential(
-                    result.minimized, word
-                )
-                assert (source_status, source_output) == (
-                    minimized_status,
-                    minimized_output,
+                source_result = run_subsequential(source, word)
+                minimized_result = run_subsequential(result.minimized, word)
+                assert (source_result.status, source_result.output) == (
+                    minimized_result.status,
+                    minimized_result.output,
                 ), word
 
     def test_separating_words_distinguish_inequivalent_states(self) -> None:
@@ -244,9 +242,11 @@ class TestMinimality:
         for length in range(6):
             for raw in product((0, 1), repeat=length):
                 word = tuple(raw)
-                assert (
-                    run_subsequential(source, word)[:2]
-                    == run_subsequential(result.minimized, word)[:2]
+                source_result = run_subsequential(source, word)
+                minimized_result = run_subsequential(result.minimized, word)
+                assert (source_result.status, source_result.output) == (
+                    minimized_result.status,
+                    minimized_result.output,
                 ), word
 
     def test_minimization_is_idempotent(self) -> None:

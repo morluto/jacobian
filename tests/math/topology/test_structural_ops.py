@@ -92,6 +92,24 @@ class TestStar:
         result = compute_star(StarRequest(complex=_complex(CIRCLE), simplex=("a",)))
         assert result.star_facets == (("a", "b"), ("a", "c"))
 
+    def test_star_of_empty_face_is_the_source_complex(self) -> None:
+        request = StarRequest(complex=_complex(CIRCLE), simplex=())
+        result = compute_star(request)
+        assert set(result.star_facets) == set(request.complex.facets)
+        assert result.star_complex == canonical_complex(
+            request.complex.vertices, request.complex.facets
+        )
+        assert result.star_complex.dimension == 1
+
+    def test_star_of_empty_face_in_empty_complex_keeps_empty_face(self) -> None:
+        result = compute_star(
+            StarRequest(complex=_complex({"vertices": [], "facets": []}), simplex=())
+        )
+        assert result.star_is_empty
+        assert result.star_complex.dimension == -1
+        assert result.star_complex.maximal_simplices == ()
+        assert StarResult.model_validate(result.model_dump()) == result
+
     def test_star_not_a_face(self) -> None:
         with pytest.raises(ValueError):
             compute_star(
@@ -945,17 +963,9 @@ class TestResultStructuralParsing:
 class TestResultDomainMirrorsRequest:
     """Serialized results must satisfy the request's own admission domain."""
 
-    def test_star_result_empty_simplex_rejected(self) -> None:
-        """No accepted invocation can request the star of the empty face, so
-        a serialized result cannot authenticate it either."""
-        with pytest.raises(ValidationError):
-            StarResult(
-                complex=_complex(EDGE),
-                simplex=(),
-                star_facets=(("a", "b"),),
-                star_is_empty=False,
-                star_complex=canonical_complex(("a", "b"), (("a", "b"),)),
-            )
+    def test_star_result_empty_simplex_roundtrips(self) -> None:
+        result = compute_star(StarRequest(complex=_complex(EDGE), simplex=()))
+        assert StarResult.model_validate(result.model_dump()) == result
 
     def test_deletion_result_empty_deleted_vertices_rejected(self) -> None:
         """An identity transformation is not a deletion result: the request

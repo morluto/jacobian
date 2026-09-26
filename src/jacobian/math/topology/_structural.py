@@ -214,6 +214,9 @@ def _require_simplex_in_complex(
     simplex_set = set(simplex)
     if len(simplex_set) != len(simplex):
         raise ValueError("simplex vertices must be distinct")
+    # The empty simplex is implicit even in the canonical {∅} value.
+    if not simplex_set:
+        return
     if not simplex_set.issubset(complex_.vertices):
         raise ValueError("simplex vertices must be in the complex")
     if not any(simplex_set.issubset(facet) for facet in complex_.facets):
@@ -353,41 +356,64 @@ class GVectorResult(StrictModel):
 
 
 class LinkRequest(StrictModel):
-    """Request the link of a simplex in a simplicial complex."""
+    """Request the link of a face, including the implicit empty face."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
-    )
+    simplex: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
 
 
 class LinkResult(StrictModel):
-    """The maximal facets of the link of a simplex."""
+    """The exact link value and its source face context."""
 
+    complex: SimplicialComplexRequest
     simplex: tuple[str, ...]
     link_facets: tuple[tuple[str, ...], ...]
     link_is_empty: bool
+    link_complex: FiniteSimplicialComplex
+
+    @model_validator(mode="after")
+    def require_structural_link(self) -> Self:
+        if tuple(sorted(self.link_complex.maximal_simplices)) != tuple(
+            sorted(tuple(sorted(facet)) for facet in self.link_facets)
+        ):
+            raise _validation_error(
+                "topology.require_link_binding_1",
+                "link_complex maximal simplices must match link_facets",
+            )
+        if set(self.link_complex.vertices) != {
+            vertex for facet in self.link_facets for vertex in facet
+        }:
+            raise _validation_error(
+                "topology.require_link_binding_2",
+                "link_complex vertices must match link_facets",
+            )
+        if self.link_is_empty != (self.link_complex.dimension == -1):
+            raise _validation_error(
+                "topology.require_link_binding_3",
+                "link_is_empty must identify the canonical {∅} link",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
 
 
 class StarRequest(StrictModel):
-    """Request the closed star of a simplex in a simplicial complex."""
+    """Request the closed star of a face, including the empty face."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[VertexLabel, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
-    )
+    simplex: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
 
 
 class StarResult(StrictModel):
-    """The closed star produced for a simplex."""
+    """The exact closed-star value and its source face context."""
 
     complex: SimplicialComplexRequest
-    simplex: tuple[str, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
-    )
+    simplex: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_DIMENSION + 1)
     star_facets: tuple[tuple[str, ...], ...]
     star_is_empty: bool
-    star_complex: FiniteSimplicialComplex | None = None
+    star_complex: FiniteSimplicialComplex
 
     @model_validator(mode="after")
     def require_structural_star(self) -> Self:
@@ -396,36 +422,25 @@ class StarResult(StrictModel):
                 "topology.require_star_binding_1",
                 "star simplex vertices must be distinct",
             )
-        if self.star_is_empty != (not self.star_facets):
+        if self.star_is_empty != (self.star_complex.dimension == -1):
             raise _validation_error(
                 "topology.require_star_binding_2",
-                "star_is_empty must match whether star_facets is empty",
+                "star_is_empty must identify the canonical {∅} star",
             )
-        if self.star_is_empty:
-            if self.star_complex is not None:
-                raise _validation_error(
-                    "topology.require_star_binding_3", "empty star must have no complex"
-                )
-        else:
-            if self.star_complex is None:
-                raise _validation_error(
-                    "topology.require_star_binding_4",
-                    "non-empty star requires star_complex",
-                )
-            if tuple(sorted(self.star_complex.maximal_simplices)) != tuple(
-                sorted(tuple(sorted(facet)) for facet in self.star_facets)
-            ):
-                raise _validation_error(
-                    "topology.require_star_binding_5",
-                    "star_complex maximal simplices must match star_facets",
-                )
-            if set(self.star_complex.vertices) != {
-                vertex for facet in self.star_facets for vertex in facet
-            }:
-                raise _validation_error(
-                    "topology.require_star_binding_6",
-                    "star_complex vertices must match star_facets",
-                )
+        if tuple(sorted(self.star_complex.maximal_simplices)) != tuple(
+            sorted(tuple(sorted(facet)) for facet in self.star_facets)
+        ):
+            raise _validation_error(
+                "topology.require_star_binding_5",
+                "star_complex maximal simplices must match star_facets",
+            )
+        if set(self.star_complex.vertices) != {
+            vertex for facet in self.star_facets for vertex in facet
+        }:
+            raise _validation_error(
+                "topology.require_star_binding_6",
+                "star_complex vertices must match star_facets",
+            )
         return self
 
     @classmethod
@@ -1184,8 +1199,14 @@ def compute_link(request: LinkRequest) -> LinkResult:
         for facet in request.complex.facets
         if target.issubset(facet) and frozenset(facet) - target
     )
-    return LinkResult(
-        simplex=request.simplex, link_facets=facets, link_is_empty=not facets
+    vertices = tuple(sorted({vertex for facet in facets for vertex in facet}))
+    link_complex = canonical_complex(vertices, facets)
+    return LinkResult._from_kernel(
+        complex=request.complex,
+        simplex=request.simplex,
+        link_facets=facets,
+        link_is_empty=link_complex.dimension == -1,
+        link_complex=link_complex,
     )
 
 
@@ -1213,7 +1234,7 @@ def compute_star(request: StarRequest) -> StarResult:
         simplex=request.simplex,
         star_facets=facets,
         star_is_empty=not facets,
-        star_complex=canonical_complex(vertices, facets) if facets else None,
+        star_complex=canonical_complex(vertices, facets),
     )
 
 

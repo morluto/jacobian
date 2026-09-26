@@ -29,5 +29,7 @@ alone.
 
 The construction is an exact finite set transform and does not infer a
 geometric realization or identify nonincident cells. The returned complex can
-be consumed directly by the existing cubical f-vector, chain-complex, product,
-and triangulation operations.
+be consumed directly by the cubical f-vector, chain-complex, triangulation, and
+product operations. Product requests carry both factors as canonical
+`CubicalComplex` values; a void factor produces a void product while retaining
+the concatenated ambient axes.

@@ -213,14 +213,14 @@ def _canonical_complex_value(
         ) from exc
     if not admitted.cells:
         return admitted, ()
-    closed, source_cells = _canonical_complex(admitted.cells)
-    if closed.ambient_dimension != admitted.ambient_dimension:
+    closed_cells = _face_cells(admitted.cells, output_limit=MAX_FACE_CELLS)
+    if closed_cells != admitted.cells:
         raise OperationDomainValidationError(
-            location=("complex", "ambient_dimension"),
-            code="cubical_complex.ambient_dimension_mismatch",
-            message="complex cells do not use the retained ambient coordinate axis",
+            location=("complex", "cells"),
+            code="cubical_complex.value_not_face_closed",
+            message="canonical CubicalComplex values must be closed under faces",
         )
-    return closed, source_cells
+    return admitted, admitted.cells
 
 
 def _admit_face_poset_source(
@@ -866,7 +866,8 @@ def skeleton(
 
 
 def product(
-    left_cells: tuple[CubicalCell, ...], right_cells: tuple[CubicalCell, ...]
+    left_value: tuple[CubicalCell, ...] | CubicalComplex,
+    right_value: tuple[CubicalCell, ...] | CubicalComplex,
 ) -> CubicalProductResult:
     """Construct the finite Cartesian product of two cubical complexes.
 
@@ -874,14 +875,18 @@ def product(
     Each factor is first normalized to its full face closure, so the Cartesian
     product of those cells is already face closed.
     """
-    if not left_cells or not right_cells:
-        raise OperationDomainValidationError(
-            location=("cells",),
-            code="cubical_complex.product_empty_factor",
-            message="both cubical product factors must contain at least one cell",
-        )
-    left_dimension = len(left_cells[0].intervals)
-    right_dimension = len(right_cells[0].intervals)
+    left = (
+        _canonical_complex_value(left_value)[0]
+        if isinstance(left_value, CubicalComplex)
+        else _canonical_complex(left_value)[0]
+    )
+    right = (
+        _canonical_complex_value(right_value)[0]
+        if isinstance(right_value, CubicalComplex)
+        else _canonical_complex(right_value)[0]
+    )
+    left_dimension = left.ambient_dimension
+    right_dimension = right.ambient_dimension
     if left_dimension + right_dimension > MAX_DIM:
         raise OperationDomainValidationError(
             location=("cells",),
@@ -892,8 +897,6 @@ def product(
             ),
         )
 
-    left, _ = _canonical_complex(left_cells)
-    right, _ = _canonical_complex(right_cells)
     product_cell_count = len(left.cells) * len(right.cells)
     if product_cell_count > MAX_CUBICAL_CHAIN_CELLS:
         raise OperationResourceAdmissionError(
@@ -947,11 +950,16 @@ def product(
 def verify_f_vector(claim: FVectorResult) -> bool:
     """Verify f-vector and Euler claims against retained source cells."""
     try:
-        expected = (
-            f_vector(claim.source_cells)
-            if claim.source_cells
-            else f_vector(claim.complex)
-        )
+        if len(claim.source_cells) > MAX_CELLS:
+            if claim.source_cells != claim.complex.cells:
+                return False
+            expected = f_vector(claim.complex)
+        else:
+            expected = (
+                f_vector(claim.source_cells)
+                if claim.source_cells
+                else f_vector(claim.complex)
+            )
         return expected == claim
     except OperationResourceAdmissionError:
         raise

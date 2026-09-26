@@ -78,7 +78,7 @@ def _boundary_subcomplex(
 
 
 def _product(request: CubicalProductRequest) -> CubicalProductResult:
-    return product(request.left_cells, request.right_cells)
+    return product(request.left_complex, request.right_complex)
 
 
 def _skeleton(request: CubicalSkeletonRequest) -> CubicalSkeletonResult:
@@ -390,7 +390,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute a finite cubical product",
         description=(
             "Compute the Cartesian product of two finite cubical complexes. "
-            "Each factor is closed under faces, then product cells concatenate "
+            "Each canonical factor is closed under faces, then product cells concatenate "
             "the left factor's integer-lattice coordinates before the right "
             f"factor's. The complete result is bounded to "
             f"{MAX_CUBICAL_CHAIN_CELLS} cells and ambient dimension "
@@ -410,8 +410,14 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "output is an interval on the concatenated coordinate axes."
                 ),
                 input={
-                    "left_cells": [{"intervals": [[0, 1]]}],
-                    "right_cells": [{"intervals": [[5, 5]]}],
+                    "left_complex": {
+                        "ambient_dimension": 1,
+                        "cells": [{"intervals": [[0, 1]]}],
+                    },
+                    "right_complex": {
+                        "ambient_dimension": 1,
+                        "cells": [{"intervals": [[5, 5]]}],
+                    },
                 },
             ),
         ),

@@ -447,7 +447,7 @@ class FVectorResult(StrictModel):
     """The f-vector and Euler characteristic bound to a cubical complex."""
 
     complex: CubicalComplex
-    source_cells: tuple[CubicalCell, ...] = Field(max_length=MAX_CELLS)
+    source_cells: tuple[CubicalCell, ...] = Field(max_length=MAX_FACE_CELLS)
     f_vector: FVector
     euler_characteristic: int
 
@@ -632,10 +632,23 @@ class CubicalCellBirth(StrictModel):
 
 
 class CubicalProductRequest(StrictModel):
-    """Two finite elementary-cube families whose Cartesian product is requested."""
+    """Two canonical cubical complexes whose Cartesian product is requested."""
 
-    left_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
-    right_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    left_complex: CubicalComplex
+    right_complex: CubicalComplex
+
+    @model_validator(mode="after")
+    def require_product_dimension_bound(self) -> Self:
+        if (
+            self.left_complex.ambient_dimension
+            + self.right_complex.ambient_dimension
+            > MAX_DIM
+        ):
+            raise _validation_error(
+                "product_ambient_dimension",
+                "the product ambient dimension exceeds the supported bound",
+            )
+        return self
 
 
 class CubicalProductResult(StrictModel):

@@ -65,11 +65,23 @@ def polynomial_discriminant(
     polynomial: RationalPolynomial,
 ) -> PolynomialDiscriminantResult:
     """Compute a bounded exact integer polynomial discriminant over QQ."""
+    if type(polynomial) is not RationalPolynomial:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="galois.polynomial_discriminant_source_type",
+            message="the discriminant source must be a canonical rational polynomial",
+        )
     try:
         canonical_polynomial = RationalPolynomial.model_validate(
             polynomial.model_dump()
         )
-    except ValidationError as exc:
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        if not isinstance(exc, ValidationError):
+            raise OperationDomainValidationError(
+                location=("polynomial",),
+                code="galois.polynomial_discriminant_source_shape",
+                message="the discriminant source must satisfy its canonical carrier shape",
+            ) from exc
         details = exc.errors(include_url=False, include_context=False)[0]
         raise OperationDomainValidationError(
             location=("polynomial",),

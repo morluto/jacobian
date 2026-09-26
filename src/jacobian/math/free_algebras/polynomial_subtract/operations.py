@@ -141,10 +141,7 @@ def _validate_operand(
             _invalid((*location, "coefficient"), "term coefficient is not canonical")
         digits = max(_decimal_digits(numerator), _decimal_digits(denominator))
         if digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
-            _resource(
-                "subtraction_coefficient_digit_budget",
-                "subtraction input coefficient exceeds its digit bound",
-            )
+            _invalid((*location, "coefficient"), "term coefficient exceeds its canonical digit bound")
         if gcd(abs(numerator), denominator) != 1:
             _invalid((*location, "coefficient"), "term coefficient is not canonical")
         maximum_coefficient_digits = max(maximum_coefficient_digits, digits)
@@ -167,38 +164,32 @@ def _validate_operand(
     )
 
 
-def _subtraction_collision_digits(
-    left: CanonicalRational, right: CanonicalRational
-) -> int:
-    left_num = _decimal_digits(left.num)
-    right_num = _decimal_digits(right.num)
-    left_den = _decimal_digits(left.den)
-    right_den = _decimal_digits(right.den)
-    if left.den == right.den:
-        grows = (left.num < 0) != (right.num < 0)
-        numerator_digits = max(left_num, right_num) + int(grows)
-        denominator_digits = left_den
-    else:
-        common = gcd(left.den, right.den)
-        left_scale = right.den // common
-        right_scale = left.den // common
-        numerator = left.num * left_scale - right.num * right_scale
-        denominator = left.den * left_scale
-        numerator_digits = _decimal_digits(numerator)
-        denominator_digits = _decimal_digits(denominator)
-    return max(numerator_digits, denominator_digits)
+def _subtraction_collision_digits(left: Fraction, right: Fraction) -> int:
+    difference = left - right
+    if not difference:
+        return 1
+    return max(
+        _decimal_digits(difference.numerator),
+        _decimal_digits(difference.denominator),
+    )
+
+
+def _difference_coefficients(
+    left: dict[tuple[str, ...], Fraction],
+    right: dict[tuple[str, ...], Fraction],
+) -> dict[tuple[str, ...], Fraction]:
+    difference = dict(left)
+    for word, coefficient in right.items():
+        difference[word] = difference.get(word, Fraction(0)) - coefficient
+    return {word: coefficient for word, coefficient in difference.items() if coefficient}
 
 
 def _subtract_sparse(
     alphabet: tuple[str, ...],
-    left: dict[tuple[str, ...], Fraction],
-    right: dict[tuple[str, ...], Fraction],
+    difference: dict[tuple[str, ...], Fraction],
 ) -> FreeAlgebraPolynomial:
     """Compute an admitted exact sparse difference and canonicalize its support."""
 
-    difference = dict(left)
-    for word, coefficient in right.items():
-        difference[word] = difference.get(word, Fraction(0)) - coefficient
     ranks = {letter: index for index, letter in enumerate(alphabet)}
     ordered = tuple(
         sorted(
@@ -254,14 +245,12 @@ def subtract(
         )
 
     collision_digits = 1
-    left_terms = {term.word: term for term in left.terms}
-    right_terms = {term.word: term for term in right.terms}
-    for word in left_terms.keys() & right_terms.keys():
+    for word in left_coefficients.keys() & right_coefficients.keys():
         collision_digits = max(
             collision_digits,
             _subtraction_collision_digits(
-                left_terms[word].coefficient,
-                right_terms[word].coefficient,
+                left_coefficients[word],
+                right_coefficients[word],
             ),
         )
     predicted_coefficient_digits = max(left_digits, right_digits, collision_digits)
@@ -271,7 +260,8 @@ def subtract(
             "predicted difference coefficient growth exceeds its digit bound",
         )
 
-    result_term_bound = len(left_coefficients.keys() | right_coefficients.keys())
+    difference = _difference_coefficients(left_coefficients, right_coefficients)
+    result_term_bound = len(difference)
     if result_term_bound > MAX_FREE_ALGEBRA_ADDITION_TERMS:
         _resource(
             "subtraction_result_term_budget",
@@ -286,7 +276,7 @@ def subtract(
         + 64
         + sum(
             64 + word_scalars_by_word[word] + 2 * (predicted_coefficient_digits + 1)
-            for word in left_coefficients.keys() | right_coefficients.keys()
+            for word in difference
         )
     )
     if predicted_output_cells > MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS:
@@ -310,7 +300,7 @@ def subtract(
             "polynomial difference exceeds the admitted exact work bound",
         )
 
-    return _subtract_sparse(left.alphabet, left_coefficients, right_coefficients)
+    return _subtract_sparse(left.alphabet, difference)
 
 
 __all__ = ["MAX_FREE_ALGEBRA_SUBTRACTION_WORK", "subtract"]

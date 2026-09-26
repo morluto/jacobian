@@ -7,6 +7,7 @@ from math import gcd
 
 import pytest
 
+from jacobian._execution import current_request_execution
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -137,6 +138,27 @@ def _conjugate_embedding():
     )
 
 
+def test_embedding_maps_large_rational_coordinate_without_generic_product_bound():
+    from fractions import Fraction
+
+    from jacobian._exact import CanonicalRational
+
+    value = RationalCyclotomicElement(
+        field=_SOURCE_FIELD,
+        coefficients_ascending=(
+            CanonicalRational(num=10**25, den=1),
+            CanonicalRational(num=0, den=1),
+        ),
+    )
+    mapped = _map_element(value, _embedding().generator_image, _TARGET_FIELD)
+
+    assert mapped.coefficients_ascending[0].as_fraction() == Fraction(10**25)
+    assert all(
+        coefficient.as_fraction() == 0
+        for coefficient in mapped.coefficients_ascending[1:]
+    )
+
+
 def test_global_equality_compares_nonzero_cross_embeddings():
     # Characters 2 and 10 are Galois conjugate. Mapping their generators by
     # opposite embeddings gives the same common Nebentypus and the same form.
@@ -145,6 +167,8 @@ def test_global_equality_compares_nonzero_cross_embeddings():
     assert modular_form_coordinates_global_equal(
         left, _embedding(), right, _conjugate_embedding()
     )
+
+
     # Independently realize each source coordinate with the exact character
     # q-expansion API, then compare after applying the declared embeddings.
     left_q = modular_character_coordinates_q_expansion(left).coefficients
@@ -198,6 +222,36 @@ def test_global_equality_compares_nonzero_cross_embeddings():
     assert error.value.errors()[0]["type"] == "modular_form.global_equality_weight"
 
 
+def test_direct_native_comparison_shares_one_execution_envelope(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _basis_form(_space(13, 2, kind="S"), basis_index=0)
+    right = _basis_form(_space(13, 10, kind="S"), basis_index=0)
+    executions = []
+
+    def record_execution(_form, _context, _image, target, precision):
+        executions.append(current_request_execution())
+        zero = RationalCyclotomicElement(
+            field=target,
+            coefficients_ascending=tuple(
+                {"num": 0, "den": 1} for _ in range(target.degree)
+            ),
+        )
+        return (zero,) * precision
+
+    monkeypatch.setattr(
+        "jacobian.math.number_theory.modular_forms.global_equality.operations"
+        "._mapped_prefix",
+        record_execution,
+    )
+
+    assert modular_form_coordinates_global_equal(
+        left, _embedding(), right, _conjugate_embedding()
+    )
+    assert len(executions) == 2
+    assert executions[0] is not None and executions[0] is executions[1]
+
+
 def test_global_equality_rejects_invalid_native_argument_types():
     from jacobian.catalog.models import OperationDomainValidationError
 
@@ -213,6 +267,24 @@ def test_global_equality_rejects_invalid_native_argument_types():
         assert error.value.errors()[0]["loc"] == (location,)
         assert error.value.errors()[0]["type"].startswith(
             "modular_form.global_equality_"
+        )
+
+
+def test_global_equality_rejects_forged_native_arguments_as_domain_errors():
+    valid = _form(_space(13, 4, kind="S"))
+    forged_form = ModularFormCoordinates.model_construct()
+    forged_embedding = CyclotomicFieldEmbedding.model_construct()
+    for arguments, location in (
+        ((forged_form, _embedding(), valid, _conjugate_embedding()), "left"),
+        ((valid, forged_embedding, valid, _conjugate_embedding()), "left_embedding"),
+        ((valid, _embedding(), forged_form, _conjugate_embedding()), "right"),
+        ((valid, _embedding(), valid, forged_embedding), "right_embedding"),
+    ):
+        with pytest.raises(OperationDomainValidationError) as error:
+            modular_form_coordinates_global_equal(*arguments)
+        assert error.value.errors()[0]["loc"] == (location,)
+        assert error.value.errors()[0]["type"] == (
+            "modular_form.global_equality_argument_invalid"
         )
 
 

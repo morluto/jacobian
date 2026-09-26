@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import gcd, isqrt, lcm
+from time import monotonic
 from typing import cast
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import current_request_execution, request_execution
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -117,21 +121,33 @@ def _map_element(
     target: RationalCyclotomicField,
 ) -> RationalCyclotomicElement:
     _, coefficients, _ = cyclotomic._validate_element(value)
-    result = _zero(target)
+    result_coefficients = [Fraction(0) for _ in range(target.degree)]
     power = _one(target)
     for coefficient in coefficients:
-        scalar = RationalCyclotomicElement(
-            field=target,
-            coefficients_ascending=tuple(
-                CanonicalRational.from_fraction(coefficient)
-                if index == 0
-                else CanonicalRational(num=0, den=1)
-                for index in range(target.degree)
-            ),
-        )
-        result = cyclotomic.add(result, cyclotomic.multiply(scalar, power))
+        if coefficient:
+            for index, value in enumerate(cyclotomic._validate_element(power)[1]):
+                result_coefficients[index] += value * coefficient
         power = cyclotomic.multiply(power, image)
-    return result
+    if any(
+        max(
+            decimal_digit_width(coefficient.numerator),
+            decimal_digit_width(coefficient.denominator),
+        )
+        > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        for coefficient in result_coefficients
+    ):
+        raise OperationResourceAdmissionError(
+            location=("coordinates",),
+            code="modular_form.global_equality_mapped_height_bound",
+            message="mapped coordinate height exceeds the cyclotomic coefficient envelope",
+        )
+    return RationalCyclotomicElement(
+        field=target,
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(coefficient)
+            for coefficient in result_coefficients
+        ),
+    )
 
 
 def _mapped_character_value(
@@ -243,6 +259,48 @@ def _mapped_prefix(
     return tuple(result)
 
 
+def _validate_native_arguments(
+    left: object,
+    left_embedding: object,
+    right: object,
+    right_embedding: object,
+) -> tuple[
+    ModularFormCoordinates,
+    CyclotomicFieldEmbedding,
+    ModularFormCoordinates,
+    CyclotomicFieldEmbedding,
+]:
+    expected = (
+        ("left", left, ModularFormCoordinates, "form"),
+        ("left_embedding", left_embedding, CyclotomicFieldEmbedding, "embedding"),
+        ("right", right, ModularFormCoordinates, "form"),
+        ("right_embedding", right_embedding, CyclotomicFieldEmbedding, "embedding"),
+    )
+    for name, value, model, kind in expected:
+        if type(value) is not model:
+            _fail_domain(
+                f"modular_form.global_equality_{kind}_type",
+                f"{name} must be an explicit canonical {kind} value",
+                (name,),
+            )
+    canonical = []
+    for name, value, model, _kind in expected:
+        try:
+            canonical.append(model.model_validate(value.model_dump(), strict=True))
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="modular_form.global_equality_argument_invalid",
+                message=f"{name} must be a structurally valid canonical value",
+            ) from exc
+    return (
+        cast(ModularFormCoordinates, canonical[0]),
+        cast(CyclotomicFieldEmbedding, canonical[1]),
+        cast(ModularFormCoordinates, canonical[2]),
+        cast(CyclotomicFieldEmbedding, canonical[3]),
+    )
+
+
 def modular_form_coordinates_global_equal(
     left: ModularFormCoordinates,
     left_embedding: CyclotomicFieldEmbedding,
@@ -257,30 +315,14 @@ def modular_form_coordinates_global_equal(
     materialized: each exact source basis is expanded only through the
     determining prefix of Gamma1(lcm(N_left,N_right)).
     """
-    if type(left) is not ModularFormCoordinates:
-        _fail_domain(
-            "modular_form.global_equality_form_type",
-            "left must be exact modular-form coordinates",
-            ("left",),
-        )
-    if type(right) is not ModularFormCoordinates:
-        _fail_domain(
-            "modular_form.global_equality_form_type",
-            "right must be exact modular-form coordinates",
-            ("right",),
-        )
-    if type(left_embedding) is not CyclotomicFieldEmbedding:
-        _fail_domain(
-            "modular_form.global_equality_embedding_type",
-            "left_embedding must be an explicit cyclotomic field embedding",
-            ("left_embedding",),
-        )
-    if type(right_embedding) is not CyclotomicFieldEmbedding:
-        _fail_domain(
-            "modular_form.global_equality_embedding_type",
-            "right_embedding must be an explicit cyclotomic field embedding",
-            ("right_embedding",),
-        )
+    if current_request_execution() is None:
+        with request_execution(monotonic()):
+            return modular_form_coordinates_global_equal(
+                left, left_embedding, right, right_embedding
+            )
+    left, left_embedding, right, right_embedding = _validate_native_arguments(
+        left, left_embedding, right, right_embedding
+    )
     if (
         type(left) is ModularFormCoordinates
         and type(right) is ModularFormCoordinates

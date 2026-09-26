@@ -231,6 +231,26 @@ def test_composition_admits_each_distinct_carrier_with_shared_chain_axes(
     )
 
 
+def test_composition_checkpoints_while_composing_generator_coordinates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = _cyclic_group_two_nerve_prefix()
+    identity = TruncatedSimplicialMap(
+        source=source,
+        target=source,
+        maps=tuple(tuple(range(len(level))) for level in source.sets),
+    )
+    homology_map = induced_normalized_homology_map(identity)
+    phases: list[str] = []
+    monkeypatch.setattr(
+        simplicial_maps, "request_checkpoint", lambda phase: phases.append(phase)
+    )
+
+    compose_simplicial_homology_maps(homology_map, homology_map)
+
+    assert "during homology-coordinate composition" in phases
+
+
 def test_identity_of_contractible_simplex_keeps_zero_rank_map_rows() -> None:
     source = standard_simplex(1, 2)
     identity = TruncatedSimplicialMap(

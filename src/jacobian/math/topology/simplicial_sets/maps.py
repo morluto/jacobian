@@ -1209,7 +1209,9 @@ def _compose_homology_coordinates(
     coordinates: IntegralHomologyCoordinates,
     middle_images: NormalizedHomologyDegreeMap,
     target_group: IntegralHomologyGroupValue,
+    checkpoint_steps: list[int],
 ) -> IntegralHomologyCoordinates:
+    request_checkpoint("during homology-coordinate composition")
     free = [0] * target_group.free_rank
     torsion = [0] * len(target_group.torsion_invariant_factors)
     images = (
@@ -1218,10 +1220,19 @@ def _compose_homology_coordinates(
     )
     coefficients = (*coordinates.free, *coordinates.torsion)
     for coefficient, image in zip(coefficients, images, strict=True):
+        checkpoint_steps[0] += 1
+        if checkpoint_steps[0] % 64 == 0:
+            request_checkpoint("during homology-coordinate composition")
         for index, value in enumerate(image.free):
             free[index] += int(coefficient) * int(value)
+            checkpoint_steps[0] += 1
+            if checkpoint_steps[0] % 256 == 0:
+                request_checkpoint("during homology-coordinate composition")
         for index, value in enumerate(image.torsion):
             torsion[index] += int(coefficient) * int(value)
+            checkpoint_steps[0] += 1
+            if checkpoint_steps[0] % 256 == 0:
+                request_checkpoint("during homology-coordinate composition")
     torsion = [
         value % int(order)
         for value, order in zip(
@@ -1335,6 +1346,7 @@ def compose_simplicial_homology_maps(
     composition_work = 0
     maximum_input_bits = 0
     maximum_middle_rank = 0
+    request_checkpoint("before homology-coordinate composition admission")
     for first_degree, second_degree in zip(
         checked_first.degree_maps, checked_second.degree_maps, strict=True
     ):
@@ -1355,6 +1367,7 @@ def compose_simplicial_homology_maps(
         )
         composition_work += len(first_images) * middle_rank * target_rank
         for coordinates in (*first_images, *second_images):
+            request_checkpoint("during homology-coordinate composition admission")
             maximum_input_bits = max(
                 maximum_input_bits,
                 *(
@@ -1383,6 +1396,7 @@ def compose_simplicial_homology_maps(
             message="homology-coordinate products may exceed the canonical integer digit limit",
         )
     degree_maps: list[NormalizedHomologyDegreeMap] = []
+    composition_checkpoint_steps = [0]
     for degree, first_degree in enumerate(checked_first.degree_maps):
         target_group = checked_second.target.homology_groups[degree]
         assert isinstance(target_group, IntegralHomologyGroupValue)
@@ -1391,11 +1405,21 @@ def compose_simplicial_homology_maps(
             NormalizedHomologyDegreeMap(
                 degree=degree,
                 free_generator_images=tuple(
-                    _compose_homology_coordinates(image, second_degree, target_group)
+                    _compose_homology_coordinates(
+                        image,
+                        second_degree,
+                        target_group,
+                        composition_checkpoint_steps,
+                    )
                     for image in first_degree.free_generator_images
                 ),
                 torsion_generator_images=tuple(
-                    _compose_homology_coordinates(image, second_degree, target_group)
+                    _compose_homology_coordinates(
+                        image,
+                        second_degree,
+                        target_group,
+                        composition_checkpoint_steps,
+                    )
                     for image in first_degree.torsion_generator_images
                 ),
             )

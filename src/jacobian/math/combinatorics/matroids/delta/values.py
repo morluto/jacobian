@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -218,9 +218,9 @@ class DeltaMatroidDistanceProfile(StrictModel):
     """The exact distance-to-feasibility function on a finite ground set."""
 
     delta_matroid: FiniteDeltaMatroid
-    distance_by_mask: tuple[int, ...]
-    nearest_feasible_count_by_mask: tuple[int, ...]
-    distance_histogram: tuple[int, ...]
+    distance_by_mask: tuple[StrictInt, ...]
+    nearest_feasible_count_by_mask: tuple[StrictInt, ...]
+    distance_histogram: tuple[StrictInt, ...]
 
     @model_validator(mode="after")
     def require_profile_shape(self) -> Self:
@@ -259,12 +259,18 @@ class DeltaMatroidDistanceProfile(StrictModel):
                 "distance_profile_nearest_count",
                 "nearest-feasible counts must be positive integers",
             )
-        if any(
-            type(value) is not int or value < 0 for value in self.distance_histogram
-        ):
+        if any(value < 0 for value in self.distance_histogram):
             raise _validation_error(
                 "distance_histogram_value",
                 "distance histogram entries must be nonnegative integers",
+            )
+        expected_histogram = tuple(
+            self.distance_by_mask.count(distance) for distance in range(ground_size + 1)
+        )
+        if self.distance_histogram != expected_histogram:
+            raise _validation_error(
+                "distance_histogram_mismatch",
+                "distance histogram must count the distance rows exactly",
             )
         return self
 

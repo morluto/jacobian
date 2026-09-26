@@ -62,33 +62,41 @@ class CoaccessibleStateWitnesses(CoaccessibleStatesRequest):
                 "coaccessible state witnesses must be state sorted",
             )
         source = self.transducer
-        if any(state >= source.state_count for state in states):
+        if any(state < 0 or state >= source.state_count for state in states):
             raise PydanticCustomError(
                 "finite_state_transducer.coaccessible_state_out_of_range",
                 "coaccessible state witness is outside the source",
             )
         transitions = source.transitions
         for witness in self.witnesses:
-            if any(state >= source.state_count for state in witness.state_trace):
+            if any(
+                state < 0 or state >= source.state_count
+                for state in witness.state_trace
+            ):
                 raise PydanticCustomError(
                     "finite_state_transducer.coaccessible_trace_state_out_of_range",
                     "witness trace state is outside the source",
                 )
             if any(
-                symbol >= source.input_alphabet_size for symbol in witness.input_suffix
+                symbol < 0 or symbol >= source.input_alphabet_size
+                for symbol in witness.input_suffix
             ):
                 raise PydanticCustomError(
                     "finite_state_transducer.coaccessible_input_symbol_out_of_range",
                     "witness input symbol is outside the source alphabet",
                 )
             if any(
-                symbol >= source.output_alphabet_size for symbol in witness.output_word
+                symbol < 0 or symbol >= source.output_alphabet_size
+                for symbol in witness.output_word
             ):
                 raise PydanticCustomError(
                     "finite_state_transducer.coaccessible_output_symbol_out_of_range",
                     "witness output symbol is outside the source alphabet",
                 )
-            if any(index >= len(transitions) for index in witness.transition_indices):
+            if any(
+                index < 0 or index >= len(transitions)
+                for index in witness.transition_indices
+            ):
                 raise PydanticCustomError(
                     "finite_state_transducer.coaccessible_transition_index_out_of_range",
                     "witness transition index is outside the source transitions",

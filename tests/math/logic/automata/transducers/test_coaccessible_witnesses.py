@@ -142,6 +142,25 @@ def test_owner_local_manifest_is_visible_to_catalog_discovery() -> None:
     )
 
 
+@pytest.mark.parametrize(
+    ("field", "replacement"),
+    [
+        ("state_trace", (-1, 1)),
+        ("input_suffix", (-1,)),
+        ("output_word", (-1,)),
+        ("transition_indices", (-1,)),
+    ],
+)
+def test_deserialization_rejects_negative_source_indices(
+    field: str, replacement: tuple[int, ...]
+) -> None:
+    result = coaccessible_state_witnesses(_machine()).model_dump()
+    result["witnesses"][0][field] = replacement
+
+    with pytest.raises(ValueError):
+        type(coaccessible_state_witnesses(_machine())).model_validate(result)
+
+
 def test_output_growth_is_rejected_before_output_materialization() -> None:
     transducer = SubsequentialTransducer(
         input_alphabet_size=1,

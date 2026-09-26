@@ -177,6 +177,41 @@ class ClassFunctionInnerProductRequest(StrictModel):
     )
 
 
+class ClassFunctionPointwiseProductRequest(StrictModel):
+    """Two class functions on one shared exact cyclotomic class axis."""
+
+    phi: FiniteClassFunction = Field(description="Left class function.")
+    psi: FiniteClassFunction = Field(
+        description="Right class function on the same axis."
+    )
+
+
+class ClassFunctionAddRequest(StrictModel):
+    """Two class functions on one shared exact cyclotomic class axis."""
+
+    phi: FiniteClassFunction = Field(description="Left class function.")
+    psi: FiniteClassFunction = Field(
+        description="Right class function on the same axis."
+    )
+
+
+class ClassFunctionConjugateRequest(StrictModel):
+    """One exact class function to conjugate coefficientwise."""
+
+    function: FiniteClassFunction = Field(
+        description="The exact class function on its retained class axis."
+    )
+
+
+class ClassFunctionScaleRequest(StrictModel):
+    """One cyclotomic scalar acting on a class function over the same field."""
+
+    scalar: CyclotomicValue = Field(
+        description="Exact scalar in the cyclotomic field named by the class axis."
+    )
+    function: FiniteClassFunction = Field(description="Exact class function to scale.")
+
+
 class ClassContribution(StrictModel):
     """One exact per-class term of the Hermitian inner product."""
 
@@ -242,6 +277,198 @@ class ClassFunctionInnerProductResult(StrictModel):
         )
 
 
+class ClassFunctionRestrictionRequest(StrictModel):
+    """Restrict a source class function to an explicitly embedded subgroup."""
+
+    class_function: FiniteClassFunction = Field(
+        description="Class function on an axis carrying its concrete source group."
+    )
+    subgroup: PermutationGroup = Field(
+        description=(
+            "Subgroup generators on the same permutation domain, each of which "
+            "must belong to the source group."
+        )
+    )
+
+
+class ClassFunctionRestrictionResult(StrictModel):
+    """Exact restriction with the target-to-source conjugacy-class map."""
+
+    source_class_function: FiniteClassFunction
+    subgroup_partition: ConjugacyClassPartition
+    target_class_to_source_class: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+    restricted: FiniteClassFunction
+
+    @model_validator(mode="after")
+    def require_restriction_axes(self) -> Self:
+        source = self.source_class_function.axis.group
+        if source is None:
+            raise _validation_error(
+                "restriction_parent", "the source class function must retain its group"
+            )
+        expected_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in self.subgroup_partition.classes),
+            cyclotomic_order=self.restricted.axis.cyclotomic_order,
+            group=self.subgroup_partition.source,
+            class_representatives=tuple(
+                cls[0] for cls in self.subgroup_partition.classes
+            ),
+        )
+        if self.restricted.axis != expected_axis:
+            raise _validation_error(
+                "restriction_axis",
+                "restricted values must use the retained subgroup axis",
+            )
+        if len(self.target_class_to_source_class) != len(
+            self.subgroup_partition.classes
+        ) or len(self.restricted.values) != len(self.subgroup_partition.classes):
+            raise _validation_error(
+                "restriction_shape",
+                "one source class and value are required per target class",
+            )
+        if any(
+            not 0 <= index < len(self.source_class_function.values)
+            for index in self.target_class_to_source_class
+        ):
+            raise _validation_error(
+                "restriction_index", "source class index is outside the source axis"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_class_function: FiniteClassFunction,
+        subgroup_partition: ConjugacyClassPartition,
+        target_class_to_source_class: tuple[int, ...],
+        restricted: FiniteClassFunction,
+    ) -> Self:
+        return cls.model_construct(
+            source_class_function=source_class_function,
+            subgroup_partition=subgroup_partition,
+            target_class_to_source_class=target_class_to_source_class,
+            restricted=restricted,
+        )
+
+
+class ClassFunctionInductionRequest(StrictModel):
+    """Induce a class function along an explicit same-domain subgroup inclusion."""
+
+    class_function: FiniteClassFunction = Field(
+        description=(
+            "Class function on a concrete subgroup; its axis group supplies the "
+            "subgroup generators and canonical class coordinates."
+        )
+    )
+    parent_group: PermutationGroup = Field(
+        description=(
+            "Concrete parent permutation group on the same domain; every source "
+            "subgroup generator must belong to it."
+        )
+    )
+
+
+class ClassFunctionInductionResult(StrictModel):
+    """Exact induced class function and the subgroup-class inclusion map."""
+
+    source_class_function: FiniteClassFunction
+    subgroup_partition: ConjugacyClassPartition
+    parent_partition: ConjugacyClassPartition
+    subgroup_class_to_parent_class: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+    induced: FiniteClassFunction
+
+    @model_validator(mode="after")
+    def require_induction_axes(self) -> Self:
+        subgroup = self.source_class_function.axis.group
+        if subgroup is None or subgroup != self.subgroup_partition.source:
+            raise _validation_error(
+                "induction_subgroup",
+                "source class function must be bound to the retained subgroup",
+            )
+        expected_subgroup_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in self.subgroup_partition.classes),
+            cyclotomic_order=self.source_class_function.axis.cyclotomic_order,
+            group=self.subgroup_partition.source,
+            class_representatives=tuple(
+                cls[0] for cls in self.subgroup_partition.classes
+            ),
+        )
+        expected_parent_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in self.parent_partition.classes),
+            cyclotomic_order=self.induced.axis.cyclotomic_order,
+            group=self.parent_partition.source,
+            class_representatives=tuple(
+                cls[0] for cls in self.parent_partition.classes
+            ),
+        )
+        if self.source_class_function.axis != expected_subgroup_axis:
+            raise _validation_error(
+                "induction_subgroup_axis",
+                "source values must use the retained subgroup axis",
+            )
+        if self.induced.axis != expected_parent_axis:
+            raise _validation_error(
+                "induction_parent", "induced values must use the retained parent axis"
+            )
+        if self.subgroup_partition.source.degree != self.parent_partition.source.degree:
+            raise _validation_error(
+                "induction_degree",
+                "subgroup and parent partitions must share a permutation domain",
+            )
+        if (
+            self.source_class_function.axis.cyclotomic_order
+            != self.induced.axis.cyclotomic_order
+        ):
+            raise _validation_error(
+                "induction_field", "induction must preserve the cyclotomic field"
+            )
+        if len(self.subgroup_class_to_parent_class) != len(
+            self.subgroup_partition.classes
+        ) or len(self.source_class_function.values) != len(
+            self.subgroup_partition.classes
+        ):
+            raise _validation_error(
+                "induction_subgroup_shape",
+                "one source value and parent-class image are required per subgroup class",
+            )
+        if len(self.induced.values) != len(self.parent_partition.classes):
+            raise _validation_error(
+                "induction_parent_shape",
+                "induced values must cover every parent conjugacy class",
+            )
+        if any(
+            not 0 <= index < len(self.parent_partition.classes)
+            for index in self.subgroup_class_to_parent_class
+        ):
+            raise _validation_error(
+                "induction_class_index", "parent class index is outside the partition"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source_class_function: FiniteClassFunction,
+        subgroup_partition: ConjugacyClassPartition,
+        parent_partition: ConjugacyClassPartition,
+        subgroup_class_to_parent_class: tuple[int, ...],
+        induced: FiniteClassFunction,
+    ) -> Self:
+        return cls.model_construct(
+            source_class_function=source_class_function,
+            subgroup_partition=subgroup_partition,
+            parent_partition=parent_partition,
+            subgroup_class_to_parent_class=subgroup_class_to_parent_class,
+            induced=induced,
+        )
+
+
 class CharacterRow(StrictModel):
     """One irreducible character row on a retained class partition."""
 
@@ -263,6 +490,127 @@ class CharacterTableRequest(StrictModel):
             f"{MAX_CHARACTER_TABLE_CELLS:,} exact coefficient cells."
         )
     )
+
+
+class CyclicCharacterRestrictionRequest(StrictModel):
+    """Restrict one supported cyclic-group irreducible to its unique C_d."""
+
+    partition: GroupConjugacyClassesResult
+    row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+    subgroup_order: int = Field(ge=1, le=MAX_CYCLOTOMIC_ORDER, strict=True)
+
+
+class CyclicCharacterRestrictionResult(StrictModel):
+    """Restricted class function with its subgroup embedding into the source."""
+
+    source_table: CharacterTableResult
+    target_partition: ConjugacyClassPartition
+    row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1)
+    source_class_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+    restricted_character: FiniteClassFunction
+
+    @model_validator(mode="after")
+    def require_inclusion_and_values(self) -> Self:
+        source_classes = self.source_table.partition.classes
+        target_classes = self.target_partition.classes
+        if (
+            self.target_partition.source.degree
+            != self.source_table.partition.source.degree
+        ):
+            raise _validation_error(
+                "restriction_parent", "subgroup action degree must match source"
+            )
+        if len(self.source_class_indices) != len(target_classes):
+            raise _validation_error(
+                "restriction_map_shape",
+                "one source class index is required per target class",
+            )
+        if not 0 <= self.row_index < len(self.source_table.rows):
+            raise _validation_error(
+                "restriction_row", "row index is outside the source table"
+            )
+        source_row = self.source_table.rows[self.row_index]
+        expected_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in target_classes),
+            cyclotomic_order=self.source_table.axis.cyclotomic_order,
+            group=self.target_partition.source,
+            class_representatives=tuple(cls[0] for cls in target_classes),
+        )
+        if self.restricted_character.axis != expected_axis:
+            raise _validation_error(
+                "restriction_axis", "restricted function must use the target class axis"
+            )
+        for target_index, target_class in enumerate(target_classes):
+            source_index = self.source_class_indices[target_index]
+            if not 0 <= source_index < len(source_classes):
+                raise _validation_error(
+                    "restriction_map_index",
+                    "source class index is outside the source partition",
+                )
+            if not set(target_class).issubset(source_classes[source_index]):
+                raise _validation_error(
+                    "restriction_inclusion",
+                    "target class must map into its declared source class",
+                )
+            if (
+                self.restricted_character.values[target_index]
+                != source_row.values[source_index]
+            ):
+                raise _validation_error(
+                    "restriction_value",
+                    "restricted value must be pulled back along the class map",
+                )
+        return self
+
+
+class ClassPowerMapRequest(StrictModel):
+    """Power-map exponent on one source-bound finite permutation group."""
+
+    partition: GroupConjugacyClassesResult = Field(
+        description="Complete canonical conjugacy partition of the source group."
+    )
+    exponent: int = Field(ge=1, le=1_000_000)
+
+
+class ClassPowerMapResult(StrictModel):
+    """Image class index for each class under ``g -> g**exponent``."""
+
+    partition: ConjugacyClassPartition
+    exponent: int = Field(ge=1, le=1_000_000)
+    image_class_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+
+    @model_validator(mode="after")
+    def require_class_axis_shape(self) -> Self:
+        if len(self.image_class_indices) != len(self.partition.classes):
+            raise _validation_error(
+                "power_map_shape", "one image class is required per source class"
+            )
+        if any(
+            not 0 <= index < len(self.partition.classes)
+            for index in self.image_class_indices
+        ):
+            raise _validation_error(
+                "power_map_index", "image class index is outside the partition"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        partition: ConjugacyClassPartition,
+        exponent: int,
+        image_class_indices: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            partition=partition,
+            exponent=exponent,
+            image_class_indices=image_class_indices,
+        )
 
 
 class CharacterTableResult(StrictModel):
@@ -340,6 +688,29 @@ class CharacterTableResult(StrictModel):
         )
 
 
+class FrobeniusSchurIndicatorRequest(StrictModel):
+    """Ordinary second indicator of one row in a complete exact table."""
+
+    table: CharacterTableResult = Field(
+        description="Complete exact ordinary character table retaining its group."
+    )
+    row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1, strict=True)
+
+
+class FrobeniusSchurIndicatorResult(StrictModel):
+    """Second indicator with its complete table and irreducible row retained."""
+
+    source_table: CharacterTableResult
+    row_index: int = Field(ge=0, le=MAX_CLASS_COUNT - 1)
+    indicator: int = Field(ge=-1, le=1, strict=True)
+
+    @model_validator(mode="after")
+    def require_irreducible_row(self) -> Self:
+        if self.row_index >= len(self.source_table.rows):
+            raise _validation_error("indicator_row", "row index is outside the table")
+        return self
+
+
 __all__ = [
     "MAX_CHARACTER_TABLE_CELLS",
     "MAX_CLASS_COUNT",
@@ -352,9 +723,21 @@ __all__ = [
     "CharacterTableResult",
     "ClassAxis",
     "ClassContribution",
+    "ClassFunctionConjugateRequest",
+    "ClassFunctionInductionRequest",
+    "ClassFunctionInductionResult",
     "ClassFunctionInnerProductRequest",
     "ClassFunctionInnerProductResult",
+    "ClassFunctionPointwiseProductRequest",
+    "ClassFunctionRestrictionRequest",
+    "ClassFunctionRestrictionResult",
+    "ClassPowerMapRequest",
+    "ClassPowerMapResult",
     "ConjugacyClassPartition",
+    "CyclicCharacterRestrictionRequest",
+    "CyclicCharacterRestrictionResult",
     "CyclotomicValue",
     "FiniteClassFunction",
+    "FrobeniusSchurIndicatorRequest",
+    "FrobeniusSchurIndicatorResult",
 ]

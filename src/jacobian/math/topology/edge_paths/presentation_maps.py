@@ -886,8 +886,53 @@ def _compose_relator_images(
 def _compose_simplicial_map(
     first: FundamentalGroupMapResult,
     second: FundamentalGroupMapResult,
-) -> SimplicialMap:
-    """Compose the two validated vertex maps into the canonical carrier map."""
+) -> SimplicialMap | PresentationBasepointChangePath:
+    """Compose two compatible presentation-map carriers."""
+
+    if isinstance(first.map, PresentationBasepointChangePath) or isinstance(
+        second.map, PresentationBasepointChangePath
+    ):
+        if not (
+            isinstance(first.map, PresentationBasepointChangePath)
+            and isinstance(second.map, PresentationBasepointChangePath)
+        ):
+            raise OperationDomainValidationError(
+                location=("second", "map"),
+                code="fundamental_group_map.composition_carrier_kind",
+                message=(
+                    "composition requires two simplicial maps or two basepoint paths"
+                ),
+            )
+        first_path, second_path = first.map, second.map
+        if (
+            first_path.complex != second_path.complex
+            or first_path.target_base_vertex != second_path.source_base_vertex
+        ):
+            raise OperationDomainValidationError(
+                location=("second", "map"),
+                code="fundamental_group_map.composition_path",
+                message=(
+                    "basepoint paths must use the same complex and matching intermediate vertex"
+                ),
+            )
+        combined_length = (
+            len(first_path.path_vertices) + len(second_path.path_vertices) - 1
+        )
+        if combined_length > MAX_WORD + 1:
+            raise OperationResourceAdmissionError(
+                location=("second", "map", "path_vertices"),
+                code="fundamental_group_map.composition_path_output",
+                message="the composed basepoint path exceeds the admitted word bound",
+            )
+        return PresentationBasepointChangePath(
+            complex=first_path.complex,
+            source_base_vertex=first_path.source_base_vertex,
+            target_base_vertex=second_path.target_base_vertex,
+            path_vertices=(
+                *first_path.path_vertices,
+                *second_path.path_vertices[1:],
+            ),
+        )
 
     run_topology_admission(first.map.require_simplicial_map, location=("first", "map"))
     run_topology_admission(

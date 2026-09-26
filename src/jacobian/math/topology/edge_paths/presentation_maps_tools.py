@@ -38,6 +38,59 @@ _P = {"generators": ["x"], "relators": []}
 _CIRCLE = canonical_complex(
     ("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c"))
 ).model_dump(mode="json")
+_POINT = {
+    "vertices": ["a"],
+    "maximal_simplices": [["a"]],
+    "faces_by_dimension": [{"dimension": 0, "faces": [["a"]]}],
+    "dimension": 0,
+    "f_vector": [1],
+    "closure_size": 1,
+    "orientation_convention": "LEXICOGRAPHIC_VERTEX_ORDER",
+    "empty_simplex_stored": False,
+}
+_TRIVIAL_GROUP_PRESENTATION = {
+    "generators": [],
+    "relators": [],
+}
+_TRIVIAL_PRESENTATION_RESULT = {
+    "complex": _POINT,
+    "base_vertex": "a",
+    "component_vertices": ["a"],
+    "spanning_tree_edges": [],
+    "non_tree_edges": [],
+    "edge_words": [],
+    "triangle_relators": [],
+    "presentation": _TRIVIAL_GROUP_PRESENTATION,
+    "abelianization": {
+        "relation_matrix": {
+            "domain": "ZZ",
+            "row_count": 0,
+            "column_count": 0,
+            "entries": [],
+        },
+        "rank": 0,
+        "free_rank": 0,
+        "torsion_invariant_factors": [],
+    },
+}
+_TRIVIAL_BASEPOINT_MAP = {
+    "map": {
+        "complex": _POINT,
+        "source_base_vertex": "a",
+        "target_base_vertex": "a",
+        "path_vertices": ["a"],
+    },
+    "source_presentation": _TRIVIAL_PRESENTATION_RESULT,
+    "target_presentation": _TRIVIAL_PRESENTATION_RESULT,
+    "generator_images": [],
+    "abelianization_map": {
+        "domain": "ZZ",
+        "row_count": 0,
+        "column_count": 0,
+        "entries": [],
+    },
+    "relator_images": [],
+}
 TOOLS = (
     MathTool(
         operation_id="topology.group_presentation.direct_relator_match.compute",
@@ -78,7 +131,19 @@ TOOLS = (
             "compose presentation homomorphisms",
             "fundamental group functoriality",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="compose_identity_basepoint_paths",
+                description=(
+                    "Compose two identity paths at the sole vertex of a point; "
+                    "the composite is the same based path map."
+                ),
+                input={
+                    "first": _TRIVIAL_BASEPOINT_MAP,
+                    "second": _TRIVIAL_BASEPOINT_MAP,
+                },
+            ),
+        ),
     ),
     MathTool(
         operation_id="topology.simplicial.fundamental_group.induced_map.compute",

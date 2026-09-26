@@ -340,15 +340,15 @@ def test_maximum_cut_preserves_256_vertex_partition_envelope() -> None:
     oversized = _graph(
         tuple(f"{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 1)), ()
     )
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    with pytest.raises(ValidationError) as request_error:
         GraphMaximumCutRequest(graph=oversized)
+    assert request_error.value.errors()[0]["type"] == "graph.maximum_cut.vertex_bound"
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices",
-    ):
+    ) as exc_info:
         compute_maximum_cut(GraphMaximumCutRequest.model_construct(graph=oversized))
+
+    assert exc_info.value.errors()[0]["type"] == "graph.maximum_cut.vertex_bound"
 
 
 def test_public_contract_explains_bounds_without_private_kernel_details() -> None:

@@ -76,7 +76,7 @@ def _per_candidate_work(pattern_order: int) -> int:
 def _require_bounded_request(
     host: SimpleUndirectedGraph,
     pattern: SimpleUndirectedGraph,
-) -> None:
+) -> int:
     host_order = len(host.vertices)
     pattern_order = len(pattern.vertices)
     candidate_count = _candidate_subset_count(host_order, pattern_order)
@@ -106,6 +106,7 @@ def _require_bounded_request(
             "for graph construction, direct host-edge probes, explicit candidate "
             "scans, and VF2++ search",
         )
+    return total_work
 
 
 class InducedVertexSubsetPatternCountRequest(StrictModel):

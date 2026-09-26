@@ -27,6 +27,7 @@ from jacobian.math.free_algebras.operations import (
     ideal_generated_prefix,
     ideal_membership,
     multiply,
+    power_polynomial,
     power_word,
     quotient_normal_word_profile,
     reverse_word,
@@ -37,6 +38,7 @@ from jacobian.math.free_algebras.operations import (
     word_prefixes,
     word_suffixes,
 )
+from jacobian.math.free_algebras.polynomial_subtract.operations import subtract
 
 __all__ = [
     "FreeAlgebraIdeal",
@@ -63,11 +65,13 @@ __all__ = [
     "ideal_generated_prefix",
     "ideal_membership",
     "multiply",
+    "power_polynomial",
     "power_word",
     "quotient_normal_word_profile",
     "reverse_word",
     "substitute_polynomial",
     "substitute_word",
+    "subtract",
     "word_factors",
     "word_overlaps",
     "word_prefixes",

@@ -270,7 +270,9 @@ OIDC rather than a long-lived npm token.
 Keep each change focused on one outcome. Explain the problem, the resulting
 behavior or contract, any compatibility impact, and the validation performed.
 Link a relevant issue when one exists. Include screenshots only when rendered
-layout or diagrams materially change.
+layout or diagrams materially change. Use a topic branch and pull request, and
+respect protected-branch rules even when available credentials could bypass
+them.
 
 Open a new issue when review, conformance testing, or real use identifies a
 specific unresolved behavior. Each issue should describe the observable

@@ -35,6 +35,8 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS,
     MAX_FREE_ALGEBRA_LETTER_LENGTH,
     MAX_FREE_ALGEBRA_OPERAND_TERMS,
+    MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT,
+    MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_RESULT_TERMS,
@@ -146,7 +148,11 @@ def _admit_polynomial(
 
 
 def _admit_product(
-    left: FreeAlgebraPolynomial, right: FreeAlgebraPolynomial
+    left: FreeAlgebraPolynomial,
+    right: FreeAlgebraPolynomial,
+    *,
+    operand_term_limit: int = MAX_FREE_ALGEBRA_OPERAND_TERMS,
+    operand_word_length_limit: int = MAX_FREE_ALGEBRA_WORD_LENGTH,
 ) -> tuple[FreeAlgebraPolynomial, FreeAlgebraPolynomial]:
     """Admit one product request before any word-pair expansion.
 
@@ -168,28 +174,23 @@ def _admit_product(
             ),
         )
 
-    max_operand_digits = 0
     for side, polynomial in (("left", left), ("right", right)):
-        if len(polynomial.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+        if len(polynomial.terms) > operand_term_limit:
             _reject_resource(
                 (side, "terms"),
                 "operand_term_budget",
                 f"{side} operand exceeds the "
-                f"{MAX_FREE_ALGEBRA_OPERAND_TERMS}-term multiplication budget",
+                f"{operand_term_limit}-term multiplication budget",
             )
         for index, term in enumerate(polynomial.terms):
-            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            if len(term.word) > operand_word_length_limit:
                 _reject_resource(
                     (side, "terms", index, "word"),
                     "operand_word_length_budget",
                     f"{side} operand word exceeds the "
-                    f"{MAX_FREE_ALGEBRA_WORD_LENGTH}-letter multiplication "
+                    f"{operand_word_length_limit}-letter multiplication "
                     "budget",
                 )
-            max_operand_digits = max(
-                max_operand_digits,
-                canonical_rational_component_digits(term.coefficient),
-            )
 
     term_pair_count = len(left.terms) * len(right.terms)
     if term_pair_count > MAX_FREE_ALGEBRA_TERM_PAIRS:
@@ -199,26 +200,103 @@ def _admit_product(
             "product term pairs exceed the "
             f"{MAX_FREE_ALGEBRA_TERM_PAIRS}-pair multiplication budget",
         )
-    # Distinct product words are a subset of the term pairs, so this bounds
-    # the result term count before product expansion.
-    if term_pair_count > MAX_FREE_ALGEBRA_RESULT_TERMS:
+    # Encode each word in base |alphabet|+1. Every generator receives a
+    # nonzero digit, so the pair (length, code) identifies concatenations
+    # exactly without allocating the concatenated result words.
+    base = len(left.alphabet) + 1
+    letter_code = {letter: index + 1 for index, letter in enumerate(left.alphabet)}
+    left_codes = tuple(_word_code(term.word, letter_code, base) for term in left.terms)
+    right_codes = tuple(
+        _word_code(term.word, letter_code, base) for term in right.terms
+    )
+    right_place_values = tuple(base ** len(term.word) for term in right.terms)
+    support_bounds: dict[tuple[int, int], list[int]] = {}
+    left_fractions = tuple(term.coefficient.as_fraction() for term in left.terms)
+    right_fractions = tuple(term.coefficient.as_fraction() for term in right.terms)
+    left_word_widths = tuple(
+        sum(len(letter) + 4 for letter in term.word) for term in left.terms
+    )
+    right_word_widths = tuple(
+        sum(len(letter) + 4 for letter in term.word) for term in right.terms
+    )
+    for left_index, (left_term, left_code) in enumerate(
+        zip(left.terms, left_codes, strict=True)
+    ):
+        left_fraction = left_fractions[left_index]
+        left_numerator_digits = len(str(abs(left_fraction.numerator)))
+        left_denominator_digits = len(str(left_fraction.denominator))
+        for right_index, (right_term, right_code, right_place) in enumerate(
+            zip(right.terms, right_codes, right_place_values, strict=True)
+        ):
+            right_fraction = right_fractions[right_index]
+            numerator_digits = left_numerator_digits + len(
+                str(abs(right_fraction.numerator))
+            )
+            denominator_digits = left_denominator_digits + len(
+                str(right_fraction.denominator)
+            )
+            key = (
+                len(left_term.word) + len(right_term.word),
+                left_code * right_place + right_code,
+            )
+            bound = support_bounds.setdefault(key, [0, 0, 0, 0])
+            bound[0] += denominator_digits
+            bound[1] = max(bound[1], numerator_digits - denominator_digits)
+            bound[2] += 1
+            bound[3] = left_word_widths[left_index] + right_word_widths[right_index]
+    distinct_product_words = len(support_bounds)
+    if distinct_product_words > MAX_FREE_ALGEBRA_RESULT_TERMS:
         _reject_resource(
             ("left", "terms"),
             "result_term_budget",
-            "product can exceed the "
+            "product support exceeds the "
             f"{MAX_FREE_ALGEBRA_RESULT_TERMS}-term result budget",
         )
+    if any(
+        word_length > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+        for word_length, _word_code_value in support_bounds
+    ):
+        _reject_resource(
+            ("left", "terms"),
+            "result_word_length_budget",
+            "product word exceeds the "
+            f"{MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH}-letter result bound",
+        )
 
-    addition_digits = len(str(term_pair_count - 1)) if term_pair_count >= 2 else 0
-    predicted_coefficient_digits = 2 * max_operand_digits + addition_digits
-    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+    coefficient_digit_bounds = tuple(
+        denominator_digits
+        + max(0, numerator_minus_denominator)
+        + len(str(contribution_count))
+        for denominator_digits, numerator_minus_denominator, contribution_count, _ in support_bounds.values()
+    )
+    if max(coefficient_digit_bounds, default=1) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
         _reject_resource(
             ("left", "terms"),
             "coefficient_growth_budget",
             "predicted product coefficient growth exceeds the "
             f"{MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS}-digit multiplication budget",
         )
+    output_cell_bound = sum(
+        128 + word_width + 2 * (coefficient_digits + 1)
+        for (_, _, _, word_width), coefficient_digits in zip(
+            support_bounds.values(), coefficient_digit_bounds, strict=True
+        )
+    )
+    if output_cell_bound > MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS:
+        _reject_resource(
+            ("left", "right"),
+            "product_output_cells_budget",
+            "predicted product output exceeds the admitted "
+            f"{MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS}-cell allocation bound",
+        )
     return left, right
+
+
+def _word_code(word: tuple[str, ...], letter_code: dict[str, int], base: int) -> int:
+    code = 0
+    for letter in word:
+        code = code * base + letter_code[letter]
+    return code
 
 
 def _sum_coefficient_digit_bound(
@@ -360,6 +438,62 @@ def multiply(
         product=product,
         ledger=ledger,
     )
+
+
+def _multiply_for_power(
+    left: FreeAlgebraPolynomial, right: FreeAlgebraPolynomial
+) -> FreeAlgebraPolynomial:
+    left, right = _admit_product(
+        left,
+        right,
+        operand_term_limit=MAX_FREE_ALGEBRA_RESULT_TERMS,
+        operand_word_length_limit=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
+    )
+    product, _ledger = multiply_sparse(left, right)
+    return product
+
+
+def power_polynomial(
+    polynomial: FreeAlgebraPolynomial, exponent: int
+) -> FreeAlgebraPolynomial:
+    """Return a bounded nonnegative power using admitted squaring products."""
+
+    value = _admit_polynomial(polynomial, label="polynomial")
+    if (
+        not isinstance(exponent, int)
+        or isinstance(exponent, bool)
+        or not 0 <= exponent <= MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT
+    ):
+        _reject_resource(
+            ("exponent",),
+            "polynomial_power_exponent",
+            "polynomial power exponent must be an integer from 0 through 64",
+        )
+    unit = FreeAlgebraPolynomial(
+        alphabet=value.alphabet,
+        terms=(
+            FreeAlgebraTerm(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)), word=()
+            ),
+        ),
+    )
+    if exponent == 0:
+        return unit
+    if exponent == 1:
+        return value
+    if value.is_zero:
+        return value
+
+    result: FreeAlgebraPolynomial | None = None
+    factor = value
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = factor if result is None else _multiply_for_power(result, factor)
+        remaining >>= 1
+        if remaining:
+            factor = _multiply_for_power(factor, factor)
+    return unit if result is None else result
 
 
 def _admit_substitution_images(
@@ -1930,6 +2064,7 @@ __all__ = [
     "ideal_generated_prefix",
     "ideal_membership",
     "multiply",
+    "power_polynomial",
     "power_word",
     "quotient_normal_word_profile",
     "reverse_word",

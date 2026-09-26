@@ -16,6 +16,7 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraPolynomialAddRequest,
     FreeAlgebraPolynomialHomomorphism,
     FreeAlgebraPolynomialHomomorphismCompositionRequest,
+    FreeAlgebraPolynomialPowerRequest,
     FreeAlgebraPolynomialProductRequest,
     FreeAlgebraPolynomialProductResult,
     FreeAlgebraPolynomialSubstitutionRequest,
@@ -47,6 +48,7 @@ from jacobian.math.free_algebras.operations import (
     ideal_generated_prefix,
     ideal_membership,
     multiply,
+    power_polynomial,
     power_word,
     quotient_normal_word_profile,
     reverse_word,
@@ -63,6 +65,12 @@ def _run_multiply(
     request: FreeAlgebraPolynomialProductRequest,
 ) -> FreeAlgebraPolynomialProductResult:
     return multiply(request.left, request.right)
+
+
+def _run_polynomial_power(
+    request: FreeAlgebraPolynomialPowerRequest,
+) -> FreeAlgebraPolynomial:
+    return power_polynomial(request.polynomial, request.exponent)
 
 
 def _run_add(request: FreeAlgebraPolynomialAddRequest) -> FreeAlgebraPolynomial:
@@ -227,7 +235,8 @@ TOOLS = (
             "generators. Admission bounds each alphabet to 26 distinct "
             "letters, operand words to 32 letters, operand terms to 64, "
             "product term pairs and result terms to 4096, and predicted "
-            "coefficient growth to 64 digits before expansion; the bounded "
+            "coefficient growth to 64 digits and output allocation before "
+            "expansion; the bounded "
             "term-pair and collected-like-word ledger is returned."
         ),
         request_type=FreeAlgebraPolynomialProductRequest,
@@ -250,6 +259,43 @@ TOOLS = (
                     "the distinct words x*y and y*x must not be collected."
                 ),
                 input={"left": _EXAMPLE_LEFT, "right": _EXAMPLE_RIGHT},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.polynomial.power.compute",
+        title="Raise a free-algebra polynomial to an exact power",
+        description=(
+            "Compute a nonnegative integer power in a free associative QQ-algebra. "
+            "Exponentiation by squaring uses the existing exact product kernel; "
+            "each intermediate term-pair convolution, coefficient-growth bound, "
+            "and output allocation is admitted before expansion. Exponents range "
+            "from 0 through 64. Exponent zero returns the unit polynomial over "
+            "the input alphabet, and exponent one returns the input value."
+        ),
+        request_type=FreeAlgebraPolynomialPowerRequest,
+        result_type=FreeAlgebraPolynomial,
+        run=_run_polynomial_power,
+        tags=("free-algebra", "polynomial", "power", "exact"),
+        discovery_terms=(
+            "noncommutative polynomial power",
+            "free associative algebra polynomial exponentiation",
+            "power a free algebra polynomial",
+        ),
+        examples=(
+            OperationExample(
+                name="square_sum_of_generators",
+                description="Square x+y in the free algebra; xy and yx remain distinct.",
+                input={
+                    "polynomial": {
+                        "alphabet": ["x", "y"],
+                        "terms": [
+                            {"coefficient": {"num": "1", "den": "1"}, "word": ["y"]},
+                            {"coefficient": {"num": "1", "den": "1"}, "word": ["x"]},
+                        ],
+                    },
+                    "exponent": 2,
+                },
             ),
         ),
     ),

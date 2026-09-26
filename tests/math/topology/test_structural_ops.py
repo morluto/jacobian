@@ -297,7 +297,8 @@ class TestBarycentricSubdivision:
         )
 
         with pytest.raises(
-            OperationResourceAdmissionError, match="more than 128 maximal chains"
+            OperationResourceAdmissionError,
+            match="more than 128 subdivision facets",
         ):
             compute_barycentric_subdivision(request)
 

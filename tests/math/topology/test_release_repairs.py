@@ -14,6 +14,7 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
     canonical_complex,
 )
+from jacobian.math.topology._simplicial_kernel import canonicalize
 from jacobian.math.topology.cellular_sheaves._models import (
     FiniteCellularSheaf,
     SheafField,
@@ -48,7 +49,6 @@ from jacobian.math.topology.edge_paths._models import (
 )
 from jacobian.math.topology.edge_paths.presentation_maps import direct_relator_match
 from jacobian.math.topology.release import (
-    CliqueRequest,
     FacePosetRequest,
     HomologyManifoldRequest,
     OrientabilityRequest,
@@ -76,33 +76,16 @@ def test_face_poset_and_clique_reconstruct_small_triangle() -> None:
     )
     poset = face_poset(request)
     assert poset.order_complex.closure_size == 25
-    clique = clique_complex(
-        CliqueRequest(
-            complex=SimplicialComplexRequest.model_validate(
-                {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]}
-            )
-        )
-    )
+    clique = clique_complex(canonicalize(("a", "b", "c"), (("a", "b", "c"),)).complex)
     assert clique.clique_facets == (("a", "b", "c"),)
 
 
 def test_clique_complex_expands_graph_beyond_source_dimension() -> None:
-    graph = CliqueRequest(
-        complex=SimplicialComplexRequest.model_validate(
-            {
-                "vertices": ["a", "b", "c", "d"],
-                "facets": [
-                    ["a", "b"],
-                    ["a", "c"],
-                    ["a", "d"],
-                    ["b", "c"],
-                    ["b", "d"],
-                    ["c", "d"],
-                ],
-            }
-        )
-    )
-    result = clique_complex(graph)
+    source = canonicalize(
+        ("a", "b", "c", "d"),
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
+    ).complex
+    result = clique_complex(source)
     assert result.source.dimension == 1
     assert result.clique_facets == (("a", "b", "c", "d"),)
     assert result.clique_complex.dimension == 3

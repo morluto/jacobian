@@ -57,11 +57,11 @@ MAX_FACE_ENUMERATOR_CANDIDATES = MAX_TOPOLOGY_FACETS * (
 MAX_MINIMAL_NONFACE_CANDIDATES = 1 << 14
 MAX_MINIMAL_NONFACE_WORK = 430_000
 MAX_MINIMAL_NONFACES = 4_096
-MAX_MINIMAL_NONFACE_RESULT_BYTES = 2_500_000
+MAX_MINIMAL_NONFACE_RESULT_CELLS = 2_500_000
 MAX_STANLEY_REISNER_GENERATORS = 64
-MAX_STANLEY_REISNER_RESULT_BYTES = 2_500_000
+MAX_STANLEY_REISNER_RESULT_CELLS = 2_500_000
 MAX_VERTEX_LABEL_BYTES = 32
-MAX_CANONICAL_COMPLEX_JSON_BYTES = (
+MAX_CANONICAL_COMPLEX_CELLS = (
     (MAX_TOPOLOGY_FACES + MAX_TOPOLOGY_FACETS)
     * (MAX_TOPOLOGY_DIMENSION + 1)
     * (MAX_VERTEX_LABEL_BYTES + 3)
@@ -845,6 +845,15 @@ def compute_face_enumerator(request: FaceEnumeratorRequest) -> IntegerPolynomial
         ),
         location=("complex",),
     )
+    if any(len(facet) > MAX_TOPOLOGY_DIMENSION + 1 for facet in canonical_facets):
+        raise OperationResourceAdmissionError(
+            location=("complex", "facets"),
+            code="topology.face_enumerator.admission.dimension",
+            message=(
+                "face-enumerator facets exceed the "
+                f"{MAX_TOPOLOGY_DIMENSION + 1}-vertex dimension bound"
+            ),
+        )
     candidates = sum((1 << len(facet)) - 1 for facet in canonical_facets)
     if candidates > MAX_FACE_ENUMERATOR_CANDIDATES:
         raise OperationResourceAdmissionError(
@@ -914,18 +923,17 @@ def _minimal_nonface_work(vertex_count: int, facets: tuple[Simplex, ...]) -> int
     )
 
 
-def _minimal_nonface_result_bytes_bound(source: FiniteSimplicialComplex) -> int:
+def _minimal_nonface_result_cells_bound(source: FiniteSimplicialComplex) -> int:
     vertex_count = len(source.vertices)
     width_bound = min(
         MAX_MINIMAL_NONFACES,
         comb(vertex_count, vertex_count // 2),
     )
-    max_row_bytes = (
-        sum(len(vertex.encode("ascii")) + 2 for vertex in source.vertices)
-        + max(0, vertex_count - 1)
-        + 2
+    return (
+        (MAX_TOPOLOGY_FACES + MAX_TOPOLOGY_FACETS) * (MAX_TOPOLOGY_DIMENSION + 1)
+        + width_bound * (vertex_count + 2)
+        + MAX_TOPOLOGY_VERTICES
     )
-    return MAX_CANONICAL_COMPLEX_JSON_BYTES + width_bound * (max_row_bytes + 1) + 2
 
 
 def _preflight_minimal_nonfaces(
@@ -998,14 +1006,14 @@ def _preflight_minimal_nonfaces(
             code="topology.minimal_nonfaces.source_invalid",
             message="source is not a valid canonical finite complex",
         ) from exc
-    result_bytes_bound = _minimal_nonface_result_bytes_bound(validated_source)
-    if result_bytes_bound > MAX_MINIMAL_NONFACE_RESULT_BYTES:
+    result_cells_bound = _minimal_nonface_result_cells_bound(validated_source)
+    if result_cells_bound > MAX_MINIMAL_NONFACE_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="topology.minimal_nonfaces.output_over_envelope",
             message=(
-                f"source-bound antichain output estimate {result_bytes_bound} "
-                f"bytes exceeds the {MAX_MINIMAL_NONFACE_RESULT_BYTES}-byte envelope"
+                f"source-bound antichain output estimate {result_cells_bound} "
+                f"cells exceeds the {MAX_MINIMAL_NONFACE_RESULT_CELLS}-cell envelope"
             ),
         )
     return validated_source
@@ -1126,14 +1134,14 @@ def compute_stanley_reisner_ideal(
     # The exact source complex and at most 64 eight-variable sparse terms fit
     # below this conservative canonical JSON envelope before polynomial values
     # are materialized.
-    estimated_output_bytes = _minimal_nonface_result_bytes_bound(source) + 64_000
-    if estimated_output_bytes > MAX_STANLEY_REISNER_RESULT_BYTES:
+    estimated_output_cells = _minimal_nonface_result_cells_bound(source) + 64_000
+    if estimated_output_cells > MAX_STANLEY_REISNER_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="topology.stanley_reisner.output_bound",
             message=(
-                f"conservative result estimate {estimated_output_bytes} exceeds "
-                f"the {MAX_STANLEY_REISNER_RESULT_BYTES}-byte envelope"
+                f"conservative result estimate {estimated_output_cells} exceeds "
+                f"the {MAX_STANLEY_REISNER_RESULT_CELLS}-cell envelope"
             ),
         )
 

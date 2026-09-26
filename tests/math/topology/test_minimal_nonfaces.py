@@ -86,7 +86,10 @@ def test_full_simplex_has_empty_antichain_and_round_trips_exactly() -> None:
     encoded = result.model_dump_json()
     decoded = MinimalNonfacesResult.model_validate_json(encoded)
     assert decoded == result
-    assert len(encoded.encode("utf-8")) <= structural.MAX_MINIMAL_NONFACE_RESULT_BYTES
+    assert (
+        structural._minimal_nonface_result_cells_bound(result.source)
+        <= structural.MAX_MINIMAL_NONFACE_RESULT_CELLS
+    )
 
 
 def test_nonface_labels_keep_the_canonical_source_vertex_axis() -> None:
@@ -106,7 +109,10 @@ def test_candidate_cap_accepts_14_vertices_and_rejects_15_before_expansion() -> 
     result = compute_minimal_nonfaces(accepted)
     assert len(result.minimal_nonfaces) == 91
     encoded = result.model_dump_json()
-    assert len(encoded.encode("utf-8")) <= structural.MAX_MINIMAL_NONFACE_RESULT_BYTES
+    assert (
+        structural._minimal_nonface_result_cells_bound(result.source)
+        <= structural.MAX_MINIMAL_NONFACE_RESULT_CELLS
+    )
     assert MinimalNonfacesResult.model_validate_json(encoded) == result
 
     rejected_vertices = tuple(f"v{i:02}" for i in range(15))
@@ -120,17 +126,17 @@ def test_candidate_cap_accepts_14_vertices_and_rejects_15_before_expansion() -> 
 
 
 @pytest.mark.parametrize(
-    "max_work,max_bytes,expected_code",
+    "max_work,max_cells,expected_code",
     [(0, None, "work_over_envelope"), (None, 1, "output_over_envelope")],
 )
 def test_work_and_output_are_preflighted_before_face_closure(
-    monkeypatch, max_work, max_bytes, expected_code
+    monkeypatch, max_work, max_cells, expected_code
 ) -> None:
     request = _request(("a", "b", "c"), (("a",), ("b",), ("c",)))
     if max_work is not None:
         monkeypatch.setattr(structural, "MAX_MINIMAL_NONFACE_WORK", max_work)
-    if max_bytes is not None:
-        monkeypatch.setattr(structural, "MAX_MINIMAL_NONFACE_RESULT_BYTES", max_bytes)
+    if max_cells is not None:
+        monkeypatch.setattr(structural, "MAX_MINIMAL_NONFACE_RESULT_CELLS", max_cells)
 
     def unexpected_closure(_facets):
         pytest.fail("request expanded the source closure before admission")

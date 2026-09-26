@@ -497,29 +497,34 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_binding(self) -> Self:
+        try:
+            complex_value = FiniteGroupGaugeComplex.model_validate(
+                self.complex.model_dump()
+            )
+            field_value = FiniteGroupGaugeField.model_validate(
+                self.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "curvature_binding", "curvature sources must satisfy their contracts"
+            ) from error
         if (
-            not isinstance(self.complex, FiniteGroupGaugeComplex)
-            or not isinstance(self.field, FiniteGroupGaugeField)
-            or not isinstance(self.complex.lattice, GaugeLattice)
-            or not isinstance(self.field.lattice, GaugeLattice)
-            or not isinstance(self.complex.group, FiniteGroupTable)
-            or not isinstance(self.field.group, FiniteGroupTable)
-            or self.complex.lattice != self.field.lattice
-            or self.complex.group != self.field.group
+            complex_value.lattice != field_value.lattice
+            or complex_value.group != field_value.group
             or not isinstance(self.face_values, tuple)
-            or len(self.face_values) != len(self.complex.faces)
+            or len(self.face_values) != len(complex_value.faces)
         ):
             raise _validation_error(
                 "curvature_binding", "curvature sources must share parents"
             )
-        identity = self.complex.group.identity
+        identity = complex_value.group.identity
         is_flat = True
-        for face, value in zip(self.complex.faces, self.face_values, strict=True):
+        for face, value in zip(complex_value.faces, self.face_values, strict=True):
             if (
                 not isinstance(value, FiniteGroupGaugeFaceCurvature)
                 or value.face_id != face.face_id
                 or not isinstance(value.value, FiniteGroupTableElement)
-                or value.value.group != self.complex.group
+                or value.value.group != complex_value.group
             ):
                 raise _validation_error(
                     "curvature_binding", "curvature entries must bind to source faces"

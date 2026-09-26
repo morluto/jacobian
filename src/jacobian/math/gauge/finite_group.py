@@ -361,6 +361,17 @@ def finite_group_gauge_curvature(
             "lattice_gauge.finite_group.curvature_request_shape",
             "complex and field must be typed values",
         )
+    try:
+        complex_value = FiniteGroupGaugeComplex.model_validate(
+            complex_value.model_dump()
+        )
+        field = FiniteGroupGaugeField.model_validate(field.model_dump())
+    except (TypeError, ValueError):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_malformed",
+            "complex and field must satisfy their complete typed contracts",
+        )
     # model_construct/copy can bypass required-field validation. Retrieve
     # potentially absent attributes without allowing AttributeError to escape.
     lattice = getattr(complex_value, "lattice", None)

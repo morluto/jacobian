@@ -776,9 +776,7 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     embedding = finite_field_module.FieldEmbedding(
         source=base,
         target=extension,
-        generator_image=FiniteFieldElement(
-            presentation=extension, coordinates=(0, 0)
-        ),
+        generator_image=FiniteFieldElement(presentation=extension, coordinates=(0, 0)),
     )
     result = finite_field_curve_base_change(curve, embedding, point)
     assert result.curve.field == extension
@@ -804,17 +802,13 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
         },
         Catalog.open(),
     )
-    assert wire_result.output["curve"]["field"] == extension.model_dump(
-        mode="json"
-    )
+    assert wire_result.output["curve"]["field"] == extension.model_dump(mode="json")
     assert wire_result.output["point"]["y"]["coordinates"] == ["1", "0"]
 
     invalid = finite_field_module.FieldEmbedding(
         source=base,
         target=extension,
-        generator_image=FiniteFieldElement(
-            presentation=extension, coordinates=(1, 0)
-        ),
+        generator_image=FiniteFieldElement(presentation=extension, coordinates=(1, 0)),
     )
     with pytest.raises(OperationDomainValidationError) as error:
         finite_field_curve_base_change(curve, invalid)

@@ -171,13 +171,9 @@ def simplicial_set_skeleton(
     skeleton_identities = (
         sum((degree + 1) * degree // 2 for degree in range(2, source.max_degree + 1))
         + sum(
-            (degree + 1) * (degree + 2) // 2
-            for degree in range(source.max_degree - 1)
+            (degree + 1) * (degree + 2) // 2 for degree in range(source.max_degree - 1)
         )
-        + sum(
-            (degree + 1) * (degree + 2)
-            for degree in range(source.max_degree)
-        )
+        + sum((degree + 1) * (degree + 2) for degree in range(source.max_degree))
     )
     # Degeneracy closure preserves restricted identities, and restriction
     # indices intertwine every source map by construction. These trusted kernel

@@ -93,6 +93,18 @@ def test_product_projections_are_simplicial_maps() -> None:
     ).identities_preserved
 
 
+def test_product_canonicalizes_factors_with_forged_identity_summary() -> None:
+    factor = standard_simplex(1, 1)
+    forged = factor.model_copy(
+        update={"checked_identities": factor.checked_identities + 1}
+    )
+    result = simplicial_set_product(
+        SimplicialSetProductRequest(left=forged, right=factor)
+    )
+    assert result.left == factor
+    assert result.left_projection.target == factor
+
+
 def test_product_rejects_degree_size_overflow_before_expansion() -> None:
     labels = tuple(f"x{i}" for i in range(6))
     identity = tuple(range(6))

@@ -114,6 +114,18 @@ def test_coproduct_rejects_level_overflow_before_expansion() -> None:
         simplicial_set_coproduct(SimplicialSetCoproductRequest(left=left, right=right))
 
 
+def test_coproduct_canonicalizes_forged_factor_summaries() -> None:
+    factor = standard_simplex(1, 1)
+    forged = factor.model_copy(
+        update={"checked_identities": factor.checked_identities + 1}
+    )
+    result = simplicial_set_coproduct(
+        SimplicialSetCoproductRequest(left=forged, right=factor)
+    )
+    assert result.left == factor
+    assert result.left_inclusion.source == factor
+
+
 def test_coproduct_rechecks_caller_authored_factor_identities() -> None:
     valid = standard_simplex(1, 1)
     malformed = FiniteTruncatedSimplicialSet._from_kernel(

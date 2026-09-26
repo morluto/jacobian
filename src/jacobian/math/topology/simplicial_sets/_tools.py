@@ -19,6 +19,9 @@ from jacobian.math.topology.simplicial_sets.image_tools import TOOLS as IMAGE_TO
 from jacobian.math.topology.simplicial_sets.maps_tools import TOOLS as MAP_TOOLS
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product_tools import TOOLS as PRODUCT_TOOLS
+from jacobian.math.topology.simplicial_sets.quotient_tools import (
+    TOOLS as QUOTIENT_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.skeleton_tools import (
     TOOLS as SKELETON_TOOLS,
 )
@@ -57,6 +60,7 @@ TOOLS = (
     *IMAGE_TOOLS,
     *MAP_TOOLS,
     *TRUNCATE_TOOLS,
+    *QUOTIENT_TOOLS,
     *SUBSET_TOOLS,
     MathTool(
         operation_id="topology.simplicial_set.from_tables.compute",

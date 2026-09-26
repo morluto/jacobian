@@ -42,6 +42,11 @@ from jacobian.math.topology.simplicial_sets.product import simplicial_set_produc
 from jacobian.math.topology.simplicial_sets.product_models import (
     SimplicialSetProductResult,
 )
+from jacobian.math.topology.simplicial_sets.quotient import simplicial_set_quotient
+from jacobian.math.topology.simplicial_sets.quotient_models import (
+    SimplicialSetQuotientRequest,
+    SimplicialSetQuotientResult,
+)
 from jacobian.math.topology.simplicial_sets.skeleton import (
     SimplicialSetSkeletonResult,
     simplicial_set_skeleton,
@@ -65,6 +70,8 @@ __all__ = [
     "SimplicialMapImageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
+    "SimplicialSetQuotientRequest",
+    "SimplicialSetQuotientResult",
     "SimplicialSetSkeletonResult",
     "SimplicialSetTablesResult",
     "SimplicialSubsetPrefix",
@@ -83,6 +90,7 @@ __all__ = [
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",
+    "simplicial_set_quotient",
     "simplicial_set_skeleton",
     "simplicial_subset",
     "standard_simplex",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from math import comb
+
 from pydantic import ValidationError
 
 from jacobian._execution import request_checkpoint
@@ -20,6 +21,7 @@ from jacobian.math.combinatorics.semistandard_tableaux._models import (
     FixedContentCountResult,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
     IntegerPartition,
     TableauContent,
 )
@@ -123,6 +125,21 @@ def fixed_content_count(
         partition = partition.partition
     elif content is None:
         raise TypeError("content is required when passing a partition")
+    # Check exact carrier and container shapes before dumping or traversing a
+    # potentially forged model_construct() instance. These length checks are O(1).
+    if (
+        type(partition) is not IntegerPartition
+        or type(partition.parts) is not tuple
+        or len(partition.parts) > MAX_PARTITION_SIZE
+        or type(content) is not TableauContent
+        or type(content.terms) is not tuple
+        or len(content.terms) > MAX_PARTITION_SIZE
+    ):
+        raise OperationDomainValidationError(
+            location=(),
+            code="semistandard_tableaux.fixed_content_input_invalid",
+            message="partition and content must be canonical bounded values",
+        )
     try:
         partition = IntegerPartition.model_validate(partition.model_dump())
         content = TableauContent.model_validate(content.model_dump())

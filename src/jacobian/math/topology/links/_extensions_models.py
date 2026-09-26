@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -399,6 +400,38 @@ class BraidProductRequest(StrictModel):
 
     left: BraidWord
     right: BraidWord
+
+
+class BraidArtinActionResult(StrictModel):
+    """Exact free-group images of the Artin automorphism of a braid."""
+
+    word: BraidWord
+    generator_images: tuple[FiniteGroupWord, ...] = Field(
+        min_length=1, max_length=MAX_BRAID_STRANDS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_free_group_endomorphism(self) -> Self:
+        if len(self.generator_images) != self.word.strand_count:
+            raise _validation_error(
+                "artin_action_generator_axis",
+                "the action must provide one image for each braid strand generator",
+            )
+        for image in self.generator_images:
+            if any(letter.generator >= self.word.strand_count for letter in image.letters):
+                raise _validation_error(
+                    "artin_action_generator_index",
+                    "every image letter must name a generator on the retained axis",
+                )
+            if any(
+                left.generator == right.generator and left.exponent == -right.exponent
+                for left, right in pairwise(image.letters)
+            ):
+                raise _validation_error(
+                    "artin_action_not_reduced",
+                    "each free-group image must be freely reduced",
+                )
+        return self
 
 
 class BraidPermutationResult(StrictModel):

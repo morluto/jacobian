@@ -3,7 +3,11 @@
 from pathlib import Path
 
 import pytest
-from tools.marker_test_roots import SEMANTIC_MARKERS, marker_test_roots
+from tools.marker_test_roots import (
+    SEMANTIC_MARKERS,
+    marker_test_root_index,
+    marker_test_roots,
+)
 
 
 def test_marker_roots_find_decorators_module_marks_and_parameter_marks(
@@ -29,17 +33,27 @@ def test_marker_roots_find_decorators_module_marks_and_parameter_marks(
     unmarked = tests / "test_unmarked.py"
     unmarked.write_text("def test_case(): pass\n", encoding="utf-8")
 
+    index = marker_test_root_index(tests)
+    assert index.test_files == tuple(
+        sorted((decorated, module_marked, parameter_marked, unmarked))
+    )
+    assert index.roots_by_marker == {
+        "property": (decorated,),
+        "exhaustive": (module_marked,),
+        "scale": (parameter_marked,),
+    }
     assert marker_test_roots(tests, "property") == (decorated,)
     assert marker_test_roots(tests, "exhaustive") == (module_marked,)
     assert marker_test_roots(tests, "scale") == (parameter_marked,)
 
 
 def test_live_semantic_markers_have_narrow_owners() -> None:
+    index = marker_test_root_index(Path("tests"))
     for marker in SEMANTIC_MARKERS:
-        roots = marker_test_roots(Path("tests"), marker)
+        roots = index.roots_by_marker[marker]
         assert roots
         assert all(path.name.startswith("test_") for path in roots)
-        assert len(roots) < len(tuple(Path("tests").rglob("test_*.py")))
+        assert len(roots) < len(index.test_files)
 
 
 def test_unknown_semantic_marker_is_rejected(tmp_path: Path) -> None:

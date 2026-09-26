@@ -24,6 +24,9 @@ from jacobian.math.polynomials._mahler_tools import (
     INTEGER_POLYNOMIAL_PROFILE_OPERATIONS,
 )
 from jacobian.math.polynomials._multiply_ops import POLYNOMIAL_MULTIPLY_OPERATION
+from jacobian.math.polynomials._quartic_resolvent_tools import (
+    QUARTIC_CUBIC_RESOLVENT_OPERATION,
+)
 
 __all__ = ["TOOLS"]
 
@@ -38,5 +41,6 @@ TOOLS: MathTools = (
     *INTEGER_POLYNOMIAL_OPERATIONS,
     *INTEGER_POLYNOMIAL_PROFILE_OPERATIONS,
     POLYNOMIAL_MULTIPLY_OPERATION,
+    QUARTIC_CUBIC_RESOLVENT_OPERATION,
     RATIONAL_LAURENT_MULTIPLY_OPERATION,
 )

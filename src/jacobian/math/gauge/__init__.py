@@ -4,8 +4,11 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeComplex,
     FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeContribution,
+    FiniteGroupGaugeCurvatureRequest,
+    FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeFace,
+    FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
@@ -29,7 +32,10 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyResult,
     SU2WilsonTraceResult,
 )
-from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
+from jacobian.math.gauge.finite_group import (
+    finite_group_gauge_curvature,
+    finite_group_gauge_holonomy,
+)
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
 )
@@ -49,8 +55,11 @@ __all__ = [
     "FiniteGroupGaugeComplex",
     "FiniteGroupGaugeComplexRequest",
     "FiniteGroupGaugeContribution",
+    "FiniteGroupGaugeCurvatureRequest",
+    "FiniteGroupGaugeCurvatureResult",
     "FiniteGroupGaugeEdgeLabel",
     "FiniteGroupGaugeFace",
+    "FiniteGroupGaugeFaceCurvature",
     "FiniteGroupGaugeField",
     "FiniteGroupGaugeHolonomyResult",
     "GaugeEdge",
@@ -72,6 +81,7 @@ __all__ = [
     "SU2HolonomyResult",
     "SU2WilsonTraceResult",
     "construct_finite_group_gauge_complex",
+    "finite_group_gauge_curvature",
     "finite_group_gauge_holonomy",
     "gauge_transform",
     "path_holonomy",

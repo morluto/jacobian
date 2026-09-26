@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-from typing import NoReturn, cast
+from typing import NoReturn
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeComplex,
     FiniteGroupGaugeContribution,
-    FiniteGroupGaugeEdgeLabel,
+    FiniteGroupGaugeCurvatureRequest,
+    FiniteGroupGaugeCurvatureResult,
+    FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
@@ -40,32 +43,25 @@ def _is_gauge_label(value: object) -> bool:
 
 
 def _admit_group(
-    group: FiniteGroupTable, *, location: str = "field"
+    group: FiniteGroupTable,
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...], int, int]:
-    table = getattr(group, "multiplication", None)
-    inverse = getattr(group, "inverse", None)
-    identity = getattr(group, "identity", None)
-    if (
-        not isinstance(table, tuple)
-        or not isinstance(inverse, tuple)
-        or not 1 <= len(table) <= 24
-        or len(inverse) != len(table)
-    ):
+    table, inverse, identity = group.multiplication, group.inverse, group.identity
+    order = len(table) if isinstance(table, tuple) else 0
+    if not 1 <= order <= 24 or not isinstance(inverse, tuple) or len(inverse) != order:
         _reject(
-            location,
+            "field",
             "lattice_gauge.finite_group.table_shape",
             "finite group table is malformed",
         )
-    order = len(table)
     if any(not isinstance(row, tuple) or len(row) != order for row in table):
         _reject(
-            location,
+            "field",
             "lattice_gauge.finite_group.table_shape",
             "finite group table must be square",
         )
     if type(identity) is not int or not 0 <= identity < order:
         _reject(
-            location,
+            "field",
             "lattice_gauge.finite_group.identity",
             "group identity index is malformed",
         )
@@ -73,7 +69,7 @@ def _admit_group(
         type(x) is not int or not 0 <= x < order for row in table for x in row
     ) or any(type(x) is not int or not 0 <= x < order for x in inverse):
         _reject(
-            location,
+            "field",
             "lattice_gauge.finite_group.table_index",
             "table entries and inverses must index the group",
         )
@@ -82,19 +78,19 @@ def _admit_group(
         for i in range(order)
     ):
         _reject(
-            location,
+            "field",
             "lattice_gauge.finite_group.inverse_law",
             "inverse map must give two-sided inverses",
         )
     if any(table[identity][i] != i or table[i][identity] != i for i in range(order)):
         _reject(
-            location,
+            "field",
             "lattice_gauge.finite_group.identity_law",
             "identity index must be two-sided",
         )
     if order**3 > MAX_FINITE_GROUP_GAUGE_WORK:
         raise OperationResourceAdmissionError(
-            location=(location,),
+            location=("field",),
             code="lattice_gauge.finite_group.work_bound",
             message="group-law admission exceeds the work bound",
         )
@@ -103,25 +99,18 @@ def _admit_group(
             for c in range(order):
                 if table[table[a][b]][c] != table[a][table[b][c]]:
                     _reject(
-                        location,
+                        "field",
                         "lattice_gauge.finite_group.associativity",
                         "multiplication table must be associative",
                     )
     return table, inverse, identity, order
 
 
-def _admit_lattice(
-    field: FiniteGroupGaugeField,
-) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...]]:
-    lattice = getattr(field, "lattice", None)
-    if not isinstance(lattice, GaugeLattice):
-        _reject(
-            "field",
-            "lattice_gauge.finite_group.lattice",
-            "field lattice must be a typed gauge lattice",
-        )
-    vertices = getattr(lattice, "vertices", None)
-    edges = getattr(lattice, "edges", None)
+def _admit_field(
+    field: FiniteGroupGaugeField, group: FiniteGroupTable, order: int
+) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], dict[str, int]]:
+    lattice = field.lattice
+    vertices, edges, values = lattice.vertices, lattice.edges, field.edge_values
     if (
         not isinstance(vertices, tuple)
         or not vertices
@@ -137,64 +126,36 @@ def _admit_lattice(
     if (
         not isinstance(edges, tuple)
         or not 1 <= len(edges) <= 128
-        or any(not isinstance(edge, GaugeEdge) for edge in edges)
+        or any(not isinstance(e, GaugeEdge) for e in edges)
     ):
         _reject(
             "field", "lattice_gauge.finite_group.lattice", "lattice edges are malformed"
         )
-    _require_canonical_edges(edges, vertices)
-    return vertices, edges
-
-
-def _require_canonical_edges(
-    edges: tuple[GaugeEdge, ...], vertices: tuple[str, ...]
-) -> None:
-    edge_ids: list[str] = []
-    for edge in edges:
-        edge_id = getattr(edge, "edge_id", None)
-        tail = getattr(edge, "tail", None)
-        head = getattr(edge, "head", None)
-        if (
-            not _is_gauge_label(edge_id)
-            or not _is_gauge_label(tail)
-            or not _is_gauge_label(head)
-        ):
-            _reject(
-                "field",
-                "lattice_gauge.finite_group.lattice",
-                "edge identifiers and endpoints must be bounded labels",
-            )
-        edge_ids.append(cast(str, edge_id))
-    ordered_ids = tuple(edge_ids)
-    if tuple(sorted(ordered_ids)) != ordered_ids or len(set(ordered_ids)) != len(
-        ordered_ids
+    edge_ids = tuple(e.edge_id for e in edges)
+    if any(
+        not _is_gauge_label(edge.edge_id)
+        or not _is_gauge_label(edge.tail)
+        or not _is_gauge_label(edge.head)
+        for edge in edges
     ):
+        _reject(
+            "field",
+            "lattice_gauge.finite_group.lattice",
+            "edge identifiers and endpoints must be bounded labels",
+        )
+    if tuple(sorted(edge_ids)) != edge_ids or len(set(edge_ids)) != len(edge_ids):
         _reject(
             "field",
             "lattice_gauge.finite_group.lattice",
             "lattice edge identifiers must be unique and ordered",
         )
     vertex_set = set(vertices)
-    if any(
-        getattr(edge, "tail", None) not in vertex_set
-        or getattr(edge, "head", None) not in vertex_set
-        for edge in edges
-    ):
+    if any(e.tail not in vertex_set or e.head not in vertex_set for e in edges):
         _reject(
             "field",
             "lattice_gauge.finite_group.lattice",
             "edge endpoints must belong to the lattice",
         )
-
-
-def _admit_edge_values(
-    field: FiniteGroupGaugeField,
-    group: FiniteGroupTable,
-    order: int,
-    edges: tuple[GaugeEdge, ...],
-) -> dict[str, int]:
-    edge_ids = tuple(edge.edge_id for edge in edges)
-    values = getattr(field, "edge_values", None)
     if not isinstance(values, tuple) or len(values) != len(edges):
         _reject(
             "field",
@@ -203,56 +164,41 @@ def _admit_edge_values(
         )
     value_by_id = {}
     for item in values:
-        if not isinstance(item, FiniteGroupGaugeEdgeLabel):
+        if (
+            not hasattr(item, "edge_id")
+            or not hasattr(item, "value")
+            or not isinstance(item.value, FiniteGroupTableElement)
+        ):
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value",
                 "edge labels must be typed table indices",
             )
-        item_value = getattr(item, "value", None)
-        if not isinstance(item_value, FiniteGroupTableElement):
-            _reject(
-                "field",
-                "lattice_gauge.finite_group.edge_value",
-                "edge labels must be typed table indices",
-            )
-        if not _is_gauge_label(getattr(item, "edge_id", None)):
+        if not _is_gauge_label(item.edge_id):
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value",
                 "edge identifier must be a bounded label",
             )
-        if getattr(item_value, "group", None) != group:
+        if item.value.group != group:
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value_parent",
                 "edge element must use the field's exact group table",
             )
-        item_index = getattr(item_value, "index", None)
-        if type(item_index) is not int or not 0 <= item_index < order:
+        if type(item.value.index) is not int or not 0 <= item.value.index < order:
             _reject(
                 "field",
                 "lattice_gauge.finite_group.edge_value",
                 "edge value must index the bound group",
             )
-        value_by_id[item.edge_id] = item_index
+        value_by_id[item.edge_id] = item.value.index
     if set(value_by_id) != set(edge_ids) or len(value_by_id) != len(values):
         _reject(
             "field",
             "lattice_gauge.finite_group.edge_values",
             "field must label every lattice edge exactly once",
         )
-    return value_by_id
-
-
-def _admit_field(
-    field: FiniteGroupGaugeField, group: FiniteGroupTable, order: int
-) -> tuple[tuple[str, ...], tuple[GaugeEdge, ...], dict[str, int]]:
-    # Native callers can reach this kernel through ``model_construct`` and
-    # bypass the field validators, so re-admit the nested lattice and edge
-    # values before indexing them instead of leaking ``AttributeError``.
-    vertices, edges = _admit_lattice(field)
-    value_by_id = _admit_edge_values(field, group, order, edges)
     return vertices, edges, value_by_id
 
 
@@ -263,8 +209,7 @@ def _resolve_path(
     values: dict[str, int],
     inverse: tuple[int, ...],
 ) -> tuple[str, str, tuple[tuple[str, bool, int], ...]]:
-    steps = getattr(path, "steps", None)
-    basepoint = getattr(path, "basepoint", None)
+    steps = path.steps
     if not isinstance(steps, tuple) or len(steps) > 256:
         raise OperationResourceAdmissionError(
             location=("path",),
@@ -273,6 +218,7 @@ def _resolve_path(
         )
     edge_by_id = {edge.edge_id: edge for edge in edges}
     if not steps:
+        basepoint = path.basepoint
         if not _is_gauge_label(basepoint) or basepoint not in set(vertices):
             _reject(
                 "path",
@@ -283,21 +229,19 @@ def _resolve_path(
     cursor = start = None
     resolved = []
     for step in steps:
-        step_forward = getattr(step, "forward", None)
-        step_edge_id = getattr(step, "edge_id", None)
         if (
             not isinstance(step, GaugePathStep)
-            or type(step_forward) is not bool
-            or not _is_gauge_label(step_edge_id)
-            or step_edge_id not in edge_by_id
+            or type(step.forward) is not bool
+            or not _is_gauge_label(step.edge_id)
+            or step.edge_id not in edge_by_id
         ):
             _reject(
                 "path",
                 "lattice_gauge.finite_group.path_step",
                 "path step must name a lattice edge and orientation",
             )
-        edge = edge_by_id[step_edge_id]
-        tail, head = (edge.tail, edge.head) if step_forward else (edge.head, edge.tail)
+        edge = edge_by_id[step.edge_id]
+        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
         if cursor is not None and cursor != tail:
             _reject(
                 "path",
@@ -305,17 +249,11 @@ def _resolve_path(
                 "oriented path steps must chain head-to-tail",
             )
         if start is None:
-            if basepoint is not None and basepoint != tail:
-                _reject(
-                    "path",
-                    "lattice_gauge.finite_group.path_basepoint",
-                    "a supplied path basepoint must equal its first oriented vertex",
-                )
             start = tail
         cursor = head
-        index = values[step_edge_id]
+        index = values[step.edge_id]
         resolved.append(
-            (step_edge_id, step_forward, index if step_forward else inverse[index])
+            (step.edge_id, step.forward, index if step.forward else inverse[index])
         )
     if start is None or cursor is None:
         raise RuntimeError("admitted nonempty path produced no endpoints")
@@ -332,8 +270,7 @@ def finite_group_gauge_holonomy(
             "lattice_gauge.finite_group.request_type",
             "expected a finite-group gauge holonomy request",
         )
-    field = getattr(request, "field", None)
-    path = getattr(request, "path", None)
+    field, path = request.field, request.path
     if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
         path, OrientedGaugePath
     ):
@@ -342,7 +279,7 @@ def finite_group_gauge_holonomy(
             "lattice_gauge.finite_group.request_shape",
             "field and path must be typed values",
         )
-    group = getattr(field, "group", None)
+    group = field.group
     if not isinstance(group, FiniteGroupTable):
         _reject(
             "field",
@@ -351,7 +288,7 @@ def finite_group_gauge_holonomy(
         )
     table, inverse, identity, order = _admit_group(group)
     vertices, edges, values = _admit_field(field, group, order)
-    steps = getattr(path, "steps", None)
+    steps = path.steps
     if not isinstance(steps, tuple) or len(steps) > 256:
         raise OperationResourceAdmissionError(
             location=("path",),
@@ -365,10 +302,13 @@ def finite_group_gauge_holonomy(
     # constructing the contribution ledger.
     parent_copies = len(edges) + len(steps) + 2
     output_units = parent_copies * order**2 + len(edges) + len(vertices) + len(steps)
-    if (
-        work > MAX_FINITE_GROUP_GAUGE_WORK
-        or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS
-    ):
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.curvature_work_bound",
+            message="finite-group curvature work exceeds the admitted envelope",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="lattice_gauge.finite_group.output_bound",
@@ -393,4 +333,126 @@ def finite_group_gauge_holonomy(
         contributions=tuple(contributions),
         start=start,
         end=end,
+    )
+
+
+def finite_group_gauge_curvature(
+    request: FiniteGroupGaugeCurvatureRequest,
+) -> FiniteGroupGaugeCurvatureResult:
+    """Return ordered face holonomies and whether every face is flat.
+
+    Face curvature is the path-ordered product around each oriented attaching
+    walk. Reversing the face therefore takes the group inverse, including for
+    noncommutative groups. Flatness means every represented 2-cell has identity
+    boundary product; it makes no claim about cells absent from the complex.
+    """
+    if not isinstance(request, FiniteGroupGaugeCurvatureRequest):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_type",
+            "expected a finite-group gauge curvature request",
+        )
+    complex_value, field = request.complex, request.field
+    if not isinstance(complex_value, FiniteGroupGaugeComplex) or not isinstance(
+        field, FiniteGroupGaugeField
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_shape",
+            "complex and field must be typed values",
+        )
+    try:
+        complex_value = FiniteGroupGaugeComplex.model_validate(
+            complex_value.model_dump()
+        )
+        field = FiniteGroupGaugeField.model_validate(field.model_dump())
+    except (TypeError, ValueError):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_malformed",
+            "complex and field must satisfy their complete typed contracts",
+        )
+    # model_construct/copy can bypass required-field validation. Retrieve
+    # potentially absent attributes without allowing AttributeError to escape.
+    lattice = getattr(complex_value, "lattice", None)
+    group = getattr(complex_value, "group", None)
+    field_lattice = getattr(field, "lattice", None)
+    field_group = getattr(field, "group", None)
+    if (
+        not isinstance(lattice, GaugeLattice)
+        or not isinstance(field_lattice, GaugeLattice)
+        or not isinstance(group, FiniteGroupTable)
+        or not isinstance(field_group, FiniteGroupTable)
+        or lattice != field_lattice
+        or group != field_group
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_parent_mismatch",
+            "complex and field must share the exact lattice and group parent",
+        )
+    table, inverse, identity, order = _admit_group(group)
+    vertices, edges, values = _admit_field(field, group, order)
+    # The complex is caller-supplied; re-admit its faces at the consuming
+    # boundary rather than trusting constructor provenance.
+    from jacobian.math.gauge.finite_group_complex import _admit_faces, _admit_lattice
+
+    _, _, vertex_set, edge_by_id, _ = _admit_lattice(lattice)
+    faces = getattr(complex_value, "faces", None)
+    if not isinstance(faces, tuple):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_shape",
+            "complex faces must be a validated tuple",
+        )
+    _admit_faces(faces, vertex_set, edge_by_id)
+    total_steps = sum(len(face.boundary.steps) for face in faces)
+    work = (
+        order**3
+        + (len(edges) + 2) * order**2
+        + len(edges)
+        + total_steps
+        + len(complex_value.faces)
+    )
+    # Returned values retain both source parents, the field's edge-bound table
+    # elements, and one table-bound curvature element per face.
+    parent_copies = len(edges) + len(faces) + 3
+    output_units = (
+        parent_copies * order**2
+        + len(vertices)
+        + len(edges) * 4
+        + total_steps * 2
+        + len(faces) * 4
+    )
+    if (
+        work > MAX_FINITE_GROUP_GAUGE_WORK
+        or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.curvature_output_bound",
+            message="finite-group curvature result exceeds admitted work or output",
+        )
+    face_values = []
+    edge_by_id = {edge.edge_id: edge for edge in edges}
+    for face in faces:
+        product = identity
+        path = face.boundary
+        if path.steps:
+            for step in path.steps:
+                index = values[step.edge_id]
+                if not step.forward:
+                    index = inverse[index]
+                product = table[product][index]
+        face_values.append(
+            FiniteGroupGaugeFaceCurvature(
+                face_id=face.face_id,
+                value=FiniteGroupTableElement(group=group, index=product),
+            )
+        )
+    return FiniteGroupGaugeCurvatureResult.model_construct(
+        complex=complex_value,
+        field=field,
+        face_values=tuple(face_values),
+        flat=all(value.value.index == identity for value in face_values),
     )

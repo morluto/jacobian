@@ -29,9 +29,8 @@ parent. Backward traversal resolves through the parent's inverse map. A
 zero-step path returns the table identity at its named lattice vertex.
 
 The path convention is `h_0 = 1` and `h_i = h_{i-1} * U_i` in traversal
-order. This matters for noncommutative groups such as S3. This slice does not
-provide vertex gauge transformations, plaquette curvature, or Wilson traces
-for arbitrary table groups.
+order. This matters for noncommutative groups such as S3. Arbitrary table groups
+do not yet have a public vertex gauge transformation or Wilson character.
 
 `lattice_gauge.finite_group.complex.construct.compute` supplies the missing
 source-bound 2-cell carrier for that path operation. Each face stores an
@@ -48,6 +47,17 @@ Construction admits at most 128 faces, 256 steps per face, 4096 aggregate
 steps, and a conservative serialized result estimate below two megabytes before
 returning the value. The value records topology only: no curvature product,
 flatness conclusion, or Wilson observable is computed by this constructor.
+
+`lattice_gauge.finite_group.curvature.compute` consumes that complex together
+with an edge field over the same exact lattice and table parent. It returns the
+ordered group product for every face boundary, plus `flat`, which is true exactly
+when every represented face product is the group identity. Reversing a face
+inverts its curvature; a constant attaching walk has identity curvature, while
+a nonempty backtracking walk is evaluated step by step. Under the usual lattice
+gauge law `U_{u→v} ↦ g_u U_{u→v} g_v^{-1}`, each closed-face product is conjugated
+at its starting vertex, so the identity/flatness predicate is gauge invariant
+([Philipsen, *QCD on the Lattice*](https://link.springer.com/chapter/10.1007/978-3-030-38207-0_5)).
+Flatness applies only to faces present in the supplied finite complex.
 
 ## Identity cases
 

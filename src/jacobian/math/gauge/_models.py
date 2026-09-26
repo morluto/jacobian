@@ -471,6 +471,72 @@ class FiniteGroupGaugeComplexRequest(StrictModel):
         return _json_arrays_to_tuples(value)
 
 
+class FiniteGroupGaugeCurvatureRequest(StrictModel):
+    """Evaluate every oriented 2-cell boundary in a source-bound complex."""
+
+    complex: FiniteGroupGaugeComplex
+    field: FiniteGroupGaugeField
+
+
+class FiniteGroupGaugeFaceCurvature(StrictModel):
+    """The ordered boundary product attached to one oriented face."""
+
+    face_id: GaugeLabel
+    value: FiniteGroupTableElement
+
+
+class FiniteGroupGaugeCurvatureResult(StrictModel):
+    """Face holonomies and flatness, bound to their complex and edge field."""
+
+    complex: FiniteGroupGaugeComplex
+    field: FiniteGroupGaugeField
+    face_values: tuple[FiniteGroupGaugeFaceCurvature, ...] = Field(
+        min_length=1, max_length=MAX_GAUGE_FACES
+    )
+    flat: StrictBool
+
+    @model_validator(mode="after")
+    def require_source_binding(self) -> Self:
+        try:
+            complex_value = FiniteGroupGaugeComplex.model_validate(
+                self.complex.model_dump()
+            )
+            field_value = FiniteGroupGaugeField.model_validate(
+                self.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "curvature_binding", "curvature sources must satisfy their contracts"
+            ) from error
+        if (
+            complex_value.lattice != field_value.lattice
+            or complex_value.group != field_value.group
+            or not isinstance(self.face_values, tuple)
+            or len(self.face_values) != len(complex_value.faces)
+        ):
+            raise _validation_error(
+                "curvature_binding", "curvature sources must share parents"
+            )
+        identity = complex_value.group.identity
+        is_flat = True
+        for face, value in zip(complex_value.faces, self.face_values, strict=True):
+            if (
+                not isinstance(value, FiniteGroupGaugeFaceCurvature)
+                or value.face_id != face.face_id
+                or not isinstance(value.value, FiniteGroupTableElement)
+                or value.value.group != complex_value.group
+            ):
+                raise _validation_error(
+                    "curvature_binding", "curvature entries must bind to source faces"
+                )
+            is_flat = is_flat and value.value.index == identity
+        if self.flat is not is_flat:
+            raise _validation_error(
+                "curvature_flat", "flatness must match the returned face values"
+            )
+        return self
+
+
 class FiniteGroupGaugeHolonomyRequest(StrictModel):
     field: FiniteGroupGaugeField
     path: OrientedGaugePath

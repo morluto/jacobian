@@ -26,6 +26,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_multiply,
     function_field_genus,
     function_field_rational_places_degree_bounded,
+    function_field_place_uniformizer,
     function_field_riemann_roch_space,
 )
 
@@ -53,5 +54,6 @@ __all__ = [
     "function_field_element_multiply",
     "function_field_genus",
     "function_field_rational_places_degree_bounded",
+    "function_field_place_uniformizer",
     "function_field_riemann_roch_space",
 ]

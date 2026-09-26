@@ -74,6 +74,7 @@ from jacobian.math.function_fields._models import (
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
+    FunctionFieldUniformizerResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -1316,6 +1317,94 @@ def function_field_place_valuation(
     return _rf_valuation(coordinate, place)
 
 
+def function_field_place_uniformizer(
+    place: FunctionFieldPlace,
+) -> FunctionFieldUniformizerResult:
+    """Return an exact element of valuation one at a rational-field place."""
+
+    place = _canonical_place(place)
+    field = _admit_rational_place_field(place.field)
+    prime_polynomial = place.prime_polynomial
+    if place.kind == "FINITE":
+        if prime_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
+        prime_polynomial = _monic_polynomial(prime_polynomial)
+    place = FunctionFieldPlace.model_construct(
+        field=field,
+        kind=place.kind,
+        prime_polynomial=prime_polynomial,
+        degree=place.degree,
+    )
+    # These are the complete possible result coefficients. Admit transport
+    # size before irreducibility invokes polynomial factorization.
+    if place.kind == "FINITE":
+        assert prime_polynomial is not None
+        numerator = prime_polynomial
+        denominator = PrimeFieldPolynomial(
+            characteristic=field.characteristic, coefficients=(1,)
+        )
+    else:
+        numerator = PrimeFieldPolynomial(
+            characteristic=field.characteristic, coefficients=(1,)
+        )
+        denominator = PrimeFieldPolynomial(
+            characteristic=field.characteristic, coefficients=(0, 1)
+        )
+    output_template = {
+        "place": place.model_dump(mode="json"),
+        "uniformizer": {
+            "field": field.model_dump(mode="json"),
+            "coordinates": [
+                {
+                    "numerator": numerator.model_dump(mode="json"),
+                    "denominator": denominator.model_dump(mode="json"),
+                }
+            ],
+        },
+    }
+    if len(encode_strict_json(output_template)) > MAX_ELEMENT_VALUE_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("place",),
+            code="function_field.uniformizer_output_exceeds_envelope",
+            message=(
+                "uniformizer output exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte envelope"
+            ),
+        )
+    if place.kind == "FINITE":
+        assert prime_polynomial is not None
+        estimated_work = prime_polynomial.degree**3 * max(
+            1, field.characteristic.bit_length()
+        )
+        if estimated_work > MAX_RATIONAL_PLACE_WORK:
+            raise OperationResourceAdmissionError(
+                location=("place", "prime_polynomial"),
+                code="function_field.place_factor_work_exceeds_envelope",
+                message=(
+                    "place irreducibility work exceeds the "
+                    f"{MAX_RATIONAL_PLACE_WORK} unit envelope"
+                ),
+            )
+        factors = _factor_polynomial(prime_polynomial)
+        if factors != ((prime_polynomial, 1),):
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.place_not_prime",
+                message="finite place polynomial must be irreducible",
+            )
+    uniformizer = FiniteFunctionFieldElement(
+        field=field,
+        coordinates=(
+            PrimeFieldRationalFunction(numerator=numerator, denominator=denominator),
+        ),
+    )
+    return FunctionFieldUniformizerResult(place=place, uniformizer=uniformizer)
+
+
 def function_field_place_residue(
     place: FunctionFieldPlace, element: FiniteFunctionFieldElement
 ) -> FunctionFieldResidueResult:
@@ -2215,6 +2304,7 @@ __all__ = [
     "function_field_element_inverse",
     "function_field_element_multiply",
     "function_field_genus",
+    "function_field_place_uniformizer",
     "function_field_place_valuation",
     "function_field_principal_divisor",
     "function_field_rational_places_degree_bounded",

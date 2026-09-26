@@ -31,6 +31,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
+    FunctionFieldUniformizerRequest,
+    FunctionFieldUniformizerResult,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -45,6 +47,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_multiply,
     function_field_genus,
     function_field_place_residue,
+    function_field_place_uniformizer,
     function_field_place_valuation,
     function_field_principal_divisor,
     function_field_rational_places_degree_bounded,
@@ -183,6 +186,12 @@ def _run_place_valuation(
         element=request.element,
         valuation=function_field_place_valuation(request.place, request.element),
     )
+
+
+def _run_place_uniformizer(
+    request: FunctionFieldUniformizerRequest,
+) -> FunctionFieldUniformizerResult:
+    return function_field_place_uniformizer(request.place)
 
 
 def _run_place_residue(
@@ -448,6 +457,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "degree": 1,
                     },
                     "element": _RATIONAL_X,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.place.uniformizer.compute",
+        title="Compute a place uniformizer",
+        description=(
+            "Return an exact element of valuation one at a finite or infinite "
+            "place of the rational function field GF(p)(x)."
+        ),
+        request_type=FunctionFieldUniformizerRequest,
+        result_type=FunctionFieldUniformizerResult,
+        run=_run_place_uniformizer,
+        tags=("function-field", "place", "uniformizer", "exact"),
+        examples=(
+            OperationExample(
+                name="uniformizer_at_x_zero",
+                description="The polynomial x has valuation one at the finite place (x).",
+                input={
+                    "place": {
+                        "field": _RATIONAL_FIELD,
+                        "kind": "FINITE",
+                        "prime_polynomial": {
+                            "characteristic": 5,
+                            "coefficients": [0, 1],
+                        },
+                        "degree": 1,
+                    }
+                },
+            ),
+            OperationExample(
+                name="uniformizer_at_infinity",
+                description="The rational function 1/x has valuation one at infinity.",
+                input={
+                    "place": {"field": _RATIONAL_FIELD, "kind": "INFINITE", "degree": 1}
                 },
             ),
         ),

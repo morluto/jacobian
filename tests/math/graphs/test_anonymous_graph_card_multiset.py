@@ -70,27 +70,29 @@ def test_serialized_result_round_trips_and_preserves_canonical_identity() -> Non
     assert restored == result
 
 
-def test_deserialization_rejects_noncanonical_representative() -> None:
-    with pytest.raises(ValidationError, match="minimal under all vertex permutations"):
-        AnonymousGraphCardMultiset.model_validate(
-            {
-                "card_order": 3,
-                "classes": [
-                    {
-                        "representative": {
-                            "vertices": ["v00", "v01", "v02"],
-                            "edges": [["v00", "v01"]],
-                        },
-                        "multiplicity": 1,
-                    }
-                ],
-            }
-        )
+def test_deserialization_accepts_structural_rows_without_claiming_canonicality() -> (
+    None
+):
+    value = AnonymousGraphCardMultiset.model_validate(
+        {
+            "card_order": 3,
+            "classes": [
+                {
+                    "representative": {
+                        "vertices": ["v00", "v01", "v02"],
+                        "edges": [["v00", "v01"]],
+                    },
+                    "multiplicity": 1,
+                }
+            ],
+        }
+    )
+    assert value.classes[0].representative.edges == (("v00", "v01"),)
 
 
-def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
+def test_deserialization_rejects_duplicate_representative_rows() -> None:
     one_edge = {"vertices": ["v00", "v01", "v02"], "edges": [["v01", "v02"]]}
-    with pytest.raises(ValidationError, match="classes must be unique"):
+    with pytest.raises(ValidationError, match="representative rows must be unique"):
         AnonymousGraphCardMultiset.model_validate(
             {
                 "card_order": 3,
@@ -102,7 +104,7 @@ def test_deserialization_rejects_duplicate_isomorphism_classes() -> None:
         )
 
 
-def test_deserialization_admits_its_exact_canonicalization_bound(monkeypatch) -> None:
+def test_deserialization_does_not_run_permutation_canonicalization(monkeypatch) -> None:
     output = anonymous_graph_card_multiset(
         AnonymousGraphCardMultisetRequest(
             card_order=4,
@@ -110,16 +112,17 @@ def test_deserialization_admits_its_exact_canonicalization_bound(monkeypatch) ->
         )
     )
     payload = output.model_dump(mode="python")
-    exact_work = factorial(4) * (4 + 2 * comb(4, 2))
-    monkeypatch.setattr(
-        deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work
-    )
+    original = deck_models._canonical_card_edges
+    calls = 0
+
+    def count_calls(vertices, edges):
+        nonlocal calls
+        calls += 1
+        return original(vertices, edges)
+
+    monkeypatch.setattr(deck_models, "_canonical_card_edges", count_calls)
     assert AnonymousGraphCardMultiset.model_validate(payload) == output
-    monkeypatch.setattr(
-        deck_models, "MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK", exact_work - 1
-    )
-    with pytest.raises(ValidationError, match="bounded permutation work"):
-        AnonymousGraphCardMultiset.model_validate(payload)
+    assert calls == 0
 
 
 def test_mixed_card_orders_are_rejected() -> None:
@@ -237,8 +240,9 @@ def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
             }
         ],
     }
-    with pytest.raises(ValidationError, match="bounded permutation work"):
-        AnonymousGraphCardMultiset.model_validate(payload)
+    # Value decoding only checks bounded structure. Operations that compare
+    # isomorphism classes perform their own combined canonicalization admission.
+    assert AnonymousGraphCardMultiset.model_validate(payload).card_order == 8
 
 
 def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -> None:

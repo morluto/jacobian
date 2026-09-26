@@ -24,6 +24,11 @@ admits per-card permutation canonicalization over the full source order.
 of one declared order and stores each exact graph-isomorphism class once with
 its positive multiplicity. Its canonical representatives make card relabeling
 irrelevant while preserving repeated-card counts. The empty multiset retains
+its declared order. Deserialization checks the fixed axis, graph-edge structure,
+row ordering, and multiplicity bounds; it does not prove that each supplied row
+is a permutation-minimal representative or that different rows are
+nonisomorphic. The degree invariant profile uses only graph degrees, so it does
+not require permutation canonicalization.
 its declared order. The native
 `anonymous_graph_card_multiset_equal(request)` function compares two such
 values by declared order, canonical classes, and exact multiplicities; it

@@ -39,8 +39,8 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.operations import (
     _edge_deck_isomorphism_profile_from_admitted,
-    _profile_from_admitted_multiset,
     _vertex_deck_isomorphism_profile_from_admitted,
+    anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
     edge_deletion_family,
     edge_unlabelled_deck,
@@ -107,9 +107,7 @@ def _run_edge_isomorphism_profile(
 def _run_anonymous_card_degree_profile(
     request: AnonymousCardDegreeProfileRequest,
 ) -> AnonymousCardDegreeProfile:
-    # The request's before-validator admits the combined envelope before nested
-    # card parsing; that parser then establishes canonical form exactly once.
-    return _profile_from_admitted_multiset(request.multiset)
+    return anonymous_card_degree_profile(request)
 
 
 
@@ -142,8 +140,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graph.deck.card_invariant_profile.compute",
         title="Profile anonymous graph cards by degree multiset",
         description=(
-            "Group the degree multisets of canonical anonymous graph-card "
-            "representatives, summing each class's exact positive multiplicity. "
+            "Group the degree multisets of the supplied anonymous graph-card "
+            "representatives, summing each row's exact positive multiplicity. "
             "Retain the declared card order, including for an empty input. This "
             "is an invariant profile of the supplied cards; it does not assert "
             "that they form a realizable graph deck or identify a source."
@@ -162,8 +160,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="empty_and_edge_card_profile",
                 description=(
                     "Count the degree multisets of an empty three-vertex card and "
-                    "two copies of a one-edge card; all representatives must be "
-                    "canonical cards of the declared order three."
+                    "two copies of a one-edge card."
                 ),
                 input={
                     "multiset": {

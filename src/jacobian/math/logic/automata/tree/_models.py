@@ -676,6 +676,19 @@ class TreeLanguageProfile(StrictModel):
             raise _validation_error("language_profile_finals", "reachable final states must be exactly the reachable accepting states")
         if tuple(witness.state for witness in self.witnesses) != expected_finals:
             raise _validation_error("language_profile_witnesses", "one witness must be supplied for every reachable final state")
+        # Deserialized profiles are untrusted: every alleged witness must be a
+        # ground tree over this automaton's ranked alphabet.
+        for witness in self.witnesses:
+            stack = [(witness.tree, 1)]
+            while stack:
+                node, depth = stack.pop()
+                if depth > MAX_RUN_TREE_DEPTH:
+                    raise _validation_error("language_profile_witness_depth", "witness exceeds the ranked-tree depth bound")
+                if node.symbol >= len(self.automaton.arity):
+                    raise _validation_error("language_profile_witness_symbol", "witness symbol is outside the automaton alphabet")
+                if len(node.children) != self.automaton.arity[node.symbol]:
+                    raise _validation_error("language_profile_witness_arity", "witness node arity does not match the automaton alphabet")
+                stack.extend((child, depth + 1) for child in node.children)
         if self.empty != (not expected_finals):
             raise _validation_error("language_profile_empty", "empty must indicate whether any final state is reachable")
         return self

@@ -1,4 +1,10 @@
-from jacobian.math.logic.automata.tree._models import TreeLanguageProfileRequest
+import pytest
+from pydantic import ValidationError
+
+from jacobian.math.logic.automata.tree._models import (
+    TreeLanguageProfile,
+    TreeLanguageProfileRequest,
+)
 from jacobian.math.logic.automata.tree.operations import (
     accepted_tree_count,
     run_tree_automaton,
@@ -52,6 +58,22 @@ def test_language_profile_identifies_empty_language_without_tree_enumeration():
     assert profile.reachable_final_states == ()
     assert profile.witnesses == ()
     assert profile.empty is True
+
+
+def test_deserialized_profile_rejects_witness_outside_ranked_alphabet():
+    machine = BottomUpTreeAutomaton(
+        state_count=1,
+        arity=(0,),
+        transitions=(TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),),
+        final_states=(0,),
+    )
+    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    payload = profile.model_dump()
+    payload["witnesses"][0]["tree"]["symbol"] = 1
+
+    with pytest.raises(ValidationError) as error:
+        TreeLanguageProfile.model_validate(payload)
+    assert error.value.errors()[0]["type"] == "tree_automata.language_profile_witness_symbol"
 
 
 def test_nondeterministic_runs_do_not_change_language_profile_or_tree_count():

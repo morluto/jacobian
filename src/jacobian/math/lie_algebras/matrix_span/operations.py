@@ -89,12 +89,19 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_shape",
             message="matrix entries must be canonical rational scalars",
         )
-    input_digits = max(
-        max(decimal_digit_width(entry.num), decimal_digit_width(entry.den))
+    input_numerator_growth = max(
+        decimal_digit_width(entry.num) - 1
         for matrix in matrices
         for row in matrix.entries
         for entry in row
     )
+    input_denominator_growth = max(
+        decimal_digit_width(entry.den) - 1
+        for matrix in matrices
+        for row in matrix.entries
+        for entry in row
+    )
+    input_digits = max(input_numerator_growth, input_denominator_growth) + 1
     if input_digits > 64:
         raise OperationResourceAdmissionError(
             location=("matrices",),
@@ -102,24 +109,62 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             message="input matrix entries are limited to 64 decimal digits",
         )
     pairs = dimension * (dimension - 1) // 2
-    # Bound products, sums, exact row reduction and coordinate solving before
-    # any matrix multiplication or RREF expansion. Cramer's rule gives a
-    # conservative determinant-height ceiling for the d by d pivot system.
-    # A sum of 2*order rational products may require a product of their
-    # denominators; charge that full rational-height growth, not integer growth.
-    commutator_digits = 2 * order * input_digits + decimal_digit_width(2 * order) + 2
-    determinant_digits = (
-        dimension * dimension * input_digits
-        + decimal_digit_width(factorial(dimension))
-        + 2
+    # Bound rational products and sums before matrix expansion. Each
+    # commutator entry sums 2*order products; unrelated product denominators
+    # are safely charged as their full product. Determinant bounds then charge
+    # every permutation term and its common denominator in the pivot systems.
+    product_count = 2 * order
+    commutator_denominator_digits = (
+        1 + product_count * 2 * input_denominator_growth
     )
-    replacement_digits = (
-        dimension * (dimension - 1) * input_digits
-        + dimension * commutator_digits
-        + decimal_digit_width(factorial(dimension))
-        + 2
+    commutator_numerator_digits = (
+        1
+        + 2 * input_numerator_growth
+        + (product_count - 1) * 2 * input_denominator_growth
+        + decimal_digit_width(product_count)
     )
-    coordinate_digits = determinant_digits + replacement_digits + 2 if pairs else 1
+    commutator_digits = max(
+        commutator_numerator_digits, commutator_denominator_digits
+    )
+    determinant_terms = factorial(dimension)
+    pivot_term_denominator_growth = dimension * input_denominator_growth
+    determinant_denominator_digits = (
+        1 + determinant_terms * pivot_term_denominator_growth
+    )
+    determinant_numerator_digits = (
+        1
+        + dimension * input_numerator_growth
+        + (determinant_terms - 1) * pivot_term_denominator_growth
+        + decimal_digit_width(determinant_terms)
+    )
+    replacement_term_denominator_growth = (
+        (dimension - 1) * input_denominator_growth
+        + commutator_denominator_digits
+        - 1
+    )
+    replacement_term_numerator_growth = (
+        (dimension - 1) * input_numerator_growth
+        + commutator_numerator_digits
+        - 1
+    )
+    replacement_denominator_digits = (
+        1 + determinant_terms * replacement_term_denominator_growth
+    )
+    replacement_numerator_digits = (
+        1
+        + replacement_term_numerator_growth
+        + (determinant_terms - 1) * replacement_term_denominator_growth
+        + decimal_digit_width(determinant_terms)
+    )
+    coordinate_digits = (
+        max(
+            replacement_numerator_digits + determinant_denominator_digits,
+            replacement_denominator_digits + determinant_numerator_digits,
+        )
+        + 1
+        if pairs
+        else 1
+    )
     # Output coefficients are rational coordinates in the pivot basis. Refuse
     # conservatively before any RREF or commutator expansion.
     if coordinate_digits > MAX_MATRIX_SPAN_RESULT_DIGITS:

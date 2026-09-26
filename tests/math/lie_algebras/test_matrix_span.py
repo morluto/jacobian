@@ -1,4 +1,5 @@
 from fractions import Fraction
+from itertools import combinations
 
 import pytest
 from pydantic import ValidationError
@@ -66,6 +67,36 @@ def test_sl2_matrix_span_constructs_induced_bracket_and_roundtrips() -> None:
             item.coefficient.as_fraction() * value for value in expected
         )
     assert LieMatrixSpanRealization.model_validate(result.model_dump()) == result
+
+
+def test_standard_m2_matrix_units_fit_the_four_dimensional_boundary() -> None:
+    units = (
+        ((1, 0), (0, 0)),
+        ((0, 1), (0, 0)),
+        ((0, 0), (1, 0)),
+        ((0, 0), (0, 1)),
+    )
+    result = lie_algebra_from_matrix_span(_request(*units))
+    assert result.algebra.basis == ("M0", "M1", "M2", "M3")
+    constants = {
+        (item.i, item.j, item.k): item.coefficient.as_fraction()
+        for item in result.algebra.structure_constants
+    }
+    for i, j in combinations(range(4), 2):
+        bracket = _oracle_bracket(units[i], units[j])
+        reconstructed = tuple(
+            sum(
+                (
+                    constants.get((i, j, k), Fraction(0))
+                    * units[k][row][column]
+                    for k in range(4)
+                ),
+                Fraction(0),
+            )
+            for row in range(2)
+            for column in range(2)
+        )
+        assert reconstructed == bracket
 
 
 def test_nonclosed_or_dependent_span_is_rejected() -> None:

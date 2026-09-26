@@ -9,6 +9,7 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes.values import (
     ChainCoefficient,
     ChainComplexValue,
+    CoefficientRing,
     require_prime_field_admission,
 )
 from jacobian.math.topology.simplicial_sets import chains as chains_module
@@ -162,9 +163,19 @@ def _degenerate_indices(
 
 
 def degenerate_submodule(
-    request: DegenerateSubmoduleRequest,
+    request: DegenerateSubmoduleRequest | FiniteTruncatedSimplicialSet,
+    coefficient_ring: CoefficientRing = CoefficientRing.INTEGER,
+    prime: int | None = None,
 ) -> DegenerateSubmoduleResult:
     """Return the span of degenerate simplices as a based chain subcomplex."""
+    if isinstance(request, FiniteTruncatedSimplicialSet):
+        request = DegenerateSubmoduleRequest(
+            simplicial_set=request,
+            coefficient_ring=coefficient_ring,
+            prime=prime,
+        )
+    elif not isinstance(request, DegenerateSubmoduleRequest):
+        raise TypeError("request must be a degenerate-submodule request or simplicial set")
     source, basis_indices = _admit(request)
     ambient = chains_module._unnormalized_chains_from_checked_source(request, source)
     sizes = tuple(len(level) for level in ambient.simplex_bases)

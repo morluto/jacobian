@@ -24,6 +24,11 @@ from jacobian.math.topology.simplicial_sets.degeneracy import (
     DegeneracyProfileResult,
     degeneracy_profile,
 )
+from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
+    DegenerateSubmoduleRequest,
+    DegenerateSubmoduleResult,
+    degenerate_submodule,
+)
 from jacobian.math.topology.simplicial_sets.image import (
     SimplicialMapImageResult,
     simplicial_map_image,
@@ -58,6 +63,8 @@ from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_
 __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
+    "DegenerateSubmoduleRequest",
+    "DegenerateSubmoduleResult",
     "FiniteTruncatedSimplicialSet",
     "NormalizedHomologyResult",
     "SimplicialComplexPrefixResult",
@@ -72,6 +79,7 @@ __all__ = [
     "UnnormalizedChainsResult",
     "compose_simplicial_maps",
     "degeneracy_profile",
+    "degenerate_submodule",
     "from_tables",
     "identity_simplicial_map",
     "normalized_chains",

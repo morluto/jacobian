@@ -6,6 +6,17 @@ assignment, and finite matrix-power operations return exact results. These
 contracts concern formal tropical polynomials and finite computations; they do
 not imply functional equality or solve tropical systems.
 
+## Scalar duality
+
+`tropical.scalar.dual.compute` maps a scalar between min-plus and max-plus by
+ordinary negation. It maps `+infinity` to `-infinity` and conversely, preserves
+the exact `ZZ` or `QQ` base, and returns both source and target semiring
+identities with the mapped scalar. Applying the map twice recovers the original
+value. It accepts only the infinity licensed by the source semiring; the
+two-infinity completion and its indeterminate addition cases are not part of
+this contract. The isomorphism by negation is the standard min-plus/max-plus
+duality described in [From max-plus algebra to nonexpansive mappings](https://www.jeremy-gunawardena.com/papers/fmpatnm.pdf).
+
 ## Vector projectivization
 
 `tropical.vector.projectivize.compute` takes a vector with a unique labelled
@@ -69,3 +80,17 @@ profile; no infinite affine root is introduced. Crossover pairs and a
 conservative serialized-result byte estimate are admitted before exact
 intersection arithmetic. Root numerators and denominators have a dedicated
 16,384-digit limit, and the output is capped at 16 MiB.
+
+## Univariate split form
+
+`tropical.polynomial.univariate_split_form.compute` returns the consecutive
+support polynomial obtained by multiplying the linear factors determined by
+the finite roots and their slope-jump multiplicities. It preserves the
+induced piecewise-linear function, including when the source has inessential
+terms, but does not claim formal polynomial equality. An integer-coefficient
+input is promoted to `QQ` when its split coefficients require rational values.
+The operation admits consecutive support before root computation and checks
+exact scalar growth before each coefficient sum. The output retains at most
+512 terms, with each coefficient bounded by the shared 8,192-digit scalar
+envelope. This is the univariate split form described in the [combinatorial
+introduction to tropical geometry](https://math.berkeley.edu/~bernd/tropical/sec1.pdf).

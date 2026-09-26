@@ -67,6 +67,10 @@ def compute_scalar_power(request: ScalarPowerRequest) -> ScalarResult:
     )
 
 
+def compute_scalar_dual(request: ScalarDualRequest) -> ScalarDualResult:
+    return tropical_scalar_dual(request.scalar)
+
+
 def compute_vector_add(request: VectorBinaryRequest) -> VectorResult:
     return VectorResult._from_kernel(tropical_vector_add(request.left, request.right))
 
@@ -129,6 +133,12 @@ def compute_univariate_roots(
     request: UnivariateRootsRequest,
 ) -> TropicalUnivariateRootProfile:
     return tropical_polynomial_univariate_roots(request.polynomial)
+
+
+def compute_univariate_split_form(
+    request: UnivariateSplitFormRequest,
+) -> TropicalPolynomial:
+    return tropical_polynomial_univariate_split_form(request.polynomial)
 
 
 def compute_univariate_newton_polygon(
@@ -217,6 +227,26 @@ TOOLS: MathTools = (
                 name="power",
                 description="Compute 3 to tropical power 2 as 6; exponent must be nonnegative.",
                 input={"scalar": _finite(3), "exponent": 2},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.scalar.dual.compute",
+        title="Dualize a tropical scalar",
+        description=(
+            "Map a min-plus scalar to max-plus or max-plus to min-plus by exact "
+            "negation, swapping the licensed infinity and retaining explicit "
+            "source and target semirings."
+        ),
+        request_type=ScalarDualRequest,
+        result_type=ScalarDualResult,
+        run=compute_scalar_dual,
+        tags=("tropical", "semiring", "exact", "duality"),
+        examples=(
+            OperationExample(
+                name="dual_finite",
+                description="Map MIN_PLUS value 3 to MAX_PLUS value -3.",
+                input={"scalar": _finite(3)},
             ),
         ),
     ),
@@ -399,6 +429,46 @@ TOOLS: MathTools = (
                 name="min_plus_corner",
                 description="The min-plus polynomial min(0, 1+x) has root -1 with multiplicity one.",
                 input={"polynomial": _poly((((0,), 0), ((1,), 1)))},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.univariate_split_form.compute",
+        title="Compute a univariate tropical split form",
+        description=(
+            "Return the consecutive-support polynomial with the same exact "
+            "univariate tropical function. Its finite roots are encoded as "
+            "tropical linear factors with slope-jump multiplicity. An integer "
+            "input is promoted to QQ if rational roots require rational split "
+            "coefficients; the output is functionally equivalent, not formally "
+            "equal, to the source."
+        ),
+        request_type=UnivariateSplitFormRequest,
+        result_type=TropicalPolynomial,
+        run=compute_univariate_split_form,
+        tags=("tropical", "polynomial", "split-form", "exact"),
+        discovery_terms=(
+            "tropical polynomial split form",
+            "factor univariate tropical polynomial",
+            "tropical roots linear factors",
+        ),
+        examples=(
+            OperationExample(
+                name="rational_root_over_integer_input",
+                description=(
+                    "The min-plus polynomial min(0, 1+2x) has root -1/2; its "
+                    "split form is represented over QQ."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": {"convention": "MIN_PLUS", "base": "ZZ"},
+                        "variables": ["x"],
+                        "terms": [
+                            {"exponents": [0], "coefficient": _finite(0)},
+                            {"exponents": [2], "coefficient": _finite(1)},
+                        ],
+                    }
+                },
             ),
         ),
     ),
@@ -595,6 +665,7 @@ __all__ = [
     "compute_scalar_add",
     "compute_scalar_multiply",
     "compute_scalar_power",
+    "compute_univariate_split_form",
     "compute_vector_add",
     "compute_vector_projectivize",
     "compute_vector_scale",

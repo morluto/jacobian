@@ -108,12 +108,57 @@ class ScalarPowerRequest(StrictModel):
     exponent: int = Field(ge=0, le=256)
 
 
+class ScalarDualRequest(StrictModel):
+    scalar: TropicalScalar
+
+
 class ScalarResult(StrictModel):
     result: TropicalScalar
 
     @classmethod
     def _from_kernel(cls, result: TropicalScalar) -> Self:
         return cls.model_construct(result=result)
+
+
+class ScalarDualResult(StrictModel):
+    """A scalar carried across the explicit min-plus/max-plus dual map."""
+
+    source_semiring: TropicalSemiring
+    target_semiring: TropicalSemiring
+    source: TropicalScalar
+    result: TropicalScalar
+
+    @model_validator(mode="after")
+    def require_dual_parents(self) -> Self:
+        expected_convention = (
+            "MAX_PLUS" if self.source_semiring.convention == "MIN_PLUS" else "MIN_PLUS"
+        )
+        if (
+            self.source.semiring != self.source_semiring
+            or self.target_semiring.convention != expected_convention
+            or self.target_semiring.base != self.source_semiring.base
+            or self.result.semiring != self.target_semiring
+        ):
+            raise _validation_error(
+                "dual_semiring_binding",
+                "dual result must bind the source scalar to the opposite convention over the same base",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: TropicalScalar,
+        target_semiring: TropicalSemiring,
+        result: TropicalScalar,
+    ) -> Self:
+        return cls.model_construct(
+            source_semiring=source.semiring,
+            target_semiring=target_semiring,
+            source=source,
+            result=result,
+        )
 
 
 class VectorBinaryRequest(StrictModel):
@@ -374,6 +419,21 @@ class UnivariateRootsRequest(StrictModel):
     polynomial: TropicalPolynomial
 
 
+class UnivariateSplitFormRequest(StrictModel):
+    """Return a univariate polynomial with the same function in split form."""
+
+    polynomial: TropicalPolynomial
+
+    @model_validator(mode="after")
+    def require_univariate(self) -> Self:
+        if len(self.polynomial.variables) != 1:
+            raise _validation_error(
+                "split_form_univariate",
+                "split form requires exactly one polynomial variable",
+            )
+        return self
+
+
 class UnivariateNewtonPolygonRequest(StrictModel):
     """Request an exact coefficient-lifted hull for a univariate polynomial."""
 
@@ -574,12 +634,15 @@ __all__ = [
     "ScalarAddRequest",
     "ScalarAddResult",
     "ScalarBinaryRequest",
+    "ScalarDualRequest",
+    "ScalarDualResult",
     "ScalarPowerRequest",
     "ScalarResult",
     "TropicalActiveTerm",
     "UnivariateNewtonPolygonRequest",
     "UnivariateNewtonPolygonResult",
     "UnivariateRootsRequest",
+    "UnivariateSplitFormRequest",
     "VectorBinaryRequest",
     "VectorProjectivizeRequest",
     "VectorProjectivizeResult",

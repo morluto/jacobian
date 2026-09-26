@@ -20,6 +20,7 @@ from jacobian.math.polynomials.tropical._models import (
     AddBranch,
     InfinityCase,
     PolynomialActiveTermsResult,
+    ScalarDualResult,
     TropicalActiveTerm,
 )
 from jacobian.math.polynomials.tropical.values import (
@@ -364,6 +365,52 @@ def tropical_scalar_power(scalar: TropicalScalar, exponent: int) -> TropicalScal
         semiring=scalar.semiring,
         kind="FINITE",
         value=CanonicalRational.from_fraction(value.as_fraction() * exponent),
+    )
+
+
+def tropical_scalar_dual(scalar: TropicalScalar) -> ScalarDualResult:
+    """Map a scalar between min-plus and max-plus by exact negation.
+
+    Negation sends the licensed additive identity to the opposite licensed
+    infinity and preserves the multiplicative identity. The result binds both
+    semiring identities so callers cannot lose the change of parent.
+    """
+    if not isinstance(scalar, TropicalScalar):
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="tropical.scalar_type",
+            message="expected a tropical scalar",
+        )
+    _admit_scalar(scalar, scalar.semiring)
+    target_convention = (
+        "MAX_PLUS" if scalar.semiring.convention == "MIN_PLUS" else "MIN_PLUS"
+    )
+    target_semiring = TropicalSemiring(
+        convention=target_convention,
+        base=scalar.semiring.base,
+    )
+    if scalar.kind == "FINITE":
+        value = _finite_value(scalar)
+        result = TropicalScalar._from_kernel(
+            semiring=target_semiring,
+            kind="FINITE",
+            value=CanonicalRational.from_integer_ratio(-value.num, value.den),
+        )
+    else:
+        kind = (
+            "NEGATIVE_INFINITY"
+            if scalar.kind == "POSITIVE_INFINITY"
+            else "POSITIVE_INFINITY"
+        )
+        result = TropicalScalar._from_kernel(
+            semiring=target_semiring,
+            kind=kind,
+            value=None,
+        )
+    return ScalarDualResult._from_kernel(
+        source=scalar,
+        target_semiring=target_semiring,
+        result=result,
     )
 
 
@@ -885,6 +932,49 @@ def tropical_polynomial_active_terms(
     )
 
 
+def _univariate_root_values(poly: TropicalPolynomial) -> tuple[Fraction, ...]:
+    """Compute finite hull breakpoints for an already-admitted polynomial."""
+    term_count = len(poly.terms)
+    pair_count = term_count * (term_count - 1) // 2
+    if pair_count > MAX_TROPICAL_ROOT_CROSSOVER_PAIRS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms"),
+            code="tropical.root_crossover_work",
+            message="pairwise tropical root crossover work exceeds the admitted bound",
+        )
+    is_max = poly.semiring.convention == "MAX_PLUS"
+    lines = [
+        (
+            term.exponents[0],
+            (-1 if is_max else 1) * _finite_value(term.coefficient).as_fraction(),
+            (-1 if is_max else 1) * term.exponents[0],
+        )
+        for term in poly.terms
+    ]
+    lines.sort(key=lambda line: line[2], reverse=True)
+    hull: list[tuple[int, Fraction, int]] = []
+    starts: list[Fraction | None] = []
+    for line in lines:
+        crossing = None
+        while hull:
+            previous = hull[-1]
+            crossing = (previous[1] - line[1]) / (line[2] - previous[2])
+            if starts[-1] is None or crossing > starts[-1]:
+                break
+            hull.pop()
+            starts.pop()
+        if not hull:
+            crossing = None
+        hull.append(line)
+        starts.append(crossing)
+    return tuple(
+        start
+        for index, start in enumerate(starts[1:], start=1)
+        if start is not None
+        for _ in range(abs(hull[index][0] - hull[index - 1][0]))
+    )
+
+
 def tropical_polynomial_univariate_roots(
     poly: TropicalPolynomial,
 ) -> TropicalUnivariateRootProfile:
@@ -1035,6 +1125,104 @@ def tropical_polynomial_univariate_roots(
         kind="FINITE_PROFILE",
         intervals=tuple(intervals),
         roots=tuple(breakpoints),
+    )
+
+
+def tropical_polynomial_univariate_split_form(
+    poly: TropicalPolynomial,
+) -> TropicalPolynomial:
+    """Return a canonical consecutive-support polynomial with the same function.
+
+    The finite tropical roots, repeated by slope-jump multiplicity, determine
+    the coefficients of the split form.  For integer input, the result is
+    promoted to QQ exactly when a rational root requires it.
+    """
+    _admit_polynomial(poly)
+    if len(poly.variables) != 1:
+        raise OperationDomainValidationError(
+            location=("polynomial", "variables"),
+            code="tropical.split_form_univariate",
+            message="split form requires exactly one polynomial variable",
+        )
+    if not poly.terms:
+        return TropicalPolynomial(
+            semiring=poly.semiring, variables=poly.variables, terms=()
+        )
+
+    first_exponent = poly.terms[0].exponents[0]
+    last_exponent = poly.terms[-1].exponents[0]
+    span = last_exponent - first_exponent
+    output_term_count = span + 1
+    if output_term_count > MAX_TROPICAL_POLYNOMIAL_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "terms"),
+            code="tropical.split_form_terms",
+            message="the consecutive split form exceeds the polynomial term envelope",
+        )
+
+    # The support expansion bound above is checked before hull work. Split
+    # form owns its output admission and does not materialize a root profile.
+    expanded_roots = _univariate_root_values(poly)
+    if len(expanded_roots) != span:
+        raise ArithmeticError("tropical root multiplicities do not span the support")
+
+    # For min-plus, coefficient k is c_min minus the k largest roots.  For
+    # max-plus it is c_min minus the k smallest roots.  This is the coefficient
+    # formula for the tropical product of the corresponding linear factors.
+    roots_for_coefficients = tuple(
+        sorted(
+            expanded_roots,
+            reverse=poly.semiring.convention == "MIN_PLUS",
+        )
+    )
+    first_coefficient = _finite_value(poly.terms[0].coefficient).as_fraction()
+    coefficients = [first_coefficient]
+    for root in roots_for_coefficients:
+        # Fraction addition reduces by gcd before forming its final numerator
+        # and denominator. Bound the reduced result, not the unreduced product.
+        next_coefficient = coefficients[-1] - root
+        if (
+            max(
+                _digits(next_coefficient.numerator),
+                _digits(next_coefficient.denominator),
+            )
+            > MAX_TROPICAL_SCALAR_DIGITS
+        ):
+            _reject_growth(
+                ("polynomial", "terms", "coefficient"),
+                "tropical arithmetic output exceeds the scalar digit envelope",
+            )
+        coefficients.append(next_coefficient)
+
+    last_coefficient = _finite_value(poly.terms[-1].coefficient).as_fraction()
+    if coefficients[-1] != last_coefficient:
+        raise ArithmeticError("tropical split form does not preserve the endpoint term")
+
+    result_base = (
+        poly.semiring.base
+        if all(value.denominator == 1 for value in coefficients)
+        else "QQ"
+    )
+    result_semiring = TropicalSemiring(
+        convention=poly.semiring.convention, base=result_base
+    )
+    rational_coefficients = tuple(
+        CanonicalRational.from_fraction(value) for value in coefficients
+    )
+    return TropicalPolynomial(
+        semiring=result_semiring,
+        variables=poly.variables,
+        terms=tuple(
+            TropicalPolynomialTerm(
+                exponents=(first_exponent + index,),
+                coefficient=TropicalScalar._from_kernel(
+                    semiring=result_semiring,
+                    kind="FINITE",
+                    value=value,
+                ),
+            )
+            for index, value in enumerate(rational_coefficients)
+        ),
     )
 
 
@@ -1329,7 +1517,9 @@ __all__ = [
     "tropical_polynomial_power",
     "tropical_polynomial_univariate_newton_polygon",
     "tropical_polynomial_univariate_roots",
+    "tropical_polynomial_univariate_split_form",
     "tropical_scalar_add",
+    "tropical_scalar_dual",
     "tropical_scalar_multiply",
     "tropical_scalar_power",
     "tropical_vector_add",

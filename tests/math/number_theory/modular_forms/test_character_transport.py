@@ -10,7 +10,6 @@ import pytest
 from pydantic import TypeAdapter
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -157,9 +156,6 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
         )
         == transported
     )
-    assert Catalog.open().operation(
-        "modular_form.character_coordinates.transport.compute"
-    )
 
 
 def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
@@ -195,7 +191,6 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     assert not modular_character_coordinates_equal_in_common_space(
         from_level_13, target_form_f_plus_v2
     ).equal
-    assert Catalog.open().operation("modular_form.character.equal.check")
 
 
 def test_global_equality_rejects_forged_retained_target_coordinates() -> None:

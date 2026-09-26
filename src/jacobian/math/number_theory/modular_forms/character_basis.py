@@ -329,7 +329,7 @@ def _character_basis_from_admission(
         space.kind == "S"
         and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
         and any(
-            value.den != 1 or abs(int(value.num)) >= 10
+            value.den != 1 or abs(value.num) >= 10
             for vector in normalized
             for coefficient in vector
             for value in coefficient.coefficients_ascending

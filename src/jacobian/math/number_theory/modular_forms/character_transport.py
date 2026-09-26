@@ -7,6 +7,7 @@ from fractions import Fraction
 from math import gcd
 from typing import cast
 
+from jacobian._exact import canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -45,7 +46,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 _MAX_TRANSPORT_WORK = 5_000_000
-_MAX_TRANSPORT_OUTPUT_BYTES = 1_000_000
+_MAX_TRANSPORT_OUTPUT_SCALARS = 1_024
 
 
 @dataclass(frozen=True)
@@ -216,10 +217,7 @@ def _admit_transport(
         )
     coordinate_digits = max(
         (
-            max(
-                len(str(abs(int(value.num)))),
-                len(str(int(value.den))),
-            )
+            canonical_rational_component_digits(value)
             for coordinate in coordinates
             for value in coordinate.coefficients_ascending
         ),
@@ -228,9 +226,6 @@ def _admit_transport(
     same_space = source_space == inclusion.target_space
     source_expansion_digits = _linear_combination_digit_bound(
         coordinate_digits, source_cusp
-    )
-    target_coordinate_digits = (
-        coordinate_digits if same_space else source_expansion_digits
     )
     target_expansion_digits = (
         source_expansion_digits
@@ -247,10 +242,10 @@ def _admit_transport(
             message="character transport expansion or target solve exceeds the exact coefficient-height bound",
         )
     work = target_precision * (source_cusp + target_cusp**2 + source_cusp * target_cusp)
-    output_bytes = target_precision * field.degree * (
-        2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32
-    ) + target_cusp * field.degree * (2 * target_coordinate_digits + 32)
-    if work > _MAX_TRANSPORT_WORK or output_bytes > _MAX_TRANSPORT_OUTPUT_BYTES:
+    # Count the cyclotomic rational components in both retained coordinate
+    # forms and in the target Sturm prefix independently of wire encoding.
+    output_scalars = field.degree * (source_cusp + target_cusp + target_precision)
+    if work > _MAX_TRANSPORT_WORK or output_scalars > _MAX_TRANSPORT_OUTPUT_SCALARS:
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.character_transport_admission",
@@ -302,11 +297,10 @@ def _expand_coordinate_tuple(
     result = [[Fraction(0), Fraction(0)] for _ in range(basis.precision)]
     for scalar, element in zip(coordinates, basis.elements, strict=True):
         a, b = (
-            Fraction(coefficient.num, coefficient.den)
-            for coefficient in scalar.coefficients_ascending
+            coefficient.as_fraction() for coefficient in scalar.coefficients_ascending
         )
         for index, coefficient in enumerate(element.expansion.coefficients):
-            c, d = (int(value.num) for value in coefficient.coefficients_ascending)
+            c, d = (value.num for value in coefficient.coefficients_ascending)
             result[index][0] += a * c - b * d
             result[index][1] += a * d + b * c + b * d
     return tuple(cyclotomic._canonical(field, tuple(pair)) for pair in result)

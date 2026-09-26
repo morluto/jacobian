@@ -89,6 +89,20 @@ def test_norm_skips_unused_final_column_growth_and_canonicalizes_field() -> None
     assert function_field_element_norm(element).norm == _rational(5, (0, 1))
 
 
+def test_norm_allows_large_irrelevant_required_matrix_entry() -> None:
+    # Eisenstein cubic: the third column is required to form multiplication by
+    # y^2, but its degree-13 entries cancel from the determinant (N(y^2)=x^2).
+    x12 = _rational(5, (0,) * 12 + (1,))
+    field = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(_rational(5, (0, 1)), _rational(5, (0,)), x12, _rational(5, (1,))),
+    )
+    y_squared = _element(field, (_rational(5, (0,)), _rational(5, (0,)), _rational(5, (1,))))
+    assert function_field_element_norm(y_squared).norm == _rational(5, (0, 0, 1))
+
+
 def test_generator_norm_and_rational_field_identity() -> None:
     field = _field()
     zero = _rational(5, (0,))

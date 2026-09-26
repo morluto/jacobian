@@ -996,14 +996,14 @@ def _admit_norm_growth(
         if value == (-1, 0):
             return
         size = max(value)
-        if size > MAX_POLYNOMIAL_X_DEGREE:
+        # Matrix entries are intermediates, not returned coefficients. Permit
+        # their bounded growth here; the determinant's output degree is checked
+        # separately below. Work remains charged for each intermediate.
+        if size > 4 * MAX_POLYNOMIAL_X_DEGREE:
             raise OperationResourceAdmissionError(
                 location=("element", "coordinates"),
-                code="function_field.norm_coefficient_growth_exceeds_envelope",
-                message=(
-                    "the exact function-field norm can exceed the "
-                    f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
-                ),
+                code="function_field.norm_work_exceeds_envelope",
+                message="function-field norm intermediate exceeds the work envelope",
             )
         work += 3 * (size + 1) ** 3
         if work > MAX_NORM_WORK:
@@ -1035,6 +1035,15 @@ def _admit_norm_growth(
             admit(term)
         determinant_degree = _trace_add_degree(determinant_degree, term)
         admit(determinant_degree)
+    if determinant_degree != (-1, 0) and max(determinant_degree) > MAX_POLYNOMIAL_X_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
     return determinant_degree
 
 

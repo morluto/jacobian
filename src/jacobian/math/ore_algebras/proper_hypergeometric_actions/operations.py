@@ -47,10 +47,64 @@ def _as_term(value: ProperHypergeometricTerm) -> ProperHypergeometricTerm:
 def _term_count_bound(
     operator: ShiftOreOperator, n_ratio: RationalFunction
 ) -> tuple[int, int]:
-    """Bound supports using the bivariate total-degree monomial envelope."""
-    numerator_degree, denominator_degree = _degree_bound(operator, n_ratio)
-    numerator_bound = (numerator_degree + 1) * (numerator_degree + 2) // 2
-    denominator_bound = (denominator_degree + 1) * (denominator_degree + 2) // 2
+    """Bound supports by separate ``n`` and ``k`` degree extents."""
+    _degree_bound(operator, n_ratio)
+    ratio_numerator_degrees = tuple(
+        max((term.exponents[axis] for term in n_ratio.numerator.terms), default=0)
+        for axis in (0, 1)
+    )
+    ratio_denominator_degrees = tuple(
+        max((term.exponents[axis] for term in n_ratio.denominator.terms), default=0)
+        for axis in (0, 1)
+    )
+    numerator_term_degrees: list[tuple[int, int]] = []
+    denominator_term_degrees: list[tuple[int, int]] = []
+    for term in operator.terms:
+        coefficient_numerator_degree = max(
+            (item.exponents[0] for item in term.coefficient.numerator.terms),
+            default=0,
+        )
+        coefficient_denominator_degree = max(
+            (item.exponents[0] for item in term.coefficient.denominator.terms),
+            default=0,
+        )
+        numerator_term_degrees.append(
+            (
+                coefficient_numerator_degree
+                + term.exponent * ratio_numerator_degrees[0],
+                term.exponent * ratio_numerator_degrees[1],
+            )
+        )
+        denominator_term_degrees.append(
+            (
+                coefficient_denominator_degree
+                + term.exponent * ratio_denominator_degrees[0],
+                term.exponent * ratio_denominator_degrees[1],
+            )
+        )
+
+    common_denominator_degrees = tuple(
+        sum(degrees[axis] for degrees in denominator_term_degrees)
+        for axis in (0, 1)
+    )
+    common_numerator_degrees = tuple(
+        common_denominator_degrees[axis]
+        + max(
+            (
+                numerator_term_degrees[index][axis]
+                - denominator_term_degrees[index][axis]
+                for index in range(len(operator.terms))
+            ),
+            default=0,
+        )
+        for axis in (0, 1)
+    )
+    numerator_bound = (common_numerator_degrees[0] + 1) * (
+        common_numerator_degrees[1] + 1
+    )
+    denominator_bound = (common_denominator_degrees[0] + 1) * (
+        common_denominator_degrees[1] + 1
+    )
     if denominator_bound > _MAX_ACTION_TERMS or numerator_bound > _MAX_ACTION_TERMS:
         raise OperationResourceAdmissionError(
             location=("operator",),

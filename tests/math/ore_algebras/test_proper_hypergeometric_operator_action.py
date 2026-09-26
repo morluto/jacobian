@@ -182,6 +182,19 @@ def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected():
         proper_hypergeometric_operator_action(_operator(22), _binomial_term())
 
 
+def test_sparse_univariate_shift_product_uses_its_actual_axis_support():
+    term = ProperHypergeometricTerm(
+        polynomial=_polynomial([((0, 0), 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=1, k_coefficient=0, offset=0, power=12
+            ),
+        ),
+    )
+    result = proper_hypergeometric_operator_action(_operator(2), term)
+    assert _rf_value(result.relative_multiplier, 3, 7) == 4**12 * 5**12
+
+
 def test_n_action_does_not_require_admission_of_the_k_quotient():
     term = ProperHypergeometricTerm(
         polynomial=_polynomial([((0, 0), 1)]),

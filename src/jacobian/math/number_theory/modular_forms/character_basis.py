@@ -418,6 +418,21 @@ def _admit_character_form(
     return space, field, scalar, character_request
 
 
+def modular_character_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Compare coordinates in the established one-dimensional character basis."""
+    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+        _domain("character coordinate equality requires canonical coordinate values")
+    if left.space != right.space:
+        _domain("character coordinate equality requires the identical exact space")
+    admitted_space = _require_space(left.space)
+    _, _, left_value, _ = _admit_character_form(left, admitted_space)
+    _, _, right_value, _ = _admit_character_form(right, admitted_space)
+    request_checkpoint("before character coordinate equality")
+    return left_value == right_value
+
+
 def _character_form_prefix(
     form: ModularFormCoordinates,
     admitted: tuple[
@@ -885,10 +900,26 @@ def modular_character_hecke_matrix(
     )
 
 
+def modular_character_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Compare the canonical scalar coordinates in the legacy character slice."""
+    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+        _domain("character coordinate equality requires canonical coordinate values")
+    if left.space != right.space:
+        _domain("character coordinate equality requires the identical exact space")
+    admitted_space = _require_space(left.space)
+    _, _, left_value, _ = _admit_character_form(left, admitted_space)
+    _, _, right_value, _ = _admit_character_form(right, admitted_space)
+    request_checkpoint("during legacy character coordinate equality")
+    return left_value == right_value
+
+
 __all__ = [
     "CHARACTER_BASIS_ID",
     "modular_character_basis_q_expansions",
     "modular_character_coordinates_hecke",
+    "modular_character_coordinates_equal",
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
     "modular_character_hecke_matrix",

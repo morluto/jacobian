@@ -225,7 +225,64 @@ def modular_form_field_coordinates_q_expansion(
     )
 
 
+def modular_form_field_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Compare exact cyclotomic coordinate vectors in the same field basis."""
+    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+        raise OperationDomainValidationError(
+            location=(),
+            code="modular_form.field_coordinates_type",
+            message="equality requires two canonical modular-form coordinate values",
+        )
+    if left.space != right.space or left.basis_id != right.basis_id:
+        raise OperationDomainValidationError(
+            location=("right",),
+            code="modular_form.field_coordinates_equality_parent",
+            message="field-coordinate equality requires the identical space and basis",
+        )
+    rational_space = _rational_space(left.space)
+    plan = _admit_basis(
+        rational_space,
+        sturm_bound(rational_space).bound + 1,
+        materialize_pari=False,
+    )
+    field = left.space.coefficient_domain
+    if (
+        type(field) is not RationalCyclotomicField
+        or field != _FIELD
+        or left.basis_id != plan.basis_id
+        or len(left.coordinates) != plan.dimension
+        or len(right.coordinates) != plan.dimension
+    ):
+        raise OperationDomainValidationError(
+            location=("left",),
+            code="modular_form.field_coordinates_equality_shape",
+            message="field coordinate axes must match the admitted cyclotomic basis",
+        )
+    digits = 1
+    for side, form in (("left", left), ("right", right)):
+        for index, value in enumerate(form.coordinates):
+            if type(value) is not RationalCyclotomicElement or value.field != field:
+                raise OperationDomainValidationError(
+                    location=(side, "coordinates", index),
+                    code="modular_form.field_coordinates_scalar_parent",
+                    message="every coordinate must use the exact declared field",
+                )
+            digits = max(digits, cyclotomic._validate_element(value)[2])
+    work = 2 * max(1, plan.dimension) * field.degree * MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+    allocation = 2 * plan.dimension * field.degree * (2 * digits + 32)
+    if work > MAX_LEVEL_ONE_BASIS_WORK or allocation > MAX_LEVEL_ONE_BASIS_ALLOCATION_BYTES:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.field_coordinates_equality_bound",
+            message="field-coordinate comparison exceeds its exact work or output envelope",
+        )
+    return left.coordinates == right.coordinates
+
+
 __all__ = [
     "modular_form_coordinates_extend_field",
+    "modular_form_field_coordinates_equal",
     "modular_form_field_coordinates_q_expansion",
 ]

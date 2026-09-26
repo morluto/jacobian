@@ -3,6 +3,7 @@
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.logic.relational_structures._admission import (
     MAX_EMBEDDING_REFLECTION_CELLS,
+    MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS,
     MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS,
     MAX_POLYMORPHISM_COORDINATE_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
@@ -28,10 +29,10 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchResult,
     InducedSubstructureRequest,
     InducedSubstructureResult,
+    RelationalHomomorphismCompositionRequest,
+    RelationalHomomorphismIdentityRequest,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRequest,
-    RelationalProductRequest,
-    RelationalProductResult,
     RelationalQuotient,
     RelationalQuotientRequest,
     RelationalReductRequest,
@@ -40,12 +41,13 @@ from jacobian.math.logic.relational_structures._models import (
 from jacobian.math.logic.relational_structures.operations import (
     check_homomorphism,
     check_polymorphism,
+    compose_homomorphisms,
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
-    direct_product_structure,
     enumerate_csp_solutions,
     enumerate_homomorphisms,
+    homomorphism_identity,
     induced_substructure,
     profile_csp_assignment,
     quotient_structure,
@@ -61,6 +63,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
+    RelationalHomomorphism,
 )
 
 
@@ -70,6 +73,18 @@ def _homomorphism_check(
     """Project a wire request into the canonical exhaustive replay."""
 
     return check_homomorphism(request.source, request.target, request.carrier_map)
+
+
+def _homomorphism_identity(
+    request: RelationalHomomorphismIdentityRequest,
+) -> RelationalHomomorphism:
+    return homomorphism_identity(request.structure)
+
+
+def _homomorphism_compose(
+    request: RelationalHomomorphismCompositionRequest,
+) -> RelationalHomomorphism:
+    return compose_homomorphisms(request.first, request.second)
 
 
 def _homomorphism_search(
@@ -142,10 +157,6 @@ def _quotient(request: RelationalQuotientRequest) -> RelationalQuotient:
     return quotient_structure(request.source, request.classes)
 
 
-def _direct_product(request: RelationalProductRequest) -> RelationalProductResult:
-    return direct_product_structure(request.left, request.right)
-
-
 def _polymorphism_check(
     request: RelationalPolymorphismRequest,
 ) -> RelationalPolymorphismCheckResult:
@@ -195,38 +206,82 @@ _EDGE_INTO_CYCLE_EXAMPLE = {
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="relational.structure.direct_product.compute",
-        title="Form a direct product of finite relational structures",
+        operation_id="relational_homomorphism.identity.compute",
+        title="Construct a finite relational identity homomorphism",
         description=(
-            "Form the direct product of two finite structures with identical "
-            "ranked signatures. Pair (i,j) receives canonical label "
-            "i*|B|+j; each relation contains exactly the coordinatewise "
-            "pairs from the two factor relations. The result retains both "
-            "factors and the two projection maps. Carrier, relation-row, and "
-            "coordinate-work bounds are checked before Cartesian relation "
-            "expansion; the admitted visits bound the product and its "
-            "projections."
+            "Return the identity map on one exact finite relational structure "
+            "as a source- and target-bound RelationalHomomorphism. The identity "
+            "preserves every relation, including true and false nullary "
+            "relations. The complete carrier has at most "
+            f"{MAX_RELATIONAL_CARRIER} labels; work is linear in its size."
         ),
-        request_type=RelationalProductRequest,
-        result_type=RelationalProductResult,
-        run=_direct_product,
-        tags=("relational-structures", "direct-product", "homomorphism", "exact"),
+        request_type=RelationalHomomorphismIdentityRequest,
+        result_type=RelationalHomomorphism,
+        run=_homomorphism_identity,
+        tags=("relational-structures", "homomorphism", "identity", "exact"),
         discovery_terms=(
-            "direct product of finite relational structures",
-            "relational structure Cartesian product",
-            "product structure projections",
-            "power of a finite relational structure",
+            "identity relational homomorphism",
+            "identity map of finite structure",
+            "identity endomorphism",
         ),
         examples=(
             OperationExample(
-                name="product_of_two_directed_edges",
+                name="identity_on_empty_nullary_structure",
                 description=(
-                    "Form the edge relation by coordinatewise pairing; both "
-                    "factors must have identical ordered ranked signatures."
+                    "The empty carrier with a false nullary relation has the "
+                    "empty identity map."
                 ),
                 input={
-                    "left": _DIRECTED_EDGE_STRUCTURE,
-                    "right": _DIRECTED_EDGE_STRUCTURE,
+                    "structure": {
+                        "carrier_size": 0,
+                        "signature": [{"symbol_id": "F", "arity": 0}],
+                        "relation_tables": [[]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relational_homomorphism.compose.compute",
+        title="Compose checked finite relational homomorphisms",
+        description=(
+            "Given first: A→B and second: B→C, return second∘first as a "
+            "source- and target-bound RelationalHomomorphism. The exact "
+            "intermediate structures must agree. Since decoded homomorphism "
+            "values are caller-supplied claims, both maps are rechecked over "
+            "every source relation tuple before composition. The two checks "
+            f"are admitted together at at most "
+            f"{MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS} tuple visits; "
+            "map composition is linear in the source carrier."
+        ),
+        request_type=RelationalHomomorphismCompositionRequest,
+        result_type=RelationalHomomorphism,
+        run=_homomorphism_compose,
+        tags=("relational-structures", "homomorphism", "composition", "exact"),
+        discovery_terms=(
+            "compose relational homomorphisms",
+            "composition of finite structure maps",
+            "compose source target bound homomorphisms",
+        ),
+        examples=(
+            OperationExample(
+                name="compose_edge_into_cycle_into_triangle",
+                description=(
+                    "Compose the edge inclusion into a directed 3-cycle with "
+                    "the identity carrier map from that cycle into the "
+                    "complete directed triangle."
+                ),
+                input={
+                    "first": {
+                        "source": _DIRECTED_EDGE_STRUCTURE,
+                        "target": _THREE_CYCLE,
+                        "mapping": [0, 1],
+                    },
+                    "second": {
+                        "source": _THREE_CYCLE,
+                        "target": _DIRECTED_TRIANGLE,
+                        "mapping": [0, 1, 2],
+                    },
                 },
             ),
         ),

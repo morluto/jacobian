@@ -25,6 +25,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
+    RelationalHomomorphism,
 )
 
 # Exhaustive homomorphism search work: every candidate carrier map is
@@ -33,6 +34,9 @@ from jacobian.math.logic.relational_structures.values import (
 # work cap bounds tuple replays, the dominant cost.
 MAX_SEARCH_CANDIDATES = 65_536
 MAX_SEARCH_TUPLE_REPLAYS = 1_048_576
+# Composition consumes two caller-supplied homomorphism claims. Each claim is
+# replayed exhaustively once before the composite map is constructed.
+MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS = 2 * MAX_RELATIONAL_TRANSPORT_TUPLES
 # Complete enumeration retains at most one carrier map per candidate, each
 # with exactly |A| integer labels; this cardinality cap bounds the result's
 # map-list size before any map is enumerated.
@@ -239,6 +243,42 @@ def admit_homomorphism_check(
             ),
         )
     return transport_tuples
+
+
+def admit_homomorphism_composition(
+    first: RelationalHomomorphism,
+    second: RelationalHomomorphism,
+) -> int:
+    """Admit both preservation replays and the exact intermediate structure.
+
+    ``first`` has type A→B and ``second`` has type B→C. The returned work is
+    the sum of source-relation tuple visits needed to establish both supplied
+    homomorphism claims before composition.
+    """
+
+    if first.target != second.source:
+        raise OperationDomainValidationError(
+            location=("second", "source"),
+            code="relational.homomorphism.intermediate_mismatch",
+            message=(
+                "the first target and second source must be the exact same "
+                "finite relational structure"
+            ),
+        )
+    first_work = admit_homomorphism_check(first.source, first.target, first.mapping)
+    second_work = admit_homomorphism_check(second.source, second.target, second.mapping)
+    work = first_work + second_work
+    if work > MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS:
+        raise OperationResourceAdmissionError(
+            location=("first", "second"),
+            code="relational.homomorphism.composition_work_bound",
+            message=(
+                "the two exhaustive homomorphism replays need "
+                f"{work} tuple visits, exceeding the "
+                f"{MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS}-visit envelope"
+            ),
+        )
+    return work
 
 
 def embedding_reflection_cells(source: FiniteRelationalStructure) -> int:
@@ -591,6 +631,7 @@ def admit_core_computation(source: FiniteRelationalStructure) -> int:
 
 __all__ = [
     "MAX_EMBEDDING_REFLECTION_CELLS",
+    "MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS",
     "MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS",
     "MAX_INDUCED_SUBSTRUCTURE_WORK",
     "MAX_POLYMORPHISM_COORDINATE_WORK",
@@ -601,6 +642,7 @@ __all__ = [
     "admit_core_computation",
     "admit_embedding_search",
     "admit_homomorphism_check",
+    "admit_homomorphism_composition",
     "admit_homomorphism_search",
     "admit_induced_substructure",
     "admit_polymorphism_check",

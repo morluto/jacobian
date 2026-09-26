@@ -41,6 +41,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
     MAX_MODULAR_FORM_LEVEL,
+    MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
     ModularFormBasis,

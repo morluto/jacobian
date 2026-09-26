@@ -41,6 +41,20 @@ class AffineFiberRequest(StrictModel):
     )
 
 
+class AffineFactorizationRequest(StrictModel):
+    """Evaluate one nonnegative coefficient vector in its semigroup parent."""
+
+    semigroup: PositiveAffineSemigroup
+    coordinates: tuple[ExactInteger, ...] = Field(
+        max_length=MAX_AFFINE_GENERATORS,
+        description=(
+            "Nonnegative exact integers on the generator axis. The owner "
+            "admits the axis, sign, digit, arithmetic-work, and output bounds "
+            "before evaluating the matrix product."
+        ),
+    )
+
+
 class AffineMembershipRequest(AffineFiberRequest):
     pass
 
@@ -76,6 +90,7 @@ class AffineSemigroupNormalityRequest(StrictModel):
 
 
 __all__ = [
+    "AffineFactorizationRequest",
     "AffineFiber",
     "AffineFiberGraph",
     "AffineFiberGraphRequest",

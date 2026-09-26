@@ -5,6 +5,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.affine_semigroups.semigroup import (
+    AffineFactorization,
     AffineFiber,
     AffineFiberGraph,
     AffineHilbertBasis,
@@ -13,6 +14,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     AffineSemigroupNormalization,
     PositiveAffineSemigroup,
     PositiveGradingResult,
+    _evaluate_factorization,
     construct,
     fiber,
     fiber_graph,
@@ -23,6 +25,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     positive_grading,
 )
 from jacobian.math.affine_semigroups.semigroup_models import (
+    AffineFactorizationRequest,
     AffineFiberGraphRequest,
     AffineFiberRequest,
     AffineHilbertBasisRequest,
@@ -62,6 +65,19 @@ def _fiber(r: AffineFiberRequest) -> AffineFiber:
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(
             location=("target",), code="affine_semigroup.fiber", message=str(e)
+        ) from e
+
+
+def _factorization(r: AffineFactorizationRequest) -> AffineFactorization:
+    try:
+        return _evaluate_factorization(r.semigroup, r.coordinates, validate_parent=True)
+    except OperationResourceAdmissionError:
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as e:
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization",
+            message=str(e),
         ) from e
 
 
@@ -105,7 +121,9 @@ def _normalization(
 ) -> AffineSemigroupNormalization:
     try:
         return normalization(r.semigroup)
-    except OperationResourceAdmissionError:
+    except OperationDomainValidationError:
+        # The native boundary already exposes the stable owner diagnostic;
+        # preserve it so direct Python and catalog invocations agree.
         raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(
@@ -129,6 +147,47 @@ def _normality(r: AffineSemigroupNormalityRequest) -> AffineSemigroupNormality:
 
 
 TOOLS = (
+    MathTool(
+        operation_id="affine_semigroup.factorization.evaluate",
+        title="Evaluate a parent-bound affine-semigroup factorization",
+        description=(
+            "Evaluate one nonnegative coefficient vector on the retained "
+            "generator axis and return an AffineFactorization carrying its "
+            "positive semigroup parent and exact ambient target. This is a "
+            "single O(rows x generators) matrix product; it does not enumerate "
+            "a fiber or claim that the factorization is unique. Admission limits "
+            "coefficients to 32 decimal digits and preflights arithmetic and output size."
+        ),
+        request_type=AffineFactorizationRequest,
+        result_type=AffineFactorization,
+        run=_factorization,
+        discovery_terms=(
+            "evaluate affine semigroup factorization coordinates",
+            "map a nonnegative generator vector to its exact semigroup element",
+            "parent-bound affine semigroup element from factorization",
+        ),
+        tags=("affine-semigroup", "factorization", "exact"),
+        examples=(
+            OperationExample(
+                name="quadrant_factorization",
+                description=(
+                    "Evaluate (2,3) on generators (1,0),(0,1), returning "
+                    "the parent-bound element (2,3)."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["a", "b"],
+                            "entries": [["1", "0"], ["0", "1"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+                    },
+                    "coordinates": ["2", "3"],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="affine_semigroup.hilbert_basis.compute",
         title="Compute a complete two-dimensional affine Hilbert basis",

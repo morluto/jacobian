@@ -4,6 +4,10 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.affine_semigroups.factorization_count import (
+    AffineFactorizationCount,
+    factorization_count,
+)
 from jacobian.math.affine_semigroups.semigroup import (
     AffineFactorization,
     AffineFiber,
@@ -23,6 +27,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     positive_grading,
 )
 from jacobian.math.affine_semigroups.semigroup_models import (
+    AffineFactorizationCountRequest,
     AffineFactorizationRequest,
     AffineFiberGraphRequest,
     AffineFiberRequest,
@@ -65,9 +70,26 @@ def _fiber(r: AffineFiberRequest) -> AffineFiber:
         ) from e
 
 
+def _factorization_count(
+    request: AffineFactorizationCountRequest,
+) -> AffineFactorizationCount:
+    try:
+        return factorization_count(request.semigroup, request.target)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="affine_semigroup.factorization_count",
+            message=str(exc),
+        ) from exc
+
+
 def _factorization(r: AffineFactorizationRequest) -> AffineFactorization:
     try:
-        return _evaluate_factorization(r.semigroup, r.coordinates, validate_parent=True)
+        return _evaluate_factorization(
+            r.semigroup, r.coordinates, validate_parent=False
+        )
     except OperationResourceAdmissionError:
         raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
@@ -131,6 +153,48 @@ def _normalization(
 
 
 TOOLS = (
+    MathTool(
+        operation_id="affine_semigroup.factorization_count.compute",
+        title="Count a finite affine-semigroup fiber exactly",
+        description=(
+            "Return the exact number of nonnegative factorizations Au=b for any "
+            "admitted positive affine semigroup. The positive grading makes each "
+            "fiber finite. One-row fibers use a gcd-normalized generating-function "
+            "dynamic program; higher-row fibers are counted directly inside the "
+            "admitted target-derived coefficient box without materializing the "
+            "factorization set. State, work, and count-digit bounds are checked first."
+        ),
+        request_type=AffineFactorizationCountRequest,
+        result_type=AffineFactorizationCount,
+        run=_factorization_count,
+        tags=("affine-semigroup", "factorization-count", "fiber", "exact"),
+        discovery_terms=(
+            "count the nonnegative factorizations of a target",
+            "exact cardinality of an affine-semigroup fiber",
+            "number of solutions to Au=b in nonnegative integers",
+            "factorization count without listing the entire fiber",
+        ),
+        examples=(
+            OperationExample(
+                name="two_unit_weights_target_four",
+                description=(
+                    "Count the five factorizations of 4 using two distinct "
+                    "generators of weight 1."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["degree"],
+                            "generator_labels": ["a", "b"],
+                            "entries": [["1", "1"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}],
+                    },
+                    "target": ["4"],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="affine_semigroup.factorization.evaluate",
         title="Evaluate a parent-bound affine-semigroup factorization",

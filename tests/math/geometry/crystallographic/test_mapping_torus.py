@@ -47,7 +47,7 @@ def test_point_mapping_torus_is_the_circle_complex() -> None:
     )
 
     assert result.basis_sizes == (1, 1)
-    assert result.differential_matrices == ((("0",),),)
+    assert result.differential_matrices == (((0,),),)
     assert tuple(group.free_rank for group in _integral_groups(result)) == (1, 1)
 
 
@@ -56,8 +56,8 @@ def test_identity_circle_mapping_torus_is_the_two_torus() -> None:
 
     assert result.basis_sizes == (1, 2, 1)
     assert result.differential_matrices == (
-        (("0", "0"),),
-        (("0",), ("0",)),
+        ((0, 0),),
+        ((0,), (0,)),
     )
     groups = _integral_groups(result)
     assert tuple(group.free_rank for group in groups) == (1, 2, 1)
@@ -68,8 +68,8 @@ def test_reflection_mapping_torus_has_klein_bottle_homology() -> None:
     result = mapping_torus_chain_complex(_matrix(((-1,),)), 2)
 
     assert result.basis_sizes == (1, 2, 1)
-    assert result.differential_matrices[0] == (("0", "0"),)
-    assert result.differential_matrices[1] == (("0",), ("-2",))
+    assert result.differential_matrices[0] == ((0, 0),)
+    assert result.differential_matrices[1] == ((0,), (-2,))
     degree_zero, degree_one, degree_two = _integral_groups(result)
     assert (degree_zero.free_rank, degree_zero.torsion_invariant_factors) == (
         1,
@@ -90,12 +90,12 @@ def test_quarter_turn_mapping_torus_uses_exterior_power_differentials() -> None:
 
     assert result.basis_sizes == (1, 3, 3, 1)
     # Λ^0 A - I and Λ^2 A - I vanish; the middle block is A-I.
-    assert result.differential_matrices[0] == (("0", "0", "0"),)
-    assert result.differential_matrices[2] == (("0",), ("0",), ("0",))
+    assert result.differential_matrices[0] == ((0, 0, 0),)
+    assert result.differential_matrices[2] == ((0,), (0,), (0,))
     assert result.differential_matrices[1] == (
-        ("0", "0", "0"),
-        ("-1", "-1", "0"),
-        ("1", "-1", "0"),
+        (0, 0, 0),
+        (-1, -1, 0),
+        (1, -1, 0),
     )
 
 

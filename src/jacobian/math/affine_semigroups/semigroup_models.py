@@ -40,6 +40,18 @@ class AffineFiberRequest(StrictModel):
     )
 
 
+class AffineFactorizationCountRequest(AffineFiberRequest):
+    """Count the finite fiber without returning its factorization vectors."""
+
+    target: tuple[ExactInteger, ...] = Field(
+        description=(
+            "Exact target on the ambient row axis. The operation admits the "
+            "univariate dynamic-program state/work envelope or the general "
+            "positive-grading coefficient-box envelope before counting."
+        )
+    )
+
+
 class AffineFactorizationRequest(StrictModel):
     """Evaluate one nonnegative coefficient vector in its semigroup parent."""
 
@@ -85,6 +97,7 @@ class AffineSemigroupNormalizationRequest(StrictModel):
 
 
 __all__ = [
+    "AffineFactorizationCountRequest",
     "AffineFactorizationRequest",
     "AffineFiber",
     "AffineFiberGraph",

@@ -162,8 +162,10 @@ class AffineFactorization(StrictModel):
     """One exact factorization, bound to its positive semigroup parent.
 
     ``coordinates`` use the retained generator axis and ``target`` uses its
-    ambient row axis. The carrier validates structure; mathematical consumers
-    check the defining relation when they rely on it.
+    ambient row axis. Decoding checks structure only (axes, signs, digit
+    bounds); the authored matrix relation belongs to the operation that
+    computed the value, and a consumer rechecks it when its own result
+    relies on that relation.
     """
 
     semigroup: PositiveAffineSemigroup
@@ -182,6 +184,14 @@ class AffineFactorization(StrictModel):
         if any(value < 0 for value in self.coordinates):
             raise _err(
                 "factorization_sign", "factorization coordinates must be nonnegative"
+            )
+        if any(
+            decimal_digit_width(value) > MAX_AFFINE_FACTOR_RESULT_DIGITS
+            for value in self.target
+        ):
+            raise _err(
+                "factorization_digits",
+                "factorization target exceeds its digit envelope",
             )
         return self
 
@@ -1185,7 +1195,7 @@ def _canonical_graph_moves(
 def _graph_components(
     vertex_count: int, edges: set[tuple[int, int]]
 ) -> tuple[tuple[int, ...], ...]:
-    adjacency: list[set[int]] = [set() for _ in range(vertex_count)]
+    adjacency = [set() for _ in range(vertex_count)]
     for left, right in edges:
         adjacency[left].add(right)
         adjacency[right].add(left)
@@ -1233,6 +1243,15 @@ def fiber_graph(
             message=(
                 "fiber graph edge work exceeds the "
                 f"{MAX_AFFINE_GRAPH_EDGE_CHECKS}-check envelope"
+            ),
+        )
+    if candidate_count * len(ordered_moves) > MAX_AFFINE_GRAPH_EDGES:
+        raise OperationResourceAdmissionError(
+            location=("target",),
+            code="affine_semigroup.graph_output",
+            message=(
+                "worst-case fiber graph exceeds the "
+                f"{MAX_AFFINE_GRAPH_EDGES}-edge output envelope"
             ),
         )
     vertices = _enumerate_fiber(semigroup, target, grades, target_grade, maxima)

@@ -1,6 +1,17 @@
 # Number theory operations
 
 - [Rational function-field genus](function-field-genus.md)
+- [Function-field divisor effective parts](function-field-divisor-effective-parts.md)
+- [Rational function-field divisor arithmetic](function-field-divisor-arithmetic.md)
+- [Rational function-field Riemann-Roch spaces](function-field-riemann-roch.md)
+- [Rational function-field places](function-field-rational-place-enumeration.md)
+- [Function-field place uniformizer](function-field-place-uniformizer.md)
+- [Function-field rational base inclusion](function-field-base-embedding.md)
+- [Exact function-field element addition](function-field-element-addition.md)
+- [Exact function-field element inversion](function-field-element-inversion.md)
+- [Exact function-field relative trace](function-field-element-trace.md)
+
+- [Rational function-field genus](function-field-genus.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
 - [Function-field divisor effective parts](function-field-divisor-effective-parts.md)
 - [Rational function-field divisor arithmetic](function-field-divisor-arithmetic.md)

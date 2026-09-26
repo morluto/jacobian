@@ -10,7 +10,10 @@ from jacobian.math.combinatorics._models import (
 from jacobian.math.combinatorics._partition_models import (
     IntegerPartitionEnumerationRequest,
     IntegerPartitionEnumerationResult,
+    PartitionCheckRequest,
+    PartitionCheckResult,
 )
+from jacobian.math.combinatorics.partition_check import check_integer_partition
 
 
 def _integer_result(value: int) -> IntegerResult:
@@ -44,7 +47,37 @@ def enumerate_integer_partitions(
     )
 
 
+def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
+    """Thin wire adapter for the public tuple-based partition checker."""
+    return check_integer_partition(request.parts)
+
+
 PARTITION_OPERATIONS = (
+    MathTool(
+        operation_id="combinatorics.partition.check",
+        title="Check an integer partition candidate",
+        description=(
+            "Classify a bounded sequence of exact integers as an integer "
+            "partition, returning its canonical value and Ferrers data, or "
+            "the first nonpositive part or adjacent increase."
+        ),
+        request_type=PartitionCheckRequest,
+        result_type=PartitionCheckResult,
+        run=check_partition,
+        tags=("combinatorics", "partition", "exact"),
+        examples=(
+            OperationExample(
+                name="partition_candidate",
+                description="Check the partition (4, 2, 1).",
+                input={"parts": [4, 2, 1]},
+            ),
+            OperationExample(
+                name="partition_obstruction",
+                description="Locate the first increasing adjacent pair.",
+                input={"parts": [3, 4, 1]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="combinatorics.compute.stirling_first",
         title="Compute Stirling number of first kind",

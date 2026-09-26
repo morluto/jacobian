@@ -14,7 +14,7 @@ from jacobian.math.finite_fields.values import (
 def require_field(presentation: FiniteFieldPresentation) -> Any:
     """Recognize the bounded field presentation and retain its FLINT modulus.
 
-    Structural parsing already bounds p^degree by 65536 and degree by 16.
+    Structural parsing already bounds p^degree by 65537 and degree by 16.
     Neither result decoding nor nested value construction invokes this check.
     """
     from flint import fmpz, fmpz_mod_poly_ctx

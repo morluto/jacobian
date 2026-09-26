@@ -125,9 +125,9 @@ def modular_form_atkin_lehner_target(
         coefficient_domain=admitted_space.coefficient_domain,
     )
     return ModularFormAtkinLehnerTarget(
-        source_space=space,
+        source_space=admitted_space,
         target_space=target_space,
-        divisor=space.level,
+        divisor=admitted_space.level,
     )
 
 

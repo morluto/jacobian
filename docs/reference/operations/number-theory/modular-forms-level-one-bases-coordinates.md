@@ -35,13 +35,29 @@ Beyond those formula families, the bounded PARI Sturm-RREF path in
 supports rational trivial-character `M_k(Gamma0(N))` and `S_k(Gamma0(N))`
 spaces through level 10,000 whenever the weight, dimension, Sturm precision,
 aggregate work, and output bounds declared by that path admit the request.
-Other nontrivial characters remain unsupported by these rational operations.
+Other nontrivial characters remain unsupported by these rational basis and
+coordinate operations.
+Other levels and cusp subspaces outside the stated basis families remain
+unsupported by these rational basis and coordinate operations.
+
+The public Sturm operation has a wider, parent-only contract than the basis
+operations: for represented `Gamma0(N)` spaces of level at most 10,000 over `QQ` or their declared
+rational cyclotomic coefficient field, it returns
+`floor(k [SL2(Z):Gamma0(N)] / 12)` and retains the exact character and field in
+the result. The formula does not depend on the character or coefficient field;
+only the validity of the exact space parent does. A bound `B` determines the
+`B + 1` coefficients from q^0 through q^B. PARI documents the same
+Gamma0(N), weight-k Sturm bound in `mfsturm(N,k)` in its
+[Modular Forms reference](https://pari.math.u-bordeaux.fr/dochtml/html/Modular_forms.html).
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow
-field-valued exception is now supported for even order-6 characters modulo 13:
-`modular_form.character_basis.compute` returns a one-element basis of
-`S_2(Gamma0(13), chi)` over `Q(zeta_6)`, normalized through q^0..q^2.
+field-valued character basis slice supports even order-6 characters of
+conductor 13 at levels 13, 26, and 39, in both `M_2` and `S_2`, over
+`Q(zeta_6)`. `modular_form.character_basis.compute` returns the complete
+q-Sturm RREF basis at precisions 3, 8, and 10 for those levels.
+`S_2(Gamma0(13), chi)` remains one-dimensional and retains its previous
+basis identifier and normalization through q^0..q^2.
 `ModularFormCoordinates` represents one exact scalar multiple of that
 basis element; `modular_form.character_coordinates.q_expansion.compute`
 returns its exact field-valued Sturm prefix. For this space the index is 14
@@ -80,19 +96,22 @@ or Hecke operations; those consumers still enforce their own accepted parents.
 The conjugate-character product above is a separate bounded operation that
 returns its target Sturm prefix.
 
-This exception does not widen the generic rational dimension, Sturm, basis,
-frame, or operator paths. Those paths remain restricted to their documented
-rational families and reject a cyclotomic parent when their operation relies
-on rational coefficients. A nontrivial character must be supplied
+This exception does not widen the generic rational dimension, basis, frame,
+or operator paths. Those paths remain restricted to their documented rational
+families and reject a cyclotomic parent when their operation relies on rational
+coefficients. The Sturm operation is the exception: it computes its integer
+from the space's level and weight and accepts every exact cyclotomic parent
+represented by `ModularFormSpace`. A nontrivial character must be supplied
 explicitly at the Gamma0 level; callers must use
 `dirichlet_character.inflate.compute` before binding
 a character of smaller modulus. The character's value order must divide the
 declared cyclotomic field order; `QQ` remains valid for rational-valued
 characters. Cyclotomic parent order is at most 128 and field degree at most 32,
 checked when the space value is constructed, before an expansion operation can
-allocate coefficient vectors. Outside the stated level-13 character slice,
-this representation adds no basis, membership, or q-expansion claim for those
-parents.
+allocate coefficient vectors. Outside the stated level-13/26/39 character
+basis slice, this representation adds no character basis, membership, or
+q-expansion claim for those parents. Only the original level-13 cusp basis is
+consumed by the existing character-coordinate operations.
 
 For `chi_{-4}(n) = 0` on even `n`, `1` for `n = 1 (mod 4)`, and `-1` for
 `n = 3 (mod 4)`, the basis generator is
@@ -290,7 +309,8 @@ is also the standard normalized newform in `S_6(Gamma0(3))`.
 ## Exact rational basis frames
 
 `modular_form.basis_frame.create` declares an ordered rational basis relative
-to one of the six supported canonical bases. A frame retains its exact modular
+to one of seven supported canonical bases, including the PARI-backed
+`gamma0-rational-gamma0-sturm-rref-v1` basis. A frame retains its exact modular
 space, canonical basis ID, canonical source labels, caller labels, and a square
 matrix `C`; column `j` gives the canonical coordinates of caller basis vector
 `j`. Thus canonical coordinates `x` convert to caller coordinates by solving

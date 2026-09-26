@@ -3,11 +3,15 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from itertools import product
+from math import gcd
+from typing import Any
 
 import pytest
 from pydantic import TypeAdapter, ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
@@ -15,10 +19,13 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character,
+    dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms import (
     character_basis as character_basis_module,
 )
+from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
     CHARACTER_BASIS_ID,
     modular_character_basis_q_expansions,
@@ -33,6 +40,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeMatrix,
     ModularCharacterHeckeMatrixRequest,
 )
+from jacobian.math.number_theory.modular_forms.character_basis_tools import TOOLS
 from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
     pari_character_basis,
@@ -41,12 +49,6 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
 )
-
-
-def _character_tool(operation_id: str):
-    from jacobian.math.number_theory.modular_forms._tools import TOOLS
-
-    return next(tool for tool in TOOLS if tool.operation_id == operation_id)
 
 
 def _space(character_coordinate: int = 2) -> ModularFormSpace:
@@ -60,6 +62,12 @@ def _space(character_coordinate: int = 2) -> ModularFormSpace:
     )
 
 
+def _operation(operation_id: str) -> MathTool[Any, Any]:
+    tool = next((item for item in TOOLS if item.operation_id == operation_id), None)
+    assert tool is not None
+    return tool
+
+
 def _coords(value: RationalCyclotomicElement) -> tuple[tuple[int, int], ...]:
     return tuple(
         (coefficient.num, coefficient.den)
@@ -71,8 +79,8 @@ def _scalar(value: int) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=RationalCyclotomicField(order=6),
         coefficients_ascending=(
-            {"num": value, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=value, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
 
@@ -117,17 +125,108 @@ def test_exact_character_basis_is_parented_and_sturm_determining(
 
 def test_character_basis_rejects_other_modular_space() -> None:
     assert ModularCharacterBasisRequest(space=_space()).space == _space()
-    assert _character_tool("modular_form.character_basis.compute") is not None
-    with pytest.raises(OperationDomainValidationError, match="supports S2"):
-        modular_character_basis_q_expansions(
-            ModularFormSpace(
-                level=13,
-                weight=2,
-                kind="M",
-                character=dirichlet_character(character_group(13), (2,)),
-                coefficient_domain=RationalCyclotomicField(order=6),
-            ),
+    assert _operation("modular_form.character_basis.compute")
+    full = modular_character_basis_q_expansions(
+        ModularFormSpace(
+            level=13,
+            weight=2,
+            kind="M",
+            character=dirichlet_character(character_group(13), (2,)),
+            coefficient_domain=RationalCyclotomicField(order=6),
+        ),
+    )
+    assert len(full.elements) == 3
+    assert full.precision == 3
+
+
+def _inflated_character(level: int, coordinate: int) -> DirichletCharacter:
+    source = dirichlet_character(character_group(13), (coordinate,))
+    target_group = character_group(level)
+    for coordinates in product(
+        *(range(order) for order in target_group.generator_orders)
+    ):
+        candidate = dirichlet_character(target_group, coordinates)
+        if all(
+            dirichlet_character_value(candidate, residue).value
+            == dirichlet_character_value(source, residue).value
+            for residue in range(level)
+            if gcd(residue, level) == 1
+        ):
+            return candidate
+    raise AssertionError("explicit character inflation fixture was not found")
+
+
+@pytest.mark.parametrize(
+    ("level", "cusp_dimension", "full_dimension", "precision"),
+    [(13, 1, 3, 3), (26, 2, 6, 8), (39, 3, 7, 10)],
+)
+@pytest.mark.parametrize("coordinate", [2, 10])
+def test_inflated_character_basis_has_independent_dimension_and_sturm_rank(
+    level: int,
+    cusp_dimension: int,
+    full_dimension: int,
+    precision: int,
+    coordinate: int,
+) -> None:
+    character = _inflated_character(level, coordinate)
+    field = RationalCyclotomicField(order=6)
+    cusp = ModularFormSpace(
+        level=level, weight=2, kind="S", character=character, coefficient_domain=field
+    )
+    full = cusp.model_copy(update={"kind": "M"})
+    cusp_basis = modular_character_basis_q_expansions(cusp)
+    full_basis = modular_character_basis_q_expansions(full)
+
+    # Cohen--Oesterle dimensions, independently evaluated from the exact
+    # conductor-13 character sums: dim S=(1,2,3), dim M=(3,6,7).
+    assert len(cusp_basis.elements) == cusp_dimension
+    assert len(full_basis.elements) == full_dimension
+    assert cusp_basis.precision == full_basis.precision == precision
+    assert cusp_basis.basis_id == (
+        "gamma0-13-even-order6-character-sturm-v1"
+        if level == 13
+        else "gamma0-cyclotomic-character-sturm-rref-v1"
+    )
+    assert full_basis.basis_id == ("gamma0-cyclotomic-character-sturm-rref-v1")
+    for basis in (cusp_basis, full_basis):
+        restored = TypeAdapter(ModularCharacterBasis).validate_json(
+            basis.model_dump_json()
         )
+        assert restored == basis
+        raw_roundtrip = tuple(
+            tuple(
+                tuple(
+                    Fraction(value.num, value.den)
+                    for value in coefficient.coefficients_ascending
+                )
+                for coefficient in element.expansion.coefficients
+            )
+            for element in basis.elements
+        )
+        assert character_basis_module._rref_character_prefix(
+            raw_roundtrip, field, precision
+        ) == tuple(element.expansion.coefficients for element in basis.elements)
+        pivots = [
+            next(
+                index
+                for index, coefficient in enumerate(element.expansion.coefficients)
+                if any(value.num for value in coefficient.coefficients_ascending)
+            )
+            for element in basis.elements
+        ]
+        assert pivots == sorted(set(pivots))
+        for row, element in enumerate(basis.elements):
+            assert element.expansion.coefficients[pivots[row]] == _scalar(1)
+            assert all(
+                not any(
+                    value.num
+                    for value in element.expansion.coefficients[
+                        pivot
+                    ].coefficients_ascending
+                )
+                for pivot in pivots
+                if pivot != pivots[row]
+            )
 
 
 @pytest.mark.parametrize("coordinates", [(12,), ("2",)])
@@ -140,7 +239,8 @@ def test_forged_character_coordinates_are_rejected_before_pari(
     )
 
     valid = _space()
-    forged_character = type(valid.character).model_construct(
+    assert isinstance(valid.character, DirichletCharacter)
+    forged_character = DirichletCharacter.model_construct(
         group=valid.character.group,
         coordinates=coordinates,
     )
@@ -163,13 +263,32 @@ def test_forged_character_coordinates_are_rejected_before_pari(
         modular_character_basis_q_expansions(forged_space)
 
 
+@pytest.mark.parametrize("missing", ["coefficient_domain", "character"])
+def test_character_basis_rejects_constructed_space_missing_required_fields(
+    missing: str,
+) -> None:
+    valid = _space()
+    values: dict[str, Any] = {
+        "group": valid.group,
+        "level": valid.level,
+        "weight": valid.weight,
+        "kind": valid.kind,
+        "character": valid.character,
+        "coefficient_domain": valid.coefficient_domain,
+    }
+    values.pop(missing)
+    malformed = ModularFormSpace.model_construct(**values)
+    with pytest.raises(OperationDomainValidationError):
+        modular_character_basis_q_expansions(malformed)
+
+
 def test_character_basis_carrier_rejects_foreign_coefficient_parent() -> None:
     space = _space()
     foreign = RationalCyclotomicElement(
         field=RationalCyclotomicField(order=3),
         coefficients_ascending=(
-            {"num": 1, "den": 1},
-            {"num": 0, "den": 1},
+            CanonicalRational(num=1, den=1),
+            CanonicalRational(num=0, den=1),
         ),
     )
     with pytest.raises(ValidationError, match="belong to the space coefficient field"):
@@ -200,10 +319,7 @@ def test_character_coordinates_realize_exact_sturm_prefix(
     assert expansion.space == form.space
     assert expansion.basis_id == CHARACTER_BASIS_ID
     assert tuple(_coords(value) for value in expansion.coefficients) == expected
-    assert (
-        _character_tool("modular_form.character_coordinates.q_expansion.compute")
-        is not None
-    )
+    assert _operation("modular_form.character_coordinates.q_expansion.compute")
 
 
 @pytest.mark.parametrize(
@@ -220,8 +336,9 @@ def test_character_hecke_t2_returns_same_space_exact_coordinates(
 
     assert result.space == form.space
     assert result.basis_id == form.basis_id
+    assert isinstance(result.coordinates[0], RationalCyclotomicElement)
     assert _coords(result.coordinates[0]) == expected_eigenvalue
-    assert _character_tool("modular_form.character_coordinates.hecke.apply")
+    assert _operation("modular_form.character_coordinates.hecke.apply")
 
 
 def test_character_hecke_maximum_admitted_index_returns_exact_parent() -> None:
@@ -232,6 +349,8 @@ def test_character_hecke_maximum_admitted_index_returns_exact_parent() -> None:
     assert result.space == form.space
     assert result.basis_id == form.basis_id
     assert len(result.coordinates) == 1
+    assert isinstance(result.coordinates[0], RationalCyclotomicElement)
+    assert isinstance(form.coordinates[0], RationalCyclotomicElement)
     assert result.coordinates[0].field == form.coordinates[0].field
 
 
@@ -246,15 +365,18 @@ def test_character_hecke_index_five_uses_power_basis_height_bound() -> None:
         3,
     )
     result = modular_character_coordinates_hecke(_form(1), 5)
+    assert isinstance(result.coordinates[0], RationalCyclotomicElement)
     assert _coords(result.coordinates[0]) == ((1, 1), (-2, 1))
 
 
 def test_character_hecke_rejects_power_basis_coordinate_above_admitted_bound(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     form = _form(1)
 
-    def out_of_bound_prefix(*_args, **_kwargs):
+    def out_of_bound_prefix(
+        *_args: object, **_kwargs: object
+    ) -> tuple[tuple[tuple[Fraction, Fraction], ...], ...]:
         prefix = [(Fraction(0), Fraction(0)) for _ in range(11)]
         prefix[1] = (Fraction(1), Fraction(0))
         prefix[10] = (Fraction(166), Fraction(0))
@@ -289,7 +411,7 @@ def test_conjugate_character_product_returns_sturm_reconstructed_target() -> Non
         coefficient_domain=RationalCyclotomicField(order=6),
     )
     assert len(product.coefficients) == 5
-    assert _character_tool("modular_form.character_coordinates.product.compute")
+    assert _operation("modular_form.character_coordinates.product.compute")
 
     precision = 5  # Sturm bound 4 for S4(Gamma0(13)).
     left_basis = pari_character_basis(
@@ -368,19 +490,17 @@ def test_character_hecke_matrix_is_bound_and_matches_normalized_a_n(
     # In this one-dimensional basis, matrix action is exactly scalar
     # multiplication and agrees with the existing coordinate operation.
     scalar = _form(7, coordinate)
+    assert isinstance(scalar.coordinates[0], RationalCyclotomicElement)
     image = modular_character_coordinates_hecke(scalar, index)
     assert image.coordinates == (
-        character_basis_module.cyclotomic.multiply(
-            matrix.entries[0][0], scalar.coordinates[0]
-        ),
+        cyclotomic.multiply(matrix.entries[0][0], scalar.coordinates[0]),
     )
     assert ModularCharacterHeckeMatrixRequest(space=space, index=index).space == space
     assert (
         ModularCharacterHeckeMatrix.model_validate_json(matrix.model_dump_json())
         == matrix
     )
-    tool = _character_tool("modular_form.character_hecke_matrix.compute")
-    assert tool is not None
+    tool = _operation("modular_form.character_hecke_matrix.compute")
     assert (
         tool.run(ModularCharacterHeckeMatrixRequest(space=space, index=index)) == matrix
     )

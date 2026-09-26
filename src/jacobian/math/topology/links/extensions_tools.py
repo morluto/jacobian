@@ -4,8 +4,11 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidPermutationResult,
+    BraidProductRequest,
+    BraidWord,
     BraidWordRequest,
     GoeritzDataRequest,
     GoeritzDataResult,
@@ -15,7 +18,10 @@ from jacobian.math.topology.links._extensions_models import (
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links.extensions import (
+    braid_artin_action,
     braid_closure,
+    braid_inverse,
+    braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
     link_goeritz_data,
@@ -28,8 +34,20 @@ def _braid_permutation(request: BraidWordRequest) -> BraidPermutationResult:
     return braid_permutation(request.word)
 
 
+def _braid_artin_action(request: BraidWordRequest) -> BraidArtinActionResult:
+    return braid_artin_action(request.word)
+
+
 def _braid_closure(request: BraidWordRequest) -> BraidClosureResult:
     return braid_closure(request.word)
+
+
+def _braid_inverse(request: BraidWordRequest) -> BraidWord:
+    return braid_inverse(request.word)
+
+
+def _braid_product(request: BraidProductRequest) -> BraidWord:
+    return braid_multiply(request.left, request.right)
 
 
 def _alexander(request: AlexanderPolynomialRequest) -> AlexanderPolynomialResult:
@@ -61,6 +79,37 @@ _SIGMA_ONE_CUBED = {
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="braid.word.artin_action.compute",
+        title="Apply a braid word to its strand free group",
+        description=(
+            "Return the exact Artin automorphism of the free group on the braid "
+            "strands. The declared convention sends sigma_i to x_i -> "
+            "x_i*x_(i+1)*x_i^-1 and x_(i+1) -> x_i; negative letters use its "
+            "inverse, and letters act successively from left to right. Images are "
+            "freely reduced. The admitted output is limited to 128 letters per "
+            "image and 100000 cumulative substitution letters."
+        ),
+        request_type=BraidWordRequest,
+        result_type=BraidArtinActionResult,
+        run=_braid_artin_action,
+        tags=("braid", "Artin-action", "free-group", "exact"),
+        discovery_terms=(
+            "braid action on free group",
+            "Artin representation of braid group",
+            "automorphism induced by braid word",
+        ),
+        examples=(
+            OperationExample(
+                name="trefoil_braid_artin_action",
+                description=(
+                    "Apply sigma_1 cubed to the rank-two free group; the positive "
+                    "generator convention and its threefold iterate are explicit."
+                ),
+                input={"word": _SIGMA_ONE_CUBED},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="link_diagram.alexander_polynomial.compute",
         title="Compute a knot diagram's Alexander polynomial",
@@ -255,6 +304,71 @@ TOOLS: MathTools = (
                     "diagram output."
                 ),
                 input={"word": _SIGMA_ONE_CUBED},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="braid.word.inverse.compute",
+        title="Invert a braid presentation word",
+        description=(
+            "Reverse the finite signed Artin-generator sequence and invert each "
+            "letter, retaining the same strand-count parent. The result is the "
+            "group inverse as a presentation word; no braid-word normalization "
+            "or equivalence decision is performed."
+        ),
+        request_type=BraidWordRequest,
+        result_type=BraidWord,
+        run=_braid_inverse,
+        tags=("braid", "inverse", "exact"),
+        discovery_terms=("inverse braid word", "invert Artin braid word"),
+        examples=(
+            OperationExample(
+                name="inverse_positive_generator",
+                description="Invert sigma_1 in B_2 to obtain sigma_1^-1.",
+                input={
+                    "word": {
+                        "strand_count": 2,
+                        "letters": [{"generator": 1, "exponent": 1}],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="braid.word.multiply.compute",
+        title="Multiply braid presentation words",
+        description=(
+            "Concatenate two signed Artin-generator sequences in B_n, preserving "
+            "the left-then-right order. Both inputs must have the same strand "
+            "count, and the output is bounded to 64 letters. This is a presentation "
+            "product; it does not reduce braid relations or decide equality."
+        ),
+        request_type=BraidProductRequest,
+        result_type=BraidWord,
+        run=_braid_product,
+        tags=("braid", "multiplication", "exact"),
+        discovery_terms=("multiply braid words", "braid group word product"),
+        examples=(
+            OperationExample(
+                name="trefoil_braid_word_product",
+                description=(
+                    "Concatenate sigma_1 squared and sigma_1 in B_2. The inputs "
+                    "must have the same strand count, and their combined word "
+                    "length must be at most 64 letters."
+                ),
+                input={
+                    "left": {
+                        "strand_count": 2,
+                        "letters": [
+                            {"generator": 1, "exponent": 1},
+                            {"generator": 1, "exponent": 1},
+                        ],
+                    },
+                    "right": {
+                        "strand_count": 2,
+                        "letters": [{"generator": 1, "exponent": 1}],
+                    },
+                },
             ),
         ),
     ),

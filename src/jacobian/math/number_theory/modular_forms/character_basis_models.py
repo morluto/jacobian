@@ -28,9 +28,12 @@ class ModularCharacterQExpansion(StrictModel):
     """One finite q-prefix over the explicit cyclotomic field of its space."""
 
     space: ModularFormSpace
-    basis_id: Literal["gamma0-13-even-order6-character-sturm-v1"]
+    basis_id: Literal[
+        "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
+    ]
     coefficients: tuple[RationalCyclotomicElement, ...] = Field(
-        min_length=3, max_length=3
+        min_length=1, max_length=128
     )
 
     @model_validator(mode="after")
@@ -109,23 +112,29 @@ class ModularCharacterBasis(StrictModel):
     """A complete admitted character-valued basis through a Sturm prefix."""
 
     space: ModularFormSpace
-    basis_id: Literal["gamma0-13-even-order6-character-sturm-v1"]
-    precision: Literal[3] = 3
-    elements: tuple[ModularCharacterBasisElement, ...] = Field(
-        min_length=1, max_length=1
-    )
+    basis_id: Literal[
+        "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
+    ]
+    precision: StrictInt = Field(ge=1, le=128)
+    elements: tuple[ModularCharacterBasisElement, ...] = Field(max_length=32)
 
     @model_validator(mode="after")
     def require_source_and_precision(self) -> Self:
         if any(
             item.expansion.space != self.space
             or item.expansion.basis_id != self.basis_id
-            or len(item.expansion.coefficients) != 3
+            or len(item.expansion.coefficients) != self.precision
             for item in self.elements
         ):
             raise PydanticCustomError(
                 "modular_forms.character_basis_binding",
                 "character basis vectors must preserve the exact source and precision",
+            )
+        if len(self.elements) > 32:
+            raise PydanticCustomError(
+                "modular_forms.character_basis_dimension",
+                "character basis dimension exceeds the admitted coordinate bound",
             )
         return self
 

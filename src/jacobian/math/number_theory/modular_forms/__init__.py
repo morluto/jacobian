@@ -33,6 +33,10 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterHeckeMatrix,
     ModularCharacterQExpansion,
 )
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
+    modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
+)
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
     modular_form_field_coordinates_q_expansion,
@@ -93,12 +97,14 @@ __all__ = [
     "modular_form_atkin_lehner_target",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
+    "modular_form_coordinates_add",
     "modular_form_coordinates_atkin_lehner",
     "modular_form_coordinates_extend_field",
     "modular_form_coordinates_from_frame",
     "modular_form_coordinates_hecke",
     "modular_form_coordinates_product",
     "modular_form_coordinates_q_expansion",
+    "modular_form_coordinates_scalar_multiply",
     "modular_form_coordinates_to_frame",
     "modular_form_coordinates_transport",
     "modular_form_coordinates_u2",

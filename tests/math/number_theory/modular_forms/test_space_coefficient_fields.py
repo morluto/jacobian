@@ -24,7 +24,6 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 )
 from jacobian.math.number_theory.modular_forms.operations import space_dimension
 from jacobian.math.number_theory.modular_forms.transform_models import SturmBoundResult
-from jacobian.math.number_theory.modular_forms.transforms import sturm_bound
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
@@ -161,7 +160,6 @@ def test_existing_qq_operations_reject_the_new_parent_without_claiming_support()
 
     for operation in (
         lambda: space_dimension(space),
-        lambda: sturm_bound(space),
         lambda: modular_form_basis_q_expansions(space, 4),
     ):
         with pytest.raises(OperationDomainValidationError):
@@ -215,7 +213,7 @@ def test_shared_coordinate_carrier_preserves_cyclotomic_parent_and_scalar_type()
         )
 
 
-def test_rational_sturm_result_cannot_be_deserialized_for_cyclotomic_space() -> None:
+def test_sturm_result_accepts_cyclotomic_space() -> None:
     space = ModularFormSpace(
         level=13,
         weight=2,
@@ -224,8 +222,7 @@ def test_rational_sturm_result_cannot_be_deserialized_for_cyclotomic_space() -> 
         coefficient_domain=RationalCyclotomicField(order=6),
     )
 
-    with pytest.raises(ValidationError, match="represents QQ spaces only"):
-        SturmBoundResult(space=space, index=14, bound=2)
+    assert SturmBoundResult(space=space, index=14, bound=2).space == space
 
 
 def test_rational_character_values_remain_valid_over_qq() -> None:

@@ -22,6 +22,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.finite_fields.values import (
+    MAX_FINITE_FIELD_PRESENTATION_ORDER,
     Axis,
     FiniteFieldElement,
     FiniteFieldPresentation,
@@ -37,6 +38,9 @@ MAX_ALGEBRAIC_SET_DEGREE = 32
 # are bounded by evaluation work instead of this materialization ceiling.
 MAX_ALGEBRAIC_SET_POINTS = 65_536
 MAX_ALGEBRAIC_SET_WORK = 1_000_000
+MAX_ALGEBRAIC_SET_COUNT_DIGITS = len(
+    str(MAX_FINITE_FIELD_PRESENTATION_ORDER**MAX_ALGEBRAIC_SET_VARS)
+)
 
 
 def _error(code: str, message: str) -> PydanticCustomError:
@@ -273,10 +277,15 @@ def _admit_enumeration(
     ):
         if projective:
             _require_homogeneous(system)
-        # Every affine point or projective scalar class is a zero. The count
-        # fits comfortably in a native integer under the carrier's q <= 2^16
-        # and n <= 8 bounds, so no candidate traversal or point materialization
-        # is needed.
+        # Every affine point or projective scalar class is a zero. The exact
+        # integer is bounded by the presentation-order and variable-axis caps;
+        # no candidate traversal or point materialization is needed.
+        if len(str(candidate_count)) > MAX_ALGEBRAIC_SET_COUNT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("presentation", "variable_axis"),
+                code="finite_field.algebraic_set_count_output_bound",
+                message="zero-set count exceeds its exact integer output bound",
+            )
         return int(candidate_count)
     if materialize and candidate_count > MAX_ALGEBRAIC_SET_POINTS:
         raise OperationResourceAdmissionError(
@@ -609,6 +618,7 @@ def verify_affine_zero_set(
 
 
 __all__ = [
+    "MAX_ALGEBRAIC_SET_COUNT_DIGITS",
     "MAX_ALGEBRAIC_SET_DEGREE",
     "MAX_ALGEBRAIC_SET_EQUATIONS",
     "MAX_ALGEBRAIC_SET_POINTS",

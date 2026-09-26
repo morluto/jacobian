@@ -157,8 +157,7 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
         )
     coefficient_digits = (
         0
-        if len(polynomial.terms) == 1
-        and polynomial.terms[0].exponents == (0, 0)
+        if len(polynomial.terms) == 1 and polynomial.terms[0].exponents == (0, 0)
         else sum(
             max(
                 decimal_digit_width(numerator),

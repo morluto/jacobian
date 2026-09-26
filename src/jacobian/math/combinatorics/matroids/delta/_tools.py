@@ -34,6 +34,11 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     twist,
     width,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import (
+    DeltaMatroidRelabelRequest,
+    DeltaMatroidRelabelling,
+    relabel,
+)
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     DeltaMatroidDistanceProfile,
@@ -71,6 +76,12 @@ def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
             code="delta_matroid.source_not_valid",
             message=str(exc),
         ) from exc
+
+
+def _relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid, request.target_ground, request.target_to_source
+    )
 
 
 def _extra_domain(
@@ -243,6 +254,37 @@ TOOLS: MathTools = (  # noqa: RUF005
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [0, 1], [1]],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.relabel.compute",
+        title="Relabel a finite delta-matroid",
+        description=(
+            "Transport the complete feasible family through an exact bijection "
+            "of ground axes, retaining both inverse index maps. Target labels "
+            "are unique and bounded by 2048 aggregate UTF-8 bytes."
+        ),
+        request_type=DeltaMatroidRelabelRequest,
+        result_type=DeltaMatroidRelabelling,
+        run=_relabel,
+        tags=("delta-matroid", "relabel", "axis-transport", "exact"),
+        discovery_terms=("delta-matroid relabeling", "ground-set axis bijection"),
+        examples=(
+            OperationExample(
+                name="relabel_two_element_cube",
+                description=(
+                    "Relabel the complete feasible family of the two-element "
+                    "cube while recording the target-to-source permutation."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    },
+                    "target_ground": ["x", "y"],
+                    "target_to_source": [1, 0],
                 },
             ),
         ),

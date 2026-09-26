@@ -200,6 +200,22 @@ def relabel(
 ) -> DeltaMatroidRelabelling:
     """Transport a complete feasible family through a ground-axis bijection."""
 
+    if isinstance(target_ground, tuple) and all(
+        isinstance(label, str) for label in target_ground
+    ):
+        target_bytes = 0
+        for label in target_ground:
+            size = _bounded_utf8_length(label)
+            if size is None:
+                break
+            target_bytes += size
+            if target_bytes > MAX_DELTA_LABEL_BYTES:
+                raise OperationResourceAdmissionError(
+                    location=("target_ground",),
+                    code="delta_matroid.relabel_target_bytes",
+                    message="target labels exceed the admitted UTF-8 byte bound",
+                )
+
     try:
         request = DeltaMatroidRelabelRequest(
             delta_matroid=delta_matroid,

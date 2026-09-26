@@ -9,10 +9,12 @@ from jacobian.math.topology.release import (
 
 def test_one_skeleton_matches_independent_face_oracle_and_retains_isolates() -> None:
     result = one_skeleton(
-        OneSkeletonRequest(
-            complex={
-                "vertices": ["d", "c", "b", "a"],
-                "facets": [["a", "b"], ["b", "c"], ["d"]],
+        OneSkeletonRequest.model_validate(
+            {
+                "complex": {
+                    "vertices": ["d", "c", "b", "a"],
+                    "facets": [["a", "b"], ["b", "c"], ["d"]],
+                }
             }
         )
     )
@@ -44,7 +46,7 @@ def test_one_skeleton_graph_value_composes_unchanged_with_graph_clique() -> None
         "vertices": ["a", "b", "c", "d"],
         "facets": [["a", "b"], ["b", "c"], ["c", "d"], ["a", "d"]],
     }
-    projected = one_skeleton(OneSkeletonRequest(complex=source))
+    projected = one_skeleton(OneSkeletonRequest.model_validate({"complex": source}))
     reconstructed = graph_clique_complex(projected.graph)
 
     assert reconstructed.clique_complex.maximal_simplices == (
@@ -63,7 +65,9 @@ def test_one_skeleton_graph_value_composes_unchanged_with_graph_clique() -> None
 
 def test_decoded_one_skeleton_rejects_forged_provenance() -> None:
     result = one_skeleton(
-        OneSkeletonRequest(complex={"vertices": ["a", "b"], "facets": [["a", "b"]]})
+        OneSkeletonRequest.model_validate(
+            {"complex": {"vertices": ["a", "b"], "facets": [["a", "b"]]}}
+        )
     )
 
     payload = result.model_dump(mode="json")
@@ -80,7 +84,9 @@ def test_decoded_one_skeleton_rejects_forged_provenance() -> None:
 
 def test_decoded_one_skeleton_rejects_forged_source_face_axis() -> None:
     result = one_skeleton(
-        OneSkeletonRequest(complex={"vertices": ["a", "b"], "facets": [["a", "b"]]})
+        OneSkeletonRequest.model_validate(
+            {"complex": {"vertices": ["a", "b"], "facets": [["a", "b"]]}}
+        )
     )
     payload = result.model_dump(mode="json")
     payload["source"]["maximal_simplices"] = [["a"], ["b"]]
@@ -96,7 +102,9 @@ def test_decoded_one_skeleton_rejects_forged_source_face_axis() -> None:
 def test_one_skeleton_provenance_check_rejects_oversized_facets_before_pairs() -> None:
     labels = tuple("abcdefghi")
     result = one_skeleton(
-        OneSkeletonRequest(complex={"vertices": labels[:-1], "facets": [labels[:-1]]})
+        OneSkeletonRequest.model_validate(
+            {"complex": {"vertices": labels[:-1], "facets": [labels[:-1]]}}
+        )
     )
     forged_source = result.source.model_copy(
         update={"vertices": labels, "maximal_simplices": (labels,)}
@@ -108,8 +116,10 @@ def test_one_skeleton_provenance_check_rejects_oversized_facets_before_pairs() -
         edge_faces=(),
     )
 
+    validator_name = "require_source_axes"
+    validator = getattr(forged_result, validator_name)
     try:
-        forged_result.require_source_axes()
+        validator()
     except ValueError as error:
         assert "source facets exceed the admitted shape bounds" in str(error)
     else:
@@ -118,7 +128,9 @@ def test_one_skeleton_provenance_check_rejects_oversized_facets_before_pairs() -
 
 def test_one_skeleton_provenance_check_caps_forged_facet_count_before_pairs() -> None:
     result = one_skeleton(
-        OneSkeletonRequest(complex={"vertices": ["a"], "facets": [["a"]]})
+        OneSkeletonRequest.model_validate(
+            {"complex": {"vertices": ["a"], "facets": [["a"]]}}
+        )
     )
     forged_source = result.source.model_copy(
         update={"maximal_simplices": (("a",),) * 2049}
@@ -130,8 +142,10 @@ def test_one_skeleton_provenance_check_caps_forged_facet_count_before_pairs() ->
         edge_faces=(),
     )
 
+    validator_name = "require_source_axes"
+    validator = getattr(forged_result, validator_name)
     try:
-        forged_result.require_source_axes()
+        validator()
     except ValueError as error:
         assert "source facets exceed the admitted shape bounds" in str(error)
     else:

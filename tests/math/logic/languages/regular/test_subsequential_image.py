@@ -127,6 +127,36 @@ def test_image_requires_matching_alphabet_identity() -> None:
         SubsequentialImageRequest(dfa=mismatch, transducer=transducer)
 
 
+def test_multi_symbol_emission_fits_admitted_work_bound() -> None:
+    input_alphabet = FiniteAlphabet(symbols=("x",))
+    output_alphabet = FiniteAlphabet(symbols=("a", "b", "c"))
+    source = DFA(
+        state_count=1,
+        alphabet_size=1,
+        alphabet_id="in",
+        alphabet=input_alphabet,
+        transitions=(DFATransition(source=0, symbol=0, target=0),),
+        initial_state=0,
+        accepting_states=(0,),
+    )
+    transducer = SubsequentialTransducer(
+        input_alphabet_size=1,
+        output_alphabet_size=3,
+        input_alphabet_id="in",
+        output_alphabet_id="out",
+        input_alphabet=input_alphabet,
+        output_alphabet=output_alphabet,
+        state_count=1,
+        initial_state=0,
+        transitions=(
+            SubseqTransition(source=0, input_symbol=0, target=0, output=(0, 1, 2)),
+        ),
+        final_outputs=(SubseqFinalOutput(state=0, output=()),),
+    )
+    result = dfa_subsequential_image(source, transducer)
+    assert nfa_membership(result, (0, 1, 2))
+
+
 def test_unemitted_output_symbol_has_no_accepting_path() -> None:
     alphabet = FiniteAlphabet(symbols=("x", "y"))
     source = DFA(

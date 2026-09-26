@@ -17,6 +17,7 @@ from jacobian.math.logic.languages.regular import (
     dfa_subsequential_image,
     dfa_subsequential_preimage,
     nfa_membership,
+    nfa_subsequential_image,
     transition_parikh_profile,
 )
 from jacobian.math.logic.languages.regular._models import (
@@ -31,6 +32,7 @@ from jacobian.math.logic.languages.regular._models import (
     RunRequest,
     RunResult,
     SubsequentialImageRequest,
+    SubsequentialNFAImageRequest,
     SubsequentialPreimageRequest,
     TransitionParikhProfileRequest,
 )
@@ -94,6 +96,12 @@ def compute_subsequential_preimage(request: SubsequentialPreimageRequest) -> DFA
 
 def compute_subsequential_image(request: SubsequentialImageRequest) -> NFA:
     return dfa_subsequential_image(request.dfa, request.transducer)
+
+
+def compute_subsequential_nfa_image(
+    request: SubsequentialNFAImageRequest,
+) -> NFA:
+    return nfa_subsequential_image(request.nfa, request.transducer)
 
 
 def compute_nfa_membership(request: NFAMembershipRequest) -> NFAMembershipResult:
@@ -192,6 +200,65 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "accepting_states": [2],
                     },
                     "word": [0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.subsequential.nfa_image.compute",
+        title="Compute an epsilon-NFA language image under a subsequential transducer",
+        description=(
+            "Return an output-alphabet epsilon-NFA recognizing the image of the "
+            "source epsilon-NFA language under a partial subsequential transducer. "
+            "Source epsilon edges leave the transducer state unchanged; labeled "
+            "source edges advance both machines and emit transition outputs. Final "
+            "outputs are emitted only at accepting source states. The source NFA "
+            "and transducer input must share the identical explicit ordered alphabet."
+        ),
+        request_type=SubsequentialNFAImageRequest,
+        result_type=NFA,
+        run=compute_subsequential_nfa_image,
+        tags=("regular-language", "transducer", "image", "exact"),
+        examples=(
+            OperationExample(
+                name="epsilon_closure_and_word_outputs",
+                description=(
+                    "Compute the transducer image of a source language with an "
+                    "epsilon prefix; source and transducer must share the same "
+                    "ordered input alphabet."
+                ),
+                input={
+                    "nfa": {
+                        "state_count": 2,
+                        "alphabet_size": 1,
+                        "alphabet_id": "input",
+                        "alphabet": {"symbols": ["x"]},
+                        "transitions": [
+                            {
+                                "transition_id": 0,
+                                "source": 0,
+                                "symbol": None,
+                                "target": 1,
+                            },
+                            {"transition_id": 1, "source": 1, "symbol": 0, "target": 1},
+                        ],
+                        "initial_state": 0,
+                        "accepting_states": [1],
+                    },
+                    "transducer": {
+                        "input_alphabet_size": 1,
+                        "output_alphabet_size": 1,
+                        "input_alphabet_id": "input",
+                        "output_alphabet_id": "output",
+                        "input_alphabet": {"symbols": ["x"]},
+                        "output_alphabet": {"symbols": ["a"]},
+                        "state_count": 1,
+                        "initial_state": 0,
+                        "transitions": [
+                            {"source": 0, "input_symbol": 0, "target": 0, "output": [0]}
+                        ],
+                        "final_outputs": [{"state": 0, "output": []}],
+                    },
                 },
             ),
         ),

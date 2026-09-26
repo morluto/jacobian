@@ -1,11 +1,9 @@
 """Supported exact values and operations for bounded modular-form spaces."""
 
-from jacobian.math.number_theory.modular_forms._models import ModularFormEqualityResult
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,
     modular_form_coordinates_atkin_lehner,
-    modular_form_coordinates_equal,
     modular_form_coordinates_from_frame,
     modular_form_coordinates_hecke,
     modular_form_coordinates_product,
@@ -13,6 +11,7 @@ from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_coordinates_to_frame,
     modular_form_coordinates_transport,
     modular_form_coordinates_u2,
+    modular_form_coordinates_u_prime,
     modular_form_coordinates_v2,
     modular_form_coordinates_v3,
     modular_form_coordinates_v_degeneracy,
@@ -32,12 +31,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterBasis,
     ModularCharacterBasisElement,
-    ModularCharacterBasisRequest,
-    ModularCharacterCoordinatesProductRequest,
-    ModularCharacterCoordinatesRequest,
     ModularCharacterHeckeMatrix,
-    ModularCharacterHeckeMatrixRequest,
-    ModularCharacterHeckeRequest,
     ModularCharacterQExpansion,
 )
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
@@ -74,17 +68,11 @@ __all__ = [
     "LevelOneModularQExpansion",
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",
-    "ModularCharacterBasisRequest",
-    "ModularCharacterCoordinatesProductRequest",
-    "ModularCharacterCoordinatesRequest",
     "ModularCharacterHeckeMatrix",
-    "ModularCharacterHeckeMatrixRequest",
-    "ModularCharacterHeckeRequest",
     "ModularCharacterQExpansion",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
-    "ModularFormEqualityResult",
     "ModularFormFieldQExpansion",
     "ModularFormFramedCoordinates",
     "ModularFormFramedHeckeMatrix",
@@ -105,7 +93,6 @@ __all__ = [
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
     "modular_form_coordinates_atkin_lehner",
-    "modular_form_coordinates_equal",
     "modular_form_coordinates_extend_field",
     "modular_form_coordinates_from_frame",
     "modular_form_coordinates_hecke",
@@ -114,6 +101,7 @@ __all__ = [
     "modular_form_coordinates_to_frame",
     "modular_form_coordinates_transport",
     "modular_form_coordinates_u2",
+    "modular_form_coordinates_u_prime",
     "modular_form_coordinates_v2",
     "modular_form_coordinates_v3",
     "modular_form_coordinates_v_degeneracy",

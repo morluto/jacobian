@@ -319,13 +319,13 @@ def main() -> int:
     dimension = int(pari.mfdim(pari_space))
     if dimension != expected_dimension:
         raise RuntimeError("PARI and caller dimension formula disagree")
-    vectors: list[list[list[str]]] = []
+    rational_vectors: list[list[list[str]]] = []
     if dimension:
         coefficient_matrix = pari.mfcoefs(pari_space, precision - 1)
         row_count, column_count = (int(value) for value in coefficient_matrix.matsize())
         if row_count != precision or column_count != dimension:
             raise RuntimeError("PARI returned an unexpected q-coefficient matrix shape")
-        vectors = [
+        rational_vectors = [
             [
                 _as_fraction_pair(coefficient_matrix[term, basis])
                 for term in range(precision)
@@ -333,13 +333,13 @@ def main() -> int:
             for basis in range(dimension)
         ]
     digest = hashlib.sha256(input_bytes).hexdigest()
-    response: dict[str, object] = {
+    rational_response: dict[str, object] = {
         "kind": "complete",
         "backend_dimension": dimension,
-        "vectors": vectors,
+        "vectors": rational_vectors,
         "request_digest": digest,
     }
-    sys.stdout.buffer.write(encode_worker_result_frame(response))
+    sys.stdout.buffer.write(encode_worker_result_frame(rational_response))
     return 0
 
 

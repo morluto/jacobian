@@ -6,6 +6,7 @@ from math import comb
 from typing import Any
 
 from jacobian._execution import request_checkpoint
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -71,6 +72,14 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             message="the polynomial prefactor exceeds the shift-quotient envelope",
         )
     factorial_degree = _factorial_ratio_degree(term, axis)
+    offset_digits = max(
+        (
+            decimal_digit_width(abs(factor.offset))
+            for factor in term.factorial_factors
+            if (factor.n_coefficient, factor.k_coefficient)[axis] != 0
+        ),
+        default=1,
+    )
     if factorial_degree > _MAX_FACTORIAL_RATIO_DEGREE:
         raise OperationResourceAdmissionError(
             location=("term", "factorial_factors"),
@@ -105,7 +114,7 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
     conservative_digits = (
         2 * coefficient_digits
         + 2 * base_digits
-        + factorial_degree * 5
+        + factorial_degree * (offset_digits + 4)
         + _term_degree(term)
         + len(str(max(1, shifted_terms * factorial_terms)))
     )

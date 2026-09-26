@@ -119,6 +119,19 @@ def test_zero_term_has_no_generic_shift_quotients():
         proper_hypergeometric_shift_quotients(term)
 
 
+def test_large_affine_offsets_are_admitted_before_symbolic_expansion():
+    term = ProperHypergeometricTerm(
+        polynomial=polynomial([((0, 0), 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=1, k_coefficient=0, offset=10**256, power=1
+            ),
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="128 digits"):
+        proper_hypergeometric_shift_quotients(term)
+
+
 def test_factorial_growth_is_rejected_before_expansion():
     term = ProperHypergeometricTerm(
         polynomial=polynomial([((0, 0), 1)]),

@@ -13,7 +13,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.matrices.certified_snf.operations import inverse_unimodular
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
     homology_groups,
@@ -774,11 +773,17 @@ def induced_normalized_homology_map(
 ) -> SimplicialHomologyMapValue:
     """Compute the induced map on every homology degree supported by a prefix."""
     chain_map = induced_normalized_chain_map(map_value)
-    source = normalized_homology(map_value.source)
+    source_right_inverses: list[list[list[int]]] = []
+    source = normalized_homology(
+        map_value.source, _integral_right_inverses=source_right_inverses
+    )
+    target_right_inverses = source_right_inverses
     target = (
         source
         if map_value.target == map_value.source
-        else normalized_homology(map_value.target)
+        else normalized_homology(
+            map_value.target, _integral_right_inverses=(target_right_inverses := [])
+        )
     )
     degree_maps: list[NormalizedHomologyDegreeMap] = []
     for degree, (source_group, target_group) in enumerate(
@@ -786,16 +791,7 @@ def induced_normalized_homology_map(
     ):
         assert isinstance(source_group, IntegralHomologyGroupValue)
         assert isinstance(target_group, IntegralHomologyGroupValue)
-        inverse_right = (
-            tuple(
-                tuple(row)
-                for row in inverse_unimodular(
-                    [list(row) for row in target_group.outgoing_smith_certificate.right_transformation.entries]
-                )
-            )
-            if source_group.free_rank or source_group.torsion_generators
-            else ()
-        )
+        inverse_right = tuple(tuple(row) for row in target_right_inverses[degree])
         degree_maps.append(
             NormalizedHomologyDegreeMap(
                 degree=degree,
@@ -961,6 +957,8 @@ def compose_simplicial_homology_maps(
 
 def normalized_homology(
     simplicial_set: FiniteTruncatedSimplicialSet,
+    *,
+    _integral_right_inverses: list[list[list[int]]] | None = None,
 ) -> NormalizedHomologyResult:
     """Compute integral normalized homology below the finite prefix top.
 
@@ -989,7 +987,9 @@ def normalized_homology(
     # This shared exact kernel computes all group data, including the formal
     # top group of the retained chain prefix. Only degrees with a known incoming
     # simplicial boundary are exposed by this operation.
-    computed = homology_groups(chain)
+    computed = homology_groups(
+        chain, _integral_right_inverses=_integral_right_inverses
+    )
     nondegenerate_bases: list[tuple[str, ...]] = []
     nondegenerate_bases.extend(normalized.nondegenerate_bases)
     return NormalizedHomologyResult(

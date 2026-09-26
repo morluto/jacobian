@@ -985,7 +985,11 @@ def construct_chain_complex(
     return value
 
 
-def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
+def homology_groups(
+    complex_value: ChainComplexValue,
+    *,
+    _integral_right_inverses: list[list[list[int]]] | None = None,
+) -> HomologyResult:
     """Return exact homology groups for a canonical chain complex value."""
     require_prime_field_admission(complex_value.coefficient_ring, complex_value.prime)
     _require_complex_cell_budget(
@@ -995,7 +999,10 @@ def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
     )
     groups: tuple[HomologyGroupValue | IntegralHomologyGroupValue, ...]
     if complex_value.coefficient_ring is CoefficientRing.INTEGER:
-        groups = compute_integral_homology(admit_integral_homology(complex_value))
+        groups = compute_integral_homology(
+            admit_integral_homology(complex_value),
+            right_inverses=_integral_right_inverses,
+        )
     else:
         groups = tuple(_compute_homology_groups(complex_value))
     return HomologyResult._from_kernel(

@@ -103,22 +103,42 @@ def _result_byte_upper_bound(
 def _forced_full_height_columns_count(
     partition: IntegerPartition, content: TableauContent
 ) -> int | None:
-    """Return the unique/zero count when equal lower rows force full columns."""
+    """Reduce forced full-height columns until one row or a general case remains."""
 
-    if (
-        len(partition.parts) <= 1
-        or len(content.terms) != len(partition.parts)
-        or len(set(partition.parts[1:])) != 1
-    ):
-        return None
-    # Every column through the common lower-row width has full height.
-    # With exactly one distinct label per row, those columns are forced
-    # to contain the labels in order. All remaining cells lie in the top
-    # row and their fixed content has exactly one weakly increasing fill.
-    lower_width = partition.parts[-1]
-    if all(term.multiplicity >= lower_width for term in content.terms):
-        return 1
-    return 0
+    rows = list(partition.parts)
+    counts = [term.multiplicity for term in content.terms]
+    row_minima = [0] * len(rows)
+    while rows:
+        active_labels = [index for index, count in enumerate(counts) if count]
+        if len(rows) == 1:
+            if (
+                sum(counts) == rows[0]
+                and all(index >= row_minima[0] for index in active_labels)
+            ):
+                return 1
+            return 0
+        if len(active_labels) < len(rows):
+            return 0
+        if len(active_labels) > len(rows):
+            return None
+
+        width = rows[-1]
+        if any(counts[index] < width for index in active_labels):
+            return 0
+        if any(
+            label_index < row_minima[row_index]
+            for row_index, label_index in enumerate(active_labels)
+        ):
+            return 0
+
+        for row_index, label_index in enumerate(active_labels):
+            counts[label_index] -= width
+            rows[row_index] -= width
+            row_minima[row_index] = label_index
+        while rows and rows[-1] == 0:
+            rows.pop()
+            row_minima.pop()
+    return 1 if not any(counts) else 0
 
 
 def _zero_result(

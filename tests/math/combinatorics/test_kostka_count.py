@@ -186,6 +186,12 @@ def test_equal_lower_rows_reduce_forced_full_height_columns() -> None:
     assert fixed_content_count(impossible).count == 0
 
 
+def test_uneven_lower_rows_reduce_successive_forced_column_blocks() -> None:
+    request = _request((300, 100, 50), ((1, 200), (2, 50), (3, 200)))
+
+    assert fixed_content_count(request).count == 1
+
+
 def test_multiset_search_work_admits_its_exact_bound(monkeypatch) -> None:
     request = _request((4, 3, 1), ((4, 3), (9, 3), (12, 2)))
     exact_work_bound = 9 * 560 * (3 + 2)

@@ -518,8 +518,8 @@ def test_twist_result_json_rejects_changed_feasible_family_cardinality() -> None
 def test_twist_result_membership_admission_has_exact_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    import jacobian.math.combinatorics.matroids.delta.operations as operations_module
     import jacobian.math.combinatorics.matroids.delta._tools as tools_module
+    import jacobian.math.combinatorics.matroids.delta.operations as operations_module
     from jacobian.catalog.models import OperationResourceAdmissionError
 
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))

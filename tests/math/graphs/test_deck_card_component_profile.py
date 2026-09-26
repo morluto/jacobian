@@ -1,4 +1,3 @@
-import json
 from itertools import combinations
 
 import pytest
@@ -13,9 +12,7 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.card_component_profile._models import (
     AnonymousDeckComponentProfile,
-    AnonymousDeckComponentProfileRequest,
 )
-from jacobian.math.graphs.decks.card_component_profile._tools import TOOLS
 from jacobian.math.graphs.decks.card_component_profile.operations import (
     card_component_profile,
 )
@@ -64,7 +61,7 @@ def test_exhaustive_order_four_graph_multiset_matches_independent_oracle() -> No
         for mask in range(1 << len(possible_edges))
     )
     deck = _deck(cards)
-    result = card_component_profile(AnonymousDeckComponentProfileRequest(deck=deck))
+    result = card_component_profile(deck)
     expected: dict[tuple[int, ...], int] = {}
     for graph in cards:
         profile = _oracle_component_orders(graph)
@@ -89,12 +86,8 @@ def test_cardwise_profile_is_unchanged_by_independent_relabelling_and_order() ->
         vertices=("p", "q", "r", "s"),
         edges=(("p", "q"), ("p", "r"), ("q", "r")),
     )
-    left = card_component_profile(
-        AnonymousDeckComponentProfileRequest(deck=_deck((first, triangle_isolate)))
-    )
-    right = card_component_profile(
-        AnonymousDeckComponentProfileRequest(deck=_deck((triangle_isolate, relabelled)))
-    )
+    left = card_component_profile(_deck((first, triangle_isolate)))
+    right = card_component_profile(_deck((triangle_isolate, relabelled)))
     assert left == right
     assert {item.component_orders: item.multiplicity for item in left.profiles} == {
         (1, 3): 1,
@@ -104,28 +97,10 @@ def test_cardwise_profile_is_unchanged_by_independent_relabelling_and_order() ->
 
 def test_zero_order_empty_deck_and_catalog_example() -> None:
     empty_deck = anonymous_graph_card_multiset(0, ())
-    result = card_component_profile(
-        AnonymousDeckComponentProfileRequest(deck=empty_deck)
-    )
+    result = card_component_profile(empty_deck)
     assert result.card_order == 0
     assert result.card_count == 0
     assert result.profiles == ()
-
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "graph.deck.card_component_profile.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        json.dumps(tool.examples[0].input), strict=True
-    )
-    published_result = tool.run(request)
-    assert {
-        item.component_orders: item.multiplicity for item in published_result.profiles
-    } == {
-        (1, 3): 1,
-        (4,): 2,
-    }
 
 
 @pytest.mark.parametrize("order", (8, 9, 10))
@@ -142,7 +117,7 @@ def test_high_order_deck_is_profiled_without_permutation_canonicalization(
         card_order=order,
         classes=(AnonymousGraphCardClass(representative=graph, multiplicity=5),),
     )
-    result = card_component_profile(AnonymousDeckComponentProfileRequest(deck=deck))
+    result = card_component_profile(deck)
     assert {item.component_orders: item.multiplicity for item in result.profiles} == {
         (order,): 5
     }
@@ -176,9 +151,7 @@ def test_duplicate_isomorphic_rows_accumulate_without_canonicalization() -> None
             ),
         ),
     )
-    result = card_component_profile(
-        AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
-    )
+    result = card_component_profile(deck)
     assert {item.component_orders: item.multiplicity for item in result.profiles} == {
         (4,): 5
     }
@@ -206,9 +179,7 @@ def test_schema_bypassed_representative_reports_domain_error(
         ),
     )
     with pytest.raises(OperationDomainValidationError):
-        card_component_profile(
-            AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
-        )
+        card_component_profile(deck)
 
 
 def test_long_edge_labels_are_rejected_before_label_comparison() -> None:
@@ -227,9 +198,7 @@ def test_long_edge_labels_are_rejected_before_label_comparison() -> None:
         ),
     )
     with pytest.raises(OperationDomainValidationError):
-        card_component_profile(
-            AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
-        )
+        card_component_profile(deck)
 
 
 def test_connectivity_work_is_admitted_before_graph_traversal(
@@ -263,7 +232,19 @@ def test_connectivity_work_is_admitted_before_graph_traversal(
         unexpected,
     )
     with pytest.raises(OperationResourceAdmissionError):
-        card_component_profile(
-            AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
-        )
+        card_component_profile(deck)
     assert calls == 0
+
+
+def test_card_component_profile_is_native_only_projection() -> None:
+    from jacobian.catalog.builtins import BUILTIN_TOOLS
+    from jacobian.math.graphs.decks.card_component_profile import (
+        card_component_profile as public_profile,
+    )
+
+    assert public_profile is card_component_profile
+    assert all(
+        tool.operation_id != "graph.deck.card_component_profile.compute"
+        for tool in BUILTIN_TOOLS
+    )
+    assert card_component_profile(_deck(())).card_count == 0

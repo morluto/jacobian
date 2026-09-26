@@ -16,7 +16,6 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.card_component_profile._models import (
     AnonymousDeckComponentProfile,
-    AnonymousDeckComponentProfileRequest,
     CardComponentSizeProfile,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -102,9 +101,7 @@ def _admit_deck(
             if (
                 type(edge) is not tuple
                 or len(edge) != 2
-                or any(
-                    type(label) is not str or len(label) > 3 for label in edge
-                )
+                or any(type(label) is not str or len(label) > 3 for label in edge)
                 or edge[0] not in expected_vertices
                 or edge[1] not in expected_vertices
                 or edge[0] >= edge[1]
@@ -160,16 +157,10 @@ def _component_orders(
 
 
 def card_component_profile(
-    request: AnonymousDeckComponentProfileRequest,
+    deck: AnonymousGraphCardMultiset,
 ) -> AnonymousDeckComponentProfile:
     """Return the multiplicity histogram of card component-size multisets."""
-    if type(request) is not AnonymousDeckComponentProfileRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.component_profile_request",
-            message="request must be an AnonymousDeckComponentProfileRequest",
-        )
-    order, rows, card_count = _admit_deck(getattr(request, "deck", None))
+    order, rows, card_count = _admit_deck(deck)
 
     # The connectivity plan has been admitted before adjacency traversal begins.
     # Component sizes are graph-isomorphism invariants, so each admitted

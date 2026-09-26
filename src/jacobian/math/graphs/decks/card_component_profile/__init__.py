@@ -2,7 +2,6 @@
 
 from jacobian.math.graphs.decks.card_component_profile._models import (
     AnonymousDeckComponentProfile,
-    AnonymousDeckComponentProfileRequest,
     CardComponentSizeProfile,
 )
 from jacobian.math.graphs.decks.card_component_profile.operations import (
@@ -11,7 +10,6 @@ from jacobian.math.graphs.decks.card_component_profile.operations import (
 
 __all__ = [
     "AnonymousDeckComponentProfile",
-    "AnonymousDeckComponentProfileRequest",
     "CardComponentSizeProfile",
     "card_component_profile",
 ]

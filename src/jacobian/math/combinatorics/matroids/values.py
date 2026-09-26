@@ -170,6 +170,16 @@ class FiniteBasisMatroid(StrictModel):
         )
     )
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        ground: tuple[str, ...],
+        bases: tuple[tuple[int, ...], ...],
+    ) -> FiniteBasisMatroid:
+        """Construct a basis carrier after its producing theorem was checked."""
+        return cls.model_construct(ground=ground, bases=bases)
+
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_envelope(cls, data: object) -> object:

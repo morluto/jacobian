@@ -347,48 +347,6 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         )
 
 
-class NondeterministicRunCountsRequest(StrictModel):
-    """Count accepting state assignments on trees, grouped by node size."""
-
-    automaton: BottomUpTreeAutomaton
-    max_size: int = Field(ge=1, le=100)
-
-
-class NondeterministicRunCountsResult(NondeterministicRunCountsRequest):
-    """Exact accepting-run counts for each positive node size through max_size."""
-
-    run_counts_by_size: tuple[ExactInteger, ...]
-    estimated_work_bound: int = Field(ge=0, le=2_000_000)
-
-    @model_validator(mode="after")
-    def bind_counts(self) -> Self:
-        if len(self.run_counts_by_size) != self.max_size:
-            raise _validation_error(
-                "run_count_profile_length",
-                "run-count profile must contain one entry per size",
-            )
-        if any(int(count) < 0 for count in self.run_counts_by_size):
-            raise _validation_error(
-                "run_count_negative", "run counts must be nonnegative"
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        request: NondeterministicRunCountsRequest,
-        *,
-        run_counts_by_size: tuple[int, ...],
-        estimated_work_bound: int,
-    ) -> Self:
-        return cls.model_construct(
-            automaton=request.automaton,
-            max_size=request.max_size,
-            run_counts_by_size=run_counts_by_size,
-            estimated_work_bound=estimated_work_bound,
-        )
-
-
 class TreeAutomatonTrimRequest(StrictModel):
     """Restrict an automaton to its reachable and productive states."""
 
@@ -483,6 +441,25 @@ class RegularTreeGrammarToAutomatonResult(StrictModel):
     ) -> Self:
         """Construct the source-bound result emitted by the trusted converter."""
         return cls.model_construct(grammar=grammar, automaton=automaton)
+
+
+class TreeAutomatonToRegularTreeGrammarRequest(StrictModel):
+    """Construct a unit-free regular grammar for a finite tree automaton."""
+
+    automaton: BottomUpTreeAutomaton
+
+
+class TreeAutomatonToRegularTreeGrammarResult(StrictModel):
+    """Source-bound grammar denoting exactly the source automaton language."""
+
+    automaton: BottomUpTreeAutomaton
+    grammar: RegularTreeGrammar
+
+    @classmethod
+    def _from_kernel(
+        cls, *, automaton: BottomUpTreeAutomaton, grammar: RegularTreeGrammar
+    ) -> Self:
+        return cls.model_construct(automaton=automaton, grammar=grammar)
 
 
 class TreeAutomatonComplementRequest(StrictModel):
@@ -921,6 +898,8 @@ __all__ = [
     "TreeAutomatonMinimizeRequest",
     "TreeAutomatonMinimizeResult",
     "TreeAutomatonReachabilityRequest",
+    "TreeAutomatonToRegularTreeGrammarRequest",
+    "TreeAutomatonToRegularTreeGrammarResult",
     "TreeAutomatonTrimRequest",
     "TreeAutomatonTrimResult",
     "TreeDeterminizeRequest",

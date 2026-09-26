@@ -2,6 +2,7 @@
 
 from jacobian.math.combinatorics.symmetric_functions.littlewood_richardson import (
     littlewood_richardson_coefficient,
+    littlewood_richardson_tableaux,
     schur_product,
 )
 from jacobian.math.combinatorics.symmetric_functions.operations import (
@@ -24,6 +25,7 @@ __all__ = [
     "StandardYoungTableau",
     "TableauCandidate",
     "littlewood_richardson_coefficient",
+    "littlewood_richardson_tableaux",
     "partition_conjugate",
     "require_semistandard",
     "require_standard",

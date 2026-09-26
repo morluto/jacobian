@@ -147,6 +147,54 @@ def test_backtracking_is_identity_and_reverse_path_inverts_product():
     assert reverse_value == group.inverse[forward_value]
 
 
+def test_malformed_constructed_group_is_rejected_structurally():
+    group, _ = _s3()
+    malformed_group = type(group).model_construct(identity=0, inverse=group.inverse)
+    field = _field(group, _s3()[1])
+    malformed_field = FiniteGroupGaugeField.model_construct(
+        lattice=field.lattice, group=malformed_group, edge_values=field.edge_values
+    )
+    request = FiniteGroupGaugeHolonomyRequest.model_construct(
+        field=malformed_field, path=OrientedGaugePath(steps=(), basepoint="a")
+    )
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        finite_group_gauge_holonomy(request)
+
+
+def test_noncanonical_edge_label_is_rejected():
+    group, index = _s3()
+    field = _field(group, index)
+    malformed_field = FiniteGroupGaugeField.model_construct(
+        lattice=field.lattice,
+        group=group,
+        edge_values=(object(), *field.edge_values[1:]),
+    )
+    request = FiniteGroupGaugeHolonomyRequest.model_construct(
+        field=malformed_field,
+        path=OrientedGaugePath(steps=(), basepoint="a"),
+    )
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError):
+        finite_group_gauge_holonomy(request)
+
+
+def test_mismatched_nonempty_path_basepoint_is_rejected():
+    group, index = _s3()
+    field = _field(group, index)
+    path = OrientedGaugePath(
+        steps=(GaugePathStep(edge_id="e1", forward=True),), basepoint="c"
+    )
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    with pytest.raises(OperationDomainValidationError, match="basepoint"):
+        finite_group_gauge_holonomy(
+            FiniteGroupGaugeHolonomyRequest(field=field, path=path)
+        )
+
+
 def test_edge_parent_substitution_is_rejected():
     group, index = _s3()
     other = construct_finite_group_table(

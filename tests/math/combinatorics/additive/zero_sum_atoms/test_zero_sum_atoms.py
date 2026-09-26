@@ -293,9 +293,7 @@ def test_projection_composes_with_transversal_and_matching_consumers() -> None:
 def test_admission_accepts_cheap_large_group_sources_and_result_boundaries() -> None:
     assert _run((), (4097,)).atom_count == 0
 
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_ATOM_SOURCE_ELEMENTS} items"
-    ):
+    with pytest.raises(ValidationError) as error:
         ZeroSumAtomSource.model_validate_json(
             encode_strict_json(
                 {
@@ -304,6 +302,10 @@ def test_admission_accepts_cheap_large_group_sources_and_result_boundaries() -> 
                 }
             )
         )
+    assert (
+        error.value.errors()[0]["type"]
+        == "additive_combinatorics.zero_sum_atom_source_cardinality"
+    )
 
     # The 24-element source ceiling is exactly the largest complete subset
     # tree inside the 20,000,000-check bound: 2**24 = 16,777,216.

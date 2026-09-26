@@ -3,6 +3,7 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.tropical._models import *  # noqa: F403
+from jacobian.math.polynomials.tropical.essential_part import compute_essential_part
 from jacobian.math.polynomials.tropical.hypersurface import (
     compute_bivariate_hypersurface,
 )
@@ -165,6 +166,10 @@ def compute_matrix_multiply(request: MatrixMultiplyRequest) -> MatrixResult:
     return MatrixResult._from_kernel(
         tropical_matrix_multiply(request.left, request.right)
     )
+
+
+def compute_matrix_add(request: MatrixAddRequest) -> MatrixResult:
+    return MatrixResult._from_kernel(tropical_matrix_add(request.left, request.right))
 
 
 def compute_matrix_power(request: MatrixPowerRequest) -> MatrixResult:
@@ -563,6 +568,47 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="tropical.polynomial.essential_part.compute",
+        title="Compute the tie-inclusive attained part of a tropical polynomial",
+        description=(
+            "Return exactly the source monomials that attain the polynomial value "
+            "somewhere on the finite affine domain, including terms that only tie. "
+            "The result retains the source, equivalent subpolynomial, all lifted "
+            "facet incidences, affine-rank equations, and complete finite-normal "
+            "lower/upper face incidence. This bounded exact hull transform is not "
+            "the unique-region functional normal form. Inputs admit at most 4 "
+            "variables, 64 terms, and 32 decimal digits per coefficient. The "
+            "complete face-closure work is bounded before hull expansion."
+        ),
+        request_type=EssentialPartRequest,
+        result_type=TropicalPolynomialEssentialPart,
+        run=compute_essential_part,
+        tags=("tropical", "polynomial", "essential-part", "exact"),
+        examples=(
+            OperationExample(
+                name="tie_inclusive_square_support",
+                description=(
+                    "Retain all four square terms and the center term because they "
+                    "tie at the origin. Essential-part inputs are limited to 4 "
+                    "variables, 64 terms, and 32 decimal digits per coefficient."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": _s(),
+                        "variables": ["x", "y"],
+                        "terms": [
+                            {"exponents": [0, 0], "coefficient": _finite(0)},
+                            {"exponents": [0, 2], "coefficient": _finite(0)},
+                            {"exponents": [1, 1], "coefficient": _finite(0)},
+                            {"exponents": [2, 0], "coefficient": _finite(0)},
+                            {"exponents": [2, 2], "coefficient": _finite(0)},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tropical.polynomial.bivariate_regular_subdivision.compute",
         title="Compute a bivariate tropical regular subdivision",
         description=(
@@ -631,6 +677,31 @@ TOOLS: MathTools = (
                             {"exponents": [1, 0], "coefficient": _finite(0)},
                         ],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.matrix.add.compute",
+        title="Add tropical matrices",
+        description=(
+            "Add tropical matrix entries coordinatewise while preserving the "
+            "shared semiring and identical labelled row and column axes."
+        ),
+        request_type=MatrixAddRequest,
+        result_type=MatrixResult,
+        run=compute_matrix_add,
+        tags=("tropical", "matrix", "exact"),
+        examples=(
+            OperationExample(
+                name="matrix_add",
+                description=(
+                    "Take the entrywise minimum of two matrices with identical "
+                    "MIN_PLUS semiring and labelled axes."
+                ),
+                input={
+                    "left": _matrix(((0, 4), (3, 1))),
+                    "right": _matrix(((2, 1), (3, 5))),
                 },
             ),
         ),
@@ -736,6 +807,7 @@ __all__ = [
     "TOOLS",
     "compute_assignment",
     "compute_finite_power_sum",
+    "compute_matrix_add",
     "compute_matrix_multiply",
     "compute_matrix_power",
     "compute_minor_assignments",

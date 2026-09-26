@@ -217,16 +217,20 @@ def test_large_ap_carrier_reaches_linear_consumers_not_independence_search() -> 
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_HYPERGRAPH_INDEPENDENCE_VERTICES}-vertex solver bound",
-    ):
+    ) as exc_info:
         independence_number(
             source, HypergraphIndependenceRequest(hypergraph=source).resource_budget
         )
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "hypergraph.independence_number.vertex_bound"
+    )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_VERTICES}-vertex representation bound",
-    ):
+    ) as exc_info:
         dual(source)
+
+    assert exc_info.value.errors()[0]["type"] == "hypergraph.dual.vertex_bound"
 
 
 def test_edge_free_hypergraph_returns_all_vertices() -> None:

@@ -11,11 +11,15 @@ from jacobian.math.polynomials.tropical._models import (
     TropicalActiveTerm,
     TropicalMinorAssignment,
 )
+from jacobian.math.polynomials.tropical.essential_part import (
+    tropical_polynomial_essential_part,
+)
 from jacobian.math.polynomials.tropical.hypersurface import (
     tropical_bivariate_hypersurface,
 )
 from jacobian.math.polynomials.tropical.operations import (
     tropical_assignment_profile,
+    tropical_matrix_add,
     tropical_matrix_finite_power_sum,
     tropical_matrix_minor_assignment_profiles,
     tropical_matrix_multiply,
@@ -40,6 +44,8 @@ from jacobian.math.polynomials.tropical.regular_subdivision import (
     tropical_bivariate_regular_subdivision,
 )
 from jacobian.math.polynomials.tropical.values import (
+    TropicalEssentialHullFace,
+    TropicalEssentialLiftedFace,
     TropicalHypersurface,
     TropicalHypersurfaceCell,
     TropicalLiftedSubdivisionFace,
@@ -48,6 +54,7 @@ from jacobian.math.polynomials.tropical.values import (
     TropicalNewtonPolygonProfile,
     TropicalNewtonPolygonVertex,
     TropicalPolynomial,
+    TropicalPolynomialEssentialPart,
     TropicalPolynomialTerm,
     TropicalRegularSubdivision,
     TropicalScalar,
@@ -67,6 +74,8 @@ __all__ = [
     "ScalarAddResult",
     "ScalarDualResult",
     "TropicalActiveTerm",
+    "TropicalEssentialHullFace",
+    "TropicalEssentialLiftedFace",
     "TropicalHypersurface",
     "TropicalHypersurfaceCell",
     "TropicalLiftedSubdivisionFace",
@@ -76,6 +85,7 @@ __all__ = [
     "TropicalNewtonPolygonProfile",
     "TropicalNewtonPolygonVertex",
     "TropicalPolynomial",
+    "TropicalPolynomialEssentialPart",
     "TropicalPolynomialTerm",
     "TropicalRegularSubdivision",
     "TropicalScalar",
@@ -87,12 +97,14 @@ __all__ = [
     "tropical_assignment_profile",
     "tropical_bivariate_hypersurface",
     "tropical_bivariate_regular_subdivision",
+    "tropical_matrix_add",
     "tropical_matrix_finite_power_sum",
     "tropical_matrix_minor_assignment_profiles",
     "tropical_matrix_multiply",
     "tropical_matrix_power",
     "tropical_polynomial_active_terms",
     "tropical_polynomial_add",
+    "tropical_polynomial_essential_part",
     "tropical_polynomial_evaluate",
     "tropical_polynomial_multiply",
     "tropical_polynomial_power",

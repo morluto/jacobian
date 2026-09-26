@@ -515,6 +515,17 @@ class BivariateRegularSubdivisionRequest(StrictModel):
         return self
 
 
+class EssentialPartRequest(StrictModel):
+    """Compute attained terms within the essential-part specific input envelope."""
+
+    polynomial: TropicalPolynomial = Field(
+        description=(
+            "Canonical tropical polynomial with at most 4 variables and 64 terms; "
+            "each finite coefficient is limited to 32 decimal digits."
+        )
+    )
+
+
 class BivariateHypersurfaceRequest(StrictModel):
     """Compute the complete bounded exact corner complex of one polynomial."""
 
@@ -526,6 +537,24 @@ class BivariateHypersurfaceRequest(StrictModel):
             raise _validation_error(
                 "hypersurface_bivariate",
                 "the exact tropical hypersurface currently requires two variables",
+            )
+        return self
+
+
+class MatrixAddRequest(StrictModel):
+    left: TropicalMatrix
+    right: TropicalMatrix
+
+    @model_validator(mode="after")
+    def require_matching_axes(self) -> Self:
+        if (
+            self.left.semiring != self.right.semiring
+            or self.left.row_axis != self.right.row_axis
+            or self.left.column_axis != self.right.column_axis
+        ):
+            raise _validation_error(
+                "matrix_mismatch",
+                "matrices must have identical semiring and labelled axes",
             )
         return self
 
@@ -778,8 +807,10 @@ __all__ = [
     "AssignmentResult",
     "BivariateHypersurfaceRequest",
     "BivariateRegularSubdivisionRequest",
+    "EssentialPartRequest",
     "FinitePowerSumResult",
     "InfinityCase",
+    "MatrixAddRequest",
     "MatrixAssignmentRequest",
     "MatrixFinitePowerSumRequest",
     "MatrixMinorAssignmentsRequest",

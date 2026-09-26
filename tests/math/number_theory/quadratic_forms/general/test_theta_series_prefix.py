@@ -159,6 +159,18 @@ def test_selected_theta_request_requires_canonical_bounded_indices(
         ThetaSelectedCoefficientsRequest(form=_form((1,)), indices=indices)
 
 
+@pytest.mark.parametrize("index", [True, 1.0, "1"])
+def test_selected_theta_native_boundary_rejects_coerced_indices(index: object) -> None:
+    forged_request = ThetaSelectedCoefficientsRequest.model_construct(
+        form=_form((1,)), indices=(index,)
+    )
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        theta_selected_coefficients(forged_request.form, forged_request.indices)
+    assert exc_info.value.errors()[0]["type"] == (
+        "quadratic_form.theta_invalid_selected_indices"
+    )
+
+
 def test_selected_theta_native_boundary_revalidates_nested_form_and_schema() -> None:
     form = _form((1,))
     forged_form = form.model_copy(

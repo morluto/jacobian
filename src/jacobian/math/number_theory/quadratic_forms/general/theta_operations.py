@@ -314,7 +314,7 @@ def theta_selected_coefficients(
             message="selected theta coefficients require a bounded canonical form",
         )
     try:
-        form = RationalQuadraticForm.model_validate(form.model_dump())
+        form = RationalQuadraticForm.model_validate(form.model_dump(), strict=True)
     except Exception as error:
         raise OperationDomainValidationError(
             location=("form",),

@@ -186,6 +186,21 @@ def test_matrix_add_rejects_malformed_native_axes(
         tropical_matrix_add(matrix, matrix)
 
 
+def test_matrix_add_rejects_invalid_native_scalar_kind() -> None:
+    semiring = TropicalSemiring(convention="MAX_PLUS", base="QQ")
+    scalar = TropicalScalar.model_construct(
+        semiring=semiring, kind="bogus", value=None
+    )
+    matrix = TropicalMatrix.model_construct(
+        semiring=semiring,
+        row_axis=("r",),
+        column_axis=("c",),
+        entries=((scalar,),),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(matrix, matrix)
+
+
 def test_matrix_add_rejects_noncanonical_nested_rational() -> None:
     semiring = TropicalSemiring(convention="MIN_PLUS", base="QQ")
     rational = CanonicalRational.model_construct(num=1, den=0)

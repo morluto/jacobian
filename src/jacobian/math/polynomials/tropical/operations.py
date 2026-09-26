@@ -69,6 +69,12 @@ def _admit_scalar(s: TropicalScalar, semiring: TropicalSemiring) -> None:
             code="tropical.semiring_mismatch",
             message="scalar must carry the request semiring",
         )
+    if s.kind not in ("FINITE", "POSITIVE_INFINITY", "NEGATIVE_INFINITY"):
+        raise OperationDomainValidationError(
+            location=("scalar", "kind"),
+            code="tropical.scalar_shape",
+            message="scalar kind must be a licensed tropical scalar kind",
+        )
     if s.kind == "FINITE":
         if not isinstance(s.value, CanonicalRational):
             raise OperationDomainValidationError(

@@ -26,6 +26,18 @@ operation-specific search bounds; the shared partition and tableau carriers
 retain their larger 500-cell envelope, which bounds the row scan over the
 ambient diagrams.
 
+## Complete tableau enumeration
+
+`combinatorics.littlewood_richardson.tableaux.enumerate` returns the complete
+family for the same three inputs. Each `TableauCandidate` stores only the
+nonempty skew rows, in top-to-bottom order, with entries left to right. The
+family is ordered by increasing reading word, and an empty skew shape with
+empty content has the unique empty tableau. A noncontained inner shape or a
+size mismatch returns the empty family. Admission bounds the search by the
+same 100,000 content-prefix limit and preflights a conservative worst-case
+family-size estimate against an 8 MB output limit before generating tableaux.
+The enumeration does not change coefficient computation's feasible envelope.
+
 For example,
 
 ```text

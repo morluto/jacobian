@@ -8,13 +8,17 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SKEW_CELLS,
     LittlewoodRichardsonCoefficientRequest,
     LittlewoodRichardsonCoefficientResult,
+    LittlewoodRichardsonTableauxRequest,
+    LittlewoodRichardsonTableauxResult,
     SchurExpansionRequest,
     SchurExpansionResult,
     SchurProductRequest,
     SchurProductResult,
 )
 from jacobian.math.combinatorics.symmetric_functions.littlewood_richardson import (
+    _admit_lr_resources,
     _compute_validated_lr,
+    _enumerate_validated_lr,
     _schur_product_from_request,
 )
 from jacobian.math.combinatorics.symmetric_functions.operations import schur_evaluation
@@ -27,9 +31,15 @@ def _run_schur_evaluation(request: SchurExpansionRequest) -> SchurExpansionResul
 def _run_littlewood_richardson_coefficient(
     request: LittlewoodRichardsonCoefficientRequest,
 ) -> LittlewoodRichardsonCoefficientResult:
-    # The catalog parsed and admitted this request; run the shared
-    # post-admission path without replaying request validation.
+    _admit_lr_resources(request)
     return _compute_validated_lr(request)
+
+
+def _run_littlewood_richardson_tableaux(
+    request: LittlewoodRichardsonTableauxRequest,
+) -> LittlewoodRichardsonTableauxResult:
+    _admit_lr_resources(request)
+    return _enumerate_validated_lr(request)
 
 
 def _run_schur_product(request: SchurProductRequest) -> SchurProductResult:
@@ -107,6 +117,38 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "Compute c^(3,2,1)_(2,1),(2,1) under the fixed LR "
                     "reading-word convention."
+                ),
+                input={
+                    "outer": {"parts": [3, 2, 1]},
+                    "inner": {"parts": [2, 1]},
+                    "content": {"parts": [2, 1]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="combinatorics.littlewood_richardson.tableaux.enumerate",
+        title="Enumerate Littlewood-Richardson tableaux",
+        description=(
+            "Return every semistandard tableau of skew shape outer/inner and "
+            "content whose right-to-left, top-to-bottom reading word is lattice. "
+            "The complete search, family count, and result size are admitted "
+            "before expansion. Results are ordered by reading word."
+        ),
+        request_type=LittlewoodRichardsonTableauxRequest,
+        result_type=LittlewoodRichardsonTableauxResult,
+        run=_run_littlewood_richardson_tableaux,
+        tags=("combinatorics", "young-tableaux", "littlewood-richardson", "exact"),
+        discovery_terms=(
+            "Littlewood-Richardson tableaux",
+            "LR tableau enumeration",
+            "skew tableau family",
+        ),
+        examples=(
+            OperationExample(
+                name="coefficient_two_tableaux",
+                description=(
+                    "Enumerate the two LR tableaux for c^(3,2,1)_(2,1),(2,1)."
                 ),
                 input={
                     "outer": {"parts": [3, 2, 1]},

@@ -15,6 +15,7 @@ from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH, OpaqueLabel
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
     IntegerPartition,
+    TableauCandidate,
 )
 
 _MAX_POINT_COORDINATE_DIGITS = 6
@@ -27,6 +28,8 @@ _MAX_SCHUR_VARIABLE_NAME_LENGTH = MAX_OPAQUE_LABEL_LENGTH
 # bound is intentionally separate from the 500-cell partition carrier bound.
 MAX_LR_SKEW_CELLS = 8
 MAX_LR_SEARCH_STATES = 100_000
+MAX_LR_TABLEAU_OUTPUT_BYTES = 8_000_000
+MAX_LR_TABLEAUX = 100_000
 MAX_SCHUR_PRODUCT_WORK = 1_000_000
 MAX_SCHUR_PRODUCT_TERMS = 22  # p(8)
 
@@ -52,6 +55,18 @@ def _lr_prefix_state_bound(content: IntegerPartition) -> int:
 
     visit(0, ())
     return state_count
+
+
+def _lr_complete_word_bound(content: IntegerPartition) -> int:
+    """Count complete words with the submitted multiplicities."""
+    size = sum(content.parts)
+    words = 1
+    for factor in range(2, size + 1):
+        words *= factor
+    for multiplicity in content.parts:
+        for factor in range(2, multiplicity + 1):
+            words //= factor
+    return words
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -225,29 +240,6 @@ class LittlewoodRichardsonCoefficientRequest(StrictModel):
     inner: IntegerPartition
     content: IntegerPartition
 
-    @model_validator(mode="after")
-    def require_bounded_search(self) -> Self:
-        # The tableau search runs only when the inner diagram is contained in
-        # the outer diagram and the sizes agree, so its cell count equals the
-        # admitted skew size, which then equals the content size.
-        skew_size = sum(self.outer.parts) - sum(self.inner.parts)
-        if skew_size > MAX_LR_SKEW_CELLS:
-            raise _validation_error(
-                "lr_skew_size_exceeded",
-                f"LR skew size |outer|-|inner| must not exceed {MAX_LR_SKEW_CELLS}",
-            )
-        if sum(self.content.parts) > MAX_LR_SKEW_CELLS:
-            raise _validation_error(
-                "lr_content_size_exceeded",
-                f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
-            )
-        if _lr_prefix_state_bound(self.content) > MAX_LR_SEARCH_STATES:
-            raise _validation_error(
-                "lr_search_states_exceeded",
-                f"LR search prefix bound must not exceed {MAX_LR_SEARCH_STATES}",
-            )
-        return self
-
 
 class LittlewoodRichardsonCoefficientResult(StrictModel):
     """One exact LR coefficient, bound to its three partition arguments."""
@@ -256,6 +248,37 @@ class LittlewoodRichardsonCoefficientResult(StrictModel):
     inner: IntegerPartition
     content: IntegerPartition
     coefficient: StrictInt = Field(ge=0)
+
+
+class LittlewoodRichardsonTableauxRequest(StrictModel):
+    """Enumerate all LR tableaux for one skew shape and content."""
+
+    outer: IntegerPartition
+    inner: IntegerPartition
+    content: IntegerPartition
+
+
+class LittlewoodRichardsonTableauxResult(StrictModel):
+    """Complete LR family, bound to its skew shape and content."""
+
+    outer: IntegerPartition
+    inner: IntegerPartition
+    content: IntegerPartition
+    tableaux: tuple[TableauCandidate, ...] = Field(max_length=MAX_LR_TABLEAUX)
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: LittlewoodRichardsonTableauxRequest,
+        tableaux: tuple[TableauCandidate, ...],
+    ) -> Self:
+        """Construct the complete family after bounded exhaustive search."""
+        return cls.model_construct(
+            outer=request.outer,
+            inner=request.inner,
+            content=request.content,
+            tableaux=tableaux,
+        )
 
 
 class SchurProductRequest(StrictModel):
@@ -340,11 +363,15 @@ def _partition_count(total: int) -> int:
 __all__ = [
     "MAX_LR_SEARCH_STATES",
     "MAX_LR_SKEW_CELLS",
+    "MAX_LR_TABLEAUX",
+    "MAX_LR_TABLEAU_OUTPUT_BYTES",
     "MAX_SCHUR_PRODUCT_TERMS",
     "MAX_SCHUR_PRODUCT_WORK",
     "IntegerPartition",
     "LittlewoodRichardsonCoefficientRequest",
     "LittlewoodRichardsonCoefficientResult",
+    "LittlewoodRichardsonTableauxRequest",
+    "LittlewoodRichardsonTableauxResult",
     "PartitionConjugateResult",
     "PartitionRequest",
     "SchurExpansionRequest",

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from math import prod
-
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -33,15 +31,6 @@ _MAX_ACTION_DEGREE = 128
 _MAX_ACTION_DIGITS = 128
 
 
-def _bounded_power(value: int, exponent: int, limit: int) -> int:
-    result = 1
-    for _ in range(exponent):
-        if value and result > limit // value:
-            return limit + 1
-        result *= value
-    return result
-
-
 def _as_term(value: ProperHypergeometricTerm) -> ProperHypergeometricTerm:
     try:
         if not isinstance(value, ProperHypergeometricTerm):
@@ -58,28 +47,10 @@ def _as_term(value: ProperHypergeometricTerm) -> ProperHypergeometricTerm:
 def _term_count_bound(
     operator: ShiftOreOperator, n_ratio: RationalFunction
 ) -> tuple[int, int]:
-    """Bound the fully cross-multiplied numerator/denominator term counts."""
-    ratios = {
-        "num": len(n_ratio.numerator.terms),
-        "den": len(n_ratio.denominator.terms),
-    }
-    numerator_terms: list[int] = []
-    denominator_terms: list[int] = []
-    for term in operator.terms:
-        coefficient = term.coefficient
-        numerator_terms.append(
-            len(coefficient.numerator.terms)
-            * _bounded_power(ratios["num"], term.exponent, _MAX_ACTION_TERMS)
-        )
-        denominator_terms.append(
-            len(coefficient.denominator.terms)
-            * _bounded_power(ratios["den"], term.exponent, _MAX_ACTION_TERMS)
-        )
-    denominator_bound = prod(denominator_terms)
-    numerator_bound = sum(
-        own * prod(denominator_terms[:index] + denominator_terms[index + 1 :])
-        for index, own in enumerate(numerator_terms)
-    )
+    """Bound supports using the bivariate total-degree monomial envelope."""
+    numerator_degree, denominator_degree = _degree_bound(operator, n_ratio)
+    numerator_bound = (numerator_degree + 1) * (numerator_degree + 2) // 2
+    denominator_bound = (denominator_degree + 1) * (denominator_degree + 2) // 2
     if denominator_bound > _MAX_ACTION_TERMS or numerator_bound > _MAX_ACTION_TERMS:
         raise OperationResourceAdmissionError(
             location=("operator",),
@@ -92,7 +63,9 @@ def _term_count_bound(
     return numerator_bound, denominator_bound
 
 
-def _degree_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
+def _degree_bound(
+    operator: ShiftOreOperator, n_ratio: RationalFunction
+) -> tuple[int, int]:
     ratio_num_degree = max(
         (sum(item.exponents) for item in n_ratio.numerator.terms), default=0
     )
@@ -119,14 +92,13 @@ def _degree_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
         ),
         default=0,
     )
-    degree = max(denominator_degree, numerator_degree)
-    if degree > _MAX_ACTION_DEGREE:
+    if max(denominator_degree, numerator_degree) > _MAX_ACTION_DEGREE:
         raise OperationResourceAdmissionError(
             location=("operator",),
             code="ore_algebra.hypergeometric_action_degree_budget",
             message="the shift action may exceed the 128-degree rational-function bound",
         )
-    return degree
+    return numerator_degree, denominator_degree
 
 
 def _coefficient_digits(value: RationalFunction) -> int:
@@ -145,15 +117,37 @@ def _coefficient_digits(value: RationalFunction) -> int:
 
 def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
     ratio_digits = _coefficient_digits(n_ratio)
-    denominator_term_digits = [
-        _coefficient_digits(term.coefficient) + term.exponent * ratio_digits
-        for term in operator.terms
-    ]
+    ratio_num_degree = max(
+        (sum(item.exponents) for item in n_ratio.numerator.terms), default=0
+    )
+    ratio_den_degree = max(
+        (sum(item.exponents) for item in n_ratio.denominator.terms), default=0
+    )
+    ratio_num_terms = len(n_ratio.numerator.terms)
+    ratio_den_terms = len(n_ratio.denominator.terms)
+    denominator_term_digits = []
+    numerator_term_digits = []
+    for term in operator.terms:
+        exponent = term.exponent
+        shifted_num_digits = ratio_digits + ratio_num_degree * (
+            len(str(max(1, exponent))) + 1
+        ) + len(str(max(1, ratio_num_terms))) + len(
+            str(max(1, ratio_num_degree + 1))
+        )
+        shifted_den_digits = ratio_digits + ratio_den_degree * (
+            len(str(max(1, exponent))) + 1
+        ) + len(str(max(1, ratio_den_terms))) + len(
+            str(max(1, ratio_den_degree + 1))
+        )
+        coefficient_digits = _coefficient_digits(term.coefficient)
+        denominator_term_digits.append(
+            coefficient_digits + exponent * shifted_den_digits
+        )
+        numerator_term_digits.append(coefficient_digits + exponent * shifted_num_digits)
     denominator_digits = sum(denominator_term_digits)
     numerator_digits = max(
         (
-            _coefficient_digits(term.coefficient)
-            + term.exponent * ratio_digits
+            numerator_term_digits[index]
             + denominator_digits
             - denominator_term_digits[index]
             for index, term in enumerate(operator.terms)
@@ -167,7 +161,6 @@ def _admit_action(operator: ShiftOreOperator, n_ratio: RationalFunction) -> None
     if not operator.terms:
         return
     numerator_terms, denominator_terms = _term_count_bound(operator, n_ratio)
-    _degree_bound(operator, n_ratio)
     coefficient_sum_digits = len(str(max(numerator_terms, denominator_terms, 1)))
     if _digit_bound(operator, n_ratio) + coefficient_sum_digits > _MAX_ACTION_DIGITS:
         raise OperationResourceAdmissionError(

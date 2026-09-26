@@ -11,3 +11,5 @@ retained below for that mathematical reference.
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
 - [Filtered chain-complex direct sums](filtered-complex-direct-sum.md)
 - [Maps on the associated graded](filtered-chain-map-page-zero.md)
+- [Maps on spectral-sequence pages](filtered-chain-map-pages.md)
+- [Compose filtered chain maps](filtered-chain-map-compose.md)

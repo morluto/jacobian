@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.chain_complexes._filtered_models import (
+    MAX_FILTER_AMBIENT_DIMENSION,
     MAX_FILTER_VECTORS_PER_GROUP,
     MAX_SPECTRAL_PAGE,
     FilteredChainComplexRequest,
@@ -26,6 +27,7 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _admit_filtered_structure,
     _associated_graded_admitted,
     _coordinates,
+    _denominator_rows,
     _fail,
     _in_span,
     _mat_vec,
@@ -36,21 +38,30 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _row_basis,
     _serialize_scalar,
     _solve,
+    _spectral_bidegree_page,
+    _spectral_zero_page,
     _transpose,
     admit_filtered,
+    admit_spectral_page,
     spectral_page,
 )
 from jacobian.math.topology.chain_complexes.values import (
+    MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS,
+    MAX_CHAIN_MAP_CELLS,
+    MAX_CHAIN_MAP_ENTRY_CHARS,
     ChainCoefficient,
     ChainComplexValue,
     CoefficientRing,
-    _require_coefficient_scalar,
 )
 
 MAX_FILTERED_HOMOLOGY_PRIME = 2**31 - 1
 MAX_FILTERED_HOMOLOGY_RESULT_CELLS = 250_000
 MAX_FILTERED_HOMOLOGY_RESULT_CHARS = 20_000_000
 MAX_FILTERED_HOMOLOGY_WORK = 50_000_000
+# Every output cell contracts at most one admitted 32-dimensional chain group.
+MAX_FILTERED_CHAIN_MAP_COMPOSITION_WORK = (
+    MAX_CHAIN_MAP_CELLS * MAX_FILTER_AMBIENT_DIMENSION
+)
 
 
 class FilteredHomologyDegree(StrictModel):
@@ -153,15 +164,60 @@ class FilteredChainMapResult(StrictModel):
     chain_map: bool
 
 
+class FilteredChainMapPageRequest(StrictModel):
+    """Induce one bounded spectral-sequence page map."""
+
+    map: FilteredChainMapResult
+    page: int = Field(ge=0, le=MAX_SPECTRAL_PAGE)
+
+
+class FilteredChainMapPageResult(StrictModel):
+    """The map on one page in the retained source and target quotient bases."""
+
+    map: FilteredChainMapResult
+    source_page: SpectralPageResult
+    target_page: SpectralPageResult
+    maps: tuple[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...], ...]
+
+    @model_validator(mode="after")
+    def require_page_axes(self) -> Self:
+        if (
+            self.source_page.complex != self.map.source
+            or self.target_page.complex != self.map.target
+            or self.source_page.filtration != self.map.source_filtration
+            or self.target_page.filtration != self.map.target_filtration
+            or self.source_page.page != self.target_page.page
+            or len(self.maps) != len(self.source_page.page_dimensions)
+            or len(self.maps) != len(self.target_page.page_dimensions)
+        ):
+            raise ValueError(
+                "induced page-map source, target, and page axes must agree"
+            )
+        for level, blocks in enumerate(self.maps):
+            if len(blocks) != len(self.source_page.page_dimensions[level]) or len(
+                blocks
+            ) != len(self.target_page.page_dimensions[level]):
+                raise ValueError("induced page maps must cover every chain degree")
+            for degree, matrix in enumerate(blocks):
+                rows = self.target_page.page_dimensions[level][degree]
+                columns = self.source_page.page_dimensions[level][degree]
+                if len(matrix) != rows or any(len(row) != columns for row in matrix):
+                    raise ValueError("induced page matrix axes are inconsistent")
+        return self
+
+
+class FilteredChainMapCompositionRequest(StrictModel):
+    """Two composable filtered chain maps, in application order."""
+
+    first: FilteredChainMapResult
+    second: FilteredChainMapResult
+
+
 class FilteredChainMapPageZeroResult(StrictModel):
     """The exact map induced by a filtered chain map on the E^0 page.
 
     ``maps[p][n]`` is written in the quotient bases chosen by the source and
-    target associated-graded values. ``source_representatives`` and
-    ``target_representatives`` retain those ambient bases as the explicit row
-    and column axes of every returned matrix, so the value can be interpreted
-    and composed after serialization without replaying the private
-    basis-selection algorithm. Its source and target remain the original
+    target associated-graded values. Its source and target remain the original
     filtered chain complexes so the map composes with their page results.
     """
 
@@ -176,7 +232,7 @@ class FilteredChainMapPageZeroResult(StrictModel):
     maps: tuple[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...], ...]
 
     @model_validator(mode="after")
-    def require_map_axes(self) -> Self:  # noqa: C901
+    def require_map_axes(self) -> Self:
         if len(self.source_dimensions) != len(self.source_filtration):
             raise ValueError("source E0 dimensions must cover every filtration level")
         if len(self.target_dimensions) != len(self.target_filtration):
@@ -198,28 +254,29 @@ class FilteredChainMapPageZeroResult(StrictModel):
         ):
             if (
                 len(dimensions) != len(self.source_filtration)
-                or any(len(level) != degree_count for level in dimensions)
                 or len(representatives) != len(self.source_filtration)
+                or any(len(level) != degree_count for level in dimensions)
                 or any(len(level) != degree_count for level in representatives)
             ):
-                raise ValueError(
-                    "E0 dimensions and quotient representatives must cover "
-                    "every degree and level"
-                )
-            for level_index, level_dimensions in enumerate(dimensions):
-                for degree, dimension in enumerate(level_dimensions):
-                    if dimension < 0 or dimension > complex_value.basis_sizes[degree]:
-                        raise ValueError(
-                            "E0 dimensions must lie between zero and each chain rank"
-                        )
-                    vectors = representatives[level_index][degree]
-                    if len(vectors) != dimension or any(
+                raise ValueError("E0 dimensions must cover every degree and level")
+            for level, degree_representatives in enumerate(representatives):
+                if (
+                    any(
                         len(vector) != complex_value.basis_sizes[degree]
+                        for degree, vectors in enumerate(degree_representatives)
                         for vector in vectors
-                    ):
-                        raise ValueError(
-                            "E0 quotient representatives must match their graded axes"
-                        )
+                    )
+                    or tuple(map(len, degree_representatives)) != dimensions[level]
+                ):
+                    raise ValueError(
+                        "E0 quotient bases must match their graded dimensions"
+                    )
+            if any(
+                not 0 <= level[degree] <= complex_value.basis_sizes[degree]
+                for level in dimensions
+                for degree in range(degree_count)
+            ):
+                raise ValueError("E0 dimensions must be nonnegative chain dimensions")
             if any(
                 sum(level[degree] for level in dimensions)
                 != complex_value.basis_sizes[degree]
@@ -540,6 +597,7 @@ def _homology_image_subspace(
                 code="filtered_homology.boundary_witness_invalid",
                 message="the returned chain does not replay its homology-class boundary relation",
             )
+        assert preimage is not None
         preimages.append(preimage)
     return selected_coordinates, selected_representatives, preimages
 
@@ -679,41 +737,18 @@ def _check_filtered_chain_map_axes(request: FilteredChainMapRequest) -> None:
             )
 
 
-def _require_canonical_map_entries(request: FilteredChainMapRequest) -> None:
-    """Reject map scalars that do not fit the retained coefficient ring.
-
-    The generic ``ChainCoefficient`` grammar admits rationals for every ring,
-    so a finite-field request can carry a syntactically valid ``"1/2"``. The
-    kernel parser must not turn that into an internal ``RuntimeError``.
-    """
-    ring = request.source.coefficient_ring
-    prime = request.source.prime
-    for degree, matrix in enumerate(request.maps):
-        for row in matrix:
-            for value in row:
-                try:
-                    _require_coefficient_scalar(ring, value, prime=prime)
-                except (AttributeError, TypeError, ValueError) as exc:
-                    raise OperationDomainValidationError(
-                        location=("maps", degree),
-                        code="filtered_chain_map.entry_invalid",
-                        message=(
-                            "map entries must use the retained canonical "
-                            "coefficient grammar"
-                        ),
-                    ) from exc
-
-
 def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
     _check_filtered_chain_map_axes(request)
-    _require_canonical_map_entries(request)
     source_admission = _admit_filtered_semantics(
         request.source, request.source_filtration
     )
     target_admission = _admit_filtered_semantics(
         request.target, request.target_filtration
     )
-    return _filtered_map_admitted(request, source_admission, target_admission)
+    parsed, chain_ok, preserving = _filtered_map_status_admitted(
+        request, source_admission, target_admission
+    )
+    return _filtered_map_result(request, parsed, chain_ok, preserving)
 
 
 def _filtered_map_admitted(
@@ -721,18 +756,30 @@ def _filtered_map_admitted(
     source_admission: Any,
     target_admission: Any,
 ) -> FilteredChainMapResult:
+    parsed, chain_ok, preserving = _filtered_map_status_admitted(
+        request, source_admission, target_admission
+    )
+    return _filtered_map_result(request, parsed, chain_ok, preserving)
+
+
+def _filtered_map_status_admitted(
+    request: FilteredChainMapRequest,
+    source_admission: Any,
+    target_admission: Any,
+    parsed: list[list[list[int | Fraction]]] | None = None,
+) -> tuple[list[list[list[int | Fraction]]], bool, bool]:
     p = request.source.prime
-    _require_canonical_map_entries(request)
-    parsed = []
-    for degree, matrix in enumerate(request.maps):
-        try:
-            parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
-        except (TypeError, ValueError, ZeroDivisionError, RuntimeError) as exc:
-            raise OperationDomainValidationError(
-                location=("maps", degree),
-                code="filtered_chain_map.entry_invalid",
-                message="map entries must use the retained canonical coefficient grammar",
-            ) from exc
+    if parsed is None:
+        parsed = []
+        for degree, matrix in enumerate(request.maps):
+            try:
+                parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
+            except (TypeError, ValueError, ZeroDivisionError, RuntimeError) as exc:
+                raise OperationDomainValidationError(
+                    location=("maps", degree),
+                    code="filtered_chain_map.entry_invalid",
+                    message="map entries must use the retained canonical coefficient grammar",
+                ) from exc
     # f d = d f, with matrix convention d rows lower x upper
     chain_ok = True
     for degree in range(len(parsed) - 1):
@@ -761,6 +808,16 @@ def _filtered_map_admitted(
                 image = _mat_vec(parsed[degree], vector, p)
                 if not _in_span(target_basis, image, p):
                     preserving = False
+    return parsed, chain_ok, preserving
+
+
+def _filtered_map_result(
+    request: FilteredChainMapRequest,
+    parsed: list[list[list[int | Fraction]]],
+    chain_ok: bool,
+    preserving: bool,
+) -> FilteredChainMapResult:
+    p = request.source.prime
     canonical_maps = tuple(
         tuple(tuple(_serialize_scalar(value, p) for value in row) for row in matrix)
         for matrix in parsed
@@ -776,8 +833,93 @@ def _filtered_map_admitted(
     )
 
 
-def _e0_map_input_stats(request: FilteredChainMapRequest) -> tuple[int, int, int]:
-    """Count input scalars cheaply, before any exact elimination."""
+def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
+    _check_filtered_chain_map_axes(request)
+    level_count = len(request.source_filtration)
+    degree_count = len(request.source.basis_sizes)
+    shape_work = 0
+    for complex_value, filtration in (
+        (request.source, request.source_filtration),
+        (request.target, request.target_filtration),
+    ):
+        for rank in complex_value.basis_sizes:
+            shape_work += level_count * max(1, rank) ** 3
+        if len(filtration) == level_count and all(
+            len(level.subspaces) == degree_count for level in filtration
+        ):
+            shape_work += sum(
+                min(
+                    len(filtration[level].subspaces[degree].vectors),
+                    complex_value.basis_sizes[degree],
+                )
+                * max(1, complex_value.basis_sizes[degree]) ** 2
+                for level in range(level_count)
+                for degree in range(degree_count)
+            )
+    if shape_work > MAX_FILTERED_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_work_exceeded",
+            message="the shape-only E0 work estimate exceeds the admitted limit",
+        )
+    retained_cells = sum(
+        rank * rank
+        for rank in (*request.source.basis_sizes, *request.target.basis_sizes)
+    )
+    map_cells_upper = sum(
+        min(
+            len(request.source_filtration[level].subspaces[degree].vectors),
+            request.source.basis_sizes[degree],
+        )
+        * min(
+            len(request.target_filtration[level].subspaces[degree].vectors),
+            request.target.basis_sizes[degree],
+        )
+        for level in range(level_count)
+        for degree in range(degree_count)
+        if len(request.source_filtration[level].subspaces) == degree_count
+        and len(request.target_filtration[level].subspaces) == degree_count
+    )
+    max_chars = max(
+        (len(str(value)) for matrix in request.maps for row in matrix for value in row),
+        default=1,
+    )
+    output_chars_upper = (retained_cells + map_cells_upper) * (
+        96 * max_chars + 512
+    ) + level_count * degree_count * 128
+    if output_chars_upper > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_chars_exceeded",
+            message="the shape-only E0 output estimate exceeds the admitted limit",
+        )
+    source_admission = _admit_filtered_semantics(
+        request.source, request.source_filtration
+    )
+    target_admission = _admit_filtered_semantics(
+        request.target, request.target_filtration
+    )
+    map_cells = sum(
+        (
+            len(source_admission.bases[level][degree])
+            - (len(source_admission.bases[level - 1][degree]) if level else 0)
+        )
+        * (
+            len(target_admission.bases[level][degree])
+            - (len(target_admission.bases[level - 1][degree]) if level else 0)
+        )
+        for level in range(len(request.source_filtration))
+        for degree in range(len(request.source.basis_sizes))
+    )
+    if map_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.e0_output_cells_exceeded",
+            message=(
+                "the E0 map envelope exceeds the admitted "
+                f"{MAX_FILTERED_HOMOLOGY_RESULT_CELLS} cells"
+            ),
+        )
     input_chars = 0
     scalar_count = 0
     max_scalar_chars = 1
@@ -809,183 +951,14 @@ def _e0_map_input_stats(request: FilteredChainMapRequest) -> tuple[int, int, int
         input_chars += value_chars
         scalar_count += 1
         max_scalar_chars = max(max_scalar_chars, value_chars)
-    return input_chars, scalar_count, max_scalar_chars
-
-
-def _filtered_semantic_work_bound(
-    complex_value: ChainComplexValue,
-    filtration: tuple[FiltrationLevel, ...],
-) -> int:
-    """Conservative shape-only work estimate for one semantic admission."""
-    sizes = complex_value.basis_sizes
-    work = sum(
-        sizes[index - 1] * sizes[index] * sizes[index + 1]
-        for index in range(1, len(sizes) - 1)
-    )
-    for level_index, level in enumerate(filtration):
-        for degree, subspace in enumerate(level.subspaces):
-            dimension = max(1, sizes[degree])
-            vectors = len(subspace.vectors)
-            work += (vectors + 1) * dimension**2
-            if level_index:
-                work += (
-                    len(filtration[level_index - 1].subspaces[degree].vectors)
-                    * dimension**3
-                )
-            if degree:
-                work += vectors * max(dimension, sizes[degree - 1]) ** 3
-    return work
-
-
-def _e0_map_work_bound(request: FilteredChainMapRequest) -> int:
-    """Shape-only work estimate for both admissions and every map application."""
-    work = _filtered_semantic_work_bound(
-        request.source, request.source_filtration
-    ) + _filtered_semantic_work_bound(request.target, request.target_filtration)
-    for level_index in range(len(request.source_filtration)):
-        for degree, source_size in enumerate(request.source.basis_sizes):
-            target_size = max(1, request.target.basis_sizes[degree])
-            source_upper = min(
-                len(request.source_filtration[level_index].subspaces[degree].vectors),
-                source_size,
-            )
-            work += source_upper * target_size**2
-    return work
-
-
-def _e0_scalar_chars_bound(max_scalar_chars: int) -> int:
-    """Per-cell character bound for the exact elimination results below.
-
-    Determinant expansion bounds the numerator and denominator growth of the
-    at-most-32-dimensional coordinate solves that produce both the graded
-    representatives and the E0 map entries.
-    """
-    return 96 * max_scalar_chars + 512
-
-
-def _preflight_e0_map(
-    request: FilteredChainMapRequest,
-    input_chars: int,
-    scalar_count: int,
-    max_scalar_chars: int,
-) -> None:
-    """Reject unattainable envelopes before exact filtered expansion.
-
-    The graded dimensions are only known after semantic admission, so this
-    uses the spanning-vector counts to bound the eventually admitted block
-    cells. The precise per-level calculation still runs after admission.
-    """
-    degree_count = len(request.source.basis_sizes)
-    level_count = len(request.source_filtration)
-    for level_index in range(level_count):
-        if (
-            len(request.source_filtration[level_index].subspaces) != degree_count
-            or len(request.target_filtration[level_index].subspaces) != degree_count
-        ):
-            # The canonical structural admission owns this diagnostic.
-            return
-    scalar_chars_bound = _e0_scalar_chars_bound(max_scalar_chars)
-    # The graded dimensions at a fixed degree telescope to the ambient rank,
-    # so the retained quotient axes have exactly ``rank**2`` cells per degree.
-    representative_cells = sum(
-        size * size for size in request.source.basis_sizes
-    ) + sum(size * size for size in request.target.basis_sizes)
-    map_cells_upper = 0
-    for level_index in range(level_count):
-        for degree in range(degree_count):
-            source_size = request.source.basis_sizes[degree]
-            target_size = request.target.basis_sizes[degree]
-            source_upper = min(
-                len(request.source_filtration[level_index].subspaces[degree].vectors),
-                source_size,
-            )
-            target_upper = min(
-                len(request.target_filtration[level_index].subspaces[degree].vectors),
-                target_size,
-            )
-            map_cells_upper += source_upper * target_upper
+    # Determinant expansion bounds the exact numerator and denominator growth
+    # of the at-most-32-dimensional coordinate solves used below.
+    scalar_chars_bound = 96 * max_scalar_chars + 512
     output_chars = (
         input_chars
         + scalar_count * 16
-        + (map_cells_upper + representative_cells) * scalar_chars_bound
-        + level_count * degree_count * 128
-    )
-    if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
-        raise OperationResourceAdmissionError(
-            location=("maps",),
-            code="filtered_chain_map.e0_output_chars_exceeded",
-            message=(
-                "the conservative exact E0 map character envelope exceeds "
-                f"{MAX_FILTERED_HOMOLOGY_RESULT_CHARS} characters"
-            ),
-        )
-    estimated_work = _e0_map_work_bound(request) + input_chars + scalar_count
-    if estimated_work > MAX_FILTERED_HOMOLOGY_WORK:
-        raise OperationResourceAdmissionError(
-            location=("maps",),
-            code="filtered_chain_map.e0_work_exceeded",
-            message=(
-                "the filtered E0 map admission is estimated at "
-                f"{estimated_work} units; limit is {MAX_FILTERED_HOMOLOGY_WORK}"
-            ),
-        )
-
-
-def _e0_graded_dimensions(
-    admission: Any, level_count: int, degree_count: int
-) -> tuple[tuple[int, ...], ...]:
-    return tuple(
-        tuple(
-            len(admission.bases[level][degree])
-            - (len(admission.bases[level - 1][degree]) if level else 0)
-            for degree in range(degree_count)
-        )
-        for level in range(level_count)
-    )
-
-
-def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, Any]:
-    _check_filtered_chain_map_axes(request)
-    _require_canonical_map_entries(request)
-    input_chars, scalar_count, max_scalar_chars = _e0_map_input_stats(request)
-    _preflight_e0_map(request, input_chars, scalar_count, max_scalar_chars)
-    source_admission = _admit_filtered_semantics(
-        request.source, request.source_filtration
-    )
-    target_admission = _admit_filtered_semantics(
-        request.target, request.target_filtration
-    )
-    level_count = len(request.source_filtration)
-    degree_count = len(request.source.basis_sizes)
-    source_dims = _e0_graded_dimensions(source_admission, level_count, degree_count)
-    target_dims = _e0_graded_dimensions(target_admission, level_count, degree_count)
-    map_cells = sum(
-        source_dims[level][degree] * target_dims[level][degree]
-        for level in range(level_count)
-        for degree in range(degree_count)
-    )
-    representative_cells = sum(
-        source_dims[level][degree] * request.source.basis_sizes[degree]
-        + target_dims[level][degree] * request.target.basis_sizes[degree]
-        for level in range(level_count)
-        for degree in range(degree_count)
-    )
-    output_cells = map_cells + representative_cells
-    if output_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("maps",),
-            code="filtered_chain_map.e0_output_cells_exceeded",
-            message=(
-                "the E0 map and quotient-axis envelope exceeds the admitted "
-                f"{MAX_FILTERED_HOMOLOGY_RESULT_CELLS} cells"
-            ),
-        )
-    scalar_chars_bound = _e0_scalar_chars_bound(max_scalar_chars)
-    output_chars = (
-        input_chars
-        + scalar_count * 16
-        + output_cells * scalar_chars_bound
-        + level_count * degree_count * 128
+        + map_cells * scalar_chars_bound
+        + len(request.source_filtration) * len(request.source.basis_sizes) * 128
     )
     if output_chars > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
         raise OperationResourceAdmissionError(
@@ -1144,6 +1117,577 @@ def _mul(left: Any, right: Any, prime: int | None, *, output_width: int) -> Any:
     return result
 
 
+def _admit_page_map_request(request: Any) -> FilteredChainMapPageRequest:
+    if not isinstance(request, FilteredChainMapPageRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="filtered_chain_map.page_request_invalid",
+            message="page-map input must be a FilteredChainMapPageRequest",
+        )
+    if type(request.page) is not int:
+        raise OperationDomainValidationError(
+            location=("page",),
+            code="filtered_chain_map.page_invalid",
+            message="the requested spectral page must be an integer",
+        )
+    admit_spectral_page(request.page)
+    return request
+
+
+def filtered_chain_map_page(
+    request: FilteredChainMapPageRequest,
+) -> FilteredChainMapPageResult:
+    """Induce the exact map on one bounded E^r page.
+
+    The operation reapplies chain-map and filtration admission, transports the
+    source page representatives in ambient coordinates, reduces them modulo
+    the target page denominators, and checks naturality against every d^r.
+    """
+    request = _admit_page_map_request(request)
+    authored = request.map
+    chain_map_request = FilteredChainMapRequest(
+        source=authored.source,
+        source_filtration=authored.source_filtration,
+        target=authored.target,
+        target_filtration=authored.target_filtration,
+        maps=authored.maps,
+    )
+    _check_filtered_chain_map_axes(chain_map_request)
+    source, target = authored.source, authored.target
+    levels = len(authored.source_filtration)
+    degree_count = len(source.basis_sizes)
+    prime = source.prime
+    # Bound repeated exact subspace reductions and the dense page-map output
+    # before page representatives or denominator bases are expanded.
+    cubic = sum(
+        max(1, rank) ** 3 for rank in (*source.basis_sizes, *target.basis_sizes)
+    )
+    coordinate_solves = sum(
+        max(1, rank) ** 4 for rank in (*source.basis_sizes, *target.basis_sizes)
+    )
+    work_bound = levels * (cubic * (3 * request.page + 3) + coordinate_solves)
+    if work_bound > MAX_FILTERED_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("page",),
+            code="filtered_chain_map.page_work_exceeded",
+            message="the conservative representative-transport work bound exceeds the admitted page-map work",
+        )
+    map_cells = levels * sum(
+        source.basis_sizes[index] * target.basis_sizes[index]
+        for index in range(degree_count)
+    )
+    page_cells = (
+        levels
+        * 3
+        * sum(
+            source.basis_sizes[index] ** 2 + target.basis_sizes[index] ** 2
+            for index in range(degree_count)
+        )
+    )
+    input_scalars = [
+        value
+        for complex_value, filtration in (
+            (source, authored.source_filtration),
+            (target, authored.target_filtration),
+        )
+        for matrix in complex_value.differential_matrices
+        for row in matrix
+        for value in row
+    ]
+    input_scalars.extend(
+        value
+        for filtration in (authored.source_filtration, authored.target_filtration)
+        for level in filtration
+        for subspace in level.subspaces
+        for vector in subspace.vectors
+        for value in vector
+    )
+    input_scalars.extend(
+        value for matrix in authored.maps for row in matrix for value in row
+    )
+    max_scalar_chars = max((len(str(value)) for value in input_scalars), default=1)
+    scalar_chars_bound = 96 * max_scalar_chars + 512
+    output_bound = (map_cells + page_cells) * scalar_chars_bound + 4096
+    if output_bound > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("page",),
+            code="filtered_chain_map.page_output_exceeded",
+            message="the conservative page-map output bound exceeds the admitted result size",
+        )
+
+    source_admission, target_admission, map_value = _admit_e0_map_request(
+        chain_map_request
+    )
+
+    if request.page == 0:
+        source_page = _spectral_zero_page(
+            _associated_graded_admitted(
+                source, authored.source_filtration, source_admission
+            ),
+            request.page,
+        )
+        target_page = _spectral_zero_page(
+            _associated_graded_admitted(
+                target, authored.target_filtration, target_admission
+            ),
+            request.page,
+        )
+    else:
+        source_page = _spectral_bidegree_page(
+            source,
+            authored.source_filtration,
+            source_admission.bases,
+            source_admission.differentials,
+            request.page,
+        )
+        target_page = _spectral_bidegree_page(
+            target,
+            authored.target_filtration,
+            target_admission.bases,
+            target_admission.differentials,
+            request.page,
+        )
+    if request.page == 0:
+        target_denominators: list[list[list[list[int | Fraction]]]] = [
+            [[] for _ in range(degree_count)] for _ in range(levels)
+        ]
+        lower: list[list[list[int | Fraction]]] = [[] for _ in range(degree_count)]
+        for level in range(levels):
+            target_denominators[level] = [list(rows) for rows in lower]
+            for degree, reps in enumerate(target_page.page_representatives[level]):
+                lower[degree].extend(
+                    [_parse_entry(value, prime) for value in vector] for vector in reps
+                )
+    else:
+        target_denominators = [[[] for _ in range(degree_count)] for _ in range(levels)]
+        for level in range(levels):
+            for degree in range(degree_count):
+                target_denominators[level][degree] = _denominator_rows(
+                    target_admission.bases,
+                    target_admission.differentials,
+                    target.basis_sizes,
+                    level,
+                    degree,
+                    request.page,
+                    prime,
+                )
+
+    parsed_maps = [
+        [[_parse_entry(value, prime) for value in row] for row in matrix]
+        for matrix in map_value.maps
+    ]
+    map_blocks: list[tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]] = []
+    for level in range(levels):
+        degree_blocks = []
+        for degree in range(degree_count):
+            denominator = target_denominators[level][degree]
+            target_reps = [
+                [_parse_entry(value, prime) for value in vector]
+                for vector in target_page.page_representatives[level][degree]
+            ]
+            target_basis = [*denominator, *target_reps]
+            columns = []
+            for vector in source_page.page_representatives[level][degree]:
+                image = _mat_vec(
+                    parsed_maps[degree],
+                    [_parse_entry(value, prime) for value in vector],
+                    prime,
+                )
+                try:
+                    coordinates = _coordinates(target_basis, image, prime)
+                except ValueError as exc:
+                    raise _fail(
+                        ("map", "maps", level, degree),
+                        "filtered_chain_map.page_image_outside_target",
+                        "a source page representative must map into the target page cycles",
+                    ) from exc
+                columns.append(coordinates[len(denominator) :])
+            rows = target_page.page_dimensions[level][degree]
+            block = [
+                [columns[column][row] for column in range(len(columns))]
+                for row in range(rows)
+            ]
+            degree_blocks.append(
+                tuple(
+                    tuple(_serialize_scalar(value, prime) for value in row)
+                    for row in block
+                )
+            )
+        map_blocks.append(tuple(degree_blocks))
+
+    maps = tuple(map_blocks)
+    # Check target d^r after f equals f after source d^r. Dimensions on each
+    # differential retain empty rows/columns even when its dense entries do not.
+    target_records = {
+        (entry.source_level, entry.source_degree): entry
+        for entry in target_page.differentials
+    }
+    for source_record in source_page.differentials:
+        key = (source_record.source_level, source_record.source_degree)
+        target_record = target_records[key]
+        level = source_record.source_level
+        degree = source_record.source_degree - source.degree_min
+        target_level = source_record.target_level
+        target_degree = degree - 1
+        f_source = [
+            [_parse_entry(value, prime) for value in row] for row in maps[level][degree]
+        ]
+        f_target = [
+            [_parse_entry(value, prime) for value in row]
+            for row in maps[target_level][target_degree]
+        ]
+        source_d = [
+            [_parse_entry(value, prime) for value in row]
+            for row in source_record.entries
+        ]
+        target_d = [
+            [_parse_entry(value, prime) for value in row]
+            for row in target_record.entries
+        ]
+        left = _rectangular_product(
+            target_d,
+            target_record.rows,
+            target_record.columns,
+            f_source,
+            source_page.page_dimensions[level][degree],
+            prime,
+        )
+        right = _rectangular_product(
+            f_target,
+            target_page.page_dimensions[target_level][target_degree],
+            source_page.page_dimensions[target_level][target_degree],
+            source_d,
+            source_page.page_dimensions[level][degree],
+            prime,
+        )
+        if left != right:
+            raise _fail(
+                ("map", "maps", level, degree),
+                "filtered_chain_map.page_square_failed",
+                "the induced page map must commute with the page differential",
+            )
+    return FilteredChainMapPageResult(
+        map=map_value,
+        source_page=source_page,
+        target_page=target_page,
+        maps=maps,
+    )
+
+
+def _rectangular_product(
+    left: list[list[int | Fraction]],
+    left_rows: int,
+    inner: int,
+    right: list[list[int | Fraction]],
+    right_columns: int,
+    prime: int | None,
+) -> list[list[int | Fraction]]:
+    """Multiply matrices while retaining explicitly admitted empty axes."""
+    if left_rows and (len(left) != left_rows or any(len(row) != inner for row in left)):
+        raise ValueError("left page matrix has inconsistent axes")
+    if inner and (
+        len(right) != inner or any(len(row) != right_columns for row in right)
+    ):
+        raise ValueError("right page matrix has inconsistent axes")
+    if not left_rows:
+        return []
+    if not inner:
+        return [[0 for _ in range(right_columns)] for _ in range(left_rows)]
+    columns = list(zip(*right, strict=True)) if right_columns else []
+    return [
+        [
+            (sum(a * b for a, b in zip(row, column, strict=True)) % prime)
+            if prime is not None
+            else sum(a * b for a, b in zip(row, column, strict=True))
+            for column in columns
+        ]
+        for row in left
+    ]
+
+
+def _coefficient_size(value: int | Fraction) -> tuple[int, int]:
+    """Return decimal numerator and denominator digit counts without expansion."""
+    fraction = value if isinstance(value, Fraction) else Fraction(value)
+    return len(str(abs(fraction.numerator))), len(str(fraction.denominator))
+
+
+def _parse_bounded_map(
+    request: FilteredChainMapRequest, label: str, prime: int | None
+) -> list[list[list[int | Fraction]]]:
+    if len(request.maps) != len(request.source.basis_sizes):
+        raise _fail(
+            (label, "maps"),
+            "filtered_chain_map.shape_invalid",
+            "each map must carry one matrix per chain degree",
+        )
+    cells = 0
+    chars = 0
+    parsed: list[list[list[int | Fraction]]] = []
+    if len(request.target.basis_sizes) != len(request.source.basis_sizes):
+        raise _fail(
+            (label, "target", "basis_sizes"),
+            "filtered_chain_map.shape_invalid",
+            "source and target must have matching chain-degree axes",
+        )
+    for degree, matrix in enumerate(request.maps):
+        rows = request.target.basis_sizes[degree]
+        columns = request.source.basis_sizes[degree]
+        if len(matrix) != rows or any(len(row) != columns for row in matrix):
+            raise _fail(
+                (label, "maps", degree),
+                "filtered_chain_map.shape_invalid",
+                "each map must have target-by-source chain axes",
+            )
+        cells += rows * columns
+        parsed_matrix = []
+        for row in matrix:
+            parsed_row = []
+            for value in row:
+                if prime is not None and type(value) is not int:
+                    raise _fail(
+                        (label, "maps", degree),
+                        "filtered_chain_map.entry_invalid",
+                        "finite-field map entries must be integers",
+                    )
+                numerator_digits, denominator_digits = _coefficient_size(value)
+                if (
+                    numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+                    or denominator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=(label, "maps", degree),
+                        code="filtered_chain_map.coefficient_exceeded",
+                        message="an input map coefficient exceeds the exact "
+                        "chain-map coefficient digit limit",
+                    )
+                chars += numerator_digits + denominator_digits + 1
+                parsed_row.append(_parse_entry(value, prime))
+            parsed_matrix.append(parsed_row)
+        parsed.append(parsed_matrix)
+    if cells > MAX_CHAIN_MAP_CELLS or chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+        raise OperationResourceAdmissionError(
+            location=(label, "maps"),
+            code="filtered_chain_map.input_envelope_exceeded",
+            message="the degreewise map exceeds its admitted cell or "
+            "coefficient-character envelope",
+        )
+    return parsed
+
+
+def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -> int:
+    """Bound decimal numerator and denominator sizes of a rational sum."""
+    term_sizes = []
+    for left, right in terms:
+        left_numerator, left_denominator = _coefficient_size(left)
+        right_numerator, right_denominator = _coefficient_size(right)
+        denominator_is_one = (
+            Fraction(left).denominator == 1 and Fraction(right).denominator == 1
+        )
+        term_sizes.append(
+            (
+                (
+                    right_numerator
+                    if abs(Fraction(left).numerator) == 1 and left_denominator == 1
+                    else left_numerator
+                    if abs(Fraction(right).numerator) == 1 and right_denominator == 1
+                    else left_numerator + right_numerator
+                ),
+                1 if denominator_is_one else left_denominator + right_denominator,
+                denominator_is_one,
+            )
+        )
+    denominator_digits = (
+        1
+        if all(size[2] for size in term_sizes)
+        else sum(size[1] for size in term_sizes)
+    )
+    numerator_digits = max(
+        numerator + denominator_digits - term_denominator
+        for numerator, term_denominator, _denominator_is_one in term_sizes
+    ) + (len(str(len(terms))) if len(terms) > 1 else 0)
+    if (
+        numerator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+        or denominator_digits > MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_coefficient_exceeded",
+            message="a composed coefficient may exceed the exact chain-map "
+            "coefficient digit limit",
+        )
+    return numerator_digits + denominator_digits + 1
+
+
+def _composition_preflight(
+    first: FilteredChainMapRequest, second: FilteredChainMapRequest
+) -> tuple[
+    int | None,
+    list[list[list[int | Fraction]]],
+    list[list[list[int | Fraction]]],
+]:
+    """Bound map products and coefficient growth before multiplying matrices."""
+    if first.target != second.source:
+        raise _fail(
+            ("second",),
+            "filtered_chain_map.composition_middle_mismatch",
+            "the target complex of the first map must equal the source complex "
+            "of the second map",
+        )
+    if (
+        first.source.coefficient_ring != second.target.coefficient_ring
+        or first.source.prime != second.target.prime
+    ):
+        raise _fail(
+            ("second",),
+            "filtered_chain_map.composition_coefficient_mismatch",
+            "the composite must retain one exact coefficient field",
+        )
+
+    prime = first.source.prime
+    parsed_first = _parse_bounded_map(first, "first", prime)
+    parsed_second = _parse_bounded_map(second, "second", prime)
+
+    output_cells = sum(
+        rows * columns
+        for rows, columns in zip(
+            second.target.basis_sizes, first.source.basis_sizes, strict=True
+        )
+    )
+    work = sum(
+        rows * columns * middle
+        for rows, columns, middle in zip(
+            second.target.basis_sizes,
+            first.source.basis_sizes,
+            first.target.basis_sizes,
+            strict=True,
+        )
+    )
+    if (
+        output_cells > MAX_CHAIN_MAP_CELLS
+        or work > MAX_FILTERED_CHAIN_MAP_COMPOSITION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_work_exceeded",
+            message="the composed map exceeds its admitted cell or exact "
+            "multiplication-work envelope",
+        )
+
+    output_chars = 0
+    for left, right in zip(parsed_second, parsed_first, strict=True):
+        for row in left:
+            for column in zip(*right, strict=False):
+                terms = [
+                    (a, b)
+                    for a, b in zip(row, column, strict=True)
+                    if a != 0 and b != 0
+                ]
+                if not terms:
+                    output_chars += 1
+                    continue
+                if prime is not None:
+                    output_chars += len(str(prime - 1))
+                    continue
+                output_chars += _coefficient_sum_bound(terms)
+    if output_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_output_exceeded",
+            message="the composed map exceeds the aggregate exact output "
+            "coefficient-character limit",
+        )
+    return prime, parsed_first, parsed_second
+
+
+def filtered_chain_map_compose(
+    request: FilteredChainMapCompositionRequest,
+) -> FilteredChainMapResult:
+    """Compose exact filtration-preserving chain maps in application order."""
+    first_request = FilteredChainMapRequest(
+        source=request.first.source,
+        source_filtration=request.first.source_filtration,
+        target=request.first.target,
+        target_filtration=request.first.target_filtration,
+        maps=request.first.maps,
+    )
+    second_request = FilteredChainMapRequest(
+        source=request.second.source,
+        source_filtration=request.second.source_filtration,
+        target=request.second.target,
+        target_filtration=request.second.target_filtration,
+        maps=request.second.maps,
+    )
+    prime, parsed_first, parsed_second = _composition_preflight(
+        first_request, second_request
+    )
+    _check_filtered_chain_map_axes(first_request)
+    _check_filtered_chain_map_axes(second_request)
+    first_source = _admit_filtered_semantics(
+        first_request.source, first_request.source_filtration
+    )
+    middle_first = _admit_filtered_semantics(
+        first_request.target, first_request.target_filtration
+    )
+    if first_request.target_filtration == second_request.source_filtration:
+        middle_second = middle_first
+    else:
+        middle_second = _admit_filtered_semantics(
+            second_request.source, second_request.source_filtration
+        )
+        if middle_first.bases != middle_second.bases:
+            raise _fail(
+                ("second", "source_filtration"),
+                "filtered_chain_map.composition_middle_filtration_mismatch",
+                "the two middle filtrations must define the same subspaces",
+            )
+    last_target = _admit_filtered_semantics(
+        second_request.target, second_request.target_filtration
+    )
+    _, first_chain_map, first_preserving = _filtered_map_status_admitted(
+        first_request, first_source, middle_first, parsed_first
+    )
+    _, second_chain_map, second_preserving = _filtered_map_status_admitted(
+        second_request, middle_second, last_target, parsed_second
+    )
+    for label, chain_map, preserving in (
+        ("first", first_chain_map, first_preserving),
+        ("second", second_chain_map, second_preserving),
+    ):
+        if not chain_map:
+            raise _fail(
+                (label, "maps"),
+                "filtered_chain_map.composition_input_not_chain_map",
+                "both inputs must commute with their chain differentials",
+            )
+        if not preserving:
+            raise _fail(
+                (label, "maps"),
+                "filtered_chain_map.composition_input_not_filtered",
+                "both inputs must preserve their supplied filtrations",
+            )
+    maps = tuple(
+        tuple(
+            tuple(_serialize_scalar(value, prime) for value in row)
+            for row in _mul(
+                parsed_second[degree],
+                parsed_first[degree],
+                prime,
+                output_width=first_request.source.basis_sizes[degree],
+            )
+        )
+        for degree in range(len(parsed_first))
+    )
+    return FilteredChainMapResult(
+        source=first_request.source,
+        target=second_request.target,
+        source_filtration=first_request.source_filtration,
+        target_filtration=second_request.target_filtration,
+        maps=maps,
+        filtration_preserving=True,
+        chain_map=True,
+    )
+
+
 def pages_through(request: SpectralPagesRequest) -> SpectralPagesResult:
     admit_filtered(request.complex, request.filtration)
     pages = []
@@ -1213,7 +1757,7 @@ def _exact_filtered_homology_coordinates(
                 filtered_cycles.append(vector)
             filtered_cycles = _row_basis(filtered_cycles, prime)
             full_cycle_basis = [*boundaries, *homology_basis]
-            image_coordinates = []
+            image_coordinates: list[list[int | Fraction]] = []
             for vector in filtered_cycles:
                 if any(_mat_vec(outgoing, vector, prime)):
                     raise OperationDomainValidationError(
@@ -1454,6 +1998,9 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
 
 
 __all__ = [
+    "FilteredChainMapCompositionRequest",
+    "FilteredChainMapPageRequest",
+    "FilteredChainMapPageResult",
     "FilteredChainMapPageZeroResult",
     "FilteredChainMapRequest",
     "FilteredChainMapResult",
@@ -1467,6 +2014,8 @@ __all__ = [
     "SpectralPagesRequest",
     "SpectralPagesResult",
     "abutment",
+    "filtered_chain_map_compose",
+    "filtered_chain_map_page",
     "filtered_chain_map_page_zero",
     "filtered_homology_filtration",
     "filtered_map",

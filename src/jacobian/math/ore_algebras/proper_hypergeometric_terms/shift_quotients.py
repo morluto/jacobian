@@ -5,6 +5,8 @@ from __future__ import annotations
 from math import comb
 from typing import Any
 
+from pydantic import ValidationError
+
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -95,10 +97,25 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
         )
     shifted_terms = _shifted_polynomial_term_bound(term, axis)
     factorial_terms = comb(factorial_degree + 2, 2)
-    if (
-        shifted_terms * factorial_terms > _MAX_EXPANSION_TERMS
-        or len(polynomial.terms) * factorial_terms > _MAX_EXPANSION_TERMS
-    ):
+    # Every linear factorial factor can increase the exponent of an axis only
+    # when its affine form contains that axis. Intersect the total-degree
+    # simplex with the axis-aligned exponent box before backend expansion.
+    # Both numerator and denominator are bounded by this union of all factors;
+    # reductions can only decrease their actual support.
+    bounds = tuple(
+        max(monomial.exponents[coordinate] for monomial in polynomial.terms)
+        + sum(
+            abs((factor.n_coefficient, factor.k_coefficient)[axis]) * abs(factor.power)
+            for factor in term.factorial_factors
+            if (factor.n_coefficient, factor.k_coefficient)[coordinate]
+        )
+        for coordinate in (0, 1)
+    )
+    expanded_terms = min(
+        comb(_term_degree(term) + factorial_degree + 2, 2),
+        (bounds[0] + 1) * (bounds[1] + 1),
+    )
+    if expanded_terms > _MAX_EXPANSION_TERMS:
         raise OperationResourceAdmissionError(
             location=("term",),
             code="ore_algebra.hypergeometric_quotient_expansion_budget",
@@ -215,7 +232,20 @@ def proper_hypergeometric_shift_quotients(
     locus. They do not define pointwise quotients at zeros, poles, or the
     reciprocal-factorial support boundary.
     """
-    term = ProperHypergeometricTerm.model_validate(term.model_dump())
+    if not isinstance(term, ProperHypergeometricTerm):
+        raise OperationDomainValidationError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_term_type",
+            message="term must be a proper hypergeometric term value",
+        )
+    try:
+        term = ProperHypergeometricTerm.model_validate(term.model_dump())
+    except (ValidationError, TypeError, ValueError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=("term",),
+            code="ore_algebra.hypergeometric_term_invalid",
+            message="term must be a canonical proper hypergeometric term value",
+        ) from exc
     _admit_quotient(term, 0)
     _admit_quotient(term, 1)
     return ProperHypergeometricShiftQuotientsResult(

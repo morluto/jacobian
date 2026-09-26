@@ -190,14 +190,14 @@ class TestKnownAnswers:
         assert result.cech_value.basis_sizes == (3, 3, 1)
         assert result.cech_value.coefficient_ring.value == "ZZ"
         assert result.cech_value.differential_matrices[0] == (
-            ("-1", "-1", "0"),
-            ("1", "0", "-1"),
-            ("0", "1", "1"),
+            (-1, -1, 0),
+            (1, 0, -1),
+            (0, 1, 1),
         )
         assert result.cech_value.differential_matrices[1] == (
-            ("1",),
-            ("-1",),
-            ("1",),
+            (1,),
+            (-1,),
+            (1,),
         )
         assert tuple(
             entry.upper_dimension for entry in result.differential_squared_zero
@@ -414,7 +414,7 @@ class TestDefiningInvariants:
     ) -> None:
         result = dual_complex(presentation.components, presentation.strata)
         matrices = tuple(
-            tuple(tuple(int(entry) for entry in row) for row in matrix)
+            tuple(tuple(entry for entry in row) for row in matrix)
             for matrix in result.cech_value.differential_matrices
         )
         for lower, upper in pairwise(matrices):

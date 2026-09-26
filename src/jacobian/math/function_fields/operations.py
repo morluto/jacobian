@@ -56,6 +56,7 @@ from jacobian.math.function_fields._models import (
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
+    MAX_TRACE_WORK,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
@@ -74,6 +75,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
+    FunctionFieldTraceResult,
+    FunctionFieldUniformizerResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -849,10 +852,35 @@ def function_field_element_power(
         return canonical
 
     internal = _internal_coordinates(canonical)
-    if all(coordinate == ZERO_RF for coordinate in internal):
-        return canonical
-    if internal == _unit_internal(field.degree):
-        return canonical
+    zero = all(coordinate == ZERO_RF for coordinate in internal)
+    unit = internal == _unit_internal(field.degree)
+    constant = None
+    if all(coordinate == ZERO_RF for coordinate in internal[1:]):
+        numerator, denominator = internal[0]
+        if len(numerator) == len(denominator) == 1:
+            constant = (
+                numerator[0]
+                * pow(denominator[0], field.characteristic - 2, field.characteristic)
+                % field.characteristic
+            )
+    if zero or unit or constant is not None:
+        _admit_field_algebra(field)
+        if zero or unit:
+            return canonical
+        scalar = pow(constant, exponent, field.characteristic)
+        coordinates = (
+            _from_internal_rational_function(
+                rf_normalize((scalar,), (1,), field.characteristic),
+                field.characteristic,
+            ),
+            *(
+                _from_internal_rational_function(ZERO_RF, field.characteristic)
+                for _ in range(field.degree - 1)
+            ),
+        )
+        return FiniteFunctionFieldElement.model_construct(
+            field=field, coordinates=coordinates
+        )
 
     result_degree = _preflight_power_schedule(field, canonical, exponent)
     _preflight_power_output(field, result_degree)
@@ -1055,6 +1083,170 @@ def function_field_element_add(
     return FiniteFunctionFieldElement.model_construct(
         field=field,
         coordinates=coordinates,
+    )
+
+
+def _trace_add_degree(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    """Bound numerator/denominator degrees of a reduced rational sum."""
+
+    if left == (-1, 0):
+        return right
+    if right == (-1, 0):
+        return left
+    return max(left[0] + right[1], right[0] + left[1]), left[1] + right[1]
+
+
+def _trace_multiply_degree(
+    left: tuple[int, int], right: tuple[int, int]
+) -> tuple[int, int]:
+    if left == (-1, 0) or right == (-1, 0):
+        return (-1, 0)
+    return left[0] + right[0], left[1] + right[1]
+
+
+def _trace_degree(value: RF) -> tuple[int, int]:
+    if rf_is_zero(value):
+        return (-1, 0)
+    return len(value[0]) - 1, len(value[1]) - 1
+
+
+def _admit_trace_growth(
+    field: FiniteFunctionField, element: FiniteFunctionFieldElement
+) -> RF:
+    """Compute Newton sums with bounded rational intermediates and return the trace."""
+    degree = field.degree
+    coordinates = _internal_coordinates(element)
+    prime = field.characteristic
+    if degree == 1:
+        return coordinates[0]
+
+    coefficients = _field_kpoly(field)
+    highest_power = max(
+        (index for index, value in enumerate(coordinates) if not rf_is_zero(value)),
+        default=0,
+    )
+    work = 0
+    intermediate_degree_limit = 1_024
+
+    def admit_operation(
+        bound: tuple[int, int], location: tuple[str | int, ...]
+    ) -> None:
+        nonlocal work
+        output_degree = max(bound)
+        if output_degree > intermediate_degree_limit:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.trace_intermediate_growth_exceeds_envelope",
+                message=(
+                    "function-field trace intermediates exceed the "
+                    f"degree-{intermediate_degree_limit} work envelope"
+                ),
+            )
+        work += 3 * (output_degree + 1) ** 3
+        if work > MAX_TRACE_WORK:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.trace_work_exceeds_envelope",
+                message=(
+                    f"function-field trace work exceeds the {MAX_TRACE_WORK} unit envelope"
+                ),
+            )
+
+    def multiply(left: RF, right: RF, location: tuple[str | int, ...]) -> RF:
+        if rf_is_zero(left) or rf_is_zero(right):
+            return ZERO_RF
+        admit_operation(
+            _trace_multiply_degree(_trace_degree(left), _trace_degree(right)), location
+        )
+        return rf_mul(left, right, prime)
+
+    def add(left: RF, right: RF, location: tuple[str | int, ...]) -> RF:
+        if rf_is_zero(left):
+            return right
+        if rf_is_zero(right):
+            return left
+        admit_operation(
+            _trace_add_degree(_trace_degree(left), _trace_degree(right)), location
+        )
+        return rf_add(left, right, prime)
+
+    power_sums: list[RF] = [rf_normalize((degree % prime,), (1,), prime)]
+    for power in range(1, highest_power + 1):
+        total = ZERO_RF
+        for previous_power in range(1, power):
+            product = multiply(
+                coefficients[degree - power + previous_power],
+                power_sums[previous_power],
+                ("element", "field", "defining_polynomial"),
+            )
+            total = add(total, product, ("element", "field", "defining_polynomial"))
+        scalar = power % prime
+        if scalar:
+            scalar_rf = rf_normalize((scalar,), (1,), prime)
+            product = multiply(
+                scalar_rf,
+                coefficients[degree - power],
+                ("element", "field", "defining_polynomial"),
+            )
+            total = add(total, product, ("element", "field", "defining_polynomial"))
+        power_sums.append(rf_sub(ZERO_RF, total, prime))
+
+    trace = ZERO_RF
+    for coordinate, power_sum in zip(
+        coordinates[: highest_power + 1], power_sums, strict=True
+    ):
+        product = multiply(coordinate, power_sum, ("element", "coordinates"))
+        trace = add(trace, product, ("element", "coordinates"))
+    return trace
+
+
+def function_field_element_trace(
+    element: FiniteFunctionFieldElement,
+) -> FunctionFieldTraceResult:
+    """Compute the exact relative trace to the rational function field GF(p)(x)."""
+
+    field, canonical = _preflight_inverse_operand(element)
+    trace = _admit_trace_growth(field, canonical)
+    trace_degree = _trace_degree(trace)
+    if max(trace_degree) > MAX_POLYNOMIAL_X_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.trace_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field trace exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
+    trace_coefficient_count = trace_degree[0] + 1 if trace_degree[0] >= 0 else 1
+    trace_denominator_count = trace_degree[1] + 1 if trace_degree[0] >= 0 else 1
+    output_template = {
+        "field": field.model_dump(mode="json"),
+        "element": canonical.model_dump(mode="json"),
+        "trace": {
+            "numerator": {
+                "characteristic": field.characteristic,
+                "coefficients": [field.characteristic - 1] * trace_coefficient_count,
+            },
+            "denominator": {
+                "characteristic": field.characteristic,
+                "coefficients": [field.characteristic - 1] * trace_denominator_count,
+            },
+        },
+    }
+    if len(encode_strict_json(output_template)) > MAX_ELEMENT_VALUE_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.trace_output_exceeds_envelope",
+            message=(
+                "the exact function-field trace result exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
+            ),
+        )
+    _admit_field_algebra(field)
+    return FunctionFieldTraceResult(
+        field=field,
+        element=canonical,
+        trace=_from_internal_rational_function(trace, field.characteristic),
     )
 
 
@@ -1530,6 +1722,94 @@ def function_field_place_valuation(
     if coordinate.numerator.is_zero():
         return None
     return _rf_valuation(coordinate, place)
+
+
+def function_field_place_uniformizer(
+    place: FunctionFieldPlace,
+) -> FunctionFieldUniformizerResult:
+    """Return an exact element of valuation one at a rational-field place."""
+
+    place = _canonical_place(place)
+    field = _admit_rational_place_field(place.field)
+    prime_polynomial = place.prime_polynomial
+    if place.kind == "FINITE":
+        if prime_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
+        prime_polynomial = _monic_polynomial(prime_polynomial)
+    place = FunctionFieldPlace.model_construct(
+        field=field,
+        kind=place.kind,
+        prime_polynomial=prime_polynomial,
+        degree=place.degree,
+    )
+    # These are the complete possible result coefficients. Admit transport
+    # size before irreducibility invokes polynomial factorization.
+    if place.kind == "FINITE":
+        assert prime_polynomial is not None
+        numerator = prime_polynomial
+        denominator = PrimeFieldPolynomial(
+            characteristic=field.characteristic, coefficients=(1,)
+        )
+    else:
+        numerator = PrimeFieldPolynomial(
+            characteristic=field.characteristic, coefficients=(1,)
+        )
+        denominator = PrimeFieldPolynomial(
+            characteristic=field.characteristic, coefficients=(0, 1)
+        )
+    output_template = {
+        "place": place.model_dump(mode="json"),
+        "uniformizer": {
+            "field": field.model_dump(mode="json"),
+            "coordinates": [
+                {
+                    "numerator": numerator.model_dump(mode="json"),
+                    "denominator": denominator.model_dump(mode="json"),
+                }
+            ],
+        },
+    }
+    if len(encode_strict_json(output_template)) > MAX_ELEMENT_VALUE_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("place",),
+            code="function_field.uniformizer_output_exceeds_envelope",
+            message=(
+                "uniformizer output exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte envelope"
+            ),
+        )
+    if place.kind == "FINITE":
+        assert prime_polynomial is not None
+        estimated_work = prime_polynomial.degree**3 * max(
+            1, field.characteristic.bit_length()
+        )
+        if estimated_work > MAX_RATIONAL_PLACE_WORK:
+            raise OperationResourceAdmissionError(
+                location=("place", "prime_polynomial"),
+                code="function_field.place_factor_work_exceeds_envelope",
+                message=(
+                    "place irreducibility work exceeds the "
+                    f"{MAX_RATIONAL_PLACE_WORK} unit envelope"
+                ),
+            )
+        factors = _factor_polynomial(prime_polynomial)
+        if factors != ((prime_polynomial, 1),):
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.place_not_prime",
+                message="finite place polynomial must be irreducible",
+            )
+    uniformizer = FiniteFunctionFieldElement(
+        field=field,
+        coordinates=(
+            PrimeFieldRationalFunction(numerator=numerator, denominator=denominator),
+        ),
+    )
+    return FunctionFieldUniformizerResult(place=place, uniformizer=uniformizer)
 
 
 def function_field_place_residue(
@@ -2431,7 +2711,9 @@ __all__ = [
     "function_field_element_inverse",
     "function_field_element_multiply",
     "function_field_element_power",
+    "function_field_element_trace",
     "function_field_genus",
+    "function_field_place_uniformizer",
     "function_field_place_valuation",
     "function_field_principal_divisor",
     "function_field_rational_places_degree_bounded",

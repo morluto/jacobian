@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import rfc8785
 from pydantic import ValidationError
 
+from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -83,6 +85,21 @@ def transport_point(
             code="elliptic_curve.finite_field.point_transport_work_bound",
             message="coordinate transport exceeds its finite-field arithmetic envelope",
         )
+    source_point = _point_admit_with_curve(source, point)
+    input_bytes = len(
+        rfc8785.dumps(
+            {
+                "isomorphism": isomorphism.model_dump(mode="json"),
+                "point": source_point.model_dump(mode="json"),
+            }
+        )
+    )
+    if 2 * input_bytes + 512 > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_transport_output_bound",
+            message="point transport result exceeds the canonical output-byte envelope",
+        )
     scaling = isomorphism.scaling
     try:
         scaling = FiniteFieldElement.model_validate(scaling.model_dump())
@@ -128,7 +145,6 @@ def transport_point(
             message="scaling does not transport the source curve coefficients to the target",
         )
 
-    source_point = _point_admit_with_curve(source, point)
     if source_point.at_infinity:
         target_point = FiniteFieldEllipticPoint.infinity(target)
     else:

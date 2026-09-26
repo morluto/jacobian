@@ -9,6 +9,7 @@
 - [Finite-field elliptic isogeny classes](elliptic-curve-isogeny-class.md)
 - [Finite-field elliptic point orders](elliptic-curve-point-order.md)
 - [Finite-field elliptic group structures](elliptic-curve-group-structure.md)
+- [Finite-field elliptic subgroup membership](elliptic-curve-subgroup-membership.md)
 - [Finite-field elliptic quadratic twists](elliptic-curve-finite-field-twists.md)
 - [Finite-field elliptic quadratic-twist relation](elliptic-curve-quadratic-twist-relation.md)
 - [Finite-field elliptic twist-class decision](elliptic-curve-finite-field-twist-class.md)

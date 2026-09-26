@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import gcd
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import decimal_digit_width
@@ -197,7 +196,11 @@ def modular_form_coordinates_scalar_multiply(
         )
     projected = tuple(value * scalar_value for value in values)
     projected_digits = max(
-        (_digits(part) for value in projected for part in (value.numerator, value.denominator)),
+        (
+            _digits(part)
+            for value in projected
+            for part in (value.numerator, value.denominator)
+        ),
         default=1,
     )
     if projected_digits > MAX_COORDINATE_ADDITION_DIGITS:
@@ -209,7 +212,9 @@ def modular_form_coordinates_scalar_multiply(
     return ModularFormCoordinates(
         space=form.space,
         basis_id=form.basis_id,
-        coordinates=tuple(CanonicalRational.from_fraction(value) for value in projected),
+        coordinates=tuple(
+            CanonicalRational.from_fraction(value) for value in projected
+        ),
     )
 
 

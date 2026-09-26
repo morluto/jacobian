@@ -410,9 +410,13 @@ def test_coordinate_scalar_boundary_is_owned_before_rank_backend() -> None:
     rejected = configuration((("a", 0, 0), ("b", rejected_value, 0)))
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_INPUT_SCALAR_DIGITS}-digit input bound",
-    ):
+    ) as exc_info:
         planar_rigidity_profile(rejected, source_graph)
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "geometry.framework.rigidity_matrix_scalar_exceeds_rank_bound"
+    )
 
 
 def test_coordinate_work_admission_charges_every_derived_difference() -> None:

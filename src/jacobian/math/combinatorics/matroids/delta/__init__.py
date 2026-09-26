@@ -12,6 +12,10 @@ from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     minor,
     twist_width_profile,
 )
+from jacobian.math.combinatorics.matroids.delta.interlace import (
+    DistanceInterlaceResult,
+    distance_interlace_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.operations import (
     direct_sum,
     distance,
@@ -26,10 +30,12 @@ from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
 __all__ = [
     "DeltaMatroidFeasibleSizeProfile",
     "DeltaMatroidTwistWidthProfile",
+    "DistanceInterlaceResult",
     "FiniteDeltaMatroid",
     "binary",
     "direct_sum",
     "distance",
+    "distance_interlace_polynomial",
     "dual",
     "feasible_size_profile",
     "from_feasible_sets",

@@ -38,6 +38,11 @@ from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     minor,
     twist_width_profile,
 )
+from jacobian.math.combinatorics.matroids.delta.interlace import (
+    DistanceInterlaceRequest,
+    DistanceInterlaceResult,
+    distance_interlace_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.operations import (
     direct_sum,
     distance,
@@ -184,17 +189,13 @@ def _distance(request: DeltaMatroidDistanceRequest) -> DeltaMatroidDistanceResul
     try:
         return distance(request.delta_matroid, request.subset)
     except DeltaMatroidAdmissionError as exc:
-        raise OperationResourceAdmissionError(
-            location=("delta_matroid",),
-            code=f"delta_matroid.{exc.reason}",
-            message=str(exc),
-        ) from exc
+        raise OperationResourceAdmissionError(location=("delta_matroid",), code=f"delta_matroid.{exc.reason}", message=str(exc)) from exc
     except ValueError as exc:
-        raise OperationDomainValidationError(
-            location=("delta_matroid",),
-            code="delta_matroid.source_not_valid",
-            message=str(exc),
-        ) from exc
+        raise OperationDomainValidationError(location=("delta_matroid",), code="delta_matroid.source_not_valid", message=str(exc)) from exc
+
+
+def _distance_interlace(request: DistanceInterlaceRequest) -> DistanceInterlaceResult:
+    return distance_interlace_polynomial(request.delta_matroid)
 
 
 TOOLS: MathTools = (  # noqa: RUF005
@@ -447,28 +448,22 @@ TOOLS: MathTools = (  # noqa: RUF005
     MathTool(
         operation_id="delta_matroid.binary_loop_complement.compute",
         title="Loop complement a binary delta-matroid",
-        description=(
-            "Toggle the diagonal of a labelled symmetric GF(2) matrix on a "
-            "sorted subset of its ground axis, then return the complete "
-            "principal-minor feasible family of the resulting presentation. "
-            "For one element this toggles feasibility of X union {e} for "
-            "each currently feasible X not containing e. The same bounded "
-            "principal-minor enumeration used by binary reconstruction applies."
-        ),
+        description=("Toggle the diagonal of a labelled symmetric GF(2) matrix on a sorted subset of its ground axis, then return the complete principal-minor feasible family of the resulting presentation."),
         request_type=BinaryLoopComplementRequest,
         result_type=BinaryLoopComplementResult,
         run=_run_loop_complement,
         tags=("delta-matroid", "binary", "loop-complement", "exact"),
-        examples=(
-            OperationExample(
-                name="loop_complement_zero_matrix",
-                description="Toggle both diagonal entries of the zero matrix.",
-                input={
-                    "matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]},
-                    "subset": [0, 1],
-                },
-            ),
-        ),
+        examples=(OperationExample(name="loop_complement_zero_matrix", description="Toggle both diagonal entries of the zero matrix.", input={"matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]}, "subset": [0, 1]}),),
+    ),
+    MathTool(
+        operation_id="delta_matroid.distance_interlace_polynomial.compute",
+        title="Compute the subset-distance interlace polynomial",
+        description=("Return the distance histogram and exact polynomial sum over X subset E of (x - 1)^d_D(X), where d_D(X) is the minimum symmetric-difference distance from X to a feasible set."),
+        request_type=DistanceInterlaceRequest,
+        result_type=DistanceInterlaceResult,
+        run=_distance_interlace,
+        tags=("delta-matroid", "interlace-polynomial", "distance", "exact"),
+        examples=(OperationExample(name="two_element_uniform_distance_interlace", description="For all four subsets feasible, every distance is zero, so the polynomial is 4.", input={"delta_matroid": {"ground": ["a", "b"], "feasible": [[], [0], [0, 1], [1]]}}),),
     ),
 )
 

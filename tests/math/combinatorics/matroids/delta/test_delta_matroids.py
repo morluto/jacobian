@@ -99,6 +99,7 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.binary_loop_complement.compute",
         "delta_matroid.twist_width_profile.compute",
         "delta_matroid.feasible_size_profile.compute",
+        "delta_matroid.distance_interlace_polynomial.compute",
     }
 
 

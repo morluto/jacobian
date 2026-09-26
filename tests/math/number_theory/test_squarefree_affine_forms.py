@@ -55,6 +55,8 @@ from jacobian.math.number_theory.squarefree_affine_forms._models import (
     MAX_INTERVAL_SIEVE_RESIDUES,
     MAX_INTERVAL_SIEVE_VISITS,
     MAX_LOCAL_FACTOR_PRIME,
+    _decimal_digits,
+    admit_admissibility_cutoff,
     admit_interval_sieve_residues,
 )
 from jacobian.math.number_theory.squarefree_affine_forms._tools import (
@@ -827,6 +829,19 @@ def test_admissibility_round_trip_and_forgery() -> None:
     forged_rows["rows"][0]["valid_count"] = 3
     with pytest.raises(ValidationError):
         LocalAdmissibilityResult.model_validate_json(json.dumps(forged_rows))
+
+
+def test_cutoff_type_errors_are_domain_rejections() -> None:
+    for cutoff in (True, "100"):
+        with pytest.raises(OperationDomainValidationError):
+            admit_admissibility_cutoff(cutoff)  # type: ignore[arg-type]
+        with pytest.raises(OperationDomainValidationError):
+            infinite_product_enclosure(SINGLE_N, cutoff)  # type: ignore[arg-type]
+
+
+def test_decimal_digit_admission_short_circuits_giant_integers() -> None:
+    giant = 1 << 1_000_000
+    assert _decimal_digits(giant) > 8
 
 
 def test_admissibility_cutoff_budget_is_a_resource_boundary() -> None:

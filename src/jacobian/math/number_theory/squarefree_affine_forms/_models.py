@@ -42,6 +42,11 @@ def _decimal_digits(value: int) -> int:
         return 1
     # 30103/100000 is a strict upper approximation to log10(2).
     digits = (magnitude.bit_length() * 30103 + 99999) // 100000
+    # Avoid building a power comparable in size to caller-controlled input.
+    # The sole possible overestimate of this bound is one digit, so values
+    # clearly beyond the component envelope can be rejected immediately.
+    if digits > MAX_SQUAREFREE_COMPONENT_DIGITS + 1:
+        return digits
     # The approximation is an upper bound; correct its one-digit overestimate.
     while digits > 1 and magnitude < 10 ** (digits - 1):
         digits -= 1
@@ -182,7 +187,9 @@ def admit_infinite_product(source: SquarefreeAffineFamily, cutoff: int) -> None:
     """Admit a complete prime prefix and its elementary square-sum tail bound."""
 
     admit_family(source)
-    if type(cutoff) is not int or not 1 <= cutoff <= MAX_INFINITE_PRODUCT_CUTOFF:
+    if type(cutoff) is not int:
+        raise _domain_error("infinite_product_cutoff", "prime cutoff must be an integer")
+    if not 1 <= cutoff <= MAX_INFINITE_PRODUCT_CUTOFF:
         raise _resource_error(
             "infinite_product_cutoff_budget",
             f"prime cutoff must be between 1 and {MAX_INFINITE_PRODUCT_CUTOFF}",
@@ -217,6 +224,8 @@ def admit_infinite_product(source: SquarefreeAffineFamily, cutoff: int) -> None:
 def admit_admissibility_cutoff(cutoff: int) -> None:
     """Require a checkable cutoff inside the prime envelope."""
 
+    if type(cutoff) is not int:
+        raise _domain_error("cutoff_type", "the admissibility cutoff must be an integer")
     if cutoff < 1:
         raise _domain_error(
             "cutoff_positive", "the admissibility cutoff is at least one"

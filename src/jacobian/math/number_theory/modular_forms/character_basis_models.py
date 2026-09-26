@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -12,6 +12,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormSpace,
@@ -22,6 +23,7 @@ class ModularCharacterBasisRequest(StrictModel):
     """Request one supported exact character-valued basis prefix."""
 
     space: ModularFormSpace
+    precision: StrictInt | None = Field(default=None, ge=1, le=128)
 
 
 class ModularCharacterQExpansion(StrictModel):
@@ -139,13 +141,105 @@ class ModularCharacterBasis(StrictModel):
         return self
 
 
+class CyclotomicCharacterMap(StrictModel):
+    """Explicit pullback of one Dirichlet character along level reduction."""
+
+    source: DirichletCharacter
+    target: DirichletCharacter
+
+
+class CyclotomicIdentityFieldMap(StrictModel):
+    """The explicit identity embedding between identical cyclotomic parents."""
+
+    source: RationalCyclotomicField
+    target: RationalCyclotomicField
+
+
+class ModularCharacterSpaceInclusion(StrictModel):
+    """A represented nested-level inclusion with its character and field maps."""
+
+    source_space: ModularFormSpace
+    target_space: ModularFormSpace
+    character_map: CyclotomicCharacterMap
+    coefficient_field_map: CyclotomicIdentityFieldMap
+
+    @model_validator(mode="after")
+    def require_structural_compatibility(self) -> Self:
+        source = self.source_space
+        target = self.target_space
+        if (
+            source.character != self.character_map.source
+            or target.character != self.character_map.target
+            or source.coefficient_domain != self.coefficient_field_map.source
+            or target.coefficient_domain != self.coefficient_field_map.target
+            or source.weight != target.weight
+            or source.kind != "S"
+            or target.kind != "S"
+            or source.level <= 0
+            or target.level % source.level
+            or source.coefficient_domain != target.coefficient_domain
+            or self.character_map.source.group.modulus != source.level
+            or self.character_map.target.group.modulus != target.level
+        ):
+            raise PydanticCustomError(
+                "modular_forms.character_inclusion_binding",
+                "character inclusion parents, map values, weight, kind, levels, and fields must agree",
+            )
+        return self
+
+
+class ModularCharacterTransportedForm(StrictModel):
+    """A source form, its explicit inclusion, and exact target representation."""
+
+    source_form: ModularFormCoordinates
+    inclusion: ModularCharacterSpaceInclusion
+    target_form: ModularFormCoordinates
+    target_q_expansion: ModularCharacterQExpansion
+
+    @model_validator(mode="after")
+    def require_transport_binding(self) -> Self:
+        if (
+            self.source_form.space != self.inclusion.source_space
+            or self.target_form.space != self.inclusion.target_space
+            or self.target_q_expansion.space != self.inclusion.target_space
+            or self.target_q_expansion.basis_id != self.target_form.basis_id
+            or len(self.target_q_expansion.coefficients) == 0
+        ):
+            raise PydanticCustomError(
+                "modular_forms.character_transport_binding",
+                "transported form must retain and bind exact source and target parents",
+            )
+        return self
+
+
+class ModularCharacterCoordinatesTransportRequest(StrictModel):
+    form: ModularFormCoordinates
+    inclusion: ModularCharacterSpaceInclusion
+
+
+class ModularCharacterEqualityRequest(StrictModel):
+    left: ModularCharacterTransportedForm
+    right: ModularCharacterTransportedForm
+
+
+class ModularCharacterEqualityResult(StrictModel):
+    equal: StrictBool
+
+
 __all__ = [
+    "CyclotomicCharacterMap",
+    "CyclotomicIdentityFieldMap",
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",
     "ModularCharacterBasisRequest",
     "ModularCharacterCoordinatesRequest",
+    "ModularCharacterCoordinatesTransportRequest",
+    "ModularCharacterEqualityRequest",
+    "ModularCharacterEqualityResult",
     "ModularCharacterHeckeMatrix",
     "ModularCharacterHeckeMatrixRequest",
     "ModularCharacterHeckeRequest",
     "ModularCharacterQExpansion",
+    "ModularCharacterSpaceInclusion",
+    "ModularCharacterTransportedForm",
 ]

@@ -20,11 +20,16 @@ version, and exact rational coordinate vector, so it defines a global form,
 not only a finite q-prefix.
 
 The basis and coordinate expansion operations return exact finite q-prefixes,
-while `modular_form.space.sturm_bound.compute`
-returns the exact Sturm integer. Callers can compose these values and compare
-the required coefficients themselves; Jacobian publishes no global equality
-checker. For a Sturm bound `B`, the determining prefix contains `B + 1`
-coefficients, from index zero through index `B`.
+while `modular_form.space.sturm_bound.compute` returns the exact Sturm integer.
+Callers can compose these values and compare the required coefficients
+themselves; Jacobian publishes no general global equality checker. For the
+narrow order-6 `S_2` family at levels 13, 26, and 39, explicit character
+inflation and common-target comparison are available through
+`modular_form.character_coordinates.transport.compute` and
+`modular_form.character.equal.check`, as described in [Rational Gamma0
+modular-form bases](modular-forms-gamma0-rational-bases.md). For a Sturm bound
+`B`, the determining prefix contains `B + 1` coefficients, from index zero
+through index `B`.
 
 These rational basis and coordinate operations support level one, holomorphic
 trivial-character spaces at Gamma0(2) and Gamma0(3), even-weight
@@ -70,8 +75,10 @@ PARI basis prefix through `q^(2n)`, applies the exact character-valued Hecke
 coefficient formula, and reconstructs the image in the same exact coordinate
 space through the Sturm bound. Its coefficient-height admission uses the
 weight-2 eigenform bound `|a_m| <= sigma_1(m) <= m(m+1)/2` across the entire
-requested prefix. No implicit embeddings across characters,
-fields, levels, or basis versions are defined.
+requested prefix. This coordinate operation does not define implicit
+embeddings across characters, fields, levels, or basis versions. The separate
+explicit-inflation path above preserves and validates both source and target
+parents.
 
 For rational scalar multiples of the two conjugate character forms, the
 operation `modular_form.character_coordinates.product.compute` multiplies

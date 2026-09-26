@@ -304,6 +304,7 @@ class ModularFormCoordinates(StrictModel):
         "gamma0-four-chi4-weight-three-v1",
         "gamma0-rational-gamma0-sturm-rref-v1",
         "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
     ]
     coordinates: tuple[CanonicalRational | RationalCyclotomicElement, ...] = Field(
         max_length=MAX_LEVEL_ONE_BASIS_COORDINATES
@@ -312,6 +313,21 @@ class ModularFormCoordinates(StrictModel):
     @model_validator(mode="after")
     def require_coefficient_parent(self) -> Self:
         field = self.space.coefficient_domain
+        if self.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
+            if not 1 <= len(self.coordinates) <= 32:
+                raise _validation_error(
+                    "character_coordinate_dimension",
+                    "general character coordinates must contain 1 through 32 entries",
+                )
+            if type(field) is not RationalCyclotomicField or any(
+                type(value) is not RationalCyclotomicElement or value.field != field
+                for value in self.coordinates
+            ):
+                raise _validation_error(
+                    "character_coordinate_parent",
+                    "general character coordinates must use their exact cyclotomic field",
+                )
+            return self
         if field == "QQ":
             if any(
                 not isinstance(value, CanonicalRational) for value in self.coordinates

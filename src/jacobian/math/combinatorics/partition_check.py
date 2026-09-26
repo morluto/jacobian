@@ -1,6 +1,9 @@
 """Native checking and canonical Ferrers data for integer partitions."""
 
-from jacobian.catalog.models import OperationDomainValidationError, OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics._partition_models import (
     MAX_PARTITION_ITEM,
     MAX_PARTITION_SIZE,
@@ -30,17 +33,21 @@ def check_integer_partition(parts: tuple[int, ...]) -> PartitionCheckResult:
     previous: int | None = None
     for index, part in enumerate(parts):
         if part <= 0:
-            return PartitionCheckResult(outcome=PartitionRejected(
-                parts=parts,
-                obstruction=NonpositivePartObstruction(index=index, value=part),
-            ))
+            return PartitionCheckResult(
+                outcome=PartitionRejected(
+                    parts=parts,
+                    obstruction=NonpositivePartObstruction(index=index, value=part),
+                )
+            )
         if previous is not None and previous < part:
-            return PartitionCheckResult(outcome=PartitionRejected(
-                parts=parts,
-                obstruction=IncreasingPartsObstruction(
-                    index=index, previous_value=previous, value=part
-                ),
-            ))
+            return PartitionCheckResult(
+                outcome=PartitionRejected(
+                    parts=parts,
+                    obstruction=IncreasingPartsObstruction(
+                        index=index, previous_value=previous, value=part
+                    ),
+                )
+            )
         previous = part
     if sum(parts) > MAX_PARTITION_SIZE:
         raise OperationResourceAdmissionError(
@@ -58,9 +65,13 @@ def check_integer_partition(parts: tuple[int, ...]) -> PartitionCheckResult:
         for row, part in enumerate(parts, start=1)
         for column in range(1, part + 1)
     )
-    return PartitionCheckResult(outcome=PartitionFound._from_checked(
-        partition=partition, conjugate=IntegerPartition(parts=conjugate), cells=cells
-    ))
+    return PartitionCheckResult(
+        outcome=PartitionFound._from_checked(
+            partition=partition,
+            conjugate=IntegerPartition(parts=conjugate),
+            cells=cells,
+        )
+    )
 
 
 __all__ = ["check_integer_partition"]

@@ -20,9 +20,7 @@ MAX_PARTITION_ITEM = 2**53 - 1
 PartitionItem = Annotated[
     StrictInt, Field(ge=-MAX_PARTITION_ITEM, le=MAX_PARTITION_ITEM)
 ]
-FerrersCoordinate = Annotated[
-    StrictInt, Field(ge=1, le=MAX_PARTITION_SIZE)
-]
+FerrersCoordinate = Annotated[StrictInt, Field(ge=1, le=MAX_PARTITION_SIZE)]
 
 
 class PartitionCheckRequest(StrictModel):
@@ -96,6 +94,7 @@ class PartitionFound(StrictModel):
             cells=cells,
         )
 
+
 class NonpositivePartObstruction(StrictModel):
     """First candidate position whose part is nonpositive."""
 
@@ -140,6 +139,7 @@ class PartitionRejected(StrictModel):
         ),
     )
     obstruction: PartitionObstruction
+
 
 PartitionCheckBranch = Annotated[
     PartitionFound | PartitionRejected, Field(discriminator="kind")

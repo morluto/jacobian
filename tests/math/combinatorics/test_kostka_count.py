@@ -200,7 +200,9 @@ def test_two_row_dynamic_count_admits_three_label_fixed_content(
     def multinomial_expansion_must_not_run(_content):
         pytest.fail("two-row reduction expanded the multiset word family")
 
-    monkeypatch.setattr(kernel, "_multiset_word_count", multinomial_expansion_must_not_run)
+    monkeypatch.setattr(
+        kernel, "_multiset_word_count", multinomial_expansion_must_not_run
+    )
 
     assert fixed_content_count(request).count == 1
 

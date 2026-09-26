@@ -1,5 +1,12 @@
 """Provider-independent exact combinatorics values and functions."""
 
+from jacobian.math.combinatorics._partition_models import (
+    IncreasingPartsObstruction,
+    NonpositivePartObstruction,
+    PartitionCheckResult,
+    PartitionFound,
+    PartitionRejected,
+)
 from jacobian.math.combinatorics.exact_cover import (
     ExactCoverItemMultiplicity,
     ExactCoverRow,
@@ -38,13 +45,6 @@ from jacobian.math.combinatorics.operations import (
     verify_rational_generating_function_coefficients,
 )
 from jacobian.math.combinatorics.partition_check import check_integer_partition
-from jacobian.math.combinatorics._partition_models import (
-    IncreasingPartsObstruction,
-    NonpositivePartObstruction,
-    PartitionCheckResult,
-    PartitionFound,
-    PartitionRejected,
-)
 from jacobian.math.combinatorics.recurrence_tables import (
     IndexedRecurrenceResidual,
     PolynomialCoefficientRecurrenceTableResult,
@@ -57,15 +57,21 @@ __all__ = [
     "ExactCoverSearchStatus",
     "GeneralizedExactCoverInstance",
     "GeneralizedExactCoverResult",
+    "IncreasingPartsObstruction",
     "IndexedRecurrenceResidual",
     "MinimumExactCoverStatus",
     "MinimumGeneralizedExactCoverResult",
+    "NonpositivePartObstruction",
+    "PartitionCheckResult",
+    "PartitionFound",
+    "PartitionRejected",
     "PolynomialCoefficientRecurrenceTableResult",
     "bell_number",
     "bernoulli_number",
     "binomial",
     "catalan_number",
     "central_binomial",
+    "check_integer_partition",
     "compositions",
     "derangement_number",
     "double_factorial",
@@ -75,17 +81,11 @@ __all__ = [
     "fibonacci_number",
     "find_generalized_exact_cover",
     "integer_partitions",
-    "check_integer_partition",
-    "IncreasingPartsObstruction",
     "lucas_number",
     "minimum_generalized_exact_cover",
     "motzkin_number",
-    "NonpositivePartObstruction",
     "multinomial",
     "partition_number",
-    "PartitionCheckResult",
-    "PartitionFound",
-    "PartitionRejected",
     "permutations",
     "progression_hypergraph",
     "rational_generating_function_coefficients",

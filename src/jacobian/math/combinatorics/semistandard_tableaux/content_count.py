@@ -111,9 +111,8 @@ def _forced_full_height_columns_count(
     while rows:
         active_labels = [index for index, count in enumerate(counts) if count]
         if len(rows) == 1:
-            if (
-                sum(counts) == rows[0]
-                and all(index >= row_minima[0] for index in active_labels)
+            if sum(counts) == rows[0] and all(
+                index >= row_minima[0] for index in active_labels
             ):
                 return 1
             return 0
@@ -141,9 +140,7 @@ def _forced_full_height_columns_count(
     return 1 if not any(counts) else 0
 
 
-def _count_two_row_content(
-    partition: IntegerPartition, content: TableauContent
-) -> int:
+def _count_two_row_content(partition: IntegerPartition, content: TableauContent) -> int:
     """Count two-row tableaux by bounded row-content dynamic programming."""
 
     top_width = partition.parts[0]
@@ -161,9 +158,7 @@ def _count_two_row_content(
             if count == 0:
                 continue
             first_top_after = max(top_before, prefix_content - top_before)
-            last_top_after = min(
-                top_width, top_before + term.multiplicity
-            )
+            last_top_after = min(top_width, top_before + term.multiplicity)
             if first_top_after <= last_top_after:
                 differences[first_top_after] += count
                 differences[last_top_after + 1] -= count

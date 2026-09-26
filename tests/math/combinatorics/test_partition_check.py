@@ -63,9 +63,7 @@ def test_partition_obstruction_scalars_stay_within_source_integer_bound() -> Non
     with pytest.raises(ValidationError):
         NonpositivePartObstruction(index=0, value=-(2**80))
     with pytest.raises(ValidationError):
-        IncreasingPartsObstruction(
-            index=1, previous_value=1, value=2**80
-        )
+        IncreasingPartsObstruction(index=1, previous_value=1, value=2**80)
 
 
 @pytest.mark.parametrize(

@@ -72,11 +72,7 @@ def _linear_combination_digit_bound(
     terms`` such products.
     This covers the integral one-digit bases at levels 13, 26, and 39.
     """
-    return (
-        terms * (2 * coordinate_digits + 2 * basis_coefficient_digits)
-        + len(str(3 * terms))
-        + 2
-    )
+    return terms * (2 * coordinate_digits + 2 * basis_coefficient_digits) + 1
 
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
@@ -382,7 +378,9 @@ def _transport_from_bases(
         _domain("source basis must extend through the target Sturm precision")
     if admitted.inclusion.target_space.level in (13, 78):
         target_form = None
-        target_expansion = ModularCharacterCommonTargetPrefix(
+        target_expansion: (
+            ModularCharacterQExpansion | ModularCharacterCommonTargetPrefix
+        ) = ModularCharacterCommonTargetPrefix(
             space=admitted.inclusion.target_space,
             precision=admitted.precision,
             coefficients=source_prefix,
@@ -418,6 +416,7 @@ def modular_character_coordinates_transport(
 ) -> ModularCharacterTransportedForm:
     """Transport a represented cusp form through explicit character inflation."""
     admitted = _admit_transport(form, inclusion)
+    inclusion = admitted.inclusion
     request_checkpoint("before character-space inclusion basis materialization")
     source_basis = _basis(
         inclusion.source_space,

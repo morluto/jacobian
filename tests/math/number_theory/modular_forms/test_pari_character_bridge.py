@@ -15,7 +15,7 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.modular_forms._pari_basis_worker import (
     _character_vector,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
 )
 from jacobian.math.number_theory.modular_forms.values import ModularFormSpace

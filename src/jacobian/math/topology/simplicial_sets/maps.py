@@ -6,11 +6,19 @@ from fractions import Fraction
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import ExactInteger, MAX_CANONICAL_INTEGER_DIGITS, format_canonical_integer
+from jacobian._exact import (
+    MAX_CANONICAL_INTEGER_DIGITS,
+    ExactInteger,
+    format_canonical_integer,
+)
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.topology.chain_complexes._integral_homology import (
+    admit_integral_homology,
 )
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
@@ -19,12 +27,15 @@ from jacobian.math.topology.chain_complexes.operations import (
 from jacobian.math.topology.chain_complexes.values import (
     MAX_CHAIN_MAP_CELLS,
     MAX_INTEGRAL_HOMOLOGY_CHAIN_RANK,
+    MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS,
+    MAX_INTEGRAL_HOMOLOGY_WORK_UNITS,
     MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
     ChainMapValue,
     CoefficientRing,
     HomologyGroup,
     IntegralHomologyGroupValue,
+    IntegralTorsionGenerator,
 )
 from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 from jacobian.math.topology.simplicial_sets.operations import from_tables
@@ -33,6 +44,7 @@ MAX_NORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
 MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS = 600_000
 MAX_INDUCED_CHAIN_MAP_WORK_UNITS = 1_000_000
 MAX_HOMOLOGY_MAP_COMPOSITION_WORK = 1_000_000
+MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK = 100_000_000
 _NORMALIZED_CHAIN_OUTPUT_STRUCTURE = 4_096
 
 
@@ -679,13 +691,169 @@ def _integer_matrix(
     return tuple(rows)
 
 
+def _admit_projection_mat_vec(
+    matrix: tuple[tuple[int, ...], ...],
+    input_bits: int,
+    *,
+    entry_bits: int | None = None,
+) -> tuple[int, int]:
+    if not matrix:
+        return 0, 0
+    columns = len(matrix[0])
+    if not columns:
+        return 0, 0
+    if entry_bits is None:
+        entry_bits = max(
+            (abs(value).bit_length() for row in matrix for value in row), default=1
+        )
+    output_bits = entry_bits + input_bits + (columns - 1).bit_length()
+    output_digits = (output_bits * 30_103 + 99_999) // 100_000
+    if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_projection_height_exceeded",
+            message="homology-coordinate projection exceeds the admitted exact integer height",
+        )
+    entry_limbs = max(1, (entry_bits + 63) // 64)
+    input_limbs = max(1, (input_bits + 63) // 64)
+    output_limbs = max(1, (output_bits + 63) // 64)
+    work = sum(len(row) * (entry_limbs * input_limbs + output_limbs) for row in matrix)
+    return output_bits, work
+
+
+def _admit_homology_projection(
+    chain_map: ChainMapValue,
+    source: NormalizedHomologyResult,
+    target: NormalizedHomologyResult,
+    target_right_inverses: list[list[list[int]]],
+) -> tuple[
+    tuple[tuple[tuple[int, ...], ...], ...],
+    tuple[tuple[tuple[int, ...], ...], ...],
+    tuple[tuple[tuple[int, ...], ...], ...],
+]:
+    source_differentials = tuple(
+        _integer_matrix(matrix) for matrix in chain_map.source.differential_matrices
+    )
+    target_differentials = tuple(
+        _integer_matrix(matrix) for matrix in chain_map.target.differential_matrices
+    )
+    map_matrices = tuple(_integer_matrix(matrix) for matrix in chain_map.map_matrices)
+    inverse_matrices = tuple(
+        tuple(tuple(row) for row in inverse) for inverse in target_right_inverses
+    )
+    all_matrices = (
+        *source_differentials,
+        *target_differentials,
+        *map_matrices,
+        *inverse_matrices,
+        *(
+            group.incoming_smith_certificate.left_transformation.entries
+            for group in target.homology_groups
+        ),
+    )
+    entry_bits_by_identity = {
+        id(matrix): max(
+            (abs(value).bit_length() for row in matrix for value in row), default=1
+        )
+        for matrix in all_matrices
+    }
+    metadata_scan_work = sum(sum(len(row) for row in matrix) for matrix in all_matrices)
+    request_checkpoint("after homology-coordinate matrix admission")
+    if metadata_scan_work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_projection_work_exceeded",
+            message="homology-coordinate matrix scans exceed the admitted work envelope",
+        )
+
+    def admit_mat_vec(
+        matrix: tuple[tuple[int, ...], ...], input_bits: int
+    ) -> tuple[int, int]:
+        return _admit_projection_mat_vec(
+            matrix,
+            input_bits,
+            entry_bits=entry_bits_by_identity[id(matrix)],
+        )
+
+    work = metadata_scan_work
+    output_scalars = 0
+    for degree, (source_group, target_group) in enumerate(
+        zip(source.homology_groups, target.homology_groups, strict=True)
+    ):
+        assert isinstance(source_group, IntegralHomologyGroupValue)
+        assert isinstance(target_group, IntegralHomologyGroupValue)
+        inverse_right = inverse_matrices[degree]
+        incoming_left = (
+            target_group.incoming_smith_certificate.left_transformation.entries
+        )
+        target_coordinates = target_group.free_rank + sum(
+            int(order) > 1 for order in target_group.torsion_invariant_factors
+        )
+        generators = (
+            *source_group.free_generators,
+            *source_group.torsion_generators,
+        )
+        output_scalars += len(generators) * target_coordinates
+        for generator in generators:
+            request_checkpoint("during induced homology coordinate admission")
+            cycle = tuple(generator.cycle.coefficients)
+            cycle_bits = max((abs(value).bit_length() for value in cycle), default=0)
+            if degree:
+                _, cost = admit_mat_vec(source_differentials[degree - 1], cycle_bits)
+                work += cost
+            image_bits, cost = admit_mat_vec(map_matrices[degree], cycle_bits)
+            work += cost
+            if degree:
+                _, cost = admit_mat_vec(target_differentials[degree - 1], image_bits)
+                work += cost
+            coordinate_bits, cost = admit_mat_vec(inverse_right, image_bits)
+            work += cost
+            _, cost = admit_mat_vec(incoming_left, coordinate_bits)
+            work += cost
+            if isinstance(generator, IntegralTorsionGenerator):
+                bounding = tuple(generator.bounding_chain.coefficients)
+                bounding_bits = max(
+                    (abs(value).bit_length() for value in bounding), default=0
+                )
+                source_bound_bits, cost = admit_mat_vec(
+                    source_differentials[degree], bounding_bits
+                )
+                work += cost
+                mapped_bound_bits, cost = admit_mat_vec(
+                    map_matrices[degree + 1], source_bound_bits
+                )
+                work += cost
+                _, cost = admit_mat_vec(target_differentials[degree], mapped_bound_bits)
+                work += cost
+            if work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
+                raise OperationResourceAdmissionError(
+                    location=("map", "homology"),
+                    code="simplicial_set.induced_homology_projection_work_exceeded",
+                    message=(
+                        "homology-coordinate projection exceeds the "
+                        f"{MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK}-unit work envelope"
+                    ),
+                )
+    if output_scalars > MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_projection_output_exceeded",
+            message="induced homology coordinates exceed their output reservation",
+        )
+    return source_differentials, target_differentials, map_matrices
+
+
 def _coordinates_in_target_homology(
     cycle: tuple[int, ...],
     group: IntegralHomologyGroupValue,
     inverse_right: tuple[tuple[int, ...], ...],
 ) -> IntegralHomologyCoordinates:
     inverse_digits = max(
-        (len(format_canonical_integer(abs(value))) for row in inverse_right for value in row),
+        (
+            len(format_canonical_integer(abs(value)))
+            for row in inverse_right
+            for value in row
+        ),
         default=1,
     )
     cycle_digits = max(
@@ -744,18 +912,21 @@ def _coordinates_in_target_homology(
 
 
 def _map_homology_generator(
-    chain_map: ChainMapValue,
     degree: int,
     cycle: tuple[int, ...],
     target_group: IntegralHomologyGroupValue,
     inverse_right: tuple[tuple[int, ...], ...],
+    source_differentials: tuple[tuple[tuple[int, ...], ...], ...],
+    target_differentials: tuple[tuple[tuple[int, ...], ...], ...],
+    map_matrices: tuple[tuple[tuple[int, ...], ...], ...],
     *,
     torsion_order: int | None = None,
     bounding_chain: tuple[int, ...] | None = None,
 ) -> IntegralHomologyCoordinates:
+    request_checkpoint("during induced homology generator projection")
     if degree and any(
         _mat_vec(
-            _integer_matrix(chain_map.source.differential_matrices[degree - 1]),
+            source_differentials[degree - 1],
             cycle,
         )
     ):
@@ -764,9 +935,9 @@ def _map_homology_generator(
             code="simplicial_set.induced_homology_source_cycle_invalid",
             message="a retained homology representative is not a source cycle",
         )
-    image = _mat_vec(_integer_matrix(chain_map.map_matrices[degree]), cycle)
+    image = _mat_vec(map_matrices[degree], cycle)
     if degree:
-        outgoing = _integer_matrix(chain_map.target.differential_matrices[degree - 1])
+        outgoing = target_differentials[degree - 1]
         if any(_mat_vec(outgoing, image)):
             raise OperationDomainValidationError(
                 location=("map", "homology", degree),
@@ -776,7 +947,7 @@ def _map_homology_generator(
     if torsion_order is not None:
         assert bounding_chain is not None
         source_boundary = _mat_vec(
-            _integer_matrix(chain_map.source.differential_matrices[degree]),
+            source_differentials[degree],
             bounding_chain,
         )
         if source_boundary != tuple(torsion_order * value for value in cycle):
@@ -785,11 +956,9 @@ def _map_homology_generator(
                 code="simplicial_set.induced_homology_torsion_witness_invalid",
                 message="the retained torsion representative has an invalid boundary witness",
             )
-        mapped_bounding_chain = _mat_vec(
-            _integer_matrix(chain_map.map_matrices[degree + 1]), bounding_chain
-        )
+        mapped_bounding_chain = _mat_vec(map_matrices[degree + 1], bounding_chain)
         target_boundary = _mat_vec(
-            _integer_matrix(chain_map.target.differential_matrices[degree]),
+            target_differentials[degree],
             mapped_bounding_chain,
         )
         if target_boundary != tuple(torsion_order * value for value in image):
@@ -806,6 +975,36 @@ def induced_normalized_homology_map(
 ) -> SimplicialHomologyMapValue:
     """Compute the induced map on every homology degree supported by a prefix."""
     chain_map = induced_normalized_chain_map(map_value)
+    source_plan = admit_integral_homology(chain_map.source)
+    target_plan = (
+        source_plan
+        if map_value.target == map_value.source
+        else admit_integral_homology(chain_map.target)
+    )
+    combined_work = source_plan.total_work + (
+        0 if target_plan is source_plan else target_plan.total_work
+    )
+    combined_output = source_plan.output_scalar_count + (
+        0 if target_plan is source_plan else target_plan.output_scalar_count
+    )
+    if combined_work > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("simplicial_map",),
+            code="simplicial_set.induced_homology_endpoint_work_budget_exceeded",
+            message=(
+                "combined source and target integral-homology work exceeds "
+                f"the {MAX_INTEGRAL_HOMOLOGY_WORK_UNITS}-unit envelope"
+            ),
+        )
+    if combined_output > MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS:
+        raise OperationResourceAdmissionError(
+            location=("simplicial_map",),
+            code="simplicial_set.induced_homology_endpoint_output_budget_exceeded",
+            message=(
+                "combined source and target homology output exceeds "
+                f"the {MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS}-scalar envelope"
+            ),
+        )
     source_right_inverses: list[list[list[int]]] = []
     source = normalized_homology(
         map_value.source, _integral_right_inverses=source_right_inverses
@@ -817,6 +1016,9 @@ def induced_normalized_homology_map(
         else normalized_homology(
             map_value.target, _integral_right_inverses=(target_right_inverses := [])
         )
+    )
+    source_differentials, target_differentials, map_matrices = (
+        _admit_homology_projection(chain_map, source, target, target_right_inverses)
     )
     degree_maps: list[NormalizedHomologyDegreeMap] = []
     for degree, (source_group, target_group) in enumerate(
@@ -830,21 +1032,25 @@ def induced_normalized_homology_map(
                 degree=degree,
                 free_generator_images=tuple(
                     _map_homology_generator(
-                        chain_map,
                         degree,
                         tuple(generator.cycle.coefficients),
                         target_group,
                         inverse_right,
+                        source_differentials,
+                        target_differentials,
+                        map_matrices,
                     )
                     for generator in source_group.free_generators
                 ),
                 torsion_generator_images=tuple(
                     _map_homology_generator(
-                        chain_map,
                         degree,
                         tuple(generator.cycle.coefficients),
                         target_group,
                         inverse_right,
+                        source_differentials,
+                        target_differentials,
+                        map_matrices,
                         torsion_order=int(generator.order),
                         bounding_chain=tuple(generator.bounding_chain.coefficients),
                     )
@@ -896,6 +1102,12 @@ def compose_simplicial_homology_maps(
     second: SimplicialHomologyMapValue,
 ) -> SimplicialHomologyMapValue:
     """Compose two induced normalized integral homology maps."""
+    if first.target != second.source:
+        raise OperationDomainValidationError(
+            location=("second", "source"),
+            code="simplicial_set.homology_map_composition_mismatch",
+            message="the first target homology must equal the second source homology",
+        )
     # Authenticate the authored coordinates before using them as operands.
     checked_first = induced_normalized_homology_map(first.simplicial_map)
     checked_second = induced_normalized_homology_map(second.simplicial_map)
@@ -904,12 +1116,6 @@ def compose_simplicial_homology_maps(
             location=("homology_map",),
             code="simplicial_set.homology_map_claim_mismatch",
             message="homology coordinates must agree with the induced simplicial maps",
-        )
-    if first.target != second.source:
-        raise OperationDomainValidationError(
-            location=("second", "source"),
-            code="simplicial_set.homology_map_composition_mismatch",
-            message="the first target homology must equal the second source homology",
         )
     composite_map = compose_simplicial_maps(
         SimplicialMapCompositionRequest(
@@ -941,7 +1147,10 @@ def compose_simplicial_homology_maps(
         for coordinates in (*first_images, *second_images):
             maximum_input_bits = max(
                 maximum_input_bits,
-                *(abs(value).bit_length() for value in (*coordinates.free, *coordinates.torsion)),
+                *(
+                    abs(value).bit_length()
+                    for value in (*coordinates.free, *coordinates.torsion)
+                ),
             )
     if composition_work > MAX_HOMOLOGY_MAP_COMPOSITION_WORK:
         raise OperationResourceAdmissionError(
@@ -1020,9 +1229,7 @@ def normalized_homology(
     # This shared exact kernel computes all group data, including the formal
     # top group of the retained chain prefix. Only degrees with a known incoming
     # simplicial boundary are exposed by this operation.
-    computed = homology_groups(
-        chain, _integral_right_inverses=_integral_right_inverses
-    )
+    computed = homology_groups(chain, _integral_right_inverses=_integral_right_inverses)
     nondegenerate_bases: list[tuple[str, ...]] = []
     nondegenerate_bases.extend(normalized.nondegenerate_bases)
     return NormalizedHomologyResult(

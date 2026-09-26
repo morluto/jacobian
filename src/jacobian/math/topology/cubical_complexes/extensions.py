@@ -27,7 +27,7 @@ from jacobian.math.topology._models import (
 from jacobian.math.topology.chain_complexes.values import MAX_OPERATION_MATRIX_CELLS
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
-    MAX_CUBICAL_BITMAP_RESULT_BYTES,
+    MAX_CUBICAL_BITMAP_RESULT_SIZE,
     MAX_CUBICAL_BITMAP_SIDE,
     MAX_CUBICAL_CHAIN_GROUP,
     MAX_CUBICAL_TRIANGULATION_RESULT_BYTES,
@@ -411,13 +411,13 @@ def bitmap_to_complex(request: CubicalBitmapRequest) -> CubicalBitmapResult:
     # A 2D cell record with bounded 8-bit coordinates occupies fewer than 96
     # JSON bytes.  Bound complete closure output before constructing any cells.
     output_bytes_bound = 128 + closed_cell_count * 96 + selected_count * 256
-    if output_bytes_bound > MAX_CUBICAL_BITMAP_RESULT_BYTES:
+    if output_bytes_bound > MAX_CUBICAL_BITMAP_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("pixels",),
             code="cubical_complex.bitmap_result_size",
             message=(
                 "the bitmap cubical complex exceeds the "
-                f"{MAX_CUBICAL_BITMAP_RESULT_BYTES}-byte result bound"
+                f"{MAX_CUBICAL_BITMAP_RESULT_SIZE}-byte result bound"
             ),
         )
 

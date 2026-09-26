@@ -32,7 +32,6 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismResult,
     _admit_component_matrix,
     _admit_morphism_resources,
-    _admit_section_plan,
     _mul,
     _resolve_component_key,
 )
@@ -199,12 +198,11 @@ def cokernel_of_morphism(
         or source.prime != target.prime
     ):
         raise _domain("parent_mismatch", "morphisms require one complex and field")
-    _admit_section_plan(source)
-    _admit_section_plan(target)
     if not isinstance(value.components, tuple) or any(
         not isinstance(component, tuple)
         or len(component) != 2
         or not isinstance(component[1], (tuple, list))
+        or any(not isinstance(row, (tuple, list)) for row in component[1])
         for component in value.components
     ):
         raise _domain("component_structure", "components must be simplex-matrix pairs")
@@ -276,14 +274,30 @@ def cokernel_of_morphism(
     ):
         raise _resource("output_bound", "cokernel quotient maps exceed the output envelope")
 
-    _readmit_parent_sheaf(source, role="source")
-    _readmit_parent_sheaf(target, role="target")
+    try:
+        _readmit_parent_sheaf(source, role="source")
+        _readmit_parent_sheaf(target, role="target")
+    except OperationDomainValidationError as exc:
+        raise _domain(
+            "parent_diagram_not_admitted",
+            "parent restrictions must equal the reconstructed functor diagram",
+        ) from exc
     for item in source.cover_restrictions:
         source_map = tuple(tuple(field.parse(x) for x in row) for row in item.entries)
         target_item = target_cover[(item.source, item.target)]
         target_map = tuple(tuple(field.parse(x) for x in row) for row in target_item.entries)
-        left = field.matmul(components[item.target], source_map)
-        right = field.matmul(target_map, components[item.source])
+        left = _mul(
+            [list(row) for row in components[item.target]],
+            [list(row) for row in source_map],
+            field.prime,
+            output_width=len(source_stalks[item.source].basis),
+        )
+        right = _mul(
+            [list(row) for row in target_map],
+            [list(row) for row in components[item.source]],
+            field.prime,
+            output_width=len(source_stalks[item.source].basis),
+        )
         if left != right:
             raise _domain("morphism_not_natural", "cokernel requires a natural morphism")
     checked = SheafMorphismResult(

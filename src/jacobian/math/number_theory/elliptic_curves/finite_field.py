@@ -603,6 +603,11 @@ class FiniteFieldGroupStructureResult(StrictModel):
                 "group_generator_curve_mismatch",
                 "group generators must retain the exact source curve",
             )
+        if any(generator.at_infinity for generator in self.generators):
+            raise _validation_error(
+                "group_generator_identity",
+                "each invariant-factor generator must be a nonidentity point",
+            )
         return self
 
 
@@ -722,6 +727,10 @@ class FiniteFieldIsomorphismResult(StrictModel):
         if self.scaling is not None and self.scaling.presentation != self.source.field:
             raise _validation_error(
                 "isomorphism_field_mismatch", "scaling must use the common curve field"
+            )
+        if self.scaling is not None and not any(_coordinates(self.scaling)):
+            raise _validation_error(
+                "isomorphism_zero_scaling", "isomorphism scaling must be nonzero"
             )
         return self
 

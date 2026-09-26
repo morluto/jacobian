@@ -34,7 +34,7 @@ def _identity_work(max_degree: int, sizes: tuple[int, ...]) -> int:
 
 def _require_simplicial_factor(
     factor: FiniteTruncatedSimplicialSet, *, location: str
-) -> None:
+) -> FiniteTruncatedSimplicialSet:
     checked = from_tables(
         factor.max_degree,
         factor.sets,
@@ -53,6 +53,8 @@ def _require_simplicial_factor(
             code="simplicial_set.coproduct_factor_invalid",
             message=f"{location} factor is not a simplicial set: {detail}",
         )
+    assert checked.simplicial_set is not None
+    return checked.simplicial_set
 
 
 def simplicial_set_coproduct(
@@ -60,6 +62,8 @@ def simplicial_set_coproduct(
 ) -> SimplicialSetCoproductResult:
     """Construct the finite degreewise disjoint union X ⊔ Y."""
     left, right = request.left, request.right
+    left = _require_simplicial_factor(left, location="left")
+    right = _require_simplicial_factor(right, location="right")
     if left.max_degree != right.max_degree:
         raise OperationDomainValidationError(
             location=("right", "max_degree"),
@@ -122,11 +126,6 @@ def simplicial_set_coproduct(
                 f"{MAX_COPRODUCT_OUTPUT_CELLS}"
             ),
         )
-
-    # The carrier's wire model checks only axes, not caller-authored simplicial
-    # identities. Validate those claims before relying on componentwise closure.
-    _require_simplicial_factor(left, location="left")
-    _require_simplicial_factor(right, location="right")
 
     labels = tuple(
         tuple(

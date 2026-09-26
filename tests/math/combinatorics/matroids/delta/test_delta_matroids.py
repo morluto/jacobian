@@ -50,6 +50,7 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",
         "delta_matroid.twist_polynomial.compute",
+        "delta_matroid.distance_interlace_polynomial.compute",
     }
 
 

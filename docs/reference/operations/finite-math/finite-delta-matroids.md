@@ -55,3 +55,15 @@ unique empty row) are materialized as masks. Labels never enter the mask sweep,
 so the recognition operation's 2,048-byte label envelope does not apply here:
 labels must be UTF-8-representable and unique, but their size is not itself a
 mathematical work or cardinality limit.
+
+`delta_matroid.distance_interlace_polynomial.compute` returns the exact
+distance histogram and the polynomial
+`Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+`d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
+integers in descending-degree order, using the shared `IntegerPolynomial`
+value. This is the distance specialization in [Brijder and Hoogeboom's
+delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
+with the variable shift fixed as `y = x - 1`; it does not imply any other
+interlace polynomial convention. Admission validates the complete source,
+then bounds `2^|E| * |F|` subset-feasible comparisons, the number of
+output terms, and coefficient bit lengths before enumerating subsets.

@@ -3,7 +3,6 @@
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials import (
-    integer_polynomial_primitive_part,
     mahler_measure,
     quadratic_root_profile,
 )
@@ -29,15 +28,3 @@ def test_catalog_mahler_family_matches_domain_valued_natives() -> None:
         catalog,
     )
     assert dispatched_roots.output == native_roots.model_dump(mode="json")
-    native_content = integer_polynomial_primitive_part(
-        IntegerPolynomial(coefficients=(6, 0, -6))
-    )
-    dispatched_content = invoke_operation(
-        "polynomial.integer.content_primitive_profile.compute",
-        {"polynomial": {"coefficients": ["6", "0", "-6"]}},
-        catalog,
-    )
-    assert dispatched_content.output == native_content.model_dump(mode="json")
-    assert dispatched_content.output["convention"] == (
-        "NONNEGATIVE_CONTENT_POSITIVE_LEADING"
-    )

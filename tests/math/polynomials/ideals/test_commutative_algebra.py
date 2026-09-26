@@ -553,12 +553,6 @@ def test_zero_basis_must_use_the_source_ideal_ring() -> None:
 
 @requires_singular
 @pytest.mark.requires_backend("singular")
-@requires_singular
-@pytest.mark.requires_backend("singular")
-@requires_singular
-@pytest.mark.requires_backend("singular")
-@requires_singular
-@pytest.mark.requires_backend("singular")
 def test_ideal_quotient_by_unit_is_the_dividend() -> None:
     dividend = _ideal(("x", "y"), {(2, 0): 1}, {(1, 1): 1})
     result = _run_quotient(
@@ -745,10 +739,22 @@ class TestEliminationIdealSemantics:
             ("-1", "1", (0,)),
         )
 
-    def test_zero_elimination_ideal_preserved(self) -> None:
-        """<x> ∩ QQ[y] = (0): the zero ideal must not become the whole ring."""
-        result = self._eliminate([(((1, 0), 1),)], ("x",))
+    @pytest.mark.parametrize(
+        "generators",
+        (
+            [(((1, 0), 1),)],
+            [
+                (((2, 0), 1), ((0, 2), -1)),
+                (((1, 0), 1), ((0, 1), 1)),
+            ],
+        ),
+        ids=("principal-x", "x2-minus-y2-and-x-plus-y"),
+    )
+    def test_zero_elimination_ideal_preserved(self, generators) -> None:
+        """Zero elimination stays zero in the exact surviving ordered ring."""
+        result = self._eliminate(generators, ("x",))
         assert result.elimination_ideal is not None
+        assert result.elimination_ideal.variables == ("y",)
         assert len(result.elimination_ideal.generators) == 1
         assert len(result.elimination_ideal.generators[0].polynomial.terms) == 0
 

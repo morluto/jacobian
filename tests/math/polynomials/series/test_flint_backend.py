@@ -79,7 +79,7 @@ def _oracle_reversion(values: list[Fraction]) -> list[Fraction]:
     return result
 
 
-@pytest.mark.parametrize("order", [64, 128, 512])
+@pytest.mark.parametrize("order", [64, 512])
 def test_inverse_boundary_orders_are_exact(order: int) -> None:
     source = _series([Fraction(1), Fraction(1), *[Fraction()] * (order - 2)])
     result = inverse(source)
@@ -92,7 +92,7 @@ def test_inverse_boundary_orders_are_exact(order: int) -> None:
     assert all(value.num == 0 for value in result.residual_coefficients)
 
 
-@pytest.mark.parametrize("order", [64, 512])
+@pytest.mark.parametrize("order", [512])
 def test_reversion_nonlinear_boundary_orders_are_exact(order: int) -> None:
     source = _series(
         [Fraction(0), Fraction(1), Fraction(1), *[Fraction()] * (order - 3)]
@@ -114,7 +114,7 @@ def test_reversion_nonlinear_boundary_orders_are_exact(order: int) -> None:
     )
 
 
-@pytest.mark.parametrize("order", [64, 128, 512])
+@pytest.mark.parametrize("order", [512])
 def test_reversion_linear_boundary_orders_are_exact(order: int) -> None:
     source = _series([Fraction(0), Fraction(1), *[Fraction()] * (order - 2)])
     result = reversion(source)

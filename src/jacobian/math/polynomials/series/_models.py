@@ -187,6 +187,40 @@ def _require_binary_height(numerator: int, denominator: int, operation: str) -> 
     _require_height(RationalHeight(numerator // 3 + 1, denominator // 3 + 1), operation)
 
 
+def _binary_decimal_digits(bits: int) -> int:
+    """Return a safe decimal digit bound for an integer below ``2**bits``."""
+    return (bits * 30_103) // 100_000 + 1
+
+
+_RESULT_BOUND_CAP = 10**MAX_RESULT_RATIONAL_DIGITS
+
+
+def _result_bound_product(left: int, right: int) -> int:
+    return min(_RESULT_BOUND_CAP, left * right)
+
+
+def _result_bound_power(value: int, exponent: int) -> int:
+    result = 1
+    factor = min(_RESULT_BOUND_CAP, value)
+    while exponent:
+        if exponent & 1:
+            result = _result_bound_product(result, factor)
+        exponent >>= 1
+        if exponent:
+            factor = _result_bound_product(factor, factor)
+    return result
+
+
+def _result_bound_sum(left: int, right: int) -> int:
+    return min(_RESULT_BOUND_CAP, left + right)
+
+
+def _result_bound_digits(value: int) -> int:
+    if value >= _RESULT_BOUND_CAP:
+        return MAX_RESULT_RATIONAL_DIGITS + 1
+    return _bounded_integer_digits(value)
+
+
 _REVERSION_BOUND_CAP: int = 10 ** (MAX_REVERSION_INTERMEDIATE_DIGITS + 1)
 
 
@@ -639,6 +673,24 @@ def admit_native_multiply(left: TruncatedSeries, right: TruncatedSeries) -> None
             "multiplication_work",
             f"retained convolution incidences exceed {MAX_MULTIPLY_INCIDENCES}",
         )
+    left_denominators = {left.coefficients[i].den for i in left_support}
+    right_denominators = {right.coefficients[i].den for i in right_support}
+    if len(left_denominators) == len(right_denominators) == 1:
+        left_numerator = max(abs(left.coefficients[i].num) for i in left_support)
+        right_numerator = max(abs(right.coefficients[i].num) for i in right_support)
+        denominators = left_denominators.pop() * right_denominators.pop()
+        for degree in range(order):
+            count = min(degree + 1, incidences)
+            if count:
+                numerator = count * left_numerator * right_numerator
+                _require_height(
+                    RationalHeight(
+                        _bounded_integer_digits(numerator),
+                        _bounded_integer_digits(denominators),
+                    ),
+                    "multiplication",
+                )
+        return
     terms: dict[int, list[RationalHeight]] = {}
     for i in left_support:
         left_height = _height(left.coefficients[i])
@@ -678,7 +730,13 @@ def admit_native_power(series: TruncatedSeries, exponent: int) -> None:
     # denominator divides D^j. Binary powering never exceeds exponent e.
     norm_bits = max(1, sum(abs(c) for c in coefficients)).bit_length()
     denominator_bits = 0 if denominator == 1 else denominator.bit_length()
-    _require_binary_height(exponent * norm_bits, exponent * denominator_bits, "power")
+    _require_height(
+        RationalHeight(
+            _binary_decimal_digits(exponent * norm_bits),
+            _binary_decimal_digits(exponent * denominator_bits),
+        ),
+        "power",
+    )
 
 
 def admit_native_inverse(series: TruncatedSeries) -> None:
@@ -739,6 +797,51 @@ def admit_native_compose(outer: TruncatedSeries, inner: TruncatedSeries) -> None
             "composition_nonzero_inner_constant",
             "inner series must have zero constant term for composition with a finite prefix",
         )
+    outer_denominators = {value.den for value in outer.coefficients if value.num}
+    inner_denominators = {value.den for value in inner.coefficients if value.num}
+    if len(outer_denominators) <= 1 and len(inner_denominators) <= 1:
+        from math import comb
+
+        outer_denominator = next(iter(outer_denominators), 1)
+        inner_denominator = next(iter(inner_denominators), 1)
+        outer_numerators = tuple(value.num for value in outer.coefficients)
+        inner_norm = sum(abs(value.num) for value in inner.coefficients)
+        for degree in range(outer.truncation_order):
+            bound = 0
+            for power_degree in range(degree + 1):
+                if not outer_numerators[power_degree] or (
+                    power_degree == 0 and degree != 0
+                ):
+                    continue
+                term = abs(outer_numerators[power_degree])
+                if power_degree:
+                    term = _result_bound_product(
+                        term, comb(degree - 1, power_degree - 1)
+                    )
+                    term = _result_bound_product(
+                        term, _result_bound_power(inner_norm, power_degree)
+                    )
+                    term = _result_bound_product(
+                        term,
+                        _result_bound_power(inner_denominator, degree - power_degree),
+                    )
+                bound = _result_bound_sum(bound, term)
+            denominator = _result_bound_product(
+                outer_denominator,
+                _result_bound_power(inner_denominator, degree),
+            )
+            if (
+                _result_bound_digits(bound) > MAX_RESULT_RATIONAL_DIGITS
+                or _result_bound_digits(denominator) > MAX_RESULT_RATIONAL_DIGITS
+            ):
+                _require_height(
+                    RationalHeight(
+                        _result_bound_digits(bound),
+                        _result_bound_digits(denominator),
+                    ),
+                    "composition",
+                )
+        return
     _composition_height_vector(
         _height_vector(outer.coefficients),
         _height_vector(inner.coefficients),

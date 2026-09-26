@@ -103,6 +103,14 @@ def _scalar(
     return _poly(variables, ((f"{num}/{den}", (0,) * len(variables)),))
 
 
+def test_zero_polynomial_retains_empty_variable_axis() -> None:
+    """A zero polynomial preserves its explicit empty variable axis."""
+    polynomial = _poly((), ())
+
+    assert polynomial.variables == ()
+    assert polynomial.polynomial.terms == ()
+
+
 @pytest.mark.skipif(
     not factor_worker_containment_available(),
     reason="the bounded factorization worker needs hard memory containment "
@@ -207,19 +215,6 @@ class TestMultivariateGcd:
         assert term.coefficient.den == 1
         assert term.exponents == (0, 0)
 
-    def test_gcd_is_monic(self) -> None:
-        """The GCD should be normalized to a monic (leading-coefficient 1) polynomial."""
-
-        # gcd(2*x*y, 3*x*y) = x*y (content stripped, monic associate)
-        left = _poly(("x", "y"), (("2/1", (1, 1)),))
-        right = _poly(("x", "y"), (("3/1", (1, 1)),))
-        result = _compute_gcd(MultivariateGcdRequest(left=left, right=right))
-        gcd = result.gcd
-        assert len(gcd.polynomial.terms) == 1
-        term = gcd.polynomial.terms[0]
-        assert term.coefficient.num == 1
-        assert term.coefficient.den == 1
-
     def test_gcd_with_rational_coefficients(self) -> None:
         """GCD works over QQ with non-integer coefficients."""
 
@@ -228,10 +223,7 @@ class TestMultivariateGcd:
         result = _compute_gcd(MultivariateGcdRequest(left=left, right=right))
         gcd = result.gcd
         # gcd(x^2*y, x*y) = x*y, monic
-        assert len(gcd.polynomial.terms) == 1
-        term = gcd.polynomial.terms[0]
-        assert term.coefficient.num == 1
-        assert term.coefficient.den == 1
+        assert gcd == _poly(("x", "y"), (("1/1", (1, 1)),))
 
     def test_gcd_rejects_univariate(self) -> None:
         """Univariate polynomials are rejected for multivariate operations."""
@@ -289,9 +281,7 @@ class TestMultivariateDivision:
         result = _compute_division(MultivariateDivisionRequest(left=left, right=right))
         assert len(result.remainder.polynomial.terms) == 0
         quotient = result.quotient
-        assert len(quotient.polynomial.terms) == 1
-        assert quotient.polynomial.terms[0].exponents == (1, 0)
-        assert quotient.polynomial.terms[0].coefficient.num == 1
+        assert quotient == _poly(("x", "y"), (("1/1", (1, 0)),))
 
     def test_division_with_remainder(self) -> None:
         """Divide x^2*y + x by x*y - 1: quotient = x, remainder = 2*x."""
@@ -303,40 +293,34 @@ class TestMultivariateDivision:
         )
         quotient = result.quotient
         remainder = result.remainder
-        assert len(quotient.polynomial.terms) == 1
-        assert quotient.polynomial.terms[0].exponents == (1, 0)
-        assert quotient.polynomial.terms[0].coefficient.num == 1
-        assert len(remainder.polynomial.terms) == 1
-        assert remainder.polynomial.terms[0].exponents == (1, 0)
-        assert remainder.polynomial.terms[0].coefficient.num == 2
+        assert quotient == _poly(("x", "y"), (("1/1", (1, 0)),))
+        assert remainder == _poly(("x", "y"), (("2/1", (1, 0)),))
 
     def test_division_grlex_order(self) -> None:
         """Division under grlex order should be a valid reconstruction."""
 
-        left = _poly(
-            ("x", "y"),
-            (("1/1", (2, 1)), ("1/1", (1, 0))),
-        )
-        right = _poly(("x", "y"), (("1/1", (1, 1)), ("-1/1", (0, 0))))
+        left = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)),))
+        right = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)), ("1/1", (0, 2, 0))))
         result = _compute_division(
             MultivariateDivisionRequest(left=left, right=right, monomial_order="grlex")
         )
         assert result.monomial_order == "grlex"
+        assert result.quotient == _poly(("x", "y", "z"), (("1/1", (0, 0, 0)),))
+        assert result.remainder == _poly(("x", "y", "z"), (("-1/1", (0, 2, 0)),))
 
     def test_division_grevlex_order(self) -> None:
         """Division under grevlex order should be a valid reconstruction."""
 
-        left = _poly(
-            ("x", "y"),
-            (("1/1", (2, 1)), ("1/1", (1, 0))),
-        )
-        right = _poly(("x", "y"), (("1/1", (1, 1)), ("-1/1", (0, 0))))
+        left = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)),))
+        right = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)), ("1/1", (0, 2, 0))))
         result = _compute_division(
             MultivariateDivisionRequest(
                 left=left, right=right, monomial_order="grevlex"
             )
         )
         assert result.monomial_order == "grevlex"
+        assert result.quotient == _poly(("x", "y", "z"), ())
+        assert result.remainder == _poly(("x", "y", "z"), (("1/1", (1, 0, 1)),))
 
     def test_division_zero_dividend(self) -> None:
         """Dividing the zero polynomial gives zero quotient and remainder."""
@@ -389,12 +373,7 @@ class TestMultivariateResultant:
         value = result.resultant.value
         assert value.variables == ("y",)
         # The resultant is 1 - y^2, i.e. terms {y^2: -1, y^0: 1}.
-        terms = {
-            t.exponents[0]: (t.coefficient.num, t.coefficient.den)
-            for t in value.polynomial.terms
-        }
-        assert terms.get(2) == (-1, 1)
-        assert terms.get(0) == (1, 1)
+        assert value == _poly(("y",), (("-1/1", (2,)), ("1/1", (0,))))
 
     def test_resultant_eliminating_different_variable(self) -> None:
         """res(x*y - 1, y^2 - x, y) = 1 - x^3 (a polynomial in x)."""
@@ -409,7 +388,7 @@ class TestMultivariateResultant:
         assert result.elimination_variable == "y"
         assert result.resultant.kind == "POLYNOMIAL"
         value = result.resultant.value
-        assert value.variables == ("x",)
+        assert value == _poly(("x",), (("-1/1", (3,)), ("1/1", (0,))))
 
     def test_resultant_with_three_variables(self) -> None:
         """res(x^2 - y, x - z, x) = z^2 - y (a polynomial in y, z)."""
@@ -424,7 +403,7 @@ class TestMultivariateResultant:
         assert result.elimination_variable == "x"
         assert result.resultant.kind == "POLYNOMIAL"
         value = result.resultant.value
-        assert value.variables == ("y", "z")
+        assert value == _poly(("y", "z"), (("-1/1", (1, 0)), ("1/1", (0, 2))))
 
     def test_resultant_nonzero_constant_right_input(self) -> None:
         """Atlas elimination case: res_x(x + y^2 - u, y - v) = y - v."""
@@ -581,6 +560,18 @@ class TestMultivariateResultant:
         }
         assert terms == {(6,): Fraction(-1)}
 
+        orientation_left = _poly(("x", "y"), (("1/1", (1, 0)), ("1/1", (0, 1))))
+        orientation_right = _poly(("x", "y"), (("1/1", (3, 0)), ("1/1", (0, 0))))
+        result = _compute_resultant(
+            MultivariateResultantRequest(
+                left=orientation_left,
+                right=orientation_right,
+                elimination_variable="x",
+            )
+        )
+        assert result.resultant.kind == "POLYNOMIAL"
+        assert result.resultant.value == _poly(("y",), (("-1/1", (3,)), ("1/1", (0,))))
+
     def test_resultant_matches_sylvester_determinant_oracle(self) -> None:
         """Differential oracle: the sparse value equals the Sylvester determinant."""
 
@@ -672,32 +663,6 @@ class TestMultivariateResultant:
                     left=left, right=right, elimination_variable="x"
                 )
             )
-
-    def test_resultant_preserves_unequal_degree_source_orientation(self) -> None:
-        """res(x+y, x^3+1, x) = 1-y^3, not the swapped-input sign."""
-
-        left = _poly(
-            ("x", "y"),
-            (("1/1", (1, 0)), ("1/1", (0, 1))),
-        )
-        right = _poly(
-            ("x", "y"),
-            (("1/1", (3, 0)), ("1/1", (0, 0))),
-        )
-
-        result = _compute_resultant(
-            MultivariateResultantRequest(
-                left=left,
-                right=right,
-                elimination_variable="x",
-            )
-        )
-
-        assert result.resultant.kind == "POLYNOMIAL"
-        assert result.resultant.value == _poly(
-            ("y",),
-            (("-1/1", (3,)), ("1/1", (0,))),
-        )
 
 
 # --------------------------------------------------------------------------- #

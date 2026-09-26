@@ -872,7 +872,10 @@ def differential_operator_multiply(
         for second in right_value.terms
         for k in range(first.order + 1)
     ]
-    static_bounds = [
+    static_bounds: list[
+        tuple[int, tuple[int, int, int], tuple[int, int, int], int]
+        | tuple[int, tuple[int, int, int], tuple[int, int, int], int, int]
+    ] = [
         (
             first.order - k + second.order,
             _rf_bound(first.coefficient),
@@ -903,7 +906,10 @@ def differential_operator_multiply(
             request_checkpoint("during differential product derivative admission")
             derivative = _rf_derivative(derivative)
             derivative_cache[(second.order, derivative_order)] = derivative
-    admitted_bounds = [
+    admitted_bounds: list[
+        tuple[int, tuple[int, int, int], tuple[int, int, int], int]
+        | tuple[int, tuple[int, int, int], tuple[int, int, int], int, int]
+    ] = [
         (
             first.order - k + second.order,
             _rf_bound(first.coefficient),

@@ -9,14 +9,10 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
-    NondeterministicRunCountsRequest,
-    NondeterministicRunCountsResult,
     RankedTreePositionsRequest,
     RankedTreePositionsResult,
     RankedTreeSubtreeRequest,
     RankedTreeSubtreeResult,
-    RegularTreeGrammarToAutomatonRequest,
-    RegularTreeGrammarToAutomatonResult,
     TreeAutomatonBooleanProductRequest,
     TreeAutomatonBooleanProductResult,
     TreeAutomatonComplementRequest,
@@ -26,6 +22,7 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
     TreeAutomatonReachabilityRequest,
+    TreeAutomatonStateAlgebraRequest,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
     TreeDeterminizeRequest,
@@ -35,7 +32,6 @@ from jacobian.math.logic.automata.tree._models import (
 )
 from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
-    _nondeterministic_run_counts_admitted,
     _tree_state_chart_unchecked,
     boolean_product_tree_automata,
     complement_tree_automaton,
@@ -45,8 +41,10 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
-    regular_tree_grammar_to_automaton,
     trim_tree_automaton,
+)
+from jacobian.math.logic.automata.tree.state_algebra import (
+    deterministic_tree_automaton_state_algebra,
 )
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
@@ -55,6 +53,7 @@ from jacobian.math.logic.automata.tree.values import (
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
+from jacobian.math.universal_algebra.values import FiniteAlgebra
 
 
 def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
@@ -112,9 +111,7 @@ def compute_regular_tree_grammar_to_automaton(
         grammar=request.grammar,
         automaton=regular_tree_grammar_to_automaton(request.grammar),
     )
-
-
-def compute_ranked_tree_positions(
+ def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
     return ranked_tree_positions(request.tree)
@@ -148,6 +145,14 @@ def compute_tree_automaton_trim(
     """Restrict an automaton to its reachable and productive states."""
 
     return trim_tree_automaton(request.automaton)
+
+
+def compute_tree_automaton_state_algebra(
+    request: TreeAutomatonStateAlgebraRequest,
+) -> FiniteAlgebra:
+    """Interpret each ranked symbol as its complete operation table."""
+
+    return deterministic_tree_automaton_state_algebra(request.automaton)
 
 
 def compute_tree_automaton_determinize(
@@ -522,46 +527,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="tree_automaton.nondeterministic.run_counts.compute",
-        title="Count accepting runs by tree size",
-        description=(
-            "Count accepting runs of a nondeterministic bottom-up tree automaton "
-            "for every node size from 1 through max_size. A run is one state "
-            "assignment over a ranked tree; the same tree contributes multiple "
-            "times when it has multiple accepting assignments. This differs from "
-            "accepted_tree_count, which counts distinct trees once. Transition "
-            "work, exact integer digits, and profile output are bounded before "
-            "dynamic programming."
-        ),
-        request_type=NondeterministicRunCountsRequest,
-        result_type=NondeterministicRunCountsResult,
-        run=compute_nondeterministic_run_counts,
-        tags=("tree-automata", "counting", "exact", "nondeterministic"),
-        examples=(
-            OperationExample(
-                name="nullary_runs",
-                description=(
-                    "The leaf has two possible states; every f-node is final "
-                    "from either child state, so a single tree can have two runs."
-                ),
-                input={
-                    "automaton": {
-                        "state_count": 2,
-                        "arity": [0, 1],
-                        "transitions": [
-                            {"symbol": 0, "child_states": [], "target_state": 0},
-                            {"symbol": 0, "child_states": [], "target_state": 1},
-                            {"symbol": 1, "child_states": [0], "target_state": 0},
-                            {"symbol": 1, "child_states": [1], "target_state": 0},
-                        ],
-                        "final_states": [0],
-                    },
-                    "max_size": 3,
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="ranked_tree.positions.compute",
         title="List all positions in a ranked tree",
         description=(
@@ -630,41 +595,47 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="regular_tree_grammar.to_automaton.compute",
-        title="Translate a regular tree grammar to a tree automaton",
+        operation_id="tree_automaton.deterministic.state_algebra.compute",
+        title="Construct the transition algebra of a deterministic tree automaton",
         description=(
-            "Convert each unit-free ranked production A -> f(B1,...,Bk) to "
-            "the bottom-up transition f(B1,...,Bk) -> A. Nonterminals retain "
-            "their integer state IDs and the start nonterminal becomes the "
-            "sole final state. Production-derived work is preflighted, while "
-            "the state, signature, rank, and row limits bound the complete "
-            "source-bound output."
+            "Return the finite algebra on the complete automaton state set whose "
+            "operation tree_symbol_j is the transition function for ranked symbol "
+            "j. Carrier positions preserve every state, including unreachable "
+            "states; symbol order and arity are retained in the algebra signature. "
+            "The result represents transition evaluation and does not include the "
+            "automaton's accepting-state subset. Carrier, arity, signature, and "
+            "expanded table-cell bounds are checked before table construction."
         ),
-        request_type=RegularTreeGrammarToAutomatonRequest,
-        result_type=RegularTreeGrammarToAutomatonResult,
-        run=compute_regular_tree_grammar_to_automaton,
-        tags=("regular-tree-grammar", "tree-automata", "exact"),
+        request_type=TreeAutomatonStateAlgebraRequest,
+        result_type=FiniteAlgebra,
+        run=compute_tree_automaton_state_algebra,
+        tags=("tree-automata", "universal-algebra", "exact"),
         discovery_terms=(
-            "convert regular tree grammar",
-            "regular tree grammar to bottom-up automaton",
-            "tree grammar recognition",
+            "tree automaton state algebra",
+            "finite algebra of tree transitions",
+            "evaluate ranked tree in transition algebra",
         ),
         examples=(
             OperationExample(
-                name="binary_tree_grammar",
+                name="ranked_symbol_operations",
                 description=(
-                    "Translate a grammar for binary trees whose leaves have "
-                    "symbol 0 and whose internal nodes have symbol 1."
+                    "For a complete deterministic input automaton—exactly one "
+                    "transition for every ranked symbol and child-state tuple—"
+                    "interpret the nullary and binary ranked symbols as "
+                    "operations on the exact automaton state set."
                 ),
                 input={
-                    "grammar": {
-                        "nonterminal_count": 1,
+                    "automaton": {
+                        "state_count": 2,
                         "arity": [0, 2],
-                        "start_nonterminal": 0,
-                        "productions": [
-                            {"nonterminal": 0, "symbol": 0, "children": []},
-                            {"nonterminal": 0, "symbol": 1, "children": [0, 0]},
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                            {"symbol": 1, "child_states": [0, 0], "target_state": 0},
+                            {"symbol": 1, "child_states": [0, 1], "target_state": 1},
+                            {"symbol": 1, "child_states": [1, 0], "target_state": 1},
+                            {"symbol": 1, "child_states": [1, 1], "target_state": 0},
                         ],
+                        "final_states": [1],
                     }
                 },
             ),

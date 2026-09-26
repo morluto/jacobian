@@ -42,6 +42,12 @@ class TreeRunRequest(StrictModel):
     tree: RankedTree
 
 
+class TreeAutomatonStateAlgebraRequest(StrictModel):
+    """Convert a complete deterministic transition table to a finite algebra."""
+
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+
+
 class TreeRunResult(TreeRunRequest):
     """Result of a tree automaton run."""
 

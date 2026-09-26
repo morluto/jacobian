@@ -1,6 +1,8 @@
 """Exact finite bottom-up tree automata."""
 
 from jacobian.math.logic.automata.tree._models import (
+    NondeterministicRunCountsRequest,
+    NondeterministicRunCountsResult,
     RankedTreePositionsRequest,
     RankedTreePositionsResult,
     RankedTreeSubtreeRequest,
@@ -21,6 +23,7 @@ from jacobian.math.logic.automata.tree.operations import (
     complete_deterministic_tree_automaton,
     determinize_tree_automaton,
     minimize_tree_automaton,
+    nondeterministic_run_counts,
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
@@ -51,6 +54,8 @@ __all__ = [
     "BottomUpTreeAutomaton",
     "CompleteDeterministicBottomUpTreeAutomaton",
     "DeterministicBottomUpTreeAutomaton",
+    "NondeterministicRunCountsRequest",
+    "NondeterministicRunCountsResult",
     "RankedTree",
     "RankedTreePositionsRequest",
     "RankedTreePositionsResult",
@@ -75,6 +80,7 @@ __all__ = [
     "deterministic_tree_automaton_state_algebra",
     "determinize_tree_automaton",
     "minimize_tree_automaton",
+    "nondeterministic_run_counts",
     "ranked_tree_positions",
     "ranked_tree_subtree",
     "reachable_state_profile",

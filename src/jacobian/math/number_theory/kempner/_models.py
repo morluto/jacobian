@@ -4,21 +4,49 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.analysis.intervals import ClosedRationalInterval
 from jacobian.math.number_theory._kempner_models import (
     KempnerDigitSet,
     KempnerSmallInteger,
 )
 
 # Dense families use a prefix recurrence rather than materialising a numeral
-# list.  The carrier remains finite and exact; this is an execution envelope,
-# not evidence of convergence of the infinite series.
-MAX_KEMPNER_SERIES_NUMERALS = 50_000
+# list. This bounds exact rational accumulation to 65,536 terms; a separate
+# preflight derives the output height from the accepted numerals' lcm. The
+# carrier remains finite and exact; this envelope is not evidence of
+# convergence of the infinite series.
+MAX_KEMPNER_SERIES_NUMERALS = 65_536
 MAX_KEMPNER_SERIES_DIGITS = 32_768
+MAX_KEMPNER_DECIMAL_TERMS = 600_000
+MAX_KEMPNER_DECIMAL_DIGITS = 256
+MAX_KEMPNER_DECIMAL_STACK = 1_000_000
+MAX_KEMPNER_DECIMAL_VISITS = 2_000_000
+
+
+class KempnerDecimalEnclosureRequest(StrictModel):
+    """Enclose the same series using fixed-point bounds for each reciprocal."""
+
+    digit_set: KempnerDigitSet
+    cutoff: KempnerSmallInteger = Field(ge=0)
+    precision: StrictInt = Field(ge=1, le=MAX_KEMPNER_DECIMAL_DIGITS)
+
+
+class KempnerDecimalEnclosure(StrictModel):
+    """Source-bound exact rational interval for a Kempner series.
+
+    Each finite reciprocal is enclosed by its floor and ceiling at the given
+    decimal scale, then the exact geometric tail bound is added above.
+    """
+
+    digit_set: KempnerDigitSet
+    cutoff: KempnerSmallInteger = Field(ge=0)
+    precision: StrictInt = Field(ge=1, le=MAX_KEMPNER_DECIMAL_DIGITS)
+    enclosure: ClosedRationalInterval
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

@@ -47,6 +47,14 @@ def _is_gauge_label(value: object) -> bool:
 def _admit_group(
     group: FiniteGroupTable,
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...], int, int]:
+    if not isinstance(group, FiniteGroupTable) or not all(
+        name in group.__dict__ for name in ("multiplication", "inverse", "identity")
+    ):
+        _reject(
+            "field",
+            "lattice_gauge.finite_group.table_shape",
+            "finite group table is malformed",
+        )
     table, inverse, identity = group.multiplication, group.inverse, group.identity
     order = len(table) if isinstance(table, tuple) else 0
     if not 1 <= order <= 24 or not isinstance(inverse, tuple) or len(inverse) != order:
@@ -364,6 +372,9 @@ def finite_group_gauge_basepoint_transport(  # noqa: C901
         not isinstance(field, FiniteGroupGaugeField)
         or not isinstance(loop, OrientedGaugePath)
         or not isinstance(connector, OrientedGaugePath)
+        or not all(
+            name in field.__dict__ for name in ("lattice", "group", "edge_values")
+        )
         or not isinstance(field.group, FiniteGroupTable)
     ):
         _reject(
@@ -378,7 +389,8 @@ def finite_group_gauge_basepoint_transport(  # noqa: C901
             "field lattice is malformed",
         )
     if (
-        not isinstance(field.lattice.vertices, tuple)
+        not all(name in field.lattice.__dict__ for name in ("vertices", "edges"))
+        or not isinstance(field.lattice.vertices, tuple)
         or not isinstance(field.lattice.edges, tuple)
         or not isinstance(field.edge_values, tuple)
     ):
@@ -413,6 +425,7 @@ def finite_group_gauge_basepoint_transport(  # noqa: C901
         )
     if any(
         not isinstance(step, GaugePathStep)
+        or not all(name in step.__dict__ for name in ("edge_id", "forward"))
         or not isinstance(step.edge_id, str)
         or not isinstance(step.forward, bool)
         for steps in (loop.steps, connector.steps)
@@ -542,13 +555,67 @@ def finite_group_gauge_curvature(
             "lattice_gauge.finite_group.curvature_request_shape",
             "complex and field must be typed values",
         )
-    group = complex_value.group
+    if not all(
+        name in complex_value.__dict__ for name in ("lattice", "group", "faces")
+    ) or not all(
+        name in field.__dict__ for name in ("lattice", "group", "edge_values")
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_malformed",
+            "complex and field are missing required source fields",
+        )
+    source_group = getattr(complex_value, "group", None)
+    field_group = getattr(field, "group", None)
+    if any(
+        not isinstance(group_value, FiniteGroupTable)
+        or not all(
+            name in group_value.__dict__
+            for name in ("multiplication", "inverse", "identity")
+        )
+        for group_value in (source_group, field_group)
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_malformed",
+            "complex and field must retain complete finite-group tables",
+        )
+    for lattice_value in (
+        getattr(complex_value, "lattice", None),
+        getattr(field, "lattice", None),
+    ):
+        if not isinstance(lattice_value, GaugeLattice) or not all(
+            name in lattice_value.__dict__ for name in ("vertices", "edges")
+        ):
+            _reject(
+                "request",
+                "lattice_gauge.finite_group.curvature_request_malformed",
+                "complex and field must retain complete lattices",
+            )
+    try:
+        complex_value = FiniteGroupGaugeComplex.model_validate(
+            complex_value.model_dump()
+        )
+        field = FiniteGroupGaugeField.model_validate(field.model_dump())
+    except (TypeError, ValueError):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_malformed",
+            "complex and field must satisfy their complete typed contracts",
+        )
+    # model_construct/copy can bypass required-field validation. Retrieve
+    # potentially absent attributes without allowing AttributeError to escape.
+    lattice = getattr(complex_value, "lattice", None)
+    group = getattr(complex_value, "group", None)
+    field_lattice = getattr(field, "lattice", None)
+    field_group = getattr(field, "group", None)
     if (
-        not isinstance(complex_value.lattice, GaugeLattice)
-        or not isinstance(field.lattice, GaugeLattice)
+        not isinstance(lattice, GaugeLattice)
+        or not isinstance(field_lattice, GaugeLattice)
         or not isinstance(group, FiniteGroupTable)
-        or complex_value.lattice != field.lattice
-        or group != field.group
+        or not isinstance(field_group, FiniteGroupTable)
+        or lattice != field_lattice
+        or group != field_group
     ):
         _reject(
             "request",
@@ -561,9 +628,16 @@ def finite_group_gauge_curvature(
     # boundary rather than trusting constructor provenance.
     from jacobian.math.gauge.finite_group_complex import _admit_faces, _admit_lattice
 
-    _, _, vertex_set, edge_by_id, _ = _admit_lattice(complex_value.lattice)
-    _admit_faces(complex_value.faces, vertex_set, edge_by_id)
-    total_steps = sum(len(face.boundary.steps) for face in complex_value.faces)
+    _, _, vertex_set, edge_by_id, _ = _admit_lattice(lattice)
+    faces = getattr(complex_value, "faces", None)
+    if not isinstance(faces, tuple):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_shape",
+            "complex faces must be a validated tuple",
+        )
+    _admit_faces(faces, vertex_set, edge_by_id)
+    total_steps = sum(len(face.boundary.steps) for face in faces)
     work = (
         order**3
         + (len(edges) + 2) * order**2
@@ -573,13 +647,13 @@ def finite_group_gauge_curvature(
     )
     # Returned values retain both source parents, the field's edge-bound table
     # elements, and one table-bound curvature element per face.
-    parent_copies = len(edges) + len(complex_value.faces) + 3
+    parent_copies = len(edges) + len(faces) + 3
     output_units = (
         parent_copies * order**2
         + len(vertices)
         + len(edges) * 4
         + total_steps * 2
-        + len(complex_value.faces) * 4
+        + len(faces) * 4
     )
     if (
         work > MAX_FINITE_GROUP_GAUGE_WORK
@@ -592,7 +666,7 @@ def finite_group_gauge_curvature(
         )
     face_values = []
     edge_by_id = {edge.edge_id: edge for edge in edges}
-    for face in complex_value.faces:
+    for face in faces:
         product = identity
         path = face.boundary
         if path.steps:

@@ -187,7 +187,6 @@ MAX_GAUGE_FACES = 128
 MAX_GAUGE_TOTAL_FACE_STEPS = 4096
 """Maximum aggregate attaching-walk steps in one gauge complex."""
 
-MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES = 1_900_000
 """Maximum conservative serialized size of one finite gauge complex."""
 
 MAX_GAUGE_LABEL_LENGTH = 64
@@ -391,9 +390,7 @@ class FiniteGroupGaugeComplex(StrictModel):
 
     lattice: GaugeLattice
     group: FiniteGroupTable
-    faces: tuple[FiniteGroupGaugeFace, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
-    )
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
 
     @model_validator(mode="before")
     @classmethod
@@ -457,26 +454,6 @@ class FiniteGroupGaugeComplex(StrictModel):
                 raise _validation_error(
                     "complex_face_closed", "each oriented face boundary must be closed"
                 )
-        output_bytes = 2048 + len(self.group.multiplication) ** 2 * 4
-        output_bytes += len(self.group.multiplication) * 12
-        output_bytes += sum(6 * len(vertex) + 32 for vertex in self.lattice.vertices)
-        output_bytes += sum(
-            6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80
-            for edge in self.lattice.edges
-        )
-        for face in self.faces:
-            output_bytes += 6 * len(face.face_id) + 64
-            if face.boundary.steps:
-                output_bytes += sum(
-                    6 * len(step.edge_id) + 48 for step in face.boundary.steps
-                )
-            else:
-                output_bytes += 6 * len(face.boundary.basepoint or "") + 16
-        if output_bytes > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES:
-            raise _validation_error(
-                "complex_output_bound",
-                "source-bound complex exceeds the conservative two-megabyte output envelope",
-            )
         return self
 
 
@@ -485,9 +462,7 @@ class FiniteGroupGaugeComplexRequest(StrictModel):
 
     lattice: GaugeLattice
     group: FiniteGroupTable
-    faces: tuple[FiniteGroupGaugeFace, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
-    )
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
 
     @model_validator(mode="before")
     @classmethod
@@ -522,29 +497,34 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_binding(self) -> Self:
+        try:
+            complex_value = FiniteGroupGaugeComplex.model_validate(
+                self.complex.model_dump()
+            )
+            field_value = FiniteGroupGaugeField.model_validate(
+                self.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "curvature_binding", "curvature sources must satisfy their contracts"
+            ) from error
         if (
-            not isinstance(self.complex, FiniteGroupGaugeComplex)
-            or not isinstance(self.field, FiniteGroupGaugeField)
-            or not isinstance(self.complex.lattice, GaugeLattice)
-            or not isinstance(self.field.lattice, GaugeLattice)
-            or not isinstance(self.complex.group, FiniteGroupTable)
-            or not isinstance(self.field.group, FiniteGroupTable)
-            or self.complex.lattice != self.field.lattice
-            or self.complex.group != self.field.group
+            complex_value.lattice != field_value.lattice
+            or complex_value.group != field_value.group
             or not isinstance(self.face_values, tuple)
-            or len(self.face_values) != len(self.complex.faces)
+            or len(self.face_values) != len(complex_value.faces)
         ):
             raise _validation_error(
                 "curvature_binding", "curvature sources must share parents"
             )
-        identity = self.complex.group.identity
+        identity = complex_value.group.identity
         is_flat = True
-        for face, value in zip(self.complex.faces, self.face_values, strict=True):
+        for face, value in zip(complex_value.faces, self.face_values, strict=True):
             if (
                 not isinstance(value, FiniteGroupGaugeFaceCurvature)
                 or value.face_id != face.face_id
                 or not isinstance(value.value, FiniteGroupTableElement)
-                or value.value.group != self.complex.group
+                or value.value.group != complex_value.group
             ):
                 raise _validation_error(
                     "curvature_binding", "curvature entries must bind to source faces"
@@ -818,13 +798,6 @@ class HolonomyRequest(StrictModel):
     path: OrientedGaugePath
 
 
-class PermutationWilsonTraceRequest(StrictModel):
-    """Evaluate the natural permutation-character Wilson loop over ``S_d``."""
-
-    field: GaugeField
-    path: OrientedGaugePath
-
-
 class PermutationWilsonTraceResult(StrictModel):
     """Exact trace in the natural degree-``d`` permutation representation."""
 
@@ -883,7 +856,6 @@ class HolonomyResult(StrictModel):
 
 
 __all__ = [
-    "MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES",
     "MAX_GAUGE_DEGREE",
     "MAX_GAUGE_EDGES",
     "MAX_GAUGE_FACES",

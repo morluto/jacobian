@@ -80,6 +80,7 @@ class _TransformGeometry:
     ramification_index: int
     ordinate_power: int
     removed_valuation: int
+    source_common_denominator: int
 
 
 @dataclass(frozen=True)
@@ -162,6 +163,28 @@ def _source_rows(source: LocalPolynomialInSeries) -> tuple[_SourceRow, ...]:
     return tuple(rows)
 
 
+def _admit_source_common_denominator(
+    source_rows: tuple[_SourceRow, ...],
+) -> int:
+    """Bound the shared source denominator before evaluating an edge root."""
+    common_denominator = 1
+    for row in source_rows:
+        for coefficient in row.series.coefficients:
+            common_denominator = lcm(
+                common_denominator, coefficient.as_fraction().denominator
+            )
+            if (
+                decimal_digit_width(common_denominator)
+                > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS
+            ):
+                _resource(
+                    "coefficient_bound",
+                    "common source denominator exceeds the output coefficient limit",
+                    ("polynomial", "coefficients"),
+                )
+    return common_denominator
+
+
 def _edge_polynomial_value(
     characteristic: NewtonEdgeCharacteristicResult, root: Fraction
 ) -> tuple[Fraction, Fraction]:
@@ -207,6 +230,9 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
             polynomial=source,
             edge_index=request.edge_index,
         )
+    )
+    source_common_denominator = _admit_source_common_denominator(
+        _source_rows(characteristic.source)
     )
     _admit_edge_root_powers(characteristic, root)
     polynomial_value, polynomial_derivative = _edge_polynomial_value(
@@ -263,6 +289,7 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
         ramification_index=ramification_index,
         ordinate_power=ordinate_power,
         removed_valuation=removed_valuation,
+        source_common_denominator=source_common_denominator,
     )
 
 
@@ -308,21 +335,8 @@ def _admit_coefficient_digits(
     source_slots: int,
     largest_degree: int,
     root: Fraction,
+    common_denominator: int,
 ) -> int:
-    common_denominator = 1
-    for row in source_rows:
-        for coefficient in row.series.coefficients:
-            value = coefficient.as_fraction()
-            common_denominator = lcm(common_denominator, value.denominator)
-            if (
-                decimal_digit_width(common_denominator)
-                > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS
-            ):
-                _resource(
-                    "coefficient_bound",
-                    "common source denominator exceeds the output coefficient limit",
-                    ("polynomial", "coefficients"),
-                )
     max_lifted_numerator_digits = max(
         (
             decimal_digit_width(value.numerator)
@@ -411,7 +425,11 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
         source_rows, largest_degree, geometry
     )
     coefficient_digits = _admit_coefficient_digits(
-        source_rows, source_slots, largest_degree, geometry.root
+        source_rows,
+        source_slots,
+        largest_degree,
+        geometry.root,
+        geometry.source_common_denominator,
     )
 
     output_bytes = (

@@ -4,16 +4,16 @@ from jacobian.math.combinatorics.algebraic._models import (
     LongestDecreasingSubsequenceResult,
     LongestIncreasingSubsequenceResult,
     PartitionDominanceResult,
-    PlacticNormalFormResult,
     PlacticEquivalenceResult,
+    PlacticNormalFormResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
 )
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
-    GreeneWitnessResult,
     BiwordRSKPair,
+    GreeneWitnessResult,
     NonnegativeIntegerMatrix,
 )
 from jacobian.math.combinatorics.algebraic.biword_ops import (

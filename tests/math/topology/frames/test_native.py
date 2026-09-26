@@ -86,8 +86,8 @@ def test_native_dense_frame_bounds_have_exact_gram_and_potential() -> None:
     assert result.gram[0][1] == off_diagonal
     assert result.gram[0][dimension] == diagonal
     assert result.gram[1][dimension] == off_diagonal
-    expected_potential = 4 * dimension * (
-        diagonal**2 + (dimension - 1) * off_diagonal**2
+    expected_potential = (
+        4 * dimension * (diagonal**2 + (dimension - 1) * off_diagonal**2)
     )
     assert frame_potential(family).potential == expected_potential
 

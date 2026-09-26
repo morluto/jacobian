@@ -15,6 +15,8 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     SemistandardYoungTableau,
     StandardYoungTableau,
     TableauCandidate,
+    TableauContent,
+    TableauContentTerm,
     require_semistandard,
     require_standard,
 )
@@ -24,6 +26,8 @@ __all__ = [
     "SemistandardYoungTableau",
     "StandardYoungTableau",
     "TableauCandidate",
+    "TableauContent",
+    "TableauContentTerm",
     "littlewood_richardson_coefficient",
     "littlewood_richardson_tableaux",
     "partition_conjugate",

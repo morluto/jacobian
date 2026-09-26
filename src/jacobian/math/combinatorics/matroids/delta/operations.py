@@ -12,7 +12,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
-    DeltaMatroidExtremalMatroidResult,
     DeltaMatroidRecognitionResult,
     require_twist_subset,
 )
@@ -232,7 +231,7 @@ def _extremal_matroid(
     delta_matroid: FiniteDeltaMatroid,
     *,
     extremum: Literal["minimum", "maximum"],
-) -> DeltaMatroidExtremalMatroidResult:
+) -> FiniteBasisMatroid:
     """Derive and map the complete minimum- or maximum-size feasible family."""
     try:
         delta_matroid = _preflight_extremal_source(delta_matroid)
@@ -337,12 +336,13 @@ def _extremal_matroid(
             message="extremal basis family exceeds the basis-exchange work limit",
         )
 
-    # Materialize the selected basis rows and their identity map only after all
-    # output bounds have passed.
-    source_indices = tuple(
-        index for index, row_size in enumerate(sizes) if row_size == target_size
+    # Materialize the selected canonical basis rows only after all output
+    # bounds have passed.
+    bases = tuple(
+        row
+        for row, row_size in zip(system.feasible, sizes, strict=True)
+        if row_size == target_size
     )
-    bases = tuple(system.feasible[index] for index in source_indices)
 
     # The source exchange axiom and output envelope have already been checked;
     # the extremal-bases theorem establishes target basis exchange. Skip a
@@ -351,23 +351,18 @@ def _extremal_matroid(
         ground=system.ground,
         bases=bases,
     )
-    return DeltaMatroidExtremalMatroidResult._from_kernel(
-        delta_matroid,
-        matroid,
-        source_indices,
-        extremum,
-    )
+    return matroid
 
 
 def lower_matroid(
     delta_matroid: FiniteDeltaMatroid,
-) -> DeltaMatroidExtremalMatroidResult:
+) -> FiniteBasisMatroid:
     """Return the matroid whose bases are the minimum-size feasible sets."""
     return _extremal_matroid(delta_matroid, extremum="minimum")
 
 
 def upper_matroid(
     delta_matroid: FiniteDeltaMatroid,
-) -> DeltaMatroidExtremalMatroidResult:
+) -> FiniteBasisMatroid:
     """Return the matroid whose bases are the maximum-size feasible sets."""
     return _extremal_matroid(delta_matroid, extremum="maximum")

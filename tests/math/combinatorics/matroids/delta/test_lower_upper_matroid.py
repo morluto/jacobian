@@ -14,7 +14,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.matroids.delta import operations as delta_operations
 from jacobian.math.combinatorics.matroids.delta._models import (
-    DeltaMatroidExtremalMatroidResult,
     DeltaMatroidLowerMatroidRequest,
     DeltaMatroidUpperMatroidRequest,
 )
@@ -24,6 +23,7 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     upper_matroid,
 )
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
+from jacobian.math.combinatorics.matroids.values import FiniteBasisMatroid
 
 
 def _symmetric_exchange(rows: tuple[tuple[int, ...], ...]) -> bool:
@@ -87,23 +87,17 @@ def test_exhaustive_small_delta_matroids_match_independent_extrema(
             index for index, row in enumerate(rows) if len(row) == max(map(len, rows))
         )
 
-        assert lower.extremum == "minimum"
-        assert lower.source_feasible_indices == expected_lower_indices
-        assert lower.matroid.bases == tuple(
-            rows[index] for index in expected_lower_indices
-        )
-        assert lower.matroid.ground == source.ground
-        assert _basis_exchange(lower.matroid.bases)
-        assert upper.extremum == "maximum"
-        assert upper.source_feasible_indices == expected_upper_indices
-        assert upper.matroid.bases == tuple(
-            rows[index] for index in expected_upper_indices
-        )
-        assert upper.matroid.ground == source.ground
-        assert _basis_exchange(upper.matroid.bases)
+        assert isinstance(lower, FiniteBasisMatroid)
+        assert lower.bases == tuple(rows[index] for index in expected_lower_indices)
+        assert lower.ground == source.ground
+        assert _basis_exchange(lower.bases)
+        assert isinstance(upper, FiniteBasisMatroid)
+        assert upper.bases == tuple(rows[index] for index in expected_upper_indices)
+        assert upper.ground == source.ground
+        assert _basis_exchange(upper.bases)
 
 
-def test_extremal_conversions_are_native_and_results_round_trip() -> None:
+def test_extremal_conversions_return_canonical_matroids() -> None:
     ids = {tool.operation_id for tool in TOOLS}
     assert "delta_matroid.lower_matroid.compute" not in ids
     assert "delta_matroid.upper_matroid.compute" not in ids
@@ -112,22 +106,9 @@ def test_extremal_conversions_are_native_and_results_round_trip() -> None:
         feasible=((), (0,), (0, 1), (1,)),
     )
     for result in (lower_matroid(source), upper_matroid(source)):
-        restored = DeltaMatroidExtremalMatroidResult.model_validate(
-            result.model_dump(mode="json")
-        )
+        assert isinstance(result, FiniteBasisMatroid)
+        restored = FiniteBasisMatroid.model_validate(result.model_dump(mode="json"))
         assert restored == result
-
-
-def test_result_rejects_incomplete_or_misaligned_source_map() -> None:
-    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((0,), (1,)))
-    lower = lower_matroid(source)
-    with pytest.raises(ValidationError):
-        DeltaMatroidExtremalMatroidResult.model_validate(
-            {
-                **lower.model_dump(),
-                "source_feasible_indices": [1],
-            }
-        )
 
 
 def test_target_ground_over_bound_is_a_resource_refusal() -> None:
@@ -207,7 +188,7 @@ def test_native_forged_oversize_source_is_admitted_before_system_copy(
 
 @pytest.mark.parametrize("operation", [lower_matroid, upper_matroid])
 def test_oversize_ground_axis_is_bounded_before_label_validation(
-    operation: Callable[[FiniteDeltaMatroid], DeltaMatroidExtremalMatroidResult],
+    operation: Callable[[FiniteDeltaMatroid], FiniteBasisMatroid],
 ) -> None:
     source = FiniteDeltaMatroid.model_construct(
         ground=(object(),) * (delta_operations.MAX_DELTA_MEMBERSHIPS + 2),

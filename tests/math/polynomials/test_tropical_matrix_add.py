@@ -235,3 +235,13 @@ def test_matrix_add_bounds_output_before_building_rows(
     )
     with pytest.raises(OperationDomainValidationError):
         tropical_matrix_add(left, right)
+
+
+def test_matrix_add_output_bound_counts_only_selected_values() -> None:
+    large = Fraction(10**5000)
+    left = _matrix("MIN_PLUS", ((large,),), row_axis=("r",), column_axis=("c",))
+    zero = _matrix("MIN_PLUS", ((Fraction(0),),), row_axis=("r",), column_axis=("c",))
+
+    result = tropical_matrix_add(left, zero)
+
+    assert result.entries[0][0].value.as_fraction() == 0

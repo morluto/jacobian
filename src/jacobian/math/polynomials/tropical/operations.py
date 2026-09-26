@@ -1582,19 +1582,16 @@ def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> Tropical
             code="tropical.matrix_mismatch",
             message="matrices must have identical semiring and labelled axes",
         )
-    # Tropical addition selects an operand, so its encoded scalar size cannot
-    # exceed either admitted input. Bound the complete canonical matrix before
-    # allocating the output rows.
+    # Tropical addition selects one operand per cell. Size the actual winners,
+    # not both inputs, before allocating the output rows.
+    winners = (
+        _tropical_scalar_add_admitted(left.semiring, left_entry, right_entry)[0]
+        for left_row, right_row in zip(left.entries, right.entries, strict=True)
+        for left_entry, right_entry in zip(left_row, right_row, strict=True)
+    )
     scalar_bytes = sum(
-        128
-        + (
-            0
-            if entry.value is None
-            else len(str(abs(entry.value.num))) + len(str(entry.value.den))
-        )
-        for matrix in (left, right)
-        for row in matrix.entries
-        for entry in row
+        160 + (0 if entry.value is None else _digits(entry.value.num) + _digits(entry.value.den))
+        for entry in winners
     )
     output_bound = (
         len(encode_strict_json(list(left.row_axis)))

@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.topology._request_admission import run_topology_admission
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
     MAX_INDUCED_MAP_EDGE_LETTERS,
@@ -904,6 +905,21 @@ def _compose_simplicial_map(
                 ),
             )
         first_path, second_path = first.map, second.map
+        for operand, path, location in (
+            (first, first_path, ("first", "map")),
+            (second, second_path, ("second", "map")),
+        ):
+            if (
+                path.complex != operand.source_presentation.complex
+                or path.complex != operand.target_presentation.complex
+                or path.source_base_vertex != operand.source_presentation.base_vertex
+                or path.target_base_vertex != operand.target_presentation.base_vertex
+            ):
+                raise OperationDomainValidationError(
+                    location=location,
+                    code="fundamental_group_map.composition_path_carrier",
+                    message="each basepoint path must match its enclosing source and target presentations",
+                )
         if (
             first_path.complex != second_path.complex
             or first_path.target_base_vertex != second_path.source_base_vertex
@@ -1098,8 +1114,8 @@ __all__ = [
     "FundamentalGroupMapResult",
     "PresentationMapCompositionRequest",
     "PresentationRelatorImage",
-    "compose_fundamental_group_maps",
     "change_fundamental_group_basepoint",
+    "compose_fundamental_group_maps",
     "direct_relator_match",
     "induced_fundamental_group_map",
 ]

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Annotated, Self
 
-from pydantic import ConfigDict, Field, model_validator
+from pydantic import ConfigDict, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -151,7 +151,7 @@ class BinaryMatrixTwistRequest(StrictModel):
             "work units before enumerating feasible sets."
         )
     )
-    subset: tuple[int, ...] = Field(
+    subset: tuple[StrictInt, ...] = Field(
         default=(),
         max_length=MAX_BINARY_GROUND,
         description=(
@@ -179,7 +179,7 @@ class BinaryMatrixTwistRequest(StrictModel):
 class BinaryMatrixResult(StrictModel):
     matrix: BinarySymmetricMatrix
     delta_matroid: FiniteDeltaMatroid
-    twist: tuple[int, ...] = ()
+    twist: tuple[int, ...] = Field(default=(), max_length=MAX_BINARY_GROUND)
 
     @model_validator(mode="after")
     def _source_binding(self) -> Self:

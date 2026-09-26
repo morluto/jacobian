@@ -242,7 +242,19 @@ def binary_matrix_twist(
 ) -> BinaryMatrixResult:
     """Return D(A)*T with the matrix presentation and twist retained."""
 
-    if type(subset) is not tuple or any(type(index) is not int for index in subset):
+    if type(subset) is not tuple:
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="delta_matroid.binary_twist_subset",
+            message="twist indices must be a tuple of exact integers",
+        )
+    if len(subset) > MAX_BINARY_GROUND:
+        raise OperationDomainValidationError(
+            location=("subset",),
+            code="delta_matroid.binary_twist_subset",
+            message="twist subset exceeds the maximum ground size",
+        )
+    if any(type(index) is not int for index in subset):
         raise OperationDomainValidationError(
             location=("subset",),
             code="delta_matroid.binary_twist_subset",
@@ -250,7 +262,7 @@ def binary_matrix_twist(
         )
     matrix = _canonical_binary_matrix(matrix)
     n = len(matrix.ground)
-    if subset != tuple(sorted(set(subset))) or any(
+    if len(subset) > n or subset != tuple(sorted(set(subset))) or any(
         index < 0 or index >= n for index in subset
     ):
         raise OperationDomainValidationError(

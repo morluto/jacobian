@@ -26,6 +26,13 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
+from jacobian.math.number_theory.arithmetic_functions._models import (
+    MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
+    DirichletConvolutionResult,
+    DirichletInverseResult,
+    MobiusTransformResult,
+    SummatoryFunctionResult,
+)
 from jacobian.math.number_theory.characters._models import (
     MAX_GENERALIZED_BERNOULLI_INDEX,
     DirichletCharacterConductorResult,
@@ -35,6 +42,7 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterGeneralizedGaussSumResult,
     DirichletCharacterJacobiSumResult,
     DirichletCharacterLValueNonpositiveResult,
+    DirichletCharacterMixedJacobiSumResult,
     DirichletCharacterOrderResult,
     DirichletCharacterOrthogonalityOverCharactersResult,
     DirichletCharacterOrthogonalityResult,
@@ -58,6 +66,7 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterKernel,
     DirichletCharacterRestrictionObstruction,
     DirichletCharacterRestrictionResult,
+    PrimitiveDirichletCharacter,
     PrincipalDirichletCharacter,
 )
 from jacobian.math.number_theory.sequences.core._models import (
@@ -73,6 +82,7 @@ from jacobian.math.number_theory.sequences.core.values import (
 __all__ = [
     "character_group",
     "dirichlet_character",
+    "dirichlet_character_arithmetic_function_twist",
     "dirichlet_character_conductor",
     "dirichlet_character_conjugate",
     "dirichlet_character_fourier_matrix",
@@ -86,6 +96,7 @@ __all__ = [
     "dirichlet_character_jacobi_sum",
     "dirichlet_character_kernel",
     "dirichlet_character_l_value_nonpositive_integer",
+    "dirichlet_character_mixed_jacobi_sum",
     "dirichlet_character_order",
     "dirichlet_character_orthogonality",
     "dirichlet_character_orthogonality_over_characters",
@@ -284,6 +295,163 @@ def dirichlet_character_jacobi_sum(
         right=right,
         value=value,
     )
+
+
+def _mixed_jacobi_admission(
+    modulus: int, order: int, *, group_rank: int, unit_count: int
+) -> tuple[int, tuple[int, ...]]:
+    degree = _euler_phi(order)
+    work = (
+        modulus * modulus
+        + order * degree
+        + group_rank * (unit_count + 2 * unit_count * unit_count)
+    )
+    if (
+        order > MAX_CYCLIC_PERIOD
+        or work > MAX_CHARACTER_SUM_WORK
+        or work > MAX_CYCLIC_FIELD_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("characters", 0, "group", "modulus"),
+            code="dirichlet_character.mixed_jacobi_sum.work_bound",
+            message="mixed Jacobi sum exceeds the admitted residue and field work envelope",
+        )
+
+    # Polynomial construction is bounded by the admitted order and field work.
+    x = symbols("x")
+    descending = tuple(
+        int(value) for value in Poly(cyclotomic_poly(order, x), x).all_coeffs()
+    )
+    if len(descending) != degree + 1 or descending[0] != 1:
+        raise RuntimeError("cyclotomic polynomial has an unexpected canonical shape")
+    phi = tuple(reversed(descending))
+    coefficient_limit = 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1
+    coefficient_bound = modulus * modulus
+    reduction_norm = max(1, sum(abs(value) for value in phi[:-1]))
+    for _ in range(max(0, order - degree)):
+        if coefficient_bound > coefficient_limit // reduction_norm:
+            raise OperationResourceAdmissionError(
+                location=("characters",),
+                code="dirichlet_character.mixed_jacobi_sum.coefficient_bound",
+                message="mixed Jacobi sum may exceed the exact cyclotomic coefficient bound",
+            )
+        coefficient_bound *= reduction_norm
+    if coefficient_bound > coefficient_limit:
+        raise OperationResourceAdmissionError(
+            location=("characters",),
+            code="dirichlet_character.mixed_jacobi_sum.coefficient_bound",
+            message="mixed Jacobi sum may exceed the exact cyclotomic coefficient bound",
+        )
+    return degree, phi
+
+
+def _mixed_jacobi_power_coefficients(
+    characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
+    order: int,
+) -> list[int]:
+    group = characters[0].group
+    modulus = group.modulus
+    row_by_residue = dict(zip(group.unit_residues, group.unit_coordinates, strict=True))
+
+    def value_exponent(character: DirichletCharacter, row: tuple[int, ...]) -> int:
+        return (
+            sum(
+                coordinate * (order // generator_order) * unit_coordinate
+                for coordinate, generator_order, unit_coordinate in zip(
+                    character.coordinates, group.generator_orders, row, strict=True
+                )
+            )
+            % order
+        )
+
+    powers = [0] * order
+    for first in range(modulus):
+        first_row = row_by_residue.get(first)
+        if first_row is None:
+            continue
+        first_exponent = value_exponent(characters[0], first_row)
+        for second in range(modulus):
+            second_row = row_by_residue.get(second)
+            third_row = row_by_residue.get((1 - first - second) % modulus)
+            if second_row is None or third_row is None:
+                continue
+            exponent = (
+                first_exponent
+                + value_exponent(characters[1], second_row)
+                + value_exponent(characters[2], third_row)
+            ) % order
+            powers[exponent] += 1
+    return powers
+
+
+def _reduce_mixed_jacobi_coefficients(
+    powers: list[int], order: int, degree: int, phi: tuple[int, ...]
+) -> tuple[int, ...]:
+    for power in range(order - 1, degree - 1, -1):
+        coefficient = powers[power]
+        if coefficient:
+            powers[power] = 0
+            for lower_power in range(degree):
+                powers[power - degree + lower_power] -= coefficient * phi[lower_power]
+    coefficients = tuple(powers[:degree])
+    if any(
+        abs(value) > 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1 for value in coefficients
+    ):
+        raise RuntimeError("admitted mixed Jacobi coefficient bound was violated")
+    return coefficients
+
+
+def dirichlet_character_mixed_jacobi_sum(
+    characters: tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
+) -> DirichletCharacterMixedJacobiSumResult:
+    r"""Return sum over a+b+c=1 mod N of chi(a) psi(b) rho(c), exactly."""
+
+    if not isinstance(characters, tuple) or len(characters) != 3:
+        raise OperationDomainValidationError(
+            location=("characters",),
+            code="dirichlet_character.mixed_jacobi_sum.character_count",
+            message="mixed Jacobi sums require exactly three characters",
+        )
+    validated: list[DirichletCharacter] = []
+    for index, character in enumerate(characters):
+        try:
+            validated.append(_require_character(character))
+        except OperationDomainValidationError as exc:
+            errors = exc.errors()
+            first = errors[0] if errors else {}
+            raise OperationDomainValidationError(
+                location=("characters", index),
+                code=str(first.get("type", "dirichlet_character.invalid")),
+                message=str(first.get("msg", "invalid Dirichlet character")),
+            ) from exc
+    chars = cast(
+        tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
+        tuple(validated),
+    )
+    group = chars[0].group
+    if any(character.group != group for character in chars[1:]):
+        raise OperationDomainValidationError(
+            location=("characters",),
+            code="dirichlet_character.mixed_jacobi_sum.parent_mismatch",
+            message="mixed Jacobi-sum characters must use the identical group parent",
+        )
+    order = group.exponent
+    degree, phi = _mixed_jacobi_admission(
+        group.modulus,
+        order,
+        group_rank=len(group.generator_orders),
+        unit_count=len(group.unit_residues),
+    )
+    powers = _mixed_jacobi_power_coefficients(chars, order)
+    coefficients = _reduce_mixed_jacobi_coefficients(powers, order, degree, phi)
+    value = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=order),
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(Fraction(coefficient))
+            for coefficient in coefficients
+        ),
+    )
+    return DirichletCharacterMixedJacobiSumResult(characters=chars, value=value)
 
 
 def dirichlet_character_orthogonality(
@@ -930,9 +1098,13 @@ def dirichlet_character_conductor(
         if target_exponent % scale:
             raise RuntimeError("induced character value is outside the target field")
         primitive_coordinates.append((target_exponent // scale) % target_order)
-    primitive_character = DirichletCharacter.model_construct(
+    primitive_character_value = DirichletCharacter.model_construct(
         group=primitive_group,
         coordinates=tuple(primitive_coordinates),
+    )
+    primitive_character = PrimitiveDirichletCharacter.model_construct(
+        character=primitive_character_value,
+        conductor=conductor,
     )
     return DirichletCharacterConductorResult._from_kernel(
         character, conductor, primitive_character
@@ -2267,6 +2439,15 @@ def _admit_sequence_twist_source(
                 message="an existing cyclotomic sequence keeps its authored index origin",
             )
         index_origin = sequence.index_origin
+    elif isinstance(sequence, FiniteRationalSequence):
+        try:
+            sequence = FiniteRationalSequence.model_validate(sequence.model_dump())
+        except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("sequence",),
+                code="dirichlet_character.sequence_twist.sequence_invalid",
+                message="rational source sequence is malformed",
+            ) from exc
     if index_origin is None:
         raise OperationDomainValidationError(
             location=("index_origin",),
@@ -2440,6 +2621,59 @@ def dirichlet_character_sequence_twist(
     )
 
 
+def dirichlet_character_arithmetic_function_twist(
+    function: DirichletConvolutionResult
+    | DirichletInverseResult
+    | MobiusTransformResult
+    | SummatoryFunctionResult,
+    character: DirichletCharacter,
+) -> FiniteCyclotomicSequence:
+    """Twist a finite arithmetic-function prefix on indices 1 through M."""
+    prefix_types = (
+        DirichletConvolutionResult,
+        DirichletInverseResult,
+        MobiusTransformResult,
+        SummatoryFunctionResult,
+    )
+    if not isinstance(function, prefix_types):
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.function_type",
+            message="source must be an exact arithmetic-function prefix value",
+        )
+    try:
+        function = type(function).model_validate(function.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.source_invalid",
+            message="source must be a canonical arithmetic-function prefix",
+        ) from exc
+    if not 1 <= function.length <= MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH:
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.source_shape",
+            message="source must be a nonempty exact arithmetic-function prefix",
+        )
+    total_digits = 0
+    for value in function.values:
+        total_digits += len(format_canonical_integer(abs(value.num)))
+        total_digits += len(format_canonical_integer(value.den))
+        if total_digits > MAX_SEQUENCE_TOTAL_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("function", "values"),
+                code="dirichlet_character.arithmetic_function_twist.sequence_size",
+                message=(
+                    "source rational values exceed the finite sequence "
+                    f"{MAX_SEQUENCE_TOTAL_DIGITS}-digit representation bound"
+                ),
+            )
+    # The existing sequence operation admits coefficient growth, cyclotomic
+    # degree, work, and result bytes before expanding any character values.
+    sequence = FiniteRationalSequence(values=function.values)
+    return dirichlet_character_sequence_twist(sequence, character, index_origin=1)
+
+
 def _compute_generalized_gauss_sum(
     character: DirichletCharacter,
     frequency: int,
@@ -2513,7 +2747,7 @@ def _compute_generalized_gauss_sum(
         coefficient_bound *= reduction_l1_bound
     if coefficient_bound > 10**digit_limit - 1:
         raise OperationResourceAdmissionError(
-            location=("character",),
+            location=("primitive_character", "character"),
             code=f"dirichlet_character.{error_name}.coefficient_bound",
             message=(
                 "Gauss sum may exceed the "
@@ -2597,18 +2831,39 @@ def dirichlet_character_gauss_sum(
 
 
 def dirichlet_character_primitive_gauss_norm(
-    character: DirichletCharacter,
+    primitive_character: PrimitiveDirichletCharacter,
 ) -> DirichletCharacterPrimitiveGaussNormResult:
-    """Compute |tau(chi)|^2 after deriving primitivity from the source character.
+    """Compute |tau(chi)|^2 for a typed primitive-character claim.
 
     The complex absolute value is represented exactly as tau(chi) times its
-    cyclotomic conjugate. The operation accepts only characters whose computed
-    conductor equals their modulus and checks that this product is that modulus.
+    cyclotomic conjugate. The operation checks the claimed conductor against
+    the exact least conductor before relying on the primitive-character theorem.
     """
-    character = _require_character(character)
-    conductor = dirichlet_character_conductor(character)
+    try:
+        if isinstance(primitive_character, PrimitiveDirichletCharacter):
+            primitive_character = PrimitiveDirichletCharacter.model_validate(
+                primitive_character.model_dump()
+            )
+        else:
+            primitive_character = PrimitiveDirichletCharacter.model_validate(
+                primitive_character
+            )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("primitive_character",),
+            code="dirichlet_character.primitive_character_invalid",
+            message="primitive_character must be a canonical conductor-bound value",
+        ) from exc
+    character = _require_character(primitive_character.character)
     modulus = character.group.modulus
-    if conductor.conductor != modulus:
+    if primitive_character.conductor != modulus:
+        raise OperationDomainValidationError(
+            location=("primitive_character", "conductor"),
+            code="dirichlet_character.primitive_character_modulus_mismatch",
+            message="primitive character modulus must equal its claimed conductor",
+        )
+    exact_conductor = dirichlet_character_conductor(character).conductor
+    if exact_conductor != primitive_character.conductor:
         raise OperationDomainValidationError(
             location=("character",),
             code="dirichlet_character.primitive_gauss_norm.requires_primitive",
@@ -2647,8 +2902,7 @@ def dirichlet_character_primitive_gauss_norm(
         ),
     )
     return DirichletCharacterPrimitiveGaussNormResult(
-        character=character,
-        conductor=modulus,
+        primitive_character=primitive_character,
         gauss_sum=gauss_sum,
         norm_squared=norm,
     )

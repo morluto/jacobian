@@ -27,6 +27,8 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterKernelRequest,
     DirichletCharacterLValueNonpositiveRequest,
     DirichletCharacterLValueNonpositiveResult,
+    DirichletCharacterMixedJacobiSumRequest,
+    DirichletCharacterMixedJacobiSumResult,
     DirichletCharacterOrderRequest,
     DirichletCharacterOrderResult,
     DirichletCharacterOrthogonalityRequest,
@@ -223,7 +225,7 @@ def _compute_gauss_sum(
 def _compute_primitive_gauss_norm(
     request: DirichletCharacterPrimitiveGaussNormRequest,
 ) -> DirichletCharacterPrimitiveGaussNormResult:
-    return native.dirichlet_character_primitive_gauss_norm(request.character)
+    return native.dirichlet_character_primitive_gauss_norm(request.primitive_character)
 
 
 def _compute_generalized_gauss_sum(
@@ -238,6 +240,12 @@ def _compute_jacobi_sum(
     request: DirichletCharacterJacobiSumRequest,
 ) -> DirichletCharacterJacobiSumResult:
     return native.dirichlet_character_jacobi_sum(request.left, request.right)
+
+
+def _compute_mixed_jacobi_sum(
+    request: DirichletCharacterMixedJacobiSumRequest,
+) -> DirichletCharacterMixedJacobiSumResult:
+    return native.dirichlet_character_mixed_jacobi_sum(request.characters)
 
 
 def _compute_orthogonality(
@@ -773,10 +781,10 @@ TOOLS: MathTools = (
         operation_id="dirichlet_character.primitive_gauss_norm.compute",
         title="Compute the exact squared norm of a primitive character Gauss sum",
         description=(
-            "Derive the character conductor from its unit-group data, require it "
-            "to equal the source modulus, then compute tau(chi) times its exact "
+            "Validate the typed primitive-character claim against its exact "
+            "conductor, then compute tau(chi) times its exact "
             "cyclotomic conjugate. The returned cyclotomic value is |tau(chi)|^2 "
-            "and equals the modulus. Caller-supplied primitive labels are not used."
+            "and equals the claimed conductor; false claims are rejected."
         ),
         request_type=DirichletCharacterPrimitiveGaussNormRequest,
         result_type=DirichletCharacterPrimitiveGaussNormResult,
@@ -786,7 +794,12 @@ TOOLS: MathTools = (
             OperationExample(
                 name="quadratic_character_mod5_norm",
                 description="Compute the exact squared norm, 5, of its primitive Gauss sum.",
-                input={"character": {"group": _GROUP_MOD5, "coordinates": [2]}},
+                input={
+                    "primitive_character": {
+                        "character": {"group": _GROUP_MOD5, "coordinates": [2]},
+                        "conductor": 5,
+                    }
+                },
             ),
         ),
     ),
@@ -890,6 +903,36 @@ TOOLS: MathTools = (
                         },
                         "coordinates": [2],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.mixed_jacobi_sum.compute",
+        title="Compute an exact three-character Jacobi convolution",
+        description=(
+            "Return the exact sum of chi(a) psi(b) rho(c) over residues "
+            "a+b+c=1 modulo one shared modulus, using extension-by-zero "
+            "values and a common canonical cyclotomic field. The quadratic "
+            "residue and exact coefficient work is admitted before expansion."
+        ),
+        request_type=DirichletCharacterMixedJacobiSumRequest,
+        result_type=DirichletCharacterMixedJacobiSumResult,
+        run=_compute_mixed_jacobi_sum,
+        tags=("number-theory", "dirichlet-character", "jacobi-sum", "exact"),
+        examples=(
+            OperationExample(
+                name="three_quadratic_characters_mod_5",
+                description=(
+                    "Sum three copies of the quadratic character modulo 5 "
+                    "over triples of residues adding to one."
+                ),
+                input={
+                    "characters": [
+                        {"group": _GROUP_MOD5, "coordinates": [2]},
+                        {"group": _GROUP_MOD5, "coordinates": [2]},
+                        {"group": _GROUP_MOD5, "coordinates": [2]},
+                    ]
                 },
             ),
         ),
@@ -1004,16 +1047,26 @@ TOOLS: MathTools = (
         description=(
             "Return b_(n)=chi(n)*a_(n) in a canonical rational cyclotomic "
             "sequence. Integer and rational sources supply index_origin; an "
-            "existing cyclotomic source retains its authored origin. Repeated "
-            "twists embed into the least common cyclotomic field. Field order, "
-            "lookup work, coefficient growth, and output size are admitted "
-            "before sequence expansion."
+            "existing cyclotomic source retains its authored origin. An exact "
+            "arithmetic-function prefix is the rational index_origin=1 case. "
+            "Repeated twists embed into the least common cyclotomic field. "
+            "Field order, lookup work, coefficient growth, and output size are "
+            "admitted before sequence expansion."
         ),
         request_type=DirichletCharacterSequenceTwistRequest,
         result_type=FiniteCyclotomicSequence,
         run=_compute_sequence_twist,
-        tags=("sequence", "dirichlet-character", "cyclotomic", "exact"),
-        discovery_terms=("Dirichlet character sequence twist",),
+        tags=(
+            "sequence",
+            "dirichlet-character",
+            "cyclotomic",
+            "exact",
+            "arithmetic-function",
+        ),
+        discovery_terms=(
+            "Dirichlet character sequence twist",
+            "arithmetic function character twist",
+        ),
         examples=(
             OperationExample(
                 name="quadratic_mod3_sequence_twist",

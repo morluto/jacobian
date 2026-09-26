@@ -21,13 +21,13 @@ Example: the nonprincipal character modulo `8` with value `-1` at `5` and
 `1` at `7` has conductor `8`; the character with value `-1` at `3` and `7`
 has conductor `4`.
 
-The result also contains the inducing character modulo `d`, represented in
-the canonical dual coordinates of the group modulo `d`. This is the primitive
-ancestor: its own conductor is `d`, and for every unit `a mod N`, its value at
-`a mod d` agrees with the source character's value at `a`. The operation finds
-it by lifting the target group's generators to source units and transporting
-their exact root-of-unity values; the kernel criterion ensures the lift choice
-does not matter. Consumers can pass this ordinary `DirichletCharacter` value
-directly to other character operations.
+The result also contains the inducing character modulo `d`, represented as a
+serialized `PrimitiveDirichletCharacter`: the canonical dual coordinates and
+the exact conductor `d`. For every unit `a mod N`, its value at `a mod d`
+agrees with the source character's value at `a`. The operation finds it by
+lifting target generators to source units and transporting exact values; the
+kernel criterion ensures the lift choice does not matter. The carrier records
+the primitive claim for composition. Operations relying on primitivity check
+that claim against the exact conductor at their boundary.
 
 [Number-theory operations](index.md) · [Tool surface](../../tools.md)

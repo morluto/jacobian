@@ -57,8 +57,11 @@ def require_complex_admission(request: SimplicialComplexRequest) -> None:
 
 
 def require_canonical_complex_admission(complex_: FiniteSimplicialComplex) -> None:
-    """Establish the authored face closure before a canonical consumer runs."""
+    """Establish every authored canonical invariant before a consumer runs."""
 
+    # Nested model instances and model_copy(update=...) can bypass Pydantic
+    # validation. Revalidate the complete model contract before face admission.
+    FiniteSimplicialComplex.model_validate(complex_.model_dump(mode="python"), strict=True)
     closure = face_closure(complex_.maximal_simplices)
     expected_faces = tuple(tuple(sorted(faces)) for faces in closure)
     actual_faces = tuple(

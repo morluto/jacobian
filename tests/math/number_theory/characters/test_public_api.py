@@ -33,6 +33,7 @@ def test_public_api_exports_only_canonical_value_and_native_operations() -> None
         "dirichlet_character_jacobi_sum",
         "dirichlet_character_kernel",
         "dirichlet_character_l_value_nonpositive_integer",
+        "dirichlet_character_mixed_jacobi_sum",
         "dirichlet_character_order",
         "dirichlet_character_orthogonality",
         "dirichlet_character_parity",

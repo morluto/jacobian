@@ -27,6 +27,8 @@ from jacobian.math.number_theory.characters._models import (
     DirichletCharacterKernelRequest,
     DirichletCharacterLValueNonpositiveRequest,
     DirichletCharacterLValueNonpositiveResult,
+    DirichletCharacterMixedJacobiSumRequest,
+    DirichletCharacterMixedJacobiSumResult,
     DirichletCharacterOrderRequest,
     DirichletCharacterOrderResult,
     DirichletCharacterOrthogonalityRequest,
@@ -238,6 +240,12 @@ def _compute_jacobi_sum(
     request: DirichletCharacterJacobiSumRequest,
 ) -> DirichletCharacterJacobiSumResult:
     return native.dirichlet_character_jacobi_sum(request.left, request.right)
+
+
+def _compute_mixed_jacobi_sum(
+    request: DirichletCharacterMixedJacobiSumRequest,
+) -> DirichletCharacterMixedJacobiSumResult:
+    return native.dirichlet_character_mixed_jacobi_sum(request.characters)
 
 
 def _compute_orthogonality(
@@ -895,6 +903,36 @@ TOOLS: MathTools = (
                         },
                         "coordinates": [2],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="dirichlet_character.mixed_jacobi_sum.compute",
+        title="Compute an exact three-character Jacobi convolution",
+        description=(
+            "Return the exact sum of chi(a) psi(b) rho(c) over residues "
+            "a+b+c=1 modulo one shared modulus, using extension-by-zero "
+            "values and a common canonical cyclotomic field. The quadratic "
+            "residue and exact coefficient work is admitted before expansion."
+        ),
+        request_type=DirichletCharacterMixedJacobiSumRequest,
+        result_type=DirichletCharacterMixedJacobiSumResult,
+        run=_compute_mixed_jacobi_sum,
+        tags=("number-theory", "dirichlet-character", "jacobi-sum", "exact"),
+        examples=(
+            OperationExample(
+                name="three_quadratic_characters_mod_5",
+                description=(
+                    "Sum three copies of the quadratic character modulo 5 "
+                    "over triples of residues adding to one."
+                ),
+                input={
+                    "characters": [
+                        {"group": _GROUP_MOD5, "coordinates": [2]},
+                        {"group": _GROUP_MOD5, "coordinates": [2]},
+                        {"group": _GROUP_MOD5, "coordinates": [2]},
+                    ]
                 },
             ),
         ),

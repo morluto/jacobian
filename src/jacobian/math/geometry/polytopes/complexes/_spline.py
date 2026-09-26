@@ -1865,6 +1865,39 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
     )
 
 
+def _spline_dimension_nullity_admitted(
+    complex_value: PolytopalComplexClosureResult, degree: int, smoothness: int
+) -> int:
+    """Rank one profile matrix after the aggregate prefix admission."""
+    _, _, rows, width = _spline_constraint_data(
+        complex_value, degree, smoothness, dimension_only=True
+    )
+    dimension = len(complex_value.space.axes)
+    row_bound = sum(
+        len(face.maximal_cell_ids) == 2
+        and face.dimension == dimension - 1
+        and smoothness >= 0
+        for face in complex_value.faces
+    ) * _facet_remainder_dimension(dimension, degree, smoothness)
+    if len(rows) > row_bound:
+        raise ArithmeticError("spline dimension matrix shape admission mismatch")
+    _admit_spline_rank_matrix(rows, width)
+    if rows:
+        from flint import fmpq, fmpq_mat
+
+        rank = int(
+            fmpq_mat(
+                [
+                    [fmpq(value.numerator, value.denominator) for value in row]
+                    for row in rows
+                ]
+            ).rank()
+        )
+    else:
+        rank = 0
+    return width - rank
+
+
 def spline_dimension_profile(
     request: SplineDimensionProfileRequest,
 ) -> SplineDimensionProfileResult:
@@ -1918,11 +1951,7 @@ def spline_dimension_profile(
             message="finite spline profile exceeds its intrinsic output envelope",
         )
     dimensions = tuple(
-        spline_dimension(
-            SplineDimensionRequest(
-                complex=complex_value, degree=degree, smoothness=request.smoothness
-            )
-        ).nullity
+        _spline_dimension_nullity_admitted(complex_value, degree, request.smoothness)
         for degree in range(request.max_degree + 1)
     )
     differences = [dimensions]

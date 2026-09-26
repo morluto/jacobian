@@ -90,7 +90,7 @@ def test_mapping_rejects_forged_nondividing_inclusion() -> None:
         generator_image=(CanonicalRational.from_fraction(Fraction(0)), CanonicalRational.from_fraction(Fraction(1))),
     )
     with pytest.raises(ValueError, match="must divide"):
-        apply_cyclotomic_field_inclusion(forged, _element(4, (1, 1)))
+        apply_cyclotomic_field_inclusion(forged, _element(4, (1, 1), (0, 1)))
 
 
 def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:

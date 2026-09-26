@@ -29,6 +29,7 @@ that need more context than an operation card:
 - [Weyl-group Poincare polynomials](groups/weyl-poincare-polynomial.md)
 - [Standard parabolic Weyl subgroups](groups/weyl-parabolic.md)
 - [Regular languages](regular-languages.md)
+- [Accepted ranked trees by height](tree-automaton-height-count.md)
 - [Deterministic tree-automaton complement](tree-automaton-complement.md)
 - [Nondeterministic tree-automaton run counts](tree-automaton-run-counts.md)
 - [Boolean products of deterministic tree automata](tree-automaton-boolean-products.md)

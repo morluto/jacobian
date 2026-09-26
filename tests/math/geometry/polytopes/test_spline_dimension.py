@@ -130,9 +130,7 @@ def test_finite_dimension_profile_matches_independent_interval_matrices():
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
     )
     result = spline_dimension_profile(
-        SplineDimensionProfileRequest(
-            complex=complex_value, max_degree=3, smoothness=0
-        )
+        SplineDimensionProfileRequest(complex=complex_value, max_degree=3, smoothness=0)
     )
     expected = tuple(
         2 * (degree + 1) - _rank(_interval_continuity_matrix(degree, 0))
@@ -140,17 +138,18 @@ def test_finite_dimension_profile_matches_independent_interval_matrices():
     )
     assert result.dimensions == expected == (1, 3, 5, 7)
     assert result.forward_differences == ((1, 3, 5, 7), (2, 2, 2), (0, 0), (0,))
-    assert SplineDimensionProfileResult.model_validate_json(
-        encode_strict_json(result.model_dump(mode="json"))
-    ) == result
+    assert (
+        SplineDimensionProfileResult.model_validate_json(
+            encode_strict_json(result.model_dump(mode="json"))
+        )
+        == result
+    )
 
 
 def test_finite_dimension_profile_one_cell_has_no_interface_rows():
     complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
     result = spline_dimension_profile(
-        SplineDimensionProfileRequest(
-            complex=complex_value, max_degree=2, smoothness=1
-        )
+        SplineDimensionProfileRequest(complex=complex_value, max_degree=2, smoothness=1)
     )
     assert result.dimensions == (1, 2, 3)
     assert result.forward_differences == ((1, 2, 3), (1, 1), (0,))

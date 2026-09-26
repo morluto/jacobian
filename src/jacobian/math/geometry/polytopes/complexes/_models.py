@@ -673,13 +673,24 @@ class SplineDimensionProfileResult(StrictModel):
     max_degree: int = Field(ge=0, le=12)
     smoothness: int = Field(ge=-1, le=4)
     dimensions: tuple[int, ...] = Field(min_length=1, max_length=13)
-    forward_differences: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=13)
+    forward_differences: tuple[tuple[int, ...], ...] = Field(
+        min_length=1, max_length=13
+    )
 
     @model_validator(mode="after")
     def require_finite_difference_profile(self) -> Self:
         if len(self.dimensions) != self.max_degree + 1:
             raise _validation_error(
-                "spline_profile_length", "dimensions must cover degrees zero through max_degree"
+                "spline_profile_length",
+                "dimensions must cover degrees zero through max_degree",
+            )
+        if any(
+            type(value) is not int or not 0 <= value <= 4096
+            for value in self.dimensions
+        ):
+            raise _validation_error(
+                "spline_profile_dimensions",
+                "dimensions must be admitted nonnegative coefficient widths",
             )
         expected = [self.dimensions]
         while len(expected[-1]) > 1:
@@ -687,7 +698,8 @@ class SplineDimensionProfileResult(StrictModel):
             expected.append(tuple(right - left for left, right in pairwise(row)))
         if self.forward_differences != tuple(expected):
             raise _validation_error(
-                "spline_profile_differences", "forward differences must be derived from the finite dimension prefix"
+                "spline_profile_differences",
+                "forward differences must be derived from the finite dimension prefix",
             )
         return self
 

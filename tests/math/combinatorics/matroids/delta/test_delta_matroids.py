@@ -502,22 +502,22 @@ def test_twist_result_json_rejects_a_different_ground_axis() -> None:
         DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
 
 
-def test_twist_result_byte_admission_has_exact_boundary(
+def test_twist_result_membership_admission_has_exact_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    import jacobian.math.combinatorics.matroids.delta.operations as operations_module
     import jacobian.math.combinatorics.matroids.delta._tools as tools_module
     from jacobian.catalog.models import OperationResourceAdmissionError
-    from jacobian.math.combinatorics.matroids.delta import twist
 
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
     request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
-    target = twist(source, request.subset)
-    exact_bytes = twist_result_serialized_bytes(source, request.subset, target)
-    monkeypatch.setattr(tools_module, "MAX_DELTA_TWIST_RESULT_BYTES", exact_bytes)
-    assert tools_module._twist(request).twisted == target
+    # The twisted family has rows {0}, {}, and {0, 1}: exactly three
+    # memberships. Admission must accept that boundary and reject one below it.
+    monkeypatch.setattr(operations_module, "MAX_DELTA_MEMBERSHIPS", 3)
+    assert tools_module._twist(request).twisted.feasible == ((), (0,), (0, 1))
 
-    monkeypatch.setattr(tools_module, "MAX_DELTA_TWIST_RESULT_BYTES", exact_bytes - 1)
-    with pytest.raises(OperationResourceAdmissionError, match="compact JSON envelope"):
+    monkeypatch.setattr(operations_module, "MAX_DELTA_MEMBERSHIPS", 2)
+    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
         tools_module._twist(request)
 
 

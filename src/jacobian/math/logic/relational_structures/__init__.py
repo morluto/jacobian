@@ -2,8 +2,8 @@
 
 from jacobian.math.logic.relational_structures._models import (
     CspAssignmentProfile,
-    CspSolutions,
     CspConstraintEvaluation,
+    CspSolutions,
     EmbeddingSearchResult,
     FiniteCspConstraint,
     FiniteCspInstance,
@@ -59,8 +59,8 @@ from jacobian.math.logic.relational_structures.values import (
 # part of this native API.
 __all__ = [
     "CspAssignmentProfile",
-    "CspSolutions",
     "CspConstraintEvaluation",
+    "CspSolutions",
     "EmbeddingSearchResult",
     "FiniteCspConstraint",
     "FiniteCspInstance",
@@ -77,8 +77,8 @@ __all__ = [
     "InducedEmbeddingCheckResult",
     "InducedRelationProfile",
     "InducedSubstructureResult",
-    "RelationalDisjointUnionResult",
     "RelationalCarrierMap",
+    "RelationalDisjointUnionResult",
     "RelationalHomomorphism",
     "RelationalPolymorphism",
     "RelationalPolymorphismCheckResult",

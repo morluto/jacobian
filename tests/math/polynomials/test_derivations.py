@@ -1,6 +1,8 @@
 """Tests for exact polynomial-derivation application."""
 
+from collections.abc import Iterator, Sequence
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -93,6 +95,126 @@ class TestDerivationApplyKnownAnswers:
         assert _terms(result.result) == ((1, (3, 0)), (2, (1, 2)))
         assert _terms(result.contributions[0]) == ((2, (1, 2)),)
         assert _terms(result.contributions[1]) == ((1, (3, 0)),)
+
+
+def test_vector_field_conversion_preserves_generator_semantics() -> None:
+    from jacobian.math.polynomials.derivations._tools import TOOLS
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    components = (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
+    derivation = derivation_from_vector_field(components)
+    assert derivation.variables == XY
+    assert derivation.images == components
+
+    # Independent calculus oracle: y*d_x(x^2 + 3*y) + 0*d_y(...) = 2*x*y.
+    source = _poly(XY, ((1, (2, 0)), (3, (0, 1))))
+    assert _terms(apply_derivation(derivation, source).result) == ((2, (1, 1)),)
+
+    # The binder is a copy-only projection with no postcondition beyond the
+    # derivation value itself, so it stays a native helper and is not a
+    # published catalog operation.
+    assert all(
+        tool.operation_id != "polynomial_derivation.from_vector_field.compute"
+        for tool in TOOLS
+    )
+
+
+def test_vector_field_conversion_accepts_decoded_component_values() -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    derivation = derivation_from_vector_field(
+        {
+            "components": [
+                _poly(XY, ((1, (0, 1)),)).model_dump(),
+                _poly(XY, ()).model_dump(),
+            ]
+        }
+    )
+    assert derivation.variables == XY
+    assert derivation.images == (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
+
+
+class _OversizedComponentSequence(Sequence[RationalPolynomial]):
+    """A bounded sequence that must never be iterated past admission."""
+
+    def __init__(self, length: int) -> None:
+        self.length = length
+        self.iterated = False
+
+    def __len__(self) -> int:
+        return self.length
+
+    def __getitem__(self, index: int) -> RationalPolynomial:
+        raise AssertionError("component parsed beyond the vector-field bound")
+
+    def __iter__(self) -> Iterator[RationalPolynomial]:
+        self.iterated = True
+        return super().__iter__()
+
+
+def test_oversized_vector_field_rejected_before_component_parsing() -> None:
+    from jacobian.math.polynomials.derivations._models import (
+        MAX_DERIVATION_VARIABLES,
+    )
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    oversized = _OversizedComponentSequence(MAX_DERIVATION_VARIABLES + 1)
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(oversized)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
+    assert not oversized.iterated
+
+
+def test_vector_field_iteration_cannot_exceed_component_bound() -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    class _LyingSequence(Sequence[Any]):
+        # A Sequence whose __len__ passes the early bound check but whose
+        # iterator yields one component beyond the admitted count.
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> Any:
+            raise AssertionError
+
+        def __iter__(self) -> Iterator[Any]:
+            yield from (_poly(XY, ((1, (0, 1)),)).model_dump() for _ in range(8))
+            yield "ninth-component"
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(_LyingSequence())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
+    assert "bounded by 8" in error.value.errors()[0]["msg"]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        (),
+        {"components": []},
+        [_poly(XY, ((1, (0, 1)),))],
+        [_poly(("x",), ((1, (1,)),)), _poly(("y",), ())],
+        "not-a-vector-field",
+        7,
+        [_poly(XY, ((1, (0, 1)),)), "not-a-polynomial"],
+    ],
+)
+def test_vector_field_invalid_shapes_raise_domain_errors(invalid: Any) -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(invalid)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
 
 
 class TestDerivationInvariants:

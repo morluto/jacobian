@@ -100,6 +100,27 @@ def _result_byte_upper_bound(
     return 512 + 4 * len(partition.parts) + 64 * len(content.terms) + count_digits
 
 
+def _forced_full_height_columns_count(
+    partition: IntegerPartition, content: TableauContent
+) -> int | None:
+    """Return the unique/zero count when equal lower rows force full columns."""
+
+    if (
+        len(partition.parts) <= 1
+        or len(content.terms) != len(partition.parts)
+        or len(set(partition.parts[1:])) != 1
+    ):
+        return None
+    # Every column through the common lower-row width has full height.
+    # With exactly one distinct label per row, those columns are forced
+    # to contain the labels in order. All remaining cells lie in the top
+    # row and their fixed content has exactly one weakly increasing fill.
+    lower_width = partition.parts[-1]
+    if all(term.multiplicity >= lower_width for term in content.terms):
+        return 1
+    return 0
+
+
 def _zero_result(
     partition: IntegerPartition, content: TableauContent
 ) -> FixedContentCountResult:
@@ -174,16 +195,11 @@ def fixed_content_count(
         # K_{lambda,lambda}=1: each row is forced to its correspondingly
         # ordered label, and the partition inequalities make columns strict.
         return FixedContentCountResult(partition=partition, content=content, count=1)
-    if (
-        len(partition.parts) == 2
-        and len(content.terms) == 2
-        and partition.parts[1] <= content.terms[0].multiplicity <= partition.parts[0]
-    ):
-        # With two labels, every cell in the lower row must use the larger
-        # label. The smaller-label multiplicity can range from the lower-row
-        # width through the upper-row width; monotonicity then forces the
-        # unique filling.
-        return FixedContentCountResult(partition=partition, content=content, count=1)
+    forced_count = _forced_full_height_columns_count(partition, content)
+    if forced_count is not None:
+        return FixedContentCountResult(
+            partition=partition, content=content, count=forced_count
+        )
     if len(content.terms) < len(partition.parts):
         # A strict column of this height needs at least this many distinct
         # labels, regardless of their multiplicities.

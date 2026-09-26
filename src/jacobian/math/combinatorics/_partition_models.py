@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, conint, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,7 +17,12 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 MAX_PARTITION_N = 30
 MAX_ENUMERATED_PARTITIONS = 10_000
 MAX_PARTITION_ITEM = 2**53 - 1
-PartitionItem = conint(strict=True, ge=-MAX_PARTITION_ITEM, le=MAX_PARTITION_ITEM)
+PartitionItem = Annotated[
+    StrictInt, Field(ge=-MAX_PARTITION_ITEM, le=MAX_PARTITION_ITEM)
+]
+FerrersCoordinate = Annotated[
+    StrictInt, Field(ge=1, le=MAX_PARTITION_SIZE)
+]
 
 
 class PartitionCheckRequest(StrictModel):
@@ -47,12 +52,13 @@ class PartitionCheckRequest(StrictModel):
                 "combinatorics.partition_candidate_length",
                 "candidate has more parts than the supported bound",
             )
-        if all(type(part) is int for part in parts):
-            if any(abs(part) > MAX_PARTITION_ITEM for part in parts):
-                raise PydanticCustomError(
-                    "combinatorics.partition_candidate_integer",
-                    "candidate part exceeds the exact JSON integer bound",
-                )
+        if all(type(part) is int for part in parts) and any(
+            abs(part) > MAX_PARTITION_ITEM for part in parts
+        ):
+            raise PydanticCustomError(
+                "combinatorics.partition_candidate_integer",
+                "candidate part exceeds the exact JSON integer bound",
+            )
         if type(parts) is list:
             admitted = dict(value)
             admitted["parts"] = tuple(parts)
@@ -68,7 +74,7 @@ class PartitionFound(StrictModel):
     size: StrictInt = Field(ge=0, le=MAX_PARTITION_SIZE)
     length: StrictInt = Field(ge=0, le=MAX_PARTITION_SIZE)
     conjugate: IntegerPartition
-    cells: tuple[tuple[StrictInt, StrictInt], ...] = Field(
+    cells: tuple[tuple[FerrersCoordinate, FerrersCoordinate], ...] = Field(
         max_length=MAX_PARTITION_SIZE,
         description="One-based Ferrers cells in row-major order.",
     )

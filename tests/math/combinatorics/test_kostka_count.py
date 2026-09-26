@@ -145,7 +145,7 @@ def test_multiset_prefix_work_is_rejected_before_search(monkeypatch) -> None:
         pytest.fail("search began before fixed-content work admission")
 
     monkeypatch.setattr(kernel, "_count_by_row_major_search", unexpected_search)
-    request = _request((11, 9), ((1, 10), (2, 10)))
+    request = _request((11, 9), ((1, 8), (2, 7), (3, 5)))
     with pytest.raises(OperationResourceAdmissionError):
         fixed_content_count(request)
 
@@ -178,11 +178,19 @@ def test_narrow_two_row_weight_is_accepted_and_counted_without_word_expansion() 
     assert fixed_content_count(request).count == 1
 
 
-def test_multiset_search_work_admits_its_exact_bound(monkeypatch) -> None:
-    request = _request((19, 1), ((4, 18), (9, 2)))
-    exact_work_bound = 21 * 190 * (2 + 2)
-    monkeypatch.setattr(kernel, "MAX_KOSTKA_SEARCH_WORK", exact_work_bound)
+def test_equal_lower_rows_reduce_forced_full_height_columns() -> None:
+    request = _request((300, 100, 100), ((1, 200), (2, 200), (3, 100)))
+    impossible = _request((300, 100, 100), ((1, 99), (2, 201), (3, 200)))
+
     assert fixed_content_count(request).count == 1
+    assert fixed_content_count(impossible).count == 0
+
+
+def test_multiset_search_work_admits_its_exact_bound(monkeypatch) -> None:
+    request = _request((4, 3, 1), ((4, 3), (9, 3), (12, 2)))
+    exact_work_bound = 9 * 560 * (3 + 2)
+    monkeypatch.setattr(kernel, "MAX_KOSTKA_SEARCH_WORK", exact_work_bound)
+    assert fixed_content_count(request).count == 2
 
     monkeypatch.setattr(kernel, "MAX_KOSTKA_SEARCH_WORK", exact_work_bound - 1)
     with pytest.raises(OperationResourceAdmissionError):

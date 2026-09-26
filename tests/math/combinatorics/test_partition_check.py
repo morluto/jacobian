@@ -47,6 +47,18 @@ def test_empty_sequence_is_the_partition_of_zero() -> None:
     assert result.outcome.size == result.outcome.length == 0
 
 
+@pytest.mark.parametrize("cell", [(0, 1), (1, -1), (501, 1), (1, 501)])
+def test_partition_found_rejects_cells_outside_one_based_bounds(cell) -> None:
+    with pytest.raises(ValidationError):
+        PartitionFound(
+            partition=IntegerPartition(parts=(1,)),
+            size=1,
+            length=1,
+            conjugate=IntegerPartition(parts=(1,)),
+            cells=(cell,),
+        )
+
+
 @pytest.mark.parametrize(
     ("parts", "expected"),
     [

@@ -7,6 +7,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.algebraic import (
     RSKWordTraceResult,
     row_insertion_rsk,
@@ -205,3 +206,10 @@ def test_trace_result_deserialization_rejects_missing_source_positions() -> None
     payload["insertion_events"] = payload["insertion_events"][:1]
     with pytest.raises(ValidationError, match="rsk_trace_event_positions"):
         RSKWordTraceResult.model_validate(payload)
+
+
+def test_trace_rejects_malformed_native_word_with_domain_error() -> None:
+    malformed = FiniteWord.model_construct()
+    with pytest.raises(OperationDomainValidationError) as exc:
+        row_insertion_rsk_trace(malformed)
+    assert exc.value.errors()[0]["type"] == "algebraic_combinatorics.rsk_trace_word"

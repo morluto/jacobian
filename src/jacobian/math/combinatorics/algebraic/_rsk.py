@@ -210,7 +210,7 @@ def _admit_rsk_trace(
             letters=request.word.letters,
         )
         payload_scalars = word_payload_scalars(word)
-    except (ValidationError, TypeError, ValueError) as exc:
+    except (AttributeError, ValidationError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("word",),
             code="algebraic_combinatorics.rsk_trace_word",

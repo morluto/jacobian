@@ -4,24 +4,38 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
-    BraidArtinActionResult,
     BraidClosureResult,
     BraidPermutationResult,
+    BraidProductRequest,
+    BraidWord,
     BraidWordRequest,
+    ConwayPolynomialRequest,
+    ConwayPolynomialResult,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkCrossingProfileRequest,
+    LinkCrossingProfileResult,
+    LinkDeterminantRequest,
+    LinkDeterminantResult,
+    LinkStateCirclesRequest,
+    LinkStateCirclesResult,
     SeifertCircleRequest,
     SeifertCircleResult,
     WirtingerPresentationRequest,
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links.extensions import (
-    braid_artin_action,
     braid_closure,
+    braid_inverse,
+    braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
+    link_conway_polynomial,
+    link_crossing_profile,
+    link_determinant,
     link_goeritz_data,
     link_seifert_circles,
+    link_state_circles,
     wirtinger_presentation,
 )
 
@@ -30,20 +44,42 @@ def _braid_permutation(request: BraidWordRequest) -> BraidPermutationResult:
     return braid_permutation(request.word)
 
 
-def _braid_artin_action(request: BraidWordRequest) -> BraidArtinActionResult:
-    return braid_artin_action(request.word)
-
-
 def _braid_closure(request: BraidWordRequest) -> BraidClosureResult:
     return braid_closure(request.word)
+
+
+def _braid_inverse(request: BraidWordRequest) -> BraidWord:
+    return braid_inverse(request.word)
+
+
+def _braid_multiply(request: BraidProductRequest) -> BraidWord:
+    return braid_multiply(request.left, request.right)
 
 
 def _alexander(request: AlexanderPolynomialRequest) -> AlexanderPolynomialResult:
     return link_alexander_polynomial(request.diagram)
 
 
+def _conway(request: ConwayPolynomialRequest) -> ConwayPolynomialResult:
+    return link_conway_polynomial(request.diagram)
+
+
+def _crossing_profile(
+    request: LinkCrossingProfileRequest,
+) -> LinkCrossingProfileResult:
+    return link_crossing_profile(request.diagram)
+
+
+def _state_circles(request: LinkStateCirclesRequest) -> LinkStateCirclesResult:
+    return link_state_circles(request.state)
+
+
 def _goeritz(request: GoeritzDataRequest) -> GoeritzDataResult:
     return link_goeritz_data(request.diagram)
+
+
+def _determinant(request: LinkDeterminantRequest) -> LinkDeterminantResult:
+    return link_determinant(request.diagram)
 
 
 def _seifert(request: SeifertCircleRequest) -> SeifertCircleResult:
@@ -68,33 +104,91 @@ _SIGMA_ONE_CUBED = {
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="braid.word.artin_action.compute",
-        title="Apply a braid word to its strand free group",
+        operation_id="link_diagram.state_circles.compute",
+        title="Compute the circles of a complete smoothing state",
         description=(
-            "Return the exact Artin automorphism of the free group on the braid "
-            "strands. The declared convention sends sigma_i to x_i -> "
-            "x_i*x_(i+1)*x_i^-1 and x_(i+1) -> x_i; negative letters use its "
-            "inverse, and letters act successively from left to right. Images are "
-            "freely reduced. The admitted output is limited to 128 letters per "
-            "image and 100000 cumulative substitution letters."
+            "Return the exact cyclic dart partition for one complete A/B smoothing "
+            "state. Choices follow the diagram crossing order and the canonical "
+            "counterclockwise dart convention. One state is processed in linear "
+            "work; diagrams are bounded to 64 crossings and output to 8 MiB."
         ),
-        request_type=BraidWordRequest,
-        result_type=BraidArtinActionResult,
-        run=_braid_artin_action,
-        tags=("braid", "Artin-action", "free-group", "exact"),
+        request_type=LinkStateCirclesRequest,
+        result_type=LinkStateCirclesResult,
+        run=_state_circles,
+        tags=("link-diagram", "smoothing", "state-circles", "exact"),
         discovery_terms=(
-            "braid action on free group",
-            "Artin representation of braid group",
-            "automorphism induced by braid word",
+            "link smoothing state circles",
+            "Kauffman state circles",
+            "A/B smoothing of link diagram",
         ),
         examples=(
             OperationExample(
-                name="trefoil_braid_artin_action",
+                name="curl_a_smoothing_circles",
                 description=(
-                    "Apply sigma_1 cubed to the rank-two free group; the positive "
-                    "generator convention and its threefold iterate are explicit."
+                    "Resolve the single crossing of an oriented curl using the A "
+                    "smoothing and return its exact cyclic dart circle."
                 ),
-                input={"word": _SIGMA_ONE_CUBED},
+                input={
+                    "state": {
+                        "diagram": {
+                            "crossings": [
+                                {
+                                    "crossing_id": "c0",
+                                    "half_edges": ["h0", "h1", "h2", "h3"],
+                                    "over_pair": [0, 2],
+                                    "under_pair": [1, 3],
+                                    "sign": -1,
+                                }
+                            ],
+                            "arcs": [
+                                {"tail": "h0", "head": "h3"},
+                                {"tail": "h1", "head": "h2"},
+                            ],
+                        },
+                        "choices": ["A"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.crossing_profile.compute",
+        title="Compute a link diagram's crossing profile",
+        description=(
+            "Return every source crossing in order with its checked sign and the "
+            "ordered over/under component IDs, plus the total writhe. Equal role "
+            "component IDs identify self-crossings; distinct IDs identify mixed "
+            "crossings. Diagram admission allows at most 64 crossings and 128 arcs."
+        ),
+        request_type=LinkCrossingProfileRequest,
+        result_type=LinkCrossingProfileResult,
+        run=_crossing_profile,
+        tags=("link-diagram", "crossing-profile", "writhe", "exact"),
+        discovery_terms=("link crossing profile", "self and mixed crossings", "writhe"),
+        examples=(
+            OperationExample(
+                name="crossing_curl_profile",
+                description=(
+                    "Classify the single crossing of an oriented curl; its over- and "
+                    "under-passing strands belong to the same component."
+                ),
+                input={
+                    "diagram": {
+                        "crossings": [
+                            {
+                                "crossing_id": "c0",
+                                "half_edges": ["h0", "h1", "h2", "h3"],
+                                "over_pair": [0, 2],
+                                "under_pair": [1, 3],
+                                "sign": -1,
+                            }
+                        ],
+                        "arcs": [
+                            {"tail": "h0", "head": "h3"},
+                            {"tail": "h1", "head": "h2"},
+                        ],
+                    }
+                },
             ),
         ),
     ),
@@ -123,6 +217,62 @@ TOOLS: MathTools = (
                     "Compute Delta(t)=1 for the crossing-free unknot; the input "
                     "must have exactly one component."
                 ),
+                input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.conway_polynomial.compute",
+        title="Compute a knot diagram's Conway polynomial",
+        description=(
+            "Return the exact knot Conway polynomial in z, normalized by Delta(1)=1, "
+            "from the source-bound Alexander polynomial using Delta(t)=nabla("
+            "t^(1/2)-t^(-1/2)). Alexander symmetry and integral coefficients are "
+            "required before the recurrence; this knot-only contract accepts at "
+            "most eight crossings."
+        ),
+        request_type=ConwayPolynomialRequest,
+        result_type=ConwayPolynomialResult,
+        run=_conway,
+        tags=("link-diagram", "knot", "Conway-polynomial", "exact"),
+        discovery_terms=(
+            "Conway polynomial of knot diagram",
+            "Alexander-Conway polynomial",
+            "Conway polynomial from Alexander polynomial",
+        ),
+        examples=(
+            OperationExample(
+                name="unknot_conway_polynomial",
+                description=(
+                    "The crossing-free unknot has normalized Conway polynomial 1."
+                ),
+                input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.determinant.compute",
+        title="Compute a knot determinant from its Alexander polynomial",
+        description=(
+            "For a classical knot diagram, evaluate the normalized Alexander "
+            "polynomial at -1 to obtain the nonnegative knot invariant, with its "
+            "source-bound polynomial and signed evaluation. Inherits the "
+            "eight-crossing exact Alexander bound; it is a knot invariant, not a "
+            "general matrix operation."
+        ),
+        request_type=LinkDeterminantRequest,
+        result_type=LinkDeterminantResult,
+        run=_determinant,
+        tags=("link-diagram", "knot", "alexander", "exact"),
+        discovery_terms=(
+            "knot invariant",
+            "Alexander polynomial evaluation",
+            "knot Alexander invariant",
+        ),
+        examples=(
+            OperationExample(
+                name="unknot_determinant",
+                description="The crossing-free unknot has determinant 1.",
                 input={"diagram": {"free_loops": 1}},
             ),
         ),
@@ -163,9 +313,9 @@ TOOLS: MathTools = (
                                 "crossing_id": "crossing_000",
                                 "half_edges": [
                                     "crossing_000:dart_0",
-                                    "crossing_000:dart_1",
-                                    "crossing_000:dart_2",
                                     "crossing_000:dart_3",
+                                    "crossing_000:dart_2",
+                                    "crossing_000:dart_1",
                                 ],
                                 "over_pair": [0, 2],
                                 "under_pair": [1, 3],
@@ -175,9 +325,9 @@ TOOLS: MathTools = (
                                 "crossing_id": "crossing_001",
                                 "half_edges": [
                                     "crossing_001:dart_0",
-                                    "crossing_001:dart_1",
-                                    "crossing_001:dart_2",
                                     "crossing_001:dart_3",
+                                    "crossing_001:dart_2",
+                                    "crossing_001:dart_1",
                                 ],
                                 "over_pair": [0, 2],
                                 "under_pair": [1, 3],
@@ -186,20 +336,20 @@ TOOLS: MathTools = (
                         ],
                         "arcs": [
                             {
-                                "first": "crossing_001:dart_3",
-                                "second": "crossing_000:dart_0",
+                                "tail": "crossing_001:dart_3",
+                                "head": "crossing_000:dart_0",
                             },
                             {
-                                "first": "crossing_001:dart_2",
-                                "second": "crossing_000:dart_1",
+                                "tail": "crossing_001:dart_2",
+                                "head": "crossing_000:dart_1",
                             },
                             {
-                                "first": "crossing_000:dart_2",
-                                "second": "crossing_001:dart_1",
+                                "tail": "crossing_000:dart_2",
+                                "head": "crossing_001:dart_1",
                             },
                             {
-                                "first": "crossing_000:dart_3",
-                                "second": "crossing_001:dart_0",
+                                "tail": "crossing_000:dart_3",
+                                "head": "crossing_001:dart_0",
                             },
                         ],
                     }
@@ -211,7 +361,7 @@ TOOLS: MathTools = (
         operation_id="link_diagram.seifert_circles.compute",
         title="Construct a knot diagram's Seifert circles",
         description=(
-            "Choose the canonical direction of the unique link component, apply "
+            "Use the encoded component orientation to apply "
             "the oriented smoothing at every crossing, and return every Seifert "
             "circle with source darts plus the disk-band surface Euler "
             "characteristic and genus. The genus belongs to this constructed "
@@ -233,6 +383,57 @@ TOOLS: MathTools = (
                     "this knot-first operation requires one component."
                 ),
                 input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="braid.word.multiply.compute",
+        title="Multiply braid words in one braid group",
+        description=(
+            "Concatenate two signed Artin presentation words in B_n, requiring "
+            "the same explicit strand count. The 64-letter result bound is "
+            "checked before construction; no braid-word reduction is performed."
+        ),
+        request_type=BraidProductRequest,
+        result_type=BraidWord,
+        run=_braid_multiply,
+        tags=("braid", "group-operation", "word", "exact"),
+        discovery_terms=("multiply braid words", "braid group product"),
+        examples=(
+            OperationExample(
+                name="braid_word_product",
+                description="Concatenate sigma_1 and its inverse in B_2.",
+                input={
+                    "left": {
+                        "strand_count": 2,
+                        "letters": [{"generator": 1, "exponent": 1}],
+                    },
+                    "right": {
+                        "strand_count": 2,
+                        "letters": [{"generator": 1, "exponent": -1}],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="braid.word.inverse.compute",
+        title="Invert a braid word",
+        description=(
+            "Return the inverse presentation word in the same B_n by reversing "
+            "letter order and negating each exponent. Strand count is retained "
+            "exactly; the operation is linear in the bounded word length."
+        ),
+        request_type=BraidWordRequest,
+        result_type=BraidWord,
+        run=_braid_inverse,
+        tags=("braid", "group-operation", "inverse", "exact"),
+        discovery_terms=("inverse braid word", "braid group inverse"),
+        examples=(
+            OperationExample(
+                name="inverse_trefoil_braid_word",
+                description="Invert sigma_1 cubed in B_2.",
+                input={"word": _SIGMA_ONE_CUBED},
             ),
         ),
     ),

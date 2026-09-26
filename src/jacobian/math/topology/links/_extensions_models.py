@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -17,6 +16,8 @@ from jacobian.math.topology.edge_paths._models import (
 )
 from jacobian.math.topology.links._models import (
     MAX_LINK_CROSSINGS,
+    MAX_LINK_LABEL_LENGTH,
+    LinkComponentsResult,
     LinkLabel,
     OrientedLinkDiagram,
 )
@@ -24,6 +25,36 @@ from jacobian.math.topology.links._models import (
 MAX_BRAID_STRANDS = 32
 MAX_BRAID_WORD_LENGTH = MAX_LINK_CROSSINGS
 MAX_WIRTINGER_GENERATORS = 64
+MAX_STATE_CIRCLE_CROSSINGS = MAX_LINK_CROSSINGS
+MAX_CONWAY_CENTERED_DEGREE = 64
+MAX_CONWAY_COEFFICIENT_DIGITS = 4_096
+
+# Output bounds are materialization CELL counts derived from the link-diagram
+# domain maxima (crossings, arcs, free loops, darts, and label characters), not
+# transport-byte measures. Each crossing carries one crossing_id label and four
+# half-edge dart labels, each at most MAX_LINK_LABEL_LENGTH characters.
+_MAX_LINK_DIAGRAM_LABEL_CELLS = MAX_LINK_CROSSINGS * 5 * MAX_LINK_LABEL_LENGTH
+_MAX_LINK_DIAGRAM_STRUCTURAL_CELLS = (
+    MAX_LINK_CROSSINGS  # crossings
+    + 2 * MAX_LINK_CROSSINGS  # arcs
+    + MAX_LINK_CROSSINGS  # free loops
+    + 4 * MAX_LINK_CROSSINGS  # darts
+)
+MAX_STATE_CIRCLE_OUTPUT_CELLS = (
+    _MAX_LINK_DIAGRAM_LABEL_CELLS
+    + _MAX_LINK_DIAGRAM_STRUCTURAL_CELLS
+    + 20 * (4 * MAX_STATE_CIRCLE_CROSSINGS)
+    + 8 * MAX_STATE_CIRCLE_CROSSINGS
+    + 16 * MAX_STATE_CIRCLE_CROSSINGS
+    + 128
+)
+MAX_CONWAY_OUTPUT_CELLS = (
+    (MAX_CONWAY_CENTERED_DEGREE + 1) * (2 * MAX_CONWAY_COEFFICIENT_DIGITS + 128)
+    + _MAX_LINK_DIAGRAM_LABEL_CELLS
+    + _MAX_LINK_DIAGRAM_STRUCTURAL_CELLS
+    + (2 * MAX_LINK_CROSSINGS + 1)  # retained Alexander polynomial terms
+    + 256
+)
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -49,6 +80,197 @@ class AlexanderPolynomialResult(StrictModel):
             raise _validation_error(
                 "alexander_polynomial_variable",
                 "Alexander polynomial must use the canonical one-variable axis t",
+            )
+        return self
+
+
+class ConwayPolynomialRequest(StrictModel):
+    diagram: OrientedLinkDiagram
+
+
+class ConwayPolynomialResult(StrictModel):
+    """Knot Conway polynomial bound to its exact Alexander and diagram source."""
+
+    alexander: AlexanderPolynomialResult
+    polynomial: RationalLaurentPolynomial
+    normalization: Literal["Delta(t)=nabla(t^(1/2)-t^(-1/2)); Delta(1)=1"] = (
+        "Delta(t)=nabla(t^(1/2)-t^(-1/2)); Delta(1)=1"
+    )
+
+    @model_validator(mode="after")
+    def require_conway_polynomial_context(self) -> Self:
+        if self.polynomial.variables != ("z",):
+            raise _validation_error(
+                "conway_polynomial_variable",
+                "Conway polynomial must use the canonical variable z",
+            )
+        coefficients: dict[int, int] = {}
+        for term in self.polynomial.terms:
+            coefficient = term.coefficient.as_fraction()
+            exponent = term.exponents[0]
+            if coefficient.denominator != 1 or exponent < 0 or exponent % 2:
+                raise _validation_error(
+                    "conway_polynomial_support",
+                    "knot Conway terms must have integral coefficients and nonnegative even exponents",
+                )
+            coefficients[exponent] = coefficient.numerator
+        if coefficients.get(0, 0) != 1:
+            raise _validation_error(
+                "conway_polynomial_augmentation",
+                "the normalized knot Conway polynomial must have constant term one",
+            )
+        return self
+
+
+class LinkCrossingProfileRequest(StrictModel):
+    diagram: OrientedLinkDiagram
+
+
+class LinkCrossingProfileEntry(StrictModel):
+    """Sign and ordered strand-component roles at one source crossing."""
+
+    crossing_id: LinkLabel
+    sign: Literal[-1, 1]
+    over_component_id: LinkLabel
+    under_component_id: LinkLabel
+
+
+class LinkCrossingProfileResult(StrictModel):
+    """Complete source-axis crossing roles, component pair, and writhe."""
+
+    components: LinkComponentsResult
+    crossings: tuple[LinkCrossingProfileEntry, ...] = Field(
+        max_length=MAX_LINK_CROSSINGS
+    )
+    writhe: StrictInt
+
+    @model_validator(mode="after")
+    def require_complete_profile(self) -> Self:
+        diagram = self.components.diagram
+        if tuple(row.crossing_id for row in self.crossings) != tuple(
+            crossing.crossing_id for crossing in diagram.crossings
+        ):
+            raise _validation_error(
+                "crossing_profile_axis",
+                "profile rows must retain the complete source crossing order",
+            )
+        component_ids = {
+            component.component_id for component in self.components.components
+        }
+        by_crossing_role: dict[tuple[str, str], set[str]] = {}
+        for component in self.components.components:
+            for visit in component.visits:
+                by_crossing_role.setdefault((visit.crossing_id, visit.role), set()).add(
+                    component.component_id
+                )
+        for row, crossing in zip(self.crossings, diagram.crossings, strict=True):
+            if row.sign != crossing.sign:
+                raise _validation_error(
+                    "crossing_profile_sign",
+                    "profile sign must equal source crossing sign",
+                )
+            if (
+                row.over_component_id not in component_ids
+                or row.under_component_id not in component_ids
+                or by_crossing_role.get((row.crossing_id, "OVER"))
+                != {row.over_component_id}
+                or by_crossing_role.get((row.crossing_id, "UNDER"))
+                != {row.under_component_id}
+            ):
+                raise _validation_error(
+                    "crossing_profile_roles",
+                    "over/under component IDs must match every retained crossing visit",
+                )
+        if self.writhe != sum(row.sign for row in self.crossings):
+            raise _validation_error(
+                "crossing_profile_writhe",
+                "writhe must equal the complete signed profile",
+            )
+        return self
+
+
+SmoothingChoice = Literal["A", "B"]
+
+
+class LinkDiagramSmoothingState(StrictModel):
+    """A complete A/B smoothing choice on the source crossing axis.
+
+    In the canonical counterclockwise dart convention, A pairs adjacent
+    positions (0,1) and (2,3) when the over strand occupies (0,2), and uses
+    the other adjacent pairing when the over strand occupies (1,3). B uses
+    the complementary pairing.
+    """
+
+    diagram: OrientedLinkDiagram
+    choices: tuple[SmoothingChoice, ...]
+
+    @model_validator(mode="after")
+    def require_complete_crossing_axis(self) -> Self:
+        if len(self.choices) != len(self.diagram.crossings):
+            raise _validation_error(
+                "smoothing_state_axis",
+                "smoothing choices must cover the complete source crossing axis",
+            )
+        return self
+
+
+class LinkStateCirclesRequest(StrictModel):
+    state: LinkDiagramSmoothingState
+
+
+class LinkSmoothedCircle(StrictModel):
+    """One canonically oriented cyclic sequence of source darts."""
+
+    darts: tuple[LinkLabel, ...] = Field(default=())
+
+
+class LinkStateCirclesResult(StrictModel):
+    """The exact circle partition induced by one complete smoothing state."""
+
+    state: LinkDiagramSmoothingState
+    circles: tuple[LinkSmoothedCircle, ...]
+    circle_count: StrictInt = Field(ge=1, le=3 * MAX_LINK_CROSSINGS)
+
+    @model_validator(mode="after")
+    def require_complete_cyclic_partition(self) -> Self:
+        diagram = self.state.diagram
+        expected = tuple(
+            dart for crossing in diagram.crossings for dart in crossing.half_edges
+        )
+        flattened = tuple(dart for circle in self.circles for dart in circle.darts)
+        if (
+            flattened
+            and (
+                len(flattened) != len(set(flattened)) or set(flattened) != set(expected)
+            )
+        ) or (not flattened and diagram.crossings):
+            raise _validation_error(
+                "state_circle_partition",
+                "smoothed circles must partition every source dart exactly once",
+            )
+        if not diagram.crossings and any(circle.darts for circle in self.circles):
+            raise _validation_error(
+                "state_circle_free_loop", "crossing-free circles have no dart labels"
+            )
+        if any(
+            circle.darts and circle.darts[0] != min(circle.darts)
+            for circle in self.circles
+        ):
+            raise _validation_error(
+                "state_circle_rotation",
+                "each cyclic dart sequence must start at its least dart",
+            )
+        expected_count = (
+            len({circle.darts for circle in self.circles if circle.darts})
+            + diagram.free_loops
+        )
+        if self.circle_count != expected_count or len(self.circles) != expected_count:
+            raise _validation_error(
+                "state_circle_count", "circle count must equal the retained circle axis"
+            )
+        if self.circles != tuple(sorted(self.circles, key=lambda circle: circle.darts)):
+            raise _validation_error(
+                "state_circle_order", "circles must use canonical lexicographic order"
             )
         return self
 
@@ -137,6 +359,12 @@ class LinkDeterminantResult(StrictModel):
         return self
 
 
+class LinkDeterminantRequest(StrictModel):
+    """Compute the knot determinant from a bounded knot diagram."""
+
+    diagram: OrientedLinkDiagram
+
+
 class BraidLetter(StrictModel):
     """One signed Artin generator ``sigma_i^(+/-1)``."""
 
@@ -166,43 +394,11 @@ class BraidWordRequest(StrictModel):
     word: BraidWord
 
 
-class BraidArtinActionResult(StrictModel):
-    """The Artin automorphism of the free group on the braid strands.
+class BraidProductRequest(StrictModel):
+    """Multiply two bounded presentation words in one fixed braid group."""
 
-    Images use zero-based generator indices and freely reduced words. The
-    convention is ``sigma_i(x_i)=x_i*x_(i+1)*x_i^-1`` and
-    ``sigma_i(x_(i+1))=x_i``; the remaining generators are fixed.
-    Letters in a braid word act successively on the current images.
-    """
-
-    word: BraidWord
-    generator_images: tuple[FiniteGroupWord, ...] = Field(
-        min_length=1, max_length=MAX_BRAID_STRANDS
-    )
-
-    @model_validator(mode="after")
-    def require_complete_free_group_endomorphism(self) -> Self:
-        if len(self.generator_images) != self.word.strand_count:
-            raise _validation_error(
-                "artin_action_generator_axis",
-                "the action must provide one image for each braid strand generator",
-            )
-        for image in self.generator_images:
-            letters = image.letters
-            if any(letter.generator >= self.word.strand_count for letter in letters):
-                raise _validation_error(
-                    "artin_action_generator_index",
-                    "every image letter must name a generator on the retained axis",
-                )
-            if any(
-                left.generator == right.generator and left.exponent == -right.exponent
-                for left, right in pairwise(letters)
-            ):
-                raise _validation_error(
-                    "artin_action_not_reduced",
-                    "each free-group image must be freely reduced",
-                )
-        return self
+    left: BraidWord
+    right: BraidWord
 
 
 class BraidPermutationResult(StrictModel):
@@ -369,6 +565,7 @@ __all__ = [
     "GoeritzDataRequest",
     "GoeritzDataResult",
     "GoeritzRegion",
+    "LinkDeterminantRequest",
     "LinkDeterminantResult",
     "SeifertCircle",
     "SeifertCircleRequest",

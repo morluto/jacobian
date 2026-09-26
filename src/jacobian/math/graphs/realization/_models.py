@@ -21,7 +21,7 @@ MAX_GRAPH_DEGREE = 63
 class DegreeSequence(StrictModel):
     """A sequence of nonnegative vertex degrees."""
 
-    degrees: tuple[int, ...] = Field(min_length=0, max_length=MAX_GRAPH_LENGTH)
+    degrees: tuple[int, ...] = Field(min_length=1, max_length=MAX_GRAPH_LENGTH)
 
     @model_validator(mode="after")
     def require_valid_degrees(self) -> Self:

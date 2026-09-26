@@ -6,6 +6,8 @@ from jacobian.math.graphs.decks._models import (
     AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
+    AnonymousGraphCardMultisetEqualityRequest,
+    AnonymousGraphCardMultisetEqualityResult,
     AnonymousGraphCardMultisetRequest,
     EdgeDeckIsomorphismClass,
     EdgeDeckIsomorphismProfile,
@@ -15,6 +17,9 @@ from jacobian.math.graphs.decks._models import (
     SourceBoundVertexCard,
     UnlabelledDeck,
     UnlabelledDeckClass,
+
+    UnlabelledEdgeDeck,
+    UnlabelledEdgeDeckClass,
     UnlabelledVertexDeck,
     UnlabelledVertexDeckClass,
     VertexDeckDegreeMultisetRequest,
@@ -27,13 +32,16 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeckSubgraphCountRequest,
+
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
     anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
+    anonymous_graph_card_multiset_equal,
     edge_deck_isomorphism_profile,
     edge_deletion_family,
+    edge_unlabelled_deck,
     unlabelled_deck,
     unlabelled_vertex_deck,
     verify_edge_deletion_family,
@@ -41,7 +49,9 @@ from jacobian.math.graphs.decks.operations import (
     vertex_deck_degree_multiset,
     vertex_deck_edge_count,
     vertex_deck_induced_subgraph_count,
+
     vertex_deck_isomorphism_profile,
+
     vertex_deck_subgraph_count,
     vertex_deletion_family,
 )
@@ -52,6 +62,8 @@ __all__ = [
     "AnonymousCardDegreeProfileRequest",
     "AnonymousGraphCardClass",
     "AnonymousGraphCardMultiset",
+    "AnonymousGraphCardMultisetEqualityRequest",
+    "AnonymousGraphCardMultisetEqualityResult",
     "AnonymousGraphCardMultisetRequest",
     "EdgeDeckIsomorphismClass",
     "EdgeDeckIsomorphismProfile",
@@ -61,6 +73,9 @@ __all__ = [
     "SourceBoundVertexCard",
     "UnlabelledDeck",
     "UnlabelledDeckClass",
+
+    "UnlabelledEdgeDeck",
+    "UnlabelledEdgeDeckClass",
     "UnlabelledVertexDeck",
     "UnlabelledVertexDeckClass",
     "VertexDeckDegreeMultisetRequest",
@@ -73,11 +88,14 @@ __all__ = [
     "VertexDeckSubgraphContribution",
     "VertexDeckSubgraphCount",
     "VertexDeckSubgraphCountRequest",
+
     "VertexDeletionFamily",
     "anonymous_card_degree_profile",
     "anonymous_graph_card_multiset",
+    "anonymous_graph_card_multiset_equal",
     "edge_deck_isomorphism_profile",
     "edge_deletion_family",
+    "edge_unlabelled_deck",
     "unlabelled_deck",
     "unlabelled_vertex_deck",
     "verify_edge_deletion_family",
@@ -85,7 +103,9 @@ __all__ = [
     "vertex_deck_degree_multiset",
     "vertex_deck_edge_count",
     "vertex_deck_induced_subgraph_count",
+
     "vertex_deck_isomorphism_profile",
+
     "vertex_deck_subgraph_count",
     "vertex_deletion_family",
 ]

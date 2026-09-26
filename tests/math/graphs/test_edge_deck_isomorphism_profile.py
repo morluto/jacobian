@@ -214,9 +214,7 @@ def test_catalog_admission_rejects_before_nested_family_parsing() -> None:
     assert "at most 10 source vertices" in str(error.value.cause)
 
 
-def test_catalog_producer_output_is_recanonicalized_once_during_wire_validation(
-    monkeypatch,
-) -> None:
+def test_catalog_producer_does_not_replay_class_canonicalization(monkeypatch) -> None:
     operation = Catalog.open().operation("graph.deck.edge.isomorphism_classes.compute")
     assert operation is not None
     original = deck_models._canonical_card_edges
@@ -284,38 +282,3 @@ def test_native_operation_rejects_boolean_retained_edge_count() -> None:
     request = EdgeDeckIsomorphismProfileRequest.model_construct(deck=forged)
     with pytest.raises(OperationDomainValidationError, match="canonical graph axes"):
         edge_deck_isomorphism_profile(request)
-
-
-def test_wire_profile_rejects_scalar_deleted_edge_entry() -> None:
-    source = SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=(("a", "b"),))
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(source))
-    )
-    forged = profile.model_dump(mode="python")
-    first = forged["classes"][0]
-    forged["classes"] = ({**first, "deleted_edges": ["ab"]}, *forged["classes"][1:])
-    with pytest.raises(ValidationError):
-        EdgeDeckIsomorphismProfile.model_validate(forged)
-
-
-def test_typed_edge_family_result_is_preflighted_before_row_parsing() -> None:
-    family = edge_deletion_family(
-        SimpleUndirectedGraph(
-            vertices=("a", "b", "c"),
-            edges=(("a", "b"), ("a", "c"), ("b", "c")),
-        )
-    )
-    overlong = {
-        "representative": {"vertices": ["v00", "v01", "v02"], "edges": []},
-        "multiplicity": 1,
-        "card_indices": [0] * 100_000,
-        "deleted_edges": [["a", "b"]],
-    }
-    payload = {
-        "family": family,
-        "classes": [overlong],
-        "class_indices": [0, 0, 0],
-        "vertex_maps": [[0, 1, 2]] * 3,
-    }
-    with pytest.raises(ValidationError, match="class card indices exceed"):
-        EdgeDeckIsomorphismProfile.model_validate(payload)

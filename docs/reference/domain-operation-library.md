@@ -886,3 +886,15 @@ mathematical correctness.
 If no bounded implementation can support the public claim, do not expose the
 operation yet. A backend import or native function is not evidence that its
 result has the desired mathematical semantics.
+
+### Stabilizer error cosets
+
+`quantum.stabilizer.error_coset.compute` projects a phase-free Pauli error to
+its coset modulo an isotropic check space. It canonicalizes the check rows in
+flattened `(x | z)` order over GF(2), then reduces the error at each pivot.
+The result retains the ordered register, canonical check basis, and the unique
+representative with zero pivot coordinates. Errors differing by a stabilizer
+therefore produce equal coset values. This quotient is finer than the syndrome
+partition: two errors with the same syndrome can represent distinct logical
+cosets. The operation is bounded by the existing envelope of 32 qubits and 64
+check rows.

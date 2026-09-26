@@ -907,6 +907,150 @@ class StabilizerErrorEquivalenceResult(StrictModel):
         return self
 
 
+class StabilizerErrorCosetRequest(StrictModel):
+    """Project one phase-free Pauli to a check-space quotient coset."""
+
+    check_space: CheckSpaceValue
+    error: PhaseFreeQubitPauli
+
+
+class StabilizerErrorCoset(StrictModel):
+    """Canonical representative of ``error + S`` in the binary Pauli space.
+
+    The check-space basis is canonical RREF in flattened ``(x | z)`` order;
+    the representative has zero entries in all pivot columns. This makes the
+    pair a unique exact value for a coset in the quotient by ``S``.
+    """
+
+    check_space: CheckSpaceValue
+    representative: PhaseFreeQubitPauli
+
+    @model_validator(mode="after")
+    def require_canonical_coset(self) -> Self:
+        check_space = self.check_space
+        register = getattr(check_space, "qubit_register", None)
+        basis = getattr(check_space, "basis", None)
+        if (
+            not isinstance(check_space, CheckSpaceValue)
+            or not isinstance(register, QubitRegister)
+            or not isinstance(basis, tuple)
+            or len(basis) > MAX_CHECK_ROWS
+            or any(not isinstance(row, PhaseFreeQubitPauli) for row in basis)
+            or not isinstance(self.representative, PhaseFreeQubitPauli)
+        ):
+            raise _validation_error(
+                "error_coset_structure", "coset parent and rows must be typed values"
+            )
+
+        def bounded_pauli(value: PhaseFreeQubitPauli) -> bool:
+            register_value = getattr(value, "qubit_register", None)
+            ids = getattr(register_value, "qubit_ids", None)
+            x_bits = getattr(value, "x_bits", None)
+            z_bits = getattr(value, "z_bits", None)
+            return (
+                isinstance(register_value, QubitRegister)
+                and isinstance(ids, tuple)
+                and 1 <= len(ids) <= MAX_QUBITS
+                and all(
+                    isinstance(label, str)
+                    and 1 <= len(label) <= MAX_QUBIT_LABEL_LENGTH
+                    and not any(
+                        0xD800 <= ord(character) <= 0xDFFF for character in label
+                    )
+                    for label in ids
+                )
+                and isinstance(x_bits, tuple)
+                and isinstance(z_bits, tuple)
+                and len(x_bits) <= MAX_QUBITS
+                and len(z_bits) <= MAX_QUBITS
+            )
+
+        # Check retained parents before rebuilding the nested check-space:
+        # its own validator would otherwise report a generic structure error.
+        if any(
+            getattr(row, "qubit_register", None) != register for row in basis
+        ):
+            raise _validation_error(
+                "error_coset_register",
+                "coset check rows must share the check register",
+            )
+        if any(not bounded_pauli(row) for row in (*basis, self.representative)):
+            raise _validation_error(
+                "error_coset_structure",
+                "coset rows and representative exceed their structural bounds",
+            )
+        try:
+            # Nested model instances are not revalidated by default. Rebuild
+            # these bounded structural carriers so forged binary rows and
+            # register bindings cannot escape in a canonical coset.
+            check_space = CheckSpaceValue.model_validate(
+                check_space.model_dump(), strict=True
+            )
+            representative = PhaseFreeQubitPauli.model_validate(
+                self.representative.model_dump(), strict=True
+            )
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise _validation_error(
+                "error_coset_structure",
+                "coset parent, rows, and representative must be structurally valid",
+            ) from exc
+        register = check_space.qubit_register
+        basis = check_space.basis
+        # Every retained row must live on the declared register. Isotropy is
+        # mathematical admission owned by ``stabilizer_error_coset`` and by any
+        # consumer relying on a caller-authored coset claim, so the constructor
+        # never replays the kernel's pairwise symplectic computation.
+        if any(row.qubit_register != register for row in basis):
+            raise _validation_error(
+                "error_coset_register",
+                "coset check rows must share the check register",
+            )
+        if representative.qubit_register != register:
+            raise _validation_error(
+                "error_coset_register",
+                "coset representative must share the check register",
+            )
+        flat_rows = [[*row.x_bits, *row.z_bits] for row in basis]
+        width = 2 * len(register.qubit_ids)
+        pivots = tuple(
+            next((column for column, bit in enumerate(row) if bit), width)
+            for row in flat_rows
+        )
+        if (
+            any(pivot == width for pivot in pivots)
+            or tuple(sorted(pivots)) != pivots
+            or len(set(pivots)) != len(pivots)
+            or any(
+                row[pivot]
+                for row_index, pivot in enumerate(pivots)
+                for other_index, row in enumerate(flat_rows)
+                if other_index != row_index
+            )
+        ):
+            raise _validation_error(
+                "error_coset_basis", "coset check basis must be canonical RREF"
+            )
+        bits = (*representative.x_bits, *representative.z_bits)
+        if any(bits[pivot] for pivot in pivots):
+            raise _validation_error(
+                "error_coset_representative",
+                "canonical coset representatives must vanish in check pivot columns",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        check_space: CheckSpaceValue,
+        representative: PhaseFreeQubitPauli,
+    ) -> Self:
+        """Build the admitted canonical quotient value without replay."""
+        return cls.model_construct(
+            check_space=check_space, representative=representative
+        )
+
+
 class CSSCheckSpaceRequest(StrictModel):
     """Binary X- and Z-check rows on one explicitly ordered register."""
 

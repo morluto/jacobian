@@ -8,7 +8,10 @@ from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieSemisimplicityResult,
 )
-from jacobian.math.lie_algebras.operations import lie_algebra_is_semisimple
+from jacobian.math.lie_algebras.operations import (
+    _induced_subalgebra_constants,
+    lie_algebra_is_semisimple,
+)
 
 
 def _algebra(
@@ -64,6 +67,32 @@ def test_decision_wire_value_requires_a_json_boolean() -> None:
 def test_native_semisimplicity_projection_uses_exact_killing_radical() -> None:
     assert lie_algebra_is_semisimple(SL2).is_semisimple
     assert not lie_algebra_is_semisimple(HEISENBERG).is_semisimple
+
+
+def test_subalgebra_admits_all_coefficients_before_materializing_constants(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from fractions import Fraction
+
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.lie_algebras._models import StructureConstant
+
+    constructed = 0
+    original = StructureConstant.model_construct
+
+    def track_construction(*args: object, **kwargs: object) -> StructureConstant:
+        nonlocal constructed
+        constructed += 1
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(StructureConstant, "model_construct", track_construction)
+    with pytest.raises(OperationResourceAdmissionError):
+        _induced_subalgebra_constants(
+            ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1))),
+            {(0, 1): {0: Fraction(1), 1: Fraction(10**65)}},
+            2,
+        )
+    assert constructed == 0
 
 
 def test_native_semisimplicity_normalizes_malformed_algebra_mapping() -> None:

@@ -1565,7 +1565,7 @@ def _induced_subalgebra_constants(
             message="subalgebra construction exceeds its admitted exact work envelope",
         )
     pivots = _rref_pivots(rows)
-    constants: list[StructureConstant] = []
+    raw_constants: list[tuple[int, int, int, Fraction]] = []
     for left_index, left in enumerate(rows):
         for right_index in range(left_index + 1, len(rows)):
             right = rows[right_index]
@@ -1590,22 +1590,34 @@ def _induced_subalgebra_constants(
                     code="lie_algebra.not_a_subalgebra",
                     message="candidate bracket escapes its span",
                 )
-            constants.extend(
-                _induced_structure_constant(
-                    left_index, right_index, output_index, bracket[pivot]
-                )
+            raw_constants.extend(
+                (left_index, right_index, output_index, bracket[pivot])
                 for output_index, pivot in enumerate(pivots)
                 if bracket[pivot]
             )
-    return tuple(constants)
+    # Admit the complete exact output envelope before materializing any of its
+    # canonical value objects.
+    for left_index, right_index, output_index, coefficient in raw_constants:
+        _require_induced_structure_coefficient_bound(
+            left_index, right_index, output_index, coefficient
+        )
+    return tuple(
+        StructureConstant.model_construct(
+            i=left_index,
+            j=right_index,
+            k=output_index,
+            coefficient=CanonicalRational.from_fraction(coefficient),
+        )
+        for left_index, right_index, output_index, coefficient in raw_constants
+    )
 
 
-def _induced_structure_constant(
+def _require_induced_structure_coefficient_bound(
     left_index: int,
     right_index: int,
     output_index: int,
     coefficient: Fraction,
-) -> StructureConstant:
+) -> None:
     """Admit the narrower algebra coefficient ceiling before canonicalization."""
 
     if (
@@ -1627,12 +1639,6 @@ def _induced_structure_constant(
                 f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
             ),
         )
-    return StructureConstant.model_construct(
-        i=left_index,
-        j=right_index,
-        k=output_index,
-        coefficient=CanonicalRational.from_fraction(coefficient),
-    )
 
 
 def lie_subalgebra(

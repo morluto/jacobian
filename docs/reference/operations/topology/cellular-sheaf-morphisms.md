@@ -23,6 +23,17 @@ the intermediate sheaf values to agree exactly, and returns the original
 source, final target, and composed component matrices. This makes the result
 usable after serialization without relying on unchecked caller claims.
 
+`cellular_sheaf.morphism.cochain_map` turns a natural morphism into its
+degreewise maps on cellular sheaf cochains. Each returned dense matrix is
+block diagonal in the canonical simplex order: its block at a simplex is the
+stalk component there, and its rows and columns are bound to the returned
+target and source cochain coordinate axes. This provides the typed map needed
+to compare or transport cochain-level data; it does not itself compute an
+induced map on cohomology. As with composition, the consumer rechecks
+naturality because a serialized `natural` flag alone is not an established
+mathematical fact.
+
 The operations bound parent diagrams, pointwise component cells, exact scalar
-digits, square-multiplication work, and worst-case scalar output growth before
-arithmetic. The current per-coefficient input limit is 64 decimal digits.
+digits, square-multiplication work, induced matrix cells, and worst-case scalar
+output growth before arithmetic. The current per-coefficient input limit is
+64 decimal digits.

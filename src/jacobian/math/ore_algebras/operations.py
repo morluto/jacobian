@@ -591,9 +591,13 @@ def _admit_differential_result_bounds(
             if any(value[0] >= 0 for value in values)
             else -1
         )
-        # Common-denominator lifting and final monic normalization can each
-        # combine one active coefficient with the other contributions.
-        coefficient_digits = 2 * sum(value[2] for value in values) + 8 * len(values)
+        # A common denominator is a product of the contribution denominators.
+        # Each numerator summand uses that denominator with its own denominator
+        # removed, so the total component height is bounded by the sum of the
+        # contribution heights plus the digits needed to add the summands.
+        coefficient_digits = sum(value[2] for value in values) + len(
+            str(len(values))
+        )
         if (
             max(numerator_degree, denominator_degree)
             > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT

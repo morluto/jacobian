@@ -188,6 +188,21 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
 
     @model_validator(mode="after")
     def complete_width_axis(self) -> Self:
+        # Check retained-label allocation before hashing the authored ground.
+        # The operation's source preflight admits this same native budget.
+        if sum(map(len, self.ground)) > MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS:
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_labels",
+                "ground labels exceed the admitted native codepoint budget",
+            )
+        try:
+            for label in self.ground:
+                label.encode("utf-8")
+        except UnicodeEncodeError:
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_utf8",
+                "ground labels must be UTF-8-representable",
+            ) from None
         if len(set(self.ground)) != len(self.ground):
             raise PydanticCustomError(
                 "delta_matroid.twist_polynomial_ground",

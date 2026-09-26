@@ -709,6 +709,30 @@ def test_twist_polynomial_result_rejects_oversized_authored_axes() -> None:
     }
 
 
+def test_twist_polynomial_result_rejects_overbudget_authored_label() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["ground"] = ["a" * 1_000_001]
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_labels"
+
+
+def test_twist_polynomial_result_rejects_non_utf8_ground() -> None:
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="python")
+    payload["ground"] = ("\ud800",)
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate(payload)
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_utf8"
+
+
 def test_twist_polynomial_admits_own_native_label_budget_boundary() -> None:
     label = "a" * 1_000_000
     source = FiniteDeltaMatroid(ground=(label,), feasible=((),))

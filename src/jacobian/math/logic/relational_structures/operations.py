@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures._admission import (
+    admit_binary_relation_transpose,
     admit_core_computation,
     admit_embedding_search,
     admit_homomorphism_check,
@@ -21,7 +22,6 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_search,
     admit_induced_substructure,
     admit_polymorphism_check,
-    admit_relational_product,
     admit_relational_reduct,
 )
 from jacobian.math.logic.relational_structures._models import (
@@ -49,7 +49,6 @@ from jacobian.math.logic.relational_structures._models import (
     RelationalPolymorphismRelationProfile,
     RelationalPolymorphismStatus,
     RelationalPolymorphismWitness,
-    RelationalProductResult,
     RelationalQuotient,
     RelationalReductResult,
     SymbolTransportProfile,
@@ -146,44 +145,47 @@ def reduct_structure(
     )
 
 
-def direct_product_structure(
-    left: FiniteRelationalStructure, right: FiniteRelationalStructure
-) -> RelationalProductResult:
-    """Return the direct product on lexicographically labelled pairs.
+def transpose_binary_relation(
+    source: FiniteRelationalStructure, symbol_id: str
+) -> FiniteRelationalStructure:
+    """Transpose one binary relation and preserve every other symbol table.
 
-    Pair ``(i, j)`` has label ``i * |B| + j``. Each relation is the direct
-    product of its factor relations under coordinatewise pair formation.
+    For the selected binary symbol ``R``, the output has
+    ``R' = {(y, x) : (x, y) in R}``. The carrier and ranked signature stay
+    fixed, so the returned canonical structure can be passed directly to
+    other relational operations.
     """
-    left = _admit_structure(left, "left")
-    right = _admit_structure(right, "right")
-    admit_relational_product(left, right)
-    right_size = right.carrier_size
-    product_rows = []
-    for left_table, right_table in zip(
-        left.relation_tables, right.relation_tables, strict=True
-    ):
-        rows = {
-            tuple(a * right_size + b for a, b in zip(left_row, right_row, strict=True))
-            for left_row in left_table
-            for right_row in right_table
-        }
-        product_rows.append(tuple(sorted(rows)))
-    product_size = left.carrier_size * right_size
-    product_value = FiniteRelationalStructure(
-        carrier_size=product_size,
-        signature=left.signature,
-        relation_tables=tuple(product_rows),
+
+    source = _admit_structure(source, "source")
+    if type(symbol_id) is not str:
+        raise OperationDomainValidationError(
+            location=("symbol_id",),
+            code="relational.structure.transpose_symbol_type",
+            message="symbol_id must be an exact relation-symbol ID string",
+        )
+    symbol_index = next(
+        (
+            index
+            for index, symbol in enumerate(source.signature)
+            if symbol.symbol_id == symbol_id
+        ),
+        None,
     )
-    return RelationalProductResult(
-        left=left,
-        right=right,
-        product=product_value,
-        left_projection=tuple(index // right_size for index in range(product_size))
-        if right_size
-        else (),
-        right_projection=tuple(index % right_size for index in range(product_size))
-        if right_size
-        else (),
+    if symbol_index is None:
+        raise OperationDomainValidationError(
+            location=("symbol_id",),
+            code="relational.structure.transpose_symbol_unknown",
+            message="symbol_id must belong to the source signature",
+        )
+    admit_binary_relation_transpose(source, symbol_index)
+    table = source.relation_tables[symbol_index]
+    request_checkpoint("before binary relation transposition")
+    tables = list(source.relation_tables)
+    tables[symbol_index] = tuple((right, left) for left, right in table)
+    return FiniteRelationalStructure(
+        carrier_size=source.carrier_size,
+        signature=source.signature,
+        relation_tables=tuple(tables),
     )
 
 

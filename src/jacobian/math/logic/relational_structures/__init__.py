@@ -43,6 +43,7 @@ from jacobian.math.logic.relational_structures.operations import (
     reduct_structure,
     search_embedding,
     search_homomorphism,
+    transpose_binary_relation,
 )
 from jacobian.math.logic.relational_structures.values import (
     FiniteRelationalStructure,
@@ -99,4 +100,5 @@ __all__ = [
     "reduct_structure",
     "search_embedding",
     "search_homomorphism",
+    "transpose_binary_relation",
 ]

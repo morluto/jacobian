@@ -84,11 +84,13 @@ def test_canonical_polytope_values_feed_lattice_requests_directly() -> None:
 
 class TestEnumerate:
     def test_unit_square_vertices(self) -> None:
-        result = enumerate_lattice_points(
-            EnumerateLatticePointsRequest(vertices=UNIT_SQUARE_V)
-        )
+        request = EnumerateLatticePointsRequest(vertices=UNIT_SQUARE_V)
+        result = enumerate_lattice_points(request)
         assert result.point_count == 4
         assert result.representation == "vertices"
+        count = count_lattice_points(LatticePolytopeRequest(vertices=UNIT_SQUARE_V))
+        assert count.point_count == 4
+        assert count.representation == "vertices"
         coords = {p.coordinates for p in result.points}
         assert coords == {
             (0, 0),
@@ -113,14 +115,9 @@ class TestEnumerate:
 
     def test_simplex_two_by_two(self) -> None:
         # conv((0,0),(2,0),(0,2)) contains 6 lattice points.
+        vertices = (_v((0, 1), (0, 1)), _v((2, 1), (0, 1)), _v((0, 1), (2, 1)))
         result = enumerate_lattice_points(
-            EnumerateLatticePointsRequest(
-                vertices=(
-                    _v((0, 1), (0, 1)),
-                    _v((2, 1), (0, 1)),
-                    _v((0, 1), (2, 1)),
-                ),
-            )
+            EnumerateLatticePointsRequest(vertices=vertices)
         )
         assert result.point_count == 6
         coords = {p.coordinates for p in result.points}
@@ -132,6 +129,10 @@ class TestEnumerate:
             (1, 1),
             (0, 2),
         }
+        assert (
+            count_lattice_points(LatticePolytopeRequest(vertices=vertices)).point_count
+            == 6
+        )
 
     def test_three_dimensional_tetrahedron(self) -> None:
         # conv(0, e1, e2, e3) has exactly its 4 vertices as lattice points.
@@ -147,6 +148,12 @@ class TestEnumerate:
         )
         assert result.point_count == 4
         assert result.dimension == 3
+        assert {point.coordinates for point in result.points} == {
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 1, 0),
+            (0, 0, 1),
+        }
 
     def test_one_dimensional_interval(self) -> None:
         result = enumerate_lattice_points(
@@ -186,23 +193,6 @@ class TestEnumerate:
 
 
 class TestCount:
-    def test_unit_square_count_matches_enumerate(self) -> None:
-        request = LatticePolytopeRequest(vertices=UNIT_SQUARE_V)
-        assert count_lattice_points(request).point_count == 4
-        assert count_lattice_points(request).representation == "vertices"
-
-    def test_simplex_count(self) -> None:
-        result = count_lattice_points(
-            LatticePolytopeRequest(
-                vertices=(
-                    _v((0, 1), (0, 1)),
-                    _v((2, 1), (0, 1)),
-                    _v((0, 1), (2, 1)),
-                ),
-            )
-        )
-        assert result.point_count == 6
-
     def test_count_and_enumerate_agree_on_cube(self) -> None:
         cube = tuple(
             _v(
@@ -356,6 +346,7 @@ class TestMembershipWorkBudget:
         assert len(request.halfspaces) == 64
         assert count_lattice_points(request).point_count == 100
 
+    @pytest.mark.scale
     def test_reviewer_wide_box_with_repeats_is_admitted(self) -> None:
         # [0,2499] x [0,3999] with every inequality repeated 16 times passes
         # the 10M-candidate scan bound; normalization keeps the membership
@@ -370,6 +361,8 @@ class TestMembershipWorkBudget:
         request = LatticePolytopeRequest(halfspaces=sides * 16)
         assert request.halfspaces is not None
         assert len(request.halfspaces) == 64
+        result = count_lattice_points(request)
+        assert result.point_count == 10_000_000
 
     def test_distinct_facet_excess_is_rejected_at_validation(self) -> None:
         # 4 box sides + 7 distinct redundant diagonal cuts = 11 distinct
@@ -386,7 +379,10 @@ class TestMembershipWorkBudget:
         with pytest.raises(ValueError, match="facet-membership work budget"):
             count_lattice_points(request)
 
+    @pytest.mark.scale
     def test_membership_work_boundary_accepts_the_limit(self) -> None:
+        from jacobian.math.geometry.polytopes.lattice.operations import _facets_and_box
+
         # Exactly 10 distinct facets over a 10M-candidate scan sits at the
         # 100M-test budget and is admitted; duplicates do not push past it.
         sides = [
@@ -403,6 +399,14 @@ class TestMembershipWorkBudget:
         )
         assert padded.halfspaces is not None
         assert len(padded.halfspaces) == 16
+        facets, _, _, _ = _facets_and_box(
+            padded.vertices,
+            padded.halfspaces,
+            padded.dimension_bound,
+        )
+        assert len(facets) == 10
+        result = count_lattice_points(padded)
+        assert result.point_count == 10_000_000
 
 
 class TestCountResultConstraints:
@@ -646,11 +650,12 @@ class TestOneDimensionalSingletonException:
         vertices_description = schema["properties"]["vertices"]["description"].lower()
         assert "exception" in vertices_description
 
-    def test_singleton_roundtrip_unchanged(self) -> None:
+    def test_singleton_enumerates_its_exact_coordinate(self) -> None:
         result = enumerate_lattice_points(
             EnumerateLatticePointsRequest(vertices=(_v((3, 1)),))
         )
         assert result.point_count == 1
+        assert [point.coordinates for point in result.points] == [(3,)]
 
 
 class TestFacetGeometryComputedOnce:

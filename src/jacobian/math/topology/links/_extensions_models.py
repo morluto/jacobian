@@ -166,6 +166,11 @@ class BraidWordRequest(StrictModel):
     word: BraidWord
 
 
+class BraidProductRequest(StrictModel):
+    left: BraidWord
+    right: BraidWord
+
+
 class BraidArtinActionResult(StrictModel):
     """The Artin automorphism of the free group on the braid strands.
 

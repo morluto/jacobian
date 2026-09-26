@@ -48,6 +48,14 @@ from jacobian.math.number_theory.modular_forms.basis import (
 from jacobian.math.number_theory.modular_forms.character_basis_tools import (
     TOOLS as CHARACTER_BASIS_TOOLS,
 )
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
+    modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
+)
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models import (
+    ModularFormCoordinatesAddRequest,
+    ModularFormCoordinatesScalarMultiplyRequest,
+)
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
     TOOLS as FIELD_COORDINATE_TOOLS,
 )
@@ -86,6 +94,18 @@ def compute_coordinate_q_expansion(
     request: ModularFormCoordinatesQExpansionRequest,
 ) -> ModularQExpansion:
     return modular_form_coordinates_q_expansion(request.form, request.precision)
+
+
+def compute_coordinate_addition(
+    request: ModularFormCoordinatesAddRequest,
+) -> ModularFormCoordinates:
+    return modular_form_coordinates_add(request.left, request.right)
+
+
+def compute_coordinate_scalar_multiplication(
+    request: ModularFormCoordinatesScalarMultiplyRequest,
+) -> ModularFormCoordinates:
+    return modular_form_coordinates_scalar_multiply(request.form, request.scalar)
 
 
 def multiply_coordinate_forms(
@@ -542,6 +562,75 @@ TOOLS: MathTools = (
                         },
                         "basis_id": "level-one-e4-e6-monomials-v1",
                         "coordinates": [{"num": "1", "den": "1"}],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.coordinates.scalar_multiply.compute",
+        title="Scale exact modular-form coordinates",
+        description=(
+            "Multiply rational coordinates by an exact rational scalar while "
+            "preserving their complete modular-space parent and canonical basis."
+        ),
+        request_type=ModularFormCoordinatesScalarMultiplyRequest,
+        result_type=ModularFormCoordinates,
+        run=compute_coordinate_scalar_multiplication,
+        tags=("modular-forms", "coordinates", "scalar-action", "exact"),
+        examples=(
+            OperationExample(
+                name="scale_level_one_weight_twelve_coordinates",
+                description="Scale E4^3 by two in the canonical M_12 basis.",
+                input={
+                    "form": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "scalar": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.coordinates.add.compute",
+        title="Add exact modular-form coordinates",
+        description=(
+            "Add rational coordinate vectors in the identical exact modular "
+            "space and canonical basis. The complete space parent and ordered "
+            "basis coordinates are preserved in the result."
+        ),
+        request_type=ModularFormCoordinatesAddRequest,
+        result_type=ModularFormCoordinates,
+        run=compute_coordinate_addition,
+        tags=("modular-forms", "coordinates", "addition", "exact"),
+        examples=(
+            OperationExample(
+                name="add_level_one_weight_twelve_coordinates",
+                description=(
+                    "Add E4^3 and one third of E6^2 in the canonical basis of "
+                    "M_12(SL2Z)."
+                ),
+                input={
+                    "left": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "right": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "3"},
+                        ],
                     },
                 },
             ),

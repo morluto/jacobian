@@ -457,6 +457,9 @@ def _classify_shared_path(
     *,
     integration: bool,
 ) -> None:
+    if path.startswith("benchmarks/evidence/") and path.endswith(".md"):
+        classification.reasons.append("evaluation evidence documentation change")
+        return
     if path.startswith("benchmarks/validation/") or path in {
         "benchmarks/README.md",
         "benchmarks/__init__.py",

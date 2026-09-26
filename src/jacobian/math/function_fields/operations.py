@@ -2670,6 +2670,9 @@ def function_field_riemann_roch_membership(
         divisor=admitted_divisor,
         status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),
         profile=tuple(profile),
+    )
+
+
 def _hyperelliptic_infinity_riemann_roch_space(
     field: FiniteFunctionField,
     branch: tuple[int, ...],

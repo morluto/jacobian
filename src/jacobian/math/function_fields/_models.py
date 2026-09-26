@@ -284,15 +284,6 @@ class HyperellipticInfinityPlaceValuationRequest(StrictModel):
     place: HyperellipticInfinityPlace
     element: FiniteFunctionFieldElement
 
-    @model_validator(mode="after")
-    def require_shared_parent(self) -> Self:
-        if self.place.field != self.element.field:
-            raise _validation_error(
-                "infinity_valuation_parent_mismatch",
-                "the place and function element must share the exact function field",
-            )
-        return self
-
 
 class FunctionFieldFiniteValuation(StrictModel):
     """A finite integer valuation, including finite value zero."""
@@ -332,15 +323,6 @@ class HyperellipticInfinityPlaceValuationResult(StrictModel):
     place: HyperellipticInfinityPlace
     element: FiniteFunctionFieldElement
     valuation: FunctionFieldValuation
-
-    @model_validator(mode="after")
-    def require_shared_parent(self) -> Self:
-        if self.place.field != self.element.field:
-            raise _validation_error(
-                "infinity_valuation_parent_mismatch",
-                "the place and function element must retain the exact function field",
-            )
-        return self
 
 
 class FunctionFieldDivisorTerm(StrictModel):

@@ -8,6 +8,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids.delta._models import (
+    DeltaMatroidDistanceProfileRequest,
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
@@ -27,12 +28,14 @@ from jacobian.math.combinatorics.matroids.delta.interlace import (
     distance_interlace_polynomial,
 )
 from jacobian.math.combinatorics.matroids.delta.operations import (
+    distance_profile,
     from_feasible_sets,
     twist,
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
+    DeltaMatroidDistanceProfile,
     FiniteDeltaMatroid,
 )
 
@@ -123,6 +126,19 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
             code=f"delta_matroid.{exc.reason}",
             message=str(exc),
         ) from exc
+
+
+def _distance_profile(
+    request: DeltaMatroidDistanceProfileRequest,
+) -> DeltaMatroidDistanceProfile:
+    try:
+        return distance_profile(request.delta_matroid)
+    except DeltaMatroidAdmissionError as exc:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("delta_matroid",),
@@ -186,6 +202,39 @@ TOOLS: MathTools = (  # noqa: RUF005
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [0, 1], [1]],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.distance_profile.compute",
+        title="Compute distance to feasibility for every ground subset",
+        description=(
+            "Return the exact Hamming distance from every subset of the "
+            "ground set to its nearest feasible set, the number of nearest "
+            "feasible sets, and the distance histogram. Subsets are ordered "
+            "by integer mask with bit i denoting ground index i. Admission "
+            "limits the complete profile to 4,096 masks and 262,144 "
+            "subset/feasible-set evaluations, and replays source symmetric "
+            "exchange under the existing 250,000-candidate bound."
+        ),
+        request_type=DeltaMatroidDistanceProfileRequest,
+        result_type=DeltaMatroidDistanceProfile,
+        run=_distance_profile,
+        tags=("delta-matroid", "distance", "feasible-set-profile", "exact"),
+        discovery_terms=("delta-matroid distance profile", "nearest feasible set"),
+        examples=(
+            OperationExample(
+                name="distance_profile_of_two_element_cube",
+                description=(
+                    "The four feasible subsets give distance zero at each of "
+                    "the four ground-subset masks."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
                 },
             ),
         ),

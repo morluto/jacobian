@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -14,6 +14,8 @@ from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 MAX_DELTA_MEMBERSHIPS = 16_384
 MAX_DELTA_LABEL_BYTES = 2_048
 MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS = 250_000
+MAX_DELTA_DISTANCE_PROFILE_STATES = 4_096
+MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS = 262_144
 _CHECKPOINT_STRIDE = 4_096
 
 
@@ -212,10 +214,89 @@ class FiniteDeltaMatroid(StrictModel):
         )
 
 
+class DeltaMatroidDistanceProfile(StrictModel):
+    """The exact distance-to-feasibility function on a finite ground set."""
+
+    delta_matroid: FiniteDeltaMatroid
+    distance_by_mask: tuple[StrictInt, ...]
+    nearest_feasible_count_by_mask: tuple[StrictInt, ...]
+    distance_histogram: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_profile_shape(self) -> Self:
+        ground_size = len(self.delta_matroid.ground)
+        if ground_size > MAX_DELTA_DISTANCE_PROFILE_STATES.bit_length() - 1:
+            raise _validation_error(
+                "distance_profile_states_exceeded",
+                "profile ground size exceeds the complete subset-state envelope",
+            )
+        expected = 1 << ground_size
+        if (
+            len(self.distance_by_mask) != expected
+            or len(self.nearest_feasible_count_by_mask) != expected
+        ):
+            raise _validation_error(
+                "distance_profile_shape",
+                "distance rows must cover every ground-subset bit mask",
+            )
+        if len(self.distance_histogram) != ground_size + 1:
+            raise _validation_error(
+                "distance_histogram_shape",
+                "distance histogram must have one entry per possible distance",
+            )
+        if any(
+            type(value) is not int or value < 0 or value > ground_size
+            for value in self.distance_by_mask
+        ):
+            raise _validation_error(
+                "distance_profile_value", "distances must be nonnegative integers"
+            )
+        if any(
+            type(value) is not int or value < 1
+            for value in self.nearest_feasible_count_by_mask
+        ):
+            raise _validation_error(
+                "distance_profile_nearest_count",
+                "nearest-feasible counts must be positive integers",
+            )
+        if any(value < 0 for value in self.distance_histogram):
+            raise _validation_error(
+                "distance_histogram_value",
+                "distance histogram entries must be nonnegative integers",
+            )
+        expected_histogram = tuple(
+            self.distance_by_mask.count(distance) for distance in range(ground_size + 1)
+        )
+        if self.distance_histogram != expected_histogram:
+            raise _validation_error(
+                "distance_histogram_mismatch",
+                "distance histogram must count the distance rows exactly",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        delta_matroid: FiniteDeltaMatroid,
+        distance_by_mask: tuple[int, ...],
+        nearest_feasible_count_by_mask: tuple[int, ...],
+        distance_histogram: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            delta_matroid=delta_matroid,
+            distance_by_mask=distance_by_mask,
+            nearest_feasible_count_by_mask=nearest_feasible_count_by_mask,
+            distance_histogram=distance_histogram,
+        )
+
+
 __all__ = [
+    "MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS",
+    "MAX_DELTA_DISTANCE_PROFILE_STATES",
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
     "MAX_DELTA_LABEL_BYTES",
     "MAX_DELTA_MEMBERSHIPS",
+    "DeltaMatroidDistanceProfile",
     "DeltaMatroidObstruction",
     "FiniteDeltaMatroid",
     "canonical_feasible_rows",

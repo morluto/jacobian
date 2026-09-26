@@ -320,7 +320,9 @@ class TestComposition:
             children = tuple(state(child) for child in node.children)
             if any(child is None for child in children):
                 return None
-            return table.get((node.symbol, children))
+            return table.get(
+                (node.symbol, tuple(child for child in children if child is not None))
+            )
 
         root = state(tree)
         return root is not None and root in machine.final_states

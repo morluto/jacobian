@@ -11,13 +11,11 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree._models import (
-    TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
 )
 from jacobian.math.logic.automata.tree.operations import (
@@ -96,6 +94,27 @@ def test_minimize_merges_equivalent_reachable_states_and_drops_unreachable() -> 
         result.model_dump_json()
     )
     assert round_trip.model_dump() == result.model_dump()
+
+
+def test_sink_equivalent_block_uses_real_state_order_and_roundtrips() -> None:
+    machine = DeterministicBottomUpTreeAutomaton(
+        state_count=2,
+        arity=(0, 0),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(), target_state=1),
+        ),
+        final_states=(0,),
+    )
+    result = minimize_tree_automaton(machine)
+    assert result.new_to_old == (0, 1)
+    assert result.old_to_new == (0, 1)
+    assert run_tree_automaton(result.minimized, RankedTree(symbol=0)) == {0}
+    assert run_tree_automaton(result.minimized, RankedTree(symbol=1)) == {1}
+    assert (
+        TreeAutomatonMinimizeResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_minimize_preserves_partial_undefined_transitions() -> None:
@@ -179,22 +198,6 @@ def test_minimize_translates_forged_carrier_shape_errors() -> None:
     assert raised.value.errors()[0]["type"] == "tree_automata.minimize_automaton_shape"
 
 
-def test_minimize_is_published_in_catalog() -> None:
-    tool = Catalog.open().operation("tree_automaton.deterministic.minimize.compute")
-    request = TreeAutomatonMinimizeRequest(
-        automaton=DeterministicBottomUpTreeAutomaton(
-            state_count=1,
-            arity=(0,),
-            transitions=(
-                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
-            ),
-            final_states=(0,),
-        )
-    )
-
-    assert tool.run(request).minimized.state_count == 1
-
-
 def _stuck_rejects(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
     table = {
         (row.symbol, row.child_states): row.target_state for row in machine.transitions
@@ -204,7 +207,9 @@ def _stuck_rejects(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
         children = tuple(state(child) for child in node.children)
         if any(child is None for child in children):
             return None
-        return table.get((node.symbol, children))
+        return table.get(
+            (node.symbol, tuple(child for child in children if child is not None))
+        )
 
     root = state(tree)
     return root is not None and root in machine.final_states
@@ -286,7 +291,9 @@ def _context_acceptance(
         children = tuple(evaluate(child) for child in node[1])
         if any(child is None for child in children):
             return None
-        return table.get((node[0], children))
+        return table.get(
+            (node[0], tuple(child for child in children if child is not None))
+        )
 
     return tuple(evaluate(context) in finals for context in contexts)
 

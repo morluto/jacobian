@@ -4,6 +4,7 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.tree._models import (
     RegularTreeGrammarToAutomatonRequest,
     RegularTreeGrammarToAutomatonResult,
@@ -110,6 +111,20 @@ def test_catalog_adapter_binds_grammar_and_automaton() -> None:
     assert (
         RegularTreeGrammarToAutomatonResult.model_validate(result.model_dump())
         == result
+    )
+
+
+def test_native_conversion_revalidates_forged_grammar_before_building_rows() -> None:
+    forged = RegularTreeGrammar.model_construct(
+        nonterminal_count=1,
+        arity=(0,),
+        start_nonterminal=0,
+        productions=(RegularTreeProduction(nonterminal=0, symbol=1, children=()),),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        regular_tree_grammar_to_automaton(forged)
+    assert error.value.errors()[0]["type"] == (
+        "tree_automata.invalid_regular_tree_grammar"
     )
 
 

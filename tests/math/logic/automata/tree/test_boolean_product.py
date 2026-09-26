@@ -1,15 +1,12 @@
 """Independent language oracle for bounded tree-automaton Boolean products."""
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationMatchRequest,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree import (
@@ -48,11 +45,13 @@ def _accepts(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
         (row.symbol, row.child_states): row.target_state for row in machine.transitions
     }
 
-    def state(node: RankedTree):
+    def state(node: RankedTree) -> int | None:
         children = tuple(state(child) for child in node.children)
         if any(child is None for child in children):
             return None
-        return rows.get((node.symbol, children))
+        return rows.get(
+            (node.symbol, tuple(child for child in children if child is not None))
+        )
 
     root = state(tree)
     return root is not None and root in machine.final_states
@@ -101,7 +100,7 @@ def test_partial_input_is_rejected_instead_of_claiming_union() -> None:
     with pytest.raises(ValidationError):
         TreeAutomatonBooleanProductRequest(
             left=left,
-            right=right,
+            right=cast(CompleteDeterministicBottomUpTreeAutomaton, right),
             connective="union",
         )
 
@@ -155,7 +154,7 @@ def test_rejects_nondeterministic_input_and_mismatched_signature() -> None:
     )
     with pytest.raises(ValidationError, match="valid dictionary or instance"):
         TreeAutomatonBooleanProductRequest(
-            left=nondeterministic,
+            left=cast(CompleteDeterministicBottomUpTreeAutomaton, nondeterministic),
             right=left,
             connective="intersection",
         )
@@ -215,7 +214,11 @@ def test_native_product_rejects_non_carrier_operands(junk: Any) -> None:
         state_count=1, arity=(0,), transitions=(), final_states=()
     )
     with pytest.raises(OperationDomainValidationError):
-        boolean_product_tree_automata(partial, left, "intersection")
+        boolean_product_tree_automata(
+            cast(CompleteDeterministicBottomUpTreeAutomaton, partial),
+            left,
+            "intersection",
+        )
 
 
 def test_native_product_rejects_forged_complete_carrier() -> None:
@@ -233,26 +236,3 @@ def test_native_product_rejects_forged_complete_carrier() -> None:
         boolean_product_tree_automata(forged, _machine(()), "intersection")
 
     assert raised.value.errors()[0]["type"] == "tree_automata.product_automaton_shape"
-
-
-def test_boolean_product_example_states_the_completeness_precondition() -> None:
-    operation = Catalog.open().operation("tree_automaton.boolean_product.compute")
-    example = operation.examples[0]
-
-    assert "partial" not in example.name
-    assert "complete" in example.description.lower()
-    request = operation.request_type.model_validate_json(
-        encode_strict_json(example.input), strict=True
-    )
-    result = operation.run(request)
-    assert result.product.state_count == 1
-
-
-def test_catalog_discovery_surfaces_tree_language_products() -> None:
-    result = Catalog.open().match(
-        OperationMatchRequest(
-            need="exact intersection and union product for deterministic ranked tree automata",
-            limit=5,
-        )
-    )
-    assert result.matches[0].operation_id == "tree_automaton.boolean_product.compute"

@@ -8,6 +8,8 @@ from itertools import product
 from math import prod
 from typing import Literal
 
+from pydantic import ValidationError
+
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._execution import request_checkpoint
 from jacobian.canonical import decimal_digit_width, encode_strict_json
@@ -45,11 +47,10 @@ from jacobian.math.logic.automata.tree.values import (
     RegularTreeGrammar,
     TreeAutomatonTransition,
     TreeStateChartEntry,
+    _admit_nondeterministic_run_counts,
     _build_reachable_state_profile,
-    _ground_reachable_states,
     _reject_tree,
     accepted_tree_count_work_bound,
-    nondeterministic_run_counts_work_bound,
     validate_ranked_tree,
 )
 
@@ -412,12 +413,26 @@ def regular_tree_grammar_to_automaton(
 ) -> BottomUpTreeAutomaton:
     """Translate each production to the corresponding bottom-up transition."""
 
-    if not isinstance(grammar, RegularTreeGrammar):
+    if (
+        not isinstance(grammar, RegularTreeGrammar)
+        or type(getattr(grammar, "arity", None)) is not tuple
+        or len(grammar.arity) > MAX_TA_SYMBOLS
+        or type(getattr(grammar, "productions", None)) is not tuple
+        or len(grammar.productions) > MAX_TA_TRANSITIONS
+    ):
         raise OperationDomainValidationError(
             location=("grammar",),
             code="tree_automata.invalid_regular_tree_grammar",
             message="conversion requires a canonical bounded regular tree grammar",
         )
+    try:
+        grammar = RegularTreeGrammar.model_validate(grammar.model_dump(), strict=True)
+    except (ValidationError, TypeError, ValueError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=("grammar",),
+            code="tree_automata.invalid_regular_tree_grammar",
+            message="conversion requires a canonical bounded regular tree grammar",
+        ) from exc
     transition_work = sum(2 + len(rule.children) for rule in grammar.productions)
     production_count = len(grammar.productions)
     sorting_work = (
@@ -511,7 +526,16 @@ def _tree_automaton_minimization_partition(
                             )
                             combos_since_checkpoint = 0
             refined_by_signature.setdefault(tuple(signature), []).append(state)
-        blocks = sorted(refined_by_signature.values(), key=min)
+        # The synthetic -1 sink is not a caller state. Its block must be
+        # ordered by its least real representative (or last if sink-only),
+        # matching the canonical quotient axis and result decoder.
+        blocks = sorted(
+            refined_by_signature.values(),
+            key=lambda block: min(
+                (state for state in block if state >= 0),
+                default=automaton.state_count,
+            ),
+        )
         refined = {
             state: block_id for block_id, block in enumerate(blocks) for state in block
         }
@@ -1134,21 +1158,18 @@ def nondeterministic_run_counts(
     """
 
     automaton = _validate_native_tree_automaton(automaton)
-    nondeterministic_run_counts_work_bound(automaton, max_size)
-    if not automaton.final_states or not any(
-        not transition.child_states for transition in automaton.transitions
-    ):
+    admission = _admit_nondeterministic_run_counts(automaton, max_size)
+    if admission.zero:
         return (0,) * max_size
-    reachable = _ground_reachable_states(automaton)
-    if not any(state in reachable for state in automaton.final_states):
-        return (0,) * max_size
-    return _nondeterministic_run_counts_admitted(automaton, max_size)
+    return _nondeterministic_run_counts_admitted(
+        automaton, max_size, admission.reachable
+    )
 
 
 def _validate_native_tree_automaton(
     automaton: BottomUpTreeAutomaton,
 ) -> BottomUpTreeAutomaton:
-    if type(automaton) is not BottomUpTreeAutomaton:
+    if not isinstance(automaton, BottomUpTreeAutomaton):
         _reject_tree(
             "automaton must be a validated bottom-up tree automaton", resource=False
         )
@@ -1163,9 +1184,10 @@ def _validate_native_tree_automaton(
 
 
 def _nondeterministic_run_counts_admitted(
-    automaton: BottomUpTreeAutomaton, max_size: int
+    automaton: BottomUpTreeAutomaton,
+    max_size: int,
+    reachable: frozenset[int],
 ) -> tuple[int, ...]:
-    reachable = _ground_reachable_states(automaton)
     by_key: dict[tuple[int, tuple[int, ...]], list[int]] = defaultdict(list)
     for transition in automaton.transitions:
         if any(child not in reachable for child in transition.child_states):

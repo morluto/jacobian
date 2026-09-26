@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import dataclass
 from itertools import pairwise
 from math import comb
@@ -12,6 +12,7 @@ from pydantic import Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -584,35 +585,47 @@ def accepted_tree_count_work_bound(
     return work
 
 
-def _ground_reachable_states(automaton: BottomUpTreeAutomaton) -> set[int]:
-    """Return states reachable by some finite ground tree.
+def _ground_reachable_states(automaton: BottomUpTreeAutomaton) -> frozenset[int]:
+    """Saturate ground reachability once, in linear transition-incidence work."""
+    waiting: list[list[int]] = [[] for _ in range(automaton.state_count)]
+    missing: list[int] = []
+    reached: set[int] = set()
+    queue: deque[int] = deque()
+    for index, transition in enumerate(automaton.transitions):
+        missing.append(len(transition.child_states))
+        if not transition.child_states and transition.target_state not in reached:
+            reached.add(transition.target_state)
+            queue.append(transition.target_state)
+        for child in transition.child_states:
+            waiting[child].append(index)
+        if index % 256 == 0:
+            request_checkpoint("during tree-automaton reachability indexing")
+    visited = 0
+    while queue:
+        request_checkpoint("during tree-automaton reachability saturation")
+        for index in waiting[queue.popleft()]:
+            missing[index] -= 1
+            if missing[index] == 0:
+                target = automaton.transitions[index].target_state
+                if target not in reached:
+                    reached.add(target)
+                    queue.append(target)
+            visited += 1
+            if visited % 8192 == 0:
+                request_checkpoint("during tree-automaton reachability saturation")
+    return frozenset(reached)
 
-    Least fixed point: nullary targets are reachable, and a transition
-    target becomes reachable once all of its child states are reachable.
-    Groups mentioning an unreachable child can never fire on any ground
-    tree, so pricing and execution must eliminate them first.
-    """
 
-    reachable: set[int] = {
-        transition.target_state
-        for transition in automaton.transitions
-        if not transition.child_states
-    }
-    changed = True
-    while changed:
-        changed = False
-        for transition in automaton.transitions:
-            if transition.target_state in reachable:
-                continue
-            if all(child in reachable for child in transition.child_states):
-                reachable.add(transition.target_state)
-                changed = True
-    return reachable
+@dataclass(frozen=True)
+class _RunCountAdmission:
+    work: int
+    reachable: frozenset[int]
+    zero: bool
 
 
-def nondeterministic_run_counts_work_bound(
+def _admit_nondeterministic_run_counts(
     automaton: BottomUpTreeAutomaton, max_size: int
-) -> int:
+) -> _RunCountAdmission:
     """Admit the grouped polynomial DP for exact accepting-run counts.
 
     Each run assigns one state to every node of one ranked tree. Counting
@@ -629,11 +642,20 @@ def nondeterministic_run_counts_work_bound(
     if not automaton.final_states or not any(
         not transition.child_states for transition in automaton.transitions
     ):
-        return 0
+        return _RunCountAdmission(0, frozenset(), True)
 
+    # Both indexing and saturation visit at most one incident edge per child
+    # occurrence, plus one queue step per state. Price them before running.
+    reachability_work = (
+        4 * automaton.state_count
+        + 4 * len(automaton.transitions)
+        + 3 * sum(len(row.child_states) for row in automaton.transitions)
+    )
+    if reachability_work > MAX_TREE_AUTOMATON_WORK:
+        _reject_tree("nondeterministic run-count reachability work bound exceeded")
     reachable = _ground_reachable_states(automaton)
     if not any(state in reachable for state in automaton.final_states):
-        return 0
+        return _RunCountAdmission(reachability_work, reachable, True)
 
     # An ordered tree shape has at most 4**n possibilities, each node has at
     # most 32 symbols and 64 assigned states: at most 8192**n runs. This also
@@ -662,12 +684,7 @@ def nondeterministic_run_counts_work_bound(
         key = (transition.symbol, transition.child_states)
         groups[key] = groups.get(key, 0) + 1
 
-    reachable_transition_count = sum(
-        1
-        for transition in automaton.transitions
-        if all(child in reachable for child in transition.child_states)
-        and transition.target_state in reachable
-    )
+    reachable_transition_count = sum(groups.values())
     width = max_size + 1
     work = (
         sum(
@@ -679,9 +696,17 @@ def nondeterministic_run_counts_work_bound(
         + reachable_transition_count * width
         + automaton.state_count * width
     )
-    if work > MAX_TREE_AUTOMATON_WORK:
+    total_work = work + reachability_work
+    if total_work > MAX_TREE_AUTOMATON_WORK:
         _reject_tree("nondeterministic run-count work bound exceeded")
-    return work
+    return _RunCountAdmission(total_work, reachable, False)
+
+
+def nondeterministic_run_counts_work_bound(
+    automaton: BottomUpTreeAutomaton, max_size: int
+) -> int:
+    """Return the admitted combined reachability and DP work estimate."""
+    return _admit_nondeterministic_run_counts(automaton, max_size).work
 
 
 __all__ = [

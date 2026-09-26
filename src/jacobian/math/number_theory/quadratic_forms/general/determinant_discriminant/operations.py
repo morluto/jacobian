@@ -228,8 +228,11 @@ def _bareiss_determinant(matrix: list[list[int]]) -> int:
             sign = -sign
         pivot = matrix[pivot_index][pivot_index]
         for row in range(pivot_index + 1, n):
+            request_checkpoint("during Bareiss determinant row elimination")
             entry = matrix[row][pivot_index]
             for column in range(pivot_index + 1, n):
+                if (column - pivot_index) % 16 == 0:
+                    request_checkpoint("during Bareiss determinant column elimination")
                 numerator = (
                     matrix[row][column] * pivot - entry * matrix[pivot_index][column]
                 )
@@ -255,7 +258,7 @@ def polar_gram_determinant_discriminant(
             return polar_gram_determinant_discriminant(request)
     execution = current_request_execution()
     assert execution is not None
-    deadline = monotonic() + _DETERMINANT_WALL_SECONDS
+    deadline = execution.started_at + _DETERMINANT_WALL_SECONDS
     if execution.outer_deadline is not None:
         deadline = min(deadline, execution.outer_deadline)
     bind_request_deadline(deadline)

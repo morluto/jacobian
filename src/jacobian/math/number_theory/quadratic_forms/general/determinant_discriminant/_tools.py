@@ -46,7 +46,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="binary-sign-convention",
                 description=(
                     "For Q=x^2+xy+y^2, det of the full polar Gram matrix is 3 "
-                    "and the signed discriminant is -3, matching b^2-4ac."
+                    "and the signed discriminant is -3, matching b^2-4ac. "
+                    "Precondition: exact rational coefficients in the stated "
+                    "Q convention and distinct in-range cross-term indices."
                 ),
                 input={
                     "form": {

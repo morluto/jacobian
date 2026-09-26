@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.matroids._models import (
     MAX_GROUND_AXIS_CODEPOINTS,
     MAX_INDEPENDENT_SET_OUTPUT_UNITS,
+    MAX_SPLIT_WEIGHT_DIGITS,
     MAX_WEIGHT_DIGITS,
     ExchangeLedgerRow,
     LinearMatroid,
@@ -349,7 +350,10 @@ def verify_maximum_weight_basis(claim: MaximumWeightBasisResult) -> bool:
 
 
 def maximum_weight_independent_set_result(
-    matroid: LinearMatroid, weight_function: MatroidWeightFunction
+    matroid: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    *,
+    max_digits: int = MAX_WEIGHT_DIGITS,
 ) -> MaximumWeightIndependentSetResult:
     """Return a maximum-weight independent set by positive-weight greedy scan.
 
@@ -383,7 +387,9 @@ def maximum_weight_independent_set_result(
         code="matroid.maximum_weight_independent_set.work_bound",
     )
     canonical_weights, canonical_function, work, output_units = (
-        _prepare_maximum_weight_independent_set(matroid, weight_function)
+        _prepare_maximum_weight_independent_set(
+            matroid, weight_function, max_digits=max_digits
+        )
     )
     _admit_maximum_weight_independent_set(work, output_units)
     return _maximum_weight_independent_set_admitted(
@@ -470,7 +476,11 @@ def verify_maximum_weight_independent_set(
     """Replay greedy optimization and exact source rank for a serialized claim."""
     try:
         return (
-            maximum_weight_independent_set_result(claim.matroid, claim.weight_function)
+            maximum_weight_independent_set_result(
+                claim.matroid,
+                claim.weight_function,
+                max_digits=MAX_SPLIT_WEIGHT_DIGITS,
+            )
             == claim
         )
     except (

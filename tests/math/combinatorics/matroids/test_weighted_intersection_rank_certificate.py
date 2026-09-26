@@ -12,7 +12,6 @@ from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
-    MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightFunction,
 )
@@ -38,32 +37,43 @@ def _weights(labels: tuple[str, ...], values: tuple[int, ...]) -> MatroidWeightF
     return MatroidWeightFunction(ground_axis=labels, values=values)
 
 
-def _rank_one_request() -> MatroidWeightedIntersectionRankCertificateRequest:
+def _rank_one_arguments() -> tuple[
+    LinearMatroid,
+    LinearMatroid,
+    MatroidWeightFunction,
+    tuple[int, ...],
+    tuple[MatroidRankMultiplier, ...],
+    tuple[MatroidRankMultiplier, ...],
+]:
     labels = ("a", "b")
     first = _matroid(((1, 1),), labels)
     second = _matroid(((1, 1),), labels)
-    return MatroidWeightedIntersectionRankCertificateRequest(
-        first=first,
-        second=second,
-        weight_function=_weights(labels, (5, 3)),
-        common_independent=(0,),
-        first_rank_terms=(MatroidRankMultiplier(subset=(0, 1), multiplier=5),),
-        second_rank_terms=(),
+    return (
+        first,
+        second,
+        _weights(labels, (5, 3)),
+        (0,),
+        (MatroidRankMultiplier(subset=(0, 1), multiplier=5),),
+        (),
     )
 
 
 def test_rank_dual_round_trips_and_composes_with_weight_split_checker() -> None:
-    request = _rank_one_request()
-    result = weighted_intersection_rank_certificate(request)
+    first, second, weight_function, candidate, first_terms, second_terms = (
+        _rank_one_arguments()
+    )
+    result = weighted_intersection_rank_certificate(
+        first, second, weight_function, candidate, first_terms, second_terms
+    )
 
     assert result.total_weight == 5
     oracle = max(
-        sum(request.weight_function.values[index] for index in candidate)
+        sum(weight_function.values[index] for index in feasible)
         for size in range(3)
-        for candidate in combinations(range(2), size)
-        if _subset_rank(request.first, candidate)
-        == _subset_rank(request.second, candidate)
-        == len(candidate)
+        for feasible in combinations(range(2), size)
+        if _subset_rank(first, feasible)
+        == _subset_rank(second, feasible)
+        == len(feasible)
     )
     assert oracle == result.total_weight
     assert result.first_split.values == (5, 3)
@@ -85,18 +95,33 @@ def test_rank_dual_round_trips_and_composes_with_weight_split_checker() -> None:
     assert split_result.total_weight == decoded.total_weight
 
 
+def test_empty_rank_certificate_rejects_composite_field_characteristic() -> None:
+    labels = ("a", "b")
+    source = LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=4, entries=((1, 0), (0, 1)), columns=2),
+        ground_labels=labels,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        weighted_intersection_rank_certificate(
+            source,
+            source,
+            _weights(labels, (-2, -5)),
+            (),
+            (),
+            (),
+        )
+
+
 def test_all_negative_objective_certifies_empty_optimum_and_round_trips() -> None:
     labels = ("a", "b")
     free = _matroid(((1, 0), (0, 1)), labels)
     result = weighted_intersection_rank_certificate(
-        MatroidWeightedIntersectionRankCertificateRequest(
-            first=free,
-            second=free,
-            weight_function=_weights(labels, (-2, -5)),
-            common_independent=(),
-            first_rank_terms=(),
-            second_rank_terms=(),
-        )
+        free,
+        free,
+        _weights(labels, (-2, -5)),
+        (),
+        (),
+        (),
     )
 
     assert result.total_weight == 0
@@ -124,17 +149,15 @@ def test_zero_rank_loop_term_covers_positive_loop_weight() -> None:
     first = _matroid(((1, 0),), labels)
     second = _matroid(((1, 0), (0, 1)), labels)
     result = weighted_intersection_rank_certificate(
-        MatroidWeightedIntersectionRankCertificateRequest(
-            first=first,
-            second=second,
-            weight_function=_weights(labels, (4, 3)),
-            common_independent=(0,),
-            first_rank_terms=(
-                MatroidRankMultiplier(subset=(1,), multiplier=3),
-                MatroidRankMultiplier(subset=(0, 1), multiplier=4),
-            ),
-            second_rank_terms=(),
-        )
+        first,
+        second,
+        _weights(labels, (4, 3)),
+        (0,),
+        (
+            MatroidRankMultiplier(subset=(1,), multiplier=3),
+            MatroidRankMultiplier(subset=(0, 1), multiplier=4),
+        ),
+        (),
     )
 
     assert result.total_weight == 4
@@ -159,14 +182,12 @@ def test_disjoint_singleton_supports_certify_empty_optimum_with_two_loops() -> N
     second = _matroid(((0, 1),), labels)
     weights = _weights(labels, (1, 1))
     rank_result = weighted_intersection_rank_certificate(
-        MatroidWeightedIntersectionRankCertificateRequest(
-            first=first,
-            second=second,
-            weight_function=weights,
-            common_independent=(),
-            first_rank_terms=(MatroidRankMultiplier(subset=(1,), multiplier=1),),
-            second_rank_terms=(MatroidRankMultiplier(subset=(0,), multiplier=1),),
-        )
+        first,
+        second,
+        weights,
+        (),
+        (MatroidRankMultiplier(subset=(1,), multiplier=1),),
+        (MatroidRankMultiplier(subset=(0,), multiplier=1),),
     )
 
     assert rank_result.total_weight == 0
@@ -212,8 +233,25 @@ def test_owner_manifest_example_runs_through_declared_types() -> None:
     assert result.first_split.values == (5, 3)
 
 
+def test_rank_certificate_validates_shared_prime_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.intersection as intersection
+
+    calls = 0
+
+    def count_prime_checks(_prime: int) -> None:
+        nonlocal calls
+        calls += 1
+
+    monkeypatch.setattr(intersection, "_admit_prime", count_prime_checks)
+    weighted_intersection_rank_certificate(*_rank_one_arguments())
+
+    assert calls == 1
+
+
 def test_forged_dual_value_fails_after_serialization() -> None:
-    result = weighted_intersection_rank_certificate(_rank_one_request())
+    result = weighted_intersection_rank_certificate(*_rank_one_arguments())
     raw = result.model_dump(mode="python")
     raw["first_rank_terms"][0]["multiplier"] = 4
     forged = MatroidWeightedIntersectionRankCertificateResult.model_validate(raw)
@@ -222,9 +260,11 @@ def test_forged_dual_value_fails_after_serialization() -> None:
 
 
 def test_nonoptimal_candidate_rejected_by_dual_objective_equality() -> None:
-    request = _rank_one_request().model_copy(update={"common_independent": (1,)})
+    first, second, weight_function, _, first_terms, second_terms = _rank_one_arguments()
     with pytest.raises(OperationDomainValidationError, match="dual objective"):
-        weighted_intersection_rank_certificate(request)
+        weighted_intersection_rank_certificate(
+            first, second, weight_function, (1,), first_terms, second_terms
+        )
 
 
 def test_admission_rejects_many_expensive_ranks_before_kernel(
@@ -246,17 +286,15 @@ def test_admission_rejects_many_expensive_ranks_before_kernel(
     def unexpected(*args: object, **kwargs: object) -> int:
         raise AssertionError("rank kernel ran before aggregate admission")
 
-    monkeypatch.setattr(intersection, "_rank", unexpected)
+    monkeypatch.setattr(intersection, "_weighted_rank", unexpected)
     with pytest.raises(OperationResourceAdmissionError, match="rank-dual certificate"):
         weighted_intersection_rank_certificate(
-            MatroidWeightedIntersectionRankCertificateRequest(
-                first=source,
-                second=source,
-                weight_function=_weights(labels, (0,) * n),
-                common_independent=(),
-                first_rank_terms=family,
-                second_rank_terms=family,
-            )
+            source,
+            source,
+            _weights(labels, (0,) * n),
+            (),
+            family,
+            family,
         )
 
 
@@ -264,22 +302,16 @@ def test_256_element_request_is_accepted_inside_rank_work_envelope() -> None:
     n = 256
     rank_bound = 128
     labels = tuple(f"e{i}" for i in range(n))
-    rows = tuple(
-        tuple(int(i == j) for j in range(n)) for i in range(rank_bound)
-    )
+    rows = tuple(tuple(int(i == j) for j in range(n)) for i in range(rank_bound))
     source = _matroid(rows, labels)
     candidate = tuple(range(rank_bound))
     result = weighted_intersection_rank_certificate(
-        MatroidWeightedIntersectionRankCertificateRequest(
-            first=source,
-            second=source,
-            weight_function=_weights(labels, (1,) * rank_bound + (0,) * rank_bound),
-            common_independent=candidate,
-            first_rank_terms=(
-                MatroidRankMultiplier(subset=tuple(range(n)), multiplier=1),
-            ),
-            second_rank_terms=(),
-        )
+        source,
+        source,
+        _weights(labels, (1,) * rank_bound + (0,) * rank_bound),
+        candidate,
+        (MatroidRankMultiplier(subset=tuple(range(n)), multiplier=1),),
+        (),
     )
 
     assert result.total_weight == rank_bound
@@ -297,18 +329,20 @@ def test_output_size_rejects_long_repeated_labels_before_rank_kernel(
     def unexpected(*args: object, **kwargs: object) -> int:
         raise AssertionError("rank kernel ran before output-size admission")
 
-    monkeypatch.setattr(intersection, "_rank", unexpected)
-    with pytest.raises(OperationResourceAdmissionError, match="rank-dual certificate"):
+    monkeypatch.setattr(intersection, "_weighted_rank", unexpected)
+    with pytest.raises(OperationResourceAdmissionError) as error:
         weighted_intersection_rank_certificate(
-            MatroidWeightedIntersectionRankCertificateRequest(
-                first=source,
-                second=source,
-                weight_function=_weights(labels, (1,)),
-                common_independent=(),
-                first_rank_terms=(),
-                second_rank_terms=(),
-            )
+            source,
+            source,
+            _weights(labels, (1,)),
+            (),
+            (),
+            (),
         )
+
+    assert error.value.errors()[0]["type"] == (
+        "matroid.weighted_intersection.rank_dual.work_bound"
+    )
 
 
 def _subset_rank(matroid: LinearMatroid, subset: tuple[int, ...]) -> int:

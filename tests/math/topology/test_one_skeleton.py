@@ -1,21 +1,14 @@
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology.release import (
-    GraphCliqueRequest,
     OneSkeletonRequest,
     OneSkeletonResult,
     graph_clique_complex,
     one_skeleton,
 )
-from jacobian.math.topology.release_tools import TOOLS
 
 
 def test_one_skeleton_matches_independent_face_oracle_and_retains_isolates() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "topology.simplicial_complex.one_skeleton.compute"
-    )
-    result = tool.run(
+    result = one_skeleton(
         OneSkeletonRequest(
             complex={
                 "vertices": ["d", "c", "b", "a"],
@@ -52,7 +45,7 @@ def test_one_skeleton_graph_value_composes_unchanged_with_graph_clique() -> None
         "facets": [["a", "b"], ["b", "c"], ["c", "d"], ["a", "d"]],
     }
     projected = one_skeleton(OneSkeletonRequest(complex=source))
-    reconstructed = graph_clique_complex(GraphCliqueRequest(graph=projected.graph))
+    reconstructed = graph_clique_complex(projected.graph)
 
     assert reconstructed.clique_complex.maximal_simplices == (
         ("v0", "v1"),
@@ -118,6 +111,28 @@ def test_one_skeleton_provenance_check_rejects_oversized_facets_before_pairs() -
     try:
         forged_result.require_source_axes()
     except ValueError as error:
-        assert "source facets exceed the admitted dimension bound" in str(error)
+        assert "source facets exceed the admitted shape bounds" in str(error)
     else:
         raise AssertionError("an oversized source facet was accepted")
+
+
+def test_one_skeleton_provenance_check_caps_forged_facet_count_before_pairs() -> None:
+    result = one_skeleton(
+        OneSkeletonRequest(complex={"vertices": ["a"], "facets": [["a"]]})
+    )
+    forged_source = result.source.model_copy(
+        update={"maximal_simplices": (("a",),) * 2049}
+    )
+    forged_result = OneSkeletonResult.model_construct(
+        source=forged_source,
+        graph=IndexedSimpleUndirectedGraph(vertex_count=1, edges=()),
+        vertex_labels=("a",),
+        edge_faces=(),
+    )
+
+    try:
+        forged_result.require_source_axes()
+    except ValueError as error:
+        assert "source facets exceed the admitted shape bounds" in str(error)
+    else:
+        raise AssertionError("an oversized forged facet tuple was accepted")

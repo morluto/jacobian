@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -208,6 +208,15 @@ def relabel(
             target_to_source=target_to_source,
         )
     except Exception as exc:
+        if isinstance(exc, ValidationError) and any(
+            error["type"] == "delta_matroid.relabel_ground_bytes"
+            for error in exc.errors()
+        ):
+            raise OperationResourceAdmissionError(
+                location=("target_ground",),
+                code="delta_matroid.relabel_target_bytes",
+                message="target labels exceed the admitted UTF-8 byte bound",
+            ) from exc
         raise OperationDomainValidationError(
             location=("request",),
             code="delta_matroid.relabel_request",
@@ -250,16 +259,11 @@ def relabel(
             message=str(exc),
         ) from exc
 
+    # The request validator already admitted the bounded target-label bytes.
+    # Recount only to price the exact transport work, not to classify input.
     target_bytes = sum(
         _bounded_utf8_length(label) or 0 for label in request.target_ground
     )
-    if target_bytes > MAX_DELTA_LABEL_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("target_ground",),
-            code="delta_matroid.relabel_target_bytes",
-            message="target labels exceed the admitted UTF-8 byte bound",
-        )
-
     n = len(source.ground)
     source_to_target_list = [0] * n
     for target, origin in enumerate(request.target_to_source):

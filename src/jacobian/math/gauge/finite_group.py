@@ -15,10 +15,14 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeContribution,
     FiniteGroupGaugeCurvatureRequest,
     FiniteGroupGaugeCurvatureResult,
+    FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
+    FiniteGroupGaugeTransformRequest,
+    FiniteGroupGaugeTransformResult,
+    FiniteGroupGaugeVertexValue,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
@@ -686,4 +690,113 @@ def finite_group_gauge_curvature(
         field=field,
         face_values=tuple(face_values),
         flat=all(value.value.index == identity for value in face_values),
+    )
+
+
+def finite_group_gauge_transform(
+    request: FiniteGroupGaugeTransformRequest,
+) -> FiniteGroupGaugeTransformResult:
+    r"""Apply ``U'_(u->v) = g_u U_(u->v) g_v^-1`` to every edge.
+
+    Table products use the same left-to-right traversal convention as finite
+    group path holonomy. Applying ``h`` after ``g`` therefore composes frames
+    as ``h_v g_v`` at every vertex.
+    """
+    if not isinstance(request, FiniteGroupGaugeTransformRequest):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.transform_request_type",
+            "expected a finite-group vertex gauge transform request",
+        )
+    field = request.field
+    if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
+        field.group, FiniteGroupTable
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.transform_request_shape",
+            "field must be a typed finite-table gauge field",
+        )
+    group = field.group
+    table, inverse, _, order = _admit_group(group)
+    vertices, edges, edge_values = _admit_field(field, group, order)
+    supplied = request.vertex_values
+    if not isinstance(supplied, tuple) or len(supplied) > 64:
+        _reject(
+            "vertex_values",
+            "lattice_gauge.finite_group.transform_vertex_values",
+            "vertex frames must be a finite labelled family",
+        )
+    frame_by_vertex: dict[str, int] = {}
+    for entry in supplied:
+        vertex = getattr(entry, "vertex", None)
+        value = getattr(entry, "value", None)
+        if (
+            not isinstance(entry, FiniteGroupGaugeVertexValue)
+            or not _is_gauge_label(vertex)
+            or vertex in frame_by_vertex
+            or not isinstance(value, FiniteGroupTableElement)
+            or value.group != group
+            or type(value.index) is not int
+            or not 0 <= value.index < order
+        ):
+            _reject(
+                "vertex_values",
+                "lattice_gauge.finite_group.transform_vertex_value",
+                "every frame must be a unique element of the field's group",
+            )
+        frame_by_vertex[vertex] = value.index
+    if set(frame_by_vertex) != set(vertices) or len(frame_by_vertex) != len(supplied):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.finite_group.transform_vertex_coverage",
+            "frames must label every lattice vertex exactly once",
+        )
+
+    # Include complete associativity admission, two table products per edge,
+    # and every repeated serialized parent table in the result estimate.
+    work = order**3 + 2 * len(edges) + len(vertices)
+    parent_copies = 2 * (len(edges) + 1) + len(vertices)
+    output_units = parent_copies * order**2 + 4 * len(edges) + 2 * len(vertices)
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.transform_work_bound",
+            message="finite-group gauge transform exceeds its work bound",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.transform_output_bound",
+            message="finite-group gauge transform exceeds its output bound",
+        )
+
+    transformed_labels = tuple(
+        FiniteGroupGaugeEdgeLabel(
+            edge_id=edge.edge_id,
+            value=FiniteGroupTableElement(
+                group=group,
+                index=table[
+                    table[frame_by_vertex[edge.tail]][edge_values[edge.edge_id]]
+                ][inverse[frame_by_vertex[edge.head]]],
+            ),
+        )
+        for edge in edges
+    )
+    transformed = FiniteGroupGaugeField.model_construct(
+        lattice=field.lattice,
+        group=group,
+        edge_values=transformed_labels,
+    )
+    canonical_frames = tuple(
+        FiniteGroupGaugeVertexValue(
+            vertex=vertex,
+            value=FiniteGroupTableElement(group=group, index=frame_by_vertex[vertex]),
+        )
+        for vertex in vertices
+    )
+    return FiniteGroupGaugeTransformResult.model_construct(
+        source=field,
+        transformed=transformed,
+        vertex_values=canonical_frames,
     )

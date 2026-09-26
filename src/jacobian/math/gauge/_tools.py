@@ -10,6 +10,8 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
+    FiniteGroupGaugeTransformRequest,
+    FiniteGroupGaugeTransformResult,
     GaugeTransformRequest,
     GaugeTransformResult,
     HolonomyRequest,
@@ -30,6 +32,7 @@ from jacobian.math.gauge.finite_group import (
     finite_group_gauge_basepoint_transport,
     finite_group_gauge_curvature,
     finite_group_gauge_holonomy,
+    finite_group_gauge_transform,
 )
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
@@ -101,6 +104,12 @@ def _run_finite_group_curvature(
     return finite_group_gauge_curvature(request)
 
 
+def _run_finite_group_transform(
+    request: FiniteGroupGaugeTransformRequest,
+) -> FiniteGroupGaugeTransformResult:
+    return finite_group_gauge_transform(request)
+
+
 _TRIANGLE_FIELD = {
     "lattice": {
         "vertices": ["a", "b", "c"],
@@ -131,6 +140,11 @@ _TRIVIAL_FIELD = {
     },
     "degree": 1,
     "edge_labels": [{"edge_id": "loop", "label": {"degree": 1, "image": [0]}}],
+}
+_CYCLIC_THREE_GROUP = {
+    "multiplication": [[0, 1, 2], [1, 2, 0], [2, 0, 1]],
+    "identity": 0,
+    "inverse": [0, 2, 1],
 }
 _SU2_IDENTITY = {
     "coordinates": [
@@ -548,6 +562,61 @@ TOOLS = (
                         {
                             "face_id": "constant",
                             "boundary": {"steps": [], "basepoint": "v"},
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.gauge_transform.compute",
+        title="Transform a finite-table lattice gauge field",
+        description=(
+            "Apply U'_(u->v)=g_u U_(u->v) g_v^-1 to every edge using one "
+            "exact finite multiplication-table parent and one complete vertex "
+            "frame map. Products follow the same left-to-right order as path "
+            "holonomy; the result retains source, target, and canonical frames."
+        ),
+        request_type=FiniteGroupGaugeTransformRequest,
+        result_type=FiniteGroupGaugeTransformResult,
+        run=_run_finite_group_transform,
+        tags=("lattice-gauge", "finite-group", "gauge-transform", "exact"),
+        discovery_terms=(
+            "finite group lattice gauge transformation",
+            "transform table group edge field by vertex frames",
+        ),
+        examples=(
+            OperationExample(
+                name="cyclic_three_edge_frame_action",
+                description=(
+                    "On one edge in C3, the endpoint frames change link label "
+                    "1 to 2 by g_tail U g_head^-1."
+                ),
+                input={
+                    "field": {
+                        "lattice": {
+                            "vertices": ["u", "v"],
+                            "edges": [{"edge_id": "uv", "tail": "u", "head": "v"}],
+                        },
+                        "group": _CYCLIC_THREE_GROUP,
+                        "edge_values": [
+                            {
+                                "edge_id": "uv",
+                                "value": {
+                                    "group": _CYCLIC_THREE_GROUP,
+                                    "index": 1,
+                                },
+                            }
+                        ],
+                    },
+                    "vertex_values": [
+                        {
+                            "vertex": "u",
+                            "value": {"group": _CYCLIC_THREE_GROUP, "index": 1},
+                        },
+                        {
+                            "vertex": "v",
+                            "value": {"group": _CYCLIC_THREE_GROUP, "index": 0},
                         },
                     ],
                 },

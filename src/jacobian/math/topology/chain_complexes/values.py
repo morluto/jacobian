@@ -174,6 +174,15 @@ def _format_chain_coefficient(value: int | Fraction) -> str:
 
 
 ChainCoefficient = Annotated[int | Fraction, _ChainCoefficientEncoding()]
+ChainBasisLabel = Annotated[str, Field(max_length=256)]
+ChainBasisLabelRow = Annotated[
+    tuple[ChainBasisLabel, ...], Field(max_length=MAX_BASIS_SIZE)
+]
+ChainBasisLabels = Annotated[
+    tuple[ChainBasisLabelRow, ...], Field(max_length=2 * MAX_CHAIN_DEGREE + 1)
+]
+ChainMapRow = Annotated[tuple[ChainCoefficient, ...], Field(max_length=MAX_BASIS_SIZE)]
+ChainMapComponent = Annotated[tuple[ChainMapRow, ...], Field(max_length=MAX_BASIS_SIZE)]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -270,6 +279,125 @@ class ChainComplexValue(StrictModel):
                 f"MAX_MATRIX_ENTRY_CHARS {MAX_MATRIX_ENTRY_CHARS}; coefficient "
                 "size is coupled to matrix work so exact elimination stays "
                 "inside the admitted request boundary",
+            )
+
+
+class ChainMapValue(StrictModel):
+    """A degreewise exact map between retained based chain complexes.
+
+    The value binds each component matrix to the exact source and target
+    complex axes. It is structural: callers that rely on the chain-map
+    equation must use a consumer which checks that equation at its admitted
+    boundary.
+    """
+
+    source: ChainComplexValue
+    target: ChainComplexValue
+    map_matrices: tuple[ChainMapComponent, ...] = Field(
+        max_length=2 * MAX_CHAIN_DEGREE + 1,
+        description=(
+            "One exact component per degree, shaped target basis size by source "
+            "basis size. JSON integers and reduced rationals use canonical "
+            "decimal strings; GF(p) coefficients are integer residues in [0,p)."
+        ),
+    )
+    source_basis_labels: ChainBasisLabels | None = None
+    target_basis_labels: ChainBasisLabels | None = None
+
+    @model_validator(mode="after")
+    def require_source_bound_components(self) -> Self:
+        source, target = self.source, self.target
+        if (source.degree_min, source.degree_max) != (
+            target.degree_min,
+            target.degree_max,
+        ):
+            raise _validation_error(
+                "chain_map_degree_interval_mismatch",
+                "chain-map endpoints must have the same degree interval",
+            )
+        if source.coefficient_ring is not target.coefficient_ring:
+            raise _validation_error(
+                "chain_map_ring_mismatch",
+                "chain-map endpoints must have the same coefficient ring",
+            )
+        if source.prime != target.prime:
+            raise _validation_error(
+                "chain_map_prime_mismatch",
+                "chain-map endpoints must have the same prime modulus",
+            )
+        if len(self.map_matrices) != len(source.basis_sizes):
+            raise _validation_error(
+                "chain_map_degree_count_mismatch",
+                "chain maps require one map component per chain degree",
+            )
+        total_cells = 0
+        total_entry_chars = 0
+        for degree, matrix in enumerate(self.map_matrices):
+            rows, columns = target.basis_sizes[degree], source.basis_sizes[degree]
+            if len(matrix) != rows or any(len(row) != columns for row in matrix):
+                raise _validation_error(
+                    "chain_map_component_shape_mismatch",
+                    f"chain-map component {degree} must have shape {rows}x{columns}",
+                )
+            for row in matrix:
+                for entry in row:
+                    _require_coefficient_scalar(
+                        source.coefficient_ring, entry, prime=source.prime
+                    )
+                    total_entry_chars += len(_format_chain_coefficient(entry))
+            total_cells += rows * columns
+        if total_cells > MAX_CHAIN_MAP_CELLS:
+            raise _validation_error(
+                "chain_map_cell_budget_exceeded",
+                f"chain map has {total_cells} aggregate cells, exceeding the "
+                f"{MAX_CHAIN_MAP_CELLS}-cell bound",
+            )
+        if total_entry_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+            raise _validation_error(
+                "chain_map_entry_budget_exceeded",
+                f"chain-map entries have {total_entry_chars} characters, exceeding "
+                f"the {MAX_CHAIN_MAP_ENTRY_CHARS}-character bound",
+            )
+        self._require_axis_labels(
+            self.source_basis_labels, source.basis_sizes, "source"
+        )
+        self._require_axis_labels(
+            self.target_basis_labels, target.basis_sizes, "target"
+        )
+        return self
+
+    @staticmethod
+    def _require_axis_labels(
+        labels: tuple[tuple[str, ...], ...] | None,
+        basis_sizes: tuple[int, ...],
+        side: str,
+    ) -> None:
+        if labels is None:
+            return
+        if len(labels) != len(basis_sizes) or any(
+            len(row) != size for row, size in zip(labels, basis_sizes, strict=True)
+        ):
+            raise _validation_error(
+                "chain_map_label_axes_mismatch",
+                f"{side} basis labels must match every endpoint basis axis",
+            )
+        total_chars = 0
+        for degree, row in enumerate(labels):
+            if any(type(label) is not str or not label for label in row):
+                raise _validation_error(
+                    "chain_map_label_invalid",
+                    f"{side} labels in degree {degree} must be nonempty strings",
+                )
+            if len(set(row)) != len(row):
+                raise _validation_error(
+                    "chain_map_labels_not_unique",
+                    f"{side} labels in degree {degree} must be unique",
+                )
+            total_chars += sum(map(len, row))
+        if total_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
+            raise _validation_error(
+                "chain_map_label_budget_exceeded",
+                f"{side} basis labels exceed the {MAX_CHAIN_MAP_ENTRY_CHARS}-character bound",
             )
 
 
@@ -639,9 +767,7 @@ class MappingConeResult(StrictModel):
     cone_differential_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
     source_degree_min: int
     target_degree_min: int
-    source: ChainComplexValue
-    target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]
+    chain_map: ChainMapValue
     value: ChainComplexValue
 
     @model_validator(mode="after")
@@ -651,9 +777,9 @@ class MappingConeResult(StrictModel):
         Result construction checks only the structural source binding;
         the defining computation runs in the owner operation.
         """
-        if (
-            self.source_degree_min != self.source.degree_min
-            or self.target_degree_min != self.target.degree_min
+        source, target = self.chain_map.source, self.chain_map.target
+        if self.source_degree_min != source.degree_min or (
+            self.target_degree_min != target.degree_min
         ):
             raise _validation_error(
                 "cone_degree_provenance_mismatch",
@@ -666,11 +792,11 @@ class MappingConeResult(StrictModel):
                 "cone_projection_not_bound",
                 "cone projections must equal the retained canonical value",
             )
-        expected_degree_max = self.source.degree_min + len(self.value.basis_sizes) - 1
+        expected_degree_max = source.degree_min + len(self.value.basis_sizes) - 1
         if (
-            self.value.coefficient_ring != self.source.coefficient_ring
-            or self.value.prime != self.source.prime
-            or self.value.degree_min != self.source.degree_min
+            self.value.coefficient_ring != source.coefficient_ring
+            or self.value.prime != source.prime
+            or self.value.degree_min != source.degree_min
             or self.value.degree_max != expected_degree_max
         ):
             raise _validation_error(
@@ -687,19 +813,16 @@ class MappingConeResult(StrictModel):
         cone_differential_matrices: tuple[
             tuple[tuple[ChainCoefficient, ...], ...], ...
         ],
-        source: ChainComplexValue,
-        target: ChainComplexValue,
-        map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
+        chain_map: ChainMapValue,
         value: ChainComplexValue,
     ) -> Self:
+        source, target = chain_map.source, chain_map.target
         return cls.model_construct(
             cone_basis_sizes=cone_basis_sizes,
             cone_differential_matrices=cone_differential_matrices,
             source_degree_min=source.degree_min,
             target_degree_min=target.degree_min,
-            source=source,
-            target=target,
-            map_matrices=map_matrices,
+            chain_map=chain_map,
             value=value,
         )
 
@@ -841,30 +964,21 @@ class VerificationResult(StrictModel):
     is_valid: bool
     detail: str
     complex: ChainComplexValue | None = None
-    source: ChainComplexValue | None = None
-    target: ChainComplexValue | None = None
-    map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] | None = None
+    chain_map: ChainMapValue | None = None
 
     @model_validator(mode="after")
     def require_complete_source(self) -> Self:
         """Require exactly one structurally complete checked relation."""
-        if self.complex is not None and (
-            self.source or self.target or self.map_matrices
-        ):
+        if self.complex is not None and self.chain_map is not None:
             raise _validation_error(
                 "verification_inputs_conflict",
                 "a differential verification result must not carry chain-map inputs",
             )
-        has_complete_map = (
-            self.source is not None
-            and self.target is not None
-            and self.map_matrices is not None
-        )
-        if self.complex is None and not has_complete_map:
+        if self.complex is None and self.chain_map is None:
             raise _validation_error(
                 "verification_inputs_missing",
                 "a verification result must retain the complete checked "
-                "input (the complex, or both endpoints with their map)",
+                "input (the complex or source-bound chain map)",
             )
         return self
 
@@ -882,14 +996,8 @@ class VerificationResult(StrictModel):
         *,
         is_valid: bool,
         detail: str,
-        source: ChainComplexValue,
-        target: ChainComplexValue,
-        map_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...],
+        chain_map: ChainMapValue,
     ) -> Self:
         return cls.model_construct(
-            is_valid=is_valid,
-            detail=detail,
-            source=source,
-            target=target,
-            map_matrices=map_matrices,
+            is_valid=is_valid, detail=detail, chain_map=chain_map
         )

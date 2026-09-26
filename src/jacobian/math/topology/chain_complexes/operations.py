@@ -9,7 +9,6 @@ from jacobian.math.topology.chain_complexes._integral_homology import (
     compute_integral_homology,
 )
 from jacobian.math.topology.chain_complexes._models import (
-    _require_chain_map_components,
     _require_complex_cell_budget,
 )
 from jacobian.math.topology.chain_complexes.values import (
@@ -21,6 +20,7 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_TENSOR_TOTAL_CELLS,
     ChainCoefficient,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
     HomologyGroupValue,
     HomologyResult,
@@ -985,7 +985,11 @@ def construct_chain_complex(
     return value
 
 
-def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
+def homology_groups(
+    complex_value: ChainComplexValue,
+    *,
+    _integral_right_inverses: list[list[list[int]]] | None = None,
+) -> HomologyResult:
     """Return exact homology groups for a canonical chain complex value."""
     require_prime_field_admission(complex_value.coefficient_ring, complex_value.prime)
     _require_complex_cell_budget(
@@ -995,7 +999,10 @@ def homology_groups(complex_value: ChainComplexValue) -> HomologyResult:
     )
     groups: tuple[HomologyGroupValue | IntegralHomologyGroupValue, ...]
     if complex_value.coefficient_ring is CoefficientRing.INTEGER:
-        groups = compute_integral_homology(admit_integral_homology(complex_value))
+        groups = compute_integral_homology(
+            admit_integral_homology(complex_value),
+            right_inverses=_integral_right_inverses,
+        )
     else:
         groups = tuple(_compute_homology_groups(complex_value))
     return HomologyResult._from_kernel(
@@ -1019,11 +1026,15 @@ def differential_squares_to_zero(
 
 
 def chain_map_commutes(
-    source: ChainComplexValue,
-    target: ChainComplexValue,
-    map_matrices: MapMatrices,
+    chain_map: ChainMapValue,
 ) -> VerificationResult:
     """Verify that a component-wise chain map commutes with differentials."""
+    chain_map = ChainMapValue.model_validate(chain_map.model_dump())
+    source, target, map_matrices = (
+        chain_map.source,
+        chain_map.target,
+        chain_map.map_matrices,
+    )
     _admit_prime_fields(source, target)
     for label, complex_value in (("source", source), ("target", target)):
         _require_complex_cell_budget(
@@ -1031,25 +1042,24 @@ def chain_map_commutes(
             maximum=MAX_OPERATION_MATRIX_CELLS,
             label=f"chain-map {label}",
         )
-    _require_chain_map_components(
-        source, target, map_matrices, label="chain-map verification"
-    )
     is_valid, detail = _chain_map_verdict(source, target, map_matrices)
     return VerificationResult._from_chain_map_kernel(
         is_valid=is_valid,
         detail=detail,
-        source=source,
-        target=target,
-        map_matrices=map_matrices,
+        chain_map=chain_map,
     )
 
 
 def mapping_cone(
-    source: ChainComplexValue,
-    target: ChainComplexValue,
-    map_matrices: MapMatrices,
+    chain_map: ChainMapValue,
 ) -> MappingConeResult:
     """Compute the mapping cone of a chain-map value."""
+    chain_map = ChainMapValue.model_validate(chain_map.model_dump())
+    source, target, map_matrices = (
+        chain_map.source,
+        chain_map.target,
+        chain_map.map_matrices,
+    )
     _admit_prime_fields(source, target)
     for label, complex_value in (("source", source), ("target", target)):
         _require_complex_cell_budget(
@@ -1057,7 +1067,6 @@ def mapping_cone(
             maximum=MAX_OPERATION_MATRIX_CELLS,
             label=f"mapping-cone {label}",
         )
-    _require_chain_map_components(source, target, map_matrices, label="mapping cone")
     _require_cone_admission(source, target, map_matrices)
     cone_basis_sizes, cone_diffs = _compute_mapping_cone(source, target, map_matrices)
     value = ChainComplexValue(
@@ -1071,9 +1080,7 @@ def mapping_cone(
     return MappingConeResult._from_kernel(
         cone_basis_sizes=cone_basis_sizes,
         cone_differential_matrices=cone_diffs,
-        source=source,
-        target=target,
-        map_matrices=map_matrices,
+        chain_map=chain_map,
         value=value,
     )
 

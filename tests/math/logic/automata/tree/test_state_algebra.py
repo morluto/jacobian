@@ -4,7 +4,10 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.tree import (
     CompleteDeterministicBottomUpTreeAutomaton,
     RankedTree,
@@ -63,6 +66,19 @@ def _term(tree: RankedTree) -> FlatTerm:
             )
         )
     return FlatTerm(nodes=tuple(nodes), root=len(nodes) - 1)
+
+
+def test_state_algebra_rejects_untrusted_or_incomplete_native_inputs() -> None:
+    automaton = _automaton()
+    partial = automaton.model_dump()
+    partial["transitions"] = partial["transitions"][:-1]
+    with pytest.raises(OperationDomainValidationError):
+        deterministic_tree_automaton_state_algebra(partial)
+    with pytest.raises(OperationDomainValidationError):
+        deterministic_tree_automaton_state_algebra(object())  # type: ignore[arg-type]
+    malformed = CompleteDeterministicBottomUpTreeAutomaton.model_construct(**partial)
+    with pytest.raises(OperationDomainValidationError):
+        deterministic_tree_automaton_state_algebra(malformed)
 
 
 def test_state_algebra_preserves_full_state_and_ranked_symbol_axes() -> None:

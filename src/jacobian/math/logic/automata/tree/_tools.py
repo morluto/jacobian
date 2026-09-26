@@ -593,7 +593,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="ranked_symbol_operations",
                 description=(
-                    "Interpret the nullary and binary ranked symbols as "
+                    "For a complete deterministic input automaton—exactly one "
+                    "transition for every ranked symbol and child-state tuple—"
+                    "interpret the nullary and binary ranked symbols as "
                     "operations on the exact automaton state set."
                 ),
                 input={

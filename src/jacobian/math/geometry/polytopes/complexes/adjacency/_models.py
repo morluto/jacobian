@@ -180,6 +180,11 @@ def _validate_facet_edge(
             "polytopal_complex.adjacency_facet_dimension",
             "each graph edge must carry a codimension-one face",
         )
+    if edge.left_cell_id not in point_maps or edge.right_cell_id not in point_maps:
+        raise PydanticCustomError(
+            "polytopal_complex.adjacency_cell_reference",
+            "each graph edge must reference existing cells",
+        )
     facet_points = {point.coordinates for point in edge.facet.vertices}
     left_points = point_maps[edge.left_cell_id]
     right_points = point_maps[edge.right_cell_id]

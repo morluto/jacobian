@@ -748,9 +748,13 @@ def _stabilizer_relation_for_pauli(
             if coordinates[pivot]:
                 row, exact_row, row_relation = echelon[pivot]
                 reduced = _product_pauli_after_admission(reduced, exact_row)
-                coordinates = tuple(a ^ b for a, b in zip(coordinates, row, strict=True))
+                coordinates = tuple(
+                    a ^ b for a, b in zip(coordinates, row, strict=True)
+                )
                 relation ^= row_relation
-        new_pivot = next((column for column, bit in enumerate(coordinates) if bit), None)
+        new_pivot = next(
+            (column for column, bit in enumerate(coordinates) if bit), None
+        )
         if new_pivot is not None:
             echelon[new_pivot] = (coordinates, reduced, relation)
 
@@ -800,7 +804,9 @@ def _measurement_post_state(
             updated.append(_product_pauli_after_admission(generator, pivot))
         else:
             updated.append(generator)
-    group = ExactStabilizerGroup(register=state.group.register, generators=tuple(updated))
+    group = ExactStabilizerGroup(
+        register=state.group.register, generators=tuple(updated)
+    )
     return stabilizer_code_compute(
         StabilizerCodeRequest(
             group=group,

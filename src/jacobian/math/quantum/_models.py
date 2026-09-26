@@ -311,7 +311,8 @@ class StabilizerCodeRequest(StrictModel):
             )
         if any(value not in (-1, 1) for value in self.generator_eigenvalues):
             raise _validation_error(
-                "code_character_sign", "stabilizer generator eigenvalues must be +1 or -1"
+                "code_character_sign",
+                "stabilizer generator eigenvalues must be +1 or -1",
             )
         return self
 
@@ -345,7 +346,8 @@ class StabilizerMeasurementBranch(StrictModel):
     def require_pure_post_state(self) -> Self:
         if self.state.logical_qubits != 0:
             raise _validation_error(
-                "measurement_branch_state", "measurement branch must retain a pure stabilizer state"
+                "measurement_branch_state",
+                "measurement branch must retain a pure stabilizer state",
             )
         return self
 
@@ -368,17 +370,20 @@ class StabilizerStatePauliMeasurementResult(StrictModel):
         register = self.source_state.group.register
         if self.source_state.logical_qubits != 0:
             raise _validation_error(
-                "measurement_source_state", "measurement source must encode no logical qubits"
+                "measurement_source_state",
+                "measurement source must encode no logical qubits",
             )
         if self.observable.register != register:
             raise _validation_error(
-                "measurement_register", "observable and state must share the ordered register"
+                "measurement_register",
+                "observable and state must share the ordered register",
             )
         if self.status == "DETERMINISTIC":
             if (
                 self.deterministic_outcome not in (-1, 1)
                 or self.relation_generator_bits is None
-                or len(self.relation_generator_bits) != len(self.source_state.group.generators)
+                or len(self.relation_generator_bits)
+                != len(self.source_state.group.generators)
                 or any(bit not in (0, 1) for bit in self.relation_generator_bits)
                 or self.relation_phase not in (0, 2)
                 or self.deterministic_state is None
@@ -399,15 +404,19 @@ class StabilizerStatePauliMeasurementResult(StrictModel):
                     "observable relation phase must determine its exact eigenvalue",
                 )
         else:
-            if any(
-                value is not None
-                for value in (
-                    self.deterministic_outcome,
-                    self.relation_generator_bits,
-                    self.relation_phase,
-                    self.deterministic_state,
+            if (
+                any(
+                    value is not None
+                    for value in (
+                        self.deterministic_outcome,
+                        self.relation_generator_bits,
+                        self.relation_phase,
+                        self.deterministic_state,
+                    )
                 )
-            ) or self.positive_branch is None or self.negative_branch is None:
+                or self.positive_branch is None
+                or self.negative_branch is None
+            ):
                 raise _validation_error(
                     "measurement_uniform_branch",
                     "uniform result needs exactly the positive and negative branches",
@@ -431,7 +440,8 @@ class StabilizerStatePauliMeasurementResult(StrictModel):
             for bit in (self.relation_generator_bits or ())
         ):
             raise _validation_error(
-                "measurement_relation_bits", "generator relation coordinates must be bits"
+                "measurement_relation_bits",
+                "generator relation coordinates must be bits",
             )
         return self
 

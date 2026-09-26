@@ -48,8 +48,7 @@ def _pauli_matrix(pauli: ExactQubitPauli) -> sp.Matrix:
     dimension = 1 << n
     matrix = sp.zeros(dimension, dimension)
     flip_mask = sum(
-        bit << (n - index - 1)
-        for index, bit in enumerate(pauli.phase_free.x_bits)
+        bit << (n - index - 1) for index, bit in enumerate(pauli.phase_free.x_bits)
     )
     for basis in range(dimension):
         z_parity = sum(
@@ -75,8 +74,7 @@ def _assert_branch_projectors(result, source_state) -> None:
     for branch in (result.positive_branch, result.negative_branch):
         assert branch is not None
         spectral_projector = (
-            sp.eye(source_projector.rows)
-            + branch.outcome * observable_matrix
+            sp.eye(source_projector.rows) + branch.outcome * observable_matrix
         ) / 2
         assert (
             spectral_projector * source_projector * spectral_projector

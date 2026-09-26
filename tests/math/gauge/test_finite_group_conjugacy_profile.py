@@ -1,6 +1,7 @@
 from itertools import permutations
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.gauge import (
@@ -17,6 +18,7 @@ from jacobian.math.gauge import (
     finite_group_gauge_holonomy,
     finite_group_holonomy_conjugacy_profile,
 )
+from jacobian.math.gauge._models import FiniteGroupGaugeContribution
 from jacobian.math.groups._table_models import (
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
@@ -233,6 +235,24 @@ def test_profile_value_rejects_open_retained_holonomy():
                 "class_representative_index": index[(1, 0, 2)],
                 "class_size": 1,
             }
+        )
+
+
+def test_holonomy_result_rejects_forged_nested_group_indices():
+    group, _, index = _s3()
+    loop = _loop(group, index[(1, 0, 2)])
+    invalid_element = FiniteGroupTableElement.model_construct(group=group, index=99)
+    with pytest.raises(ValidationError):
+        FiniteGroupGaugeHolonomyResult.model_validate(
+            {**loop.model_dump(), "holonomy": invalid_element}
+        )
+
+    invalid_contribution = FiniteGroupGaugeContribution.model_construct(
+        edge_id="e", forward=True, value=invalid_element
+    )
+    with pytest.raises(ValidationError):
+        FiniteGroupGaugeHolonomyResult.model_validate(
+            {**loop.model_dump(), "contributions": (invalid_contribution,)}
         )
 
 

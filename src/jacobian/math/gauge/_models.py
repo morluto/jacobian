@@ -608,6 +608,13 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
 
     @model_validator(mode="after")
     def require_parent_bindings(self) -> Self:
+        order = (
+            len(self.field.group.multiplication)
+            if isinstance(self.field, FiniteGroupGaugeField)
+            and isinstance(self.field.group, FiniteGroupTable)
+            and type(self.field.group.multiplication) is tuple
+            else 0
+        )
         if (
             not isinstance(self.field, FiniteGroupGaugeField)
             or not isinstance(self.field.lattice, GaugeLattice)
@@ -617,6 +624,8 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
             or not _has_canonical_path_steps(self.path)
             or not isinstance(self.holonomy, FiniteGroupTableElement)
             or self.holonomy.group != self.field.group
+            or type(self.holonomy.index) is not int
+            or not 0 <= self.holonomy.index < order
             or type(self.contributions) is not tuple
             or len(self.contributions) != len(self.path.steps)
         ):
@@ -631,6 +640,8 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
                 or contribution.forward is not step.forward
                 or not isinstance(contribution.value, FiniteGroupTableElement)
                 or contribution.value.group != self.field.group
+                or type(contribution.value.index) is not int
+                or not 0 <= contribution.value.index < order
             ):
                 raise _validation_error(
                     "finite_group_holonomy_contribution_parent",

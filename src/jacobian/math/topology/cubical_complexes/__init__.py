@@ -2,6 +2,7 @@
 
 from jacobian.math.topology.cubical_complexes.extensions import (
     CubicalTriangulationCellMap,
+    CubicalTriangulationRequest,
     CubicalTriangulationResult,
     CubicalVertexMap,
     bitmap_to_complex,
@@ -26,6 +27,7 @@ from jacobian.math.topology.cubical_complexes.operations import (
 
 __all__ = [
     "CubicalTriangulationCellMap",
+    "CubicalTriangulationRequest",
     "CubicalTriangulationResult",
     "CubicalVertexMap",
     "bitmap_to_complex",

@@ -1,9 +1,12 @@
 """Public declarations for exact bounded modular-form operations."""
 
+from typing import cast
+
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
+    ModularCharacterSpaceInclusionRequest,
     ModularFormBasisFrameRequest,
     ModularFormBasisRequest,
     ModularFormCanonicalToFramedRequest,
@@ -53,6 +56,16 @@ from jacobian.math.number_theory.modular_forms.basis import (
 from jacobian.math.number_theory.modular_forms.character_basis_tools import (
     TOOLS as CHARACTER_BASIS_TOOLS,
 )
+from jacobian.math.number_theory.modular_forms.character_basis_tools import (
+    _character_form_example,
+)
+from jacobian.math.number_theory.modular_forms.character_degeneracy import (
+    modular_character_coordinates_v_degeneracy,
+)
+from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
+    ModularCharacterVDegeneracyImage,
+    ModularCharacterVDegeneracyRequest,
+)
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
     TOOLS as FIELD_COORDINATE_TOOLS,
 )
@@ -61,6 +74,7 @@ from jacobian.math.number_theory.modular_forms.transform_tools import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularCharacterSpaceInclusion,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -110,6 +124,14 @@ def compute_modular_form_space_inclusion(
     request: ModularFormSpaceInclusionRequest,
 ) -> ModularFormSpaceInclusion:
     return modular_form_space_inclusion(request.source_space, request.target_space)
+
+
+def compute_modular_character_space_inclusion(
+    request: ModularCharacterSpaceInclusionRequest,
+) -> ModularCharacterSpaceInclusion:
+    return native.modular_form_character_space_inclusion(
+        request.source_space, request.target_space
+    )
 
 
 def decide_coordinate_equality(
@@ -192,6 +214,44 @@ def apply_coordinate_v_degeneracy(
     return modular_form_coordinates_v_degeneracy(request.form, request.d)
 
 
+def apply_character_coordinate_v_degeneracy(
+    request: ModularCharacterVDegeneracyRequest,
+) -> ModularCharacterVDegeneracyImage:
+    return modular_character_coordinates_v_degeneracy(request)
+
+
+def _character_v_target_space_example() -> dict[str, object]:
+    target = dict(cast(dict[str, object], _character_form_example()["space"]))
+    target["level"] = 26
+    target["character"] = {
+        "group": {
+            "modulus": 26,
+            "unit_residues": [1, 3, 5, 7, 9, 11, 15, 17, 19, 21, 23, 25],
+            "character_count": 12,
+            "invariant_factors": [12],
+            "generators": [15],
+            "generator_orders": [12],
+            "unit_coordinates": [
+                [0],
+                [4],
+                [9],
+                [11],
+                [8],
+                [7],
+                [1],
+                [2],
+                [5],
+                [3],
+                [10],
+                [6],
+            ],
+            "exponent": 12,
+        },
+        "coordinates": [2],
+    }
+    return target
+
+
 def compute_operator_image(
     request: ModularFormOperatorImageRequest,
 ) -> ModularFormOperatorImage:
@@ -207,6 +267,79 @@ def compute_operator_image_prefix(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="modular_form.character_space.inclusion.compute",
+        title="Construct a character-valued modular-space inclusion",
+        description=(
+            "Construct the same-weight inclusion from a Gamma0(M) space to a "
+            "Gamma0(N) space when M divides N, the space kinds and exact "
+            "coefficient parents agree, and the target Dirichlet character is "
+            "the source character pulled back along reduction modulo M. The "
+            "operation checks the relation on every target unit. This map "
+            "establishes space inclusion only; it does not transport coordinates "
+            "or construct a target basis. Levels are bounded by 2,048."
+        ),
+        request_type=ModularCharacterSpaceInclusionRequest,
+        result_type=ModularCharacterSpaceInclusion,
+        run=compute_modular_character_space_inclusion,
+        tags=("modular-forms", "characters", "spaces", "inclusion", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_character_level_inclusion",
+                description=(
+                    "Include S2(Gamma0(3), chi) into S2(Gamma0(15), chi') "
+                    "when chi' is the exact inflation of the quadratic chi."
+                ),
+                input={
+                    "source_space": {
+                        "level": 3,
+                        "weight": 2,
+                        "kind": "S",
+                        "character": {
+                            "group": {
+                                "modulus": 3,
+                                "unit_residues": [1, 2],
+                                "character_count": 2,
+                                "invariant_factors": [2],
+                                "generators": [2],
+                                "generator_orders": [2],
+                                "unit_coordinates": [[0], [1]],
+                                "exponent": 2,
+                            },
+                            "coordinates": [1],
+                        },
+                    },
+                    "target_space": {
+                        "level": 15,
+                        "weight": 2,
+                        "kind": "S",
+                        "character": {
+                            "group": {
+                                "modulus": 15,
+                                "unit_residues": [1, 2, 4, 7, 8, 11, 13, 14],
+                                "character_count": 8,
+                                "invariant_factors": [2, 4],
+                                "generators": [11, 7],
+                                "generator_orders": [2, 4],
+                                "unit_coordinates": [
+                                    [0, 0],
+                                    [1, 1],
+                                    [0, 2],
+                                    [0, 1],
+                                    [1, 3],
+                                    [1, 0],
+                                    [0, 3],
+                                    [1, 2],
+                                ],
+                                "exponent": 4,
+                            },
+                            "coordinates": [1, 0],
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="modular_form.space.inclusion.compute",
         title="Construct a natural inclusion of modular-form spaces",
@@ -1143,6 +1276,36 @@ TOOLS: MathTools = (
                         ],
                     },
                     "d": 2,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.character_coordinates.v_degeneracy.apply",
+        title="Represent a character-valued V_d image in its exact target space",
+        description=(
+            "Return the exact source-bound V_d image, defined by "
+            "V_d(f)(q)=f(q^d), for either normalized form in "
+            "S2(Gamma0(13), chi) for the admitted order-six characters over "
+            "Q(zeta_6), with d=2 or 3. Supply the exact target S2 space at "
+            "level 26 or 39; its character-inflation inclusion is checked. "
+            "The result retains the exact source form, degeneracy index, "
+            "inflated target space, and finite q-prefix through q^(2d), the "
+            "image of the source's Sturm-determining prefix."
+        ),
+        request_type=ModularCharacterVDegeneracyRequest,
+        result_type=ModularCharacterVDegeneracyImage,
+        run=apply_character_coordinate_v_degeneracy,
+        tags=("modular-forms", "characters", "v-operator", "exact"),
+        examples=(
+            OperationExample(
+                name="v2_order6_character_form",
+                description=(
+                    "Apply V_2 with the exact level-26 inflated-character target."
+                ),
+                input={
+                    "form": _character_form_example(),
+                    "target_space": _character_v_target_space_example(),
                 },
             ),
         ),

@@ -28,6 +28,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
+from .space_maps import modular_form_character_space_inclusion
 from .transforms import named_q_expansion, sturm_bound
 
 
@@ -276,6 +277,7 @@ def space_dimension(space: ModularFormSpace) -> SpaceDimensionResult:
 
 __all__ = [
     "level_one_named_q_expansion",
+    "modular_form_character_space_inclusion",
     "named_q_expansion",
     "space_dimension",
     "sturm_bound",

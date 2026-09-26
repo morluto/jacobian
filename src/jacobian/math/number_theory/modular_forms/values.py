@@ -23,6 +23,7 @@ from jacobian.math.polynomials.series._models import TruncatedSeries
 
 MAX_MODULAR_FORM_LEVEL = 100_000
 MAX_MODULAR_FORM_WEIGHT = 1_000_000
+MAX_MODULAR_CHARACTER_INCLUSION_LEVEL = 2_048
 
 # Operation owners keep the reusable q-prefix carrier broader than any one
 # transform.  Transform admission below uses this source envelope before it
@@ -283,6 +284,44 @@ class ModularFormSpaceInclusion(StrictModel):
         if issue is not None:
             reason, message = issue
             raise _validation_error(reason, message)
+        return self
+
+
+class ModularCharacterSpaceInclusion(StrictModel):
+    """Same-weight inclusion along Gamma0 level and Dirichlet-character inflation.
+
+    Source and target use identical coefficient parents. The character values
+    themselves are bound to their respective levels by ``ModularFormSpace``;
+    the inflation relation is established by the constructing operation and
+    must be rechecked by any consumer that relies on this authored map.
+    """
+
+    map_kind: Literal["gamma0_character_inflation"] = "gamma0_character_inflation"
+    source_space: ModularFormSpace
+    target_space: ModularFormSpace
+
+    @model_validator(mode="after")
+    def require_structural_inclusion(self) -> Self:
+        source = self.source_space
+        target = self.target_space
+        if (
+            source.group != "GAMMA0"
+            or target.group != "GAMMA0"
+            or not isinstance(source.character, DirichletCharacter)
+            or not isinstance(target.character, DirichletCharacter)
+            or type(source.level) is not int
+            or type(target.level) is not int
+            or source.level > MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
+            or target.level > MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
+            or target.level % source.level
+            or source.weight != target.weight
+            or source.kind != target.kind
+            or source.coefficient_domain != target.coefficient_domain
+        ):
+            raise _validation_error(
+                "character_inclusion_shape",
+                "character inclusion requires nested Gamma0 levels, matching weight, space kind, and coefficient parent",
+            )
         return self
 
 
@@ -627,9 +666,11 @@ __all__ = [
     "MAX_LEVEL_ONE_BASIS_COORDINATES",
     "MAX_LEVEL_ONE_BASIS_PRECISION",
     "MAX_LEVEL_ONE_BASIS_WEIGHT",
+    "MAX_MODULAR_CHARACTER_INCLUSION_LEVEL",
     "MAX_MODULAR_FORM_LEVEL",
     "MAX_MODULAR_FORM_WEIGHT",
     "LevelOneModularQExpansion",
+    "ModularCharacterSpaceInclusion",
     "ModularFormBasis",
     "ModularFormBasisElement",
     "ModularFormCoordinates",

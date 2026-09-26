@@ -1,0 +1,201 @@
+"""Exact structural maps between supported modular-form spaces."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+from typing import cast
+
+from pydantic import ValidationError
+
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.number_theory.characters.operations import (
+    require_complete_character_group,
+)
+from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.modular_forms.values import (
+    MAX_MODULAR_CHARACTER_INCLUSION_LEVEL,
+    ModularCharacterSpaceInclusion,
+    ModularFormSpace,
+)
+
+MAX_CHARACTER_INCLUSION_WORK = 100_000
+
+
+def _domain(
+    message: str, *, code: str = "modular_form.character_inclusion_invalid"
+) -> None:
+    raise OperationDomainValidationError(
+        location=("inclusion",), code=code, message=message
+    )
+
+
+def _character_angle(
+    character: DirichletCharacter,
+    residue: int,
+    rows_by_residue: tuple[tuple[int, ...] | None, ...],
+) -> Fraction | None:
+    """Return the exact rational angle of a character value on a unit."""
+
+    group = character.group
+    row = rows_by_residue[residue % group.modulus]
+    if row is None:
+        return None
+    exponent = (
+        sum(
+            coordinate * (group.exponent // axis_order) * unit_coordinate
+            for coordinate, axis_order, unit_coordinate in zip(
+                character.coordinates, group.generator_orders, row, strict=True
+            )
+        )
+        % group.exponent
+    )
+    return Fraction(exponent, group.exponent)
+
+
+def require_modular_character_space_inclusion(
+    inclusion: ModularCharacterSpaceInclusion,
+) -> ModularCharacterSpaceInclusion:
+    """Re-establish the exact character-inflation relation of a supplied map."""
+
+    if type(inclusion) is not ModularCharacterSpaceInclusion:
+        _domain("a canonical modular-character space inclusion is required")
+    # Values that cross serialization are revalidated here. Native canonical
+    # values have already passed their owner models; rebuilding them would replay
+    # the exhaustive finite-unit group verification before work admission.
+    if (
+        type(inclusion.source_space) is not ModularFormSpace
+        or type(inclusion.target_space) is not ModularFormSpace
+    ):
+        try:
+            canonical = ModularCharacterSpaceInclusion.model_validate(
+                inclusion.model_dump()
+            )
+        except (ValidationError, AttributeError, TypeError, ValueError) as error:
+            raise OperationDomainValidationError(
+                location=("inclusion",),
+                code="modular_form.character_inclusion_invalid",
+                message="the modular-character space inclusion is malformed",
+            ) from error
+    else:
+        canonical = inclusion
+
+    source = canonical.source_space
+    target = canonical.target_space
+    # model_construct (or another trusted-kernel bypass) can construct a value
+    # whose nested structural claims were never checked.
+    try:
+        inclusion.require_structural_inclusion()
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="modular_form.character_inclusion_invalid",
+            message="the modular-character space inclusion is structurally invalid",
+        ) from error
+    if (
+        type(source) is not ModularFormSpace
+        or type(target) is not ModularFormSpace
+        or type(source.character) is not DirichletCharacter
+        or type(target.character) is not DirichletCharacter
+    ):
+        _domain("both inclusion parents must retain exact Dirichlet characters")
+    source_level = source.level
+    target_level = target.level
+    if (
+        type(source_level) is not int
+        or type(target_level) is not int
+        or source_level > MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
+        or target_level > MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
+    ):
+        raise OperationResourceAdmissionError(
+            location=("target_space", "level"),
+            code="modular_form.character_inclusion_level_bound",
+            message=(
+                "character-space inclusion levels exceed the exact admitted bound "
+                f"{MAX_MODULAR_CHARACTER_INCLUSION_LEVEL}"
+            ),
+        )
+
+    source_character = cast(DirichletCharacter, source.character)
+    target_character = cast(DirichletCharacter, target.character)
+    # Admit before proving authored finite-unit presentations. The level terms
+    # cover the complete-unit checks; the table/rank terms cover the relation.
+    target_units = target_character.group.unit_residues
+    source_units = source_character.group.unit_residues
+    source_rank = len(source_character.group.generator_orders)
+    target_rank = len(target_character.group.generator_orders)
+    work = (
+        source_level
+        + target_level
+        + len(source_units)
+        + len(target_units)
+        + len(target_units) * (source_rank + target_rank + 2)
+    )
+    if work > MAX_CHARACTER_INCLUSION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("target_space",),
+            code="modular_form.character_inclusion_work_bound",
+            message="exact character-inclusion comparison exceeds its admitted work bound",
+        )
+
+    require_complete_character_group(source_character.group)
+    require_complete_character_group(target_character.group)
+
+    # Index rows by canonical residue after admission. This makes each exact
+    # character lookup constant-time, including at the maximum admitted level.
+    source_rows: list[tuple[int, ...] | None] = [None] * source_level
+    target_rows: list[tuple[int, ...] | None] = [None] * target_level
+    for residue, row in zip(
+        source_units, source_character.group.unit_coordinates, strict=True
+    ):
+        source_rows[residue] = row
+    for residue, row in zip(
+        target_units, target_character.group.unit_coordinates, strict=True
+    ):
+        target_rows[residue] = row
+    source_rows_by_residue = tuple(source_rows)
+    target_rows_by_residue = tuple(target_rows)
+
+    for residue in target_units:
+        source_angle = _character_angle(
+            source_character, residue, source_rows_by_residue
+        )
+        target_angle = _character_angle(
+            target_character, residue, target_rows_by_residue
+        )
+        if source_angle is None or target_angle is None or source_angle != target_angle:
+            _domain(
+                "target character must equal the source character pulled back along reduction of units",
+                code="modular_form.character_inflation_mismatch",
+            )
+    return canonical
+
+
+def modular_form_character_space_inclusion(
+    source_space: ModularFormSpace,
+    target_space: ModularFormSpace,
+) -> ModularCharacterSpaceInclusion:
+    """Construct a nested-level inclusion with exact character inflation."""
+
+    if (
+        type(source_space) is not ModularFormSpace
+        or type(target_space) is not ModularFormSpace
+    ):
+        _domain(
+            "source and target must be exact modular-form space values",
+            code="modular_form.character_inclusion_space_type",
+        )
+    inclusion = ModularCharacterSpaceInclusion.model_construct(
+        map_kind="gamma0_character_inflation",
+        source_space=source_space,
+        target_space=target_space,
+    )
+    return require_modular_character_space_inclusion(inclusion)
+
+
+__all__ = [
+    "modular_form_character_space_inclusion",
+    "require_modular_character_space_inclusion",
+]

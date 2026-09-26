@@ -392,13 +392,13 @@ def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
         degree_min=0,
         degree_max=1,
         basis_sizes=(1, 1),
-        differential_matrices=((("1",),),),
+        differential_matrices=(((1,),),),
     )
     filtration = (
         FiltrationLevel(
             subspaces=(
-                FilteredSubspace(vectors=(("1",),)),
-                FilteredSubspace(vectors=(("1",),)),
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((1,),)),
             )
         ),
     )
@@ -408,11 +408,11 @@ def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
             source_filtration=filtration,
             target=complex_,
             target_filtration=filtration,
-            maps=((("0",),), (("2",),)),
+            maps=(((0,),), ((2,),)),
         )
     )
     assert result.chain_map is True
-    assert result.maps == ((("0",),), (("0",),))
+    assert result.maps == (((0,),), ((0,),))
 
 
 def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
@@ -428,21 +428,21 @@ def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
         degree_min=0,
         degree_max=1,
         basis_sizes=(1, 1),
-        differential_matrices=((("0",),),),
+        differential_matrices=(((0,),),),
     )
     source_filtration = (
         FiltrationLevel(
             subspaces=(
                 FilteredSubspace(vectors=()),
-                FilteredSubspace(vectors=(("1",),)),
+                FilteredSubspace(vectors=((1,),)),
             )
         ),
     )
     target_filtration = (
         FiltrationLevel(
             subspaces=(
-                FilteredSubspace(vectors=(("1",),)),
-                FilteredSubspace(vectors=(("1",),)),
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((1,),)),
             )
         ),
     )
@@ -453,7 +453,7 @@ def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
             source_filtration=source_filtration,
             target=target,
             target_filtration=target_filtration,
-            maps=(((),), (("0",),)),
+            maps=(((),), ((0,),)),
         )
     )
 
@@ -468,19 +468,19 @@ def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> No
         degree_min=0,
         degree_max=1,
         basis_sizes=(1, 1),
-        differential_matrices=((("1",),),),
+        differential_matrices=(((1,),),),
     )
     malformed = (
         FiltrationLevel(
             subspaces=(
-                FilteredSubspace(vectors=(("1",),)),
-                FilteredSubspace(vectors=(("1",),)),
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((1,),)),
             )
         ),
         FiltrationLevel(
             subspaces=(
-                FilteredSubspace(vectors=(("0",),)),
-                FilteredSubspace(vectors=(("0",),)),
+                FilteredSubspace(vectors=((0,),)),
+                FilteredSubspace(vectors=((0,),)),
             )
         ),
     )
@@ -491,7 +491,7 @@ def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> No
                 source_filtration=malformed,
                 target=complex_,
                 target_filtration=malformed,
-                maps=((("1",),), (("1",),)),
+                maps=(((1,),), ((1,),)),
             )
         )
 

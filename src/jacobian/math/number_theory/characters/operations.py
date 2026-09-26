@@ -409,9 +409,21 @@ def dirichlet_character_mixed_jacobi_sum(
             code="dirichlet_character.mixed_jacobi_sum.character_count",
             message="mixed Jacobi sums require exactly three characters",
         )
+    validated: list[DirichletCharacter] = []
+    for index, character in enumerate(characters):
+        try:
+            validated.append(_require_character(character))
+        except OperationDomainValidationError as exc:
+            errors = exc.errors()
+            first = errors[0] if errors else {}
+            raise OperationDomainValidationError(
+                location=("characters", index),
+                code=str(first.get("type", "dirichlet_character.invalid")),
+                message=str(first.get("msg", "invalid Dirichlet character")),
+            ) from exc
     chars = cast(
         tuple[DirichletCharacter, DirichletCharacter, DirichletCharacter],
-        tuple(_require_character(character) for character in characters),
+        tuple(validated),
     )
     group = chars[0].group
     if any(character.group != group for character in chars[1:]):

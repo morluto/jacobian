@@ -60,6 +60,13 @@ def test_mixed_jacobi_sum_requires_three_characters_in_same_parent() -> None:
     )
 
 
+def test_mixed_jacobi_sum_reports_malformed_character_index() -> None:
+    character = _principal_character(5)
+    with pytest.raises(OperationDomainValidationError) as error:
+        dirichlet_character_mixed_jacobi_sum((character, None, character))  # type: ignore[arg-type]
+    assert error.value.errors()[0]["loc"] == ("characters", 1)
+
+
 def test_mixed_jacobi_sum_rejects_quadratic_residue_work_before_expansion() -> None:
     character = _principal_character(1024)
     with pytest.raises(OperationResourceAdmissionError) as error:

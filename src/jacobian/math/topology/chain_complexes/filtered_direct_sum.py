@@ -428,6 +428,29 @@ def _preflight_matrices(
 def _preflight(
     left: FilteredChainComplexRequest, right: FilteredChainComplexRequest
 ) -> None:
+    # model_construct/model_copy can forge axis lengths that normal validation
+    # would reject. Check them before the resource estimator indexes by degree.
+    for label, value in (("left", left), ("right", right)):
+        complex_value = value.complex
+        degree_count = len(complex_value.basis_sizes)
+        if len(value.filtration) > MAX_FILTER_LEVELS or any(
+            len(level.subspaces) != degree_count for level in value.filtration
+        ):
+            raise _fail(
+                (label, "filtration"),
+                "filtered_chain_complex.filtration_axis_invalid",
+                "each filtration level must bind every degree in the complex axis",
+            )
+        for level_index, level in enumerate(value.filtration):
+            for degree, (subspace, ambient) in enumerate(
+                zip(level.subspaces, complex_value.basis_sizes, strict=True)
+            ):
+                if any(len(vector) != ambient for vector in subspace.vectors):
+                    raise _fail(
+                        (label, "filtration", level_index, degree),
+                        "filtered_chain_complex.filtration_axis_invalid",
+                        "filtration vectors must match their chain group dimension",
+                    )
     a = left.complex
     b = right.complex
     output_sizes = _require_shared_context(left, right)

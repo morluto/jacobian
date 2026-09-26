@@ -1154,9 +1154,11 @@ def induced_normalized_homology_map(
     """Compute the induced map on every homology degree supported by a prefix."""
     chain_map = induced_normalized_chain_map(map_value)
     source_plan = admit_integral_homology(chain_map.source)
+    source_carrier = _require_carrier(map_value.source, location="source")
+    target_carrier = _require_carrier(map_value.target, location="target")
     target_plan = (
         source_plan
-        if map_value.target == map_value.source
+        if target_carrier == source_carrier
         else admit_integral_homology(chain_map.target)
     )
     _admit_endpoint_plans(source_plan, target_plan)
@@ -1202,23 +1204,32 @@ def compose_simplicial_homology_maps(
     # shared middle complex.
     first_chain = induced_normalized_chain_map(first.simplicial_map)
     second_chain = induced_normalized_chain_map(second.simplicial_map)
-    plans: list[tuple[ChainComplexValue, IntegralHomologyExecutionPlan]] = []
-    for complex_value in (
-        first_chain.source,
-        first_chain.target,
-        second_chain.source,
-        second_chain.target,
+    plans: list[
+        tuple[
+            FiniteTruncatedSimplicialSet,
+            ChainComplexValue,
+            IntegralHomologyExecutionPlan,
+        ]
+    ] = []
+    for carrier, complex_value in (
+        (first.simplicial_map.source, first_chain.source),
+        (first.simplicial_map.target, first_chain.target),
+        (second.simplicial_map.source, second_chain.source),
+        (second.simplicial_map.target, second_chain.target),
     ):
-        if not any(existing == complex_value for existing, _ in plans):
-            plans.append((complex_value, admit_integral_homology(complex_value)))
-    if sum(plan.total_work for _, plan in plans) > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
+        canonical = _require_carrier(carrier, location="simplicial_set")
+        if not any(existing == canonical for existing, _, _ in plans):
+            plans.append(
+                (canonical, complex_value, admit_integral_homology(complex_value))
+            )
+    if sum(plan.total_work for _, _, plan in plans) > MAX_INTEGRAL_HOMOLOGY_WORK_UNITS:
         raise OperationResourceAdmissionError(
             location=("homology_map",),
             code="simplicial_set.induced_homology_endpoint_work_budget_exceeded",
             message="combined endpoint homology work exceeds its admitted envelope",
         )
     if (
-        sum(plan.output_scalar_count for _, plan in plans)
+        sum(plan.output_scalar_count for _, _, plan in plans)
         > MAX_INTEGRAL_HOMOLOGY_OUTPUT_SCALARS
     ):
         raise OperationResourceAdmissionError(
@@ -1226,22 +1237,30 @@ def compose_simplicial_homology_maps(
             code="simplicial_set.induced_homology_endpoint_output_budget_exceeded",
             message="combined endpoint homology output exceeds its admitted envelope",
         )
-    def plan_for(complex_value: ChainComplexValue) -> IntegralHomologyExecutionPlan:
-        return next(plan for existing, plan in plans if existing == complex_value)
+    def plan_for(
+        carrier: FiniteTruncatedSimplicialSet,
+        complex_value: ChainComplexValue,
+    ) -> IntegralHomologyExecutionPlan:
+        canonical = _require_carrier(carrier, location="simplicial_set")
+        return next(
+            plan
+            for existing_carrier, existing_complex, plan in plans
+            if existing_carrier == canonical and existing_complex == complex_value
+        )
 
     endpoint_cache: list[_NormalizedHomologyEndpoint] = []
     first_prepared = _prepare_induced_normalized_homology_map(
         first.simplicial_map,
         first_chain,
-        plan_for(first_chain.source),
-        plan_for(first_chain.target),
+        plan_for(first.simplicial_map.source, first_chain.source),
+        plan_for(first.simplicial_map.target, first_chain.target),
         endpoint_cache,
     )
     second_prepared = _prepare_induced_normalized_homology_map(
         second.simplicial_map,
         second_chain,
-        plan_for(second_chain.source),
-        plan_for(second_chain.target),
+        plan_for(second.simplicial_map.source, second_chain.source),
+        plan_for(second.simplicial_map.target, second_chain.target),
         endpoint_cache,
     )
     if (

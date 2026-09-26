@@ -178,6 +178,50 @@ def test_composition_canonicalizes_authored_homology_endpoints() -> None:
     assert compose_simplicial_homology_maps(stale, canonical) == canonical
 
 
+def test_composition_admits_each_distinct_carrier_with_shared_chain_axes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_carrier = standard_simplex(0, 2)
+    second_carrier = first_carrier.model_copy(
+        update={"sets": (("other-vertex",), *first_carrier.sets[1:])}
+    )
+    third_carrier = first_carrier.model_copy(
+        update={"sets": (("third-vertex",), *first_carrier.sets[1:])}
+    )
+
+    def map_between(source, target):
+        return TruncatedSimplicialMap(
+            source=source,
+            target=target,
+            maps=tuple(tuple(range(len(level))) for level in source.sets),
+        )
+
+    first = induced_normalized_homology_map(
+        map_between(first_carrier, second_carrier)
+    )
+    second = induced_normalized_homology_map(
+        map_between(second_carrier, third_carrier)
+    )
+    chain_complex = normalized_chains(first_carrier).chain_complex
+    one_endpoint_work = simplicial_maps.admit_integral_homology(
+        chain_complex
+    ).total_work
+    monkeypatch.setattr(
+        simplicial_maps, "MAX_INTEGRAL_HOMOLOGY_WORK_UNITS", one_endpoint_work
+    )
+
+    def endpoint_must_not_run(*args, **kwargs):
+        pytest.fail("endpoint homology ran before the aggregate work admission")
+
+    monkeypatch.setattr(simplicial_maps, "normalized_homology", endpoint_must_not_run)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        compose_simplicial_homology_maps(first, second)
+
+    assert error.value.errors()[0]["type"] == (
+        "simplicial_set.induced_homology_endpoint_work_budget_exceeded"
+    )
+
+
 def test_identity_of_contractible_simplex_keeps_zero_rank_map_rows() -> None:
     source = standard_simplex(1, 2)
     identity = TruncatedSimplicialMap(

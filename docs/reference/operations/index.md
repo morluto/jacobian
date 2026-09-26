@@ -14,6 +14,7 @@ that need more context than an operation card:
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Regular languages](regular-languages.md)
+- [Finite-state transducers](finite-state-transducers.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)

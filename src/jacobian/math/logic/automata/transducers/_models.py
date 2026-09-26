@@ -745,6 +745,25 @@ class RationalRelationInverseRequest(StrictModel):
     transducer: RationalTransducer
 
 
+class RationalRelationProjectionRequest(StrictModel):
+    """Project one tape of a finite rational relation to a regular language."""
+
+    transducer: RationalTransducer
+    tape: Literal["input", "output"]
+
+
+class RationalRelationFiberRequest(StrictModel):
+    """Fix one input word and represent all related output words as an NFA."""
+
+    transducer: RationalTransducer
+    input_word: tuple[int, ...] = Field(
+        description=(
+            "The exact input-alphabet word whose output fiber is requested; "
+            "supported length is determined by the derived fiber work and output bounds."
+        ),
+    )
+
+
 class RelationPathReplayResult(RelationPathReplayRequest):
     status: Literal["ACCEPTING_PAIR", "INVALID_PATH"]
     input_word: tuple[int, ...] = Field(max_length=MAX_FST_RESULT_WORD_LENGTH)
@@ -816,7 +835,9 @@ __all__ = [
     "ComposeResult",
     "MinimizeRequest",
     "MinimizeResult",
+    "RationalRelationFiberRequest",
     "RationalRelationInverseRequest",
+    "RationalRelationProjectionRequest",
     "RelationPathReplayRequest",
     "RelationPathReplayResult",
     "StatePairDistinguishability",

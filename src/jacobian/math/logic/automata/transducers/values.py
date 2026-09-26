@@ -274,8 +274,12 @@ class RationalTransducer(StrictModel):
 
     input_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
     output_alphabet_size: int = Field(ge=1, le=MAX_FST_ALPHABET)
-    input_alphabet_id: str | None = Field(default=None)
-    output_alphabet_id: str | None = Field(default=None)
+    input_alphabet_id: str | None = Field(
+        default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
+    )
+    output_alphabet_id: str | None = Field(
+        default=None, max_length=MAX_FST_ALPHABET_ID_LENGTH
+    )
     input_alphabet: FiniteAlphabet | None = None
     output_alphabet: FiniteAlphabet | None = None
     state_count: int = Field(ge=1, le=MAX_FST_STATES)

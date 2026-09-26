@@ -36,6 +36,41 @@ initial and accepting sets, and edge order. This is a typed relation transform;
 applying it twice recovers the original canonical relation. Its work and result
 size are linear in the already bounded relation representation.
 
+`transducer.relation.projection.compute` consumes a `RationalTransducer` and
+selects either its `input` or `output` tape. It returns an epsilon-NFA accepting
+exactly the selected words contributed by accepting relation paths. The two
+alphabets are carried separately by the relation, and the result preserves the
+selected side's alphabet size, explicit ordered symbols, and optional identity.
+Multiple paths and multiple outputs for one input remain relational choices;
+the operation does not turn a nondeterministic relation into a function. A
+zero-length selected edge label becomes epsilon, while a longer label becomes
+a path with fresh intermediate states. Multiple initial states are joined by
+epsilon edges from one fresh NFA start state. State, transition, work, and
+result-byte estimates are admitted before expanded NFA transitions are built.
+The construction is checked against an independent accepting-path enumerator
+on finite acyclic relations and against inverse-relation projection identities.
+
+`transducer.relation.outputs_for_input_automaton.compute` fixes one input word
+and returns an epsilon-NFA for every output on every accepting relation path
+whose concatenated input labels equal that word. The construction pairs each
+transducer state with a position in the fixed word, and follows an edge only
+where its entire input label matches at that position. Empty input labels do
+not advance the position; multi-symbol output labels expand to NFA paths. An
+output-producing input-epsilon cycle remains a cycle in the NFA, so an infinite
+fiber such as `1*` is represented exactly without enumerating outputs or
+determinizing the result. Product states, label matching, work, intermediate
+allocation, transitions, and serialized NFA size are admitted before product
+exploration. An explicit output alphabet is required so the result carries the
+same reusable alphabet parent expected by regular-language operations. The
+finite cases are checked against direct accepting-path
+enumeration, and an epsilon-output-loop fixture checks an infinite fiber.
+
+This construction is the fixed-word section of a rational relation: fixing the
+input to a singleton regular language and retaining the output tape produces a
+regular language. It follows the classical finite-transducer and rational
+transduction framework; see Berstel, [*Transductions and Context-Free
+Languages*, Chapter 4](https://www-igm.univ-mlv.fr/~berstel/LivreTransductions/LivreTransductions.html).
+
 `transducer.subsequential.from_word_morphism.compute` converts a bounded
 `WordMorphism` into a one-state total transducer. The source and target alphabet
 orders are preserved as explicit alphabet contexts. Every source symbol has a

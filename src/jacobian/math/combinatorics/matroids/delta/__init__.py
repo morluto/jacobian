@@ -12,6 +12,7 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     verify_from_feasible_sets,
     width,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import relabel
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
 
 __all__ = [
@@ -20,6 +21,7 @@ __all__ = [
     "dual",
     "from_feasible_sets",
     "minor",
+    "relabel",
     "twist",
     "twist_polynomial",
     "verify_from_feasible_sets",

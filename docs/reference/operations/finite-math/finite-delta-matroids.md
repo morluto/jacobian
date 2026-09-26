@@ -32,10 +32,11 @@ result-binding obstruction check. The aggregate worst case is therefore
 advertised envelope rather than a universal result-construction rule.
 
 The catalog also exposes exact twists, widths, duals, deletion/contraction
-minors, and binary principal-minor reconstruction. These are separate
-mathematical postconditions rather than fields of the recognition result.
-Graph conversions, interlace and transition polynomials, lower/upper matroids,
-and graph local-complement profiles remain outside the current contract.
+minors, binary principal-minor reconstruction, relabelling, and the
+subset-distance interlace polynomial. These are separate mathematical
+postconditions rather than fields of the recognition result. Graph conversions,
+other interlace or transition polynomials, lower/upper matroids, and graph
+local-complement profiles remain outside the current contract.
 
 `delta_matroid.twist.compute` returns the canonical twisted
 `FiniteDeltaMatroid`. `delta_matroid.width.compute` returns the exact width
@@ -51,5 +52,18 @@ bytes of target labels, 329,784 units of axis-check and row-transport work,
 73,740 materialized result cells (retained labels, rows, memberships, and axis
 maps), and 903,524 total reserved work units, including two 250,000-candidate
 source-exchange passes for admission and recognition. Source exchange checks and
-relabelling work are admitted before target feasible rows are materialized. Relabelling preserves the symmetric-exchange axiom because
-a bijection preserves symmetric difference and membership.
+relabelling work are admitted before target feasible rows are materialized.
+Relabelling preserves the symmetric-exchange axiom because a bijection preserves
+symmetric difference and membership.
+
+`delta_matroid.distance_interlace_polynomial.compute` returns the exact
+distance histogram and the polynomial
+`Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+`d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
+integers in descending-degree order, using the shared `IntegerPolynomial`
+value. This is the distance specialization in [Brijder and Hoogeboom's
+delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
+with the variable shift fixed as `y = x - 1`; it does not imply any other
+interlace polynomial convention. Admission validates the complete source,
+then bounds `2^|E| * |F|` subset-feasible comparisons, the number of
+output terms, and coefficient bit lengths before enumerating subsets.

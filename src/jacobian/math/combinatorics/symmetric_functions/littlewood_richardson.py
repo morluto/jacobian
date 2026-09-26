@@ -309,8 +309,8 @@ def schur_product(
     request = _admit_native_request(
         SchurProductRequest,
         {
-            "left": left.model_dump(mode="python"),
-            "right": right.model_dump(mode="python"),
+            "left": left,
+            "right": right,
         },
     )
     return _schur_product_from_request(request)

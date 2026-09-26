@@ -3,6 +3,7 @@
 from collections.abc import Callable
 from typing import Any
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
@@ -54,6 +55,11 @@ from .operations import (
     to_power_series,
 )
 from .puiseux_values import PuiseuxTerm, TruncatedPuiseuxWindow
+from .smooth_branch import (
+    SmoothBranchFirstJetRequest,
+    SmoothBranchFirstJetResult,
+    smooth_branch_first_jet,
+)
 from .values import TruncatedLaurentWindow
 
 
@@ -93,13 +99,13 @@ def _example_series() -> dict[str, object]:
 def _example_puiseux(coefficient: int = 1) -> dict[str, object]:
     return TruncatedPuiseuxWindow(
         variable="t",
-        valuation_lower={"num": 0, "den": 1},
-        precision={"num": 2, "den": 1},
+        valuation_lower=CanonicalRational.from_integer_ratio(0, 1),
+        precision=CanonicalRational.from_integer_ratio(2, 1),
         ramification_index=2,
         terms=(
             PuiseuxTerm(
-                exponent={"num": 1, "den": 2},
-                coefficient={"num": coefficient, "den": 1},
+                exponent=CanonicalRational.from_integer_ratio(1, 2),
+                coefficient=CanonicalRational.from_integer_ratio(coefficient, 1),
             ),
         ),
     ).model_dump(mode="json")
@@ -138,6 +144,67 @@ def _rational_function_at_infinity(
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="local_series.polynomial.smooth_branch_first_jet.compute",
+        title="Lift a simple rational local branch through first order",
+        description=(
+            "Return the exact first-order power-series jet at a supplied simple "
+            "rational root of F(0,y). This is an unramified smooth-branch slice; "
+            "multiple, ramified, and algebraic-coefficient branches are outside "
+            "its contract."
+        ),
+        request_type=SmoothBranchFirstJetRequest,
+        result_type=SmoothBranchFirstJetResult,
+        run=smooth_branch_first_jet,
+        tags=("local-series", "polynomial", "branch-lifting", "exact"),
+        examples=(
+            OperationExample(
+                name="smooth_linear_branch",
+                description=(
+                    "For F(t,y)=y-2-3t and the simple root y(0)=2, return "
+                    "y(t)=2+3t+O(t^2)."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 2,
+                                    "coefficients": [
+                                        {"num": "-2", "den": "1"},
+                                        {"num": "-3", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 1,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 2,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "initial_root": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="local_series.polynomial.newton_edge_characteristic_roots.compute",
         title="Solve a quadratic Newton edge characteristic equation",
@@ -834,13 +901,13 @@ TOOLS: MathTools = (
                 input={
                     "series": TruncatedPuiseuxWindow(
                         variable="t",
-                        valuation_lower={"num": -2, "den": 1},
-                        precision={"num": 1, "den": 1},
+                        valuation_lower=CanonicalRational.from_integer_ratio(-2, 1),
+                        precision=CanonicalRational.from_integer_ratio(1, 1),
                         ramification_index=1,
                         terms=(
                             PuiseuxTerm(
-                                exponent={"num": -1, "den": 1},
-                                coefficient={"num": 3, "den": 2},
+                                exponent=CanonicalRational.from_integer_ratio(-1, 1),
+                                coefficient=CanonicalRational.from_integer_ratio(3, 2),
                             ),
                         ),
                     ).model_dump(mode="json")

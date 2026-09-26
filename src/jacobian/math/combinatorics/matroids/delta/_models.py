@@ -25,6 +25,7 @@ from jacobian.math.combinatorics.matroids.values import (
     MAX_FINITE_BASIS_MEMBERSHIPS,
     MAX_FINITE_BASIS_TOTAL_LABEL_BYTES,
     FiniteBasisMatroid,
+    _preflight_basis_family,
 )
 
 MAX_DELTA_EXTREMAL_SOURCE_GROUND_LABELS = MAX_DELTA_MEMBERSHIPS + 1
@@ -222,15 +223,58 @@ class DeltaMatroidExtremalMatroidResult(StrictModel):
     def preflight_result(cls, data: object) -> object:
         if not isinstance(data, Mapping):
             return data
+        admitted = dict(data)
         source = data.get("source")
-        if isinstance(source, Mapping):
-            _preflight_extremal_input({"delta_matroid": source})
+        if isinstance(source, (Mapping, FiniteDeltaMatroid)):
+            if isinstance(source, Mapping):
+                raw_source = source
+            else:
+                raw_source = {
+                    "ground": getattr(source, "ground", None),
+                    "feasible": getattr(source, "feasible", None),
+                }
+            _preflight_extremal_input({"delta_matroid": raw_source})
+            try:
+                admitted["source"] = FiniteDeltaMatroid.model_validate(raw_source)
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise _validation_error(
+                    "source_invalid", "result source must be a valid delta-matroid"
+                ) from exc
+        elif source is not None:
+            raise _validation_error(
+                "source_invalid", "result source must be a valid delta-matroid"
+            )
+        matroid = data.get("matroid")
+        if isinstance(matroid, (Mapping, FiniteBasisMatroid)):
+            if isinstance(matroid, Mapping):
+                raw_matroid = matroid
+            else:
+                raw_matroid = {
+                    "ground": getattr(matroid, "ground", None),
+                    "bases": getattr(matroid, "bases", None),
+                }
+            _preflight_basis_family(raw_matroid.get("bases"))
+            ground = raw_matroid.get("ground")
+            if isinstance(ground, (list, tuple)) and len(ground) > MAX_FINITE_BASIS_GROUND_SIZE:
+                raise _validation_error(
+                    "matroid_ground_bound", "result ground axis exceeds its limit"
+                )
+            try:
+                admitted["matroid"] = FiniteBasisMatroid.model_validate(raw_matroid)
+            except (TypeError, ValueError, AttributeError) as exc:
+                raise _validation_error(
+                    "matroid_invalid", "result matroid must be a valid basis matroid"
+                ) from exc
+        elif matroid is not None:
+            raise _validation_error(
+                "matroid_invalid", "result matroid must be a valid basis matroid"
+            )
         indices = data.get("source_feasible_indices")
         if isinstance(indices, (list, tuple)) and len(indices) > MAX_FINITE_BASIS_COUNT:
             raise _validation_error(
                 "source_map_bound", "source-row map exceeds the basis-row limit"
             )
-        return data
+        return admitted
 
     @model_validator(mode="after")
     def require_exact_source_map(self) -> Self:

@@ -8,12 +8,9 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids.delta._models import (
-    DeltaMatroidExtremalMatroidResult,
     DeltaMatroidFromFeasibleSetsRequest,
-    DeltaMatroidLowerMatroidRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
-    DeltaMatroidUpperMatroidRequest,
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
 )
@@ -26,9 +23,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
 from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
 from jacobian.math.combinatorics.matroids.delta.operations import (
     from_feasible_sets,
-    lower_matroid,
     twist,
-    upper_matroid,
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
@@ -131,73 +126,7 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
         ) from exc
 
 
-def _lower_matroid(
-    request: DeltaMatroidLowerMatroidRequest,
-) -> DeltaMatroidExtremalMatroidResult:
-    return lower_matroid(request.delta_matroid)
-
-
-def _upper_matroid(
-    request: DeltaMatroidUpperMatroidRequest,
-) -> DeltaMatroidExtremalMatroidResult:
-    return upper_matroid(request.delta_matroid)
-
-
 TOOLS: MathTools = (  # noqa: RUF005
-    MathTool(
-        operation_id="delta_matroid.lower_matroid.compute",
-        title="Compute the lower matroid of a finite delta-matroid",
-        description=(
-            "Return the matroid whose complete basis family consists of every "
-            "minimum-cardinality feasible set. Retain the exact source ground "
-            "axis and map each output basis to its source feasible-row index. "
-            "Source exchange is replayed; output ground, family, membership, "
-            "label, and basis-exchange work are admitted before construction."
-        ),
-        request_type=DeltaMatroidLowerMatroidRequest,
-        result_type=DeltaMatroidExtremalMatroidResult,
-        run=_lower_matroid,
-        tags=("delta-matroid", "lower-matroid", "exact"),
-        examples=(
-            OperationExample(
-                name="lower_matroid_of_two_element_delta",
-                description="The unique minimum-cardinality feasible set is ∅.",
-                input={
-                    "delta_matroid": {
-                        "ground": ["a", "b"],
-                        "feasible": [[], [0], [0, 1], [1]],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="delta_matroid.upper_matroid.compute",
-        title="Compute the upper matroid of a finite delta-matroid",
-        description=(
-            "Return the matroid whose complete basis family consists of every "
-            "maximum-cardinality feasible set. Retain the exact source ground "
-            "axis and map each output basis to its source feasible-row index. "
-            "Source exchange is replayed; output ground, family, membership, "
-            "label, and basis-exchange work are admitted before construction."
-        ),
-        request_type=DeltaMatroidUpperMatroidRequest,
-        result_type=DeltaMatroidExtremalMatroidResult,
-        run=_upper_matroid,
-        tags=("delta-matroid", "upper-matroid", "exact"),
-        examples=(
-            OperationExample(
-                name="upper_matroid_of_two_element_delta",
-                description="The unique maximum feasible set is {a,b}.",
-                input={
-                    "delta_matroid": {
-                        "ground": ["a", "b"],
-                        "feasible": [[], [0], [0, 1], [1]],
-                    }
-                },
-            ),
-        ),
-    ),
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",
         title="Recognize a finite delta-matroid from a complete feasible family",

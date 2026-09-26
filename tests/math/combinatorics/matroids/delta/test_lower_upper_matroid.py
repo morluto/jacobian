@@ -102,10 +102,10 @@ def test_exhaustive_small_delta_matroids_match_independent_extrema(
         assert _basis_exchange(upper.matroid.bases)
 
 
-def test_catalog_declares_both_operations_and_result_round_trips() -> None:
+def test_extremal_conversions_are_native_and_results_round_trip() -> None:
     ids = {tool.operation_id for tool in TOOLS}
-    assert "delta_matroid.lower_matroid.compute" in ids
-    assert "delta_matroid.upper_matroid.compute" in ids
+    assert "delta_matroid.lower_matroid.compute" not in ids
+    assert "delta_matroid.upper_matroid.compute" not in ids
     source = FiniteDeltaMatroid(
         ground=("a", "b"),
         feasible=((), (0,), (0, 1), (1,)),

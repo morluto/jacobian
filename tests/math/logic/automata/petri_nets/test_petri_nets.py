@@ -9,7 +9,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata import petri_nets
 from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
@@ -20,6 +23,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     IncidenceMatrixRequest,
     ReachabilityRequest,
     SiphonTrapRequest,
+    StateEquationRequest,
 )
 from jacobian.math.logic.automata.petri_nets._tools import (
     compute_enabled_transitions,
@@ -86,6 +90,107 @@ def test_native_operations_return_canonical_results() -> None:
         1,
         0,
     )
+
+
+def test_state_equation_is_formal_and_does_not_claim_reachability() -> None:
+    # Each transition consumes a token from the place produced by the other.
+    # At the empty marking neither can fire, but y=(1,1) satisfies C y = 0.
+    net = PetriNet(
+        place_count=2,
+        transition_count=2,
+        pre=((1, 0), (0, 1)),
+        post=((0, 1), (1, 0)),
+    )
+    source = Marking(tokens=(0, 0), net=net)
+    request = StateEquationRequest(net=net, marking=source, transition_counts=(1, 1))
+
+    result = petri_nets.state_equation_target(
+        request.net, request.marking, request.transition_counts
+    )
+    assert result.target == (0, 0)
+    assert result.marking.net == net
+    assert petri_nets.enabled_transitions(net, source).transitions == ()
+    assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_state_equation_returns_signed_integer_target() -> None:
+    net = PetriNet(
+        place_count=1,
+        transition_count=1,
+        pre=((1,),),
+        post=((0,),),
+    )
+    result = petri_nets.state_equation_target(net, Marking(tokens=(0,)), (1,))
+    assert result.target == (-1,)
+
+
+@pytest.mark.parametrize(
+    "forged_target",
+    [
+        [64_001_001],
+        [0] * 65,
+    ],
+)
+def test_state_equation_result_rejects_out_of_envelope_serialized_targets(
+    forged_target,
+) -> None:
+    net = PetriNet(
+        place_count=1,
+        transition_count=1,
+        pre=((0,),),
+        post=((0,),),
+    )
+    valid = petri_nets.state_equation_target(net, Marking(tokens=(0,)), (0,))
+    payload = valid.model_dump()
+    payload["target"] = forged_target
+    with pytest.raises(ValidationError):
+        type(valid).model_validate_json(json.dumps(payload))
+
+
+def test_state_equation_rejects_foreign_marking_and_unbounded_count_vector() -> None:
+    net = _simple_net()
+    foreign = _token_passing_net()
+    with pytest.raises(ValidationError):
+        StateEquationRequest(
+            net=net,
+            marking=Marking(tokens=(1, 0), net=foreign),
+            transition_counts=(0, 0),
+        )
+    parsed = StateEquationRequest(
+        net=net,
+        marking=Marking(tokens=(1, 0)),
+        transition_counts=(1001, 0),
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        petri_nets.state_equation_target(
+            parsed.net, parsed.marking, parsed.transition_counts
+        )
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [None, [0, 0], "ab", 1, {0: 0, 1: 0}, (0, 0, 0), (0.0, 0), (0, -1), (True, 0)],
+)
+def test_state_equation_rejects_malformed_count_containers(malformed) -> None:
+    # The exported native face admits the same canonical tuple as the wire
+    # model before taking the vector's length, so malformed containers get
+    # the stable domain error instead of a TypeError or lax coercion.
+    net = _simple_net()
+    with pytest.raises(OperationDomainValidationError):
+        petri_nets.state_equation_target(net, Marking(tokens=(1, 0)), malformed)
+
+
+def test_state_equation_canonical_vector_still_matches_direct_arithmetic() -> None:
+    net = _token_passing_net()
+    tokens = (2, 0)
+    result = petri_nets.state_equation_target(
+        net, Marking(tokens=tokens, net=net), (1, 0)
+    )
+    expected = tuple(
+        tokens[p] + (net.post[p][0] - net.pre[p][0]) for p in range(net.place_count)
+    )
+    assert result.target == expected
+    assert result.transition_counts == (1, 0)
 
 
 def test_empty_net_preserves_empty_axes_across_json() -> None:

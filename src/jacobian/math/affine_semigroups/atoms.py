@@ -18,7 +18,6 @@ from jacobian.math.affine_semigroups.semigroup import (
 )
 
 MAX_AFFINE_ATOM_WORK = 1_000_000
-MAX_AFFINE_ATOM_OUTPUT_BYTES = 2_000_000
 
 
 class AffineMinimalGenerators(StrictModel):
@@ -101,8 +100,6 @@ def minimal_generators(
                 f"{MAX_AFFINE_ATOM_WORK}-state aggregate work envelope"
             ),
         )
-    _admit_atom_output(semigroup)
-
     fibers = {
         target: _enumerate_fiber(semigroup, target, grades, target_grade, maxima)
         for target, (maxima, grades, target_grade) in plans.items()
@@ -165,48 +162,6 @@ def minimal_generators(
         atoms=atom_semigroup,
         source_factorizations=source_factorizations,
     )
-
-
-def _admit_atom_output(semigroup: PositiveAffineSemigroup) -> None:
-    """Bound output from source dimensions before factorization enumeration."""
-    config = semigroup.configuration
-    labels = (*config.row_labels, *config.generator_labels)
-    # Python character count is a cheap lower bound on UTF-8/JSON output size.
-    # Reject before encoding so a forged native value cannot force an
-    # unbounded temporary allocation on the refusal path.
-    if any(len(label) > MAX_AFFINE_ATOM_OUTPUT_BYTES for label in labels):
-        raise OperationResourceAdmissionError(
-            location=("semigroup",),
-            code="affine_semigroup.atom_output",
-            message="minimal-generator result exceeds its output-byte envelope",
-        )
-    label_characters = sum(
-        len(label.encode("utf-8"))
-        + sum(ord(character) < 32 for character in label) * 5
-        + sum(character in ('"', "\\") for character in label)
-        for label in labels
-    )
-    grading_bits = sum(
-        value.num.bit_length() + value.den.bit_length() for value in semigroup.grading
-    )
-    # The atom parent has no more labels, rows, columns, or matrix cells than
-    # the source parent. JSON escapes control characters as six ASCII bytes;
-    # input matrix entries have at most eight decimal digits. Factor entries
-    # fit the already-admitted 50,000-state fiber box.
-    one_parent = (
-        label_characters
-        + 64 * (config.rows + config.columns)
-        + 16 * config.rows * config.columns
-        + 2 * ((grading_bits + 2) // 3 + config.rows)
-        + 512
-    )
-    result_bound = 2 * one_parent + 12 * config.columns * config.columns
-    if result_bound > MAX_AFFINE_ATOM_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("semigroup",),
-            code="affine_semigroup.atom_output",
-            message="minimal-generator result exceeds its output-byte envelope",
-        )
 
 
 __all__ = [

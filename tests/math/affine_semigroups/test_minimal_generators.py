@@ -145,15 +145,19 @@ def test_minimal_generators_support_positive_graded_configurations_with_negative
     assert result.source_factorizations[3] == (0, 2, 0)
 
 
-def test_oversized_native_label_is_rejected_before_output_encoding() -> None:
+def test_native_label_size_is_not_limited_by_wire_output_envelope() -> None:
+    # Native values do not cross the JSON boundary; a wire-byte ceiling must
+    # not reject an otherwise tiny mathematical computation.
     semigroup = _semigroup(((1,),))
+    label = "g" * 1_100_000
     configuration = semigroup.configuration.model_copy(
-        update={"generator_labels": ("g" * 2_000_001,)}
+        update={"generator_labels": (label,)}
     )
-    oversized = semigroup.model_copy(update={"configuration": configuration})
+    result = minimal_generators(
+        semigroup.model_copy(update={"configuration": configuration})
+    )
 
-    with pytest.raises(OperationResourceAdmissionError, match="output-byte envelope"):
-        minimal_generators(oversized)
+    assert result.atoms.configuration.generator_labels == (label,)
 
 
 def test_aggregate_work_is_admitted_before_factorization_enumeration(

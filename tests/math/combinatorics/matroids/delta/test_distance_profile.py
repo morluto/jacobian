@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
@@ -220,6 +221,19 @@ def test_ground_subset_state_limit_is_preflighted() -> None:
 
     assert error.value.errors()[0]["type"] == (
         "delta_matroid.distance_profile_states_exceeded"
+    )
+
+
+def test_raw_feasible_membership_limit_is_preflighted_before_nested_parsing() -> None:
+    raw = {
+        "delta_matroid": {"ground": ["a"], "feasible": [[0]] * 20_000}
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidDistanceProfileRequest.model_validate(raw)
+
+    assert error.value.errors()[0]["type"] == (
+        "delta_matroid.source_memberships_exceeded"
     )
 
 

@@ -173,6 +173,22 @@ class DeltaMatroidDistanceProfileRequest(StrictModel):
                         "distance_profile_states_exceeded",
                         "the complete ground-subset profile exceeds the subset-state envelope",
                     )
+                feasible = source.get("feasible")
+                if isinstance(feasible, (list, tuple)):
+                    if len(feasible) > MAX_DELTA_MEMBERSHIPS:
+                        raise _validation_error(
+                            "source_memberships_exceeded",
+                            "source feasible family exceeds the membership envelope",
+                        )
+                    memberships = 0
+                    for row in feasible:
+                        if isinstance(row, (list, tuple)):
+                            memberships += len(row)
+                            if memberships > MAX_DELTA_MEMBERSHIPS:
+                                raise _validation_error(
+                                    "source_memberships_exceeded",
+                                    "source feasible family exceeds the membership envelope",
+                                )
         return data
 
 

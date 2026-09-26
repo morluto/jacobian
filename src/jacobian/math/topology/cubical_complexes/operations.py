@@ -289,6 +289,27 @@ def _face_poset_cover_pairs(
 
 def face_poset(cells: tuple[CubicalCell, ...]) -> CubicalFacePosetResult:
     """Return the inclusion poset of all cells in the face-closed complex."""
+    if (
+        type(cells) is not tuple
+        or not cells
+        or len(cells) > MAX_CELLS
+        or any(type(cell) is not CubicalCell for cell in cells)
+    ):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.face_poset.request_type",
+            message="face_poset requires a nonempty tuple of canonical cubical cells",
+        )
+    try:
+        cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python")) for cell in cells
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.face_poset.invalid_cell",
+            message="face_poset cells must satisfy the cubical-cell contract",
+        ) from exc
     source_cells, ambient_dimension, maximum_coordinate_digits = (
         _admit_face_poset_source(cells)
     )
@@ -724,12 +745,33 @@ def product(
     Each factor is first normalized to its full face closure, so the Cartesian
     product of those cells is already face closed.
     """
-    if not left_cells or not right_cells:
-        raise OperationDomainValidationError(
-            location=("cells",),
-            code="cubical_complex.product_empty_factor",
-            message="both cubical product factors must contain at least one cell",
-        )
+    for name, factor in (("left_cells", left_cells), ("right_cells", right_cells)):
+        if (
+            type(factor) is not tuple
+            or not factor
+            or len(factor) > MAX_CELLS
+            or any(type(cell) is not CubicalCell for cell in factor)
+        ):
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="cubical_complex.product_factor_type",
+                message="product factors must be nonempty tuples of canonical cubical cells",
+            )
+        try:
+            validated = tuple(
+                CubicalCell.model_validate(cell.model_dump(mode="python"))
+                for cell in factor
+            )
+        except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="cubical_complex.product_invalid_cell",
+                message="product factor cells must satisfy the cubical-cell contract",
+            ) from exc
+        if name == "left_cells":
+            left_cells = validated
+        else:
+            right_cells = validated
     left_dimension = len(left_cells[0].intervals)
     right_dimension = len(right_cells[0].intervals)
     if left_dimension + right_dimension > MAX_DIM:
@@ -993,14 +1035,35 @@ def _admit_lower_star(
 ) -> tuple[
     int, tuple[CubicalCell, ...], dict[CubicalCell, Fraction], tuple[Fraction, ...]
 ]:
-    if not isinstance(cells, tuple) or any(
-        type(item) is not CubicalCell for item in cells
+    if (
+        type(cells) is not tuple
+        or not cells
+        or len(cells) > MAX_CELLS
+        or any(type(item) is not CubicalCell for item in cells)
+        or type(vertex_values) is not tuple
+        or not vertex_values
+        or len(vertex_values) > MAX_LOWER_STAR_VERTICES
+        or any(type(item) is not CubicalVertexFiltrationValue for item in vertex_values)
     ):
         raise OperationDomainValidationError(
             location=("cells",),
             code="cubical_complex.lower_star_request_type_invalid",
             message="lower-star filtration requires canonical cubical cells",
         )
+    try:
+        cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python")) for cell in cells
+        )
+        vertex_values = tuple(
+            CubicalVertexFiltrationValue.model_validate(entry.model_dump(mode="python"))
+            for entry in vertex_values
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("vertex_values",),
+            code="cubical_complex.lower_star_invalid_value",
+            message="lower-star inputs must satisfy their canonical contracts",
+        ) from exc
     try:
         require_prime_field_admission(CoefficientRing.PRIME_FIELD, prime)
     except ValueError as exc:
@@ -1279,6 +1342,40 @@ def from_top_cell_values(
     cells containing it. Thus a sublevel consists exactly of the face closure
     of active top cells and is a cubical subcomplex.
     """
+    if (
+        type(cells) is not tuple
+        or not cells
+        or len(cells) > MAX_CELLS
+        or any(type(cell) is not CubicalCell for cell in cells)
+        or type(top_cell_values) is not tuple
+        or not top_cell_values
+        or len(top_cell_values) > MAX_LOWER_STAR_CELLS
+        or any(
+            type(entry) is not CubicalTopCellFiltrationValue
+            for entry in top_cell_values
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.top_cell_request_type_invalid",
+            message="top-cell filtration requires bounded tuples of canonical cells and values",
+        )
+    try:
+        cells = tuple(
+            CubicalCell.model_validate(cell.model_dump(mode="python")) for cell in cells
+        )
+        top_cell_values = tuple(
+            CubicalTopCellFiltrationValue.model_validate(
+                entry.model_dump(mode="python")
+            )
+            for entry in top_cell_values
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.top_cell_request_invalid",
+            message="top-cell filtration inputs must satisfy their canonical contracts",
+        ) from exc
     try:
         require_prime_field_admission(CoefficientRing.PRIME_FIELD, prime)
     except ValueError as exc:

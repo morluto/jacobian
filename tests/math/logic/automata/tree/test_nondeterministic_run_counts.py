@@ -6,7 +6,6 @@ from itertools import product
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.automata.tree import (
     BottomUpTreeAutomaton,

@@ -1144,7 +1144,9 @@ def _validate_native_tree_automaton(
     automaton: BottomUpTreeAutomaton,
 ) -> BottomUpTreeAutomaton:
     if type(automaton) is not BottomUpTreeAutomaton:
-        _reject_tree("automaton must be a validated bottom-up tree automaton", resource=False)
+        _reject_tree(
+            "automaton must be a validated bottom-up tree automaton", resource=False
+        )
     try:
         return BottomUpTreeAutomaton.model_validate(automaton.model_dump())
     except Exception as exc:

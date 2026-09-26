@@ -4,8 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
-    PolytopalComplexAdjacencyGraph,
     PolytopalAdjacencyRequest,
+    PolytopalComplexAdjacencyGraph,
 )
 from jacobian.math.geometry.polytopes.complexes.adjacency.operations import (
     MAX_POLYTOPAL_ADJACENCY_RESULT_COORDINATES,

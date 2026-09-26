@@ -305,8 +305,8 @@ class PolytopalComplexAdjacencyGraph(StrictModel):
 
 
 __all__ = [
-    "PolytopalAdjacencyRequest",
     "PolytopalAdjacencyCell",
+    "PolytopalAdjacencyRequest",
     "PolytopalComplexAdjacencyGraph",
     "PolytopalFacetAdjacency",
 ]

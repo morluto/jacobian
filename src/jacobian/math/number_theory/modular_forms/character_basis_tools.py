@@ -3,16 +3,20 @@
 import json
 from itertools import product
 from math import gcd
+from typing import cast
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
+    RationalCyclotomicField,
 )
 from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
     modular_character_coordinates_hecke,
@@ -44,6 +48,7 @@ from jacobian.math.number_theory.modular_forms.character_transport import (
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
     ModularFormFieldQExpansion,
+    ModularFormSpace,
 )
 
 
@@ -143,11 +148,15 @@ def _character_form_example(coordinate: int = 2) -> dict[str, object]:
     }
 
 
-def _transport_example_values():
+def _transport_example_values() -> tuple[
+    ModularFormCoordinates,
+    ModularFormSpace,
+    ModularCharacterSpaceInclusion,
+]:
     source_form = ModularFormCoordinates.model_validate_json(
         json.dumps(_character_form_example(2))
     )
-    source_character = source_form.space.character
+    source_character = cast(DirichletCharacter, source_form.space.character)
     target_group = character_group(26)
     target_character = None
     for coordinates in product(
@@ -174,8 +183,8 @@ def _transport_example_values():
             source=source_character, target=target_character
         ),
         coefficient_field_map=CyclotomicIdentityFieldMap(
-            source=source_form.space.coefficient_domain,
-            target=target_space.coefficient_domain,
+            source=cast(RationalCyclotomicField, source_form.space.coefficient_domain),
+            target=cast(RationalCyclotomicField, target_space.coefficient_domain),
         ),
     )
     return source_form, target_space, inclusion
@@ -191,14 +200,14 @@ def _transport_example() -> dict[str, object]:
 
 def _equality_example() -> dict[str, object]:
     form, target_space, inclusion = _transport_example_values()
-    field = target_space.coefficient_domain
+    field = cast(RationalCyclotomicField, target_space.coefficient_domain)
 
     def element(real: int, zeta: int = 0) -> RationalCyclotomicElement:
         return RationalCyclotomicElement(
             field=field,
             coefficients_ascending=(
-                {"num": real, "den": 1},
-                {"num": zeta, "den": 1},
+                CanonicalRational(num=real, den=1),
+                CanonicalRational(num=zeta, den=1),
             ),
         )
 
@@ -226,7 +235,7 @@ def _equality_example() -> dict[str, object]:
         target_form=coordinates,
         target_q_expansion=ModularCharacterQExpansion(
             space=target_space,
-            basis_id=coordinates.basis_id,
+            basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
             coefficients=q_coefficients,
         ),
     ).model_dump(mode="json")

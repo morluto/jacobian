@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from fractions import Fraction
 from math import gcd
+from typing import cast
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -29,6 +30,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     _require_basis_space,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    ModularCharacterBasis,
     ModularCharacterEqualityResult,
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
@@ -159,12 +161,15 @@ def _admit_transport(
     source_space = inclusion.source_space
     field = inclusion.coefficient_field_map.source
     source_cusp, _ = character_space_dimensions(
-        source_space.level, source_space.weight, source_space.character, field
+        source_space.level,
+        source_space.weight,
+        cast(DirichletCharacter, source_space.character),
+        field,
     )
     target_cusp, _ = character_space_dimensions(
         inclusion.target_space.level,
         inclusion.target_space.weight,
-        inclusion.target_space.character,
+        cast(DirichletCharacter, inclusion.target_space.character),
         field,
     )
     if form.basis_id == CHARACTER_BASIS_ID:
@@ -180,8 +185,6 @@ def _admit_transport(
             _domain(
                 "legacy character coordinates are admitted only in the level-13 cusp source"
             )
-        for coordinate in form.coordinates:
-            cyclotomic._validate_element(coordinate)
     elif form.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
         if (
             type(form.coordinates) is not tuple
@@ -191,15 +194,17 @@ def _admit_transport(
             _domain(
                 "general character coordinates must match a level-26 or level-39 cusp basis"
             )
-        for coordinate in form.coordinates:
-            if (
-                type(coordinate) is not RationalCyclotomicElement
-                or coordinate.field != field
-            ):
-                _domain("every character coordinate must use the exact declared field")
-            cyclotomic._validate_element(coordinate)
     else:
         _domain("character transport requires an admitted character coordinate basis")
+
+    coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
+    for coordinate in coordinates:
+        if (
+            type(coordinate) is not RationalCyclotomicElement
+            or coordinate.field != field
+        ):
+            _domain("every character coordinate must use the exact declared field")
+        cyclotomic._validate_element(coordinate)
 
     target_precision = _character_sturm_precision(inclusion.target_space)
     source_precision = _character_sturm_precision(source_space)
@@ -215,7 +220,7 @@ def _admit_transport(
                 len(str(abs(int(value.num)))),
                 len(str(int(value.den))),
             )
-            for coordinate in form.coordinates
+            for coordinate in coordinates
             for value in coordinate.coefficients_ascending
         ),
         default=1,
@@ -267,7 +272,7 @@ def _basis(
     space: ModularFormSpace,
     precision: int,
     admitted_dimensions: tuple[int, int],
-):
+) -> ModularCharacterBasis:
     space, field, character_request = _require_basis_space(space)
     return _character_basis_from_admission(
         space,
@@ -280,14 +285,17 @@ def _basis(
 
 def _expand_coordinates(
     form: ModularFormCoordinates,
-    basis,
+    basis: ModularCharacterBasis,
     field: RationalCyclotomicField,
 ) -> tuple[RationalCyclotomicElement, ...]:
-    return _expand_coordinate_tuple(form.coordinates, basis, field)
+    coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
+    return _expand_coordinate_tuple(coordinates, basis, field)
 
 
 def _expand_coordinate_tuple(
-    coordinates: tuple[RationalCyclotomicElement, ...], basis, field
+    coordinates: tuple[RationalCyclotomicElement, ...],
+    basis: ModularCharacterBasis,
+    field: RationalCyclotomicField,
 ) -> tuple[RationalCyclotomicElement, ...]:
     if len(coordinates) != len(basis.elements):
         _domain("character coordinate count differs from its exact basis dimension")
@@ -305,7 +313,8 @@ def _expand_coordinate_tuple(
 
 
 def _coordinates_from_prefix(
-    prefix: tuple[RationalCyclotomicElement, ...], basis
+    prefix: tuple[RationalCyclotomicElement, ...],
+    basis: ModularCharacterBasis,
 ) -> ModularFormCoordinates:
     if len(prefix) != basis.precision:
         _domain("q-prefix precision must equal the common target Sturm precision")
@@ -332,12 +341,18 @@ def _coordinates_from_prefix(
     )
 
 
-def _linear_combination_from_coordinates(coordinates, basis):
-    return _expand_coordinate_tuple(coordinates, basis, basis.space.coefficient_domain)
+def _linear_combination_from_coordinates(
+    coordinates: tuple[RationalCyclotomicElement, ...],
+    basis: ModularCharacterBasis,
+) -> tuple[RationalCyclotomicElement, ...]:
+    field = cast(RationalCyclotomicField, basis.space.coefficient_domain)
+    return _expand_coordinate_tuple(coordinates, basis, field)
 
 
 def _transport_from_bases(
-    admitted: _AdmittedTransport, source_basis, target_basis
+    admitted: _AdmittedTransport,
+    source_basis: ModularCharacterBasis,
+    target_basis: ModularCharacterBasis,
 ) -> ModularCharacterTransportedForm:
     source_prefix = _expand_coordinates(admitted.form, source_basis, admitted.field)
     if len(source_prefix) != admitted.precision:
@@ -430,7 +445,7 @@ def modular_character_coordinates_equal_in_common_space(
         left_admitted.target_character_dimensions,
     )
     bases = [(target, target_basis)]
-    transported = []
+    transported: list[tuple[RationalCyclotomicElement, ...]] = []
     for value, admitted in ((left, left_admitted), (right, right_admitted)):
         source_space = admitted.inclusion.source_space
         source_basis = next(

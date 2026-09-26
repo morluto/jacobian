@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from itertools import product
 from math import gcd
+from typing import Literal, cast
 
 import pytest
 from pydantic import TypeAdapter
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -22,6 +24,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character,
     dirichlet_character_value,
 )
+from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
 )
@@ -43,11 +46,17 @@ from jacobian.math.number_theory.modular_forms.values import (
 )
 
 _FIELD = RationalCyclotomicField(order=6)
-_GENERIC_BASIS = "gamma0-cyclotomic-character-sturm-rref-v1"
-_LEGACY_BASIS = "gamma0-13-even-order6-character-sturm-v1"
+_GENERIC_BASIS: Literal["gamma0-cyclotomic-character-sturm-rref-v1"] = (
+    "gamma0-cyclotomic-character-sturm-rref-v1"
+)
+_LEGACY_BASIS: Literal["gamma0-13-even-order6-character-sturm-v1"] = (
+    "gamma0-13-even-order6-character-sturm-v1"
+)
 
 
-def _inflate(source_character, target_level: int):
+def _inflate(
+    source_character: DirichletCharacter, target_level: int
+) -> DirichletCharacter:
     target_group = character_group(target_level)
     for coordinates in product(
         *(range(order) for order in target_group.generator_orders)
@@ -63,7 +72,7 @@ def _inflate(source_character, target_level: int):
     raise AssertionError("no exact character inflation fixture was found")
 
 
-def _space(level: int, character) -> ModularFormSpace:
+def _space(level: int, character: DirichletCharacter) -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
         weight=2,
@@ -77,23 +86,25 @@ def _element(constant: int, zeta: int = 0) -> RationalCyclotomicElement:
     return RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=(
-            {"num": constant, "den": 1},
-            {"num": zeta, "den": 1},
+            CanonicalRational(num=constant, den=1),
+            CanonicalRational(num=zeta, den=1),
         ),
     )
 
 
-def _inclusion(source_space: ModularFormSpace, target_space: ModularFormSpace):
+def _inclusion(
+    source_space: ModularFormSpace, target_space: ModularFormSpace
+) -> ModularCharacterSpaceInclusion:
     return ModularCharacterSpaceInclusion(
         source_space=source_space,
         target_space=target_space,
         character_map=CyclotomicCharacterMap(
-            source=source_space.character,
-            target=target_space.character,
+            source=cast(DirichletCharacter, source_space.character),
+            target=cast(DirichletCharacter, target_space.character),
         ),
         coefficient_field_map=CyclotomicIdentityFieldMap(
-            source=source_space.coefficient_domain,
-            target=target_space.coefficient_domain,
+            source=cast(RationalCyclotomicField, source_space.coefficient_domain),
+            target=cast(RationalCyclotomicField, target_space.coefficient_domain),
         ),
     )
 
@@ -246,7 +257,8 @@ def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:
         source_space=source_space,
         target_space=mismatched_target,
         character_map=CyclotomicCharacterMap(
-            source=source_character, target=wrong_target.character
+            source=source_character,
+            target=cast(DirichletCharacter, wrong_target.character),
         ),
         coefficient_field_map=CyclotomicIdentityFieldMap(
             source=_FIELD, target=larger_field
@@ -278,7 +290,7 @@ def test_transport_request_model_round_trip() -> None:
 
 
 def test_transport_height_boundary_is_admitted_before_basis_materialization(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.number_theory.modular_forms import character_basis
 
@@ -288,7 +300,7 @@ def test_transport_height_boundary_is_admitted_before_basis_materialization(
     target_space = _space(26, target_character)
     inclusion = _inclusion(source_space, target_space)
 
-    def backend_must_not_run(*args, **kwargs):
+    def backend_must_not_run(*args: object, **kwargs: object) -> None:
         raise AssertionError("PARI basis work ran before height admission")
 
     monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)

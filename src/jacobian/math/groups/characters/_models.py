@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -581,6 +581,74 @@ class ClassPowerMapResult(StrictModel):
             exponent=exponent,
             image_class_indices=image_class_indices,
         )
+
+
+class ClassMultiplicationConstantsRequest(StrictModel):
+    """Complete conjugacy-class partition for a bounded class algebra."""
+
+    partition: GroupConjugacyClassesResult = Field(
+        description="Complete canonical conjugacy partition of the source group."
+    )
+
+
+class ClassMultiplicationConstantsResult(StrictModel):
+    """Structure constants of the integral conjugacy-class algebra.
+
+    ``constants[i][j][k]`` is the coefficient of class sum ``k`` in the
+    product of class sums ``i`` and ``j``.
+    """
+
+    partition: ConjugacyClassPartition
+    constants: Annotated[
+        tuple[
+            Annotated[
+                tuple[
+                    Annotated[
+                        tuple[StrictInt, ...],
+                        Field(min_length=1, max_length=MAX_CLASS_COUNT),
+                    ],
+                    ...,
+                ],
+                Field(min_length=1, max_length=MAX_CLASS_COUNT),
+            ],
+            ...,
+        ],
+        Field(min_length=1, max_length=MAX_CLASS_COUNT),
+    ]
+
+    @model_validator(mode="after")
+    def require_complete_tensor(self) -> Self:
+        class_count = len(self.partition.classes)
+        if (
+            len(self.constants) != class_count
+            or any(len(row) != class_count for row in self.constants)
+            or any(
+                len(coefficients) != class_count
+                for row in self.constants
+                for coefficients in row
+            )
+        ):
+            raise _validation_error(
+                "class_algebra_shape",
+                "class multiplication constants must be a complete cubic tensor",
+            )
+        if any(
+            value < 0 for row in self.constants for values in row for value in values
+        ):
+            raise _validation_error(
+                "class_algebra_coefficient",
+                "class multiplication constants must be nonnegative integers",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        partition: ConjugacyClassPartition,
+        constants: tuple[tuple[tuple[int, ...], ...], ...],
+    ) -> Self:
+        return cls.model_construct(partition=partition, constants=constants)
 
 
 class CharacterTableResult(StrictModel):

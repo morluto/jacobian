@@ -23,6 +23,7 @@ from jacobian.math.logic.automata.tree.values import (
     CompleteDeterministicBottomUpTreeAutomaton,
     DeterministicBottomUpTreeAutomaton,
     RankedTree,
+    RegularTreeGrammar,
     TreeStateChartEntry,
     TreeStateWitness,
 )
@@ -257,6 +258,48 @@ class AcceptedTreeCountResult(AcceptedTreeCountRequest):
         )
 
 
+class NondeterministicRunCountsRequest(StrictModel):
+    """Count accepting state assignments on trees, grouped by node size."""
+
+    automaton: BottomUpTreeAutomaton
+    max_size: int = Field(ge=1, le=100)
+
+
+class NondeterministicRunCountsResult(NondeterministicRunCountsRequest):
+    """Exact accepting-run counts for each positive node size through max_size."""
+
+    run_counts_by_size: tuple[ExactInteger, ...]
+    estimated_work_bound: int = Field(ge=0, le=2_000_000)
+
+    @model_validator(mode="after")
+    def bind_counts(self) -> Self:
+        if len(self.run_counts_by_size) != self.max_size:
+            raise _validation_error(
+                "run_count_profile_length",
+                "run-count profile must contain one entry per size",
+            )
+        if any(int(count) < 0 for count in self.run_counts_by_size):
+            raise _validation_error(
+                "run_count_negative", "run counts must be nonnegative"
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: NondeterministicRunCountsRequest,
+        *,
+        run_counts_by_size: tuple[int, ...],
+        estimated_work_bound: int,
+    ) -> Self:
+        return cls.model_construct(
+            automaton=request.automaton,
+            max_size=request.max_size,
+            run_counts_by_size=run_counts_by_size,
+            estimated_work_bound=estimated_work_bound,
+        )
+
+
 class TreeAutomatonTrimRequest(StrictModel):
     """Restrict an automaton to its reachable and productive states."""
 
@@ -331,6 +374,26 @@ class TreeAutomatonTrimResult(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+class RegularTreeGrammarToAutomatonRequest(StrictModel):
+    """Convert a unit-free regular tree grammar to its bottom-up automaton."""
+
+    grammar: RegularTreeGrammar
+
+
+class RegularTreeGrammarToAutomatonResult(StrictModel):
+    """The source grammar and the equivalent bottom-up tree automaton."""
+
+    grammar: RegularTreeGrammar
+    automaton: BottomUpTreeAutomaton
+
+    @classmethod
+    def _from_kernel(
+        cls, *, grammar: RegularTreeGrammar, automaton: BottomUpTreeAutomaton
+    ) -> Self:
+        """Construct the source-bound result emitted by the trusted converter."""
+        return cls.model_construct(grammar=grammar, automaton=automaton)
 
 
 class TreeAutomatonComplementRequest(StrictModel):
@@ -501,9 +564,16 @@ class TreeAutomatonMinimizeRequest(StrictModel):
 
 
 class TreeAutomatonMinimizeResult(TreeAutomatonMinimizeRequest):
-    """Smallest reachable deterministic quotient and source-state transport."""
+    """Smallest reachable deterministic quotient and source-state transport.
 
-    minimized: DeterministicBottomUpTreeAutomaton
+    A total quotient table is carried as the complete deterministic carrier,
+    so it composes directly with complement and Boolean products; a partial
+    quotient stays on the partial deterministic carrier.
+    """
+
+    minimized: (
+        CompleteDeterministicBottomUpTreeAutomaton | DeterministicBottomUpTreeAutomaton
+    )
     old_to_new: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
     new_to_old: tuple[int | None, ...] = Field(max_length=MAX_TA_STATES)
     reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
@@ -652,7 +722,7 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 
     status: Literal["COMPLETE", "TRUNCATED"]
     truncation_reason: Literal["NONE", "STATE_BUDGET", "WORK_BUDGET"]
-    deterministic: BottomUpTreeAutomaton
+    deterministic: DeterministicBottomUpTreeAutomaton
     subset_map: tuple[tuple[int, ...], ...]
     equivalence_claim: bool
     closure_rows_checked: int = Field(ge=0)
@@ -753,6 +823,8 @@ class TreeDeterminizeResult(TreeDeterminizeRequest):
 __all__ = [
     "AcceptedTreeCountRequest",
     "AcceptedTreeCountResult",
+    "RegularTreeGrammarToAutomatonRequest",
+    "RegularTreeGrammarToAutomatonResult",
     "TreeAutomatonBooleanProductRequest",
     "TreeAutomatonBooleanProductResult",
     "TreeAutomatonComplementRequest",

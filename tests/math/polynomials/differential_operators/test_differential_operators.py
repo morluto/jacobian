@@ -2169,6 +2169,16 @@ def test_result_rejects_forged_zero_and_expected_decisions() -> None:
     with polynomial_validation_error():
         DifferentialOperatorApplyResult.model_validate_json(json.dumps(payload))
 
+    request = DifferentialOperatorApplyRequest(
+        polynomial=_polynomial(("x",), {(1,): 1}),
+        operator=_operator(("x",), {(0,): 1}),
+    )
+    result = compute_differential_operator_application(request)
+    payload = result.model_dump(mode="json")
+    payload["output"] = _polynomial(("y",), {(1,): 1}).model_dump(mode="json")
+    with polynomial_validation_error():
+        DifferentialOperatorApplyResult.model_validate_json(json.dumps(payload))
+
 
 def test_dvorsky_finite_identities_for_m_one_through_six() -> None:
     a, b, c, d, t = sympy.symbols("a b c d t")

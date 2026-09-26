@@ -6,6 +6,7 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import (
+    AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
 )
@@ -102,3 +103,31 @@ def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() ->
     assert tool.request_type.__name__ == "AnonymousGraphCardMultiset"
     result = tool.run(_vertex_deck(_graph(3, 0b011)))
     assert result.source_edge_count == 2
+
+
+def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None:
+    deck = AnonymousGraphCardMultiset(
+        card_order=8,
+        classes=(
+            {
+                "representative": {
+                    "vertices": [f"v{i:02d}" for i in range(8)],
+                    "edges": [],
+                },
+                "multiplicity": 9,
+            },
+        ),
+    )
+    result = anonymous_vertex_deck_edge_count(deck)
+    assert result.source_order == 9
+    assert result.source_edge_count == 0
+
+
+def test_native_admission_rejects_oversized_edge_tuple_before_edge_scan() -> None:
+    graph = SimpleUndirectedGraph.model_construct(
+        vertices=("v00", "v01"), edges=(("v00", "v01"),) * 100_000
+    )
+    item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
+    deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
+    with pytest.raises(OperationDomainValidationError, match="more edges"):
+        anonymous_vertex_deck_edge_count(deck)

@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from jacobian._models import StrictModel
 from jacobian.math.graphs.decks._models import AnonymousGraphCardMultiset
 
-MAX_ANONYMOUS_VERTEX_DECK_ORDER = 8
+MAX_ANONYMOUS_VERTEX_DECK_ORDER = 9
 MAX_ANONYMOUS_VERTEX_DECK_CARD_EDGES = MAX_ANONYMOUS_VERTEX_DECK_ORDER * (
     (MAX_ANONYMOUS_VERTEX_DECK_ORDER - 1) * (MAX_ANONYMOUS_VERTEX_DECK_ORDER - 2) // 2
 )

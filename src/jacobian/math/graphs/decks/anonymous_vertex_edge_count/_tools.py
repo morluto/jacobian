@@ -47,16 +47,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         {
                             "representative": {
                                 "vertices": ["v00", "v01"],
-                                "edges": [["v00", "v01"]],
+                                "edges": [],
                             },
-                            "multiplicity": 2,
+                            "multiplicity": "1",
                         },
                         {
                             "representative": {
                                 "vertices": ["v00", "v01"],
-                                "edges": [],
+                                "edges": [["v00", "v01"]],
                             },
-                            "multiplicity": 1,
+                            "multiplicity": "2",
                         },
                     ],
                 },

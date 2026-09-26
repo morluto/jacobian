@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Literal, NoReturn
+from typing import Literal, NoReturn, cast
 
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -149,7 +149,7 @@ def _character_sturm_precision(space: ModularFormSpace) -> int:
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
     return all(
-        int(coefficient.num) == 0 for coefficient in value.coefficients_ascending
+        coefficient.num == 0 for coefficient in value.coefficients_ascending
     )
 
 
@@ -226,7 +226,7 @@ def _character_basis_from_admission(
     # Quer, Thm. 2.3, gives the exact independent dimension formula for this
     # bounded character family. Admission is complete before entering PARI.
     cusp_dimension, full_dimension = character_space_dimensions(
-        space.level, space.weight, space.character, field
+        space.level, space.weight, cast(DirichletCharacter, space.character), field
     )
     dimension = cusp_dimension if space.kind == "S" else full_dimension
     precision = _character_sturm_precision(space)
@@ -501,18 +501,6 @@ def modular_character_coordinates_product(
             location=("form",),
             code="modular_form.character_product_admission",
             message="character product exceeds its exact work, height, or output envelope",
-        )
-    if left_space == right_space and left_scalar == right_scalar:
-        request_checkpoint("before character coordinate equality")
-        return ModularFormFieldQExpansion(
-            space=target_space,
-            coefficients=tuple(
-                _coefficient(field, cyclotomic._validate_element(value)[1])
-                for value in left_scalar.coefficients_ascending
-            )
-            + tuple(
-                _coefficient(field, (Fraction(0),) * field.degree) for _ in range(2)
-            ),
         )
     if not any(value.num for value in left_scalar.coefficients_ascending) or not any(
         value.num for value in right_scalar.coefficients_ascending

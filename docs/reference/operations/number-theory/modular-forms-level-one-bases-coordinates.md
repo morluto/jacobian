@@ -295,7 +295,8 @@ is also the standard normalized newform in `S_6(Gamma0(3))`.
 ## Exact rational basis frames
 
 `modular_form.basis_frame.create` declares an ordered rational basis relative
-to one of the six supported canonical bases. A frame retains its exact modular
+to one of seven supported canonical bases, including the PARI-backed
+`gamma0-rational-gamma0-sturm-rref-v1` basis. A frame retains its exact modular
 space, canonical basis ID, canonical source labels, caller labels, and a square
 matrix `C`; column `j` gives the canonical coordinates of caller basis vector
 `j`. Thus canonical coordinates `x` convert to caller coordinates by solving

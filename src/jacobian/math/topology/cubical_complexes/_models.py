@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from itertools import product
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
@@ -72,6 +73,13 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by cubical-complex contracts."""
 
     return PydanticCustomError(f"cubical_complex.{reason}", message)
+
+
+def _cell_is_face(face: CubicalCell, coface: CubicalCell) -> bool:
+    return len(face.intervals) == len(coface.intervals) and all(
+        outer[0] <= inner[0] and inner[1] <= outer[1]
+        for inner, outer in zip(face.intervals, coface.intervals, strict=True)
+    )
 
 
 class CubicalCell(StrictModel):
@@ -163,6 +171,30 @@ class CubicalFacePosetResult(StrictModel):
                 "face_poset_axis_binding",
                 "face-poset labels and dimensions must bind the canonical cell axis",
             )
+        label_by_cell = {entry.cell: entry.element for entry in self.cell_elements}
+        strict = {
+            (label_by_cell[lower], label_by_cell[upper])
+            for lower in self.complex.cells
+            for upper in self.complex.cells
+            if lower != upper
+            and lower.dimension < upper.dimension
+            and _cell_is_face(lower, upper)
+        }
+        covers = {
+            (label_by_cell[lower], label_by_cell[upper])
+            for lower in self.complex.cells
+            for upper in self.complex.cells
+            if upper.dimension == lower.dimension + 1 and _cell_is_face(lower, upper)
+        }
+        if {
+            (pair.lower, pair.upper) for pair in self.poset.strict_order_pairs
+        } != strict or {
+            (pair.lower, pair.upper) for pair in self.poset.cover_relations
+        } != covers:
+            raise _validation_error(
+                "face_poset_order_binding",
+                "the poset order and covers must be cubical face inclusion",
+            )
         return self
 
 
@@ -241,6 +273,19 @@ class CubicalClosedStarResult(StrictModel):
                 "closed_star_source_binding",
                 "the selected cell and closed star must be bound to the source complex",
             )
+        expected = tuple(
+            candidate
+            for candidate in self.complex.cells
+            if any(
+                _cell_is_face(candidate, coface) and _cell_is_face(self.cell, coface)
+                for coface in self.complex.cells
+            )
+        )
+        if self.closed_star.cells != expected:
+            raise _validation_error(
+                "closed_star_incomplete",
+                "the closed star must contain exactly cells sharing a source coface with the selected cell",
+            )
         return self
 
 
@@ -273,6 +318,43 @@ class CubicalOneSkeletonResult(StrictModel):
             raise _validation_error(
                 "one_skeleton_vertex_map_source",
                 "every indexed vertex must map to a source zero-cell",
+            )
+        source_vertices = tuple(
+            cell for cell in self.complex.cells if cell.dimension == 0
+        )
+        vertex_index = {cell: index for index, cell in enumerate(source_vertices)}
+        expected_edges = set()
+        for edge in (cell for cell in self.complex.cells if cell.dimension == 1):
+            varying_axes = tuple(
+                axis
+                for axis, (lower, upper) in enumerate(edge.intervals)
+                if lower != upper
+            )
+            if len(varying_axes) != 1:
+                continue
+            axis = varying_axes[0]
+            endpoints = []
+            for endpoint in edge.intervals[axis]:
+                vertex = CubicalCell(
+                    intervals=tuple(
+                        (endpoint, endpoint) if coordinate == axis else interval
+                        for coordinate, interval in enumerate(edge.intervals)
+                    )
+                )
+                if vertex not in vertex_index:
+                    raise _validation_error(
+                        "one_skeleton_missing_endpoint",
+                        "every source cubical edge must have both source vertices",
+                    )
+                endpoints.append(vertex_index[vertex])
+            expected_edges.add(tuple(sorted(endpoints)))
+        if (
+            self.vertex_cells != source_vertices
+            or set(self.graph.edges) != expected_edges
+        ):
+            raise _validation_error(
+                "one_skeleton_source_binding",
+                "the graph must contain every source vertex and cubical edge",
             )
         return self
 
@@ -319,6 +401,16 @@ class CubicalSkeletonResult(StrictModel):
             raise _validation_error(
                 "skeleton_source_binding_invalid",
                 "every retained cell must belong to the source and meet the dimension bound",
+            )
+        expected = tuple(
+            cell
+            for cell in self.complex.cells
+            if cell.dimension <= self.dimension_bound
+        )
+        if self.skeleton.cells != expected:
+            raise _validation_error(
+                "skeleton_incomplete",
+                "the skeleton must contain every source cell within the dimension bound",
             )
         return self
 
@@ -490,6 +582,23 @@ class CubicalBitmapResult(StrictModel):
                 "bitmap_pixel_map_incomplete",
                 "pixel map cells must equal the complex's full set of unit squares",
             )
+        expected_cells = {
+            CubicalCell(intervals=face)
+            for entry in self.pixel_to_cell
+            for face in product(
+                *(
+                    ((lower, lower), (lower, upper), (upper, upper))
+                    if upper > lower
+                    else ((lower, lower),)
+                    for lower, upper in entry.cell.intervals
+                )
+            )
+        }
+        if set(self.complex.cells) != expected_cells:
+            raise _validation_error(
+                "bitmap_face_closure_incomplete",
+                "the bitmap complex must contain exactly the faces of its foreground pixels",
+            )
         if any(
             a < 0 or b > bound
             for cell in self.complex.cells
@@ -615,6 +724,38 @@ class FilteredCubicalComplex(StrictModel):
                 "critical_values_invalid",
                 "critical values must be strictly increasing and duplicate-free",
             )
+        value_by_vertex = {
+            entry.vertex: entry.value.as_fraction() for entry in self.vertex_values
+        }
+        expected_critical = tuple(sorted(set(value_by_vertex.values())))
+        if critical != expected_critical:
+            raise _validation_error(
+                "critical_values_not_bound",
+                "critical values must be exactly the distinct source vertex values",
+            )
+        for birth in self.cell_births:
+            choices = tuple(
+                (lower,) if lower == upper else (lower, upper)
+                for lower, upper in birth.cell.intervals
+            )
+            vertices = tuple(
+                CubicalCell(
+                    intervals=tuple((coordinate, coordinate) for coordinate in point)
+                )
+                for point in product(*choices)
+            )
+            maximum = max(value_by_vertex[vertex] for vertex in vertices)
+            maximizers = tuple(
+                vertex for vertex in vertices if value_by_vertex[vertex] == maximum
+            )
+            if (
+                birth.value.as_fraction() != maximum
+                or birth.maximizing_vertices != maximizers
+            ):
+                raise _validation_error(
+                    "lower_star_birth_not_bound",
+                    "each cell birth and maximizing vertices must match its vertex values",
+                )
         if any(
             tuple(
                 sorted(
@@ -676,20 +817,43 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
                 "top_cell_birth_axis_invalid",
                 "cell births must follow the canonical complex cell axis",
             )
-        if any(entry.cell not in self.complex.cells for entry in self.top_cell_values):
+        maximal = tuple(
+            cell
+            for cell in self.complex.cells
+            if not any(
+                cell != candidate and _cell_is_face(cell, candidate)
+                for candidate in self.complex.cells
+            )
+        )
+        if tuple(entry.cell for entry in self.top_cell_values) != maximal:
             raise _validation_error(
                 "top_cell_value_source_invalid",
-                "top-cell values must be attached to source-complex cells",
+                "top-cell values must cover the canonical maximal-cell axis",
             )
-        if any(
-            coface not in self.complex.cells
-            for birth in self.cell_births
-            for coface in birth.minimizing_top_cells
+        value_by_cell = {
+            entry.cell: entry.value.as_fraction() for entry in self.top_cell_values
+        }
+        if tuple(value.as_fraction() for value in self.critical_values) != tuple(
+            sorted(set(value_by_cell.values()))
         ):
             raise _validation_error(
-                "top_cell_witness_invalid",
-                "birth witnesses must belong to the source complex",
+                "top_cell_critical_values_invalid",
+                "critical values must be exactly the distinct maximal-cell values",
             )
+        for birth in self.cell_births:
+            containing = tuple(top for top in maximal if _cell_is_face(birth.cell, top))
+            minimum = min(value_by_cell[top] for top in containing)
+            witnesses = tuple(
+                top for top in containing if value_by_cell[top] == minimum
+            )
+            if (
+                birth.value.as_fraction() != minimum
+                or birth.minimizing_top_cells != witnesses
+            ):
+                raise _validation_error(
+                    "top_cell_birth_not_bound",
+                    "each cell birth and witness set must match its maximal cofaces",
+                )
         basis_sizes = tuple(len(basis.cells) for basis in self.cell_bases)
         if self.filtered_chain_complex.complex.basis_sizes != basis_sizes:
             raise _validation_error(
@@ -784,13 +948,11 @@ __all__ = [
     "MAX_CUBICAL_FACE_POSET_COVER_CANDIDATES",
     "MAX_CUBICAL_FACE_POSET_RESULT_SIZE",
     "MAX_CUBICAL_PRIME",
-    "MAX_CUBICAL_PRODUCT_RESULT_BYTES",
     "MAX_CUBICAL_PRODUCT_RESULT_SIZE",
-    "MAX_CUBICAL_TRIANGULATION_RESULT_BYTES",
     "MAX_CUBICAL_SKELETON_RESULT_SIZE",
-    "MAX_TRIANGULATION_CELL_SIMPLICES",
-    "MAX_TRIANGULATION_SIMPLICES"
+    "MAX_CUBICAL_TRIANGULATION_RESULT_BYTES",
     "MAX_DIM",
+    "MAX_FACE_CELLS",
     "MAX_LOWER_STAR_CELLS",
     "MAX_LOWER_STAR_COORDINATE_DIGITS",
     "MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES",

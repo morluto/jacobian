@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import combinations, permutations
 from typing import Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -19,6 +19,7 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     Simplex,
     VertexLabel,
+    face_closure,
 )
 from jacobian.math.topology._models import (
     canonical_complex as canonical_simplicial_complex,
@@ -27,8 +28,7 @@ from jacobian.math.topology.chain_complexes.values import MAX_OPERATION_MATRIX_C
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
     MAX_CUBICAL_BITMAP_RESULT_BYTES,
-    MAX_CUBICAL_CELL_BOUNDARY_COORDINATE_DIGITS,
-    MAX_CUBICAL_CELL_BOUNDARY_RESULT_BYTES,
+    MAX_CUBICAL_BITMAP_SIDE,
     MAX_CUBICAL_CHAIN_GROUP,
     MAX_CUBICAL_TRIANGULATION_RESULT_BYTES,
     MAX_DIM,
@@ -268,6 +268,12 @@ def _require_valid_triangulation_transport(
             raise ValueError("cell simplex maps are absent from the target complex")
     if tuple(sorted(expected_facets)) != result.simplicial_complex.maximal_simplices:
         raise ValueError("target facets do not equal the mapped source subdivisions")
+    expected_closure = face_closure(tuple(sorted(expected_facets)))
+    actual_closure = tuple(
+        group.faces for group in result.simplicial_complex.faces_by_dimension
+    )
+    if actual_closure != expected_closure:
+        raise ValueError("target faces do not equal the mapped subdivisions' closure")
 
 
 def _maximal_cubical_cells(cells: tuple[CubicalCell, ...]) -> tuple[CubicalCell, ...]:
@@ -326,6 +332,30 @@ def bitmap_to_complex(request: CubicalBitmapRequest) -> CubicalBitmapResult:
     ``(r, c)`` denotes the closed 2-cell ``([c,c+1], [r,r+1])``.  The full
     cubical face closure is returned; false pixels contribute no cells.
     """
+    if type(request) is not CubicalBitmapRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="cubical_complex.bitmap_request_type",
+            message="bitmap_to_complex requires a canonical bitmap request",
+        )
+    try:
+        if (
+            type(request.pixels) is not tuple
+            or not request.pixels
+            or len(request.pixels) > MAX_CUBICAL_BITMAP_SIDE
+            or any(
+                type(row) is not tuple or len(row) > MAX_CUBICAL_BITMAP_SIDE
+                for row in request.pixels
+            )
+        ):
+            raise ValueError("bitmap axes exceed the canonical request bounds")
+        request = CubicalBitmapRequest.model_validate(request.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="cubical_complex.bitmap_request_invalid",
+            message="bitmap request must satisfy its canonical rectangular contract",
+        ) from exc
     row_count = len(request.pixels)
     column_count = len(request.pixels[0])
     selected_count = sum(pixel for row in request.pixels for pixel in row)
@@ -442,7 +472,6 @@ def boundary(cells: tuple[CubicalCell, ...]) -> CubicalBoundaryResult:
         terms=tuple(terms),
         boundary_cells=boundary_cells,
     )
-
 
 
 def _rank(matrix: list[list[int]], p: int) -> int:

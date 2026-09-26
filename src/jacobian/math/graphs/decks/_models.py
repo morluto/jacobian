@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from itertools import combinations, permutations
 from math import comb, factorial
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Self, cast
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -16,7 +16,7 @@ from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
 from jacobian.math.graphs.realization._models import DegreeSequence
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
 
 MAX_DECK_VERTICES = 64
 """Admission cap on source vertices so the complete card family fits output."""
@@ -27,6 +27,8 @@ MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
 MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
+MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
+MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
 MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
 MAX_ANONYMOUS_CARD_RESULT_BYTES = 1_000_000
 MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
@@ -83,22 +85,35 @@ def _canonical_card_edges(
     vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
 ) -> tuple[tuple[str, str], ...]:
     """Return the least fixed-axis adjacency encoding in the permutation orbit."""
+    return _canonical_card_form(vertices, edges)[0]
+
+
+def _canonical_card_form(
+    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+) -> tuple[tuple[tuple[str, str], ...], tuple[int, ...]]:
+    """Return the canonical edge tuple and source-position to canonical-position map."""
     n = len(vertices)
     index = {vertex: i for i, vertex in enumerate(vertices)}
     edge_indices = {frozenset((index[left], index[right])) for left, right in edges}
     pairs = tuple(combinations(range(n), 2))
     best: tuple[int, ...] | None = None
+    best_order: tuple[int, ...] | None = None
     for order in permutations(range(n)):
         bits = tuple(
             int(frozenset((order[i], order[j])) in edge_indices) for i, j in pairs
         )
         if best is None or bits < best:
             best = bits
-    assert best is not None
+            best_order = order
+    assert best is not None and best_order is not None
     labels = tuple(f"v{i:02d}" for i in range(n))
-    return tuple(
+    canonical_edges = tuple(
         (labels[i], labels[j]) for bit, (i, j) in zip(best, pairs, strict=True) if bit
     )
+    source_to_canonical = [0] * n
+    for canonical_position, source_position in enumerate(best_order):
+        source_to_canonical[source_position] = canonical_position
+    return canonical_edges, tuple(source_to_canonical)
 
 
 class AnonymousGraphCardMultisetRequest(StrictModel):
@@ -153,6 +168,14 @@ class AnonymousGraphCardMultiset(StrictModel):
         ):
             raise _validation_error(
                 "anonymous_card_classes", "classes exceed the carrier bound"
+            )
+        if (
+            _anonymous_canonicalization_work(n, len(self.classes))
+            > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+        ):
+            raise _validation_error(
+                "anonymous_card_validation_bound",
+                "canonical class validation exceeds its bounded permutation work",
             )
         pair_count = comb(n, 2)
         output_bytes = len(self.classes) * (64 + 16 * pair_count)
@@ -213,6 +236,11 @@ class AnonymousGraphCardMultiset(StrictModel):
                 raise _validation_error(
                     "anonymous_card_edges",
                     "representative edges must be valid, unique, and ordered",
+                )
+            if _canonical_card_edges(graph.vertices, graph.edges) != graph.edges:
+                raise _validation_error(
+                    "anonymous_card_not_canonical",
+                    "each representative must be minimal under all vertex permutations",
                 )
             if previous_key is not None and graph.edges <= previous_key:
                 raise _validation_error(
@@ -885,6 +913,1139 @@ class UnlabelledVertexDeck(StrictModel):
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:
         return cls.model_construct(**values)
+
+
+class VertexDeckIsomorphismProfileRequest(StrictModel):
+    """Produce exact card-to-class maps for a complete vertex-deletion family."""
+
+    deck: VertexDeletionFamily
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_raw_source_order(cls, value: Any) -> Any:
+        if type(value) is not dict:
+            return value
+        deck = value.get("deck")
+        source = deck.get("source") if type(deck) is dict else None
+        vertices: Any = source.get("vertices") if type(source) is dict else None
+        edges: Any = source.get("edges") if type(source) is dict else None
+        if type(vertices) not in (list, tuple):
+            return value
+        order = len(vertices)
+        if order > MAX_UNLABELLED_DECK_VERTICES:
+            raise _validation_error(
+                "vertex_iso_profile_bound",
+                "vertex-deck isomorphism profile supports at most 10 source vertices",
+            )
+        pair_count = comb(order, 2)
+        card_pair_count = comb(max(order - 1, 0), 2)
+        if type(edges) in (list, tuple) and len(edges) > pair_count:
+            raise _validation_error(
+                "vertex_iso_profile_source_edges",
+                "source edge list exceeds the simple-graph order bound",
+            )
+        _preflight_vertex_profile_labels(vertices, edges)
+        cards: Any = deck.get("cards") if type(deck) is dict else None
+        if type(cards) in (list, tuple):
+            if len(cards) != order:
+                raise _validation_error(
+                    "vertex_iso_profile_card_count",
+                    "a complete vertex family must contain one card per source vertex",
+                )
+            for card in cards:
+                if type(card) is not dict:
+                    continue
+                _preflight_vertex_profile_labels(card.get("deleted_vertex"))
+                graph = card.get("card")
+                if type(graph) is not dict:
+                    continue
+                card_vertices: Any = graph.get("vertices")
+                card_edges: Any = graph.get("edges")
+                retained_vertices: Any = card.get("retained_vertices")
+                if (
+                    (
+                        type(card_vertices) in (list, tuple)
+                        and len(card_vertices) > max(order - 1, 0)
+                    )
+                    or (
+                        type(retained_vertices) in (list, tuple)
+                        and len(retained_vertices) > max(order - 1, 0)
+                    )
+                    or (
+                        type(card_edges) in (list, tuple)
+                        and len(card_edges) > card_pair_count
+                    )
+                ):
+                    raise _validation_error(
+                        "vertex_iso_profile_card_shape",
+                        "a card exceeds the declared source-order shape bound",
+                    )
+                _preflight_vertex_profile_labels(
+                    card_vertices, card_edges, retained_vertices
+                )
+        source_edges = len(edges) if type(edges) in (list, tuple) else pair_count
+        _preflight_vertex_family_ledgers(deck, order, source_edges)
+        _, total_work, output_bytes = _vertex_iso_profile_resource_estimates(
+            order, source_edges, order
+        )
+        if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+            raise _validation_error(
+                "vertex_iso_profile_work_bound",
+                "vertex-deck isomorphism mapping exceeds the shared work bound",
+            )
+        if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+            raise _validation_error(
+                "vertex_iso_profile_output_bound",
+                "vertex-deck isomorphism profile exceeds the serialized byte bound",
+            )
+        return _normalize_vertex_iso_profile_request(value)
+
+
+class VertexDeckIsomorphismClass(StrictModel):
+    """One canonical graph class and its source-card indices."""
+
+    representative: SimpleUndirectedGraph
+    multiplicity: int = Field(ge=1)
+    card_indices: tuple[int, ...]
+
+
+class VertexDeckIsomorphismProfile(StrictModel):
+    """Canonical classes and explicit vertex bijections for every deck card."""
+
+    family: VertexDeletionFamily
+    classes: tuple[VertexDeckIsomorphismClass, ...]
+    class_indices: tuple[int, ...]
+    vertex_maps: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_json_tuple_fields(cls, value: Any) -> Any:
+        return _admit_and_normalize_vertex_iso_profile_result(value)
+
+    @model_validator(mode="after")
+    def require_exact_partition_and_maps(self) -> Self:
+        family = self.family
+        if (
+            type(family) is not VertexDeletionFamily
+            or type(family.source) is not SimpleUndirectedGraph
+            or type(family.source.vertices) is not tuple
+            or type(family.source.edges) is not tuple
+            or type(family.cards) is not tuple
+        ):
+            raise _validation_error(
+                "vertex_iso_profile_family",
+                "profile must retain a canonical source-bound vertex family",
+            )
+        source_order = len(family.source.vertices)
+        card_order = max(source_order - 1, 0)
+        card_count = len(family.cards)
+        if source_order > MAX_UNLABELLED_DECK_VERTICES:
+            raise _validation_error(
+                "vertex_iso_profile_bound",
+                "vertex-deck isomorphism profile exceeds its source-order bound",
+            )
+        if (
+            len(self.class_indices) != card_count
+            or len(self.vertex_maps) != card_count
+            or len(self.classes) > card_count
+            or sum(item.multiplicity for item in self.classes) != card_count
+        ):
+            raise _validation_error(
+                "vertex_iso_profile_card_count",
+                "profile rows and card maps must cover every source card",
+            )
+
+        previous_edges: tuple[tuple[str, str], ...] | None = None
+        seen: list[int] = []
+        canonical_axis = tuple(f"v{i:02d}" for i in range(card_order))
+        for class_index, item in enumerate(self.classes):
+            representative = item.representative
+            if (
+                type(item.card_indices) is not tuple
+                or not item.card_indices
+                or tuple(sorted(item.card_indices)) != item.card_indices
+                or item.multiplicity != len(item.card_indices)
+                or any(
+                    type(index) is not int or index < 0 or index >= card_count
+                    for index in item.card_indices
+                )
+                or representative.vertices != canonical_axis
+                or _canonical_card_edges(representative.vertices, representative.edges)
+                != representative.edges
+                or (
+                    previous_edges is not None
+                    and representative.edges <= previous_edges
+                )
+            ):
+                raise _validation_error(
+                    "vertex_iso_profile_class",
+                    "classes must be unique, canonical, ordered, and cover valid card indices",
+                )
+            previous_edges = representative.edges
+            seen.extend(item.card_indices)
+            for card_index in item.card_indices:
+                if self.class_indices[card_index] != class_index:
+                    raise _validation_error(
+                        "vertex_iso_profile_class_map",
+                        "class_indices must agree with each class card list",
+                    )
+        if sorted(seen) != list(range(card_count)):
+            raise _validation_error(
+                "vertex_iso_profile_partition",
+                "class card indices must partition the card axis",
+            )
+
+        for card_index, (class_index, mapping) in enumerate(
+            zip(self.class_indices, self.vertex_maps, strict=True)
+        ):
+            if (
+                type(class_index) is not int
+                or class_index < 0
+                or class_index >= len(self.classes)
+                or type(mapping) is not tuple
+                or len(mapping) != card_order
+                or any(type(value) is not int for value in mapping)
+                or tuple(sorted(mapping)) != tuple(range(card_order))
+            ):
+                raise _validation_error(
+                    "vertex_iso_profile_map_shape",
+                    "each card needs one valid class index and vertex permutation",
+                )
+            card = family.cards[card_index].card
+            edge_index = {
+                vertex: position for position, vertex in enumerate(card.vertices)
+            }
+            target_edges = tuple(
+                sorted(
+                    (
+                        (
+                            f"v{min(mapping[edge_index[left]], mapping[edge_index[right]]):02d}",
+                            f"v{max(mapping[edge_index[left]], mapping[edge_index[right]]):02d}",
+                        )
+                        for left, right in card.edges
+                    )
+                )
+            )
+            if target_edges != self.classes[class_index].representative.edges:
+                raise _validation_error(
+                    "vertex_iso_profile_map_relation",
+                    "each vertex map must carry its card edges to the class representative",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+def _vertex_iso_profile_output_bound(
+    family: VertexDeletionFamily, class_count: int
+) -> int:
+    return _vertex_iso_profile_resource_estimates(
+        len(family.source.vertices), len(family.source.edges), class_count
+    )[2]
+
+
+def _normalize_vertex_iso_profile_request(value: Any) -> Any:
+    if type(value) is not dict:
+        return value
+    deck = value.get("deck")
+    if type(deck) is not dict:
+        return value
+    normalized = dict(value)
+    normalized["deck"] = _normalize_vertex_family_json(deck)
+    return normalized
+
+
+def _normalize_vertex_iso_profile_result(value: Any) -> Any:
+    if type(value) is not dict:
+        return value
+    family = value.get("family")
+    classes = value.get("classes")
+    normalized = dict(value)
+    if type(family) is dict:
+        normalized["family"] = _normalize_vertex_family_json(family)
+    if type(classes) is list:
+        normalized_classes = []
+        for item in classes:
+            if type(item) is not dict:
+                normalized_classes.append(item)
+                continue
+            row = dict(item)
+            indices = row.get("card_indices")
+            if type(indices) is list:
+                row["card_indices"] = tuple(indices)
+            representative = row.get("representative")
+            if type(representative) is dict:
+                row["representative"] = _normalize_vertex_graph_json(representative)
+            normalized_classes.append(row)
+        normalized["classes"] = tuple(normalized_classes)
+    for field in ("class_indices", "vertex_maps"):
+        rows = normalized.get(field)
+        if type(rows) is list:
+            normalized[field] = tuple(
+                tuple(row) if field == "vertex_maps" and type(row) is list else row
+                for row in rows
+            )
+    return normalized
+
+
+def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
+    if type(value) is not dict:
+        return value
+    dimensions = _vertex_iso_profile_dimensions(
+        value.get("family"), value.get("classes")
+    )
+    if dimensions is not None:
+        order, edge_count, class_count = dimensions
+        if order > MAX_UNLABELLED_DECK_VERTICES:
+            raise _validation_error(
+                "vertex_iso_profile_bound",
+                "vertex-deck isomorphism profile exceeds its source-order bound",
+            )
+        family = value.get("family")
+        _preflight_vertex_family_labels(family)
+        _preflight_vertex_family_ledgers(family, order, edge_count)
+        classes: Any = value.get("classes")
+        _require_exact_vertex_iso_profile_wire_integers(value, classes)
+        if type(classes) in (list, tuple):
+            card_order = max(order - 1, 0)
+            card_pair_count = comb(card_order, 2)
+            family = value.get("family")
+            raw_cards: Any = (
+                family.get("cards")
+                if type(family) is dict
+                else getattr(family, "cards", None)
+            )
+            if type(raw_cards) in (list, tuple):
+                for card in raw_cards:
+                    graph = (
+                        card.get("card")
+                        if type(card) is dict
+                        else getattr(card, "card", None)
+                    )
+                    vertices: Any = (
+                        graph.get("vertices")
+                        if type(graph) is dict
+                        else getattr(graph, "vertices", None)
+                    )
+                    edges: Any = (
+                        graph.get("edges")
+                        if type(graph) is dict
+                        else getattr(graph, "edges", None)
+                    )
+                    if (
+                        type(vertices) in (list, tuple) and len(vertices) > card_order
+                    ) or (
+                        type(edges) in (list, tuple) and len(edges) > card_pair_count
+                    ):
+                        raise _validation_error(
+                            "vertex_iso_profile_card_shape",
+                            "a card exceeds the declared source-order shape bound",
+                        )
+            for item in classes:
+                graph = (
+                    item.get("representative")
+                    if type(item) is dict
+                    else getattr(item, "representative", None)
+                )
+                vertices = (
+                    graph.get("vertices")
+                    if type(graph) is dict
+                    else getattr(graph, "vertices", None)
+                )
+                edges = (
+                    graph.get("edges")
+                    if type(graph) is dict
+                    else getattr(graph, "edges", None)
+                )
+                if (type(vertices) in (list, tuple) and len(vertices) > card_order) or (
+                    type(edges) in (list, tuple) and len(edges) > card_pair_count
+                ):
+                    raise _validation_error(
+                        "vertex_iso_profile_card_shape",
+                        "a representative exceeds the declared source-order shape bound",
+                    )
+                _preflight_vertex_profile_labels(vertices, edges)
+        if (
+            type(classes) in (list, tuple)
+            and len(cast(list[Any] | tuple[Any, ...], classes)) > order
+        ):
+            raise _validation_error(
+                "vertex_iso_profile_class_count",
+                "the isomorphism profile cannot have more classes than cards",
+            )
+        _, work, output_bytes = _vertex_iso_profile_value_resource_estimates(
+            order, edge_count, class_count
+        )
+        if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+            raise _validation_error(
+                "vertex_iso_profile_validation_work_bound",
+                "class representatives and card maps exceed the shared validation work bound",
+            )
+        if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+            raise _validation_error(
+                "vertex_iso_profile_output_bound",
+                "vertex-deck isomorphism profile exceeds its serialized byte bound",
+            )
+    return _normalize_vertex_iso_profile_result(value)
+
+
+def _vertex_iso_profile_dimensions(
+    family: Any, classes: Any
+) -> tuple[int, int, int] | None:
+    if type(family) is VertexDeletionFamily:
+        source = family.source
+        vertices = getattr(source, "vertices", None)
+        edges = getattr(source, "edges", None)
+    elif type(family) is dict:
+        raw_source: Any = family.get("source")
+        if type(raw_source) is not dict:
+            return None
+        vertices = raw_source.get("vertices")
+        edges = raw_source.get("edges")
+    else:
+        return None
+    if type(vertices) not in (list, tuple):
+        return None
+    order = len(cast(list[Any] | tuple[Any, ...], vertices))
+    edge_count = (
+        len(cast(list[Any] | tuple[Any, ...], edges))
+        if type(edges) in (list, tuple)
+        else comb(order, 2)
+    )
+    class_count = len(classes) if type(classes) in (list, tuple) else order
+    return order, edge_count, class_count
+
+
+def _normalize_vertex_family_json(value: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(value)
+    source = normalized.get("source")
+    if type(source) is dict:
+        normalized["source"] = _normalize_vertex_graph_json(source)
+    cards = normalized.get("cards")
+    if type(cards) is list:
+        normalized_cards = []
+        for item in cards:
+            if type(item) is not dict:
+                normalized_cards.append(item)
+                continue
+            row = dict(item)
+            card = row.get("card")
+            if type(card) is dict:
+                row["card"] = _normalize_vertex_graph_json(card)
+            retained = row.get("retained_vertices")
+            if type(retained) is list:
+                row["retained_vertices"] = tuple(retained)
+            normalized_cards.append(row)
+        normalized["cards"] = tuple(normalized_cards)
+    for field in ("edge_appearances", "vertex_appearances"):
+        entries = normalized.get(field)
+        if type(entries) is list:
+            normalized[field] = tuple(entries)
+    return normalized
+
+
+def _normalize_vertex_graph_json(value: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(value)
+    vertices = normalized.get("vertices")
+    edges = normalized.get("edges")
+    if type(vertices) is list:
+        normalized["vertices"] = tuple(vertices)
+    if type(edges) is list:
+        normalized["edges"] = tuple(
+            tuple(edge) if type(edge) is list and len(edge) == 2 else edge
+            for edge in edges
+        )
+    return normalized
+
+
+def _vertex_iso_profile_resource_estimates(
+    source_order: int, source_edge_count: int, class_count: int
+) -> tuple[int, int, int]:
+    card_order = max(source_order - 1, 0)
+    pair_count = comb(card_order, 2)
+    canonical_work = (
+        source_order * factorial(card_order) * (1 + card_order + pair_count)
+    )
+    family_check_work = source_order * (source_edge_count + card_order + 1)
+    # Count worst-case JSON escaping for bounded 64-byte graph labels.
+    family_bytes = 512 + 384 * (source_order + source_order * card_order)
+    family_bytes += 800 * (source_edge_count + source_order * source_edge_count)
+    class_bytes = class_count * (512 + 32 * pair_count + 16 * card_order)
+    map_bytes = source_order * (128 + 16 * card_order)
+    return (
+        canonical_work,
+        canonical_work + family_check_work,
+        (256 + family_bytes + class_bytes + map_bytes),
+    )
+
+
+def _vertex_iso_profile_value_resource_estimates(
+    source_order: int, source_edge_count: int, class_count: int
+) -> tuple[int, int, int]:
+    """Bound wire validation, including canonicality checks on each class row."""
+    card_order = max(source_order - 1, 0)
+    pair_count = comb(card_order, 2)
+    per_class_canonical_work = factorial(card_order) * (1 + card_order + pair_count)
+    family_check_work = source_order * (source_edge_count + card_order + 1)
+    map_check_work = source_order * (source_edge_count + card_order)
+    _, _, output_bytes = _vertex_iso_profile_resource_estimates(
+        source_order, source_edge_count, class_count
+    )
+    return (
+        class_count * per_class_canonical_work,
+        class_count * per_class_canonical_work + family_check_work + map_check_work,
+        output_bytes,
+    )
+
+
+class EdgeDeckIsomorphismProfileRequest(StrictModel):
+    """Produce exact card-to-class vertex maps for a complete edge deck."""
+
+    deck: EdgeDeletionFamily
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_raw_source_order(cls, value: Any) -> Any:
+        if type(value) is not dict:
+            return value
+        family: Any = value.get("deck")
+        source: Any = family.get("source") if type(family) is dict else None
+        vertices: Any = source.get("vertices") if type(source) is dict else None
+        edges: Any = source.get("edges") if type(source) is dict else None
+        if type(vertices) not in (list, tuple):
+            return value
+        order = len(vertices)
+        if order > MAX_UNLABELLED_DECK_VERTICES:
+            raise _validation_error(
+                "edge_iso_profile_bound",
+                "edge-deck isomorphism profile supports at most 10 source vertices",
+            )
+        pair_count = comb(order, 2)
+        edge_count = len(edges) if type(edges) in (list, tuple) else pair_count
+        if edge_count > pair_count:
+            raise _validation_error(
+                "edge_iso_profile_source_edges",
+                "source edge list exceeds the simple-graph order bound",
+            )
+        _preflight_raw_edge_pairs(edges, pair_count)
+        _preflight_edge_profile_labels(vertices, edges)
+        cards: Any = family.get("cards") if type(family) is dict else None
+        if type(cards) in (list, tuple):
+            if len(cards) != edge_count:
+                raise _validation_error(
+                    "edge_iso_profile_card_count",
+                    "a complete edge family must contain one card per source edge",
+                )
+            for card in cards:
+                if type(card) is not dict:
+                    continue
+                if type(card.get("retained_edge_count")) is not int:
+                    raise _validation_error(
+                        "edge_iso_profile_integer_type",
+                        "retained_edge_count must be an exact integer",
+                    )
+                _preflight_raw_edge_pairs(card.get("deleted_edge"), 2)
+                _preflight_edge_profile_labels(card.get("deleted_edge"))
+                graph: Any = card.get("card")
+                if type(graph) is not dict:
+                    continue
+                card_vertices: Any = graph.get("vertices")
+                card_edges: Any = graph.get("edges")
+                retained_vertices: Any = card.get("retained_vertices")
+                if (
+                    (
+                        type(card_vertices) in (list, tuple)
+                        and len(card_vertices) > order
+                    )
+                    or (
+                        type(retained_vertices) in (list, tuple)
+                        and len(retained_vertices) > order
+                    )
+                    or (
+                        type(card_edges) in (list, tuple)
+                        and len(card_edges) > pair_count
+                    )
+                ):
+                    raise _validation_error(
+                        "edge_iso_profile_card_shape",
+                        "an edge card exceeds the declared source-order shape bound",
+                    )
+                _preflight_raw_edge_pairs(card_edges, pair_count)
+                _preflight_edge_profile_labels(
+                    card_vertices,
+                    card_edges,
+                    retained_vertices,
+                )
+        _, work, output_bytes = _edge_iso_profile_resource_estimates(
+            order, edge_count, edge_count
+        )
+        if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+            raise _validation_error(
+                "edge_iso_profile_work_bound",
+                "edge-deck isomorphism mapping exceeds the shared work bound",
+            )
+        if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+            raise _validation_error(
+                "edge_iso_profile_output_bound",
+                "edge-deck isomorphism profile exceeds the serialized byte bound",
+            )
+        normalized = dict(value)
+        normalized["deck"] = _normalize_edge_family_json(family)
+        return normalized
+
+
+class EdgeDeckIsomorphismClass(StrictModel):
+    """One canonical class and its source-edge deletion provenance."""
+
+    representative: SimpleUndirectedGraph
+    multiplicity: int = Field(ge=1)
+    card_indices: tuple[int, ...]
+    deleted_edges: tuple[tuple[str, str], ...]
+
+
+class EdgeDeckIsomorphismProfile(StrictModel):
+    """Canonical edge-card classes and explicit card-vertex bijections."""
+
+    family: EdgeDeletionFamily
+    classes: tuple[EdgeDeckIsomorphismClass, ...]
+    class_indices: tuple[int, ...]
+    vertex_maps: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="before")
+    @classmethod
+    def admit_and_normalize_wire_value(cls, value: Any) -> Any:
+        return _admit_and_normalize_edge_iso_profile_result(value)
+
+    @model_validator(mode="after")
+    def require_exact_partition_and_maps(self) -> Self:
+        family = self.family
+        source_order = len(family.source.vertices)
+        card_count = len(family.cards)
+        if source_order > MAX_UNLABELLED_DECK_VERTICES:
+            raise _validation_error(
+                "edge_iso_profile_bound",
+                "edge-deck isomorphism profile exceeds its source-order bound",
+            )
+        if (
+            type(self.class_indices) is not tuple
+            or type(self.vertex_maps) is not tuple
+            or type(self.classes) is not tuple
+            or len(self.class_indices) != card_count
+            or len(self.vertex_maps) != card_count
+            or len(self.classes) > card_count
+            or sum(item.multiplicity for item in self.classes) != card_count
+        ):
+            raise _validation_error(
+                "edge_iso_profile_card_count",
+                "profile rows and card maps must cover every source edge card",
+            )
+        canonical_axis = tuple(f"v{i:02d}" for i in range(source_order))
+        previous_edges: tuple[tuple[str, str], ...] | None = None
+        seen: list[int] = []
+        for class_index, item in enumerate(self.classes):
+            representative = item.representative
+            if (
+                type(item.card_indices) is not tuple
+                or type(item.deleted_edges) is not tuple
+                or not item.card_indices
+                or tuple(sorted(item.card_indices)) != item.card_indices
+                or item.multiplicity != len(item.card_indices)
+                or len(item.deleted_edges) != item.multiplicity
+                or any(
+                    type(index) is not int or index < 0 or index >= card_count
+                    for index in item.card_indices
+                )
+                or item.deleted_edges
+                != tuple(
+                    family.cards[index].deleted_edge for index in item.card_indices
+                )
+                or representative.vertices != canonical_axis
+                or _canonical_card_edges(representative.vertices, representative.edges)
+                != representative.edges
+                or (
+                    previous_edges is not None
+                    and representative.edges <= previous_edges
+                )
+            ):
+                raise _validation_error(
+                    "edge_iso_profile_class",
+                    "classes must be unique, canonical, ordered, and retain exact card provenance",
+                )
+            previous_edges = representative.edges
+            seen.extend(item.card_indices)
+            for card_index in item.card_indices:
+                if self.class_indices[card_index] != class_index:
+                    raise _validation_error(
+                        "edge_iso_profile_class_map",
+                        "class_indices must agree with each class card list",
+                    )
+        if sorted(seen) != list(range(card_count)):
+            raise _validation_error(
+                "edge_iso_profile_partition",
+                "class card indices must partition the edge-card axis",
+            )
+        for card_index, (class_index, mapping) in enumerate(
+            zip(self.class_indices, self.vertex_maps, strict=True)
+        ):
+            if (
+                type(class_index) is not int
+                or class_index < 0
+                or class_index >= len(self.classes)
+                or type(mapping) is not tuple
+                or len(mapping) != source_order
+                or any(type(position) is not int for position in mapping)
+                or tuple(sorted(mapping)) != tuple(range(source_order))
+            ):
+                raise _validation_error(
+                    "edge_iso_profile_map_shape",
+                    "each edge card needs a valid class index and vertex permutation",
+                )
+            card = family.cards[card_index].card
+            positions = {
+                vertex: position for position, vertex in enumerate(card.vertices)
+            }
+            mapped_edges = tuple(
+                sorted(
+                    (
+                        f"v{min(mapping[positions[left]], mapping[positions[right]]):02d}",
+                        f"v{max(mapping[positions[left]], mapping[positions[right]]):02d}",
+                    )
+                    for left, right in card.edges
+                )
+            )
+            if mapped_edges != self.classes[class_index].representative.edges:
+                raise _validation_error(
+                    "edge_iso_profile_map_relation",
+                    "each vertex map must carry its card edges to the class representative",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+def _edge_iso_profile_resource_estimates(
+    source_order: int, source_edge_count: int, class_count: int
+) -> tuple[int, int, int]:
+    pair_count = comb(source_order, 2)
+    canonical_work = (
+        source_edge_count
+        * factorial(source_order)
+        * (1 + source_order + 2 * pair_count)
+    )
+    family_check_work = source_edge_count * (source_edge_count + source_order + 1)
+    map_check_work = source_edge_count * (
+        source_order + max(source_edge_count - 1, 0) ** 2
+    )
+    class_bytes = class_count * (512 + 32 * pair_count + 16 * source_order)
+    family_bytes = 512 + 512 * (source_order + source_edge_count * source_order)
+    family_bytes += 1024 * (source_edge_count + source_edge_count**2)
+    maps_bytes = source_edge_count * (128 + 16 * source_order)
+    output_bytes = 256 + family_bytes + class_bytes + maps_bytes
+    return (
+        canonical_work,
+        canonical_work + family_check_work + map_check_work,
+        output_bytes,
+    )
+
+
+def _admit_and_normalize_edge_iso_profile_result(value: Any) -> Any:
+    if type(value) is not dict:
+        return value
+    dimensions = _edge_iso_profile_dimensions(value.get("family"), value.get("classes"))
+    if dimensions is None:
+        return _normalize_edge_iso_profile_result(value)
+    order, edge_count, class_count = dimensions
+    if order > MAX_UNLABELLED_DECK_VERTICES:
+        raise _validation_error(
+            "edge_iso_profile_bound",
+            "edge-deck isomorphism profile exceeds its source-order bound",
+        )
+    pair_count = comb(order, 2)
+    if edge_count > pair_count:
+        raise _validation_error(
+            "edge_iso_profile_source_edges",
+            "source edge list exceeds the simple-graph order bound",
+        )
+    family: Any = value.get("family")
+    classes: Any = value.get("classes")
+    if class_count > edge_count:
+        raise _validation_error(
+            "edge_iso_profile_class_count",
+            "the profile cannot have more isomorphism classes than edge cards",
+        )
+    _preflight_edge_profile_family_wire(family, order, pair_count, edge_count)
+    _preflight_edge_profile_result_rows(value, order, pair_count, edge_count)
+    _require_exact_edge_profile_wire_integers(value, classes)
+    _, work, output_bytes = _edge_iso_profile_resource_estimates(
+        order, edge_count, class_count
+    )
+    if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+        raise _validation_error(
+            "edge_iso_profile_validation_work_bound",
+            "class representatives and card maps exceed the shared validation work bound",
+        )
+    if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+        raise _validation_error(
+            "edge_iso_profile_output_bound",
+            "edge-deck isomorphism profile exceeds the serialized byte bound",
+        )
+    return _normalize_edge_iso_profile_result(value)
+
+
+def _edge_iso_profile_dimensions(
+    family: Any, classes: Any
+) -> tuple[int, int, int] | None:
+    """Derive edge-profile dimensions from either a typed or wire family."""
+    if type(family) is EdgeDeletionFamily:
+        source = family.source
+        vertices = getattr(source, "vertices", None)
+        edges = getattr(source, "edges", None)
+    elif type(family) is dict:
+        raw_source: Any = family.get("source")
+        if type(raw_source) is not dict:
+            return None
+        vertices = raw_source.get("vertices")
+        edges = raw_source.get("edges")
+    else:
+        return None
+    if type(vertices) not in (list, tuple):
+        return None
+    order = len(cast(list[Any] | tuple[Any, ...], vertices))
+    edge_count = (
+        len(cast(list[Any] | tuple[Any, ...], edges))
+        if type(edges) in (list, tuple)
+        else comb(order, 2)
+    )
+    class_count = len(classes) if type(classes) in (list, tuple) else edge_count
+    return order, edge_count, class_count
+
+
+def _preflight_edge_profile_family_wire(
+    family: Any, order: int, pair_count: int, edge_count: int
+) -> None:
+    raw_cards: Any = family.get("cards") if type(family) is dict else None
+    if type(raw_cards) not in (list, tuple):
+        return
+    if len(raw_cards) != edge_count:
+        raise _validation_error(
+            "edge_iso_profile_card_count",
+            "a complete edge family must contain one card per source edge",
+        )
+    for card in raw_cards:
+        if type(card) is not dict:
+            continue
+        if type(card.get("retained_edge_count")) is not int:
+            raise _validation_error(
+                "edge_iso_profile_integer_type",
+                "retained_edge_count must be an exact integer",
+            )
+        _preflight_raw_edge_pairs(card.get("deleted_edge"), 2)
+        _preflight_edge_profile_labels(card.get("deleted_edge"))
+        graph: Any = card.get("card")
+        if type(graph) is not dict:
+            continue
+        card_vertices: Any = graph.get("vertices")
+        card_edges: Any = graph.get("edges")
+        retained_vertices: Any = card.get("retained_vertices")
+        if (
+            (type(card_vertices) in (list, tuple) and len(card_vertices) > order)
+            or (
+                type(retained_vertices) in (list, tuple)
+                and len(retained_vertices) > order
+            )
+            or (type(card_edges) in (list, tuple) and len(card_edges) > pair_count)
+        ):
+            raise _validation_error(
+                "edge_iso_profile_card_shape",
+                "an edge card exceeds the declared source-order shape bound",
+            )
+        _preflight_raw_edge_pairs(card_edges, pair_count)
+        _preflight_edge_profile_labels(card_vertices, card_edges, retained_vertices)
+
+
+def _preflight_raw_edge_pairs(value: Any, maximum: int) -> None:
+    if type(value) not in (list, tuple):
+        return
+    if len(value) > maximum:
+        raise _validation_error(
+            "edge_iso_profile_card_shape",
+            "an edge pair collection exceeds its declared shape bound",
+        )
+    if any(type(pair) in (list, tuple) and len(pair) > 2 for pair in value):
+        raise _validation_error(
+            "edge_iso_profile_card_shape",
+            "each graph edge must contain at most two endpoints",
+        )
+
+
+def _preflight_graph_labels(code: str, *collections: Any) -> None:
+    """Reject over-long scalar labels before nested graph parsing copies them."""
+    for collection in collections:
+        if type(collection) is str:
+            collection = (collection,)
+        if type(collection) not in (list, tuple):
+            continue
+        for item in collection:
+            labels = item if type(item) in (list, tuple) else (item,)
+            if any(
+                type(label) is str and (not label or len(label) > MAX_GRAPH_LABEL_BYTES)
+                for label in labels
+            ):
+                raise _validation_error(
+                    code,
+                    "graph labels exceed the 64-byte scalar bound",
+                )
+
+
+def _preflight_edge_profile_labels(*collections: Any) -> None:
+    _preflight_graph_labels("edge_iso_profile_label_bound", *collections)
+
+
+def _preflight_vertex_profile_labels(*collections: Any) -> None:
+    _preflight_graph_labels("vertex_iso_profile_label_bound", *collections)
+
+
+def _preflight_vertex_family_ledgers(family: Any, order: int, edge_count: int) -> None:
+    """Bound appearance-ledger lengths before tuple normalization copies them."""
+    if type(family) is not dict:
+        return
+    raw_edges: Any = family.get("edge_appearances")
+    if type(raw_edges) in (list, tuple) and len(raw_edges) != edge_count:
+        raise _validation_error(
+            "vertex_iso_profile_ledger_bound",
+            "edge appearances must align with the source edge axis",
+        )
+    raw_vertices: Any = family.get("vertex_appearances")
+    if type(raw_vertices) in (list, tuple) and len(raw_vertices) != order:
+        raise _validation_error(
+            "vertex_iso_profile_ledger_bound",
+            "vertex appearances must align with the source vertex axis",
+        )
+
+
+def _preflight_vertex_family_labels(family: Any) -> None:
+    """Bound scalar labels on every nested vertex-family graph."""
+    if type(family) is not dict:
+        return
+    source: Any = family.get("source")
+    if type(source) is dict:
+        _preflight_vertex_profile_labels(source.get("vertices"), source.get("edges"))
+    raw_cards: Any = family.get("cards")
+    if type(raw_cards) in (list, tuple):
+        for card in raw_cards:
+            if type(card) is not dict:
+                continue
+            _preflight_vertex_profile_labels(card.get("deleted_vertex"))
+            graph: Any = card.get("card")
+            if type(graph) is dict:
+                _preflight_vertex_profile_labels(
+                    graph.get("vertices"), graph.get("edges")
+                )
+            _preflight_vertex_profile_labels(card.get("retained_vertices"))
+
+
+def _require_exact_vertex_iso_profile_wire_integers(
+    value: dict[str, Any], classes: Any
+) -> None:
+    """Reject Pydantic-coerced booleans and floats in profile integer fields."""
+    class_indices: Any = value.get("class_indices")
+    if type(class_indices) in (list, tuple) and any(
+        type(index) is not int for index in class_indices
+    ):
+        raise _validation_error(
+            "vertex_iso_profile_integer_type",
+            "class_indices must contain exact integers",
+        )
+    vertex_maps: Any = value.get("vertex_maps")
+    if type(vertex_maps) in (list, tuple) and any(
+        type(row) in (list, tuple)
+        and any(type(position) is not int for position in row)
+        for row in vertex_maps
+    ):
+        raise _validation_error(
+            "vertex_iso_profile_integer_type",
+            "vertex_maps must contain exact integers",
+        )
+    if type(classes) not in (list, tuple):
+        return
+    for item in classes:
+        if type(item) is not dict:
+            continue
+        if type(item.get("multiplicity")) is not int:
+            raise _validation_error(
+                "vertex_iso_profile_integer_type",
+                "class multiplicity must be an exact integer",
+            )
+        card_indices: Any = item.get("card_indices")
+        if type(card_indices) in (list, tuple) and any(
+            type(index) is not int for index in card_indices
+        ):
+            raise _validation_error(
+                "vertex_iso_profile_integer_type",
+                "class card_indices must contain exact integers",
+            )
+
+
+def _preflight_edge_profile_result_rows(
+    value: dict[str, Any], order: int, pair_count: int, card_count: int
+) -> None:
+    class_indices: Any = value.get("class_indices")
+    if type(class_indices) in (list, tuple) and len(class_indices) > card_count:
+        raise _validation_error(
+            "edge_iso_profile_card_count",
+            "class index rows exceed the edge-card axis",
+        )
+    maps: Any = value.get("vertex_maps")
+    if type(maps) in (list, tuple):
+        if len(maps) > card_count:
+            raise _validation_error(
+                "edge_iso_profile_card_count",
+                "vertex map rows exceed the edge-card axis",
+            )
+        if any(type(row) in (list, tuple) and len(row) > order for row in maps):
+            raise _validation_error(
+                "edge_iso_profile_map_shape",
+                "a vertex map exceeds the source vertex axis",
+            )
+    classes: Any = value.get("classes")
+    if type(classes) not in (list, tuple):
+        return
+    for item in classes:
+        if type(item) is not dict:
+            continue
+        indices: Any = item.get("card_indices")
+        if type(indices) in (list, tuple) and len(indices) > card_count:
+            raise _validation_error(
+                "edge_iso_profile_class_shape",
+                "class card indices exceed the edge-card axis",
+            )
+        deleted_edges: Any = item.get("deleted_edges")
+        if type(deleted_edges) in (list, tuple):
+            if len(deleted_edges) > card_count:
+                raise _validation_error(
+                    "edge_iso_profile_class_shape",
+                    "class deleted-edge provenance exceeds the edge-card axis",
+                )
+            _preflight_raw_edge_pairs(deleted_edges, card_count)
+            _preflight_edge_profile_labels(deleted_edges)
+        representative: Any = item.get("representative")
+        if type(representative) is dict:
+            vertices: Any = representative.get("vertices")
+            representative_edges: Any = representative.get("edges")
+            if type(vertices) in (list, tuple) and len(vertices) > order:
+                raise _validation_error(
+                    "edge_iso_profile_class_shape",
+                    "a class representative exceeds the source vertex order",
+                )
+            if (
+                type(representative_edges) in (list, tuple)
+                and len(representative_edges) > pair_count
+            ):
+                raise _validation_error(
+                    "edge_iso_profile_class_shape",
+                    "a class representative exceeds the simple-graph edge bound",
+                )
+            _preflight_raw_edge_pairs(representative_edges, pair_count)
+            _preflight_edge_profile_labels(vertices, representative_edges)
+
+
+def _require_exact_edge_profile_wire_integers(
+    value: dict[str, Any], classes: Any
+) -> None:
+    class_indices: Any = value.get("class_indices")
+    if type(class_indices) in (list, tuple) and any(
+        type(index) is not int for index in class_indices
+    ):
+        raise _validation_error(
+            "edge_iso_profile_integer_type",
+            "class_indices must contain exact integers",
+        )
+    vertex_maps: Any = value.get("vertex_maps")
+    if type(vertex_maps) in (list, tuple) and any(
+        type(row) in (list, tuple)
+        and any(type(position) is not int for position in row)
+        for row in vertex_maps
+    ):
+        raise _validation_error(
+            "edge_iso_profile_integer_type",
+            "vertex_maps must contain exact integers",
+        )
+    if type(classes) not in (list, tuple):
+        return
+    for item in classes:
+        if type(item) is not dict:
+            continue
+        if type(item.get("multiplicity")) is not int:
+            raise _validation_error(
+                "edge_iso_profile_integer_type",
+                "class multiplicity must be an exact integer",
+            )
+        card_indices: Any = item.get("card_indices")
+        if type(card_indices) in (list, tuple) and any(
+            type(index) is not int for index in card_indices
+        ):
+            raise _validation_error(
+                "edge_iso_profile_integer_type",
+                "class card_indices must contain exact integers",
+            )
+
+
+def _normalize_edge_iso_profile_result(value: dict[str, Any]) -> dict[str, Any]:
+    normalized = dict(value)
+    family: Any = normalized.get("family")
+    if type(family) is dict:
+        normalized["family"] = _normalize_edge_family_json(family)
+    classes: Any = normalized.get("classes")
+    if type(classes) is list:
+        rows = []
+        for item in classes:
+            if type(item) is not dict:
+                rows.append(item)
+                continue
+            row = dict(item)
+            for field in ("card_indices", "deleted_edges"):
+                if type(row.get(field)) is list:
+                    row[field] = tuple(
+                        tuple(entry)
+                        if field == "deleted_edges" and type(entry) is list
+                        else entry
+                        for entry in row[field]
+                    )
+            representative = row.get("representative")
+            if type(representative) is dict:
+                row["representative"] = _normalize_vertex_graph_json(representative)
+            rows.append(row)
+        normalized["classes"] = tuple(rows)
+    for field in ("class_indices", "vertex_maps"):
+        raw_rows: Any = normalized.get(field)
+        if type(raw_rows) is list:
+            normalized[field] = tuple(
+                tuple(row) if field == "vertex_maps" and type(row) is list else row
+                for row in raw_rows
+            )
+    return normalized
+
+
+def _normalize_edge_family_json(value: dict[str, Any]) -> dict[str, Any]:
+    normalized = _normalize_vertex_family_json(value)
+    cards: Any = normalized.get("cards")
+    if type(cards) is tuple:
+        rows = []
+        for item in cards:
+            if type(item) is not dict:
+                rows.append(item)
+                continue
+            row = dict(item)
+            deleted = row.get("deleted_edge")
+            if type(deleted) is list:
+                row["deleted_edge"] = tuple(deleted)
+            rows.append(row)
+        normalized["cards"] = tuple(rows)
+    return normalized
 
 
 class VertexDeckInducedSubgraphCountRequest(StrictModel):

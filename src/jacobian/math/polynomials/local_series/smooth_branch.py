@@ -17,7 +17,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.polynomials.local_series.newton_polygon import (
-    LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
 )
 from jacobian.math.polynomials.local_series.values import (
@@ -253,19 +252,14 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
             code="local_series.smooth_branch.root_type",
             message="initial_root must be an exact rational value",
         )
-    if not isinstance(source.coefficients, tuple) or any(
-        not isinstance(row, LocalPolynomialCoefficient)
-        or (
-            row.series is not None
-            and not isinstance(row.series, TruncatedLaurentWindow)
-        )
-        for row in source.coefficients
-    ):
+    try:
+        source = LocalPolynomialInSeries.model_validate(source.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
             location=("polynomial", "coefficients"),
             code="local_series.smooth_branch.polynomial_shape",
             message="polynomial rows and nested series must have canonical shapes",
-        )
+        ) from error
     max_degree, rows = _admit_source(source)
     root = request.initial_root.as_fraction()
     constant, linear, constant_digits, linear_digits = _coefficient_inputs(

@@ -11,7 +11,7 @@ from pydantic import Field, StrictInt, model_validator
 
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -40,7 +40,6 @@ MAX_LOCAL_POLYNOMIAL_ROWS = 256
 MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS = 8192
 MAX_NEWTON_POLYGON_Y_DEGREE = 32_768
 MAX_NEWTON_POLYGON_SCALAR_DIGITS = 256
-MAX_NEWTON_POLYGON_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
 
 class LocalPolynomialCoefficient(StrictModel):
@@ -182,7 +181,14 @@ def newton_edge_characteristic_polynomial(
             code="local_series.newton_characteristic_request_type",
             message="request must select an edge of a local polynomial",
         )
-    polygon = local_polynomial_newton_polygon(request.polynomial)
+    if type(request.edge_index) is not int or request.edge_index < 0:
+        raise OperationDomainValidationError(
+            location=("edge_index",),
+            code="local_series.newton_edge_index",
+            message="edge_index must be a nonnegative integer",
+        )
+    source = _validated_source(request.polynomial)
+    polygon = local_polynomial_newton_polygon(source)
     if request.edge_index >= len(polygon.edges):
         raise OperationDomainValidationError(
             location=("edge_index",),
@@ -191,7 +197,7 @@ def newton_edge_characteristic_polynomial(
         )
     edge = polygon.edges[request.edge_index]
     left_degree = edge.left.y_degree
-    source_rows = {row.y_degree: row for row in request.polynomial.coefficients}
+    source_rows = {row.y_degree: row for row in source.coefficients}
     valuations = dict(polygon.coefficient_valuations)
     transported = []
     polynomial_terms = []
@@ -351,6 +357,7 @@ def _admit(
             code="local_series.newton_polynomial_type",
             message="polynomial must be a local polynomial in Laurent series",
         )
+    source = _validated_source(source)
     if len(source.coefficients) > MAX_LOCAL_POLYNOMIAL_ROWS:
         raise OperationResourceAdmissionError(
             location=("polynomial", "coefficients"),
@@ -382,7 +389,10 @@ def _admit(
         valuation = None
         for offset, coefficient in enumerate(row.series.coefficients):
             value = coefficient.as_fraction()
-            if max(len(str(abs(value.numerator))), len(str(value.denominator))) > min(
+            if max(
+                decimal_digit_width(value.numerator),
+                decimal_digit_width(value.denominator),
+            ) > min(
                 MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
                 MAX_NEWTON_POLYGON_SCALAR_DIGITS,
             ):
@@ -401,27 +411,25 @@ def _admit(
             )
         valuations.append((row.y_degree, valuation))
         points.append((row.y_degree, valuation))
-    center = source.center.as_fraction()
-    center_digits = max(len(str(abs(center.numerator))), len(str(center.denominator)))
-    output_bound = (
-        512
-        + len(source.coefficients) * 192
-        + slots * (2 * MAX_NEWTON_POLYGON_SCALAR_DIGITS + 96)
-        + center_digits * 2
-    )
-    if output_bound > MAX_NEWTON_POLYGON_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("polynomial",),
-            code="local_series.newton_output_bound",
-            message="local Newton polygon source and result exceed the canonical output envelope",
-        )
     return valuations, points
+
+
+def _validated_source(source: LocalPolynomialInSeries) -> LocalPolynomialInSeries:
+    try:
+        return LocalPolynomialInSeries.model_validate(source.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="local_series.newton_polynomial_shape",
+            message="polynomial must contain a canonical bounded local-series shape",
+        ) from error
 
 
 def local_polynomial_newton_polygon(
     source: LocalPolynomialInSeries,
 ) -> LocalPolynomialNewtonPolygonResult:
     """Compute the exact lower convex hull of (y-degree, local valuation)."""
+    source = _validated_source(source)
     valuation_rows, point_rows = _admit(source)
     hull: list[tuple[int, int]] = []
     for point in point_rows:

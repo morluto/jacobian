@@ -27,8 +27,8 @@ ramified branches. It is a direct first-jet result, not a claim about analytic
 convergence or global branches.
 
 Admission caps the source at 17 coefficient rows, `y` degree 16, 512 retained
-series coefficients, 64-digit rational initial roots, and a 4096-digit bound
-on every rational evaluation intermediate and output coefficient. The source
+series coefficients, and a 4096-digit bound on every rational evaluation
+intermediate and output coefficient. The source
 windows must provide at least precision two and contain no negative powers.
 
 [Documentation home](../../../index.md) · [Polynomial operations](index.md) · [Tool surface](../../tools.md)

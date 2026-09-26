@@ -478,11 +478,21 @@ class BieberbachFaceOrbitComplex(StrictModel):
     """
 
     source: CrystallographicFundamentalDomainResult
-    vertex_orbits: tuple[tuple[StrictInt, ...], ...]
-    edge_orbit_representatives: tuple[StrictInt, ...]
-    orbit_maps: tuple[BieberbachFaceOrbitMap, ...]
-    boundary_1_to_0: tuple[BieberbachGroupRingBoundaryEntry, ...]
-    boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...]
+    vertex_orbits: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_VERTICES)], ...
+    ] = Field(max_length=MAX_VERTICES)
+    edge_orbit_representatives: tuple[StrictInt, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS
+    )
+    orbit_maps: tuple[BieberbachFaceOrbitMap, ...] = Field(
+        max_length=2 * MAX_COMPUTED_FACETS
+    )
+    boundary_1_to_0: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
+        max_length=2 * MAX_COMPUTED_FACETS
+    )
+    boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS
+    )
     quotient_chain_complex: ChainComplexValue
 
     @model_validator(mode="after")

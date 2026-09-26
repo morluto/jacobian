@@ -162,6 +162,15 @@ def test_klein_bottle_face_orbits_give_integral_homology() -> None:
     assert homology[2].free_rank == 0
 
 
+def test_face_orbit_value_bounds_collections_during_parsing() -> None:
+    result = _compute(klein=False)
+    payload = result.model_dump(mode="python", warnings=False)
+    payload["orbit_maps"] = (*payload["orbit_maps"],) * 100
+
+    with pytest.raises(ValidationError):
+        BieberbachFaceOrbitComplex.model_validate(payload, strict=True)
+
+
 def test_face_orbit_value_rejects_incomplete_endpoint_map_ledger() -> None:
     result = _compute(klein=False)
     forged = result.model_copy(update={"orbit_maps": result.orbit_maps[:-1]})

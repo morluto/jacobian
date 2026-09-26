@@ -94,6 +94,28 @@ def test_composition_order_zero_images_and_noncommuting_products() -> None:
     assert zero_composition.images[1].terms == ()
 
 
+def test_zero_image_annihilates_long_prefix_before_output_length_admission() -> None:
+    f = _map(("x",), ("u", "v"), ({("u",) * 31 + ("v",): 1},))
+    g = _map(("u", "v"), ("a",), ({("a",) * 32: 1}, {}))
+
+    result = compose_polynomial_homomorphisms(f, g)
+
+    assert result.images[0].terms == ()
+
+
+def test_zero_image_does_not_inflate_surviving_coefficient_bound() -> None:
+    f = _map(
+        ("x",),
+        ("u", "v"),
+        ({("u",) * 31 + ("v",): 1, (): 1},),
+    )
+    g = _map(("u", "v"), ("a",), ({("a",): 100}, {}))
+
+    result = compose_polynomial_homomorphisms(f, g)
+
+    assert _coefficients(result.images[0]) == {(): Fraction(1)}
+
+
 def test_composition_is_associative_for_small_maps() -> None:
     f = _map(("x",), ("u", "v"), ({("u", "v"): 1, (): 1},))
     g = _map(("u", "v"), ("r",), ({("r",): 1}, {("r", "r"): 1}))

@@ -20,7 +20,9 @@ TOOLS = (
         title="Scale a free-algebra polynomial exactly",
         description=(
             "Multiply every coefficient of a sparse noncommutative QQ-polynomial "
-            "by one exact rational. The ordered alphabet and word support are preserved."
+            "by one exact rational. For a nonzero scalar, the ordered alphabet and "
+            "word support are preserved; a zero scalar returns the canonical zero "
+            "polynomial with empty support."
         ),
         request_type=FreeAlgebraPolynomialScalarMultiplyRequest,
         result_type=FreeAlgebraPolynomial,

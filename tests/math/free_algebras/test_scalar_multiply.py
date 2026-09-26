@@ -146,13 +146,27 @@ def test_coefficient_growth_is_admitted_then_exactly_rejected() -> None:
     )
 
 
+def test_multi_character_words_are_charged_by_unicode_scalar_cells() -> None:
+    # 4,096 binary words of length 12, with 64-scalar labels, exceed the
+    # output budget only when label widths (rather than generator counts) count.
+    alphabet = ("a" * 64, "b" * 64)
+    words = tuple(reversed(tuple(product(alphabet, repeat=12))))
+    source = polynomial(alphabet, tuple((word, Fraction(1)) for word in words))
+
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        scalar_multiply(source, CanonicalRational.from_fraction(Fraction(2)))
+    assert exc_info.value.errors()[0]["type"] == (
+        "free_algebra.scalar_multiply_output_cells"
+    )
+
+
 def test_scalar_above_cross_cancellation_bound_is_rejected() -> None:
     source = polynomial(("x",), ((("x",), Fraction(1)),))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         scalar_multiply(source, CanonicalRational.from_fraction(Fraction(10**128)))
-    assert exc_info.value.errors()[0]["type"] == (
-        "free_algebra.scalar_multiply_coefficient_growth"
-    )
+    error = exc_info.value.errors()[0]
+    assert error["type"] == "free_algebra.scalar_multiply_coefficient_growth"
+    assert error["loc"] == ("scalar",)
 
 
 def test_request_json_round_trip_preserves_the_operation_arguments() -> None:

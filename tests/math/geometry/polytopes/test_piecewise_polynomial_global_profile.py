@@ -8,7 +8,6 @@ from jacobian.math.geometry.polytopes._models import (
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
-    GlobalPolynomialProfileRequest,
     PieceAssignment,
     PiecewisePolynomialResult,
 )
@@ -75,9 +74,7 @@ def test_one_polynomial_on_each_cell_returns_source_bound_global_polynomial():
         {cell.cell_id: polynomial for cell in complex_value.maximal_cells},
     )
 
-    result = piecewise_polynomial_global_profile(
-        GlobalPolynomialProfileRequest(function=function)
-    )
+    result = piecewise_polynomial_global_profile(function)
 
     assert result.status == "GLOBAL_POLYNOMIAL"
     assert result.function == function
@@ -97,9 +94,7 @@ def test_continuous_but_different_cell_polynomials_are_not_global():
     )
     assert function.status == "COMPATIBLE"
 
-    result = piecewise_polynomial_global_profile(
-        GlobalPolynomialProfileRequest(function=function)
-    )
+    result = piecewise_polynomial_global_profile(function)
 
     assert result.status == "NOT_GLOBAL_POLYNOMIAL"
     assert result.polynomial is None
@@ -120,14 +115,10 @@ def test_rebuilds_forged_compatibility_and_public_tool_roundtrips():
         status="COMPATIBLE",
     )
     with pytest.raises(OperationDomainValidationError, match="not continuous"):
-        piecewise_polynomial_global_profile(
-            GlobalPolynomialProfileRequest(function=forged)
-        )
+        piecewise_polynomial_global_profile(forged)
 
     single = polytopal_complex_closure((_interval(0, 1, "s"),))
     function = _function(single, {single.maximal_cells[0].cell_id: _poly({0: 1})})
-    result = piecewise_polynomial_global_profile(
-        GlobalPolynomialProfileRequest(function=function)
-    )
+    result = piecewise_polynomial_global_profile(function)
     assert result.status == "GLOBAL_POLYNOMIAL"
     assert result.polynomial == _poly({0: 1})

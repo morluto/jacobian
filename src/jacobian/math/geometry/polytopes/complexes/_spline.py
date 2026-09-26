@@ -22,7 +22,6 @@ from jacobian.math.geometry.polytopes._models import (
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
     ComplexPoint,
-    GlobalPolynomialProfileRequest,
     GlobalPolynomialProfileResult,
     PieceAssignment,
     PieceCompatibilityRow,
@@ -362,7 +361,7 @@ def piecewise_polynomial_from_maximal_pieces(
 
 
 def piecewise_polynomial_global_profile(
-    request: GlobalPolynomialProfileRequest,
+    function: PiecewisePolynomialResult,
 ) -> GlobalPolynomialProfileResult:
     """Determine whether full-dimensional cell pieces are one ambient polynomial.
 
@@ -372,9 +371,8 @@ def piecewise_polynomial_global_profile(
     is both necessary and sufficient. Lower-dimensional maximal cells are
     rejected because their restrictions do not determine an ambient extension.
     """
-    if not isinstance(request, GlobalPolynomialProfileRequest):
-        _reject("global_profile_request", "expected a canonical profile request")
-    function = request.function
+    if not isinstance(function, PiecewisePolynomialResult):
+        _reject("global_profile_input", "expected a canonical piecewise function")
     try:
         payload = function.model_dump(mode="python")
         function = PiecewisePolynomialResult.model_validate(payload)

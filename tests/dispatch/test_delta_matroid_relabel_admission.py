@@ -19,7 +19,4 @@ def test_oversized_target_labels_keep_resource_classification_on_wire() -> None:
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         invoke_operation("delta_matroid.relabel.compute", payload, Catalog.open())
 
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "delta_matroid.relabel_target_bytes"
-    )
+    assert exc_info.value.errors()[0]["type"] == "delta_matroid.relabel_target_bytes"

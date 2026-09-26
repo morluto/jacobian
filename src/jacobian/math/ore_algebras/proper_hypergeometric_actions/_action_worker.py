@@ -14,7 +14,7 @@ from jacobian.math.ore_algebras.proper_hypergeometric_terms._models import (
     ProperHypergeometricTerm,
 )
 
-_MAX_BYTES = 4 * 1024 * 1024
+_MAX_BYTES = 64 * 1024 * 1024
 
 
 def _error_payload(error: object, kind: str) -> dict[str, object]:

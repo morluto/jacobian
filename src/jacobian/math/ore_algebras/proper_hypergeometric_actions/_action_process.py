@@ -32,7 +32,9 @@ from jacobian.process import (
 
 _WORKER_PATH = Path(__file__).resolve().with_name("_action_worker.py")
 _WALL_SECONDS = 120.0
-_STREAM_LIMIT = 4 * 1024 * 1024
+# The mathematical admission runs in the parent before serialization. Keep a
+# separate, finite transport ceiling for admitted payloads and worker output.
+_STREAM_LIMIT = 64 * 1024 * 1024
 _ADDRESS_SPACE_BYTES = 2 * 1024 * 1024 * 1024
 
 

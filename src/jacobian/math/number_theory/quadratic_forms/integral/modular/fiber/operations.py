@@ -92,6 +92,12 @@ def compute_modular_quadratic_fiber(
         )
     if not isinstance(target, ModularInteger):
         raise _domain_error("target_type", "expected a modular integer target")
+    try:
+        target = ModularInteger.model_validate(target.model_dump())
+    except (TypeError, ValueError, AttributeError) as exc:
+        raise _domain_error(
+            "target_shape", "target must be a canonical modular integer value"
+        ) from exc
     dimension, modulus_digits = _check_modular_polynomial(polynomial)
     _admit_modulus(target.modulus)
     if isinstance(target.residue, bool) or not isinstance(target.residue, int):

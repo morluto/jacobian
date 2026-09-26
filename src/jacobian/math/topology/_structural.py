@@ -373,6 +373,17 @@ class LinkResult(StrictModel):
 
     @model_validator(mode="after")
     def require_structural_link(self) -> Self:
+        target = frozenset(self.simplex)
+        expected_facets = _maximal_faces(
+            tuple(sorted(frozenset(facet) - target))
+            for facet in self.complex.facets
+            if target.issubset(facet) and frozenset(facet) - target
+        )
+        if self.link_facets != expected_facets:
+            raise _validation_error(
+                "topology.require_link_binding_4",
+                "link_facets must be the link determined by complex and simplex",
+            )
         if tuple(sorted(self.link_complex.maximal_simplices)) != tuple(
             sorted(tuple(sorted(facet)) for facet in self.link_facets)
         ):

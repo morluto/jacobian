@@ -612,6 +612,14 @@ def clique_complex(source: FiniteSimplicialComplex) -> CliqueResult:
             maximal_sets.append(face_set)
 
     closure = tuple(tuple(faces) for faces in faces_by_dimension)
+    if not vertices:
+        result_complex = canonical_complex((), (), closure=())
+        return CliqueResult(
+            source=source,
+            graph_edges=edges,
+            clique_facets=(),
+            clique_complex=result_complex,
+        )
     highest_dimension = max(index for index, faces in enumerate(closure) if faces)
     closure = closure[: highest_dimension + 1]
     result_complex = canonical_complex(vertices, tuple(maximal), closure=closure)

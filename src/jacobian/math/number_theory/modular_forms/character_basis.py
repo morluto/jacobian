@@ -468,45 +468,6 @@ def modular_character_coordinates_q_expansion(
     return _character_form_prefix(form, admitted, basis)
 
 
-def modular_character_coordinates_equal(
-    left: ModularFormCoordinates,
-    right: ModularFormCoordinates,
-) -> bool:
-    """Decide global equality by comparing the common exact Sturm prefix."""
-    left_admitted = _admit_character_form(left)
-    if type(right) is not ModularFormCoordinates:
-        _domain("right character form must be a canonical ModularFormCoordinates value")
-    if right.space != left_admitted[0] or right.basis_id != left.basis_id:
-        raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.character_equality_parent",
-            message="character equality requires the identical space and basis; no implicit embedding is defined",
-        )
-    right_admitted = _admit_character_form(
-        right, (*left_admitted[:2], left_admitted[3])
-    )
-    left_space = left_admitted[0]
-    right_space = right_admitted[0]
-    if left_space != right_space or left.basis_id != right.basis_id:
-        raise OperationDomainValidationError(
-            location=("right", "space"),
-            code="modular_form.character_equality_parent",
-            message="character equality requires the identical space and basis; no implicit embedding is defined",
-        )
-    left_zero = not any(value.num for value in left_admitted[2].coefficients_ascending)
-    right_zero = not any(
-        value.num for value in right_admitted[2].coefficients_ascending
-    )
-    if left_zero and right_zero:
-        return True
-    basis = _character_basis_from_admission(
-        left_space, left_admitted[1], left_admitted[3]
-    )
-    left_prefix = _character_form_prefix(left, left_admitted, basis)
-    right_prefix = _character_form_prefix(right, right_admitted, basis)
-    return left_prefix.coefficients == right_prefix.coefficients
-
-
 def modular_character_coordinates_product(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> ModularFormFieldQExpansion:
@@ -605,6 +566,18 @@ def modular_character_coordinates_product(
             location=("form",),
             code="modular_form.character_product_admission",
             message="character product exceeds its exact work, height, or output envelope",
+        )
+    if left_space == right_space and left_scalar == right_scalar:
+        request_checkpoint("before character coordinate equality")
+        return ModularFormFieldQExpansion(
+            space=target_space,
+            coefficients=tuple(
+                _coefficient(field, cyclotomic._validate_element(value)[1])
+                for value in left_scalar.coefficients_ascending
+            )
+            + tuple(
+                _coefficient(field, (Fraction(0),) * field.degree) for _ in range(2)
+            ),
         )
     if not any(value.num for value in left_scalar.coefficients_ascending) or not any(
         value.num for value in right_scalar.coefficients_ascending

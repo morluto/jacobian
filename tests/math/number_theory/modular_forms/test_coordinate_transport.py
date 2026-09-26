@@ -7,7 +7,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.modular_forms import (
     ModularFormCoordinates,
     ModularFormSpace,
-    modular_form_coordinates_equal,
     modular_form_coordinates_q_expansion,
     modular_form_coordinates_transport,
 )
@@ -47,7 +46,7 @@ def test_transport_level_one_e4_to_gamma0_two_matches_independent_divisor_sum() 
     ] == expected
 
     same = ModularFormCoordinates.model_validate_json(transported.model_dump_json())
-    assert modular_form_coordinates_equal(transported, same)
+    assert same == transported
 
 
 def test_transport_cusp_form_into_ambient_space_preserves_the_form() -> None:

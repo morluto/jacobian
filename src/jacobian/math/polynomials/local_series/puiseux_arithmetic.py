@@ -220,6 +220,18 @@ def _admit_sum_growth(contributions: list[Fraction]) -> None:
     """Bound exact common-denominator accumulation before constructing sums."""
     if not contributions:
         return
+    if len(contributions) == 1:
+        value = contributions[0]
+        if (
+            max(value.numerator.bit_length(), value.denominator.bit_length())
+            > _MAX_SCALAR_BITS
+        ):
+            _resource(
+                "puiseux_coefficient_growth",
+                "copied coefficient exceeds the scalar digit bound",
+                ("terms",),
+            )
+        return
     denominator_bits = sum(value.denominator.bit_length() for value in contributions)
     numerator_bits = max(value.numerator.bit_length() for value in contributions)
     numerator_bound = numerator_bits + denominator_bits + ceil(log2(len(contributions)))
@@ -236,6 +248,19 @@ def _admit_product_sum_growth(
 ) -> None:
     """Bound a sum of products before multiplying any coefficient pair."""
     if not contributions:
+        return
+    if len(contributions) == 1:
+        left, right = contributions[0]
+        numerator_bound = left.numerator.bit_length() + right.numerator.bit_length()
+        denominator_bound = (
+            left.denominator.bit_length() + right.denominator.bit_length()
+        )
+        if max(numerator_bound, denominator_bound) > _MAX_SCALAR_BITS:
+            _resource(
+                "puiseux_coefficient_growth",
+                "single exact product coefficient growth exceeds the scalar digit bound",
+                ("terms",),
+            )
         return
     numerator_bits = [
         left.numerator.bit_length() + right.numerator.bit_length()

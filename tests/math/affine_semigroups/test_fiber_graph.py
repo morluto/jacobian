@@ -8,6 +8,7 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.affine_semigroups.semigroup import (
     AffineConfiguration,
+    AffineFiberGraph,
     PositiveAffineSemigroup,
     fiber_graph,
 )
@@ -56,6 +57,29 @@ def test_fiber_graph_requires_moves_in_the_exact_relation_lattice() -> None:
     assert exc_info.value.errors()[0]["type"] == (
         "affine_semigroup.graph_move_not_relation"
     )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"target": ()},
+        {"vertices": ((2, 0, 0),)},
+        {"vertices": ((-1, 3, 0),)},
+        {
+            "edges": ((0, 1),),
+            "moves": (),
+            "vertices": ((0, 1, 0), (1, 0, 0)),
+            "components": ((0, 1),),
+        },
+        {"components": ((0,), (1, 2, 3, 4, 5))},
+    ],
+)
+def test_decoded_graph_rejects_false_fiber_claims(changes: dict[str, object]) -> None:
+    valid = fiber_graph(_semigroup(), (2,), ((1, -1, 0),))
+    payload = valid.model_dump()
+    payload.update(changes)
+    with pytest.raises(ValueError):
+        AffineFiberGraph.model_validate(payload)
 
 
 def test_fiber_graph_tool_is_discoverable_and_round_trips() -> None:

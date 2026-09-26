@@ -3,6 +3,10 @@
 from jacobian.math.affine_semigroups._models import (
     IntegerConfigurationCircuitsResult,
 )
+from jacobian.math.affine_semigroups.factorization_count import (
+    AffineFactorizationCount,
+    factorization_count,
+)
 from jacobian.math.affine_semigroups.graver import (
     graver_basis,
     markov_basis,
@@ -41,6 +45,7 @@ from jacobian.math.affine_semigroups.semigroup import (
 __all__ = [
     "AffineConfiguration",
     "AffineFactorization",
+    "AffineFactorizationCount",
     "AffineFiber",
     "AffineFiberGraph",
     "AffineHilbertBasis",
@@ -54,6 +59,7 @@ __all__ = [
     "PositiveGradingResult",
     "construct",
     "evaluate_factorization",
+    "factorization_count",
     "fiber",
     "fiber_graph",
     "graver_basis",

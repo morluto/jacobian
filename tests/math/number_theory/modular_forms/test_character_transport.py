@@ -224,9 +224,7 @@ def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
         (source_26, form_26, left),
         (source_39, form_39, right),
     ):
-        source_basis = modular_character_basis_q_expansions(
-            source_space, precision=29
-        )
+        source_basis = modular_character_basis_q_expansions(source_space, precision=29)
         direct_prefix = tuple(
             _sum_cyclotomic(
                 cyclotomic.multiply(
@@ -357,9 +355,7 @@ def test_global_equality_requires_the_least_common_source_level() -> None:
         modular_character_coordinates_equal_in_common_space(first, first)
     assert identity.target_form is None
     assert len(identity.target_q_expansion.coefficients) == 3
-    assert modular_character_coordinates_equal_in_common_space(
-        identity, identity
-    ).equal
+    assert modular_character_coordinates_equal_in_common_space(identity, identity).equal
     assert modular_character_coordinates_equal_in_common_space(second, second).equal
 
 

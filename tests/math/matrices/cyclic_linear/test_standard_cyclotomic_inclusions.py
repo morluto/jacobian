@@ -115,9 +115,9 @@ def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:
 
 def test_catalog_examples_run_and_results_pass_strict_json_validation() -> None:
     catalog = Catalog.open()
+    assert catalog.operation("matrix.cyclic.cyclotomic_inclusion.compose") is None
     for operation_id in (
         "matrix.cyclic.cyclotomic_inclusion.compute",
-        "matrix.cyclic.cyclotomic_inclusion.compose",
         "matrix.cyclic.cyclotomic_element.map",
     ):
         operation = catalog.operation(operation_id)

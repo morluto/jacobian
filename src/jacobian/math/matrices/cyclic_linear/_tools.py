@@ -12,14 +12,12 @@ from jacobian.math.matrices.cyclic_linear._models import (
     CyclicRationalRankKernelProfileRequest,
     CyclotomicElementMapRequest,
     CyclotomicFieldInclusion,
-    CyclotomicFieldInclusionCompositionRequest,
     CyclotomicFieldInclusionRequest,
     RationalCyclotomicElement,
 )
 from jacobian.math.matrices.cyclic_linear.operations import (
     CyclicRankKernelAdmissionError,
     apply_cyclotomic_field_inclusion,
-    compose_cyclotomic_field_inclusions,
     cyclic_rational_rank_kernel_profile,
     cyclotomic_field_inclusion,
 )
@@ -44,19 +42,6 @@ def _inclusion(request: CyclotomicFieldInclusionRequest) -> CyclotomicFieldInclu
     except CyclicRankKernelAdmissionError as error:
         raise OperationDomainValidationError(
             location=("source",),
-            code=f"matrix.cyclic.{error.reason}",
-            message=str(error),
-        ) from error
-
-
-def _compose(
-    request: CyclotomicFieldInclusionCompositionRequest,
-) -> CyclotomicFieldInclusion:
-    try:
-        return compose_cyclotomic_field_inclusions(request.first, request.second)
-    except CyclicRankKernelAdmissionError as error:
-        raise OperationDomainValidationError(
-            location=("first",),
             code=f"matrix.cyclic.{error.reason}",
             message=str(error),
         ) from error
@@ -93,45 +78,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="third_roots_in_sixth_roots",
                 description="The standard inclusion sends zeta_3 to zeta_6 squared = zeta_6 - 1.",
                 input={"source": {"order": 3}, "target": {"order": 6}},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="matrix.cyclic.cyclotomic_inclusion.compose",
-        title="Compose standard cyclotomic field inclusions",
-        description=(
-            "Compose standard inclusions QQ(zeta_n) -> QQ(zeta_m) -> QQ(zeta_r) "
-            "when the intermediate parent matches and n divides m divides r."
-        ),
-        request_type=CyclotomicFieldInclusionCompositionRequest,
-        result_type=CyclotomicFieldInclusion,
-        run=_compose,
-        tags=("number-theory", "cyclotomic", "composition", "exact"),
-        discovery_terms=("compose cyclotomic field maps",),
-        examples=(
-            OperationExample(
-                name="compose_orders_three_six_twelve",
-                description="Compose the standard inclusions through the order-six field.",
-                input={
-                    "first": {
-                        "source": {"order": 3},
-                        "target": {"order": 6},
-                        "generator_image": [
-                            {"num": "-1", "den": "1"},
-                            {"num": "1", "den": "1"},
-                        ],
-                    },
-                    "second": {
-                        "source": {"order": 6},
-                        "target": {"order": 12},
-                        "generator_image": [
-                            {"num": "0", "den": "1"},
-                            {"num": "0", "den": "1"},
-                            {"num": "1", "den": "1"},
-                            {"num": "0", "den": "1"},
-                        ],
-                    },
-                },
             ),
         ),
     ),

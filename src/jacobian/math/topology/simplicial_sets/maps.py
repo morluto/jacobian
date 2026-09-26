@@ -853,12 +853,10 @@ def _admit_homology_projection(
                 bounding_bits = max(
                     (abs(value).bit_length() for value in bounding), default=0
                 )
-                source_bound_bits, cost = admit_mat_vec(
-                    source_differentials[degree], bounding_bits
-                )
+                _, cost = admit_mat_vec(source_differentials[degree], bounding_bits)
                 work += cost
                 mapped_bound_bits, cost = admit_mat_vec(
-                    map_matrices[degree + 1], source_bound_bits
+                    map_matrices[degree + 1], bounding_bits
                 )
                 work += cost
                 _, cost = admit_mat_vec(target_differentials[degree], mapped_bound_bits)
@@ -1107,9 +1105,7 @@ def _compute_induced_normalized_homology_map(
     ):
         assert isinstance(source_group, IntegralHomologyGroupValue)
         assert isinstance(target_group, IntegralHomologyGroupValue)
-        inverse_right = tuple(
-            tuple(row) for row in plan.target.right_inverses[degree]
-        )
+        inverse_right = tuple(tuple(row) for row in plan.target.right_inverses[degree])
         degree_maps.append(
             NormalizedHomologyDegreeMap(
                 degree=degree,
@@ -1286,6 +1282,7 @@ def compose_simplicial_homology_maps(
             code="simplicial_set.induced_homology_endpoint_output_budget_exceeded",
             message="combined endpoint homology output exceeds its admitted envelope",
         )
+
     def plan_for(
         carrier: FiniteTruncatedSimplicialSet,
         complex_value: ChainComplexValue,

@@ -10,6 +10,11 @@ from jacobian.math.topology.simplicial_sets.subset_models import (
 
 _DELTA_ONE = standard_simplex(1, 2).model_dump(mode="json")
 
+
+def _run_simplicial_subset(request: SimplicialSubsetRequest) -> SimplicialSubsetPrefix:
+    return simplicial_subset(request.simplicial_set, request.degree_indices)
+
+
 TOOLS = (
     MathTool(
         operation_id="topology.simplicial_set.subset.from_degree_families.compute",
@@ -26,7 +31,7 @@ TOOLS = (
         ),
         request_type=SimplicialSubsetRequest,
         result_type=SimplicialSubsetPrefix,
-        run=simplicial_subset,
+        run=_run_simplicial_subset,
         tags=("topology", "simplicial-set", "subobject", "face", "degeneracy", "exact"),
         discovery_terms=(
             "simplicial subset",

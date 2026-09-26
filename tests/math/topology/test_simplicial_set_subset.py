@@ -28,12 +28,7 @@ def _delta_one_prefix():
 
 def test_constant_vertex_gives_source_bound_closed_subobject() -> None:
     ambient = _delta_one_prefix()
-    result = simplicial_subset(
-        SimplicialSubsetRequest(
-            simplicial_set=ambient,
-            degree_indices=((0,), (0,), (0,)),
-        )
-    )
+    result = simplicial_subset(ambient, ((0,), (0,), (0,)))
 
     assert result.inclusion.target == ambient
     assert result.inclusion.source.sets == (("(0)",), ("(0,0)",), ("(0,0,0)",))
@@ -61,12 +56,7 @@ def test_constant_vertex_gives_source_bound_closed_subobject() -> None:
 
 
 def test_empty_degree_families_form_the_initial_subobject() -> None:
-    result = simplicial_subset(
-        SimplicialSubsetRequest(
-            simplicial_set=_delta_one_prefix(),
-            degree_indices=((), (), ()),
-        )
-    )
+    result = simplicial_subset(_delta_one_prefix(), ((), (), ()))
     assert result.inclusion.source.sets == ((), (), ())
     assert result.inclusion.source.face_maps == (((), ()), ((), (), ()))
     assert result.inclusion.source.degeneracy_maps == (((),), ((), ()))
@@ -75,12 +65,7 @@ def test_empty_degree_families_form_the_initial_subobject() -> None:
 
 def test_boundary_of_the_one_simplex_retains_both_vertices_and_degeneracies() -> None:
     ambient = _delta_one_prefix()
-    result = simplicial_subset(
-        SimplicialSubsetRequest(
-            simplicial_set=ambient,
-            degree_indices=((0, 1), (0, 2), (0, 3)),
-        )
-    )
+    result = simplicial_subset(ambient, ((0, 1), (0, 2), (0, 3)))
     assert result.inclusion.maps == ((0, 1), (0, 2), (0, 3))
     assert result.inclusion.source.sets == (
         ("(0)", "(1)"),
@@ -92,29 +77,14 @@ def test_boundary_of_the_one_simplex_retains_both_vertices_and_degeneracies() ->
 def test_missing_face_or_degeneracy_rejects_the_proposed_family() -> None:
     ambient = _delta_one_prefix()
     with pytest.raises(OperationDomainValidationError, match="missing face d_0"):
-        simplicial_subset(
-            SimplicialSubsetRequest(
-                simplicial_set=ambient,
-                degree_indices=((), (1,), ()),
-            )
-        )
+        simplicial_subset(ambient, ((), (1,), ()))
     with pytest.raises(OperationDomainValidationError, match="missing degeneracy s_0"):
-        simplicial_subset(
-            SimplicialSubsetRequest(
-                simplicial_set=ambient,
-                degree_indices=((0,), (), ()),
-            )
-        )
+        simplicial_subset(ambient, ((0,), (), ()))
 
 
 def test_serialized_subobject_inclusion_composes_as_a_simplicial_map() -> None:
     ambient = _delta_one_prefix()
-    result = simplicial_subset(
-        SimplicialSubsetRequest(
-            simplicial_set=ambient,
-            degree_indices=((0,), (0,), (0,)),
-        )
-    )
+    result = simplicial_subset(ambient, ((0,), (0,), (0,)))
     restored = SimplicialSubsetPrefix.model_validate_json(result.model_dump_json())
     identity = identity_simplicial_map(ambient)
     composite = compose_simplicial_maps(

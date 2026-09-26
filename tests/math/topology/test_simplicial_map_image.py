@@ -5,7 +5,6 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.simplicial_sets._tools import TOOLS
 from jacobian.math.topology.simplicial_sets.image import (
-    SimplicialMapImageRequest,
     simplicial_map_image,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
@@ -27,7 +26,7 @@ def test_image_factorization_collapses_simplex_and_composes_to_input():
     target = standard_simplex(1, 2)
     collapse = _map(source, target, ((0, 0), (0, 0, 0), (0, 0, 0, 0)))
 
-    result = simplicial_map_image(SimplicialMapImageRequest(simplicial_map=collapse))
+    result = simplicial_map_image(collapse)
 
     assert tuple(map(len, result.image.sets)) == (1, 1, 1)
     assert result.surjection.source == source
@@ -59,7 +58,7 @@ def test_identity_map_has_full_image_and_identity_factors():
     source = standard_simplex(1, 2)
     identity = identity_simplicial_map(source)
 
-    result = simplicial_map_image(SimplicialMapImageRequest(simplicial_map=identity))
+    result = simplicial_map_image(identity)
 
     assert result.image == source
     assert result.surjection == identity
@@ -71,7 +70,7 @@ def test_image_preserves_the_initial_all_empty_prefix():
     assert source_result.simplicial_set is not None
     empty_map = _map(source_result.simplicial_set, standard_simplex(0, 1), ((), ()))
 
-    result = simplicial_map_image(SimplicialMapImageRequest(simplicial_map=empty_map))
+    result = simplicial_map_image(empty_map)
 
     assert result.image.sets == ((), ())
     assert result.surjection.maps == ((), ())
@@ -87,7 +86,7 @@ def test_image_rechecks_caller_supplied_carrier_identities():
     forged = _map(source, bad_target, identity_rows)
 
     with pytest.raises(OperationDomainValidationError) as error:
-        simplicial_map_image(SimplicialMapImageRequest(simplicial_map=forged))
+        simplicial_map_image(forged)
 
     assert error.value.errors()[0]["type"] == "simplicial_map.image_carrier_invalid"
 
@@ -97,6 +96,6 @@ def test_image_rejects_a_non_natural_map():
     bad = _map(source, source, ((0, 1), (1, 1, 2)))
 
     with pytest.raises(OperationDomainValidationError) as error:
-        simplicial_map_image(SimplicialMapImageRequest(simplicial_map=bad))
+        simplicial_map_image(bad)
 
     assert error.value.errors()[0]["type"] == "simplicial_map.face_naturality_failed"

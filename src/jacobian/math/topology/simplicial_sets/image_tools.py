@@ -18,6 +18,13 @@ _COLLAPSE = {
     }
 }
 
+
+def _run_simplicial_map_image(
+    request: SimplicialMapImageRequest,
+) -> SimplicialMapImageResult:
+    return simplicial_map_image(request.simplicial_map)
+
+
 TOOLS = (
     MathTool(
         operation_id="topology.simplicial_set.map.image.compute",
@@ -30,7 +37,7 @@ TOOLS = (
         ),
         request_type=SimplicialMapImageRequest,
         result_type=SimplicialMapImageResult,
-        run=simplicial_map_image,
+        run=_run_simplicial_map_image,
         tags=("topology", "simplicial-set", "map", "image", "exact"),
         discovery_terms=(
             "simplicial map image",

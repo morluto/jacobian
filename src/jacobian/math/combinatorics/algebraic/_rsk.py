@@ -224,7 +224,13 @@ def _admit_rsk_trace(
     bump_steps = sum(
         min(prefix_length, len(word.alphabet)) for prefix_length in range(length)
     )
-    work = bump_steps * MAX_RSK_ROW_SEARCH_COMPARISONS
+    # Every insertion searches each existing row through the terminal append
+    # row; bumps alone omit the final successful/terminal binary search.
+    row_searches = bump_steps + sum(
+        min(prefix_length, len(word.alphabet))
+        for prefix_length in range(1, length + 1)
+    )
+    work = row_searches * MAX_RSK_ROW_SEARCH_COMPARISONS
     if work > MAX_RSK_TRACE_WORK:
         raise OperationResourceAdmissionError(
             location=("word",),

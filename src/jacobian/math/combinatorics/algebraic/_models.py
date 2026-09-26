@@ -313,6 +313,29 @@ class RSKWordTraceResult(StrictModel):
                 "algebraic_combinatorics.rsk_trace_total_bumps",
                 "the total bump path exceeds the alphabet-height bound",
             )
+        previous_lengths: tuple[int, ...] = ()
+        for event in self.insertion_events:
+            lengths = event.row_lengths
+            if len(lengths) not in (len(previous_lengths), len(previous_lengths) + 1):
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_prefix_shape",
+                    "successive trace shapes must grow by one cell in one row",
+                )
+            previous = previous_lengths + ((0,) if len(lengths) > len(previous_lengths) else ())
+            if any(
+                current != prior and current != prior + 1
+                for prior, current in zip(previous, lengths)
+            ) or sum(current - prior for prior, current in zip(previous, lengths)) != 1:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_trace_prefix_shape",
+                    "successive trace shapes must grow by one cell in one row",
+                )
+            previous_lengths = lengths
+        if previous_lengths != self.tableau_pair.shape.parts:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_trace_final_shape",
+                "the final trace prefix must match the tableau pair shape",
+            )
         return self
 
     @classmethod

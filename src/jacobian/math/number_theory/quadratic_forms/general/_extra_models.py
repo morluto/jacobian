@@ -283,8 +283,12 @@ class ThetaRepresentingVectorsRequest(StrictModel):
     """Complete vector fibers at selected values of a positive-definite form."""
 
     form: RationalQuadraticForm
-    indices: tuple[int, ...] = Field(
-        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    indices: tuple[Annotated[int, Field(ge=0, le=MAX_THETA_SELECTED_INDEX)], ...] = Field(
+        min_length=1,
+        max_length=MAX_THETA_SELECTED_INDICES,
+        description=(
+            f"Strictly increasing, distinct indices in [0, {MAX_THETA_SELECTED_INDEX}]."
+        ),
     )
 
     @model_validator(mode="after")

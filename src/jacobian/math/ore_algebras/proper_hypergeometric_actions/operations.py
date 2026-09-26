@@ -102,17 +102,30 @@ def _degree_bound(
 
 
 def _coefficient_digits(value: RationalFunction) -> int:
-    return max(
-        (
-            max(
-                len(str(abs(term.coefficient.as_integer_ratio()[0]))),
-                len(str(term.coefficient.as_integer_ratio()[1])),
+    denominator_support_digits = 0
+    maximum_numerator_digits = 1
+    maximum_component_digits = 1
+    support_terms = 0
+    for polynomial in (value.numerator, value.denominator):
+        for term in polynomial.terms:
+            numerator, denominator = term.coefficient.as_integer_ratio()
+            numerator_digits = len(str(abs(numerator)))
+            denominator_digits = len(str(denominator))
+            denominator_support_digits += denominator_digits
+            maximum_numerator_digits = max(maximum_numerator_digits, numerator_digits)
+            maximum_component_digits = max(
+                maximum_component_digits, numerator_digits, denominator_digits
             )
-            for polynomial in (value.numerator, value.denominator)
-            for term in polynomial.terms
-        ),
-        default=1,
+            support_terms += 1
+    # A later polynomial product can combine every coefficient denominator in
+    # this support into one coefficient denominator. Bound that common
+    # denominator and numerator accumulation before SymPy constructs it.
+    support_bound = (
+        denominator_support_digits
+        + maximum_numerator_digits
+        + len(str(max(1, support_terms)))
     )
+    return max(maximum_component_digits, support_bound)
 
 
 def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:

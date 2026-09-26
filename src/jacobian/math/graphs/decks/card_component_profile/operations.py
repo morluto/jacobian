@@ -102,10 +102,12 @@ def _admit_deck(
             if (
                 type(edge) is not tuple
                 or len(edge) != 2
-                or any(type(label) is not str for label in edge)
-                or edge[0] >= edge[1]
+                or any(
+                    type(label) is not str or len(label) > 3 for label in edge
+                )
                 or edge[0] not in expected_vertices
                 or edge[1] not in expected_vertices
+                or edge[0] >= edge[1]
             ):
                 raise OperationDomainValidationError(
                     location=("deck", "classes", index, "representative", "edges"),

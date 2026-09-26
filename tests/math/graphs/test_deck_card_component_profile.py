@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetRequest,
 )
 from jacobian.math.graphs.decks.card_component_profile._models import (
     AnonymousDeckComponentProfile,
@@ -203,6 +202,27 @@ def test_schema_bypassed_representative_reports_domain_error(
         classes=(
             AnonymousGraphCardClass.model_construct(
                 representative=forged_graph, multiplicity=1
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        card_component_profile(
+            AnonymousDeckComponentProfileRequest.model_construct(deck=deck)
+        )
+
+
+def test_long_edge_labels_are_rejected_before_label_comparison() -> None:
+    # Direct native callers can bypass Pydantic; reject oversized labels before
+    # comparing two attacker-controlled common prefixes.
+    label = "v" + "x" * 100_000
+    graph = SimpleUndirectedGraph.model_construct(
+        vertices=("v00", "v01"), edges=((label, label + "y"),)
+    )
+    deck = AnonymousGraphCardMultiset.model_construct(
+        card_order=2,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=graph, multiplicity=1
             ),
         ),
     )

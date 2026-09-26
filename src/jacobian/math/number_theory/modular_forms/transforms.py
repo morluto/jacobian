@@ -16,7 +16,10 @@ from jacobian.catalog.models import (
 from jacobian.math.number_theory.characters.operations import (
     require_complete_character_group,
 )
-from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.characters.values import (
+    MAX_CHARACTER_GROUP_MODULUS,
+    DirichletCharacter,
+)
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_GAMMA0_OPERATION_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
@@ -431,6 +434,32 @@ def _sturm_space(space: object) -> ModularFormSpace:
             code="modular_form.level_bound",
             message="modular-form level exceeds the exact Sturm-index envelope",
         )
+    raw_character = getattr(space, "character", None)
+    if isinstance(raw_character, DirichletCharacter):
+        raw_group = getattr(raw_character, "group", None)
+        raw_units = getattr(raw_group, "unit_residues", None)
+        raw_coordinates = getattr(raw_group, "unit_coordinates", None)
+        if type(raw_units) is not tuple or type(raw_coordinates) is not tuple:
+            raise OperationDomainValidationError(
+                location=("space", "character", "group"),
+                code="modular_form.invalid_character_group",
+                message="Sturm bounds require bounded canonical character group tables",
+            )
+        if (
+            len(raw_units) > MAX_CHARACTER_GROUP_MODULUS
+            or len(raw_coordinates) > MAX_CHARACTER_GROUP_MODULUS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("space", "character", "group"),
+                code="modular_form.character_group_bound",
+                message="character group tables exceed the bounded Sturm parent envelope",
+            )
+        if any(type(row) is not tuple or len(row) > 32 for row in raw_coordinates):
+            raise OperationResourceAdmissionError(
+                location=("space", "character", "group", "unit_coordinates"),
+                code="modular_form.character_group_bound",
+                message="character coordinate rows exceed the bounded Sturm parent envelope",
+            )
     try:
         # Re-run the parent validators because a caller can construct a model
         # without validation and later rely on its character/field claims.

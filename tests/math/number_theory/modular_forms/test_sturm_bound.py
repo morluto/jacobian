@@ -12,6 +12,10 @@ from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character,
 )
+from jacobian.math.number_theory.characters.values import (
+    MAX_CHARACTER_GROUP_MODULUS,
+    DirichletCharacter,
+)
 from jacobian.math.number_theory.modular_forms.transform_models import (
     SturmBoundRequest,
     SturmBoundResult,
@@ -185,3 +189,27 @@ def test_sturm_operation_admits_arithmetic_before_computing_bound() -> None:
     too_large_level = _space(10_001, 12)
     with pytest.raises(OperationResourceAdmissionError):
         _STURM_TOOL.run(SturmBoundRequest(space=too_large_level))
+
+
+def test_sturm_bounds_constructed_character_tables_before_copying() -> None:
+    valid = dirichlet_character(character_group(13), (2,))
+    fields = valid.group.model_dump()
+    fields["unit_residues"] = valid.group.unit_residues + (
+        0,
+    ) * (MAX_CHARACTER_GROUP_MODULUS + 1)
+    oversized_group = type(valid.group).model_construct(**fields)
+    forged_character = DirichletCharacter.model_construct(
+        group=oversized_group,
+        coordinates=valid.coordinates,
+    )
+    space = ModularFormSpace.model_construct(
+        group="GAMMA0",
+        level=13,
+        weight=2,
+        kind="M",
+        character=forged_character,
+        coefficient_domain=RationalCyclotomicField(order=6),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError):
+        sturm_bound(space)

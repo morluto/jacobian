@@ -67,6 +67,10 @@ def _check_integral_form(form: IntegralQuadraticForm) -> tuple[int, ...]:
         raise _resource_error(
             "axis_bound", "modular reduction supports at most 128 axes"
         )
+    if n + len(form.cross_terms) > MAX_MODULAR_QUADRATIC_FORM_TERMS:
+        raise _resource_error(
+            "support_bound", "modular reduction supports at most 2,048 terms"
+        )
     if (
         form.domain != "ZZ"
         or any(
@@ -144,7 +148,8 @@ def reduce_integral_form_modulus(
         raise _domain_error(
             "request_type", "expected a typed modular reduction request"
         )
-    return _reduce_integral_form_modulus_value(request.form, request.modulus)
+    target = _reduce_integral_form_modulus_value(request.form, request.modulus)
+    return ModularQuadraticReduction(source=request.form, target=target)
 
 
 def _reduce_integral_form_modulus_value(
@@ -194,7 +199,7 @@ def _reduce_integral_form_modulus_value(
         diagonal_residues=diagonal,
         cross_terms=cross_terms,
     )
-    return ModularQuadraticReduction(source=request.form, target=target)
+    return target
 
 
 def _check_modular_polynomial(
@@ -295,6 +300,8 @@ def _check_modular_values(
     if (
         not isinstance(vector.axis, tuple)
         or not isinstance(vector.coordinates, tuple)
+        or len(vector.axis) > MAX_MODULAR_QUADRATIC_FORM_AXIS
+        or len(vector.coordinates) > MAX_MODULAR_QUADRATIC_FORM_AXIS
         or vector.axis != polynomial.axis
         or len(vector.coordinates) != n
         or any(

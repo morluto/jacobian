@@ -30,6 +30,16 @@ def parity_profile(form: IntegralQuadraticForm) -> ParityProfile:
             code="quadratic_form.parity_profile.form_type",
             message="expected a canonical integral quadratic form",
         )
+    if (
+        not isinstance(form.axis, tuple)
+        or not isinstance(form.diagonal_coefficients, tuple)
+        or not isinstance(form.cross_terms, tuple)
+    ):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.parity_profile.form_shape",
+            message="integral quadratic form containers must be tuples",
+        )
     allocation_units = (
         2 + len(form.axis) + len(form.diagonal_coefficients) + len(form.cross_terms)
     )

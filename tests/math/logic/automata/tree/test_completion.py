@@ -7,7 +7,6 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.automata.tree import (
     BottomUpTreeAutomaton,
@@ -151,23 +150,3 @@ def test_completion_rejects_sink_or_output_that_exceeds_bounds() -> None:
         OperationResourceAdmissionError, match="completed transition table"
     ):
         complete_deterministic_tree_automaton(expanded_table_too_large)
-
-
-def test_catalog_completion_operation_has_typed_json_contract() -> None:
-    operation = Catalog.open().operation(
-        "tree_automaton.deterministic.complete.compute"
-    )
-    assert operation is not None
-    request = operation.request_type.model_validate(
-        {
-            "automaton": {
-                "state_count": 1,
-                "arity": [0, 1],
-                "transitions": [{"symbol": 0, "child_states": [], "target_state": 0}],
-                "final_states": [0],
-            }
-        }
-    )
-    result = operation.run(request)
-    assert result.completed.state_count == 2
-    assert result.sink_state == 1

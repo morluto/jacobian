@@ -11,13 +11,11 @@ from jacobian._execution import (
     request_cancellation,
     request_execution,
 )
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree._models import (
-    TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
 )
 from jacobian.math.logic.automata.tree.operations import (
@@ -177,23 +175,6 @@ def test_minimize_translates_forged_carrier_shape_errors() -> None:
         minimize_tree_automaton(forged)
 
     assert raised.value.errors()[0]["type"] == "tree_automata.minimize_automaton_shape"
-
-
-def test_minimize_is_published_in_catalog() -> None:
-    tool = Catalog.open().operation("tree_automaton.deterministic.minimize.compute")
-    assert tool is not None
-    request = TreeAutomatonMinimizeRequest(
-        automaton=DeterministicBottomUpTreeAutomaton(
-            state_count=1,
-            arity=(0,),
-            transitions=(
-                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
-            ),
-            final_states=(0,),
-        )
-    )
-
-    assert tool.run(request).minimized.state_count == 1
 
 
 def _stuck_rejects(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:

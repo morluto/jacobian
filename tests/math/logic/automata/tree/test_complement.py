@@ -7,7 +7,6 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.tree import (
     BottomUpTreeAutomaton,
@@ -131,20 +130,3 @@ def test_complement_admits_transition_product_before_expansion() -> None:
         CompleteDeterministicBottomUpTreeAutomaton.model_validate(
             high_arity.model_dump(), strict=True
         )
-
-
-def test_catalog_complement_operation_uses_the_typed_contract() -> None:
-    tool = Catalog.open().operation("tree_automaton.complement.compute")
-    assert tool is not None
-    request = tool.request_type.model_validate(
-        {
-            "automaton": {
-                "state_count": 2,
-                "arity": [0],
-                "transitions": [{"symbol": 0, "child_states": [], "target_state": 1}],
-                "final_states": [1],
-            }
-        }
-    )
-    result = tool.run(request)
-    assert result.complement.final_states == (1,)

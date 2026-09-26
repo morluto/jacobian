@@ -67,10 +67,11 @@ TOOLS: MathTools = (
         operation_id="modular_form.space.sturm_bound.compute",
         title="Compute a Gamma0 Sturm bound",
         description=(
-            "Return the exact bounded Sturm integer for a supported "
-            "trivial-character Gamma0(QQ) space or the exact chi_{-4} "
-            "parent at level 4 and weight 1 or 3; this operation does not "
-            "compare forms."
+            "Return the exact bounded Sturm integer for represented Gamma0 "
+            "spaces of level at most 10,000 over QQ or their declared rational cyclotomic "
+            "coefficient field. The bound depends on level and weight; "
+            "the exact character and coefficient parent remain attached. "
+            "This operation does not compare forms."
         ),
         request_type=SturmBoundRequest,
         result_type=SturmBoundResult,
@@ -88,6 +89,52 @@ TOOLS: MathTools = (
                         "kind": "M",
                         "character": "TRIVIAL",
                         "coefficient_domain": "QQ",
+                    }
+                },
+            ),
+            OperationExample(
+                name="order_four_character_sturm",
+                description=(
+                    "Compute a Sturm bound for a character space over "
+                    "Q(zeta_12), retaining its exact coefficient parent."
+                ),
+                input={
+                    "space": {
+                        "group": "GAMMA0",
+                        "level": 13,
+                        "weight": 2,
+                        "kind": "M",
+                        "character": {
+                            "group": {
+                                "modulus": 13,
+                                "unit_residues": list(range(1, 13)),
+                                "character_count": 12,
+                                "invariant_factors": [12],
+                                "generators": [2],
+                                "generator_orders": [12],
+                                "unit_coordinates": [
+                                    [0],
+                                    [1],
+                                    [4],
+                                    [2],
+                                    [9],
+                                    [5],
+                                    [11],
+                                    [3],
+                                    [8],
+                                    [10],
+                                    [7],
+                                    [6],
+                                ],
+                                "exponent": 12,
+                            },
+                            "coordinates": [3],
+                        },
+                        "coefficient_domain": {
+                            "domain": "QQ_CYCLOTOMIC",
+                            "order": 12,
+                            "generator": "CLASS_OF_X",
+                        },
                     }
                 },
             ),

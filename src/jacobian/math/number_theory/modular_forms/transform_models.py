@@ -6,6 +6,7 @@ from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.matrices.cyclic_linear._models import RationalCyclotomicField
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_GAMMA0_OPERATION_LEVEL,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
@@ -30,11 +31,12 @@ class SturmBoundResult(StrictModel):
     bound: StrictInt = Field(ge=0)
 
     @model_validator(mode="after")
-    def require_rational_space(self) -> SturmBoundResult:
-        if self.space.coefficient_domain != "QQ":
+    def require_exact_space(self) -> SturmBoundResult:
+        field = self.space.coefficient_domain
+        if field != "QQ" and type(field) is not RationalCyclotomicField:
             raise PydanticCustomError(
-                "modular_forms.rational_sturm_result_parent",
-                "this Sturm result carrier currently represents QQ spaces only",
+                "modular_forms.sturm_result_parent",
+                "a Sturm result requires an exact QQ or cyclotomic space parent",
             )
         return self
 

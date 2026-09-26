@@ -35,8 +35,20 @@ Beyond those formula families, the bounded PARI Sturm-RREF path in
 supports rational trivial-character `M_k(Gamma0(N))` and `S_k(Gamma0(N))`
 spaces through level 10,000 whenever the weight, dimension, Sturm precision,
 aggregate work, and output bounds declared by that path admit the request.
-Other levels, cusp subspaces above level one, and other nontrivial characters
-remain unsupported in the rational basis and coordinate paths.
+Other nontrivial characters remain unsupported by these rational basis and
+coordinate operations.
+Other levels and cusp subspaces outside the stated basis families remain
+unsupported by these rational basis and coordinate operations.
+
+The public Sturm operation has a wider, parent-only contract than the basis
+operations: for represented `Gamma0(N)` spaces of level at most 10,000 over `QQ` or their declared
+rational cyclotomic coefficient field, it returns
+`floor(k [SL2(Z):Gamma0(N)] / 12)` and retains the exact character and field in
+the result. The formula does not depend on the character or coefficient field;
+only the validity of the exact space parent does. A bound `B` determines the
+`B + 1` coefficients from q^0 through q^B. PARI documents the same
+Gamma0(N), weight-k Sturm bound in `mfsturm(N,k)` in its
+[Modular Forms reference](https://pari.math.u-bordeaux.fr/dochtml/html/Modular_forms.html).
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow
@@ -84,10 +96,12 @@ or Hecke operations; those consumers still enforce their own accepted parents.
 The conjugate-character product above is a separate bounded operation that
 returns its target Sturm prefix.
 
-This exception does not widen the generic rational dimension, Sturm, basis,
-frame, coordinate, transport, equality, or operator paths. Those paths remain restricted to their documented
-rational families and reject a cyclotomic parent when their operation relies
-on rational coefficients. A nontrivial character must be supplied
+This exception does not widen the generic rational dimension, basis, frame,
+or operator paths. Those paths remain restricted to their documented rational
+families and reject a cyclotomic parent when their operation relies on rational
+coefficients. The Sturm operation is the exception: it computes its integer
+from the space's level and weight and accepts every exact cyclotomic parent
+represented by `ModularFormSpace`. A nontrivial character must be supplied
 explicitly at the Gamma0 level; callers must use
 `dirichlet_character.inflate.compute` before binding
 a character of smaller modulus. The character's value order must divide the

@@ -435,7 +435,15 @@ def _sturm_space(space: object) -> ModularFormSpace:
             message="modular-form level exceeds the exact Sturm-index envelope",
         )
     raw_character = getattr(space, "character", None)
-    if isinstance(raw_character, DirichletCharacter):
+    if type(raw_character) is not DirichletCharacter and not (
+        type(raw_character) is str and raw_character == "TRIVIAL"
+    ):
+        raise OperationDomainValidationError(
+            location=("space", "character"),
+            code="modular_form.invalid_character_parent",
+            message="Sturm bounds require a typed character or the trivial character",
+        )
+    if type(raw_character) is DirichletCharacter:
         raw_group = getattr(raw_character, "group", None)
         raw_axes = (
             getattr(raw_group, "invariant_factors", None),

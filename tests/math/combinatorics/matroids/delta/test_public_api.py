@@ -7,15 +7,22 @@ from jacobian.math.combinatorics.matroids import delta as delta_matroids
 
 def test_public_api_is_small_and_canonical() -> None:
     assert delta_matroids.__all__ == [
+        "DeltaMatroidFeasibleSizeProfile",
+        "DeltaMatroidTwistWidthProfile",
         "DistanceInterlaceResult",
         "FiniteDeltaMatroid",
         "binary",
+        "direct_sum",
+        "distance",
         "distance_interlace_polynomial",
         "dual",
+        "feasible_size_profile",
         "from_feasible_sets",
+        "loop_complement",
         "minor",
         "relabel",
         "twist",
+        "twist_width_profile",
         "verify_from_feasible_sets",
         "width",
     ]

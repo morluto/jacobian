@@ -155,6 +155,11 @@ def rank(matrix: PrimeFieldMatrix) -> int:
     """Return matrix rank over the bound prime field."""
 
     _admit_prime(matrix.prime)
+    return _rank_admitted(matrix)
+
+
+def _rank_admitted(matrix: PrimeFieldMatrix) -> int:
+    """Return rank when the caller has already admitted the field prime."""
     if not matrix.entries or matrix.columns == 0:
         return 0
     if matrix.prime > MAX_PRIME_FIELD_FLINT_PRIME:

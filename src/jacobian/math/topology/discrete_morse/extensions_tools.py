@@ -3,6 +3,7 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology.discrete_morse.extensions import *
+from jacobian.math.topology.operations import canonicalize
 
 
 def _greedy(r: Any) -> Any:
@@ -13,8 +14,44 @@ def _collapse(r: Any) -> Any:
     return collapse_sequence(r)
 
 
+def _greedy_collapse(r: Any) -> Any:
+    canonical = canonicalize(r.complex.vertices, r.complex.facets).complex
+    return greedy_collapse(canonical)
+
+
 _I = {"vertices": ["a", "b"], "facets": [["a", "b"]]}
+_TRIANGLE = {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]}
 TOOLS = (
+    MathTool(
+        operation_id="topology.simplicial_complex.greedy_collapse.compute",
+        title="Greedily collapse a finite simplicial complex",
+        description=(
+            "Repeatedly remove the lexicographically first free face/facet pair "
+            "from the current finite complex, stopping when no free pair remains. "
+            "Return the exact source, collapse sequence, and remaining complex. "
+            "The result is maximal under elementary collapses; it makes no "
+            "minimum-size, noncollapsibility, contractibility, or homotopy claim."
+        ),
+        request_type=GreedyCollapseRequest,
+        result_type=CollapseSequenceResult,
+        run=_greedy_collapse,
+        tags=("topology", "simplicial", "collapse", "greedy", "exact"),
+        discovery_terms=(
+            "greedy simplicial collapse",
+            "maximal elementary collapse sequence",
+            "free face collapse",
+        ),
+        examples=(
+            OperationExample(
+                name="filled_triangle_greedy_collapse",
+                description=(
+                    "Greedily collapse a filled triangle to one vertex; the tie "
+                    "rule chooses the lexicographically first free face/facet pair."
+                ),
+                input={"complex": _TRIANGLE},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="topology.discrete_morse.greedy_matching.compute",
         title="Construct a deterministic greedy Morse matching",

@@ -5,9 +5,19 @@ from __future__ import annotations
 from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 from jacobian.math.topology._request_admission import (
     require_canonical_complex_admission,
+    run_topology_admission,
+)
+from jacobian.math.topology.discrete_morse._contraction import (
+    compute_chain_contraction as _compute_chain_contraction,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
     compute_gradient_paths as _compute_gradient_paths,
+)
+from jacobian.math.topology.discrete_morse._kernel import (
+    compute_integer_morse_complex as _compute_integer_morse_complex,
+)
+from jacobian.math.topology.discrete_morse._kernel import (
+    compute_minimum_matching as _compute_minimum_matching,
 )
 from jacobian.math.topology.discrete_morse._kernel import (
     compute_morse_complex as _compute_morse_complex,
@@ -18,7 +28,10 @@ from jacobian.math.topology.discrete_morse._kernel import (
 from jacobian.math.topology.discrete_morse._models import (
     DiscreteMorseMatchingResult,
     GradientPathsResult,
+    IntegerMorseComplexResult,
     MatchingPair,
+    MinimumMorseMatchingResult,
+    MorseChainContractionResult,
     MorseComplexResult,
 )
 
@@ -34,7 +47,9 @@ def construct_matching(
     validator or transport layer.
     """
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _construct_matching(complex_, pairs)
 
 
@@ -51,7 +66,9 @@ def compute_gradient_paths(
     critical cell to its critical targets of the adjacent lower dimension.
     """
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _compute_gradient_paths(complex_, pairs, start, target)
 
 
@@ -66,12 +83,47 @@ def compute_morse_complex(
     gradient-path counts.
     """
 
-    require_canonical_complex_admission(complex_)
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
     return _compute_morse_complex(complex_, pairs)
 
 
+def compute_integer_morse_complex(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> IntegerMorseComplexResult:
+    """Compute the ZZ Morse chain complex using lex-oriented signed paths."""
+
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(complex_), location=("complex",)
+    )
+    return _compute_integer_morse_complex(complex_, pairs)
+
+
+def compute_minimum_matching(
+    complex_: FiniteSimplicialComplex,
+) -> MinimumMorseMatchingResult:
+    """Return an exact acyclic matching minimizing the total critical cells."""
+
+    require_canonical_complex_admission(complex_)
+    return _compute_minimum_matching(complex_)
+
+
+def compute_chain_contraction(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> MorseChainContractionResult:
+    """Return a bounded integral chain contraction onto the Morse complex."""
+
+    return _compute_chain_contraction(complex_, pairs)
+
+
 __all__ = [
+    "compute_chain_contraction",
     "compute_gradient_paths",
+    "compute_integer_morse_complex",
+    "compute_minimum_matching",
     "compute_morse_complex",
     "construct_matching",
 ]

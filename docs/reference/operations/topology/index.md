@@ -8,4 +8,6 @@ construction, finite-field homology, and integral homology. Recurrence and
 generating-series operations belong to combinatorics; their historical page is
 retained below for that mathematical reference.
 
+- [Discrete Morse matching](discrete-morse-matching.md)
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
+- [Discrete Morse chain contractions](discrete-morse-chain-contraction.md)

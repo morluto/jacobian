@@ -2,13 +2,28 @@
 
 from __future__ import annotations
 
-from jacobian.catalog.models import MathTool, MathTools, OperationExample
-from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.catalog.models import (
+    MathTool,
+    MathTools,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_DIMENSION,
+    FiniteSimplicialComplex,
+)
 from jacobian.math.topology.discrete_morse._models import (
+    MAX_MORSE_CONTRACTION_FACE_CANDIDATES,
     DiscreteMorseMatchingRequest,
     DiscreteMorseMatchingResult,
     GradientPathsRequest,
     GradientPathsResult,
+    IntegerMorseComplexRequest,
+    IntegerMorseComplexResult,
+    MinimumMorseMatchingRequest,
+    MinimumMorseMatchingResult,
+    MorseChainContractionRequest,
+    MorseChainContractionResult,
     MorseComplexRequest,
     MorseComplexResult,
 )
@@ -16,7 +31,10 @@ from jacobian.math.topology.discrete_morse.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
 from jacobian.math.topology.discrete_morse.operations import (
+    compute_chain_contraction,
     compute_gradient_paths,
+    compute_integer_morse_complex,
+    compute_minimum_matching,
     compute_morse_complex,
     construct_matching,
 )
@@ -48,6 +66,46 @@ def _run_compute_morse_complex(request: MorseComplexRequest) -> MorseComplexResu
     return compute_morse_complex(canonical, request.pairs)
 
 
+def _run_compute_integer_morse_complex(
+    request: IntegerMorseComplexRequest,
+) -> IntegerMorseComplexResult:
+    canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return compute_integer_morse_complex(canonical, request.pairs)
+
+
+def _run_minimum_matching(
+    request: MinimumMorseMatchingRequest,
+) -> MinimumMorseMatchingResult:
+    canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return compute_minimum_matching(canonical)
+
+
+def _run_compute_chain_contraction(
+    request: MorseChainContractionRequest,
+) -> MorseChainContractionResult:
+    if any(
+        len(facet) > MAX_TOPOLOGY_DIMENSION + 1 for facet in request.complex.facets
+    ) or any(
+        len(cell) > MAX_TOPOLOGY_DIMENSION + 1
+        for pair in request.pairs
+        for cell in (pair.face, pair.coface)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("complex", "pairs"),
+            code="topology.discrete_morse.contraction.axes",
+            message="facets and matching cells exceed the bounded dimension axis",
+        )
+    possible_faces = sum((1 << len(facet)) - 1 for facet in request.complex.facets)
+    if possible_faces > MAX_MORSE_CONTRACTION_FACE_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="topology.discrete_morse.contraction.face_candidates",
+            message="request facets exceed the 512-candidate closure admission bound",
+        )
+    canonical = canonicalize(request.complex.vertices, request.complex.facets).complex
+    return compute_chain_contraction(canonical, request.pairs)
+
+
 _CIRCLE_FACETS = {
     "vertices": ["a", "b", "c"],
     "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
@@ -58,6 +116,11 @@ _INTERVAL_FACETS = {
     "facets": [["a", "b"]],
 }
 
+_TRIANGLE_FACETS = {
+    "vertices": ["a", "b", "c"],
+    "facets": [["a", "b", "c"]],
+}
+
 _CIRCLE_MATCHING_PAIRS = [
     {"face": ["a"], "coface": ["a", "b"]},
     {"face": ["c"], "coface": ["a", "c"]},
@@ -65,6 +128,36 @@ _CIRCLE_MATCHING_PAIRS = [
 
 TOOLS: MathTools = (
     *EXTENSION_TOOLS,
+    MathTool(
+        operation_id="topology.discrete_morse.matching.minimum.compute",
+        title="Compute a minimum-critical-cell acyclic matching",
+        description=(
+            "Exhaustively search the admitted finite face poset for an acyclic "
+            "matching with the minimum total number of critical cells. Ties use "
+            "the first optimum found by canonical lexicographic cover-pair order. "
+            "The operation rejects inputs whose complete search bound exceeds "
+            "its envelope; it never returns a partial incumbent as a minimum."
+        ),
+        request_type=MinimumMorseMatchingRequest,
+        result_type=MinimumMorseMatchingResult,
+        run=_run_minimum_matching,
+        tags=("topology", "discrete-morse", "minimum", "exact", "search"),
+        discovery_terms=(
+            "minimum critical cells",
+            "optimal discrete Morse matching",
+            "exact acyclic matching optimization",
+        ),
+        examples=(
+            OperationExample(
+                name="filled_triangle_minimum_matching",
+                description=(
+                    "Find an acyclic matching of a filled triangle with one "
+                    "critical vertex, the minimum possible total."
+                ),
+                input={"complex": _TRIANGLE_FACETS},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="topology.discrete_morse.matching.construct",
         title="Construct and classify a discrete Morse matching",
@@ -244,6 +337,82 @@ TOOLS: MathTools = (
                     "numbers are (1, 1)."
                 ),
                 input={"complex": _CIRCLE_FACETS, "pairs": _CIRCLE_MATCHING_PAIRS},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.discrete_morse.integer_complex.compute",
+        title="Compute the integral signed Morse chain complex",
+        description=(
+            "For a supplied acyclic matching on a bounded finite simplicial "
+            "complex, return the exact Morse differential over ZZ with the "
+            "critical simplices as ordered bases. Simplex orientations use "
+            "lexicographic vertex order; each gradient path contributes its "
+            "initial simplicial boundary incidence followed by Forman's "
+            "orientation transport across matched cells."
+        ),
+        request_type=IntegerMorseComplexRequest,
+        result_type=IntegerMorseComplexResult,
+        run=_run_compute_integer_morse_complex,
+        tags=("topology", "discrete-morse", "morse-complex", "integer", "exact"),
+        discovery_terms=(
+            "integral discrete Morse complex",
+            "signed Morse differential",
+            "Morse boundary over integers",
+            "ZZ gradient paths",
+        ),
+        examples=(
+            OperationExample(
+                name="interval_integral_boundary",
+                description=(
+                    "The empty matching on one interval has both endpoints and "
+                    "the edge critical; its signed boundary uses lexicographic "
+                    "orientations [a,b]."
+                ),
+                input={"complex": _INTERVAL_FACETS, "pairs": []},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.discrete_morse.chain_contraction.compute",
+        title="Construct the integral chain contraction of an acyclic Morse matching",
+        description=(
+            "For a bounded acyclic matching on a finite simplicial complex, "
+            "return the exact inclusion and projection between its oriented "
+            "simplicial chains and the critical-cell Morse chains, together "
+            "with a degree-raising chain homotopy H satisfying "
+            "id - I P = d H + H d. The operation admits only small exact "
+            "matrix reductions and rejects cyclic or malformed matchings."
+        ),
+        request_type=MorseChainContractionRequest,
+        result_type=MorseChainContractionResult,
+        run=_run_compute_chain_contraction,
+        tags=("topology", "discrete-morse", "chain-contraction", "homotopy", "exact"),
+        discovery_terms=(
+            "Morse chain contraction",
+            "discrete Morse chain homotopy",
+            "inclusion projection homotopy",
+            "strong deformation retract of chain complexes",
+        ),
+        examples=(
+            OperationExample(
+                name="interval_contraction_to_one_vertex",
+                description=(
+                    "Collapse the interval chain complex onto vertex b; the "
+                    "result includes maps and an exact chain homotopy."
+                ),
+                input={
+                    "complex": _INTERVAL_FACETS,
+                    "pairs": [{"face": ["a"], "coface": ["a", "b"]}],
+                },
+            ),
+            OperationExample(
+                name="empty_matching_identity_contraction",
+                description=(
+                    "With no matched pairs every simplex stays critical and "
+                    "the contraction is the identity with zero homotopy."
+                ),
+                input={"complex": _INTERVAL_FACETS, "pairs": []},
             ),
         ),
     ),

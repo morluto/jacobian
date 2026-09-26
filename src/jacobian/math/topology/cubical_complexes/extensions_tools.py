@@ -18,10 +18,6 @@ def _boundary(r: Any) -> Any:
     return boundary(r.cells)
 
 
-def _cell_boundary(r: Any) -> Any:
-    return cell_boundary(r.cell)
-
-
 def _relative(r: Any) -> Any:
     return relative_homology(r)
 
@@ -72,31 +68,6 @@ TOOLS = (
                 name="square_boundary",
                 description="Compute the signed boundary of one unit square; intervals are lattice intervals of length zero or one.",
                 input=_SQUARE,
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="topology.cubical.cell.boundary.compute",
-        title="Compute an oriented cubical cell boundary",
-        description=(
-            "Return the exact signed codimension-one faces of one elementary "
-            "integer-lattice cube. Nondegenerate axes are ordered by ambient "
-            "coordinate index, and the boundary is sum_j (-1)^(j-1) "
-            "(upper_j - lower_j). A point has empty boundary. Coordinates are "
-            "limited to 64 decimal digits and the result to 32 KiB."
-        ),
-        request_type=CubicalCellBoundaryRequest,
-        result_type=CubicalCellBoundaryResult,
-        run=_cell_boundary,
-        tags=("topology", "cubical", "boundary", "exact"),
-        examples=(
-            OperationExample(
-                name="oriented_square_boundary",
-                description=(
-                    "Return the signed four-edge boundary of a unit square in "
-                    "increasing ambient axis order."
-                ),
-                input={"cell": {"intervals": [[0, 1], [0, 1]]}},
             ),
         ),
     ),

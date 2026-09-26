@@ -1069,10 +1069,6 @@ def filtered_chain_map_page(
         target_filtration=authored.target_filtration,
         maps=authored.maps,
     )
-    source_admission, target_admission, map_value = _admit_e0_map_request(
-        chain_map_request
-    )
-
     source, target = authored.source, authored.target
     levels = len(authored.source_filtration)
     degree_count = len(source.basis_sizes)
@@ -1123,7 +1119,7 @@ def filtered_chain_map_page(
         for value in vector
     )
     input_scalars.extend(
-        value for matrix in map_value.maps for row in matrix for value in row
+        value for matrix in authored.maps for row in matrix for value in row
     )
     max_scalar_chars = max((len(str(value)) for value in input_scalars), default=1)
     scalar_chars_bound = 96 * max_scalar_chars + 512
@@ -1134,6 +1130,10 @@ def filtered_chain_map_page(
             code="filtered_chain_map.page_output_exceeded",
             message="the conservative page-map output bound exceeds the admitted result size",
         )
+
+    source_admission, target_admission, map_value = _admit_e0_map_request(
+        chain_map_request
+    )
 
     if request.page == 0:
         source_page = _spectral_zero_page(

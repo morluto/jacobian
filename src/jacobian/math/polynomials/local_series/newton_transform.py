@@ -115,11 +115,11 @@ def _fraction_digits(value: Fraction) -> int:
 
 
 def _admit_edge_root_powers(
-    characteristic: NewtonEdgeCharacteristicResult, root: Fraction
+    characteristic: NewtonEdgeCharacteristicResult,
+    root: Fraction,
+    common_denominator: int,
 ) -> None:
     """Bound exact root powers before evaluating the edge polynomial."""
-    if abs(root) == 1:
-        return
     largest_exponent = max(
         (
             term.exponents[0]
@@ -144,6 +144,7 @@ def _admit_edge_root_powers(
     projected_digits = (
         root_power_digits
         + MAX_NEWTON_POLYGON_SCALAR_DIGITS
+        + decimal_digit_width(common_denominator)
         + term_count_digits
         + decimal_digit_width(largest_exponent)
     )
@@ -198,6 +199,12 @@ def _edge_polynomial_value(
 def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
     if not isinstance(request, NewtonTransformRequest):
         _domain("request_type", "request must select an edge and rational root", ())
+    if type(request.edge_index) is not int or request.edge_index < 0:
+        _domain(
+            "edge_index",
+            "edge_index must be a nonnegative strict integer",
+            ("edge_index",),
+        )
     source = request.polynomial
     if not isinstance(source, LocalPolynomialInSeries):
         _domain("polynomial_type", "polynomial must be a local series polynomial", ("polynomial",))
@@ -228,7 +235,7 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
         )
     )
     source_common_denominator = _admit_source_common_denominator(characteristic)
-    _admit_edge_root_powers(characteristic, root)
+    _admit_edge_root_powers(characteristic, root, source_common_denominator)
     polynomial_value, polynomial_derivative = _edge_polynomial_value(
         characteristic, root
     )
@@ -327,28 +334,47 @@ def _admit_output_windows(
 def _admit_coefficient_digits(
     source_rows: tuple[_SourceRow, ...],
     source_slots: int,
-    largest_degree: int,
     root: Fraction,
     common_denominator: int,
+    geometry: _TransformGeometry,
+    output_precisions: tuple[int, ...],
 ) -> int:
-    max_lifted_numerator_digits = max(
-        (
-            decimal_digit_width(value.numerator)
-            + decimal_digit_width(common_denominator // value.denominator)
-            for row in source_rows
-            for coefficient in row.series.coefficients
-            for value in (coefficient.as_fraction(),)
-        ),
-        default=1,
-    )
+    max_lifted_numerator_digits = 1
+    largest_root_power = 0
+    for row in source_rows:
+        for offset, coefficient in enumerate(row.series.coefficients):
+            value = coefficient.as_fraction()
+            if not value:
+                continue
+            target_exponent = (
+                geometry.ramification_index * (row.series.valuation_lower + offset)
+                + geometry.ordinate_power * row.y_degree
+                - geometry.removed_valuation
+            )
+            retained_degrees = tuple(
+                degree
+                for degree in range(row.y_degree + 1)
+                if target_exponent < output_precisions[degree]
+            )
+            if not retained_degrees:
+                continue
+            max_lifted_numerator_digits = max(
+                max_lifted_numerator_digits,
+                decimal_digit_width(value.numerator)
+                + decimal_digit_width(common_denominator // value.denominator),
+            )
+            largest_root_power = max(
+                largest_root_power,
+                *(row.y_degree - degree for degree in retained_degrees),
+            )
     root_digits = _fraction_digits(root)
     term_digits = (
         max_lifted_numerator_digits
-        + largest_degree * root_digits
-        + largest_degree
+        + largest_root_power * root_digits
+        + largest_root_power
         + 1
     )
-    denominator_digits = decimal_digit_width(common_denominator) + largest_degree * (
+    denominator_digits = decimal_digit_width(common_denominator) + largest_root_power * (
         decimal_digit_width(root.denominator)
     )
     coefficient_digits = max(
@@ -454,11 +480,12 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
             )
             if target_exponent < 0:
                 raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-            if any(
+            retained_products = sum(
                 target_exponent < output_precisions[degree]
                 for degree in range(row.y_degree + 1)
-            ):
-                work += row.y_degree + 1
+            )
+            if retained_products:
+                work += retained_products
                 if work > MAX_NEWTON_TRANSFORM_WORK:
                     _resource(
                         "work_bound",
@@ -468,9 +495,10 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
     coefficient_digits = _admit_coefficient_digits(
         source_rows,
         source_slots,
-        largest_degree,
         geometry.root,
         retained_denominator,
+        geometry,
+        output_precisions,
     )
 
     output_bytes = (

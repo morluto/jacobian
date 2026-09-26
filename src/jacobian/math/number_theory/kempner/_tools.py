@@ -2,11 +2,14 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.kempner._models import (
+    KempnerDecimalEnclosure,
+    KempnerDecimalEnclosureRequest,
     KempnerSeriesEnclosure,
     KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner.operations import (
     enclose_kempner_series,
+    enclose_kempner_series_decimal,
 )
 
 
@@ -14,6 +17,14 @@ def _run_enclosure(
     request: KempnerSeriesEnclosureRequest,
 ) -> KempnerSeriesEnclosure:
     return enclose_kempner_series(request.digit_set, request.cutoff)
+
+
+def _run_decimal_enclosure(
+    request: KempnerDecimalEnclosureRequest,
+) -> KempnerDecimalEnclosure:
+    return enclose_kempner_series_decimal(
+        request.digit_set, request.cutoff, request.precision
+    )
 
 
 TOOLS: MathTools = (
@@ -50,6 +61,38 @@ TOOLS: MathTools = (
                 input={
                     "digit_set": {"base": "10", "allowed_digits": ["1"]},
                     "cutoff": "2",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_theory.kempner_series.enclose_decimal",
+        title="Enclose a dense Kempner reciprocal series",
+        description=(
+            "Return an exact fixed-point interval for the finite reciprocal "
+            "sum plus its geometric tail bound. Admission limits numeral "
+            "count, traversal work, stack size, precision, and rational result "
+            "height before enumerating the family."
+        ),
+        request_type=KempnerDecimalEnclosureRequest,
+        result_type=KempnerDecimalEnclosure,
+        run=_run_decimal_enclosure,
+        tags=("number-theory", "kempner", "reciprocal-series", "dense", "exact"),
+        discovery_terms=(
+            "dense Kempner series fixed-point enclosure",
+            "large digit-restricted reciprocal sum interval",
+        ),
+        examples=(
+            OperationExample(
+                name="repunit_family_decimal_enclosure",
+                description=(
+                    "Enclose the base-10 repunit-digit family through two "
+                    "digits at three decimal places."
+                ),
+                input={
+                    "digit_set": {"base": "10", "allowed_digits": ["1"]},
+                    "cutoff": "2",
+                    "precision": 3,
                 },
             ),
         ),

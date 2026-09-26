@@ -128,6 +128,8 @@ class KempnerSeriesEnclosure(StrictModel):
 __all__ = [
     "MAX_KEMPNER_SERIES_DIGITS",
     "MAX_KEMPNER_SERIES_NUMERALS",
+    "KempnerDecimalEnclosure",
+    "KempnerDecimalEnclosureRequest",
     "KempnerSeriesEnclosure",
     "KempnerSeriesEnclosureRequest",
 ]

@@ -98,15 +98,19 @@ def test_adjacency_uses_shared_facets_and_not_vertex_contacts() -> None:
 def test_adjacency_admits_only_bounded_cell_families() -> None:
     triangle = _cell(((0, 0), (1, 0), (0, 1)))
     cells = (triangle,) * 17
-    with pytest.raises(
-        OperationResourceAdmissionError, match="16-cell adjacency envelope"
-    ):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         polytopal_complex_adjacency_graph(cells)
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.adjacency.cell_count_over_envelope"
+    )
 
 
 def test_adjacency_requires_the_pure_full_dimensional_closure_contract() -> None:
-    with pytest.raises(OperationDomainValidationError, match="full-dimensional"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))), _segment()))
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.maximal_cell_not_full_dimensional"
+    )
 
 
 def test_multi_digit_cell_ids_keep_numeric_vertices_and_lexical_graph_edges() -> None:
@@ -140,14 +144,17 @@ def test_result_json_rejects_forged_nonfacet_with_correct_declared_dimension() -
     facet = payload["facet_edges"][0]["facet"]
     facet["vertices"] = [facet["vertices"][0]]
 
-    with pytest.raises(ValidationError, match="exactly the common cell vertices"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.adjacency_facet_vertices"
+    )
 
 
 @pytest.mark.parametrize(
-    ("replacement", "message"),
+    ("replacement", "error_code"),
     [
-        (((2, 0),), "full-dimensional"),
+        (((2, 0),), "polytopal_complex.adjacency_cell_dimension"),
         (
             (
                 (0, 0),
@@ -155,12 +162,12 @@ def test_result_json_rejects_forged_nonfacet_with_correct_declared_dimension() -
                 (Fraction(1, 4), Fraction(1, 4)),
                 (1, 0),
             ),
-            "extreme hull vertices",
+            "polytopal_complex.adjacency_cell_extreme_vertices",
         ),
     ],
 )
 def test_result_json_rejects_noncanonical_cell_vertex_claims(
-    replacement: tuple[tuple[Fraction | int, ...], ...], message: str
+    replacement: tuple[tuple[Fraction | int, ...], ...], error_code: str
 ) -> None:
     result = polytopal_complex_adjacency_graph((_cell(((0, 0), (1, 0), (0, 1))),))
     payload = json.loads(result.model_dump_json())
@@ -178,8 +185,9 @@ def test_result_json_rejects_noncanonical_cell_vertex_claims(
         for point in points
     ]
 
-    with pytest.raises(ValidationError, match=message):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == error_code
 
 
 def test_result_json_bounds_coordinate_height_before_exact_hull_validation() -> None:
@@ -187,5 +195,8 @@ def test_result_json_bounds_coordinate_height_before_exact_hull_validation() -> 
     payload = json.loads(result.model_dump_json())
     payload["cells"][0]["vertices"][0]["coordinates"][0]["num"] = "1" + "0" * 1_024
 
-    with pytest.raises(ValidationError, match="exceeds the 1024-digit bound"):
+    with pytest.raises(ValidationError) as exc_info:
         PolytopalComplexAdjacencyGraph.model_validate_json(json.dumps(payload))
+    assert exc_info.value.errors()[0]["type"] == (
+        "polytopal_complex.adjacency_coordinate_digits"
+    )

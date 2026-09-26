@@ -248,6 +248,26 @@ def test_raw_rational_digits_are_rejected_before_exact_integer_decoding() -> Non
         WeightedMaximumRequest.model_validate({"source": raw})
 
 
+def test_result_deserialization_is_structural_for_large_source_weights() -> None:
+    denominator = "9" * 1000
+    payload = {
+        "source": {
+            "word": {"alphabet": ["a", "b"], "letters": ["a", "b"]},
+            "weights": [
+                {"num": "1", "den": denominator},
+                {"num": "1", "den": str(int(denominator) - 2)},
+            ],
+        },
+        "monotonicity": "NONDECREASING",
+        "weight": {"num": "0", "den": "1"},
+        "indices": [0, 1],
+        "values": ["a", "b"],
+    }
+    decoded = WeightedMaximumResult.model_validate_json(json.dumps(payload))
+    assert len(decoded.source.weights) == 2
+    assert decoded.weight.as_fraction() == 0
+
+
 def test_serialized_result_composes_through_its_typed_contract() -> None:
     source = _word(("a", "b"), ("b", "a"), (Fraction(1, 2), Fraction(3, 4)))
     result = maximum_weight_nonincreasing_subsequence(source)

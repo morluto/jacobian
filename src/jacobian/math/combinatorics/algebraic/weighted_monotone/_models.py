@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -162,61 +161,6 @@ class WeightedMaximumResult(StrictModel):
             indices=indices,
             values=values,
         )
-
-    @model_validator(mode="after")
-    def require_exact_witness(self) -> Self:
-        if len(self.indices) != len(self.values):
-            raise PydanticCustomError(
-                "weighted_word.witness_length",
-                "witness positions and values must have equal lengths",
-            )
-        word = self.source.word
-        ranks = {symbol: rank for rank, symbol in enumerate(word.alphabet)}
-        if any(
-            position < 0
-            or position >= len(word.letters)
-            or word.letters[position] != value
-            for position, value in zip(self.indices, self.values, strict=True)
-        ):
-            raise PydanticCustomError(
-                "weighted_word.witness_source",
-                "witness positions and values must replay in the source",
-            )
-        if any(left >= right for left, right in pairwise(self.indices)):
-            raise PydanticCustomError(
-                "weighted_word.witness_indices",
-                "witness positions must increase strictly",
-            )
-        value_ranks = tuple(ranks[value] for value in self.values)
-        if self.monotonicity == "NONDECREASING":
-            ordered = all(left <= right for left, right in pairwise(value_ranks))
-        else:
-            ordered = all(left >= right for left, right in pairwise(value_ranks))
-        if not ordered:
-            raise PydanticCustomError(
-                "weighted_word.witness_order",
-                "witness values must satisfy the named weak order",
-            )
-        total = sum(
-            (self.source.weights[position].as_fraction() for position in self.indices),
-            start=0,
-        )
-        if total != self.weight.as_fraction():
-            raise PydanticCustomError(
-                "weighted_word.witness_weight",
-                "witness weights must sum exactly to the reported optimum",
-            )
-        if word.letters and not self.indices:
-            raise PydanticCustomError(
-                "weighted_word.empty_nonempty_witness",
-                "a nonempty source requires a nonempty subsequence witness",
-            )
-        if not word.letters and (self.indices or self.weight.as_fraction()):
-            raise PydanticCustomError(
-                "weighted_word.empty_witness",
-                "the empty source has the empty zero-weight witness",
-            )
-        return self
 
 
 __all__ = [

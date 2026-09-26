@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 from itertools import product
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -25,6 +25,8 @@ from jacobian.math.logic.relational_structures.values import (
 
 MAX_CSP_CONSTRAINTS = 4_096
 MAX_CSP_SCOPE_ENTRIES = 16_384
+MAX_CSP_SOLUTION_ASSIGNMENTS = 65_536
+MAX_CSP_SOLUTION_LABELS = 1_048_576
 
 
 class PPFormulaEvaluationRequest(StrictModel):
@@ -43,6 +45,7 @@ def _polymorphism_validation_error(reason: str, message: str) -> PydanticCustomE
 
 
 def _operation_table_index(inputs: tuple[int, ...], carrier_size: int) -> int:
+    """Index the canonical lexicographic table at one input tuple."""
     index = 0
     for value in inputs:
         index = index * carrier_size + value
@@ -999,6 +1002,14 @@ class CspAssignmentProfile(StrictModel):
             raise _validation_error(
                 "assignment_axis", "profile assignment is not total"
             )
+        if any(
+            not 0 <= value < self.instance.template.carrier_size
+            for value in self.assignment
+        ):
+            raise _validation_error(
+                "assignment_value",
+                "profile assignment values must lie in the template carrier",
+            )
         if len(self.evaluations) != len(self.instance.constraints):
             raise _validation_error(
                 "assignment_profile", "every constraint occurrence must be evaluated"
@@ -1028,6 +1039,81 @@ class CspAssignmentProfile(StrictModel):
                 "assignment_status", "status must agree with all constraint evaluations"
             )
         return self
+
+
+class CspSolutions(StrictModel):
+    """The complete lexicographically ordered solution family of one CSP.
+
+    Assignments use the variable axis and labels of the retained template.
+    The instance keeps named constraint occurrences and their provenance,
+    including occurrences that deduplicate in its canonical source structure.
+    """
+
+    instance: FiniteCspInstance
+    assignments: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...
+    ] = Field(max_length=MAX_CSP_SOLUTION_ASSIGNMENTS)
+    total_candidates: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_assignment_family_shape(self) -> Self:
+        expected = (
+            1
+            if self.instance.variable_count == 0
+            else (
+                0
+                if self.instance.template.carrier_size == 0
+                else self.instance.template.carrier_size**self.instance.variable_count
+            )
+        )
+        if self.total_candidates != expected:
+            raise _validation_error(
+                "solutions.candidate_count",
+                "total_candidates must be the complete assignment-space size",
+            )
+        if len(self.assignments) > expected:
+            raise _validation_error(
+                "solutions.assignment_count",
+                "the solution family cannot exceed the complete assignment space",
+            )
+        if sum(map(len, self.assignments)) > MAX_CSP_SOLUTION_LABELS:
+            raise _validation_error(
+                "solutions.output_bound",
+                "the retained assignment labels exceed the output envelope",
+            )
+        previous: tuple[int, ...] | None = None
+        for assignment in self.assignments:
+            if len(assignment) != self.instance.variable_count or any(
+                not 0 <= value < self.instance.template.carrier_size
+                for value in assignment
+            ):
+                raise _validation_error(
+                    "solutions.assignment_shape",
+                    "each assignment must be total and template-valued",
+                )
+            if previous is not None and assignment <= previous:
+                raise _validation_error(
+                    "solutions.order",
+                    "assignments must be unique and lexicographically ordered",
+                )
+            previous = assignment
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        instance: FiniteCspInstance,
+        assignments: tuple[tuple[int, ...], ...],
+        total_candidates: int,
+    ) -> Self:
+        """Build after the admitted exhaustive search without replaying it."""
+
+        return cls.model_construct(
+            instance=instance,
+            assignments=assignments,
+            total_candidates=total_candidates,
+        )
 
 
 class HomomorphismCoreRequest(StrictModel):
@@ -1619,7 +1705,16 @@ class RelationalPolymorphismRelationProfile(StrictModel):
 
 
 class RelationalPolymorphismCheckResult(StrictModel):
-    """Complete preservation profile for one caller-supplied operation table."""
+    """Complete preservation profile for one caller-supplied operation table.
+
+    Validation is structural: the witness must reference the named source
+    relation and its rows, with carrier-valued coordinates, and the relation
+    profiles must agree with the source signature and counts. The admitted
+    ``relational.polymorphism.check`` kernel performs the exhaustive
+    coordinatewise image replay; re-checking an externally authored claim
+    means running that operation again on its admitted source, arity, and
+    operation table, not replaying it inside deserialization.
+    """
 
     source: FiniteRelationalStructure
     arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
@@ -1735,7 +1830,13 @@ class RelationalPolymorphismCheckResult(StrictModel):
             ):
                 raise _polymorphism_validation_error(
                     "polymorphism.witness_output",
-                    "witness output must be the table image and absent from its relation",
+                    "witness output coordinates must be source carrier labels",
+                )
+            profile = self.relation_profiles[symbol_index]
+            if profile.preserved_combinations >= profile.input_combinations:
+                raise _polymorphism_validation_error(
+                    "polymorphism.witness_profile",
+                    "the witnessed relation must record a non-preserved combination",
                 )
         return self
 

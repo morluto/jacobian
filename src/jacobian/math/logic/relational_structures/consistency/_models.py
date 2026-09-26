@@ -20,7 +20,9 @@ class CspDomainRequest(StrictModel):
     """A finite CSP instance with one allowed template subset per variable."""
 
     instance: FiniteCspInstance
-    domains: tuple[Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...] = Field(
+    domains: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...
+    ] = Field(
         max_length=MAX_RELATIONAL_CARRIER,
         description="One ordered, duplicate-free subset of template labels per variable.",
     )
@@ -52,8 +54,12 @@ class CspDomainConsistency(StrictModel):
     """
 
     instance: FiniteCspInstance
-    initial_domains: tuple[tuple[StrictInt, ...], ...]
-    domains: tuple[tuple[StrictInt, ...], ...]
+    initial_domains: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...
+    ] = Field(max_length=MAX_RELATIONAL_CARRIER)
+    domains: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_RELATIONAL_CARRIER)], ...
+    ] = Field(max_length=MAX_RELATIONAL_CARRIER)
     empty_domain_variables: tuple[StrictInt, ...]
     false_nullary_constraint_ids: tuple[str, ...]
 
@@ -61,7 +67,9 @@ class CspDomainConsistency(StrictModel):
     def require_canonical_consistency(self) -> Self:
         count = self.instance.variable_count
         if len(self.initial_domains) != count or len(self.domains) != count:
-            raise _error("result_axis", "domain axes must match the instance variable count")
+            raise _error(
+                "result_axis", "domain axes must match the instance variable count"
+            )
         carrier_size = self.instance.template.carrier_size
         if any(
             len(initial) > carrier_size
@@ -72,20 +80,35 @@ class CspDomainConsistency(StrictModel):
             or any(not 0 <= value < carrier_size for value in domain)
             for domain, initial in zip(self.domains, self.initial_domains, strict=True)
         ):
-            raise _error("result_domains", "final domains must be canonical subsets of initial domains")
+            raise _error(
+                "result_domains",
+                "final domains must be canonical subsets of initial domains",
+            )
         expected_empty = tuple(i for i, domain in enumerate(self.domains) if not domain)
         if self.empty_domain_variables != expected_empty:
-            raise _error("result_empty_domains", "empty-domain metadata must match the final domains")
-        symbols = {symbol.symbol_id: i for i, symbol in enumerate(self.instance.template.signature)}
+            raise _error(
+                "result_empty_domains",
+                "empty-domain metadata must match the final domains",
+            )
+        symbols = {
+            symbol.symbol_id: i
+            for i, symbol in enumerate(self.instance.template.signature)
+        }
         false_ids = {
             constraint.constraint_id
             for constraint in self.instance.constraints
             if not constraint.scope
-            and not self.instance.template.relation_tables[symbols[constraint.symbol_id]]
+            and not self.instance.template.relation_tables[
+                symbols[constraint.symbol_id]
+            ]
         }
         if (
-            tuple(sorted(set(self.false_nullary_constraint_ids))) != self.false_nullary_constraint_ids
+            tuple(sorted(set(self.false_nullary_constraint_ids)))
+            != self.false_nullary_constraint_ids
             or set(self.false_nullary_constraint_ids) != false_ids
         ):
-            raise _error("result_nullary_metadata", "false nullary metadata must name exactly false nullary constraints")
+            raise _error(
+                "result_nullary_metadata",
+                "false nullary metadata must name exactly false nullary constraints",
+            )
         return self

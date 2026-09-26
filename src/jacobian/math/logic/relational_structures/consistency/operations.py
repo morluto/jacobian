@@ -45,8 +45,13 @@ def generalized_arc_consistency(request: CspDomainRequest) -> CspDomainConsisten
         for symbol_id, _scope in constraint_profiles
     )
     scope_entries = sum(len(scope) for _symbol_id, scope in constraint_profiles)
-    support_work_bound = candidate_bound * 4 + scope_entries * instance.template.carrier_size
-    if candidate_bound > MAX_GAC_CANDIDATE_ROWS or support_work_bound > MAX_GAC_SUPPORT_WORK:
+    support_work_bound = (
+        candidate_bound * 4 + scope_entries * instance.template.carrier_size
+    )
+    if (
+        candidate_bound > MAX_GAC_CANDIDATE_ROWS
+        or support_work_bound > MAX_GAC_SUPPORT_WORK
+    ):
         raise OperationResourceAdmissionError(
             location=("instance",),
             code="relational.csp.consistency.work_bound",
@@ -65,7 +70,7 @@ def generalized_arc_consistency(request: CspDomainRequest) -> CspDomainConsisten
     final_domains = tuple(tuple(sorted(domain)) for domain in domains)
     return CspDomainConsistency(
         instance=instance,
-        initial_domains=request.domains,
+        initial_domains=tuple(tuple(sorted(domain)) for domain in request.domains),
         domains=final_domains,
         empty_domain_variables=tuple(
             variable for variable, domain in enumerate(final_domains) if not domain
@@ -134,7 +139,9 @@ def _unique_constraint_profiles(
     false_nullary: list[str] = []
     for constraint in instance.constraints:
         if not constraint.scope:
-            if not instance.template.relation_tables[relation_index[constraint.symbol_id]]:
+            if not instance.template.relation_tables[
+                relation_index[constraint.symbol_id]
+            ]:
                 false_nullary.append(constraint.constraint_id)
             continue
         profile = (constraint.symbol_id, constraint.scope)
@@ -150,7 +157,13 @@ def _build_support_index(
     relation_index: dict[str, int],
     constraint_profiles: tuple[tuple[str, tuple[int, ...]], ...],
     false_nullary: tuple[str, ...],
-) -> tuple[Supports, ReverseSupports, list[CandidateRow], list[list[tuple[int, int]]], tuple[str, ...]]:
+) -> tuple[
+    Supports,
+    ReverseSupports,
+    list[CandidateRow],
+    list[list[tuple[int, int]]],
+    tuple[str, ...],
+]:
     supports: Supports = {}
     reverse: ReverseSupports = {}
     rows: list[CandidateRow] = []
@@ -163,7 +176,9 @@ def _build_support_index(
             incident[variable].append((ci, variable))
         for relation_row in relation:
             row_values: dict[int, int] = {}
-            if not _candidate_row_is_compatible(scope, relation_row, domains, row_values):
+            if not _candidate_row_is_compatible(
+                scope, relation_row, domains, row_values
+            ):
                 continue
             row_id = len(rows)
             pairs = tuple((variable, row_values[variable]) for variable in variables)
@@ -209,7 +224,15 @@ def _prune_unsupported_domains(
     while queue:
         request_checkpoint("during generalized arc-consistency pruning")
         _remove_unsupported_value(
-            queue.popleft(), domains, supports, reverse, rows, incident, active, queue, queued
+            queue.popleft(),
+            domains,
+            supports,
+            reverse,
+            rows,
+            incident,
+            active,
+            queue,
+            queued,
         )
 
 

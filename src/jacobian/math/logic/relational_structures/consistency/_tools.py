@@ -41,7 +41,9 @@ TOOLS: MathTools = (
                             "relation_tables": [[[0, 1]]],
                         },
                         "variable_count": 2,
-                        "constraints": [{"constraint_id": "edge", "symbol_id": "E", "scope": [0, 1]}],
+                        "constraints": [
+                            {"constraint_id": "edge", "symbol_id": "E", "scope": [0, 1]}
+                        ],
                     },
                     "domains": [[0, 1], [0, 1]],
                 },

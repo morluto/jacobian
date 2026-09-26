@@ -199,9 +199,9 @@ def _boundary_matrices(
     groups: tuple[tuple[CubicalCell, ...], ...],
     *,
     prime: int | None,
-) -> tuple[tuple[tuple[str, ...], ...], ...]:
+) -> tuple[tuple[tuple[int, ...], ...], ...]:
     """Assemble the dense cubical boundary matrices in canonical basis order."""
-    matrices: list[tuple[tuple[str, ...], ...]] = []
+    matrices: list[tuple[tuple[int, ...], ...]] = []
     for degree in range(1, len(groups)):
         source = groups[degree]
         target = groups[degree - 1]
@@ -212,10 +212,7 @@ def _boundary_matrices(
                 dense[row_for[face]][column] += coefficient
         matrices.append(
             tuple(
-                tuple(
-                    str(value % prime) if prime is not None else str(value)
-                    for value in row
-                )
+                tuple(value % prime if prime is not None else value for value in row)
                 for row in dense
             )
         )

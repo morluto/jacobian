@@ -460,10 +460,12 @@ def test_request_rejects_pairwise_convolution_before_expansion() -> None:
     )
 
     request = CrossedProductMultiplyRequest(left=left, right=right)
-    with pytest.raises(
-        OperationDomainValidationError, match=rf"{MAX_CONVOLUTION_PAIRS}-pair"
-    ):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         compute_product(request)
+
+    assert (
+        exc_info.value.errors()[0]["type"] == "crossed_product.convolution_work_bound"
+    )
 
 
 def test_request_rejects_mismatched_presentations_with_a_typed_error() -> None:

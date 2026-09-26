@@ -6,6 +6,7 @@
 - [Rational function-field divisor arithmetic](function-field-divisor-arithmetic.md)
 - [Rational function-field Riemann-Roch spaces](function-field-riemann-roch.md)
 - [Rational function-field places](function-field-rational-place-enumeration.md)
+- [Function-field place uniformizer](function-field-place-uniformizer.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

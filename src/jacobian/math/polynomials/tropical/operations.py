@@ -412,6 +412,15 @@ def tropical_scalar_dual(scalar: TropicalScalar) -> ScalarDualResult:
             message="expected a tropical scalar",
         )
     _admit_scalar(scalar, scalar.semiring)
+    if scalar.semiring.convention not in (
+        "MIN_PLUS",
+        "MAX_PLUS",
+    ) or scalar.semiring.base not in ("ZZ", "QQ"):
+        raise OperationDomainValidationError(
+            location=("scalar", "semiring"),
+            code="tropical.semiring_value",
+            message="scalar semiring has an unsupported convention or base",
+        )
     target_convention = (
         "MAX_PLUS" if scalar.semiring.convention == "MIN_PLUS" else "MIN_PLUS"
     )
@@ -1012,6 +1021,13 @@ def tropical_polynomial_substitute(
     zero = tuple(0 for _ in target_variables)
     output: dict[tuple[int, ...], Fraction] = {}
     for source_term in polynomial.terms:
+        # An empty factor annihilates the whole tropical product. Check the
+        # complete support before expanding any preceding coefficient powers.
+        if any(
+            exponent > 0 and not image.terms
+            for exponent, image in zip(source_term.exponents, images, strict=True)
+        ):
+            continue
         current = {zero: _finite_value(source_term.coefficient).as_fraction()}
         for exponent, image in zip(source_term.exponents, images, strict=True):
             if exponent == 0:

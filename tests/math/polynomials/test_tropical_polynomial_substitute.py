@@ -17,6 +17,7 @@ from jacobian.math.polynomials.tropical._tools import (
     TOOLS,
     compute_polynomial_substitute,
 )
+from jacobian.math.polynomials.tropical.operations import tropical_polynomial_substitute
 from jacobian.math.polynomials.tropical.values import (
     TropicalPolynomial,
     TropicalPolynomialTerm,
@@ -306,3 +307,13 @@ def test_substitution_is_published_with_an_executable_example() -> None:
     result = operation.run(request)
     assert result.result.variables == ("t",)
     assert tuple(term.exponents for term in result.result.terms) == ((0,), (1,))
+
+
+def test_later_zero_image_skips_preceding_coefficient_expansion() -> None:
+    source = _polynomial(("x", "y"), (((1024, 1), 0),))
+    wide_image = _polynomial(("u",), (((0,), 0), ((1,), 1), ((2,), 2), ((3,), 3)))
+    zero_image = TropicalPolynomial(
+        semiring=source.semiring, variables=("u",), terms=()
+    )
+    result = tropical_polynomial_substitute(source, ("u",), (wide_image, zero_image))
+    assert result.terms == ()

@@ -14,11 +14,13 @@ exact source sequence and its first left-to-right obstruction:
 - `INCREASING_ADJACENT_PARTS`, with the zero-based index of the right-hand
   part and the two values that violate weak decrease.
 
-The source sequence is limited to 500 exact JSON-safe integers, and the sum of
-its positive entries must be at most 500. Exceeding these supported bounds is
-an input/admission error, not a mathematical `NOT_A_PARTITION` result.
-Noninteger values are boundary-invalid. The operation checks the raw sequence
-length before constructing the typed tuple.
+The source sequence is limited to 500 exact JSON-safe integers. A sequence with
+a nonpositive part or an adjacent increase returns its first obstruction even
+when its positive entries sum to more than 500. If no obstruction exists, the
+sum must be at most 500 to construct the canonical partition and Ferrers data;
+larger valid candidates receive a resource-admission error. Noninteger values
+are boundary-invalid. The operation checks the raw sequence length before
+constructing the typed tuple.
 
 ```json
 {"parts": [4, 2, 1]}

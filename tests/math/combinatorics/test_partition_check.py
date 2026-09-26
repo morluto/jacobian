@@ -6,6 +6,7 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics._partition_models import (
     IncreasingPartsObstruction,
     NonpositivePartObstruction,
@@ -139,6 +140,11 @@ def test_raw_candidate_is_bounded_before_request_model_construction() -> None:
 
     with pytest.raises(ValidationError):
         PartitionCheckRequest(parts=(2**53,))
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        check_partition(PartitionCheckRequest(parts=(501,)))
+    assert exc_info.value.errors()[0]["type"] == (
+        "combinatorics.partition_candidate_size"
+    )
 
 
 def test_cell_output_at_the_admitted_bound_is_complete() -> None:

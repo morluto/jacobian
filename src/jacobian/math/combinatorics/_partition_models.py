@@ -27,8 +27,8 @@ class PartitionCheckRequest(StrictModel):
         min_length=0,
         max_length=MAX_PARTITION_SIZE,
         description=(
-            "A bounded sequence of exact integers; the bound applies to the "
-            f"sum of positive entries, at most {MAX_PARTITION_SIZE}."
+            "A bounded sequence of exact JSON-safe integers. The size bound "
+            f"applies when no partition obstruction is present ({MAX_PARTITION_SIZE})."
         ),
     )
 
@@ -72,6 +72,23 @@ class PartitionFound(StrictModel):
         max_length=MAX_PARTITION_SIZE,
         description="One-based Ferrers cells in row-major order.",
     )
+
+    @classmethod
+    def _from_checked(
+        cls,
+        *,
+        partition: IntegerPartition,
+        conjugate: IntegerPartition,
+        cells: tuple[tuple[int, int], ...],
+    ) -> PartitionFound:
+        """Build the result from derived data computed by the owning operation."""
+        return cls.model_construct(
+            partition=partition,
+            size=sum(partition.parts),
+            length=len(partition.parts),
+            conjugate=conjugate,
+            cells=cells,
+        )
 
     @model_validator(mode="after")
     def require_derived_data(self) -> Self:
@@ -135,7 +152,10 @@ class PartitionRejected(StrictModel):
     parts: tuple[PartitionItem, ...] = Field(
         min_length=0,
         max_length=MAX_PARTITION_SIZE,
-        description="The exact candidate sequence classified by this result.",
+        description=(
+            "The exact bounded JSON-safe candidate sequence classified by this result; "
+            "obstruction results are not subject to the partition size cap."
+        ),
     )
     obstruction: PartitionObstruction
 
@@ -145,7 +165,6 @@ class PartitionRejected(StrictModel):
             raise _combinatorics_validation_error(
                 "partition rejection source exceeds the exact JSON integer bound"
             )
-
         previous: int | None = None
         expected: PartitionObstruction | None = None
         for index, part in enumerate(self.parts):

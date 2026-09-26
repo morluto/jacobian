@@ -1,6 +1,11 @@
 """Immutable declarations for integer-partition operations."""
 
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._models import (
     IntegerResult,
@@ -8,6 +13,8 @@ from jacobian.math.combinatorics._models import (
     NonnegativePairRequest,
 )
 from jacobian.math.combinatorics._partition_models import (
+    MAX_PARTITION_SIZE,
+    MAX_PARTITION_ITEM,
     IncreasingPartsObstruction,
     IntegerPartitionEnumerationRequest,
     IntegerPartitionEnumerationResult,
@@ -53,8 +60,36 @@ def enumerate_integer_partitions(
 
 def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
     """Return the canonical partition or the first defining obstruction."""
-
-    parts = request.parts
+    if not isinstance(request, PartitionCheckRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="combinatorics.partition_request_type",
+            message="request must be a partition-check request",
+        )
+    parts = getattr(request, "parts", None)
+    if type(parts) is not tuple or len(parts) > MAX_PARTITION_SIZE:
+        raise OperationDomainValidationError(
+            location=("parts",),
+            code="combinatorics.partition_candidate_shape",
+            message="candidate must be a bounded tuple of exact integers",
+        )
+    if any(
+        type(part) is not int or abs(part) > MAX_PARTITION_ITEM
+        for part in parts
+    ):
+        raise OperationDomainValidationError(
+            location=("parts",),
+            code="combinatorics.partition_candidate_integer",
+            message="candidate parts must be exact JSON-safe integers",
+        )
+    try:
+        parts = PartitionCheckRequest.model_validate({"parts": parts}).parts
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("parts",),
+            code="combinatorics.partition_request_invalid",
+            message="request must satisfy the partition-check input contract",
+        ) from exc
     previous: int | None = None
     for index, part in enumerate(parts):
         if part <= 0:
@@ -77,6 +112,13 @@ def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
             )
         previous = part
 
+    if sum(parts) > MAX_PARTITION_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("parts",),
+            code="combinatorics.partition_candidate_size",
+            message="valid partition candidate exceeds the supported size",
+        )
+
     partition = IntegerPartition(parts=parts)
     conjugate = tuple(
         sum(part >= column for part in parts)
@@ -88,10 +130,8 @@ def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
         for column in range(1, part + 1)
     )
     return PartitionCheckResult(
-        outcome=PartitionFound(
+        outcome=PartitionFound._from_checked(
             partition=partition,
-            size=sum(parts),
-            length=len(parts),
             conjugate=IntegerPartition(parts=conjugate),
             cells=cells,
         )

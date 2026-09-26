@@ -179,24 +179,29 @@ def _admit(request: SimpleNumberFieldEmbeddingRequest) -> None:
             message=f"field-map polynomial coefficients are limited to {MAX_FIELD_MAP_INPUT_DIGITS} digits",
         )
     rationals = (
-        *request.generator_image.coefficients_ascending,
-        *request.element.coefficients_ascending,
+        ("generator_image", request.generator_image.coefficients_ascending),
+        ("element", request.element.coefficients_ascending),
     )
-    if any(
-        canonical_rational_component_digits(value) > MAX_FIELD_MAP_INPUT_DIGITS
-        for value in rationals
-    ):
-        raise OperationResourceAdmissionError(
-            location=("element",),
-            code="number_field.embedding.coordinate_bound",
-            message=f"field-map coordinates are limited to {MAX_FIELD_MAP_INPUT_DIGITS} digits",
-        )
+    for location, coordinates in rationals:
+        if any(
+            canonical_rational_component_digits(value) > MAX_FIELD_MAP_INPUT_DIGITS
+            for value in coordinates
+        ):
+            raise OperationResourceAdmissionError(
+                location=(location,),
+                code="number_field.embedding.coordinate_bound",
+                message=f"field-map coordinates are limited to {MAX_FIELD_MAP_INPUT_DIGITS} digits",
+            )
     # Horner evaluation uses at most source degree multiplications in the
     # target quotient.  This estimate bounds exact rational coordinate growth.
     input_digits = max(
         1,
         *(len(str(abs(value))) for value in values),
-        *(canonical_rational_component_digits(value) for value in rationals),
+        *(
+            canonical_rational_component_digits(value)
+            for _, coordinates in rationals
+            for value in coordinates
+        ),
     )
     growth = input_digits + request.source.degree * request.target.degree * (
         3 * input_digits + 3
@@ -236,9 +241,18 @@ def _canonical_request(
 
 
 def apply_simple_number_field_embedding(
-    request: SimpleNumberFieldEmbeddingRequest,
+    source: SimpleNumberFieldPresentation,
+    target: SimpleNumberFieldPresentation,
+    generator_image: SimpleNumberFieldElement,
+    element: SimpleNumberFieldElement,
 ) -> SimpleNumberFieldEmbeddingResult:
     """Validate a proposed exact field map and transport one source element."""
+    request = SimpleNumberFieldEmbeddingRequest.model_construct(
+        source=source,
+        target=target,
+        generator_image=generator_image,
+        element=element,
+    )
     request = _canonical_request(request)
     _admit(request)
     target = request.target

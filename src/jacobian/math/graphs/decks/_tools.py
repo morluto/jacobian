@@ -532,8 +532,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="edge_copies_from_path_deck",
                 description=(
-                    "P3 has two ordinary edge copies. Its three vertex-deleted "
-                    "cards contain four edge copies total, so divide by n-h=2."
+                    "P3 has two ordinary edge copies. Its endpoint-deleted cards "
+                    "contain one edge copy each and its middle-deleted card has "
+                    "none, so the card total 2 divided by n-h=1 gives 2."
                 ),
                 input={
                     "deck": {

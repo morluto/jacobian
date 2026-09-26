@@ -135,7 +135,12 @@ def _compute_relative_trace_norm(
 def _apply_field_embedding(
     request: SimpleNumberFieldEmbeddingRequest,
 ) -> SimpleNumberFieldEmbeddingResult:
-    return apply_simple_number_field_embedding(request)
+    return apply_simple_number_field_embedding(
+        request.source,
+        request.target,
+        request.generator_image,
+        request.element,
+    )
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

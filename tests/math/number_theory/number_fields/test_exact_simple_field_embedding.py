@@ -3,7 +3,10 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.number_fields._field_embedding import (
     SimpleNumberFieldEmbeddingRequest,
     apply_simple_number_field_embedding,
@@ -27,6 +30,15 @@ def _element(
     )
 
 
+def _apply(request: SimpleNumberFieldEmbeddingRequest):
+    return apply_simple_number_field_embedding(
+        request.source,
+        request.target,
+        request.generator_image,
+        request.element,
+    )
+
+
 def test_exact_quadratic_embedding_into_quartic_transports_element() -> None:
     source = _field(1, 0, -2)
     target = _field(1, 0, 0, 0, -2)
@@ -37,11 +49,36 @@ def test_exact_quadratic_embedding_into_quartic_transports_element() -> None:
         element=_element(source, 1, 1),
     )
 
-    result = apply_simple_number_field_embedding(request)
+    result = _apply(request)
 
     assert result.embedding.source == source
     assert result.embedding.target == target
     assert result.image == _element(target, 1, 0, 1, 0)
+
+
+def test_native_embedding_api_accepts_mathematical_arguments_directly() -> None:
+    source = _field(1, 0, -2)
+    target = _field(1, 0, 0, 0, -2)
+    result = apply_simple_number_field_embedding(
+        source,
+        target,
+        _element(target, 0, 0, 1, 0),
+        _element(source, 1, 1),
+    )
+
+    assert result.image == _element(target, 1, 0, 1, 0)
+
+
+def test_generator_image_coordinate_limit_reports_its_own_field() -> None:
+    source = _field(1, 0, -2)
+    target = _field(1, 0, 0, 0, -2)
+    oversized_image = _element(target, 0, 0, 10**32, 0)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        apply_simple_number_field_embedding(
+            source, target, oversized_image, _element(source, 1, 0)
+        )
+
+    assert error.value.errors()[0]["loc"] == ("generator_image",)
 
 
 def test_rejects_image_that_does_not_satisfy_source_relation() -> None:
@@ -55,7 +92,7 @@ def test_rejects_image_that_does_not_satisfy_source_relation() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError, match="exact root"):
-        apply_simple_number_field_embedding(request)
+        _apply(request)
 
 
 def test_rejects_reducible_source_before_map_evaluation() -> None:
@@ -69,7 +106,7 @@ def test_rejects_reducible_source_before_map_evaluation() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError, match="must define a field"):
-        apply_simple_number_field_embedding(request)
+        _apply(request)
 
 
 def test_models_bind_source_target_and_element_parents() -> None:
@@ -91,7 +128,7 @@ def test_transport_preserves_rational_coordinates() -> None:
         presentation=source,
         coefficients_ascending=[{"num": 0, "den": 1}, {"num": 1, "den": 2}],
     )
-    result = apply_simple_number_field_embedding(
+    result = _apply(
         SimpleNumberFieldEmbeddingRequest(
             source=source,
             target=target,
@@ -114,7 +151,7 @@ def test_model_constructed_generator_image_degree_mismatch_is_rejected() -> None
     )
 
     with pytest.raises(OperationDomainValidationError, match="canonical validated"):
-        apply_simple_number_field_embedding(request)
+        _apply(request)
 
 
 def test_model_constructed_element_wrong_parent_is_rejected() -> None:
@@ -128,13 +165,13 @@ def test_model_constructed_element_wrong_parent_is_rejected() -> None:
     )
 
     with pytest.raises(OperationDomainValidationError, match="canonical validated"):
-        apply_simple_number_field_embedding(request)
+        _apply(request)
 
 
 def test_identity_embedding_at_advertised_maximum_degree_is_admitted() -> None:
     sextic = _field(1, 0, 0, 0, 0, 0, -2)
     element = _element(sextic, 1, 1, 0, 0, 0, 0)
-    result = apply_simple_number_field_embedding(
+    result = _apply(
         SimpleNumberFieldEmbeddingRequest(
             source=sextic,
             target=sextic,
@@ -149,7 +186,7 @@ def test_identity_embedding_at_advertised_maximum_degree_is_admitted() -> None:
 def test_degree_eight_identity_is_rejected_by_degree_admission() -> None:
     octic = _field(1, 0, 0, 0, 0, 0, 0, 0, 2)
     with pytest.raises(OperationDomainValidationError, match="degrees at most 6"):
-        apply_simple_number_field_embedding(
+        _apply(
             SimpleNumberFieldEmbeddingRequest(
                 source=octic,
                 target=octic,
@@ -167,7 +204,7 @@ def test_transport_preserves_products_against_independent_polynomial_remainder()
     source = _field(1, 0, -2)
     target = _field(1, 0, 0, 0, -2)
     generator_image = _element(target, 0, 0, 1, 0)
-    mapped_alpha = apply_simple_number_field_embedding(
+    mapped_alpha = _apply(
         SimpleNumberFieldEmbeddingRequest(
             source=source,
             target=target,
@@ -175,7 +212,7 @@ def test_transport_preserves_products_against_independent_polynomial_remainder()
             element=_element(source, 0, 1),
         )
     ).image
-    mapped_one_plus_alpha = apply_simple_number_field_embedding(
+    mapped_one_plus_alpha = _apply(
         SimpleNumberFieldEmbeddingRequest(
             source=source,
             target=target,
@@ -183,7 +220,7 @@ def test_transport_preserves_products_against_independent_polynomial_remainder()
             element=_element(source, 1, 1),
         )
     ).image
-    mapped_product = apply_simple_number_field_embedding(
+    mapped_product = _apply(
         SimpleNumberFieldEmbeddingRequest(
             source=source,
             target=target,

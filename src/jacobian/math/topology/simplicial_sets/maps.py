@@ -6,8 +6,7 @@ from fractions import Fraction
 
 from pydantic import Field, StrictInt, model_validator
 
-from jacobian._exact import ExactInteger
-from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
+from jacobian._exact import ExactInteger, MAX_CANONICAL_INTEGER_DIGITS, format_canonical_integer
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -511,7 +510,18 @@ def induced_normalized_chain_map(
     image if that image is nondegenerate, and to zero otherwise. Basis labels
     retain the exact simplex axes at each endpoint.
     """
-    source, target = map_value.source, map_value.target
+    source = _require_carrier(map_value.source, location="source")
+    target = _require_carrier(map_value.target, location="target")
+    try:
+        map_value = TruncatedSimplicialMap.model_validate(
+            {"source": source, "target": target, "maps": map_value.maps}
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("map",),
+            code="simplicial_map.degreewise_axes_invalid",
+            message="map rows must match the canonical source and target axes",
+        ) from exc
     source_sizes = tuple(map(len, source.sets))
     target_sizes = tuple(map(len, target.sets))
     source_nondegenerate = tuple(
@@ -675,9 +685,12 @@ def _coordinates_in_target_homology(
     inverse_right: tuple[tuple[int, ...], ...],
 ) -> IntegralHomologyCoordinates:
     inverse_digits = max(
-        (len(str(abs(value))) for row in inverse_right for value in row), default=1
+        (len(format_canonical_integer(abs(value))) for row in inverse_right for value in row),
+        default=1,
     )
-    cycle_digits = max((len(str(abs(value))) for value in cycle), default=1)
+    cycle_digits = max(
+        (len(format_canonical_integer(abs(value))) for value in cycle), default=1
+    )
     rank = len(cycle)
     growth_bound = inverse_digits + cycle_digits + len(str(max(1, rank)))
     if growth_bound > MAX_CANONICAL_INTEGER_DIGITS:
@@ -696,6 +709,26 @@ def _coordinates_in_target_homology(
         )
     cycle_coordinates = chain_coordinates[rank:]
     incoming = group.incoming_smith_certificate
+    left_digits = max(
+        (
+            len(format_canonical_integer(abs(value)))
+            for row in incoming.left_transformation.entries
+            for value in row
+        ),
+        default=1,
+    )
+    coordinate_digits = max(
+        (len(format_canonical_integer(abs(value))) for value in cycle_coordinates),
+        default=1,
+    )
+    smith_rank = len(cycle_coordinates)
+    smith_growth_bound = left_digits + coordinate_digits + len(str(max(1, smith_rank)))
+    if smith_growth_bound > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_smith_coordinate_growth_exceeded",
+            message="Smith coordinate multiplication exceeds its admitted integer height",
+        )
     smith_coordinates = _mat_vec(
         incoming.left_transformation.entries, cycle_coordinates
     )

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from math import comb
+from pydantic import ValidationError
 
 from jacobian._execution import request_checkpoint
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.algebraic.operations import (
     standard_young_tableaux_count,
 )
@@ -119,6 +123,15 @@ def fixed_content_count(
         partition = partition.partition
     elif content is None:
         raise TypeError("content is required when passing a partition")
+    try:
+        partition = IntegerPartition.model_validate(partition.model_dump())
+        content = TableauContent.model_validate(content.model_dump())
+    except (AttributeError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code="semistandard_tableaux.fixed_content_input_invalid",
+            message="partition and content must be canonical bounded values",
+        ) from exc
     if _result_byte_upper_bound(partition, content) > MAX_KOSTKA_RESULT_BYTES:
         raise OperationResourceAdmissionError(
             location=("content",),
@@ -135,6 +148,16 @@ def fixed_content_count(
     if len(partition.parts) == 1:
         # A weakly increasing row has exactly one filling for every fixed
         # multiset: its labels in increasing order.
+        return FixedContentCountResult(partition=partition, content=content, count=1)
+    if (
+        len(partition.parts) > 1
+        and len(set(partition.parts)) == 1
+        and len(content.terms) == len(partition.parts)
+        and tuple(term.multiplicity for term in content.terms)
+        == (partition.parts[0],) * len(partition.parts)
+    ):
+        # In a rectangle, each column uses all labels once. With exactly one
+        # row-width of each of exactly height labels, every row is forced.
         return FixedContentCountResult(partition=partition, content=content, count=1)
     if len(content.terms) < len(partition.parts):
         # A strict column of this height needs at least this many distinct

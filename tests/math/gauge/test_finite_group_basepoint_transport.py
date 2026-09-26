@@ -177,9 +177,33 @@ def test_forged_nested_field_shapes_are_structured_errors() -> None:
         assert error.value.errors()[0]["type"] == ("lattice_gauge.finite_group.lattice")
 
 
+def test_forged_request_missing_fields_is_structured_error() -> None:
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_group_gauge_basepoint_transport(
+            FiniteGroupGaugeBasepointTransportRequest.model_construct()
+        )
+    assert error.value.errors()[0]["type"] == (
+        "lattice_gauge.finite_group.basepoint_request_shape"
+    )
+
+
+def test_oversized_forged_path_is_rejected_before_step_validation() -> None:
+    field, _ = _nonabelian_field()
+    loop = OrientedGaugePath.model_construct(steps=(object(),) * 257, basepoint="a")
+    connector = OrientedGaugePath(steps=(), basepoint="a")
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_group_gauge_basepoint_transport(
+            FiniteGroupGaugeBasepointTransportRequest.model_construct(
+                field=field, loop=loop, connector=connector
+            )
+        )
+    assert error.value.errors()[0]["type"] == (
+        "lattice_gauge.finite_group.basepoint_input_path_bound"
+    )
+
+
 def test_forged_nested_path_shapes_are_structured_errors() -> None:
     field, _ = _nonabelian_field()
-    valid = _loop()
     connector = OrientedGaugePath(steps=(), basepoint="a")
     forged_paths = (
         OrientedGaugePath.model_construct(),

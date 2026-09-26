@@ -338,7 +338,7 @@ def finite_group_gauge_holonomy(
     )
 
 
-def finite_group_gauge_basepoint_transport(
+def finite_group_gauge_basepoint_transport(  # noqa: C901
     request: FiniteGroupGaugeBasepointTransportRequest,
 ) -> FiniteGroupGaugeBasepointTransportResult:
     r"""Transport a based loop by conjugating with a connector holonomy.
@@ -352,6 +352,12 @@ def finite_group_gauge_basepoint_transport(
             "request",
             "lattice_gauge.finite_group.basepoint_request_type",
             "expected a finite-group basepoint transport request",
+        )
+    if not all(name in request.__dict__ for name in ("field", "loop", "connector")):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.basepoint_request_shape",
+            "request is missing required fields",
         )
     field, loop, connector = request.field, request.loop, request.connector
     if (
@@ -391,9 +397,6 @@ def finite_group_gauge_basepoint_transport(
         or "basepoint" not in connector.__dict__
         or not isinstance(loop.steps, tuple)
         or not isinstance(connector.steps, tuple)
-        or not all(isinstance(step, GaugePathStep) for step in (*loop.steps, *connector.steps))
-        or any(not isinstance(step.edge_id, str) or not isinstance(step.forward, bool)
-               for step in (*loop.steps, *connector.steps))
         or not isinstance(loop.basepoint, (str, type(None)))
         or not isinstance(connector.basepoint, (str, type(None)))
     ):
@@ -402,14 +405,23 @@ def finite_group_gauge_basepoint_transport(
             "lattice_gauge.finite_group.basepoint_request_shape",
             "loop and connector paths are malformed",
         )
-    if (
-        len(loop.steps) > 256
-        or len(connector.steps) > 256
-    ):
+    if len(loop.steps) > 256 or len(connector.steps) > 256:
         raise OperationResourceAdmissionError(
             location=("loop", "connector"),
             code="lattice_gauge.finite_group.basepoint_input_path_bound",
             message="source paths exceed the 256-step path bound",
+        )
+    if any(
+        not isinstance(step, GaugePathStep)
+        or not isinstance(step.edge_id, str)
+        or not isinstance(step.forward, bool)
+        for steps in (loop.steps, connector.steps)
+        for step in steps
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.basepoint_request_shape",
+            "loop and connector paths are malformed",
         )
     transported_length = 2 * len(connector.steps) + len(loop.steps)
     if transported_length > 256:

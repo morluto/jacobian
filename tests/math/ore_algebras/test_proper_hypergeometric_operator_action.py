@@ -172,9 +172,14 @@ def test_zero_operator_and_zero_term_have_canonical_zero_multiplier():
     assert result.relative_multiplier.numerator.terms == ()
 
 
-def test_large_expansion_is_rejected_before_rational_normalization():
+def test_degree_nine_expansion_is_accepted_and_larger_expansion_is_rejected():
+    result = proper_hypergeometric_operator_action(_operator(9), _binomial_term())
+    assert _rf_value(result.relative_multiplier, 20, 4) * _direct_binomial(
+        20, 4
+    ) == _direct_binomial(29, 4)
+
     with pytest.raises(OperationResourceAdmissionError, match="256-term"):
-        proper_hypergeometric_operator_action(_operator(9), _binomial_term())
+        proper_hypergeometric_operator_action(_operator(22), _binomial_term())
 
 
 def test_n_action_does_not_require_admission_of_the_k_quotient():

@@ -223,14 +223,6 @@ def _apply(
     return run_action_worker(operator, term)
 
 
-def _preflight_worker_payload(
-    operator: ShiftOreOperator, term: ProperHypergeometricTerm
-) -> None:
-    """Reject mathematical work before encoding the bounded worker request."""
-    quotient = proper_hypergeometric_n_shift_quotient(term)
-    _admit_action(operator, quotient)
-
-
 def proper_hypergeometric_operator_action(
     operator: ShiftOreOperator,
     term: ProperHypergeometricTerm,
@@ -247,7 +239,6 @@ def proper_hypergeometric_operator_action(
 
         relative_multiplier = _zero_rational_function()
     else:
-        _preflight_worker_payload(operator, term)
         relative_multiplier = _apply(operator, term)
     return ProperHypergeometricOperatorActionResult(
         operator=operator,

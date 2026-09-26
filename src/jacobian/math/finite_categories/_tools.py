@@ -5,9 +5,12 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.finite_categories import operations as native
 from jacobian.math.finite_categories._models import (
+    CategoryNerveRequest,
     CategoryProductRequest,
     CategoryProfileResult,
+    FiniteCategoryNerve,
 )
+from jacobian.math.finite_categories.nerve import nerve_prefix
 from jacobian.math.finite_categories.values import FiniteCategory, FiniteCategoryProduct
 
 
@@ -47,6 +50,11 @@ _TERMINAL_CATEGORY = {
     "identities": [["T", "id_T"]],
     "composition": [["id_T", "id_T", "id_T"]],
 }
+
+
+def compute_category_nerve(request: CategoryNerveRequest) -> FiniteCategoryNerve:
+    return nerve_prefix(request.category, request.max_degree)
+
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
@@ -120,6 +128,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "left": _CATEGORY,
                     "right": _TERMINAL_CATEGORY,
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="category.finite.nerve_prefix.compute",
+        title="Construct the bounded nerve prefix of a finite category",
+        description=(
+            "Construct N_k(C) as composable k-tuples through the requested degree, "
+            "with exact face and degeneracy maps in a FiniteTruncatedSimplicialSet. "
+            "Retain the source category and each simplex's morphism and vertex "
+            "transport. Degree counts, map rows, total simplices, and identity "
+            "replay work are preflight bounded."
+        ),
+        request_type=CategoryNerveRequest,
+        result_type=FiniteCategoryNerve,
+        run=compute_category_nerve,
+        tags=("algebra", "category", "nerve", "simplicial-set", "exact"),
+        discovery_terms=("finite category nerve", "composable morphism tuples"),
+        examples=(
+            OperationExample(
+                name="interval_category_nerve",
+                description=(
+                    "Construct the degree-0..2 nerve of A -> B. Its nondegenerate "
+                    "1-simplex is f, and all simplicial identities are checked."
+                ),
+                input={"category": _CATEGORY, "max_degree": 2},
             ),
         ),
     ),

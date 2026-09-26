@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.finite_categories.values import (
@@ -14,6 +14,7 @@ from jacobian.math.finite_categories.values import (
     FiniteCategory,
     MorphismSpec,
 )
+from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 
 
 class CategoryProfileResult(StrictModel):
@@ -64,8 +65,75 @@ class CategoryProductRequest(StrictModel):
     right: FiniteCategory
 
 
+class CategoryNerveRequest(StrictModel):
+    """A finite category and requested degree of its nerve prefix."""
+
+    category: FiniteCategory
+    max_degree: int = Field(ge=0, le=4)
+
+
+class FiniteCategoryNerve(StrictModel):
+    """A nerve prefix with its exact source category and simplex transport.
+
+    ``simplex_morphisms[n][j]`` records the composable morphism tuple for the
+    simplex labelled ``simplicial_set.sets[n][j]``.  In degree zero this is
+    the empty tuple; ``simplex_objects`` records its vertex.
+    """
+
+    category: FiniteCategory
+    simplicial_set: FiniteTruncatedSimplicialSet
+    simplex_morphisms: tuple[tuple[tuple[CategoryIdentifier, ...], ...], ...]
+    simplex_objects: tuple[tuple[tuple[CategoryIdentifier, ...], ...], ...]
+
+    @model_validator(mode="after")
+    def require_aligned_simplex_transport(self) -> Self:
+        if not (
+            len(self.simplex_morphisms)
+            == len(self.simplex_objects)
+            == self.simplicial_set.max_degree + 1
+        ):
+            raise ValueError("nerve transport must cover every simplicial degree")
+        for degree, (morphism_level, object_level, labels) in enumerate(
+            zip(
+                self.simplex_morphisms,
+                self.simplex_objects,
+                self.simplicial_set.sets,
+                strict=True,
+            )
+        ):
+            if not (len(morphism_level) == len(object_level) == len(labels)):
+                raise ValueError(
+                    "nerve transport must align with canonical simplex labels"
+                )
+            if any(
+                len(morphisms) != degree or len(objects) != degree + 1
+                for morphisms, objects in zip(morphism_level, object_level, strict=True)
+            ):
+                raise ValueError(
+                    "nerve simplex transport has the wrong simplex dimension"
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        category: FiniteCategory,
+        simplicial_set: FiniteTruncatedSimplicialSet,
+        simplex_morphisms: tuple[tuple[tuple[CategoryIdentifier, ...], ...], ...],
+        simplex_objects: tuple[tuple[tuple[CategoryIdentifier, ...], ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            category=category,
+            simplicial_set=simplicial_set,
+            simplex_morphisms=simplex_morphisms,
+            simplex_objects=simplex_objects,
+        )
+
+
 __all__ = [
+    "CategoryNerveRequest",
     "CategoryProductRequest",
     "CategoryProfileResult",
+    "FiniteCategoryNerve",
     "MorphismSpec",
 ]

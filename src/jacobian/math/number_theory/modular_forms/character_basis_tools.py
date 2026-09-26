@@ -25,7 +25,7 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 
 def _compute(request: ModularCharacterBasisRequest) -> ModularCharacterBasis:
-    return modular_character_basis_q_expansions(request.space)
+    return modular_character_basis_q_expansions(request.space, request.precision)
 
 
 def _coordinates_q_expansion(
@@ -178,10 +178,14 @@ TOOLS: MathTools = (
         operation_id="modular_form.character_basis.compute",
         title="Construct an exact character-valued modular-form basis",
         description=(
-            "Return the exact q-Sturm RREF basis over Q(zeta_6) for weight-two "
+            "Return the exact q-Sturm RREF basis over Q(zeta_6) with coefficients "
+            "through the requested precision (or the smallest Sturm-determining "
+            "precision when omitted) for weight-two "
             "M or S spaces with an even character of conductor 13 and order "
             "dividing six at "
-            "levels 13, 26, or 39. Dimensions are established by the bounded "
+            "levels 13, 26, or 39. Requested precision must be at least the "
+            "space's Sturm precision and at most 128; the RREF normalization "
+            "always uses the complete Sturm prefix. Dimensions are established by the bounded "
             "Cohen-Oesterle formula and checked against PARI; the result retains "
             "the exact character and coefficient-field parents."
         ),
@@ -252,10 +256,10 @@ TOOLS: MathTools = (
             OperationExample(
                 name="level13_order3_character_basis",
                 description=(
-                    "Construct the exact q-Sturm basis for an even order-3 "
+                    "Construct an extended q-prefix for an even order-3 "
                     "character using the same explicit Q(zeta_6) parent."
                 ),
-                input={"space": _character_form_example(4)["space"]},
+                input={"space": _character_form_example(4)["space"], "precision": 5},
             ),
         ),
     ),

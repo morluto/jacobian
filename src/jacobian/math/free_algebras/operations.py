@@ -440,7 +440,14 @@ def _preflight_substitution_expansion(
                 output_length += image_word_lengths[letter]
                 contribution_digits += max(
                     (
-                        canonical_rational_component_digits(image_term.coefficient)
+                        (
+                            0
+                            if abs(image_term.coefficient.num) == 1
+                            and image_term.coefficient.den == 1
+                            else canonical_rational_component_digits(
+                                image_term.coefficient
+                            )
+                        )
                         for image_term in image_terms[letter]
                     ),
                     default=0,

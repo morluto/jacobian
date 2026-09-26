@@ -23,6 +23,11 @@ from jacobian.math.function_fields._models import (
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
+from jacobian.math.function_fields.hyperelliptic_affine_places import (
+    HyperellipticAffinePlacesRequest,
+    HyperellipticAffinePlacesResult,
+    enumerate_hyperelliptic_affine_places,
+)
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
     function_field_base_embedding_apply,
@@ -59,10 +64,13 @@ __all__ = [
     "FunctionFieldValuation",
     "HyperellipticAffinePlace",
     "HyperellipticAffinePlaceValuationResult",
+    "HyperellipticAffinePlacesRequest",
+    "HyperellipticAffinePlacesResult",
     "HyperellipticInfinityPlace",
     "HyperellipticInfinityPlaceValuationResult",
     "PrimeFieldPolynomial",
     "PrimeFieldRationalFunction",
+    "enumerate_hyperelliptic_affine_places",
     "function_field_base_embedding",
     "function_field_base_embedding_apply",
     "function_field_divisor_add",

@@ -3,6 +3,7 @@
 - [Rational function-field genus](function-field-genus.md)
 - [Odd-degree hyperelliptic valuation at infinity](function-field-hyperelliptic-infinity-valuation.md)
 - [Rational affine hyperelliptic valuations](hyperelliptic-affine-valuations.md)
+- [Rational affine hyperelliptic place enumeration](hyperelliptic-affine-place-enumeration.md)
 - [Finite-field elliptic extension counts](elliptic-curve-extension-counts.md)
 - [Finite-field elliptic model isomorphism](elliptic-curve-isomorphism.md)
 - [Finite-field elliptic isogeny classes](elliptic-curve-isogeny-class.md)

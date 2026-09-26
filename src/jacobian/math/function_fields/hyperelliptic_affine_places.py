@@ -1,0 +1,162 @@
+"""Exact enumeration of rational affine places on admitted hyperelliptic models."""
+
+from __future__ import annotations
+
+from pydantic import Field, model_validator
+
+from jacobian._models import StrictModel
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.finite_fields.values import FiniteFieldPresentation
+from jacobian.math.function_fields._models import (
+    FiniteFunctionField,
+    HyperellipticAffinePlace,
+)
+from jacobian.math.function_fields.operations import (
+    _admit_field_resources,
+    _canonical_field,
+    _hyperelliptic_branch_polynomial,
+    _validated_field,
+)
+
+MAX_AFFINE_PLACE_ENUMERATION_WORK = 5_000_000
+MAX_AFFINE_PLACE_ENUMERATION_OUTPUT = 514
+_PLACE_RESULT_FIXED_WORK = 64
+_FIELD_COEFFICIENT_VALIDATION_WORK = 4
+# Conservative Euclidean polynomial-gcd bound for admitted coefficient degree.
+_BRANCH_RECOGNITION_WORK_PER_DEGREE_CUBE = 8
+
+
+class HyperellipticAffinePlacesRequest(StrictModel):
+    """A supported odd-characteristic squarefree model ``y^2=f(x)``."""
+
+    field: FiniteFunctionField
+
+
+class HyperellipticAffinePlacesResult(StrictModel):
+    """All GF(p)-rational affine places, ordered by ``(x,y)``."""
+
+    field: FiniteFunctionField
+    places: tuple[HyperellipticAffinePlace, ...] = Field(
+        max_length=MAX_AFFINE_PLACE_ENUMERATION_OUTPUT
+    )
+
+    @model_validator(mode="after")
+    def require_parent_and_canonical_order(self) -> HyperellipticAffinePlacesResult:
+        previous: tuple[int, int] | None = None
+        for place in self.places:
+            if place.field != self.field:
+                raise ValueError(
+                    "every affine place must retain the result function field"
+                )
+            coordinate = (place.x, place.y)
+            if previous is not None and coordinate <= previous:
+                raise ValueError("affine places must be unique and ordered by (x,y)")
+            previous = coordinate
+        return self
+
+
+def enumerate_hyperelliptic_affine_places(
+    field: FiniteFunctionField,
+) -> HyperellipticAffinePlacesResult:
+    """Enumerate exactly the rational affine points of an admitted ``y^2=f(x)``.
+
+    This is an affine rational-point enumeration, not a complete enumeration of
+    places of the global function field. Points at infinity and places with a
+    non-prime residue field require other carriers.
+    """
+
+    field = _validated_field(field)
+    # Characteristic admission must precede rational-function normalization:
+    # composite moduli do not have field inverses and can make Euclid loop.
+    _admit_field_resources(field)
+    if field.characteristic == 2:
+        raise OperationDomainValidationError(
+            location=("field", "characteristic"),
+            code="function_field.affine_enumeration_characteristic",
+            message="affine y^2=f(x) enumeration requires odd characteristic",
+        )
+    # Squarefree y^2-f(x) itself proves irreducibility, so generic
+    # rational-function factorization is redundant and outside this operation's
+    # admission envelope.
+    field = _canonical_field(field)
+    branch_degree_bound = max(
+        (
+            max(coefficient.numerator.degree, coefficient.denominator.degree)
+            for coefficient in field.defining_polynomial
+        ),
+        default=0,
+    )
+    branch_recognition_work = (
+        _BRANCH_RECOGNITION_WORK_PER_DEGREE_CUBE
+        * (branch_degree_bound + 1) ** 3
+        * field.characteristic.bit_length()
+    )
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="function_field.affine_enumeration_model",
+            message="field must be an odd-characteristic squarefree y^2=f(x) model",
+        )
+
+    prime = field.characteristic
+    # Admission counts the square table and Horner scan, then bounds up to two
+    # result records per x and validation of their retained field coefficients.
+    output_count_bound = 2 * prime
+    field_coefficient_count = sum(
+        len(polynomial.coefficients)
+        for coefficient in field.defining_polynomial
+        for polynomial in (coefficient.numerator, coefficient.denominator)
+    )
+    work = (
+        branch_recognition_work
+        + prime * (len(branch) + 1)
+        + output_count_bound
+        * (
+            _PLACE_RESULT_FIXED_WORK
+            + _FIELD_COEFFICIENT_VALIDATION_WORK * field_coefficient_count
+        )
+    )
+    if work > MAX_AFFINE_PLACE_ENUMERATION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="function_field.affine_enumeration_work_exceeds_envelope",
+            message=(
+                "affine place scan, result construction, validation, and output "
+                "work exceed the admitted bound"
+            ),
+        )
+    roots: dict[int, list[int]] = {}
+    for y in range(prime):
+        roots.setdefault(y * y % prime, []).append(y)
+
+    residue = FiniteFieldPresentation(
+        characteristic=prime,
+        modulus_coefficients=(0, 1),
+        generator="a",
+    )
+    places: list[HyperellipticAffinePlace] = []
+    for x in range(prime):
+        value = 0
+        for coefficient in reversed(branch):
+            value = (value * x + coefficient) % prime
+        for y in roots.get(value, ()):
+            places.append(
+                HyperellipticAffinePlace(
+                    field=field,
+                    x=x,
+                    y=y,
+                    local_parameter="y" if y == 0 else "x_minus_x0",
+                    residue_field=residue,
+                )
+            )
+    # Each x has at most two square roots in an odd prime field, so this bound
+    # follows from the admitted characteristic, before the output is built.
+    return HyperellipticAffinePlacesResult(field=field, places=tuple(places))
+
+
+def _run(request: HyperellipticAffinePlacesRequest) -> HyperellipticAffinePlacesResult:
+    return enumerate_hyperelliptic_affine_places(request.field)

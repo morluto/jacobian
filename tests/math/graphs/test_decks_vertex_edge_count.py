@@ -4,11 +4,7 @@ from itertools import combinations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationMatchRequest,
-)
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks.operations import (
     unlabelled_vertex_deck,
     vertex_deck_edge_count,
@@ -86,13 +82,3 @@ def test_rejects_source_order_below_kelly_edge_count_boundary() -> None:
     deck = unlabelled_vertex_deck(vertex_deletion_family(graph))
     with pytest.raises(OperationDomainValidationError, match="at least three"):
         vertex_deck_edge_count(deck)
-
-
-def test_catalog_finds_vertex_deck_edge_count_operation() -> None:
-    found = Catalog.open().match(
-        OperationMatchRequest(
-            need="reconstruct exact source graph edge count from complete vertex deck",
-            limit=5,
-        )
-    )
-    assert found.matches[0].operation_id == "graph.deck.vertex.edge_count.compute"

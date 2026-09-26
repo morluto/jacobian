@@ -272,7 +272,7 @@ def _admit_product(
     coefficient_digit_bounds = tuple(
         denominator_digits
         + max(0, numerator_minus_denominator)
-        + len(str(contribution_count))
+        + (len(str(contribution_count - 1)) if contribution_count > 1 else 0)
         for denominator_digits, numerator_minus_denominator, contribution_count, _ in support_bounds.values()
     )
     if max(coefficient_digit_bounds, default=1) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
@@ -287,6 +287,13 @@ def _admit_product(
         for (_, _, _, word_width), coefficient_digits in zip(
             support_bounds.values(), coefficient_digit_bounds, strict=True
         )
+    )
+    output_cell_bound += sum(
+        128
+        + len(term.word)
+        + 2 * (canonical_rational_component_digits(term.coefficient) + 1)
+        for polynomial in (left, right)
+        for term in polynomial.terms
     )
     if output_cell_bound > MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS:
         _reject_resource(

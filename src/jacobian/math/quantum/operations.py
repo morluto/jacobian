@@ -43,8 +43,9 @@ from jacobian.math.quantum._models import (
     StabilizerCodeRequest,
     StabilizerCodeValue,
     StabilizerDistanceResult,
+    StabilizerErasureCorrectabilityRequest,
+    StabilizerErasureCorrectabilityResult,
     StabilizerErrorCoset,
-    StabilizerErrorCosetRequest,
     StabilizerErrorEquivalenceResult,
     StabilizerMeasurementBranch,
     StabilizerStatePauliMeasurementRequest,
@@ -1887,12 +1888,207 @@ def stabilizer_exact_distance(value: CheckSpaceValue) -> StabilizerDistanceResul
     )
 
 
+def _erasure_result_bytes_upper_bound(
+    qubit_ids: tuple[str, ...], row_count: int, erasure_size: int
+) -> int:
+    """Conservatively bound serialized source and optional Pauli witness bytes."""
+    register_bytes = 64 + sum(6 * len(qubit_id) + 3 for qubit_id in qubit_ids)
+    row_bytes = register_bytes + 64 + 6 * len(qubit_ids)
+    source_bytes = (
+        256
+        + register_bytes
+        + sum(6 * len(qubit_id) + 3 for qubit_id in qubit_ids)
+        + row_count * (row_bytes + 1)
+    )
+    # The result may add one witness, its register, and fixed JSON/model keys.
+    return source_bytes + register_bytes + 6 * len(qubit_ids) + 1024
+
+
+def _supported_stabilizer_dimension(
+    canonical_rows: list[list[int]], n: int, positions: tuple[int, ...]
+) -> int:
+    """Dimension of S intersected with Paulis supported in the given positions."""
+    erased_positions = set(positions)
+    outside = tuple(index for index in range(n) if index not in erased_positions)
+    projected = [
+        [row[index] for index in outside] + [row[n + index] for index in outside]
+        for row in canonical_rows
+    ]
+    projected_basis, _ = _gf2_rref(projected, 2 * len(outside))
+    return len(canonical_rows) - len(projected_basis)
+
+
+def _find_supported_logical_witness(
+    local_basis: tuple[tuple[int, ...], ...],
+    positions: tuple[int, ...],
+    n: int,
+    register: QubitRegister,
+    canonical_rows: list[list[int]],
+    pivots: list[int],
+) -> PhaseFreeQubitPauli | None:
+    """Return a supported normalizer vector outside S, when one exists."""
+    erased_count = len(positions)
+    for local in local_basis:
+        full = [0] * (2 * n)
+        for offset, index in enumerate(positions):
+            full[index] = local[offset]
+            full[n + index] = local[erased_count + offset]
+        residual = full[:]
+        for basis_row, pivot in zip(canonical_rows, pivots, strict=True):
+            if residual[pivot]:
+                residual = [a ^ b for a, b in zip(residual, basis_row, strict=True)]
+        if any(residual):
+            return PhaseFreeQubitPauli(
+                register=register,
+                x_bits=tuple(full[:n]),
+                z_bits=tuple(full[n:]),
+            )
+    return None
+
+
+def stabilizer_erasure_correctability(
+    request: StabilizerErasureCorrectabilityRequest,
+) -> StabilizerErasureCorrectabilityResult:
+    """Decide whether an erasure set supports a nontrivial logical Pauli.
+
+    For E, compute the kernel of the check commutation equations restricted to
+    X/Z coordinates on E. Erasure is correctable exactly when this supported
+    normalizer is contained in the stabilizer row space.
+    """
+    if not isinstance(request, StabilizerErasureCorrectabilityRequest):
+        _reject(
+            "request",
+            "quantum.stabilizer.erasure.invalid_request",
+            "erasure correctability requires a typed request",
+        )
+    check_space = getattr(request, "check_space", None)
+    erased = getattr(request, "erased_qubit_ids", None)
+    if not isinstance(check_space, CheckSpaceValue):
+        _reject(
+            "check_space",
+            "quantum.stabilizer.not_a_check_space",
+            "erasure correctability requires a typed check space",
+        )
+    supplied_register = getattr(check_space, "qubit_register", None)
+    supplied_basis = getattr(check_space, "basis", None)
+    if supplied_register is None or supplied_basis is None:
+        _reject(
+            "check_space",
+            "quantum.stabilizer.invalid_basis",
+            "check-space register and basis are required",
+        )
+    register = _admit_register(supplied_register, "check_space")
+    n = len(register.qubit_ids)
+    if not isinstance(supplied_basis, tuple) or len(supplied_basis) > MAX_CHECK_ROWS:
+        _reject(
+            "check_space",
+            "quantum.stabilizer.invalid_basis",
+            "check-space basis is malformed",
+        )
+    rows: list[list[int]] = []
+    for row in supplied_basis:
+        _admit_phase_free(row, "check_space")
+        if row.qubit_register != register:
+            _reject(
+                "check_space",
+                "quantum.stabilizer.parent_mismatch",
+                "all check rows must use the declared register",
+            )
+        rows.append([*row.x_bits, *row.z_bits])
+    m = len(rows)
+    if (
+        not isinstance(erased, tuple)
+        or len(erased) > n
+        or any(type(qid) is not str for qid in erased)
+        or len(set(erased)) != len(erased)
+        or any(qid not in register.qubit_ids for qid in erased)
+    ):
+        _reject(
+            "erased_qubit_ids",
+            "quantum.stabilizer.erasure.invalid_subset",
+            "erased qubit IDs must be a unique subset of the check-space register",
+        )
+    erased_set = set(erased)
+    positions = tuple(
+        index
+        for index, qubit_id in enumerate(register.qubit_ids)
+        if qubit_id in erased_set
+    )
+    e = len(positions)
+
+    # Bound validation, both RREFs, the restricted kernel and all row-space
+    # membership checks, plus the duplicated typed source and largest witness.
+    admitted_work = (
+        n * m * m
+        + 4 * m * (2 * n) ** 2
+        + 2 * m * (2 * e) ** 2
+        + (2 * e) ** 2
+        + (2 * e) * m * (2 * n)
+    )
+    output_bytes = _erasure_result_bytes_upper_bound(register.qubit_ids, m, e)
+    if admitted_work > 2_000_000 or output_bytes > 1_000_000:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="quantum.stabilizer.erasure.over_admitted_envelope",
+            message="exact erasure linear algebra or result exceeds its admitted work/output envelope",
+        )
+
+    for i, flat_row in enumerate(rows):
+        for other_row in rows[i + 1 :]:
+            if _symplectic_pairing(flat_row, other_row, n):
+                _reject(
+                    "check_space",
+                    "quantum.stabilizer.not_isotropic",
+                    "erasure correctability requires an isotropic check space",
+                )
+
+    canonical_rows, pivots = _gf2_rref(rows, 2 * n)
+    canonical_basis = tuple(
+        PhaseFreeQubitPauli(
+            register=register,
+            x_bits=tuple(row[:n]),
+            z_bits=tuple(row[n:]),
+        )
+        for row in canonical_rows
+    )
+    canonical_space = CheckSpaceValue(register=register, basis=canonical_basis)
+    source = StabilizerErasureCorrectabilityRequest(
+        check_space=canonical_space,
+        erased_qubit_ids=tuple(register.qubit_ids[index] for index in positions),
+    )
+
+    # Each row gives the symplectic commutation functional on the 2|E|
+    # coordinates (x_E | z_E). Its kernel is the supported normalizer.
+    constraints = [
+        [row[n + index] for index in positions] + [row[index] for index in positions]
+        for row in canonical_rows
+    ]
+    local_basis = _gf2_nullspace(constraints, 2 * e)
+
+    # The kernel of S -> coordinates outside E is S intersect V_E.
+    stabilizer_dimension = _supported_stabilizer_dimension(canonical_rows, n, positions)
+    witness = _find_supported_logical_witness(
+        local_basis, positions, n, register, canonical_rows, pivots
+    )
+    normalizer_dimension = len(local_basis)
+    logical_dimension = normalizer_dimension - stabilizer_dimension
+    return StabilizerErasureCorrectabilityResult(
+        source=source,
+        supported_normalizer_dimension=normalizer_dimension,
+        supported_stabilizer_dimension=stabilizer_dimension,
+        supported_logical_dimension=logical_dimension,
+        correctable=logical_dimension == 0,
+        witness=witness,
+    )
+
+
 __all__ = [
     "canonicalize_check_space",
     "css_check_space",
     "pauli_inverse",
     "pauli_multiply",
     "pauli_pairing",
+    "stabilizer_erasure_correctability",
     "stabilizer_error_equivalence",
     "stabilizer_exact_distance",
     "stabilizer_normalizer",

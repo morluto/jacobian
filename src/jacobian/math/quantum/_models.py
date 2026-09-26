@@ -8,6 +8,7 @@ from pydantic import (
     AfterValidator,
     ConfigDict,
     Field,
+    StrictBool,
     StrictInt,
     StringConstraints,
     model_validator,
@@ -940,6 +941,52 @@ class StabilizerErrorCoset(StrictModel):
             raise _validation_error(
                 "error_coset_structure", "coset parent and rows must be typed values"
             )
+
+        def bounded_pauli(value: PhaseFreeQubitPauli) -> bool:
+            register_value = getattr(value, "qubit_register", None)
+            ids = getattr(register_value, "qubit_ids", None)
+            x_bits = getattr(value, "x_bits", None)
+            z_bits = getattr(value, "z_bits", None)
+            return (
+                isinstance(register_value, QubitRegister)
+                and isinstance(ids, tuple)
+                and 1 <= len(ids) <= MAX_QUBITS
+                and all(
+                    isinstance(label, str)
+                    and 1 <= len(label) <= MAX_QUBIT_LABEL_LENGTH
+                    and not any(
+                        0xD800 <= ord(character) <= 0xDFFF for character in label
+                    )
+                    for label in ids
+                )
+                and isinstance(x_bits, tuple)
+                and isinstance(z_bits, tuple)
+                and len(x_bits) <= MAX_QUBITS
+                and len(z_bits) <= MAX_QUBITS
+            )
+
+        if any(not bounded_pauli(row) for row in (*basis, self.representative)):
+            raise _validation_error(
+                "error_coset_structure",
+                "coset rows and representative exceed their structural bounds",
+            )
+        try:
+            # Nested model instances are not revalidated by default. Rebuild
+            # these bounded structural carriers so forged binary rows and
+            # register bindings cannot escape in a canonical coset.
+            check_space = CheckSpaceValue.model_validate(
+                check_space.model_dump(), strict=True
+            )
+            representative = PhaseFreeQubitPauli.model_validate(
+                self.representative.model_dump(), strict=True
+            )
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise _validation_error(
+                "error_coset_structure",
+                "coset parent, rows, and representative must be structurally valid",
+            ) from exc
+        register = check_space.qubit_register
+        basis = check_space.basis
         # Every retained row must live on the declared register. Isotropy is
         # mathematical admission owned by ``stabilizer_error_coset`` and by any
         # consumer relying on a caller-authored coset claim, so the constructor
@@ -949,7 +996,7 @@ class StabilizerErrorCoset(StrictModel):
                 "error_coset_register",
                 "coset check rows must share the check register",
             )
-        if self.representative.qubit_register != register:
+        if representative.qubit_register != register:
             raise _validation_error(
                 "error_coset_register",
                 "coset representative must share the check register",
@@ -974,7 +1021,7 @@ class StabilizerErrorCoset(StrictModel):
             raise _validation_error(
                 "error_coset_basis", "coset check basis must be canonical RREF"
             )
-        bits = (*self.representative.x_bits, *self.representative.z_bits)
+        bits = (*representative.x_bits, *representative.z_bits)
         if any(bits[pivot] for pivot in pivots):
             raise _validation_error(
                 "error_coset_representative",
@@ -1367,6 +1414,81 @@ class StabilizerDistanceResult(StrictModel):
         return self
 
 
+class StabilizerErasureCorrectabilityRequest(StrictModel):
+    """A supplied erasure subset on one register-bound stabilizer check space."""
+
+    check_space: CheckSpaceValue
+    erased_qubit_ids: tuple[QubitId, ...] = Field(max_length=MAX_QUBITS)
+
+    @model_validator(mode="after")
+    def require_erasure_subset(self) -> Self:
+        register = self.check_space.qubit_register
+        if len(set(self.erased_qubit_ids)) != len(self.erased_qubit_ids) or any(
+            qubit_id not in register.qubit_ids for qubit_id in self.erased_qubit_ids
+        ):
+            raise _validation_error(
+                "erasure_subset", "erased qubit IDs must be a unique register subset"
+            )
+        return self
+
+
+class StabilizerErasureCorrectabilityResult(StrictModel):
+    """Exact supported-logical criterion for one erasure subset."""
+
+    source: StabilizerErasureCorrectabilityRequest
+    supported_normalizer_dimension: StrictInt = Field(ge=0, le=2 * MAX_QUBITS)
+    supported_stabilizer_dimension: StrictInt = Field(ge=0, le=MAX_CHECK_ROWS)
+    supported_logical_dimension: StrictInt = Field(ge=0, le=2 * MAX_QUBITS)
+    correctable: StrictBool
+    witness: PhaseFreeQubitPauli | None = None
+
+    @model_validator(mode="after")
+    def require_exact_witness_branch(self) -> Self:
+        if self.supported_logical_dimension != (
+            self.supported_normalizer_dimension - self.supported_stabilizer_dimension
+        ):
+            raise _validation_error(
+                "erasure_logical_dimension",
+                "supported logical dimension must be the normalizer/stabilizer difference",
+            )
+        if self.correctable != (self.supported_logical_dimension == 0):
+            raise _validation_error(
+                "erasure_correctability",
+                "correctability must match the exact dimension",
+            )
+        if self.correctable:
+            if self.witness is not None:
+                raise _validation_error(
+                    "erasure_witness", "a correctable erasure has no logical witness"
+                )
+        else:
+            if self.witness is None:
+                raise _validation_error(
+                    "erasure_witness",
+                    "an uncorrectable erasure needs a supported logical witness",
+                )
+            register = self.source.check_space.qubit_register
+            erased = set(self.source.erased_qubit_ids)
+            if not any(self.witness.x_bits) and not any(self.witness.z_bits):
+                raise _validation_error(
+                    "erasure_witness", "a logical witness must be nontrivial"
+                )
+            if self.witness.qubit_register != register or any(
+                (x or z) and qubit_id not in erased
+                for qubit_id, x, z in zip(
+                    register.qubit_ids,
+                    self.witness.x_bits,
+                    self.witness.z_bits,
+                    strict=True,
+                )
+            ):
+                raise _validation_error(
+                    "erasure_witness",
+                    "logical witness must be supported inside the erasure",
+                )
+        return self
+
+
 __all__ = [
     "MAX_CHECK_ROWS",
     "MAX_QUBITS",
@@ -1396,6 +1518,8 @@ __all__ = [
     "PhaseFreeQubitPauli",
     "QubitId",
     "QubitRegister",
+    "StabilizerErasureCorrectabilityRequest",
+    "StabilizerErasureCorrectabilityResult",
     "StabilizerErrorEquivalenceRequest",
     "StabilizerErrorEquivalenceResult",
     "StabilizerMeasurementBranch",

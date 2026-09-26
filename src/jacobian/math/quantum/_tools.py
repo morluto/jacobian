@@ -29,6 +29,8 @@ from jacobian.math.quantum._models import (
     StabilizerCodeRequest,
     StabilizerCodeValue,
     StabilizerDistanceResult,
+    StabilizerErasureCorrectabilityRequest,
+    StabilizerErasureCorrectabilityResult,
     StabilizerErrorCoset,
     StabilizerErrorCosetRequest,
     StabilizerErrorEquivalenceRequest,
@@ -50,6 +52,7 @@ from jacobian.math.quantum.operations import (
     pauli_pairing,
     pauli_to_labels,
     stabilizer_code_compute,
+    stabilizer_erasure_correctability,
     stabilizer_error_coset,
     stabilizer_error_equivalence,
     stabilizer_exact_distance,
@@ -81,6 +84,12 @@ def _run_css_distance(value: CSSCheckSpaceValue) -> CSSDistanceResult:
 
 def _run_stabilizer_distance(value: CheckSpaceValue) -> StabilizerDistanceResult:
     return stabilizer_exact_distance(value)
+
+
+def _run_erasure_correctability(
+    request: StabilizerErasureCorrectabilityRequest,
+) -> StabilizerErasureCorrectabilityResult:
+    return stabilizer_erasure_correctability(request)
 
 
 def _run_logical_frame(value: CheckSpaceValue) -> LogicalPauliFrame:
@@ -417,6 +426,46 @@ TOOLS = (
                             "z_bits": [1, 0],
                         }
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quantum.stabilizer.erasure_correctability.compute",
+        title="Check exact stabilizer erasure correctability",
+        description=(
+            "Decide whether a supplied qubit erasure set supports any nontrivial "
+            "logical Pauli. An uncorrectable result includes an exact supported "
+            "normalizer representative outside the stabilizer space."
+        ),
+        request_type=StabilizerErasureCorrectabilityRequest,
+        result_type=StabilizerErasureCorrectabilityResult,
+        run=_run_erasure_correctability,
+        tags=("quantum", "stabilizer", "erasure", "correctability", "exact"),
+        examples=(
+            OperationExample(
+                name="single_qubit_erasure_of_repetition_code",
+                description=(
+                    "The three-qubit phase-flip repetition checks cannot correct "
+                    "erasure of q0 because logical X on q0 has support there."
+                ),
+                input={
+                    "check_space": {
+                        "register": {"qubit_ids": ["q0", "q1", "q2"]},
+                        "basis": [
+                            {
+                                "register": {"qubit_ids": ["q0", "q1", "q2"]},
+                                "x_bits": [1, 1, 0],
+                                "z_bits": [0, 0, 0],
+                            },
+                            {
+                                "register": {"qubit_ids": ["q0", "q1", "q2"]},
+                                "x_bits": [0, 1, 1],
+                                "z_bits": [0, 0, 0],
+                            },
+                        ],
+                    },
+                    "erased_qubit_ids": ["q0"],
                 },
             ),
         ),

@@ -141,10 +141,9 @@ def test_distance_matrix_admits_256_vertex_sources_and_rejects_larger_order() ->
         ),
         edges=(),
     )
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    with pytest.raises(ValidationError) as error:
         GraphDistanceMatrixRequest(graph=oversized)
+    assert error.value.errors()[0]["type"] == "graph.distance_matrix.vertex_bound"
 
 
 def test_arbitrary_string_identifiers_remain_deterministic() -> None:

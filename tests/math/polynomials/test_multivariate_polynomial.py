@@ -1078,8 +1078,7 @@ class TestMultivariateSubresultantSequence:
         )
         with pytest.raises(
             OperationDomainValidationError,
-            match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound",
-        ):
+        ) as exc_info:
             _compute_subresultants(
                 MultivariateSubresultantSequenceRequest(
                     left=beyond,
@@ -1087,6 +1086,8 @@ class TestMultivariateSubresultantSequence:
                     main_variable="x",
                 )
             )
+
+        assert exc_info.value.errors()[0]["type"] == "polynomial.multivariate_admission"
 
     def test_admits_through_derived_brown_intermediate_boundary(self) -> None:
         boundary_left = _poly(

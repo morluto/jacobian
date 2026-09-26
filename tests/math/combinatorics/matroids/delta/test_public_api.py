@@ -18,6 +18,7 @@ def test_public_api_is_small_and_canonical() -> None:
         "from_feasible_sets",
         "loop_complement",
         "minor",
+        "relabel",
         "twist",
         "twist_width_profile",
         "verify_from_feasible_sets",

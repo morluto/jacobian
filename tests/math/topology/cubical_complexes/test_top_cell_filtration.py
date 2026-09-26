@@ -38,11 +38,16 @@ def _contains(container: CubicalCell, cell: CubicalCell) -> bool:
     )
 
 
+def _from_top_cell_values(request: CubicalTopCellFiltrationRequest):
+    """Call the native top-cell filtration with unpacked domain arguments."""
+    return from_top_cell_values(request.cells, request.top_cell_values, request.prime)
+
+
 def test_top_cell_values_give_exact_face_closure_sublevels_and_witnesses() -> None:
     left = _cell((0, 1), (0, 1))
     right = _cell((1, 2), (0, 1))
     values = {left: Fraction(3, 2), right: Fraction(-2, 3)}
-    result = from_top_cell_values(
+    result = _from_top_cell_values(
         CubicalTopCellFiltrationRequest(
             cells=(left, right),
             top_cell_values=tuple(
@@ -100,7 +105,7 @@ def test_top_cell_values_give_exact_face_closure_sublevels_and_witnesses() -> No
 
 def test_a_single_point_is_a_valid_degenerate_top_cell() -> None:
     point = _cell((8, 8), (-1, -1))
-    result = from_top_cell_values(
+    result = _from_top_cell_values(
         CubicalTopCellFiltrationRequest(
             cells=(point,), top_cell_values=(_value(point, Fraction(0)),)
         )
@@ -116,14 +121,14 @@ def test_top_cell_values_must_cover_exactly_maximal_generators() -> None:
     right = _cell((1, 2), (0, 1))
     shared_edge = _cell((1, 1), (0, 1))
     with pytest.raises(OperationDomainValidationError, match="cover exactly"):
-        from_top_cell_values(
+        _from_top_cell_values(
             CubicalTopCellFiltrationRequest(
                 cells=(left, right),
                 top_cell_values=(_value(left, Fraction(0)),),
             )
         )
     with pytest.raises(OperationDomainValidationError, match="cover exactly"):
-        from_top_cell_values(
+        _from_top_cell_values(
             CubicalTopCellFiltrationRequest(
                 cells=(left, right),
                 top_cell_values=(

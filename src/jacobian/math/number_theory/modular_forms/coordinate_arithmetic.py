@@ -6,7 +6,7 @@ from fractions import Fraction
 from math import gcd
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import CanonicalLimits, decimal_digit_width, encode_strict_json
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -22,7 +22,6 @@ from jacobian.math.number_theory.modular_forms.values import (
 MAX_COORDINATE_ADDITION_DIGITS = MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
 MAX_COORDINATE_ADDITION_CELLS = MAX_LEVEL_ONE_BASIS_COORDINATES
 MAX_COORDINATE_ADDITION_WORK = 3 * MAX_LEVEL_ONE_BASIS_COORDINATES
-MAX_COORDINATE_ADDITION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _digits(value: int) -> int:
@@ -131,21 +130,6 @@ def modular_form_coordinates_add(
             message="predicted rational coordinate growth exceeds the addition envelope",
         )
 
-    parent_bytes = len(encode_strict_json(left.space.model_dump(mode="json")))
-    basis_bytes = len(encode_strict_json(left.basis_id))
-    output_bytes = (
-        256
-        + parent_bytes
-        + basis_bytes
-        + output_cells * (2 * projected_digits + 80)
-    )
-    if output_bytes > MAX_COORDINATE_ADDITION_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("left", "coordinates"),
-            code="modular_form.coordinate_add_output_bound",
-            message="predicted coordinate result exceeds the canonical output limit",
-        )
-
     result = tuple(a + b for a, b in zip(left_values, right_values, strict=True))
     return ModularFormCoordinates(
         space=left.space,
@@ -218,15 +202,6 @@ def modular_form_coordinates_scalar_multiply(
             code="modular_form.coordinate_scalar_digit_bound",
             message="predicted rational coordinate growth exceeds the scalar envelope",
         )
-    parent_bytes = len(encode_strict_json(form.space.model_dump(mode="json")))
-    basis_bytes = len(encode_strict_json(form.basis_id))
-    output_bytes = 256 + parent_bytes + basis_bytes + dimension * (2 * projected_digits + 80)
-    if output_bytes > MAX_COORDINATE_ADDITION_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("form", "coordinates"),
-            code="modular_form.coordinate_scalar_output_bound",
-            message="predicted coordinate result exceeds the canonical output limit",
-        )
     return ModularFormCoordinates(
         space=form.space,
         basis_id=form.basis_id,
@@ -237,7 +212,6 @@ def modular_form_coordinates_scalar_multiply(
 __all__ = [
     "MAX_COORDINATE_ADDITION_CELLS",
     "MAX_COORDINATE_ADDITION_DIGITS",
-    "MAX_COORDINATE_ADDITION_OUTPUT_BYTES",
     "MAX_COORDINATE_ADDITION_WORK",
     "modular_form_coordinates_add",
     "modular_form_coordinates_scalar_multiply",

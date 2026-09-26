@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -14,7 +14,9 @@ _MIN_LENGTH = 1
 # Largest prefix whose complete divisor-incidence traversal stays within the
 # owner-local 600,000-incidence work budget.
 _MAX_DIVISOR_PREFIX_LENGTH = 54_269
+MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH = _MAX_DIVISOR_PREFIX_LENGTH
 _MAX_SUMMATORY_LENGTH = 10_000
+MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH = _MAX_SUMMATORY_LENGTH
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -50,8 +52,10 @@ class DirichletConvolutionRequest(StrictModel):
 class DirichletConvolutionResult(StrictModel):
     """Result: the Dirichlet convolution ``(f*g)(1)..(f*g)(n)``."""
 
-    values: tuple[CanonicalRational, ...]
-    length: int
+    values: tuple[CanonicalRational, ...] = Field(
+        min_length=_MIN_LENGTH, max_length=MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH
+    )
+    length: int = Field(ge=_MIN_LENGTH, le=MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH)
     convention: Literal["JACOBIAN_DIRICHLET_CONVOLUTION"] = (
         "JACOBIAN_DIRICHLET_CONVOLUTION"
     )
@@ -91,7 +95,9 @@ class MobiusTransformRequest(StrictModel):
 class MobiusTransformResult(StrictModel):
     """Result: the (inverse) Möbius transform at indices 1..n."""
 
-    values: tuple[CanonicalRational, ...]
+    values: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH
+    )
     length: int
     inverse: bool
     convention: Literal["JACOBIAN_MOBIUS_TRANSFORM"] = "JACOBIAN_MOBIUS_TRANSFORM"
@@ -124,7 +130,9 @@ class SummatoryFunctionRequest(StrictModel):
 class SummatoryFunctionResult(StrictModel):
     """Result: the partial sums ``S(1)..S(n)``."""
 
-    values: tuple[CanonicalRational, ...]
+    values: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH
+    )
     length: int
     convention: Literal["JACOBIAN_SUMMATORY_FUNCTION"] = "JACOBIAN_SUMMATORY_FUNCTION"
 
@@ -161,7 +169,9 @@ class DirichletInverseRequest(StrictModel):
 class DirichletInverseResult(StrictModel):
     """Result: the Dirichlet inverse at indices 1..n."""
 
-    values: tuple[CanonicalRational, ...]
+    values: tuple[CanonicalRational, ...] = Field(
+        max_length=MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH
+    )
     length: int
     convention: Literal["JACOBIAN_DIRICHLET_INVERSE"] = "JACOBIAN_DIRICHLET_INVERSE"
 
@@ -175,6 +185,8 @@ class DirichletInverseResult(StrictModel):
 
 
 __all__ = [
+    "MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH",
+    "MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH",
     "DirichletConvolutionRequest",
     "DirichletConvolutionResult",
     "DirichletInverseRequest",

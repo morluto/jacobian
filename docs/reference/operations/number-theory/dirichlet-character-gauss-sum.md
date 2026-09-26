@@ -28,10 +28,11 @@ The result retains the authored frequency and its canonical residue modulo
 sum of the quadratic character modulo 5 is zero, while the principal character
 sum is 4. The ordinary Gauss-sum operation is the frequency-one case.
 
-`dirichlet_character.primitive_gauss_norm.compute` first derives the
-character's conductor and accepts the norm identity only when it equals the
-supplied modulus. It returns the exact cyclotomic Gauss sum and its product
-with its cyclotomic conjugate, checking
+`dirichlet_character.primitive_gauss_norm.compute` consumes a
+`PrimitiveDirichletCharacter` carrier with a claimed exact conductor. It checks
+that claim against the computed conductor before using the norm identity. It
+returns the exact cyclotomic Gauss sum and its product with its cyclotomic
+conjugate, checking
 `tau(chi) * conjugate(tau(chi)) = N` by exact reduction. This is the squared
 complex absolute value for a primitive character; imprimitive characters are
 rejected rather than assigned the primitive norm formula.

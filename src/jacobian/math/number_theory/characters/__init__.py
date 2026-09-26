@@ -5,6 +5,7 @@ from jacobian.math.number_theory.characters._models import (
 )
 from jacobian.math.number_theory.characters.operations import (
     character_group,
+    dirichlet_character_arithmetic_function_twist,
     dirichlet_character_conductor,
     dirichlet_character_conjugate,
     dirichlet_character_fourier_matrix,
@@ -18,6 +19,7 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_jacobi_sum,
     dirichlet_character_kernel,
     dirichlet_character_l_value_nonpositive_integer,
+    dirichlet_character_mixed_jacobi_sum,
     dirichlet_character_order,
     dirichlet_character_orthogonality,
     dirichlet_character_orthogonality_over_characters,
@@ -40,6 +42,7 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterKernel,
     DirichletCharacterRestrictionObstruction,
     DirichletCharacterRestrictionResult,
+    PrimitiveDirichletCharacter,
     PrincipalDirichletCharacter,
 )
 
@@ -53,8 +56,10 @@ __all__ = [
     "DirichletCharacterPrimitiveGaussNormResult",
     "DirichletCharacterRestrictionObstruction",
     "DirichletCharacterRestrictionResult",
+    "PrimitiveDirichletCharacter",
     "PrincipalDirichletCharacter",
     "character_group",
+    "dirichlet_character_arithmetic_function_twist",
     "dirichlet_character_conductor",
     "dirichlet_character_conjugate",
     "dirichlet_character_fourier_matrix",
@@ -68,6 +73,7 @@ __all__ = [
     "dirichlet_character_jacobi_sum",
     "dirichlet_character_kernel",
     "dirichlet_character_l_value_nonpositive_integer",
+    "dirichlet_character_mixed_jacobi_sum",
     "dirichlet_character_order",
     "dirichlet_character_orthogonality",
     "dirichlet_character_orthogonality_over_characters",

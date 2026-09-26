@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from math import prod
+
 from jacobian._execution import request_checkpoint
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -204,48 +207,40 @@ def _coefficient_digits(value: RationalFunction) -> int:
 
 
 def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
-    unit_shift_quotient = (
-        len(n_ratio.numerator.terms) == 1
-        and len(n_ratio.denominator.terms) == 1
-        and not n_ratio.numerator.terms[0].exponents
-        and n_ratio.numerator.terms[0].coefficient.as_fraction() == 1
-        and not n_ratio.denominator.terms[0].exponents
-        and n_ratio.denominator.terms[0].coefficient.as_fraction() == 1
-    )
-    ratio_digits = _coefficient_digits(n_ratio)
-    ratio_num_degree = max(
-        (sum(item.exponents) for item in n_ratio.numerator.terms), default=0
-    )
-    ratio_den_degree = max(
-        (sum(item.exponents) for item in n_ratio.denominator.terms), default=0
-    )
-    ratio_num_terms = len(n_ratio.numerator.terms)
-    ratio_den_terms = len(n_ratio.denominator.terms)
+    def shifted_polynomial_digits(polynomial, amount: int) -> int:
+        if not polynomial.terms:
+            return 1
+        common_denominator = prod(
+            term.coefficient.as_integer_ratio()[1] for term in polynomial.terms
+        )
+        coefficient_norm = sum(
+            abs(term.coefficient.as_fraction())
+            * (1 + abs(amount)) ** term.exponents[0]
+            for term in polynomial.terms
+        )
+        integer_bound = coefficient_norm * common_denominator
+        return max(
+            decimal_digit_width(integer_bound.numerator),
+            decimal_digit_width(common_denominator),
+        )
+
     denominator_term_digits = []
     numerator_term_digits = []
     for term in operator.terms:
         exponent = term.exponent
-        shifted_num_digits = (
-            1
-            if unit_shift_quotient
-            else ratio_digits
-            + ratio_num_degree * (len(str(max(1, exponent))) + 1)
-            + len(str(max(1, ratio_num_terms)))
-            + len(str(max(1, ratio_num_degree + 1)))
+        shifted_num_digits = sum(
+            shifted_polynomial_digits(n_ratio.numerator, amount)
+            for amount in range(exponent)
         )
-        shifted_den_digits = (
-            1
-            if unit_shift_quotient
-            else ratio_digits
-            + ratio_den_degree * (len(str(max(1, exponent))) + 1)
-            + len(str(max(1, ratio_den_terms)))
-            + len(str(max(1, ratio_den_degree + 1)))
+        shifted_den_digits = sum(
+            shifted_polynomial_digits(n_ratio.denominator, amount)
+            for amount in range(exponent)
         )
         coefficient_digits = _coefficient_digits(term.coefficient)
         denominator_term_digits.append(
-            coefficient_digits + exponent * shifted_den_digits
+            coefficient_digits + shifted_den_digits
         )
-        numerator_term_digits.append(coefficient_digits + exponent * shifted_num_digits)
+        numerator_term_digits.append(coefficient_digits + shifted_num_digits)
     denominator_digits = sum(denominator_term_digits)
     numerator_digits = max(
         (

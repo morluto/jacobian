@@ -195,6 +195,25 @@ def test_sparse_univariate_shift_product_uses_its_actual_axis_support():
     assert _rf_value(result.relative_multiplier, 3, 7) == 4**12 * 5**12
 
 
+def test_tenth_shift_of_twelfth_factorial_power_fits_admitted_bounds():
+    term = ProperHypergeometricTerm(
+        polynomial=_polynomial([((0, 0), 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=1, k_coefficient=0, offset=0, power=12
+            ),
+        ),
+    )
+
+    result = proper_hypergeometric_operator_action(_operator(10), term)
+
+    assert len(result.relative_multiplier.numerator.terms) == 121
+    assert len(result.relative_multiplier.denominator.terms) == 1
+    assert _rf_value(result.relative_multiplier, 3, 7) == (
+        factorial(13) // factorial(3)
+    ) ** 12
+
+
 def test_n_action_does_not_require_admission_of_the_k_quotient():
     term = ProperHypergeometricTerm(
         polynomial=_polynomial([((0, 0), 1)]),

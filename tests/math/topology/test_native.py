@@ -137,7 +137,7 @@ def test_producer_canonical_differentials_equal_its_sparse_boundaries() -> None:
         dense = [[0] * matrix.columns for _ in range(matrix.rows)]
         for entry in matrix.entries:
             dense[entry.row][entry.column] = entry.value
-        expected.append(tuple(tuple(str(value) for value in row) for row in dense))
+        expected.append(tuple(tuple(value for value in row) for row in dense))
 
     assert result.canonical_value.differential_matrices == tuple(expected)
 
@@ -207,8 +207,8 @@ def test_serialized_integral_value_round_trips_into_homology() -> None:
             convention=HomologyConvention.UNREDUCED,
         )
     )
-    payload = simplicial_chain_complex_value(integral).model_dump(mode="json")
-    value = ChainComplexValue.model_validate(payload)
+    payload = simplicial_chain_complex_value(integral).model_dump_json()
+    value = ChainComplexValue.model_validate_json(payload)
     result = homology_groups(value)
     assert result.coefficient_ring is CoefficientRing.INTEGER
     assert [group.free_rank for group in _integral_groups(result)] == [1, 1]
@@ -226,7 +226,7 @@ def test_reduced_chains_encode_augmentation_as_degree_minus_one() -> None:
     value = simplicial_chain_complex_value(reduced)
     assert (value.degree_min, value.degree_max) == (-1, 1)
     assert value.basis_sizes == (1, 3, 3)
-    assert value.differential_matrices[0] == (("1", "1", "1"),)
+    assert value.differential_matrices[0] == ((1, 1, 1),)
     result = homology_groups(value)
     assert [group.betti_number for group in _field_groups(result)] == [0, 0, 1]
 
@@ -319,7 +319,7 @@ def test_chain_result_parse_is_structural_and_consumer_admits_field(
     decoded = ChainComplexResult.model_validate_json(result.model_dump_json())
     assert decoded == result
     assert calls == []
-    payload = result.model_dump(mode="json")
+    payload = result.model_dump()
     payload["prime"] = 4
     payload["canonical_value"]["prime"] = 4
     authored = ChainComplexResult.model_validate(payload)

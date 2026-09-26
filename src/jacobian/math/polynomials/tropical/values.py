@@ -11,6 +11,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_rank
 from jacobian.math.geometry.polytopes.complexes._models import (
     MAX_COMPLEX_TOTAL_FACES,
     PolytopalComplexClosureResult,
@@ -19,11 +20,15 @@ from jacobian.math.geometry.polytopes.values import (
     RationalHPolyhedron,
     RationalPolyhedronVPresentation,
 )
-from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_rank
 
 MAX_TROPICAL_SCALAR_DIGITS = 8_192
 MAX_TROPICAL_VECTOR_DIMENSION = 128
 MAX_TROPICAL_MATRIX_CELLS = 4_096
+MAX_TROPICAL_MATRIX_RESULT_BYTES = (
+    MAX_TROPICAL_MATRIX_CELLS * (2 * MAX_TROPICAL_SCALAR_DIGITS + 192)
+    + 256 * 320
+    + 4_096
+)
 MAX_TROPICAL_POLYNOMIAL_TERMS = 512
 MAX_TROPICAL_EXPONENT = 1_024
 MAX_TROPICAL_ROOT_CROSSOVER_PAIRS = 65_536
@@ -864,6 +869,7 @@ __all__ = [
     "MAX_TROPICAL_HYPERSURFACE_CELLS",
     "MAX_TROPICAL_HYPERSURFACE_RESULT_BYTES",
     "MAX_TROPICAL_MATRIX_CELLS",
+    "MAX_TROPICAL_MATRIX_RESULT_BYTES",
     "MAX_TROPICAL_NEWTON_RESULT_BYTES",
     "MAX_TROPICAL_POLYNOMIAL_TERMS",
     "MAX_TROPICAL_ROOT_CROSSOVER_PAIRS",

@@ -170,6 +170,7 @@ def test_matrix_add_preserves_empty_axes(
         (("r", "r"), ("c",)),
         (("r",), ("c", "c")),
         (tuple(f"r{i}" for i in range(129)), tuple(f"c{i}" for i in range(129))),
+        (([],), ("c",)),
     ],
 )
 def test_matrix_add_rejects_malformed_native_axes(
@@ -183,6 +184,37 @@ def test_matrix_add_rejects_malformed_native_axes(
     )
     with pytest.raises(OperationDomainValidationError):
         tropical_matrix_add(matrix, matrix)
+
+
+def test_matrix_add_rejects_invalid_semiring_on_empty_native_matrices() -> None:
+    matrix = TropicalMatrix.model_construct(
+        semiring="bad", row_axis=(), column_axis=(), entries=()
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(matrix, matrix)
+
+
+def test_matrix_add_uses_native_output_bound_for_wide_selected_values() -> None:
+    value = Fraction(10**2999)
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="QQ")
+    scalar = TropicalScalar(
+        semiring=semiring,
+        kind="FINITE",
+        value=CanonicalRational.from_fraction(value),
+    )
+    axis = tuple(f"r{index}" for index in range(64))
+    columns = tuple(f"c{index}" for index in range(64))
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=axis,
+        column_axis=columns,
+        entries=tuple(tuple(scalar for _ in columns) for _ in axis),
+    )
+
+    result = tropical_matrix_add(matrix, matrix)
+
+    assert len(result.entries) == 64
+    assert all(entry.value == scalar.value for row in result.entries for entry in row)
 
 
 def test_matrix_add_rejects_mismatched_semiring_or_labelled_axes() -> None:
@@ -230,8 +262,8 @@ def test_matrix_add_bounds_output_before_building_rows(
     right = left
     monkeypatch.setattr(
         tropical_operations,
-        "CanonicalLimits",
-        lambda: type("Limits", (), {"max_output_bytes": 300})(),
+        "MAX_TROPICAL_MATRIX_RESULT_BYTES",
+        300,
     )
     with pytest.raises(OperationDomainValidationError):
         tropical_matrix_add(left, right)

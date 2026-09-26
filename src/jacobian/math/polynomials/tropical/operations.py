@@ -30,6 +30,7 @@ from jacobian.math.polynomials.tropical.values import (
     MAX_TROPICAL_ACTIVE_RESULT_BYTES,
     MAX_TROPICAL_ACTIVE_TERM_WORK,
     MAX_TROPICAL_EXPONENT,
+    MAX_TROPICAL_MATRIX_RESULT_BYTES,
     MAX_TROPICAL_NEWTON_RESULT_BYTES,
     MAX_TROPICAL_POLYNOMIAL_TERMS,
     MAX_TROPICAL_ROOT_CROSSOVER_PAIRS,
@@ -140,16 +141,39 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
             message="expected a tropical matrix",
         )
     if (
+        type(matrix.semiring) is not TropicalSemiring
+        or type(matrix.row_axis) is not tuple
+        or type(matrix.column_axis) is not tuple
+        or type(matrix.entries) is not tuple
+        or any(type(row) is not tuple for row in matrix.entries)
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="tropical.matrix_shape",
+            message="matrix axes, rows, and semiring must be canonical values",
+        )
+    try:
+        TropicalSemiring.model_validate(matrix.semiring.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("semiring",),
+            code="tropical.semiring_invalid",
+            message="matrix semiring must satisfy the tropical semiring contract",
+        ) from error
+    labels = (*matrix.row_axis, *matrix.column_axis)
+    if any(not _is_valid_tropical_axis_label(label) for label in labels):
+        raise OperationDomainValidationError(
+            location=("matrix", "axis"),
+            code="tropical.matrix_axis_label",
+            message="matrix axis labels must satisfy the opaque-label contract",
+        )
+    if (
         len(matrix.row_axis) != len(matrix.entries)
         or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
         or len(set(matrix.row_axis)) != len(matrix.row_axis)
         or len(set(matrix.column_axis)) != len(matrix.column_axis)
         or len(matrix.row_axis) > 128
         or len(matrix.column_axis) > 128
-        or any(
-            not _is_valid_tropical_axis_label(label)
-            for label in (*matrix.row_axis, *matrix.column_axis)
-        )
     ):
         raise OperationDomainValidationError(
             location=("matrix",),
@@ -1584,13 +1608,18 @@ def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> Tropical
         )
     # Tropical addition selects one operand per cell. Size the actual winners,
     # not both inputs, before allocating the output rows.
-    winners = (
+    winners = tuple(
         _tropical_scalar_add_admitted(left.semiring, left_entry, right_entry)[0]
         for left_row, right_row in zip(left.entries, right.entries, strict=True)
         for left_entry, right_entry in zip(left_row, right_row, strict=True)
     )
     scalar_bytes = sum(
-        160 + (0 if entry.value is None else _digits(entry.value.num) + _digits(entry.value.den))
+        160
+        + (
+            0
+            if entry.value is None
+            else _digits(entry.value.num) + _digits(entry.value.den)
+        )
         for entry in winners
     )
     output_bound = (
@@ -1599,18 +1628,19 @@ def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> Tropical
         + 256
         + scalar_bytes
     )
-    if output_bound > CanonicalLimits().max_output_bytes:
+    if output_bound > MAX_TROPICAL_MATRIX_RESULT_BYTES:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="tropical.matrix_output_bytes",
             message="matrix sum may exceed the canonical output byte envelope",
         )
-    rows = tuple(
+    rows = (
         tuple(
-            _tropical_scalar_add_admitted(left.semiring, left_entry, right_entry)[0]
-            for left_entry, right_entry in zip(left_row, right_row, strict=True)
+            winners[offset : offset + len(left.column_axis)]
+            for offset in range(0, len(winners), len(left.column_axis))
         )
-        for left_row, right_row in zip(left.entries, right.entries, strict=True)
+        if left.column_axis
+        else tuple(() for _ in left.row_axis)
     )
     return TropicalMatrix(
         semiring=left.semiring,
@@ -1819,6 +1849,12 @@ def tropical_matrix_minor_assignment_profiles(
     determinant; tied optimal bijections are all retained.
     """
     _admit_matrix(matrix)
+    if not isinstance(sizes, tuple) or any(type(size) is not int for size in sizes):
+        raise OperationDomainValidationError(
+            location=("sizes",),
+            code="tropical.minor_sizes",
+            message="minor sizes must be a tuple of native integers",
+        )
     if not sizes or len(set(sizes)) != len(sizes):
         raise OperationDomainValidationError(
             location=("sizes",),
@@ -1840,11 +1876,11 @@ def tropical_matrix_minor_assignment_profiles(
     permutation_count = sum(
         comb(rows, size) * comb(columns, size) * factorial(size) for size in sizes
     )
-    if minor_count > 256 or permutation_count > 25_000:
+    if minor_count > 256 or permutation_count > 40_320:
         raise OperationResourceAdmissionError(
             location=("sizes",),
             code="tropical.minor_assignment_work",
-            message="selected minors exceed the 256-minor or 25,000-assignment bound",
+            message="selected minors exceed the 256-minor or 40,320-assignment bound",
         )
 
     # Include the source once, then conservatively charge every minor scalar
@@ -1878,8 +1914,9 @@ def tropical_matrix_minor_assignment_profiles(
                         if entry.kind != "FINITE":
                             finite = False
                             break
-                        total = _sum_fractions_checked(
-                            total, _finite_value(entry).as_fraction()
+                        term = _finite_value(entry).as_fraction()
+                        total = (
+                            term if total == 0 else _sum_fractions_checked(total, term)
                         )
                     scores.append((permutation, total if finite else None))
 

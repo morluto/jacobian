@@ -5,11 +5,12 @@ from __future__ import annotations
 from itertools import combinations
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.logic.automata.petri_nets.values import (
+    MAX_PETRI_ARC_WEIGHT,
     MAX_PETRI_MARKING,
     MAX_PETRI_PLACES,
     MAX_PETRI_TRANSITIONS,
@@ -30,7 +31,12 @@ MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES = 4_000_000
 MAX_FIRING_SEQUENCE_LENGTH = 1024
 MAX_CONCURRENT_STEP_OCCURRENCES = 1000
 MAX_STATE_EQUATION_OCCURRENCES = 1000
-MAX_STATE_EQUATION_TARGET_ABS = 64_001_000
+MAX_STATE_EQUATION_TARGET_ABS = (
+    MAX_PETRI_MARKING + MAX_PETRI_ARC_WEIGHT * MAX_STATE_EQUATION_OCCURRENCES
+)
+MAX_MARKING_EQUATION_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_MARKING_EQUATION_FORMAL_TARGET_ABS = MAX_STATE_EQUATION_TARGET_ABS
+MAX_MARKING_EQUATION_RESIDUAL_ABS = MAX_STATE_EQUATION_TARGET_ABS
 MAX_MARKING_CONFLICT_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
     MAX_PETRI_TRANSITIONS * (MAX_PETRI_TRANSITIONS - 1) // 2
@@ -495,12 +501,16 @@ class PetriNetMatricesResult(StrictModel):
             raise _validation_error(
                 "support_axes", "support profiles must match the source net axes"
             )
-        for support in (*self.input_places_by_transition, *self.output_places_by_transition):
+        for support in (
+            *self.input_places_by_transition,
+            *self.output_places_by_transition,
+        ):
             if tuple(sorted(set(support))) != support or any(
                 index < 0 or index >= places for index in support
             ):
                 raise _validation_error(
-                    "support_indices", "transition supports must use source place indices"
+                    "support_indices",
+                    "transition supports must use source place indices",
                 )
         for support in (
             *self.consumer_transitions_by_place,
@@ -559,6 +569,13 @@ class StateEquationRequest(StrictModel):
             raise _validation_error(
                 "state_equation_count_sign", "transition counts must be nonnegative"
             )
+        if any(
+            count > MAX_STATE_EQUATION_OCCURRENCES for count in self.transition_counts
+        ):
+            raise _validation_error(
+                "state_equation_occurrence_bound",
+                "total transition count exceeds the admitted bound",
+            )
         if sum(self.transition_counts) > MAX_STATE_EQUATION_OCCURRENCES:
             raise _validation_error(
                 "state_equation_occurrence_bound",
@@ -599,6 +616,99 @@ class StateEquationResult(StrictModel):
             raise _validation_error(
                 "state_equation_target_bound",
                 "target coordinates must fit the admitted signed integer envelope",
+            )
+        return self
+
+
+class MarkingEquationRequest(StrictModel):
+    """Compare a target marking with the formal state-equation target."""
+
+    net: PetriNet
+    source_marking: Marking
+    target_marking: Marking
+    transition_counts: tuple[StrictInt, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS,
+        description=(
+            "Nonnegative transition counts with total at most "
+            f"{MAX_STATE_EQUATION_OCCURRENCES}; equality is only a necessary "
+            "reachability condition, not a firing witness."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_marking_equation_axes(self) -> Self:
+        for name, marking in (
+            ("source_marking", self.source_marking),
+            ("target_marking", self.target_marking),
+        ):
+            _require_marking_parent(self.net, marking)
+            if len(marking.tokens) != self.net.place_count:
+                raise _validation_error(
+                    f"{name}_length", f"{name} must match place_count"
+                )
+        if len(self.transition_counts) != self.net.transition_count:
+            raise _validation_error(
+                "state_equation_transition_axis",
+                "counts must match transition_count",
+            )
+        if any(count < 0 for count in self.transition_counts):
+            raise _validation_error(
+                "state_equation_count_sign", "transition counts must be nonnegative"
+            )
+        return self
+
+
+class MarkingEquationResult(StrictModel):
+    """Exact formal target and residual for one supplied marking equation."""
+
+    net: PetriNet
+    source_marking: Marking
+    target_marking: Marking
+    transition_counts: tuple[StrictInt, ...]
+    formal_target: tuple[StrictInt, ...] = Field(max_length=MAX_PETRI_PLACES)
+    residual: tuple[StrictInt, ...] = Field(max_length=MAX_PETRI_PLACES)
+    satisfies_equation: StrictBool
+
+    @model_validator(mode="after")
+    def require_result_axes(self) -> Self:
+        _require_result_marking(self.net, self.source_marking)
+        _require_result_marking(
+            self.net, self.target_marking, reason="target_marking_length"
+        )
+        if (
+            len(self.transition_counts) != self.net.transition_count
+            or any(
+                count < 0 or count > MAX_STATE_EQUATION_OCCURRENCES
+                for count in self.transition_counts
+            )
+            or sum(self.transition_counts) > MAX_STATE_EQUATION_OCCURRENCES
+        ):
+            raise _validation_error(
+                "state_equation_transition_axis",
+                "counts must be admitted on the net transition axis",
+            )
+        if (
+            len(self.formal_target) != self.net.place_count
+            or len(self.residual) != self.net.place_count
+        ):
+            raise _validation_error(
+                "marking_equation_place_axis",
+                "formal target and residual must match the net place axis",
+            )
+        if any(
+            abs(value) > MAX_MARKING_EQUATION_FORMAL_TARGET_ABS
+            for value in self.formal_target
+        ) or any(
+            abs(value) > MAX_MARKING_EQUATION_RESIDUAL_ABS for value in self.residual
+        ):
+            raise _validation_error(
+                "marking_equation_coordinate_bound",
+                "formal target and residual must fit the admitted exact integer bound",
+            )
+        if self.satisfies_equation != all(value == 0 for value in self.residual):
+            raise _validation_error(
+                "marking_equation_predicate",
+                "satisfies_equation must match the exact zero residual profile",
             )
         return self
 
@@ -1479,6 +1589,9 @@ __all__ = [
     "MAX_FIRING_SEQUENCE_LENGTH",
     "MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES",
     "MAX_MARKING_COMMUTATION_PROFILE_WORK",
+    "MAX_MARKING_EQUATION_FORMAL_TARGET_ABS",
+    "MAX_MARKING_EQUATION_OUTPUT_BYTES",
+    "MAX_MARKING_EQUATION_RESIDUAL_ABS",
     "MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES",
     "MAX_SIPHON_TRAP_FAMILY_OUTPUT_BYTES",
     "MAX_SIPHON_TRAP_WORK",
@@ -1498,6 +1611,8 @@ __all__ = [
     "MarkingCommutationProfileResult",
     "MarkingConflictProfileRequest",
     "MarkingConflictProfileResult",
+    "MarkingEquationRequest",
+    "MarkingEquationResult",
     "PetriInvariantsRequest",
     "PetriInvariantsResult",
     "PetriMarkingState",

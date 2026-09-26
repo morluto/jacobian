@@ -10,6 +10,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     fire_transition,
     marking_commutation_profile,
     marking_conflict_profile,
+    marking_equation,
     marking_reachability,
     petri_invariants,
     petri_net_matrices,
@@ -30,6 +31,9 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     verify_reachability_graph,
     verify_siphon_trap,
 )
+from jacobian.math.logic.automata.petri_nets.shortest_paths.operations import (
+    shortest_firing_sequences,
+)
 from jacobian.math.logic.automata.petri_nets.values import (
     Marking,
     PetriNet,
@@ -49,6 +53,7 @@ __all__ = [
     "fire_transition",
     "marking_commutation_profile",
     "marking_conflict_profile",
+    "marking_equation",
     "marking_reachability",
     "petri_invariants",
     "petri_net_matrices",
@@ -60,6 +65,7 @@ __all__ = [
     "relabel_petri_net",
     "replay_firing_sequence",
     "reverse_petri_net",
+    "shortest_firing_sequences",
     "siphon_trap_family",
     "state_equation_target",
     "verify_enabled_transitions",

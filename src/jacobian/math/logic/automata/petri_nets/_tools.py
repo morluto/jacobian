@@ -21,6 +21,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingCommutationProfileResult,
     MarkingConflictProfileRequest,
     MarkingConflictProfileResult,
+    MarkingEquationRequest,
+    MarkingEquationResult,
     MarkingReachabilityRequest,
     MarkingReachabilityResult,
     PetriInvariantsRequest,
@@ -56,6 +58,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     fire_transition,
     marking_commutation_profile,
     marking_conflict_profile,
+    marking_equation,
     marking_reachability,
     petri_invariants,
     petri_net_matrices,
@@ -119,6 +122,15 @@ def compute_incidence(request: IncidenceMatrixRequest) -> IncidenceMatrixResult:
 def compute_state_equation(request: StateEquationRequest) -> StateEquationResult:
     return state_equation_target(
         request.net, request.marking, request.transition_counts
+    )
+
+
+def compute_marking_equation(request: MarkingEquationRequest) -> MarkingEquationResult:
+    return marking_equation(
+        request.net,
+        request.source_marking,
+        request.target_marking,
+        request.transition_counts,
     )
 
 
@@ -224,6 +236,30 @@ _PRODUCER_CONSUMER_NET = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="petri_net.matrices.compute",
+        title="Compute Petri-net pre, post, and incidence matrices",
+        description="Return exact Pre, Post, and C = Post - Pre matrices, plus input/output place supports per transition and producer/consumer transition supports per place. The source net retains the exact axes.",
+        request_type=PetriNetMatricesRequest,
+        result_type=PetriNetMatricesResult,
+        run=compute_petri_net_matrices,
+        tags=("petri-net", "matrices", "exact"),
+        discovery_terms=("pre-incidence", "post-incidence", "incidence matrix"),
+        examples=(
+            OperationExample(
+                name="weighted_pre_post_matrices",
+                description="Return all three matrices for a two-place weighted net.",
+                input={
+                    "net": {
+                        "place_count": 2,
+                        "transition_count": 1,
+                        "pre": [[2], [0]],
+                        "post": [[0], [3]],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="petri_net.relabel.compute",
         title="Relabel Petri-net place and transition axes",
@@ -456,6 +492,39 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="simple_net_incidence",
                 description="Incidence matrix of a 2-place, 2-transition net.",
                 input={"net": _NET2["net"]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="petri_net.marking_equation.compute",
+        title="Compare Petri net markings by the state equation",
+        description=(
+            "Compute the formal target M0 + (Post - Pre)x, its signed residual "
+            "against a supplied target marking, and whether the equation holds. "
+            "This algebraic condition does not decide reachability."
+        ),
+        request_type=MarkingEquationRequest,
+        result_type=MarkingEquationResult,
+        run=compute_marking_equation,
+        tags=("petri-net", "marking-equation", "state-equation", "exact"),
+        examples=(
+            OperationExample(
+                name="cancellation_without_enabled_transitions",
+                description=(
+                    "The equation holds at the empty marking, though neither "
+                    "transition is enabled initially."
+                ),
+                input={
+                    "net": {
+                        "place_count": 2,
+                        "transition_count": 2,
+                        "pre": [[1, 0], [0, 1]],
+                        "post": [[0, 1], [1, 0]],
+                    },
+                    "source_marking": {"tokens": [0, 0]},
+                    "target_marking": {"tokens": [0, 0]},
+                    "transition_counts": [1, 1],
+                },
             ),
         ),
     ),

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from collections import Counter
 from dataclasses import dataclass
+from itertools import pairwise
 from math import comb
 from typing import Annotated, NoReturn, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -48,6 +49,74 @@ class TreeAutomatonTransition(StrictModel):
     symbol: int = Field(ge=0, le=MAX_TA_SYMBOLS - 1)
     child_states: tuple[int, ...] = Field(max_length=MAX_TA_ARITY)
     target_state: int = Field(ge=0, le=MAX_TA_STATES - 1)
+
+
+class RegularTreeProduction(StrictModel):
+    """One unit-free regular tree grammar production ``A -> f(B1,...,Bk)``."""
+
+    nonterminal: StrictInt = Field(ge=0, le=MAX_TA_STATES - 1)
+    symbol: StrictInt = Field(ge=0, le=MAX_TA_SYMBOLS - 1)
+    children: tuple[StrictInt, ...] = Field(max_length=MAX_TA_ARITY)
+
+
+class RegularTreeGrammar(StrictModel):
+    """A finite ranked regular tree grammar over explicitly indexed symbols.
+
+    Nonterminals are ``0..nonterminal_count-1`` and the start nonterminal is
+    explicit. Productions have the unit-free ranked form
+    ``A -> f(B1,...,Bk)``; their child count must equal the arity of ``f``.
+    """
+
+    nonterminal_count: StrictInt = Field(ge=1, le=MAX_TA_STATES)
+    arity: tuple[Annotated[StrictInt, Field(ge=0, le=MAX_TA_ARITY)], ...] = Field(
+        max_length=MAX_TA_SYMBOLS
+    )
+    start_nonterminal: StrictInt = Field(ge=0, le=MAX_TA_STATES - 1)
+    productions: tuple[RegularTreeProduction, ...] = Field(
+        max_length=MAX_TA_TRANSITIONS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_productions(self) -> Self:
+        if self.start_nonterminal >= self.nonterminal_count:
+            raise _validation_error(
+                "grammar_start_out_of_range",
+                "start nonterminal must be in the declared nonterminal set",
+            )
+        for production in self.productions:
+            if production.nonterminal >= self.nonterminal_count:
+                raise _validation_error(
+                    "grammar_nonterminal_out_of_range",
+                    "production left side must be a declared nonterminal",
+                )
+            if production.symbol >= len(self.arity):
+                raise _validation_error(
+                    "grammar_symbol_out_of_range",
+                    "production symbol must be in the declared ranked signature",
+                )
+            if len(production.children) != self.arity[production.symbol]:
+                raise _validation_error(
+                    "grammar_rank_mismatch",
+                    "production child count must match its ranked symbol",
+                )
+            if any(child >= self.nonterminal_count for child in production.children):
+                raise _validation_error(
+                    "grammar_child_out_of_range",
+                    "production children must be declared nonterminals",
+                )
+        productions = tuple(
+            sorted(
+                self.productions,
+                key=lambda rule: (rule.nonterminal, rule.symbol, rule.children),
+            )
+        )
+        if any(left == right for left, right in pairwise(productions)):
+            raise _validation_error(
+                "grammar_duplicate_production",
+                "duplicate productions do not add a new derivation rule",
+            )
+        object.__setattr__(self, "productions", productions)
+        return self
 
 
 class RankedTree(StrictModel):
@@ -531,6 +600,8 @@ __all__ = [
     "DeterministicBottomUpTreeAutomaton",
     "RankedTree",
     "ReachableStateProfile",
+    "RegularTreeGrammar",
+    "RegularTreeProduction",
     "TreeAutomatonTransition",
     "TreeStateChartEntry",
     "TreeStateWitness",

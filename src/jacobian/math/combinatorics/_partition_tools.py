@@ -1,6 +1,11 @@
 """Immutable declarations for integer-partition operations."""
 
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics import operations as native
 from jacobian.math.combinatorics._models import (
     IntegerResult,
@@ -8,9 +13,18 @@ from jacobian.math.combinatorics._models import (
     NonnegativePairRequest,
 )
 from jacobian.math.combinatorics._partition_models import (
+    MAX_PARTITION_SIZE,
+    MAX_PARTITION_ITEM,
+    IncreasingPartsObstruction,
     IntegerPartitionEnumerationRequest,
     IntegerPartitionEnumerationResult,
+    NonpositivePartObstruction,
+    PartitionCheckRequest,
+    PartitionCheckResult,
+    PartitionFound,
+    PartitionRejected,
 )
+from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
 
 
 def _integer_result(value: int) -> IntegerResult:
@@ -44,7 +58,112 @@ def enumerate_integer_partitions(
     )
 
 
+def check_partition(request: PartitionCheckRequest) -> PartitionCheckResult:
+    """Return the canonical partition or the first defining obstruction."""
+    if not isinstance(request, PartitionCheckRequest):
+        raise OperationDomainValidationError(
+            location=(),
+            code="combinatorics.partition_request_type",
+            message="request must be a partition-check request",
+        )
+    parts = getattr(request, "parts", None)
+    if type(parts) is not tuple or len(parts) > MAX_PARTITION_SIZE:
+        raise OperationDomainValidationError(
+            location=("parts",),
+            code="combinatorics.partition_candidate_shape",
+            message="candidate must be a bounded tuple of exact integers",
+        )
+    if any(
+        type(part) is not int or abs(part) > MAX_PARTITION_ITEM
+        for part in parts
+    ):
+        raise OperationDomainValidationError(
+            location=("parts",),
+            code="combinatorics.partition_candidate_integer",
+            message="candidate parts must be exact JSON-safe integers",
+        )
+    try:
+        parts = PartitionCheckRequest.model_validate({"parts": parts}).parts
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("parts",),
+            code="combinatorics.partition_request_invalid",
+            message="request must satisfy the partition-check input contract",
+        ) from exc
+    previous: int | None = None
+    for index, part in enumerate(parts):
+        if part <= 0:
+            return PartitionCheckResult(
+                outcome=PartitionRejected(
+                    parts=parts,
+                    obstruction=NonpositivePartObstruction(index=index, value=part),
+                )
+            )
+        if previous is not None and previous < part:
+            return PartitionCheckResult(
+                outcome=PartitionRejected(
+                    parts=parts,
+                    obstruction=IncreasingPartsObstruction(
+                        index=index,
+                        previous_value=previous,
+                        value=part,
+                    ),
+                )
+            )
+        previous = part
+
+    if sum(parts) > MAX_PARTITION_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("parts",),
+            code="combinatorics.partition_candidate_size",
+            message="valid partition candidate exceeds the supported size",
+        )
+
+    partition = IntegerPartition(parts=parts)
+    conjugate = tuple(
+        sum(part >= column for part in parts)
+        for column in range(1, (parts[0] if parts else 0) + 1)
+    )
+    cells = tuple(
+        (row, column)
+        for row, part in enumerate(parts, start=1)
+        for column in range(1, part + 1)
+    )
+    return PartitionCheckResult(
+        outcome=PartitionFound._from_checked(
+            partition=partition,
+            conjugate=IntegerPartition(parts=conjugate),
+            cells=cells,
+        )
+    )
+
+
 PARTITION_OPERATIONS = (
+    MathTool(
+        operation_id="combinatorics.partition.check",
+        title="Check an integer partition candidate",
+        description=(
+            "Classify a bounded sequence of exact integers as an integer "
+            "partition, returning its canonical value and Ferrers data, or "
+            "the first nonpositive part or adjacent increase."
+        ),
+        request_type=PartitionCheckRequest,
+        result_type=PartitionCheckResult,
+        run=check_partition,
+        tags=("combinatorics", "partition", "exact"),
+        examples=(
+            OperationExample(
+                name="partition_candidate",
+                description="Check the partition (4, 2, 1).",
+                input={"parts": [4, 2, 1]},
+            ),
+            OperationExample(
+                name="partition_obstruction",
+                description="Locate the first increasing adjacent pair.",
+                input={"parts": [3, 4, 1]},
+            ),
+        ),
+    ),
     MathTool(
         operation_id="combinatorics.compute.stirling_first",
         title="Compute Stirling number of first kind",

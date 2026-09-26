@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from math import gcd
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import CanonicalLimits, encode_strict_json
@@ -134,10 +133,7 @@ def modular_form_coordinates_add(
     parent_bytes = len(encode_strict_json(left.space.model_dump(mode="json")))
     basis_bytes = len(encode_strict_json(left.basis_id))
     output_bytes = (
-        256
-        + parent_bytes
-        + basis_bytes
-        + output_cells * (2 * projected_digits + 80)
+        256 + parent_bytes + basis_bytes + output_cells * (2 * projected_digits + 80)
     )
     if output_bytes > MAX_COORDINATE_ADDITION_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(

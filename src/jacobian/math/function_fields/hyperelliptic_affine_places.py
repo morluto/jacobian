@@ -15,7 +15,7 @@ from jacobian.math.function_fields._models import (
     HyperellipticAffinePlace,
 )
 from jacobian.math.function_fields.operations import (
-    _admit_field,
+    _admit_field_resources,
     _canonical_field,
     _hyperelliptic_branch_polynomial,
     _validated_field,
@@ -29,6 +29,8 @@ MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES = 2_000_000
 _PLACE_RESULT_OVERHEAD_BYTES = 256
 _PLACE_RESULT_FIXED_WORK = 64
 _FIELD_COEFFICIENT_VALIDATION_WORK = 4
+# Conservative Euclidean polynomial-gcd bound for admitted coefficient degree.
+_BRANCH_RECOGNITION_WORK_PER_DEGREE_CUBE = 8
 
 
 class HyperellipticAffinePlacesRequest(StrictModel):
@@ -77,7 +79,22 @@ def enumerate_hyperelliptic_affine_places(
             code="function_field.affine_enumeration_characteristic",
             message="affine y^2=f(x) enumeration requires odd characteristic",
         )
-    _admit_field(field)
+    # Validate coefficient/work bounds before recognition. Squarefree y^2-f(x)
+    # itself proves irreducibility, so generic rational-function factorization
+    # is redundant and outside this operation's admission envelope.
+    _admit_field_resources(field)
+    branch_degree_bound = max(
+        (
+            max(coefficient.numerator.degree, coefficient.denominator.degree)
+            for coefficient in field.defining_polynomial
+        ),
+        default=0,
+    )
+    branch_recognition_work = (
+        _BRANCH_RECOGNITION_WORK_PER_DEGREE_CUBE
+        * (branch_degree_bound + 1) ** 3
+        * field.characteristic.bit_length()
+    )
     branch = _hyperelliptic_branch_polynomial(field)
     if branch is None:
         raise OperationDomainValidationError(
@@ -104,7 +121,8 @@ def enumerate_hyperelliptic_affine_places(
         for polynomial in (coefficient.numerator, coefficient.denominator)
     )
     work = (
-        prime * (len(branch) + 1)
+        branch_recognition_work
+        + prime * (len(branch) + 1)
         + output_count_bound
         * (
             _PLACE_RESULT_FIXED_WORK

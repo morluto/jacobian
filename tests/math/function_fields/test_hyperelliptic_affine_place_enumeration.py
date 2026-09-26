@@ -1,5 +1,8 @@
+import pytest
+
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.function_fields._models import (
     FiniteFunctionField,
     PrimeFieldPolynomial,
@@ -45,6 +48,23 @@ def test_enumeration_is_complete_canonical_and_composes_with_valuation():
         for place in result.places
     )
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_non_squarefree_model_is_rejected_by_shape_recognition() -> None:
+    field = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(_rf((0, 0, 1)), _rf((0,)), _rf((1,))),
+    )
+    # y^2=x^2 is reducible and its branch polynomial is not squarefree.
+    # Enumeration rejects it at the cheap model-recognition boundary rather
+    # than invoking generic rational-function irreducibility factorization.
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        enumerate_hyperelliptic_affine_places(field)
+    assert (
+        exc_info.value.errors()[0]["type"] == "function_field.affine_enumeration_model"
+    )
 
 
 def test_every_enumerated_place_is_accepted_by_existing_valuation():

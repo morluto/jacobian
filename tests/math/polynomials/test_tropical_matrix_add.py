@@ -166,7 +166,11 @@ def test_matrix_add_preserves_empty_axes(
 
 @pytest.mark.parametrize(
     ("row_axis", "column_axis"),
-    [(("r", "r"), ("c",)), (("r",), ("c", "c")), (tuple(f"r{i}" for i in range(129)), tuple(f"c{i}" for i in range(129)))],
+    [
+        (("r", "r"), ("c",)),
+        (("r",), ("c", "c")),
+        (tuple(f"r{i}" for i in range(129)), tuple(f"c{i}" for i in range(129))),
+    ],
 )
 def test_matrix_add_rejects_malformed_native_axes(
     row_axis: tuple[str, ...], column_axis: tuple[str, ...]
@@ -205,3 +209,29 @@ def test_matrix_add_rejects_mismatched_semiring_or_labelled_axes() -> None:
             tropical_matrix_add(left, right)
         with pytest.raises(ValidationError):
             MatrixAddRequest(left=left, right=right)
+
+
+@pytest.mark.parametrize("label", ["", " padded", "x" * 65, "bad\nlabel"])
+def test_matrix_add_rejects_invalid_native_axis_labels(label: str) -> None:
+    matrix = TropicalMatrix.model_construct(
+        semiring=TropicalSemiring(convention="MIN_PLUS", base="QQ"),
+        row_axis=(label,),
+        column_axis=("c",),
+        entries=((),),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(matrix, matrix)
+
+
+def test_matrix_add_bounds_output_before_building_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    left = _matrix("MIN_PLUS", ((Fraction(0),),), row_axis=("r",), column_axis=("c",))
+    right = left
+    monkeypatch.setattr(
+        tropical_operations,
+        "CanonicalLimits",
+        lambda: type("Limits", (), {"max_output_bytes": 300})(),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(left, right)

@@ -120,6 +120,18 @@ def _admit_vector(vector: TropicalVector) -> None:
         _admit_scalar(entry, vector.semiring)
 
 
+def _is_valid_tropical_axis_label(label: object) -> bool:
+    return (
+        isinstance(label, str)
+        and bool(label)
+        and label == label.strip()
+        and len(label) <= 64
+        and not any(
+            unicodedata.category(character) in ("Cc", "Cs") for character in label
+        )
+    )
+
+
 def _admit_matrix(matrix: TropicalMatrix) -> None:
     if not isinstance(matrix, TropicalMatrix):
         raise OperationDomainValidationError(
@@ -134,6 +146,10 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
         or len(set(matrix.column_axis)) != len(matrix.column_axis)
         or len(matrix.row_axis) > 128
         or len(matrix.column_axis) > 128
+        or any(
+            not _is_valid_tropical_axis_label(label)
+            for label in (*matrix.row_axis, *matrix.column_axis)
+        )
     ):
         raise OperationDomainValidationError(
             location=("matrix",),
@@ -1565,6 +1581,32 @@ def tropical_matrix_add(left: TropicalMatrix, right: TropicalMatrix) -> Tropical
             location=("right",),
             code="tropical.matrix_mismatch",
             message="matrices must have identical semiring and labelled axes",
+        )
+    # Tropical addition selects an operand, so its encoded scalar size cannot
+    # exceed either admitted input. Bound the complete canonical matrix before
+    # allocating the output rows.
+    scalar_bytes = sum(
+        128
+        + (
+            0
+            if entry.value is None
+            else len(str(abs(entry.value.num))) + len(str(entry.value.den))
+        )
+        for matrix in (left, right)
+        for row in matrix.entries
+        for entry in row
+    )
+    output_bound = (
+        len(encode_strict_json(list(left.row_axis)))
+        + len(encode_strict_json(list(left.column_axis)))
+        + 256
+        + scalar_bytes
+    )
+    if output_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="tropical.matrix_output_bytes",
+            message="matrix sum may exceed the canonical output byte envelope",
         )
     rows = tuple(
         tuple(

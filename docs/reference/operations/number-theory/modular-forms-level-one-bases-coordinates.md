@@ -20,11 +20,16 @@ version, and exact rational coordinate vector, so it defines a global form,
 not only a finite q-prefix.
 
 The basis and coordinate expansion operations return exact finite q-prefixes,
-while `modular_form.space.sturm_bound.compute`
-returns the exact Sturm integer. Callers can compose these values and compare
-the required coefficients themselves; Jacobian publishes no global equality
-checker. For a Sturm bound `B`, the determining prefix contains `B + 1`
-coefficients, from index zero through index `B`.
+while `modular_form.space.sturm_bound.compute` returns the exact Sturm integer.
+Callers can compose these values and compare the required coefficients
+themselves; Jacobian publishes no general global equality checker. For the
+narrow order-6 `S_2` family at levels 13, 26, and 39, explicit character
+inflation and common-target comparison are available through
+`modular_form.character_coordinates.transport.compute` and
+`modular_form.character.equal.check`, as described in [Rational Gamma0
+modular-form bases](modular-forms-gamma0-rational-bases.md). For a Sturm bound
+`B`, the determining prefix contains `B + 1` coefficients, from index zero
+through index `B`.
 
 These rational basis and coordinate operations support level one, holomorphic
 trivial-character spaces at Gamma0(2) and Gamma0(3), even-weight
@@ -35,8 +40,20 @@ Beyond those formula families, the bounded PARI Sturm-RREF path in
 supports rational trivial-character `M_k(Gamma0(N))` and `S_k(Gamma0(N))`
 spaces through level 10,000 whenever the weight, dimension, Sturm precision,
 aggregate work, and output bounds declared by that path admit the request.
-Other levels, cusp subspaces above level one, and other nontrivial characters
-remain unsupported in the rational basis and coordinate paths.
+Other nontrivial characters remain unsupported by these rational basis and
+coordinate operations.
+Other levels and cusp subspaces outside the stated basis families remain
+unsupported by these rational basis and coordinate operations.
+
+The public Sturm operation has a wider, parent-only contract than the basis
+operations: for represented `Gamma0(N)` spaces of level at most 10,000 over `QQ` or their declared
+rational cyclotomic coefficient field, it returns
+`floor(k [SL2(Z):Gamma0(N)] / 12)` and retains the exact character and field in
+the result. The formula does not depend on the character or coefficient field;
+only the validity of the exact space parent does. A bound `B` determines the
+`B + 1` coefficients from q^0 through q^B. PARI documents the same
+Gamma0(N), weight-k Sturm bound in `mfsturm(N,k)` in its
+[Modular Forms reference](https://pari.math.u-bordeaux.fr/dochtml/html/Modular_forms.html).
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow
@@ -58,8 +75,10 @@ PARI basis prefix through `q^(2n)`, applies the exact character-valued Hecke
 coefficient formula, and reconstructs the image in the same exact coordinate
 space through the Sturm bound. Its coefficient-height admission uses the
 weight-2 eigenform bound `|a_m| <= sigma_1(m) <= m(m+1)/2` across the entire
-requested prefix. No implicit embeddings across characters,
-fields, levels, or basis versions are defined.
+requested prefix. This coordinate operation does not define implicit
+embeddings across characters, fields, levels, or basis versions. The separate
+explicit-inflation path above preserves and validates both source and target
+parents.
 
 For rational scalar multiples of the two conjugate character forms, the
 operation `modular_form.character_coordinates.product.compute` multiplies
@@ -84,10 +103,12 @@ or Hecke operations; those consumers still enforce their own accepted parents.
 The conjugate-character product above is a separate bounded operation that
 returns its target Sturm prefix.
 
-This exception does not widen the generic rational dimension, Sturm, basis,
-frame, coordinate, transport, equality, or operator paths. Those paths remain restricted to their documented
-rational families and reject a cyclotomic parent when their operation relies
-on rational coefficients. A nontrivial character must be supplied
+This exception does not widen the generic rational dimension, basis, frame,
+or operator paths. Those paths remain restricted to their documented rational
+families and reject a cyclotomic parent when their operation relies on rational
+coefficients. The Sturm operation is the exception: it computes its integer
+from the space's level and weight and accepts every exact cyclotomic parent
+represented by `ModularFormSpace`. A nontrivial character must be supplied
 explicitly at the Gamma0 level; callers must use
 `dirichlet_character.inflate.compute` before binding
 a character of smaller modulus. The character's value order must divide the
@@ -295,7 +316,8 @@ is also the standard normalized newform in `S_6(Gamma0(3))`.
 ## Exact rational basis frames
 
 `modular_form.basis_frame.create` declares an ordered rational basis relative
-to one of the six supported canonical bases. A frame retains its exact modular
+to one of seven supported canonical bases, including the PARI-backed
+`gamma0-rational-gamma0-sturm-rref-v1` basis. A frame retains its exact modular
 space, canonical basis ID, canonical source labels, caller labels, and a square
 matrix `C`; column `j` gives the canonical coordinates of caller basis vector
 `j`. Thus canonical coordinates `x` convert to caller coordinates by solving

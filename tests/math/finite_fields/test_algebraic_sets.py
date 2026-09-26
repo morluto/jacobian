@@ -150,6 +150,15 @@ def test_affine_count_streams_beyond_set_materialization_limit() -> None:
         affine_zero_set(system)
 
 
+def test_zero_system_count_at_widened_field_boundary_is_bounded_and_exact() -> None:
+    presentation = finite_field(65_537, (0, 1))
+    system = _zero_system(presentation, tuple(f"x{i}" for i in range(8)))
+
+    assert affine_zero_count(system) == 65_537**8
+    with pytest.raises(OperationResourceAdmissionError, match="materialization"):
+        affine_zero_set(_zero_system(presentation, ("x",)))
+
+
 def test_projective_count_does_not_construct_points(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 from benchmarks.tooling.errors import HarborSuiteError
-from benchmarks.tooling.harbor_suite import verifier_bundle_checksum
 from tools import sync_harbor_verifier_support as checksum_tool
 
 from tests.tooling.harbor_suite_support import (
@@ -36,11 +35,12 @@ def test_checksum_update_only_rewrites_selected_task(
     first_docker = first / "tests" / "Dockerfile"
     second_docker = second / "tests" / "Dockerfile"
     second_before = second_docker.read_bytes()
-    verifier_digest = verifier_bundle_checksum(first / "tests")
-
     checksum_tool.update("test-v1", ("test-v1-a",))
 
-    assert f'jacobian.checksum="{verifier_digest}"' in first_docker.read_text()
+    assert (
+        'jacobian.checksum="2a8f28454f793b040a9c25967b59fe5c65c3149889d95010a2a95faddea27a47"'
+        in first_docker.read_text()
+    )
     assert second_docker.read_bytes() == second_before
 
 

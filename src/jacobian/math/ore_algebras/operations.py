@@ -5,12 +5,13 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
-from math import comb
+from math import comb, lcm
 from typing import Any
 
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -537,8 +538,49 @@ def _rf_bound(value: RationalFunction) -> tuple[int, int, int]:
     return _poly_degree(numerator), _poly_degree(denominator), digits
 
 
+def _poly_product_coefficient_digits(left: _Poly, right: _Poly) -> int:
+    """Bound coefficient height after sparse rational polynomial convolution."""
+    if not left or not right:
+        return 1
+
+    def profile(poly: _Poly) -> tuple[int, int]:
+        denominator_sum = 0
+        maximum_numerator_minus_denominator = 0
+        for coefficient in poly.values():
+            numerator_digits = len(str(abs(coefficient.numerator)))
+            denominator_digits = len(str(coefficient.denominator))
+            denominator_sum += denominator_digits
+            maximum_numerator_minus_denominator = max(
+                maximum_numerator_minus_denominator,
+                numerator_digits - denominator_digits,
+            )
+        return denominator_sum, maximum_numerator_minus_denominator
+
+    left_denominators, left_height = profile(left)
+    right_denominators, right_height = profile(right)
+    denominator_digits = left_denominators + right_denominators
+    collision_count = min(len(left), len(right))
+    addition_digits = len(str(collision_count)) if collision_count > 1 else 0
+    numerator_digits = (
+        denominator_digits + max(0, left_height + right_height) + addition_digits
+    )
+    return max(denominator_digits, numerator_digits)
+
+
+def _rf_product_coefficient_digits(
+    left: tuple[_Poly, _Poly], right: tuple[_Poly, _Poly]
+) -> int:
+    return max(
+        _poly_product_coefficient_digits(left[0], right[0]),
+        _poly_product_coefficient_digits(left[1], right[1]),
+    )
+
+
 def _derivative_rf_bound(
-    bound: tuple[int, int, int], order: int
+    bound: tuple[int, int, int],
+    order: int,
+    *,
+    source: RationalFunction | None = None,
 ) -> tuple[int, int, int]:
     """Bound every rational-function carrier reached by ``D**order``."""
     numerator_degree, denominator_degree, digits = bound
@@ -546,6 +588,47 @@ def _derivative_rf_bound(
         return -1, 0, digits
     # N'/Q - N Q'/Q**2 raises the denominator degree by Q's degree and
     # the numerator degree by at most deg(Q)-1 on each step.
+    coefficient_digits = digits
+    if order and source is not None:
+        numerator, denominator = _decode_rf(source)
+
+        def denominator_profile(poly: _Poly) -> tuple[int, int]:
+            common = lcm(*(coefficient.denominator for coefficient in poly.values()))
+            return _bounded_integer_digits(common), max(
+                (
+                    _bounded_integer_digits(abs(value.numerator))
+                    for value in poly.values()
+                ),
+                default=1,
+            )
+
+        numerator_denominator_digits, numerator_digits = denominator_profile(numerator)
+        denominator_denominator_digits, denominator_digits = denominator_profile(
+            denominator
+        )
+        collision_digits = _bounded_integer_digits(
+            min(len(numerator), len(denominator))
+        )
+        common_product_denominator = (
+            numerator_denominator_digits + denominator_denominator_digits
+        )
+        differentiated_numerator = (
+            common_product_denominator
+            + numerator_digits
+            + denominator_digits
+            + _bounded_integer_digits(max(1, numerator_degree, denominator_degree))
+            + collision_digits
+            + 2
+        )
+        squared_denominator = (
+            2 * denominator_denominator_digits
+            + 2 * denominator_digits
+            + collision_digits
+            + 2
+        )
+        coefficient_digits = max(differentiated_numerator, squared_denominator)
+        for _ in range(1, order):
+            coefficient_digits = (coefficient_digits + 4) * 2
     growth_steps = 1 << order
     return (
         numerator_degree + order * max(denominator_degree - 1, 0),
@@ -553,12 +636,24 @@ def _derivative_rf_bound(
         # Fraction additions can multiply the active denominator at every
         # derivative stage.  Exponential accounting is conservative but keeps
         # the admission independent of the eventual cancellation pattern.
-        (digits + 4) * growth_steps,
+        coefficient_digits if source is not None else (digits + 4) * growth_steps,
     )
 
 
+def _bounded_integer_digits(value: int) -> int:
+    """Cheap upper bound for decimal digits without converting a large int."""
+    if abs(value) <= 1:
+        return 1
+    return (abs(value).bit_length() * 30_103 + 99_999) // 100_000
+
+
 def _admit_differential_result_bounds(
-    contributions: list[tuple[int, tuple[int, int, int], tuple[int, int, int], int]],
+    contributions: list[
+        tuple[int, tuple[int, int, int], tuple[int, int, int], int]
+        | tuple[int, tuple[int, int, int], tuple[int, int, int], int, int]
+    ],
+    *,
+    check_coefficient_digits: bool = True,
 ) -> None:
     """Admit the final RF carrier before any differential expansion.
 
@@ -569,14 +664,18 @@ def _admit_differential_result_bounds(
     if not contributions:
         return
     groups: dict[int, list[tuple[int, int, int]]] = {}
-    for exponent, left, derivative, binomial_digits in contributions:
+    for contribution in contributions:
+        exponent, left, derivative, binomial_digits = contribution[:4]
+        convolution_digits = contribution[4] if len(contribution) == 5 else 0
         left_num, left_den, left_digits = left
         derivative_num, derivative_den, derivative_digits = derivative
         contribution_num = (
             -1 if left_num < 0 or derivative_num < 0 else left_num + derivative_num
         )
         contribution_den = left_den + derivative_den
-        contribution_digits = left_digits + derivative_digits + binomial_digits
+        contribution_digits = max(
+            left_digits + derivative_digits + binomial_digits, convolution_digits
+        )
         groups.setdefault(exponent, []).append(
             (contribution_num, contribution_den, contribution_digits)
         )
@@ -591,15 +690,20 @@ def _admit_differential_result_bounds(
             if any(value[0] >= 0 for value in values)
             else -1
         )
-        # Common-denominator lifting and final monic normalization can each
-        # combine one active coefficient with the other contributions.
-        coefficient_digits = 2 * sum(value[2] for value in values) + 8 * len(values)
+        # A common denominator is a product of the contribution denominators.
+        # Each numerator summand uses that denominator with its own denominator
+        # removed, so the total component height is bounded by the sum of the
+        # contribution heights plus the digits needed to add the summands.
+        coefficient_digits = sum(value[2] for value in values) + len(str(len(values)))
         if (
             max(numerator_degree, denominator_degree)
             > MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT
             or max(numerator_degree, denominator_degree) + 1
             > MAX_RATIONAL_FUNCTION_TERMS
-            or coefficient_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+            or (
+                check_coefficient_digits
+                and coefficient_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+            )
         ):
             raise OperationResourceAdmissionError(
                 location=("result", exponent),
@@ -715,7 +819,7 @@ def differential_operator_apply(
             (
                 0,
                 _rf_bound(term.coefficient),
-                _derivative_rf_bound(function_bound, term.order),
+                _derivative_rf_bound(function_bound, term.order, source=function_value),
                 0,
             )
             for term in operator_value.terms
@@ -750,29 +854,80 @@ def differential_operator_multiply(
             message="differential product order exceeds the admitted envelope",
         )
     right_bounds = {
-        term.order: _rf_bound(term.coefficient) for term in right_value.terms
+        id(term): (term.coefficient, _rf_bound(term.coefficient))
+        for term in right_value.terms
     }
-    _admit_differential_result_bounds(
-        [
-            (
-                first.order - k + second.order,
-                _rf_bound(first.coefficient),
-                _derivative_rf_bound(right_bounds[second.order], k),
-                len(str(comb(first.order, k))),
-            )
-            for first in left_value.terms
-            for second in right_value.terms
-            for k in range(first.order + 1)
-        ]
-    )
+    planned = [
+        (
+            first,
+            second,
+            k,
+            _derivative_rf_bound(
+                right_bounds[id(second)][1],
+                k,
+                source=right_bounds[id(second)][0],
+            ),
+        )
+        for first in left_value.terms
+        for second in right_value.terms
+        for k in range(first.order + 1)
+    ]
+    static_bounds: list[
+        tuple[int, tuple[int, int, int], tuple[int, int, int], int]
+        | tuple[int, tuple[int, int, int], tuple[int, int, int], int, int]
+    ] = [
+        (
+            first.order - k + second.order,
+            _rf_bound(first.coefficient),
+            derivative_bound,
+            len(str(comb(first.order, k))),
+        )
+        for first, second, k, derivative_bound in planned
+    ]
+    # Admit derivative degrees and sparse work before constructing derivative
+    # coefficients; their exact coefficient supports then make convolution
+    # growth admission collision-aware.
+    _admit_differential_result_bounds(static_bounds, check_coefficient_digits=False)
+    if any(
+        derivative_bound[2] > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+        for _, _, _, derivative_bound in planned
+    ):
+        raise OperationResourceAdmissionError(
+            location=("right", "terms"),
+            code="ore_algebra.differential_result_carrier",
+            message="differential derivative exceeds the rational-function coefficient bound",
+        )
+    derivative_cache: dict[tuple[int, int], tuple[_Poly, _Poly]] = {}
+    for second in right_value.terms:
+        derivative = _decode_rf(second.coefficient)
+        maximum_order = max((first.order for first in left_value.terms), default=0)
+        derivative_cache[(second.order, 0)] = derivative
+        for derivative_order in range(1, maximum_order + 1):
+            request_checkpoint("during differential product derivative admission")
+            derivative = _rf_derivative(derivative)
+            derivative_cache[(second.order, derivative_order)] = derivative
+    admitted_bounds: list[
+        tuple[int, tuple[int, int, int], tuple[int, int, int], int]
+        | tuple[int, tuple[int, int, int], tuple[int, int, int], int, int]
+    ] = [
+        (
+            first.order - k + second.order,
+            _rf_bound(first.coefficient),
+            derivative_bound,
+            len(str(comb(first.order, k))),
+            _rf_product_coefficient_digits(
+                _decode_rf(first.coefficient), derivative_cache[(second.order, k)]
+            ),
+        )
+        for first, second, k, derivative_bound in planned
+    ]
+    _admit_differential_result_bounds(admitted_bounds)
     accumulated: dict[int, tuple[_Poly, _Poly]] = {}
     for first in left_value.terms:
         coefficient = _decode_rf(first.coefficient)
         for second in right_value.terms:
-            derivative = _decode_rf(second.coefficient)
             for k in range(first.order + 1):
-                if k:
-                    derivative = _rf_derivative(derivative)
+                derivative = derivative_cache[(second.order, k)]
                 if not derivative[0]:
                     continue
                 contribution = _rf_mul(coefficient, derivative)

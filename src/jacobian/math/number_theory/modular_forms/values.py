@@ -260,82 +260,6 @@ class ModularFormSpace(StrictModel):
         return self
 
 
-class ModularFormSpaceInclusion(StrictModel):
-    """The natural inclusion from one rational trivial-character Gamma0 space.
-
-    For ``source.level | target.level``, the subgroup inclusion is
-    ``Gamma0(target.level) <= Gamma0(source.level)``. This carrier only
-    represents the same-weight, same-coefficient-parent map; it does not
-    encode arbitrary character or field maps.
-    """
-
-    map_kind: Literal["natural_gamma0_level_inclusion"] = (
-        "natural_gamma0_level_inclusion"
-    )
-    source_space: ModularFormSpace
-    target_space: ModularFormSpace
-
-    @model_validator(mode="after")
-    def require_supported_inclusion(self) -> Self:
-        issue = natural_gamma0_inclusion_issue(
-            self.map_kind, self.source_space, self.target_space
-        )
-        if issue is not None:
-            reason, message = issue
-            raise _validation_error(reason, message)
-        return self
-
-
-def natural_gamma0_inclusion_issue(
-    map_kind: str,
-    source: ModularFormSpace,
-    target: ModularFormSpace,
-) -> tuple[str, str] | None:
-    """Return why a claimed natural rational Gamma0 inclusion is invalid."""
-
-    if map_kind != "natural_gamma0_level_inclusion":
-        return "inclusion_kind_tag", "inclusion map kind is not canonical"
-    if type(source) is not ModularFormSpace or type(target) is not ModularFormSpace:
-        return "inclusion_space_type", "inclusion parents must be exact modular spaces"
-    required = ("group", "character", "coefficient_domain", "level", "weight", "kind")
-    if any(not hasattr(source, field) for field in required):
-        return "inclusion_source_incomplete", "source space must contain all required fields"
-    if any(not hasattr(target, field) for field in required):
-        return "inclusion_target_incomplete", "target space must contain all required fields"
-    if (
-        source.group != "GAMMA0"
-        or target.group != "GAMMA0"
-        or source.character != "TRIVIAL"
-        or target.character != "TRIVIAL"
-        or source.coefficient_domain != "QQ"
-        or target.coefficient_domain != "QQ"
-    ):
-        return (
-            "inclusion_parent",
-            "natural Gamma0 inclusion requires trivial-character QQ spaces",
-        )
-    if (
-        type(source.level) is not int
-        or type(target.level) is not int
-        or not 1 <= source.level <= MAX_MODULAR_FORM_LEVEL
-        or not 1 <= target.level <= MAX_MODULAR_FORM_LEVEL
-        or type(source.weight) is not int
-        or type(target.weight) is not int
-        or not 0 <= source.weight <= MAX_MODULAR_FORM_WEIGHT
-        or not 0 <= target.weight <= MAX_MODULAR_FORM_WEIGHT
-        or source.kind not in ("M", "S")
-        or target.kind not in ("M", "S")
-    ):
-        return "inclusion_space_invalid", "inclusion spaces must be canonical"
-    if source.weight != target.weight:
-        return "inclusion_weight", "source and target weights must agree"
-    if target.level % source.level:
-        return "inclusion_level", "source Gamma0 level must divide the target level"
-    if source.kind == "M" and target.kind == "S":
-        return "inclusion_kind", "the full space does not embed into the cusp space"
-    return None
-
-
 class ModularFormBasisElement(StrictModel):
     """One named vector of a deterministic exact modular-form basis."""
 
@@ -380,6 +304,7 @@ class ModularFormCoordinates(StrictModel):
         "gamma0-four-chi4-weight-three-v1",
         "gamma0-rational-gamma0-sturm-rref-v1",
         "gamma0-13-even-order6-character-sturm-v1",
+        "gamma0-cyclotomic-character-sturm-rref-v1",
     ]
     coordinates: tuple[CanonicalRational | RationalCyclotomicElement, ...] = Field(
         max_length=MAX_LEVEL_ONE_BASIS_COORDINATES
@@ -388,6 +313,21 @@ class ModularFormCoordinates(StrictModel):
     @model_validator(mode="after")
     def require_coefficient_parent(self) -> Self:
         field = self.space.coefficient_domain
+        if self.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
+            if not 1 <= len(self.coordinates) <= 32:
+                raise _validation_error(
+                    "character_coordinate_dimension",
+                    "general character coordinates must contain 1 through 32 entries",
+                )
+            if type(field) is not RationalCyclotomicField or any(
+                type(value) is not RationalCyclotomicElement or value.field != field
+                for value in self.coordinates
+            ):
+                raise _validation_error(
+                    "character_coordinate_parent",
+                    "general character coordinates must use their exact cyclotomic field",
+                )
+            return self
         if field == "QQ":
             if any(
                 not isinstance(value, CanonicalRational) for value in self.coordinates
@@ -637,6 +577,5 @@ __all__ = [
     "ModularFormOperatorImage",
     "ModularFormOperatorImagePrefix",
     "ModularFormSpace",
-    "ModularFormSpaceInclusion",
     "ModularQExpansion",
 ]

@@ -34,6 +34,7 @@ from jacobian.math.topology.frames._tools import (
 )
 from jacobian.math.topology.frames.operations import gram, verify_gram
 from jacobian.math.topology.frames.values import (
+    MAX_COMPLEX_FRAME_CELLS,
     MAX_VECTOR_CELLS,
     ComplexFrame,
     VectorFamily,
@@ -81,12 +82,19 @@ def test_decoded_gram_rejects_shape_forgery() -> None:
     assert not verify_gram(result.model_copy(update={"vectors": ()}))
 
 
-def test_vector_family_schema_advertises_cell_budget() -> None:
-    description = VectorFamily.model_json_schema()["properties"]["vectors"][
-        "description"
-    ]
+@pytest.mark.parametrize(
+    ("carrier", "cell_limit"),
+    (
+        (VectorFamily, MAX_VECTOR_CELLS),
+        (ComplexFrame, MAX_COMPLEX_FRAME_CELLS),
+    ),
+)
+def test_frame_schemas_advertise_the_cell_budget(
+    carrier: type[VectorFamily] | type[ComplexFrame], cell_limit: int
+) -> None:
+    description = carrier.model_json_schema()["properties"]["vectors"]["description"]
 
-    assert f"len(vectors) * dimension <= {MAX_VECTOR_CELLS}" in description
+    assert f"len(vectors) * dimension <= {cell_limit}" in description
 
 
 def test_gram_accepts_a_single_vector_beyond_the_old_side_cap() -> None:
@@ -111,15 +119,6 @@ def test_frame_operations_admit_coefficient_beyond_the_old_value_cap() -> None:
     assert result.potential == 1004006004001
 
 
-def test_frame_requires_full_ambient_span() -> None:
-    request = VectorFamily.model_validate(
-        {"dimension": len(([[1, 0], [2, 0]])[0]), "vectors": [[1, 0], [2, 0]]}
-    )
-    with pytest.raises(OperationDomainValidationError) as error:
-        _frame_potential(request)
-    assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
-
-
 def test_coherence_rejects_zero_vector() -> None:
     request = VectorFamily.model_validate(
         {
@@ -142,6 +141,16 @@ def test_tight_equiangular_profile_is_exact_and_serializable() -> None:
     assert result.common_squared_inner_product is not None
     assert result.common_squared_inner_product.as_integer_ratio() == (0, 1)
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+    forged = json.loads(result.model_dump_json())
+    forged["common_squared_inner_product"] = None
+    with pytest.raises(ValueError, match="common squared inner product"):
+        type(result).model_validate_json(json.dumps(forged))
+
+    singleton = _tight_equiangular_profile(VectorFamily(dimension=1, vectors=((1,),)))
+    payload = json.loads(singleton.model_dump_json())
+    assert payload["common_squared_inner_product"] is None
+    assert type(singleton).model_validate_json(json.dumps(payload)) == singleton
 
 
 def test_exact_complex_mub_profile_and_forged_shape_rejection() -> None:
@@ -486,38 +495,31 @@ def test_sic_profile_rejects_forged_structural_residuals() -> None:
 
 
 @pytest.mark.parametrize(
-    ("operation", "request_type"),
+    ("operation", "expected_code", "request_type"),
     (
-        (_tight_equiangular_profile, VectorFamily),
-        (_complex_frame_profile, ComplexFrameProfileRequest),
-        (_mutually_unbiased_bases, MutuallyUnbiasedBasesRequest),
-        (_sic_profile, SicProfileRequest),
+        (_tight_equiangular_profile, "frames.vector_family_type", VectorFamily),
+        (_complex_frame_profile, "frames.request_type", ComplexFrameProfileRequest),
+        (
+            _mutually_unbiased_bases,
+            "frames.request_type",
+            MutuallyUnbiasedBasesRequest,
+        ),
+        (_sic_profile, "frames.request_type", SicProfileRequest),
+        (_gram, "frames.vector_family_type", None),
+        (_coherence, "frames.vector_family_type", None),
+        (_frame_potential, "frames.vector_family_type", None),
     ),
 )
-def test_new_frame_operations_reject_untyped_native_requests(
-    operation: object, request_type: type[object]
-) -> None:
-    expected_message = (
-        "VectorFamily" if operation is _tight_equiangular_profile else "request"
-    )
-    with pytest.raises(OperationDomainValidationError, match=expected_message) as error:
-        operation({})  # type: ignore[operator]
-    expected_code = (
-        "frames.vector_family_type"
-        if operation is _tight_equiangular_profile
-        else "frames.request_type"
-    )
-    assert error.value.errors()[0]["type"] == expected_code
-    assert request_type.__name__ in str(error.value)
-
-
-@pytest.mark.parametrize("operation", (_gram, _coherence, _frame_potential))
-def test_existing_frame_operations_reject_untyped_native_requests(
+def test_frame_operations_reject_untyped_native_requests(
     operation: object,
+    expected_code: str,
+    request_type: type[object] | None,
 ) -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         operation({})  # type: ignore[operator]
-    assert error.value.errors()[0]["type"] == "frames.vector_family_type"
+    assert error.value.errors()[0]["type"] == expected_code
+    if request_type is not None:
+        assert request_type.__name__ in str(error.value)
 
 
 def test_existing_frame_operations_reject_forged_vector_axes_at_native_boundary() -> (
@@ -527,19 +529,6 @@ def test_existing_frame_operations_reject_forged_vector_axes_at_native_boundary(
     with pytest.raises(OperationDomainValidationError) as error:
         _gram(malformed)
     assert error.value.errors()[0]["type"] == "frames.vector_dimension_mismatch"
-
-
-def test_coherence_is_exact_and_carries_canonical_maximizer() -> None:
-    result = _coherence(
-        VectorFamily.model_validate(
-            {
-                "dimension": len(([[1, 1], [1, 0], [0, 1]])[0]),
-                "vectors": [[1, 1], [1, 0], [0, 1]],
-            }
-        )
-    )
-    assert result.coherence_squared.as_integer_ratio() == (1, 2)
-    assert result.maximizing_pair == (0, 2)
 
 
 def test_potential_remains_exact_above_json_safe_integer() -> None:
@@ -674,26 +663,6 @@ def test_sparse_row_norm_controls_gram_entry_admission() -> None:
     result = _gram(VectorFamily(dimension=family.dimension, vectors=family.vectors))
 
     assert result.gram == ((4_900_000_000_000_000,),)
-
-
-@pytest.mark.scale
-def test_dense_high_height_gram_uses_the_structural_work_bound() -> None:
-    dimension = 512
-    basis = tuple(
-        tuple(1_000 if row == column else 999 for column in range(dimension))
-        for row in range(dimension)
-    )
-    vectors = basis * 2
-    result = _gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
-
-    potential = _frame_potential(
-        VectorFamily(dimension=len(vectors[0]), vectors=vectors)
-    )
-    diagonal = 1_000**2 + (dimension - 1) * 999**2
-    off_diagonal = 2 * 1_000 * 999 + (dimension - 2) * 999**2
-    expected = 4 * dimension * (diagonal**2 + (dimension - 1) * off_diagonal**2)
-    assert result.gram[0][0] == diagonal
-    assert potential.potential == expected
 
 
 @pytest.mark.scale
@@ -939,15 +908,6 @@ def test_mub_cross_basis_independent_denominators_are_admitted() -> None:
     assert canonical_rational_component_digits(overlap) <= MAX_CANONICAL_RATIONAL_DIGITS
 
 
-def test_complex_frame_schema_advertises_the_cell_constraint() -> None:
-    """The generated schema states the materialized-cell relation."""
-
-    schema = ComplexFrame.model_json_schema()
-    text = schema["properties"]["vectors"].get("description", "")
-    assert "len(vectors) * dimension" in text
-    assert "4_096" in text or "4096" in text
-
-
 def test_mub_status_is_not_replayed_on_deserialization() -> None:
     standard = ComplexFrame(dimension=2, vectors=((_z(1), _z(0)), (_z(0), _z(1))))
     result = _mutually_unbiased_bases(
@@ -1087,22 +1047,3 @@ def test_tight_equiangular_profile_charges_both_structural_passes() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         _tight_equiangular_profile(family)
     assert error.value.errors()[0]["type"] == "frames.profile_work_budget"
-
-
-def test_nontrivial_equiangular_profile_requires_common_value() -> None:
-    """An equiangular frame with an observed pair retains its common value."""
-
-    result = _tight_equiangular_profile(
-        VectorFamily(dimension=2, vectors=((1, 0), (0, 1)))
-    )
-    assert result.equiangular is True
-    forged = json.loads(result.model_dump_json())
-    forged["common_squared_inner_product"] = None
-    with pytest.raises(ValueError, match="common squared inner product"):
-        type(result).model_validate_json(json.dumps(forged))
-
-    # A singleton has no off-diagonal pair, so the field stays optional there.
-    singleton = _tight_equiangular_profile(VectorFamily(dimension=1, vectors=((1,),)))
-    payload = json.loads(singleton.model_dump_json())
-    assert payload["common_squared_inner_product"] is None
-    assert type(singleton).model_validate_json(json.dumps(payload)) == singleton

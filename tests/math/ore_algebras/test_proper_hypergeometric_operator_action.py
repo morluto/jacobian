@@ -177,6 +177,19 @@ def test_large_expansion_is_rejected_before_rational_normalization():
         proper_hypergeometric_operator_action(_operator(9), _binomial_term())
 
 
+def test_n_action_does_not_require_admission_of_the_k_quotient():
+    term = ProperHypergeometricTerm(
+        polynomial=_polynomial([((0, 0), 1)]),
+        factorial_factors=(
+            IntegerAffineFactorial(
+                n_coefficient=0, k_coefficient=128, offset=0, power=32
+            ),
+        ),
+    )
+    result = proper_hypergeometric_operator_action(_operator(1), term)
+    assert _rf_value(result.relative_multiplier, 3, 2) == 1
+
+
 def test_native_boundary_rejects_noncanonical_term_values_with_owner_error():
     with pytest.raises(OperationDomainValidationError, match="canonical proper"):
         proper_hypergeometric_operator_action(_operator(0), None)

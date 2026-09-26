@@ -5,6 +5,7 @@ from __future__ import annotations
 from math import comb
 from typing import Any
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -154,6 +155,7 @@ def _factorial_ratio_expression(
 def _quotient(term: ProperHypergeometricTerm, axis: int) -> RationalFunction:
     from sympy import Rational
 
+    request_checkpoint("before hypergeometric shift quotient normalization")
     variables = symbols_for_variables(_VARIABLES)
     polynomial = rational_polynomial_to_sympy(term.polynomial)
     shift = variables[axis]
@@ -168,8 +170,12 @@ def _quotient(term: ProperHypergeometricTerm, axis: int) -> RationalFunction:
         expression,
         _VARIABLES,
         maximum_terms=_MAX_EXPANSION_TERMS,
+        deadline_check=lambda: request_checkpoint(
+            "during hypergeometric shift quotient normalization"
+        ),
         symbols=variables,
     )
+    request_checkpoint("after hypergeometric shift quotient normalization")
     if any(
         max(
             len(str(abs(coefficient.as_fraction().numerator))),
@@ -203,3 +209,12 @@ def proper_hypergeometric_shift_quotients(
     return ProperHypergeometricShiftQuotientsResult(
         n_ratio=_quotient(term, 0), k_ratio=_quotient(term, 1)
     )
+
+
+def proper_hypergeometric_n_shift_quotient(
+    term: ProperHypergeometricTerm,
+) -> RationalFunction:
+    """Compute only ``T(n+1,k)/T(n,k)`` for internal n-shift consumers."""
+    term = ProperHypergeometricTerm.model_validate(term.model_dump())
+    _admit_quotient(term, 0)
+    return _quotient(term, 0)

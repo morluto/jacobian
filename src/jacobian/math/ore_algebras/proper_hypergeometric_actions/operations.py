@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from math import prod
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -17,7 +18,7 @@ from jacobian.math.ore_algebras.proper_hypergeometric_terms._models import (
     ProperHypergeometricTerm,
 )
 from jacobian.math.ore_algebras.proper_hypergeometric_terms.shift_quotients import (
-    proper_hypergeometric_shift_quotients,
+    proper_hypergeometric_n_shift_quotient,
 )
 from jacobian.math.polynomials._conversions import (
     rational_function_from_sympy,
@@ -179,23 +180,29 @@ def _admit_action(operator: ShiftOreOperator, n_ratio: RationalFunction) -> None
 def _apply(
     operator: ShiftOreOperator, term: ProperHypergeometricTerm
 ) -> RationalFunction:
-    from sympy import Integer, cancel
+    from sympy import Integer
 
+    request_checkpoint("before hypergeometric operator action normalization")
     n, k = symbols_for_variables(_VARIABLES)
-    quotients = proper_hypergeometric_shift_quotients(term)
-    _admit_action(operator, quotients.n_ratio)
-    n_ratio = rational_function_to_sympy(quotients.n_ratio, symbols=(n, k))
+    n_quotient = proper_hypergeometric_n_shift_quotient(term)
+    _admit_action(operator, n_quotient)
+    n_ratio = rational_function_to_sympy(n_quotient, symbols=(n, k))
     total = Integer(0)
     for item in operator.terms:
         coefficient = rational_function_to_sympy(item.coefficient, symbols=(n,))
         shifted_product = Integer(1)
         for amount in range(item.exponent):
+            request_checkpoint("during hypergeometric operator action substitution")
             shifted_product *= n_ratio.subs(n, n + amount)
         total += coefficient * shifted_product
+    request_checkpoint("before hypergeometric operator action normalization")
     return rational_function_from_sympy(
-        cancel(total),
+        total,
         _VARIABLES,
         maximum_terms=_MAX_ACTION_TERMS,
+        deadline_check=lambda: request_checkpoint(
+            "during hypergeometric operator action normalization"
+        ),
         symbols=(n, k),
     )
 

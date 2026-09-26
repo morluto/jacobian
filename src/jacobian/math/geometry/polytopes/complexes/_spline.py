@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import combinations, product
-from math import comb
+from itertools import combinations
+from math import comb, gcd
 from typing import Any, NoReturn
 
 import sympy as sp
@@ -35,15 +35,19 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewisePolynomialAdditionRequest,
     PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialResult,
+    PiecewisePolynomialScalarMultiplicationRequest,
     PiecewiseSmoothnessRequest,
     PiecewiseSmoothnessResult,
     PolytopalComplexClosureResult,
+    SplineCellRefinementLineage,
     SplineCoordinatesRequest,
     SplineCoordinatesResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
     SplineEvaluationResult,
+    SplineRefinementMapRequest,
+    SplineRefinementMapResult,
     SplineSpaceResult,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
@@ -564,6 +568,133 @@ def piecewise_polynomial_add(  # noqa: C901
     )
 
 
+def piecewise_polynomial_scalar_multiply(  # noqa: C901
+    request: PiecewisePolynomialScalarMultiplicationRequest,
+) -> PiecewisePolynomialResult:
+    """Scale one compatible piecewise polynomial over QQ exactly.
+
+    Compatibility is reconstructed from the supplied cell polynomials, so a
+    serialized caller status or ledger is never treated as a proof.  Rational
+    coefficient heights and the complete output are admitted before products
+    are materialized.
+    """
+    if not isinstance(request, PiecewisePolynomialScalarMultiplicationRequest):
+        _reject(
+            "scalar_multiplication_type", "expected a scalar multiplication request"
+        )
+    try:
+        request_payload = request.model_dump(mode="python")
+        request = PiecewisePolynomialScalarMultiplicationRequest.model_validate(
+            request_payload
+        )
+    except Exception:
+        _reject("scalar_multiplication_input", "request fields must be canonical")
+    if request_payload != request.model_dump(mode="python"):
+        _reject("scalar_multiplication_input", "request fields must be canonical")
+    function = request.function
+    try:
+        payload = function.model_dump(mode="python")
+        function = PiecewisePolynomialResult.model_validate(payload)
+    except Exception:
+        _reject(
+            "scalar_multiplication_input",
+            "expected a canonical piecewise-polynomial value",
+        )
+    if payload != function.model_dump(mode="python"):
+        _reject(
+            "scalar_multiplication_input",
+            "piecewise-polynomial value must be canonical",
+        )
+    if function.status != "COMPATIBLE":
+        _reject(
+            "scalar_multiplication_continuity",
+            "only compatible functions can be scaled",
+        )
+    scalar = request.scalar.as_fraction()
+    scalar_digits = max(
+        decimal_digit_width(scalar.numerator),
+        decimal_digit_width(scalar.denominator),
+    )
+    if scalar_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("scalar",),
+            code="polytopal_complex.scalar_multiplication_scalar",
+            message="scalar exceeds the admitted rational digit envelope",
+        )
+    output_digits = 0
+    total_terms = 0
+    for piece in function.pieces:
+        terms = piece.polynomial.polynomial.terms
+        total_terms += len(terms)
+        for term in terms:
+            coefficient = term.coefficient.as_fraction()
+            numerator_digits, denominator_digits = _scaled_component_digit_widths(
+                coefficient, scalar
+            )
+            if (
+                max(numerator_digits, denominator_digits)
+                > MAX_CANONICAL_RATIONAL_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("scalar",),
+                    code="polytopal_complex.scalar_multiplication_growth",
+                    message="a scaled coefficient may exceed the canonical rational digit envelope",
+                )
+            output_digits += numerator_digits + denominator_digits
+    try:
+        input_bytes = len(encode_strict_json(function.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.scalar_multiplication_output",
+            message="piecewise-polynomial output exceeds the canonical JSON envelope",
+        ) from exc
+    output_bound = output_digits + 64 * total_terms + input_bytes
+    if output_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.scalar_multiplication_output",
+            message="scaled piecewise-polynomial output exceeds the admitted envelope",
+        )
+    checked = piecewise_polynomial_from_maximal_pieces(
+        function.complex, function.pieces
+    )
+    if checked.status != "COMPATIBLE":
+        _reject(
+            "scalar_multiplication_continuity",
+            "function continuity claims must be exact",
+        )
+    pieces = []
+    for piece in checked.pieces:
+        terms = []
+        for term in piece.polynomial.polynomial.terms:
+            coefficient = term.coefficient.as_fraction() * scalar
+            if coefficient:
+                terms.append(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                        exponents=term.exponents,
+                    )
+                )
+        pieces.append(
+            PieceAssignment(
+                cell_id=piece.cell_id,
+                polynomial=RationalPolynomial(
+                    variables=piece.polynomial.variables,
+                    polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+                ),
+            )
+        )
+    # Scalar multiplication is linear on every shared-face restriction, so
+    # the exact zero compatibility rows remain zero, including for scalar 0.
+    return PiecewisePolynomialResult(
+        complex=checked.complex,
+        pieces=tuple(pieces),
+        compatibility=checked.compatibility,
+        status="COMPATIBLE",
+    )
+
+
 def piecewise_polynomial_multiply(  # noqa: C901
     request: PiecewisePolynomialMultiplicationRequest,
 ) -> PiecewisePolynomialResult:
@@ -914,16 +1045,17 @@ def _admit_evaluation_growth(
 
 
 def _monomials(dimension: int, degree: int) -> tuple[tuple[int, ...], ...]:
-    return tuple(
-        sorted(
-            (
-                exponents
-                for exponents in product(range(degree + 1), repeat=dimension)
-                if sum(exponents) <= degree
-            ),
-            reverse=True,
-        )
-    )
+    result: list[tuple[int, ...]] = []
+
+    def extend(prefix: tuple[int, ...], remaining: int) -> None:
+        if len(prefix) == dimension:
+            result.append(prefix)
+            return
+        for exponent in range(remaining, -1, -1):
+            extend((*prefix, exponent), remaining - exponent)
+
+    extend((), degree)
+    return tuple(result)
 
 
 def _facet_remainder_dimension(dimension: int, degree: int, smoothness: int) -> int:
@@ -1027,6 +1159,8 @@ MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
 MAX_SPLINE_DIMENSION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
 MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SPLINE_REFINEMENT_MAP_WORK = 32_000_000
+MAX_SPLINE_REFINEMENT_RESULT_CELLS = 1_000_000
 
 
 def _admit_spline(
@@ -1221,27 +1355,7 @@ def _admit_spline_coordinate_materialization(
     width: int,
 ) -> None:
     """Bound retained basis bytes and exact work before nullspace expansion."""
-    maximum_entry_digits = max(
-        (
-            _decimal_digits_upper(value.numerator)
-            + _decimal_digits_upper(value.denominator)
-            for row in constraint_rows
-            for value in row
-        ),
-        default=1,
-    )
-    rank_bound = min(len(constraint_rows), width)
-    row_height = (width + 1) * maximum_entry_digits + len(str(width + 1))
-    determinant_digits = rank_bound * row_height + rank_bound * len(
-        str(max(rank_bound, 1))
-    )
-    if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_coordinates_height",
-            message="the canonical spline basis may exceed the exact rational component bound",
-        )
-    basis_scalar_digits = max(1, 2 * determinant_digits + 4)
+    basis_scalar_digits = _spline_nullspace_scalar_digit_bound(constraint_rows, width)
     coordinate_scalar_digits = max(
         (
             _decimal_digits_upper(value.numerator)
@@ -1298,6 +1412,33 @@ def _admit_spline_coordinate_materialization(
                 code="polytopal_complex.spline_coordinates_height",
                 message="spline membership products exceed the exact scalar envelope",
             )
+
+
+def _spline_nullspace_scalar_digit_bound(
+    constraint_rows: tuple[tuple[Fraction, ...], ...], width: int
+) -> int:
+    """Bound exact nullspace coefficient height from admitted matrix minors."""
+    maximum_entry_digits = max(
+        (
+            _decimal_digits_upper(value.numerator)
+            + _decimal_digits_upper(value.denominator)
+            for row in constraint_rows
+            for value in row
+        ),
+        default=1,
+    )
+    rank_bound = min(len(constraint_rows), width)
+    row_height = (width + 1) * maximum_entry_digits + len(str(width + 1))
+    determinant_digits = rank_bound * row_height + rank_bound * len(
+        str(max(rank_bound, 1))
+    )
+    if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_height",
+            message="the canonical spline basis may exceed the exact rational component bound",
+        )
+    return max(1, 2 * determinant_digits + 4)
 
 
 def spline_coordinates(
@@ -1430,13 +1571,24 @@ def _spline_constraint_rows(
 ]:
     """Build exact interface rows after the complex and dimensions are admitted."""
     dimension = len(complex_value.space.axes)
+    symbols = tuple(sp.Symbol(axis) for axis in complex_value.space.axes)
     monomials = _monomials(dimension, degree)
+    monomial_index = {monomial: index for index, monomial in enumerate(monomials)}
+    monomial_polynomials = tuple(
+        sp.Poly(
+            sp.prod(
+                symbol**power for symbol, power in zip(symbols, monomial, strict=True)
+            ),
+            *symbols,
+            domain=sp.QQ,
+        )
+        for monomial in monomials
+    )
     coefficient_axis = tuple(
         (cell.cell_id, monomial) for cell in cells for monomial in monomials
     )
     if len(coefficient_axis) != width:
         raise ArithmeticError("spline coefficient-axis admission mismatch")
-    symbols = tuple(sp.Symbol(axis) for axis in complex_value.space.axes)
     constraint_rows: list[list[Fraction]] = []
     cell_index = {cell.cell_id: i for i, cell in enumerate(cells)}
     for face in complex_value.faces:
@@ -1447,13 +1599,10 @@ def _spline_constraint_rows(
         divisor = sp.Poly(ell.as_expr() ** (smoothness + 1), *symbols, domain=sp.QQ)
         remainders = []
         for cell_id, sign in ((supports[0], 1), (supports[1], -1)):
-            for monomial in monomials:
-                expr = sp.Poly(
-                    sp.prod(symbols[i] ** monomial[i] for i in range(dimension)),
-                    *symbols,
-                    domain=sp.QQ,
-                )
-                rem = expr.div(divisor)[1] * sign
+            for monomial, polynomial in zip(
+                monomials, monomial_polynomials, strict=True
+            ):
+                rem = polynomial.div(divisor)[1] * sign
                 remainders.append((cell_id, monomial, rem))
         support_coeffs: set[tuple[int, ...]] = set()
         for _, _, rem in remainders:
@@ -1463,8 +1612,8 @@ def _spline_constraint_rows(
             for cell_id, monomial, rem in remainders:
                 coeff = rem.coeff_monomial(exponent)
                 if coeff:
-                    col = cell_index[cell_id] * len(monomials) + monomials.index(
-                        monomial
+                    col = (
+                        cell_index[cell_id] * len(monomials) + monomial_index[monomial]
                     )
                     row[col] += Fraction(int(coeff.p), int(coeff.q))
             if any(row):
@@ -1622,6 +1771,39 @@ def _spline_dimension_output_upper_bound(
     return result_header_bytes + complex_bytes + axis_bytes + matrix_bytes
 
 
+def _admit_spline_rank_matrix(
+    rows: tuple[tuple[Fraction, ...], ...], width: int
+) -> None:
+    """Admit exact matrix height and rank intermediates before elimination."""
+    if any(len(row) != width for row in rows):
+        raise ArithmeticError("spline rank matrix shape admission mismatch")
+    max_entry_digits = max(
+        (
+            max(
+                decimal_digit_width(value.numerator),
+                decimal_digit_width(value.denominator),
+            )
+            for row in rows
+            for value in row
+        ),
+        default=1,
+    )
+    pivot_size = min(len(rows), width)
+    intermediate_digits = (pivot_size + 1) * (
+        max_entry_digits + len(str(max(len(rows), width))) + 2
+    )
+    intermediate_bytes = len(rows) * width * (2 * intermediate_digits + 16)
+    if (
+        intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
+        or intermediate_bytes > MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_dimension_height",
+            message="spline dimension rank intermediates exceed their height or storage envelope",
+        )
+
+
 def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
     """Return the exact spline dimension without constructing a nullspace basis."""
     if not isinstance(request, SplineDimensionRequest):
@@ -1643,19 +1825,8 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         and request.smoothness >= 0
         for face in complex_value.faces
     ) * _facet_remainder_dimension(dimension, request.degree, request.smoothness)
-    if len(rows) > row_bound or any(len(row) != width for row in rows):
+    if len(rows) > row_bound:
         raise ArithmeticError("spline dimension matrix shape admission mismatch")
-    max_entry_digits = max(
-        (
-            max(
-                decimal_digit_width(value.numerator),
-                decimal_digit_width(value.denominator),
-            )
-            for row in rows
-            for value in row
-        ),
-        default=1,
-    )
     output_bytes = _spline_dimension_output_upper_bound(
         complex_value, request.degree, request.smoothness, axis, rows, width
     )
@@ -1665,20 +1836,7 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
             code="polytopal_complex.spline_dimension_output",
             message="spline dimension exact matrix exceeds its output envelope",
         )
-    pivot_size = min(len(rows), width)
-    intermediate_digits = (pivot_size + 1) * (
-        max_entry_digits + len(str(max(len(rows), width))) + 2
-    )
-    intermediate_bytes = len(rows) * width * (2 * intermediate_digits + 16)
-    if (
-        intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
-        or intermediate_bytes > MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES
-    ):
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_dimension_height",
-            message="spline dimension rank intermediates exceed their height or storage envelope",
-        )
+    _admit_spline_rank_matrix(rows, width)
     matrix = _spline_constraint_matrix(rows, width)
     if rows:
         from flint import fmpq, fmpq_mat
@@ -1701,6 +1859,306 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         compatibility_matrix=matrix,
         rank=rank,
         nullity=nullity,
+    )
+
+
+def spline_refinement_map(  # noqa: C901
+    request: SplineRefinementMapRequest,
+) -> SplineRefinementMapResult:
+    """Return the exact cellwise coefficient injection from coarse splines.
+
+    Every coarse basis vector is copied to the unique fine cell contained in
+    each common-refinement pair.  The copied vectors are checked against the
+    exact refined compatibility matrix before the map is returned.
+    """
+    if not isinstance(request, SplineRefinementMapRequest):
+        _reject(
+            "spline_refinement_map_type",
+            "expected a canonical spline refinement-map request",
+        )
+    try:
+        request_payload = request.model_dump(mode="python")
+        request = SplineRefinementMapRequest.model_validate(request_payload)
+    except Exception:
+        _reject(
+            "spline_refinement_map_input",
+            "refinement-map fields must be canonical",
+        )
+    if request_payload != request.model_dump(mode="python"):
+        _reject(
+            "spline_refinement_map_input",
+            "refinement-map fields must be canonical",
+        )
+
+    # Admit the spline matrices and transfer before asking the public overlay
+    # operation to expand the common refinement. That operation performs its
+    # own canonical admission against the same two complex inputs.
+    coarse_admitted, coarse_cells, coarse_width = _admit_spline(
+        request.coarse, request.degree, request.smoothness
+    )
+    _refined_admitted, refined_width, refined_row_bound, _ = _admit_spline_dimension(
+        request.refined, request.degree, request.smoothness
+    )
+    map_work = refined_row_bound * refined_width * coarse_width
+    if map_work > MAX_SPLINE_REFINEMENT_MAP_WORK:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_refinement_map_work",
+            message="exact spline refinement inclusion exceeds its work envelope",
+        )
+    source_dimension = len(coarse_admitted.space.axes)
+    coarse_monomial_count = comb(source_dimension + request.degree, request.degree)
+    coarse_interface_count = sum(
+        len(face.maximal_cell_ids) == 2
+        and face.dimension == source_dimension - 1
+        and request.smoothness >= 0
+        for face in coarse_admitted.faces
+    )
+    source_cells_bound = (
+        coarse_width * coarse_width
+        + coarse_interface_count * coarse_monomial_count * coarse_width
+    )
+    target_cells_bound = refined_row_bound * refined_width
+    if source_cells_bound + target_cells_bound > MAX_SPLINE_REFINEMENT_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_refinement_map_output",
+            message="the retained source and target spline matrices exceed the map output envelope",
+        )
+    coarse_row_bound = coarse_interface_count * _facet_remainder_dimension(
+        source_dimension, request.degree, request.smoothness
+    )
+    source_rank_work_bound = (
+        2 * coarse_row_bound * coarse_width * min(coarse_row_bound, coarse_width)
+    )
+    target_rank_work_bound = (
+        2 * refined_width * min(refined_width, refined_row_bound) * refined_row_bound
+    )
+    if (
+        source_rank_work_bound + target_rank_work_bound
+        > 2 * MAX_SPLINE_DIMENSION_RANK_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_refinement_map_rank_work",
+            message="combined exact spline rank work exceeds the refinement-map envelope",
+        )
+    source_input_bytes = len(encode_strict_json(request.coarse.model_dump(mode="json")))
+    refined_input_bytes = len(
+        encode_strict_json(request.refined.model_dump(mode="json"))
+    )
+    output_bytes_bound = (
+        (source_cells_bound + target_cells_bound) * MAX_SPLINE_SCALAR_DIGITS
+        + 3 * source_input_bytes
+        + 3 * refined_input_bytes
+        + 4096 * (coarse_width + refined_width)
+    )
+    if output_bytes_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_refinement_map_output",
+            message="source, target, and refinement map exceed the composite output envelope",
+        )
+
+    from jacobian.math.geometry.polytopes.complexes._models import (
+        CommonRefinementRequest,
+    )
+    from jacobian.math.geometry.polytopes.complexes.operations import (
+        polytopal_complex_common_refinement,
+    )
+
+    refinement = polytopal_complex_common_refinement(
+        CommonRefinementRequest(left=request.coarse, right=request.refined)
+    )
+    # A refinement of the coarse complex has one top-dimensional intersection
+    # per fine cell, and the overlay must be the supplied refined complex.
+    target_geometry = {
+        cell.cell_id: tuple(
+            sorted(
+                tuple(coordinate.as_fraction() for coordinate in vertex.coordinates)
+                for vertex in cell.vertices
+            )
+        )
+        for cell in refinement.right.maximal_cells
+    }
+    overlay_geometry = {
+        cell.cell_id: tuple(
+            sorted(
+                tuple(coordinate.as_fraction() for coordinate in vertex.coordinates)
+                for vertex in cell.vertices
+            )
+        )
+        for cell in refinement.refinement.maximal_cells
+    }
+    pairs_by_target: dict[str, list[Any]] = {}
+    for pair in refinement.cell_pairs:
+        pairs_by_target.setdefault(pair.right_cell_id, []).append(pair)
+    refined_cells = tuple(
+        sorted(refinement.right.maximal_cells, key=lambda cell: cell.cell_id)
+    )
+    target_ids = tuple(cell.cell_id for cell in refined_cells)
+    if (
+        target_geometry != overlay_geometry
+        or set(pairs_by_target) != set(target_ids)
+        or any(len(pairs_by_target[cell_id]) != 1 for cell_id in target_ids)
+        or any(
+            pairs_by_target[cell_id][0].refined_cell_id != cell_id
+            for cell_id in target_ids
+        )
+    ):
+        _reject(
+            "spline_refinement_map_not_refinement",
+            "the supplied target complex must be a face-to-face refinement of the source",
+        )
+    lineage = tuple(
+        SplineCellRefinementLineage(
+            coarse_cell_id=pairs_by_target[cell_id][0].left_cell_id,
+            refined_cell_id=cell_id,
+            common_refinement_cell_id=pairs_by_target[cell_id][0].refined_cell_id,
+        )
+        for cell_id in target_ids
+    )
+
+    # The common-refinement constructors return canonical complexes. Build
+    # coefficient data from those exact values so all retained axes and matrix
+    # columns use the same canonical cell IDs.
+    coarse_complex, coarse_axis, coarse_rows, coarse_width = _spline_constraint_rows(
+        refinement.left,
+        coarse_cells,
+        coarse_width,
+        request.degree,
+        request.smoothness,
+    )
+    _refined_complex, refined_axis, refined_rows, refined_width = (
+        _spline_constraint_rows(
+            refinement.right,
+            refined_cells,
+            refined_width,
+            request.degree,
+            request.smoothness,
+        )
+    )
+    _admit_spline_rank_matrix(coarse_rows, coarse_width)
+    _admit_spline_rank_matrix(refined_rows, refined_width)
+    basis_scalar_digits = _spline_nullspace_scalar_digit_bound(
+        coarse_rows, coarse_width
+    )
+    basis_output_bytes_bound = output_bytes_bound + coarse_width * coarse_width * max(
+        0, 2 * basis_scalar_digits + 32 - MAX_SPLINE_SCALAR_DIGITS
+    )
+    if basis_output_bytes_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_refinement_map_output",
+            message="the exact source basis and refinement map exceed the output envelope",
+        )
+    source_space = _spline_space_from_data(
+        coarse_complex,
+        request.degree,
+        request.smoothness,
+        coarse_axis,
+        coarse_rows,
+        coarse_width,
+    )
+    source_matrix = source_space.compatibility_matrix
+    target_matrix = _spline_constraint_matrix(refined_rows, refined_width)
+
+    # Rank work and output digit bounds are checked before exact rank or nullspace
+    # materialization.  The per-operation admission above bounds each matrix;
+    # this composite bound additionally covers both retained matrices and the
+    # coefficient copy used to establish image membership.
+    if refined_rows:
+        from flint import fmpq, fmpq_mat
+
+        target_backend = fmpq_mat(
+            [
+                [fmpq(value.numerator, value.denominator) for value in row]
+                for row in refined_rows
+            ]
+        )
+        target_rank = int(target_backend.rank())
+    else:
+        target_rank = 0
+    target_nullity = refined_width - target_rank
+
+    # The result retains one source nullspace and one refined compatibility
+    # matrix. Admit the encoded exact value before constructing the result.
+    result_payload = {
+        "coarse_complex": refinement.left.model_dump(mode="json"),
+        "refined_complex": refinement.right.model_dump(mode="json"),
+        "degree": request.degree,
+        "smoothness": request.smoothness,
+        "coarse_coefficient_axis": [
+            [cell_id, list(monomial)] for cell_id, monomial in coarse_axis
+        ],
+        "coarse_compatibility_matrix": source_matrix.model_dump(mode="json"),
+        "coarse_rank": source_space.rank,
+        "coarse_nullspace_basis": source_space.nullspace_basis.model_dump(mode="json"),
+        "refined_coefficient_axis": [
+            [cell_id, list(monomial)] for cell_id, monomial in refined_axis
+        ],
+        "refined_compatibility_matrix": target_matrix.model_dump(mode="json"),
+        "refined_rank": target_rank,
+        "refined_nullity": target_nullity,
+        "cell_lineage": [row.model_dump(mode="json") for row in lineage],
+    }
+    base_output_bytes = len(encode_strict_json(result_payload))
+    if base_output_bytes > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_refinement_map_output",
+            message="source, target, and common-refinement values exceed the output envelope",
+        )
+
+    source_cell_index = {
+        cell.cell_id: position
+        for position, cell in enumerate(
+            sorted(refinement.left.maximal_cells, key=lambda cell: cell.cell_id)
+        )
+    }
+    monomial_count = len(coarse_axis) // len(source_cell_index)
+    target_entries = tuple(
+        tuple(value.as_fraction() for value in row) for row in target_matrix.entries
+    )
+    for basis_row in source_space.nullspace_basis.entries:
+        source_values = tuple(value.as_fraction() for value in basis_row)
+        transferred = [Fraction(0) for _ in range(refined_width)]
+        for refined_index, cell_id in enumerate(target_ids):
+            pair = pairs_by_target[cell_id][0]
+            source_block = source_cell_index[pair.left_cell_id]
+            source_offset = source_block * monomial_count
+            target_offset = refined_index * monomial_count
+            transferred[target_offset : target_offset + monomial_count] = source_values[
+                source_offset : source_offset + monomial_count
+            ]
+        if any(
+            sum(
+                (
+                    coefficient * value
+                    for coefficient, value in zip(row, transferred, strict=True)
+                ),
+                Fraction(0),
+            )
+            for row in target_entries
+        ):
+            raise ArithmeticError(
+                "coarse spline basis image violates a refined facet constraint"
+            )
+
+    return SplineRefinementMapResult(
+        coarse_complex=refinement.left,
+        refined_complex=refinement.right,
+        degree=request.degree,
+        smoothness=request.smoothness,
+        coarse_coefficient_axis=coarse_axis,
+        coarse_compatibility_matrix=source_matrix,
+        coarse_rank=source_space.rank,
+        coarse_nullspace_basis=source_space.nullspace_basis,
+        refined_coefficient_axis=refined_axis,
+        refined_compatibility_matrix=target_matrix,
+        refined_rank=target_rank,
+        refined_nullity=target_nullity,
+        cell_lineage=lineage,
     )
 
 
@@ -1744,6 +2202,58 @@ def _decimal_digits_upper(value: int) -> int:
         return 1
     # log10(2) < 30103/100000, so avoid stringifying caller-sized integers.
     return (abs(value).bit_length() * 30_103) // 100_000 + 1
+
+
+def _scaled_component_digit_widths(
+    coefficient: Fraction, scalar: Fraction
+) -> tuple[int, int]:
+    """Bound one scaled coefficient's reduced numerator/denominator widths.
+
+    A cheap additive profile admits the common case.  Only when it crosses the
+    canonical envelope do we pay for the exact cross-cancelled product, which
+    keeps the identity, zero, and cancelling factors at their true width rather
+    than the growing sum of component widths.
+    """
+
+    numerator_digits = _decimal_digits_upper(
+        coefficient.numerator
+    ) + _decimal_digits_upper(scalar.numerator)
+    denominator_digits = _decimal_digits_upper(
+        coefficient.denominator
+    ) + _decimal_digits_upper(scalar.denominator)
+    if max(numerator_digits, denominator_digits) <= MAX_CANONICAL_RATIONAL_DIGITS:
+        return numerator_digits, denominator_digits
+    return _reduced_product_component_digits(coefficient, scalar)
+
+
+def _reduced_product_component_digits(
+    left: Fraction, right: Fraction
+) -> tuple[int, int]:
+    """Return the exact reduced component widths of one rational product.
+
+    Both operands are already canonical, so cross-cancelling the numerator and
+    denominator once leaves the exact reduced product.  Multiplying only the
+    cross-cancelled factors keeps multiplying by ``0`` or ``±1`` (and every
+    cancelling factor) at its unchanged width instead of materializing an
+    over-height intermediate.
+    """
+
+    if left.numerator == 0 or right.numerator == 0:
+        return 1, 1
+    left_numerator = left.numerator
+    left_denominator = left.denominator
+    right_numerator = right.numerator
+    right_denominator = right.denominator
+    cancellation = gcd(abs(left_numerator), right_denominator)
+    left_numerator //= cancellation
+    right_denominator //= cancellation
+    cancellation = gcd(abs(right_numerator), left_denominator)
+    right_numerator //= cancellation
+    left_denominator //= cancellation
+    return (
+        decimal_digit_width(left_numerator * right_numerator),
+        decimal_digit_width(left_denominator * right_denominator),
+    )
 
 
 def _admit_spline_evaluation_growth(
@@ -1865,5 +2375,6 @@ __all__ = [
     "piecewise_polynomial_from_maximal_pieces",
     "piecewise_polynomial_multiply",
     "spline_evaluate",
+    "spline_refinement_map",
     "spline_space",
 ]

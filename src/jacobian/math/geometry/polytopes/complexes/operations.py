@@ -76,10 +76,12 @@ from jacobian.math.geometry.polytopes.complexes._spline import (
     piecewise_polynomial_evaluate,
     piecewise_polynomial_from_maximal_pieces,
     piecewise_polynomial_multiply,
+    piecewise_polynomial_scalar_multiply,
     piecewise_polynomial_smoothness,
     spline_coordinates,
     spline_dimension,
     spline_evaluate,
+    spline_refinement_map,
     spline_space,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
@@ -90,6 +92,7 @@ __all__ = [
     "piecewise_polynomial_evaluate",
     "piecewise_polynomial_from_maximal_pieces",
     "piecewise_polynomial_multiply",
+    "piecewise_polynomial_scalar_multiply",
     "piecewise_polynomial_smoothness",
     "polytopal_complex_affine_transform",
     "polytopal_complex_closure",
@@ -97,6 +100,7 @@ __all__ = [
     "spline_coordinates",
     "spline_dimension",
     "spline_evaluate",
+    "spline_refinement_map",
     "spline_space",
 ]
 

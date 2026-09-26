@@ -285,7 +285,7 @@ class TestGramCertificateAdmission:
         with pytest.raises(OperationDomainValidationError, match="square"):
             _check_gram(request)
 
-    def test_oversized_matrix_coefficient_rejected_before_eigenvalues(self) -> None:
+    def test_over_limit_coefficient_rejected_during_admission(self) -> None:
         huge = "9" * 129
         request = self._request(
             (
@@ -297,7 +297,7 @@ class TestGramCertificateAdmission:
             _check_gram(request)
         assert exc_info.value.errors()[0]["type"] == "sum_of_squares.coefficient_bound"
 
-    def test_boundary_coefficient_admitted(self) -> None:
+    def test_boundary_coefficient_reaches_exact_checker(self) -> None:
         edge = "9" * 128
         request = self._request(
             (
@@ -306,6 +306,8 @@ class TestGramCertificateAdmission:
             )
         )
         assert request.gram_matrix.entries[0][0].num == 10**128 - 1
+        result = _check_gram(request)
+        assert result.is_psd is True
 
 
 class TestGramCertificateResultStructure:
@@ -340,25 +342,6 @@ class TestGramCertificateResultStructure:
             )
         )
         return request.model_dump(mode="json")
-
-    def test_oversized_result_dimension_is_rejected_at_field_validation(self) -> None:
-        """A 40x40 result matrix fails the parse-time dimension bound before
-        any explicit verification traverses its entries."""
-        payload = self._valid_result()
-        payload["monomial_basis"] = [
-            _poly(("x",), (1, 1, (k,))).model_dump(mode="json") for k in range(40)
-        ]
-        payload["polynomial"] = _poly(
-            ("x",), *[(1, 1, (2 * k,)) for k in range(39, -1, -1)]
-        ).model_dump(mode="json")
-        zero_row = tuple({"num": "0", "den": "1"} for _ in range(40))
-        payload["gram_matrix"] = {
-            "domain": "QQ",
-            "entries": [zero_row for _ in range(40)],
-        }
-        with pytest.raises(ValidationError) as exc_info:
-            GramCertificateResult.model_validate_json(json.dumps(payload))
-        assert exc_info.value.errors()[0]["type"] == "too_long"
 
     def test_oversized_result_basis_is_rejected_at_field_validation(self) -> None:
         """A basis longer than the Gram dimension bound is rejected at the

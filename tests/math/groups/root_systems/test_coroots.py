@@ -7,7 +7,6 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.groups.root_systems._models import (
     CartanMatrix,
@@ -67,11 +66,9 @@ def test_simply_laced_a2_coroots_equal_roots() -> None:
 
 
 def test_published_coroot_tool_is_declared() -> None:
-    assert any(tool.operation_id == "root_system.coroots.compute" for tool in TOOLS)
-    assert any(
-        tool.operation_id == "root_system.root_to_coroot.compute"
-        for tool in BUILTIN_TOOLS
-    )
+    operation_ids = {tool.operation_id for tool in TOOLS}
+    assert "root_system.coroots.compute" in operation_ids
+    assert "root_system.root_to_coroot.compute" in operation_ids
 
 
 def test_single_positive_root_conversion_matches_euclidean_oracle() -> None:

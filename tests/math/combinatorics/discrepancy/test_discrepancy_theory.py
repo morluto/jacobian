@@ -559,6 +559,61 @@ class TestDiscrepancyEval:
 
 
 class TestDiscrepancyOptimum:
+    @pytest.fixture(autouse=True)
+    def _keep_backend_contract_tests_on_solver_path(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # The suite below exercises the HiGHS/Z3 path and its operational
+        # failures directly. Keep that path explicit as the tiny exact scan
+        # gains its own independent correctness regression.
+        monkeypatch.setattr(discrepancy_models, "MAX_OPTIMUM_EXACT_ENUMERATION_WORK", 0)
+
+    def test_admitted_tiny_instance_uses_exact_coloring_scan(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        import itertools
+
+        monkeypatch.setattr(
+            discrepancy_models, "MAX_OPTIMUM_EXACT_ENUMERATION_WORK", 100_000
+        )
+        monkeypatch.setitem(sys.modules, "numpy", None)
+        monkeypatch.setitem(sys.modules, "scipy.optimize", None)
+        system = FiniteSetSystem(
+            ground_set_size=4,
+            sets=((0, 1), (1, 2), (0, 2)),
+        )
+
+        result = compute_optimal_discrepancy(
+            DiscrepancyOptimumRequest(set_system=system)
+        )
+
+        exact = min(
+            max(
+                (
+                    abs(sum(coloring[element] for element in subset))
+                    for subset in system.sets
+                ),
+                default=0,
+            )
+            for coloring in itertools.product((-1, 1), repeat=system.ground_set_size)
+        )
+        assert result.optimal_discrepancy == exact == 2
+        assert result.status == "OPTIMAL"
+
+    def test_empty_set_family_proves_zero_without_a_solver(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setitem(sys.modules, "numpy", None)
+        monkeypatch.setitem(sys.modules, "scipy.optimize", None)
+        system = FiniteSetSystem(ground_set_size=64, sets=((),) * 1_000)
+
+        result = compute_optimal_discrepancy(
+            DiscrepancyOptimumRequest(set_system=system)
+        )
+
+        assert result.optimal_coloring == (-1,) * 64
+        assert result.optimal_discrepancy == 0
+
     def test_triangle_system(self) -> None:
         req = DiscrepancyOptimumRequest(
             set_system=FiniteSetSystem(

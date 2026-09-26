@@ -59,9 +59,7 @@ def canonical_chain_complex_value_from_parts(
             dense[entry.row][entry.column] = (
                 entry.value if prime is None else entry.value % prime
             )
-        differential_matrices.append(
-            tuple(tuple(str(value) for value in row) for row in dense)
-        )
+        differential_matrices.append(tuple(tuple(row) for row in dense))
     return ChainComplexValue(
         coefficient_ring=(
             CoefficientRing.INTEGER

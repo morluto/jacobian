@@ -112,6 +112,13 @@ def test_finite_magma_countermodel_check_remains_native_only() -> None:
     )
 
 
+def test_cubical_cell_vertices_remains_native_only() -> None:
+    # The vertex set is a deterministic projection of ``face_closure``; it is a
+    # native helper, not a distinct public operation (public-operation-admission
+    # gate 8).
+    assert Catalog.open().operation("topology.cubical.cell.vertices.compute") is None
+
+
 def test_match_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
     catalog = Catalog.open()
     public_ids = {

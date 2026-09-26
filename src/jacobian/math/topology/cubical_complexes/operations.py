@@ -46,6 +46,9 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
     MAX_CUBICAL_CHAIN_CELLS,
     MAX_CUBICAL_CHAIN_GROUP,
+    MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES,
+    MAX_CUBICAL_CHAIN_PRODUCT_TERMS,
+    MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS,
     MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS,
     MAX_CUBICAL_CLOSED_STAR_RESULT_SIZE,
     MAX_CUBICAL_CLOSED_STAR_WORK,
@@ -73,8 +76,12 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalCellBasis,
     CubicalCellBirth,
     CubicalCellPosetElement,
+    CubicalChainCell,
     CubicalChainCoefficient,
     CubicalChainComplexResult,
+    CubicalChainProductRequest,
+    CubicalChainTerm,
+    CubicalChainValue,
     CubicalClosedStarResult,
     CubicalComplex,
     CubicalFacePosetResult,
@@ -833,6 +840,112 @@ def product(
         ),
         left_ambient_dimension=left_dimension,
         right_ambient_dimension=right_dimension,
+    )
+
+
+def chain_product(request: CubicalChainProductRequest) -> CubicalChainValue:
+    """Return the integral external product of two sparse cubical chains.
+
+    Product coordinates concatenate the left factor before the right factor.
+    This induces the standard product orientation and the graded boundary
+    identity without inserting a sign into the generator product itself.
+    """
+    try:
+        request = CubicalChainProductRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="cubical_complex.chain_product.invalid_request",
+            message="both factors must be canonical integral cubical chains",
+        ) from exc
+    left = request.left
+    right = request.right
+    ambient_dimension = left.ambient_dimension + right.ambient_dimension
+    if ambient_dimension > MAX_DIM:
+        raise OperationDomainValidationError(
+            location=("right", "ambient_dimension"),
+            code="cubical_complex.chain_product_ambient_dimension",
+            message=f"chain product ambient dimension exceeds {MAX_DIM}",
+        )
+
+    term_count = len(left.terms) * len(right.terms)
+    if term_count > MAX_CUBICAL_CHAIN_PRODUCT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("terms",),
+            code="cubical_complex.chain_product_term_budget",
+            message=(
+                "chain product expansion exceeds the "
+                f"{MAX_CUBICAL_CHAIN_PRODUCT_TERMS}-term bound"
+            ),
+        )
+
+    coordinate_digits = max(
+        (
+            len(str(abs(coordinate)))
+            for chain in (left, right)
+            for term in chain.terms
+            for interval in term.cell.intervals
+            for coordinate in interval
+        ),
+        default=1,
+    )
+    pairs = tuple(
+        (left_term, right_term)
+        for left_term in left.terms
+        for right_term in right.terms
+    )
+    coefficient_products = tuple(
+        left_term.coefficient * right_term.coefficient
+        for left_term, right_term in pairs
+    )
+    coefficient_digits = max(
+        (len(str(abs(coefficient))) for coefficient in coefficient_products),
+        default=1,
+    )
+    if coefficient_digits > MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("terms",),
+            code="cubical_complex.chain_product_coefficient_budget",
+            message=(
+                "chain product coefficients exceed the "
+                f"{MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS}-digit bound"
+            ),
+        )
+    result_bytes_bound = 128 + term_count * (
+        100
+        + ambient_dimension * (2 * (coordinate_digits + 1) + 5)
+        + coefficient_digits
+        + 1
+    )
+    if result_bytes_bound > MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("terms",),
+            code="cubical_complex.chain_product_result_size",
+            message=(
+                "chain product result exceeds the "
+                f"{MAX_CUBICAL_CHAIN_PRODUCT_RESULT_BYTES}-byte bound"
+            ),
+        )
+
+    # With fixed factor ambient dimensions, concatenation is injective. Since
+    # each input axis is sorted, left-major pairs also keep output cells sorted.
+    product_terms = tuple(
+        CubicalChainTerm(
+            cell=CubicalChainCell(
+                intervals=left_term.cell.intervals + right_term.cell.intervals
+            ),
+            coefficient=coefficient,
+        )
+        for (left_term, right_term), coefficient in zip(
+            pairs, coefficient_products, strict=True
+        )
+    )
+    return CubicalChainValue(
+        ambient_dimension=ambient_dimension,
+        degree=left.degree + right.degree,
+        terms=product_terms,
     )
 
 

@@ -160,7 +160,9 @@ class NewtonEdgeCharacteristicRootsResult(StrictModel):
             default=0,
         )
         if sum(root.multiplicity for root in self.roots) != degree:
-            raise ValueError("root multiplicities must reconstruct the edge polynomial degree")
+            raise ValueError(
+                "root multiplicities must reconstruct the edge polynomial degree"
+            )
         return self
 
 
@@ -261,15 +263,16 @@ def newton_edge_characteristic_roots(
     denominator = 1
     for coefficient in coefficient_by_degree.values():
         denominator = lcm(denominator, coefficient.denominator)
-    integers = [
-        coefficient_by_degree.get(exponent, Fraction(0)) * denominator
+    integer_coefficients = [
+        int(coefficient_by_degree.get(exponent, Fraction(0)) * denominator)
         for exponent in range(degree, -1, -1)
     ]
-    integer_coefficients = [int(value) for value in integers]
     content = 0
-    for coefficient in integer_coefficients:
-        content = gcd(content, abs(coefficient))
-    integer_coefficients = [coefficient // content for coefficient in integer_coefficients]
+    for integer_coefficient in integer_coefficients:
+        content = gcd(content, abs(integer_coefficient))
+    integer_coefficients = [
+        coefficient // content for coefficient in integer_coefficients
+    ]
     if integer_coefficients[0] < 0:
         integer_coefficients = [-coefficient for coefficient in integer_coefficients]
     coefficient_digit_bound = min(

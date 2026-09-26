@@ -1,6 +1,5 @@
 """Root system operations."""
 
-from jacobian.math.groups.root_systems._models import CartanMatrix, FiniteCartanDatum
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
     cartan_matrix_from_type,
@@ -15,8 +14,6 @@ from jacobian.math.groups.root_systems.operations import (
 )
 
 __all__ = [
-    "CartanMatrix",
-    "FiniteCartanDatum",
     "cartan_datum",
     "cartan_matrix_from_type",
     "positive_roots",

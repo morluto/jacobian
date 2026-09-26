@@ -21,6 +21,7 @@ from jacobian.math.geometry.polytopes._models import (
     RationalVPolytope,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
+    MAX_COMPLEX_CELLS,
     ComplexPoint,
     PieceAssignment,
     PieceCompatibilityRow,
@@ -32,6 +33,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewiseSmoothnessRequest,
     PiecewiseSmoothnessResult,
     PolytopalComplexClosureResult,
+    SplineCoordinatesRequest,
+    SplineCoordinatesResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
@@ -219,47 +222,15 @@ def _admit_pieces(
     complex_value: PolytopalComplexClosureResult,
     pieces: tuple[PieceAssignment, ...],
 ) -> PolytopalComplexClosureResult:
-    complex_value = _admit_complex(complex_value)
-    if (
-        not isinstance(pieces, tuple)
-        or not pieces
-        or any(not isinstance(row, PieceAssignment) for row in pieces)
-    ):
-        _reject("piece_type", "pieces must be canonical cell-polynomial assignments")
-    try:
-        canonical_pieces = tuple(
-            PieceAssignment.model_validate(row.model_dump(mode="python"))
-            for row in pieces
-        )
-    except Exception:
-        _reject("piece_malformed", "piece assignments must be canonical values")
-    if any(
-        row.model_dump(mode="python") != source.model_dump(mode="python")
-        for row, source in zip(canonical_pieces, pieces, strict=True)
-    ):
-        _reject("piece_malformed", "piece assignments must be canonical values")
-    cells = tuple(cell.cell_id for cell in complex_value.maximal_cells)
-    supplied = tuple(sorted(row.cell_id for row in canonical_pieces))
-    if supplied != cells or len(set(supplied)) != len(supplied):
-        _reject(
-            "piece_axis",
-            "exactly one polynomial piece is required for every canonical maximal cell",
-        )
-    variables = canonical_pieces[0].polynomial.variables
-    if variables != tuple(complex_value.space.axes):
-        _reject(
-            "piece_ring", "polynomial variables must equal the complex coordinate axes"
-        )
-    if any(row.polynomial.variables != variables for row in canonical_pieces):
-        _reject(
-            "piece_ring", "all pieces must use one identical ordered polynomial ring"
-        )
-    if len(canonical_pieces) > 16:
-        raise OperationResourceAdmissionError(
-            location=("pieces",),
-            code="polytopal_complex.piece_count",
-            message="too many pieces",
-        )
+    return _admit_piece_assignments(_admit_complex(complex_value), pieces)
+
+
+def _admit_piece_assignments(
+    complex_value: PolytopalComplexClosureResult,
+    pieces: tuple[PieceAssignment, ...],
+) -> PolytopalComplexClosureResult:
+    """Admit piece axes and compatibility work on an already checked complex."""
+    canonical_pieces = _canonical_piece_assignments(complex_value, pieces)
     term_count = max(len(row.polynomial.polynomial.terms) for row in canonical_pieces)
     dimension = len(complex_value.space.axes)
     max_degree = max(
@@ -302,6 +273,52 @@ def _admit_pieces(
             message="piece compatibility ledger exceeds the admitted output envelope",
         )
     return complex_value
+
+
+def _canonical_piece_assignments(
+    complex_value: PolytopalComplexClosureResult,
+    pieces: tuple[PieceAssignment, ...],
+) -> tuple[PieceAssignment, ...]:
+    """Validate source-to-cell polynomial axes without computing continuity."""
+    if not isinstance(pieces, tuple) or not pieces:
+        _reject("piece_type", "pieces must be canonical cell-polynomial assignments")
+    if len(pieces) > MAX_COMPLEX_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("pieces",),
+            code="polytopal_complex.piece_count",
+            message="too many pieces",
+        )
+    if any(not isinstance(row, PieceAssignment) for row in pieces):
+        _reject("piece_type", "pieces must be canonical cell-polynomial assignments")
+    try:
+        canonical_pieces = tuple(
+            PieceAssignment.model_validate(row.model_dump(mode="python"))
+            for row in pieces
+        )
+    except Exception:
+        _reject("piece_malformed", "piece assignments must be canonical values")
+    if any(
+        row.model_dump(mode="python") != source.model_dump(mode="python")
+        for row, source in zip(canonical_pieces, pieces, strict=True)
+    ):
+        _reject("piece_malformed", "piece assignments must be canonical values")
+    cells = tuple(cell.cell_id for cell in complex_value.maximal_cells)
+    supplied = tuple(sorted(row.cell_id for row in canonical_pieces))
+    if supplied != cells or len(set(supplied)) != len(supplied):
+        _reject(
+            "piece_axis",
+            "exactly one polynomial piece is required for every canonical maximal cell",
+        )
+    variables = canonical_pieces[0].polynomial.variables
+    if variables != tuple(complex_value.space.axes):
+        _reject(
+            "piece_ring", "polynomial variables must equal the complex coordinate axes"
+        )
+    if any(row.polynomial.variables != variables for row in canonical_pieces):
+        _reject(
+            "piece_ring", "all pieces must use one identical ordered polynomial ring"
+        )
+    return canonical_pieces
 
 
 def piecewise_polynomial_from_maximal_pieces(
@@ -924,6 +941,19 @@ def _facet_remainder_dimension(dimension: int, degree: int, smoothness: int) -> 
     )
 
 
+def _require_pure_spline_complex(
+    complex_value: PolytopalComplexClosureResult, smoothness: int
+) -> None:
+    if smoothness >= 0 and any(
+        cell.dimension != complex_value.dimension
+        for cell in complex_value.maximal_cells
+    ):
+        _reject(
+            "spline_purity",
+            "C^r spline spaces require every maximal cell to have full complex dimension",
+        )
+
+
 def _linear_form(face: Any, symbols: tuple[Any, ...]) -> Any:
     ideal = _affine_ideal(face, symbols)
     if len(ideal) != 1:
@@ -1013,6 +1043,7 @@ MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
 MAX_SPLINE_DIMENSION_OUTPUT_DIGITS = 10 * 1024 * 1024
 """Decimal-digit ceiling summed over stored rational cells of the matrix."""
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
+MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 
 
 def _admit_spline(
@@ -1035,7 +1066,13 @@ def _admit_spline(
     ):
         _reject("spline_axes", "complex coordinate axes must be nonempty symbols")
     cells = tuple(sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id))
+    _require_pure_spline_complex(complex_value, smoothness)
     dimension = len(complex_value.space.axes)
+    if any(cell.dimension != dimension for cell in cells):
+        _reject(
+            "spline_ambient_dimension",
+            "spline coordinates require maximal cells full-dimensional in the ambient space",
+        )
     monomial_count = comb(dimension + degree, degree)
     width = len(cells) * monomial_count
     if width > 4096:
@@ -1051,6 +1088,9 @@ def _admit_spline(
         and face.dimension == dimension - 1
         and smoothness >= 0
     )
+    row_bound = interface_count * _facet_remainder_dimension(
+        dimension, degree, smoothness
+    )
     # Each interface contributes at most one dense row per monomial.  Reserve
     # the full row-by-column materialization before SymPy or RationalMatrix
     # allocation; this bounds both the exact constraint output and elimination.
@@ -1060,6 +1100,13 @@ def _admit_spline(
             location=("complex",),
             code="polytopal_complex.spline_constraints",
             message="spline compatibility matrix exceeds the admitted envelope",
+        )
+    rank_work = 2 * row_bound * width * min(row_bound, width)
+    if rank_work > MAX_SPLINE_DIMENSION_RANK_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.spline_rank_work",
+            message="spline rank and nullspace work exceeds the admitted envelope",
         )
     # The unconstrained case has a width-by-width nullspace basis.  Admit the
     # complete exact result (both matrices and all rational components) before
@@ -1087,6 +1134,20 @@ def spline_space(
     complex_value, coefficient_axis, constraint_rows, width = _spline_constraint_data(
         complex_value, degree, smoothness
     )
+    return _spline_space_from_data(
+        complex_value, degree, smoothness, coefficient_axis, constraint_rows, width
+    )
+
+
+def _spline_space_from_data(
+    complex_value: PolytopalComplexClosureResult,
+    degree: int,
+    smoothness: int,
+    coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...],
+    constraint_rows: tuple[tuple[Fraction, ...], ...],
+    width: int,
+) -> SplineSpaceResult:
+    """Materialize an admitted spline basis from its exact coefficient rows."""
     matrix = _spline_constraint_matrix(constraint_rows, width)
     # Retain the coefficient-axis width even when there are no interface
     # constraints.  ``sp.Matrix([])`` is 0x0 and would silently erase the
@@ -1130,6 +1191,223 @@ def spline_space(
     )
 
 
+def _spline_basis_coordinates(
+    space: SplineSpaceResult, vector: tuple[Fraction, ...]
+) -> tuple[Fraction, ...]:
+    """Recover exact coordinates from the unit columns of a nullspace basis."""
+    basis = tuple(
+        tuple(value.as_fraction() for value in row)
+        for row in space.nullspace_basis.entries
+    )
+    free_columns: list[int | None] = [None] * len(basis)
+    for column in range(len(space.coefficient_axis)):
+        one_rows = [row for row, values in enumerate(basis) if values[column] == 1]
+        if len(one_rows) == 1 and all(
+            value == 0 or row == one_rows[0]
+            for row, values in enumerate(basis)
+            for value in (values[column],)
+        ):
+            row_index = one_rows[0]
+            if free_columns[row_index] is None:
+                free_columns[row_index] = column
+    if any(column is None for column in free_columns):
+        raise ArithmeticError(
+            "canonical spline nullspace lost its free-coordinate axes"
+        )
+    coordinates = tuple(vector[column] for column in free_columns if column is not None)
+    reconstructed = tuple(
+        sum(
+            (coordinates[row] * values[column] for row, values in enumerate(basis)),
+            Fraction(0),
+        )
+        for column in range(len(space.coefficient_axis))
+    )
+    if reconstructed != vector:
+        _reject(
+            "spline_coordinates_not_member",
+            "piece polynomials are not in the exact span of the retained spline basis",
+        )
+    return coordinates
+
+
+def _admit_spline_coordinate_materialization(
+    complex_value: PolytopalComplexClosureResult,
+    coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...],
+    constraint_rows: tuple[tuple[Fraction, ...], ...],
+    vector: tuple[Fraction, ...],
+    width: int,
+) -> None:
+    """Bound retained basis bytes and exact work before nullspace expansion."""
+    maximum_entry_digits = max(
+        (
+            _decimal_digits_upper(value.numerator)
+            + _decimal_digits_upper(value.denominator)
+            for row in constraint_rows
+            for value in row
+        ),
+        default=1,
+    )
+    rank_bound = min(len(constraint_rows), width)
+    row_height = (width + 1) * maximum_entry_digits + len(str(width + 1))
+    determinant_digits = rank_bound * row_height + rank_bound * len(
+        str(max(rank_bound, 1))
+    )
+    if determinant_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_height",
+            message="the canonical spline basis may exceed the exact rational component bound",
+        )
+    basis_scalar_digits = max(1, 2 * determinant_digits + 4)
+    coordinate_scalar_digits = max(
+        (
+            _decimal_digits_upper(value.numerator)
+            + _decimal_digits_upper(value.denominator)
+            for value in vector
+        ),
+        default=1,
+    )
+    result_bound = (
+        (len(constraint_rows) * width + width * width) * (2 * basis_scalar_digits + 32)
+        + width * (coordinate_scalar_digits + 32)
+        + len(encode_strict_json(complex_value.model_dump(mode="json")))
+        + 512 * len(coefficient_axis)
+        + 4096
+    )
+    if result_bound > MAX_SPLINE_COORDINATE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_output",
+            message="the source-bound spline space and coordinates exceed the output envelope",
+        )
+    matrix_work = len(constraint_rows) * width
+    if matrix_work + 3 * width * width > 32_000_000:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_coordinates_work",
+            message="spline membership and basis-coordinate work exceed the admitted envelope",
+        )
+    reconstruction_digits = width * (
+        coordinate_scalar_digits + basis_scalar_digits + len(str(width)) + 2
+    )
+    if reconstruction_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.spline_coordinates_reconstruction_height",
+            message="reconstructing the basis coordinates may exceed the exact scalar envelope",
+        )
+    coefficient_digits = coordinate_scalar_digits
+    for row in constraint_rows:
+        value_digits = max(
+            (
+                _decimal_digits_upper(value.numerator)
+                + _decimal_digits_upper(value.denominator)
+                for value in row
+            ),
+            default=1,
+        )
+        if (
+            width * (value_digits + coefficient_digits + len(str(width)) + 2)
+            > MAX_CANONICAL_RATIONAL_DIGITS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("function",),
+                code="polytopal_complex.spline_coordinates_height",
+                message="spline membership products exceed the exact scalar envelope",
+            )
+
+
+def spline_coordinates(
+    request: SplineCoordinatesRequest,
+) -> SplineCoordinatesResult:
+    """Express one supplied piecewise polynomial in the canonical spline basis.
+
+    The operation ignores caller-provided compatibility claims and derives the
+    exact cell coefficient vector from the source pieces.  Membership is
+    established by the retained spline compatibility matrix, then coordinates
+    are recovered from the unit columns of the canonical nullspace basis.
+    """
+    if not isinstance(request, SplineCoordinatesRequest):
+        _reject(
+            "spline_coordinates_type", "expected a canonical spline-coordinate request"
+        )
+    function = request.function
+    if not isinstance(function, PiecewisePolynomialResult):
+        _reject("spline_coordinates_function", "expected a piecewise-polynomial value")
+
+    complex_value, cells, width = _admit_spline(
+        function.complex, request.degree, request.smoothness
+    )
+    pieces = _canonical_piece_assignments(complex_value, function.pieces)
+    cell_order = tuple(
+        sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id)
+    )
+    monomials = _monomials(len(complex_value.space.axes), request.degree)
+    coefficient_axis = tuple(
+        (cell.cell_id, monomial) for cell in cell_order for monomial in monomials
+    )
+    columns = {axis: index for index, axis in enumerate(coefficient_axis)}
+    coefficients = [Fraction(0) for _ in coefficient_axis]
+    pieces_by_cell = {piece.cell_id: piece.polynomial for piece in pieces}
+    variables = tuple(complex_value.space.axes)
+    for cell_id in (cell.cell_id for cell in cell_order):
+        polynomial = pieces_by_cell[cell_id]
+        if polynomial.variables != variables:
+            _reject(
+                "spline_coordinates_ring", "piece variables must match the complex axes"
+            )
+        for term in polynomial.polynomial.terms:
+            if sum(term.exponents) > request.degree:
+                _reject(
+                    "spline_coordinates_degree",
+                    "every piece degree must be at most the requested spline degree",
+                )
+            column = columns.get((cell_id, term.exponents))
+            if column is None:
+                _reject(
+                    "spline_coordinates_axis",
+                    "a piece term is outside the monomial axis",
+                )
+            coefficients[column] = term.coefficient.as_fraction()
+
+    complex_value, axis, constraint_rows, width = _spline_constraint_rows(
+        complex_value, cells, width, request.degree, request.smoothness
+    )
+    if axis != coefficient_axis:
+        raise ArithmeticError("spline coordinate coefficient-axis mismatch")
+    vector = tuple(coefficients)
+    _admit_spline_coordinate_materialization(
+        complex_value, coefficient_axis, constraint_rows, vector, width
+    )
+    if any(
+        sum(
+            (entry * value for entry, value in zip(row, vector, strict=True)),
+            Fraction(0),
+        )
+        for row in constraint_rows
+    ):
+        _reject(
+            "spline_coordinates_not_member",
+            "piece polynomials do not satisfy the requested exact C^r interface conditions",
+        )
+
+    space = _spline_space_from_data(
+        complex_value,
+        request.degree,
+        request.smoothness,
+        coefficient_axis,
+        constraint_rows,
+        width,
+    )
+    basis_coordinates = _spline_basis_coordinates(space, vector)
+    return SplineCoordinatesResult(
+        spline_space=space,
+        basis_coordinates=tuple(
+            CanonicalRational.from_fraction(value) for value in basis_coordinates
+        ),
+    )
+
+
 def _spline_constraint_data(
     complex_value: PolytopalComplexClosureResult,
     degree: int,
@@ -1152,6 +1430,22 @@ def _spline_constraint_data(
         )
     else:
         complex_value, cells, width = _admit_spline(complex_value, degree, smoothness)
+    return _spline_constraint_rows(complex_value, cells, width, degree, smoothness)
+
+
+def _spline_constraint_rows(
+    complex_value: PolytopalComplexClosureResult,
+    cells: tuple[Any, ...],
+    width: int,
+    degree: int,
+    smoothness: int,
+) -> tuple[
+    PolytopalComplexClosureResult,
+    tuple[tuple[str, tuple[int, ...]], ...],
+    tuple[tuple[Fraction, ...], ...],
+    int,
+]:
+    """Build exact interface rows after the complex and dimensions are admitted."""
     dimension = len(complex_value.space.axes)
     monomials = _monomials(dimension, degree)
     coefficient_axis = tuple(
@@ -1238,6 +1532,7 @@ def _admit_spline_dimension(
     dimension = len(complex_value.space.axes)
     if any(not axis.strip() for axis in complex_value.space.axes):
         _reject("spline_axes", "complex coordinate axes must be nonempty symbols")
+    _require_pure_spline_complex(complex_value, smoothness)
     monomial_count = comb(dimension + degree, degree)
     width = len(complex_value.maximal_cells) * monomial_count
     if width > 4096:

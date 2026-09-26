@@ -23,6 +23,15 @@ the intermediate sheaf values to agree exactly, and returns the original
 source, final target, and composed component matrices. This makes the result
 usable after serialization without relying on unchecked caller claims.
 
+The native-only `identity_morphism` constructor in
+`jacobian.math.topology.cellular_sheaves` returns the canonical identity
+natural transformation on one checked sheaf. It is not published as a
+catalog operation; `cellular_sheaf.morphism.compute` already owns the public
+morphism value, and its example supplies the identity components directly.
+`identity_morphism` returns an identity matrix in each retained stalk basis,
+including the correctly shaped empty matrix for a zero-dimensional stalk,
+with the source and target set to the same source-bound sheaf.
+
 `cellular_sheaf.morphism.cochain_map` turns a natural morphism into its
 degreewise maps on cellular sheaf cochains. Each returned dense matrix is
 block diagonal in the canonical simplex order: its block at a simplex is the
@@ -57,3 +66,16 @@ zero-dimensional stalks and correctly shaped empty matrices. This follows the
 cellular-sheaf convention as a functor from the face poset to vector spaces;
 see Hansen and Ghrist, [Toward a Spectral Theory of Cellular
 Sheaves](https://doi.org/10.1007/s41468-019-00038-7).
+
+## Pointwise cokernels
+
+`cellular_sheaf.morphism.cokernel.compute` returns the pointwise quotient
+sheaf `coker(phi)` and its canonical projection from the target sheaf. At each
+simplex, the quotient stalk is `G(sigma) / im(phi_sigma)`. Naturality of `phi`
+ensures each target restriction carries the source image into the target image,
+so it induces a well-defined map on quotient stalks. The operation binds the
+quotient to the same complex and coefficient field and returns explicit based
+quotient coordinates, including zero-dimensional quotients. A target-stalk
+representative for each quotient basis vector is retained at every simplex;
+these representatives define the stalk basis and need not assemble into a
+natural map of sheaves.

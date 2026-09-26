@@ -17,6 +17,9 @@ from jacobian.math.topology.cellular_sheaves.cohomology_map_tools import (
 from jacobian.math.topology.cellular_sheaves.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
+from jacobian.math.topology.cellular_sheaves.morphism_cokernel_tools import (
+    TOOLS as MORPHISM_COKERNEL_TOOLS,
+)
 from jacobian.math.topology.cellular_sheaves.morphism_image_tools import (
     TOOLS as MORPHISM_IMAGE_TOOLS,
 )
@@ -118,6 +121,7 @@ def _identity_cover_maps() -> list[dict[str, object]]:
 TOOLS: MathTools = (
     *MORPHISM_IMAGE_TOOLS,
     *MORPHISM_KERNEL_TOOLS,
+    *MORPHISM_COKERNEL_TOOLS,
     *COHOMOLOGY_MAP_TOOLS,
     *EXTENSION_TOOLS,
     MathTool(

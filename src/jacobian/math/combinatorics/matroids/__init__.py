@@ -2,6 +2,7 @@
 
 from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
+    MatroidRankMultiplier,
     MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
 )
@@ -9,9 +10,12 @@ from jacobian.math.combinatorics.matroids.graphic import graphic_matroid
 from jacobian.math.combinatorics.matroids.intersection import (
     matroid_common_basis,
     matroid_intersection,
+    maximum_weight_matroid_intersection,
     verify_common_basis_result,
+    verify_weighted_intersection_rank_certificate,
     verify_weighted_intersection_result,
     weighted_intersection_certificate,
+    weighted_intersection_rank_certificate,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     matroid_closure,
@@ -25,6 +29,7 @@ from jacobian.math.combinatorics.matroids.operations import (
 
 __all__ = [
     "LinearMatroid",
+    "MatroidRankMultiplier",
     "MatroidWeightFunction",
     "MatroidWeightedIntersectionResult",
     "graphic_matroid",
@@ -34,10 +39,13 @@ __all__ = [
     "matroid_rank",
     "maximum_weight_basis_result",
     "maximum_weight_independent_set_result",
+    "maximum_weight_matroid_intersection",
     "verify_closure",
     "verify_common_basis_result",
     "verify_maximum_weight_basis",
     "verify_maximum_weight_independent_set",
+    "verify_weighted_intersection_rank_certificate",
     "verify_weighted_intersection_result",
     "weighted_intersection_certificate",
+    "weighted_intersection_rank_certificate",
 ]

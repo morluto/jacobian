@@ -13,6 +13,10 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidIntersectionRequest,
     MatroidIntersectionResult,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionOptimizationRequest,
+    MatroidWeightedIntersectionOptimizationResult,
+    MatroidWeightedIntersectionRankCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MaximumWeightBasisRequest,
     MaximumWeightBasisResult,
@@ -23,7 +27,9 @@ from jacobian.math.combinatorics.matroids.graphic import graphic_matroid
 from jacobian.math.combinatorics.matroids.intersection import (
     matroid_common_basis,
     matroid_intersection,
+    maximum_weight_matroid_intersection,
     weighted_intersection_certificate,
+    weighted_intersection_rank_certificate,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     closure_result,
@@ -60,6 +66,29 @@ def _run_weighted_intersection_certificate(
     request: MatroidWeightedIntersectionCertificateRequest,
 ) -> MatroidWeightedIntersectionResult:
     return weighted_intersection_certificate(request)
+
+
+def _run_weighted_intersection_rank_certificate(
+    request: MatroidWeightedIntersectionRankCertificateRequest,
+) -> MatroidWeightedIntersectionRankCertificateResult:
+    return weighted_intersection_rank_certificate(
+        request.first,
+        request.second,
+        request.weight_function,
+        request.common_independent,
+        request.first_rank_terms,
+        request.second_rank_terms,
+    )
+
+
+def _run_weighted_intersection_optimization(
+    request: MatroidWeightedIntersectionOptimizationRequest,
+) -> MatroidWeightedIntersectionOptimizationResult:
+    return maximum_weight_matroid_intersection(
+        request.first,
+        request.second,
+        request.weight_function,
+    )
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {
@@ -268,17 +297,72 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="matroid.intersection.weighted_rank_certificate.check",
+        title="Check a weighted matroid intersection rank-dual certificate",
+        description=(
+            "Check a caller-supplied common independent set and sparse nested "
+            "chains of nonnegative integer multipliers on each source's rank "
+            "inequalities. Recompute listed ranks, verify the coordinatewise "
+            "dual cover and equality of primal and dual values, then return the "
+            "candidate and the implied integer weight split. This checks a "
+            "certificate and does not find a candidate or construct a dual. "
+            "The returned split composes with "
+            "matroid.intersection.weighted_certificate.check."
+        ),
+        request_type=MatroidWeightedIntersectionRankCertificateRequest,
+        result_type=MatroidWeightedIntersectionRankCertificateResult,
+        run=_run_weighted_intersection_rank_certificate,
+        tags=("matroid", "intersection", "weighted", "dual", "optimality", "exact"),
+        discovery_terms=(
+            "check weighted matroid intersection rank dual",
+            "rank inequality certificate for maximum weight common independent set",
+            "dual certificate for weighted matroid intersection",
+        ),
+        examples=(
+            OperationExample(
+                name="rank_one_pair_rank_dual",
+                description=(
+                    "Certify a weight-5 singleton in identical rank-one matroids. "
+                    "The first-source rank terms form the nested chain {0} "
+                    "subset {0, 1}; the second-source family is empty."
+                ),
+                input={
+                    "first": {
+                        "matrix": {"prime": 2, "entries": [[1, 1]], "columns": 2},
+                        "ground_labels": ["a", "b"],
+                    },
+                    "second": {
+                        "matrix": {"prime": 2, "entries": [[1, 1]], "columns": 2},
+                        "ground_labels": ["a", "b"],
+                    },
+                    "weight_function": {
+                        "ground_axis": ["a", "b"],
+                        "values": [5, 3],
+                    },
+                    "common_independent": [0],
+                    "first_rank_terms": [
+                        {"subset": [0], "multiplier": 2},
+                        {"subset": [0, 1], "multiplier": 3},
+                    ],
+                    "second_rank_terms": [],
+                },
+            ),
+        ),
+    ),
 )
 TOOLS = TOOLS + (  # noqa: RUF005
     MathTool(
-        operation_id="matroid.intersection.maximum.compute",
+        operation_id="matroid.intersection.compute",
         title="Compute a maximum common independent set",
         description=(
             "Compute an exact maximum-cardinality common independent set of "
             "two represented matroids on one labelled ground. Return both "
             "source ranks of the selected set and an Edmonds min-max rank "
-            "witness; serialized claims replay all four ranks against their "
-            "retained source matroids."
+            "witness. Deserialization checks structure and scalar consistency "
+            "only; call replay_intersection_result when relying on "
+            "caller-authored rank claims to check them against the retained "
+            "source matroids."
         ),
         request_type=MatroidIntersectionRequest,
         result_type=MatroidIntersectionResult,
@@ -371,6 +455,60 @@ TOOLS = TOOLS + (  # noqa: RUF005
                             "columns": 2,
                         },
                         "ground_labels": ["a", "b"],
+                    },
+                },
+            ),
+        ),
+    ),
+)
+
+TOOLS = TOOLS + (  # noqa: RUF005
+    MathTool(
+        operation_id="matroid.intersection.maximum_weight.compute",
+        title="Compute a maximum-weight common independent set",
+        description=(
+            "Compute one exact maximum-weight set independent in both "
+            "represented matroids. The empty set is a candidate, so the "
+            "result can be empty when every feasible nonempty set has lower "
+            "weight. Separate weighted certificate operations check "
+            "caller-authored optimality witnesses."
+        ),
+        request_type=MatroidWeightedIntersectionOptimizationRequest,
+        result_type=MatroidWeightedIntersectionOptimizationResult,
+        run=_run_weighted_intersection_optimization,
+        tags=("matroid", "intersection", "weighted", "optimization", "exact"),
+        discovery_terms=(
+            "maximum-weight common independent set",
+            "weighted matroid intersection",
+            "maximum weight matroid intersection",
+        ),
+        examples=(
+            OperationExample(
+                name="one_positive_common_element",
+                description=(
+                    "Choose the heavier element that is nonloop in both "
+                    "rank-one sources."
+                ),
+                input={
+                    "first": {
+                        "matrix": {
+                            "prime": 2,
+                            "entries": [[1, 1]],
+                            "columns": 2,
+                        },
+                        "ground_labels": ["a", "b"],
+                    },
+                    "second": {
+                        "matrix": {
+                            "prime": 2,
+                            "entries": [[1, 0]],
+                            "columns": 2,
+                        },
+                        "ground_labels": ["a", "b"],
+                    },
+                    "weight_function": {
+                        "ground_axis": ["a", "b"],
+                        "values": [5, 3],
                     },
                 },
             ),

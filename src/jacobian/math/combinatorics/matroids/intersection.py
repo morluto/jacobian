@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Sequence
+from math import ceil, log10
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -9,12 +10,19 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.matroids._models import (
     MAX_INDEPENDENT_SET_OUTPUT_UNITS,
+    MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
     LinearMatroid,
     MatroidCommonBasisResult,
     MatroidIntersectionResult,
     MatroidIntersectionWitness,
+    MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
+    MatroidWeightedIntersectionOptimizationRequest,
+    MatroidWeightedIntersectionOptimizationResult,
+    MatroidWeightedIntersectionRankCertificateRequest,
+    MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
+    MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     MAX_CLOSURE_RANK_WORK,
@@ -25,7 +33,15 @@ from jacobian.math.combinatorics.matroids.operations import (
     _selected_columns_matrix,
     require_bounded_retained_axis,
 )
-from jacobian.math.matrices.finite_fields.linear_algebra import rank as pf_rank
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    _admit_prime,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    _rank_admitted as pf_rank_admitted,
+)
+from jacobian.math.matrices.finite_fields.linear_algebra import (
+    rank as pf_rank,
+)
 
 MAX_INTERSECTION_GROUND = 256
 # Admission precomputes both source ranks, then charges the reachable search
@@ -37,6 +53,93 @@ MAX_INTERSECTION_GROUND = 256
 # admitted request has a finite exact completion envelope.
 MAX_INTERSECTION_WORK = 50_000_000
 MAX_WEIGHTED_INTERSECTION_WORK = 50_000_000
+# One bounded primality check per weighted-intersection operation. The
+# characteristic is validated once after canonicalization and every later
+# rank routes through the already-admitted kernel entry point.
+_WEIGHTED_INTERSECTION_PRIME_VALIDATION_WORK = 1024
+
+
+def _weighted_intersection_optimization_admission(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    objective: Sequence[int],
+) -> None:
+    """Admit Frank's integer weight-splitting kernel before rank expansion.
+
+    For n elements, the exchange circuits are constructed once at each of at
+    most n+1 cardinality stages. Schrijver's termination proof bounds the
+    number of dual adjustments between augmentations by n, so at most
+    n(n+1) graph/slack rounds occur. A round scans O(n²) arcs. Integral input
+    weights keep all split values integral; each finite adjustment slack is a
+    positive integer.
+    """
+    n = first.ground_size
+    if n > MAX_INTERSECTION_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("first", "matrix"),
+            code="matroid.weighted_intersection.optimize.work_bound",
+            message=(
+                "weighted intersection ground is limited to "
+                f"{MAX_INTERSECTION_GROUND} elements"
+            ),
+        )
+
+    rows_first = max(1, len(first.matrix.entries))
+    rows_second = max(1, len(second.matrix.entries))
+    rank_cost_first = _rank_work(rows_first, n)
+    rank_cost_second = _rank_work(rows_second, n)
+    # At each cardinality stage, each outside element needs one X+y rank test
+    # and at most |X| removal tests for each matroid. Include final feasibility
+    # ranks; all requests are admitted before the first such test.
+    calls_per_source = n * (n + 1) ** 2 + 1
+    rank_work = calls_per_source * (rank_cost_first + rank_cost_second)
+    # The rank estimate dominates each selected-column copy and residue
+    # validation (rows*n*min(rows,n) >= rows*k for every k <= n). Prime
+    # validation is performed once per operation and charged separately.
+    prime_validation_work = _WEIGHTED_INTERSECTION_PRIME_VALIDATION_WORK
+
+    update_rounds = n * (n + 1)
+    scan_visits = 16 * n * n * update_rounds + 4 * n * n * (n + 1) + 2 * n * n
+    weight_digits = max(
+        (len(str(abs(value))) for value in objective),
+        default=1,
+    )
+    # If M=max(1, |w_e|), each epsilon is at most 2(M+max|c1|).
+    # Thus max|c1| evolves by B' <= 3B+2M. With at most n(n+1)
+    # adjustments, both split vectors remain below 2*3^T*M.
+    dual_digits = weight_digits + ceil(log10(2) + update_rounds * log10(3))
+    if dual_digits > MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("weight_function", "values"),
+            code="matroid.weighted_intersection.optimize.growth_bound",
+            message=(
+                "Frank weight-split intermediates exceed the "
+                f"{MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS}-digit bound"
+            ),
+        )
+    # A decimal limb holds at most nine digits. Charge every graph/slack scan
+    # at the maximum possible integer width; this bounds Python big-int
+    # comparisons, additions, and subtractions independently of wall time.
+    arithmetic_work = scan_visits * max(1, ceil(dual_digits / 9))
+    require_bounded_retained_axis(
+        first,
+        second,
+        location=("first", "second", "weight_function"),
+        code="matroid.weighted_intersection.optimize.work_bound",
+    )
+    if (
+        rank_work + arithmetic_work + prime_validation_work
+        > MAX_WEIGHTED_INTERSECTION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("first", "second", "weight_function"),
+            code="matroid.weighted_intersection.optimize.work_bound",
+            message=(
+                "weighted intersection rank work, exact integer arithmetic, "
+                f"or retained axis allocation exceeds the "
+                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
+            ),
+        )
 
 
 def _admit_matroid(value: object, location: tuple[str, ...]) -> LinearMatroid:
@@ -327,6 +430,275 @@ def matroid_common_basis(
     )
 
 
+def _weighted_matroid_intersection_admitted(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weights: tuple[int, ...],
+) -> tuple[int, ...]:
+    """Run Frank's exact weight-splitting augmenting algorithm.
+
+    `c1+c2=weights` is maintained throughout. At each cardinality, the
+    current common independent set is optimal for each split weight among
+    sets of that size. Tight exchange paths augment that cardinality profile;
+    when no tight path exists, the minimum positive integral slack adjusts
+    the split on the reachable side. An infinite slack proves there is no
+    larger common independent set. The caller admits every circuit rank,
+    graph scan, split intermediate, and the retained result before entry.
+    """
+    n = first.ground_size
+    chosen: set[int] = set()
+    first_split = list(weights)
+    second_split = [0] * n
+    profile: list[tuple[tuple[int, ...], int]] = [((), 0)]
+    updates = 0
+    augmentations = 0
+
+    while True:
+        chosen_tuple = tuple(sorted(chosen))
+        first_arcs, second_arcs, sources, sinks = _weighted_exchange_graph(
+            first, second, chosen_tuple, n
+        )
+
+        # No element can be added to one of the matroids, so the current set
+        # already has maximum possible common cardinality. Its profile through
+        # the current size includes every feasible common cardinality.
+        if not sources or not sinks:
+            break
+
+        # The exchange graph and its arc families depend only on the current
+        # common set. Dual adjustments revisit this data without replaying
+        # circuit ranks.
+        while True:
+            max_first_source = max(first_split[element] for element in sources)
+            max_second_sink = max(second_split[element] for element in sinks)
+            normalized_sources = tuple(
+                element
+                for element in sources
+                if first_split[element] == max_first_source
+            )
+            normalized_sinks = {
+                element for element in sinks if second_split[element] == max_second_sink
+            }
+
+            adjacency = _weighted_tight_adjacency(
+                first_arcs, second_arcs, first_split, second_split, n
+            )
+            path, reachable = _weighted_tight_path(
+                adjacency, normalized_sources, normalized_sinks
+            )
+
+            if path is not None:
+                chosen.symmetric_difference_update(path)
+                augmentations += 1
+                if augmentations > n:
+                    raise OperationDomainValidationError(
+                        location=("first", "second"),
+                        code="matroid.weighted_intersection.optimizer_invariant",
+                        message="weighted intersection exceeded the ground-size augmentation bound",
+                    )
+                selected = tuple(sorted(chosen))
+                profile.append((selected, sum(weights[index] for index in selected)))
+                break
+
+            slacks = _weighted_exchange_slacks(
+                first_arcs,
+                second_arcs,
+                sources,
+                sinks,
+                reachable,
+                max_first_source,
+                max_second_sink,
+                first_split,
+                second_split,
+            )
+
+            if not slacks:
+                # All four Frank slack families are empty. The full exchange
+                # graph has no source-to-sink path, so this is a maximum
+                # cardinality common set and the computed profile is complete.
+                return min(
+                    profile,
+                    key=lambda item: (-item[1], len(item[0]), item[0]),
+                )[0]
+            epsilon = min(slacks)
+            if epsilon <= 0:
+                raise OperationDomainValidationError(
+                    location=("first", "second"),
+                    code="matroid.weighted_intersection.optimizer_invariant",
+                    message="weighted exchange slacks must be strictly positive",
+                )
+            for element in reachable:
+                first_split[element] -= epsilon
+                second_split[element] += epsilon
+            updates += 1
+            if updates > n * (n + 1):
+                raise OperationDomainValidationError(
+                    location=("first", "second"),
+                    code="matroid.weighted_intersection.optimizer_invariant",
+                    message="weighted intersection exceeded Frank's dual-update bound",
+                )
+
+    return min(profile, key=lambda item: (-item[1], len(item[0]), item[0]))[0]
+
+
+def _weighted_exchange_graph(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    chosen: tuple[int, ...],
+    ground_size: int,
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]], list[int], list[int]]:
+    first_arcs: list[tuple[int, int]] = []
+    second_arcs: list[tuple[int, int]] = []
+    sources: list[int] = []
+    sinks: list[int] = []
+    for outside in range(ground_size):
+        if outside in chosen:
+            continue
+        plus = (*chosen, outside)
+        first_addable = _weighted_independent(first, plus)
+        second_addable = _weighted_independent(second, plus)
+        if first_addable:
+            sources.append(outside)
+        if second_addable:
+            sinks.append(outside)
+        if first_addable and second_addable:
+            continue
+        for index, inside in enumerate(chosen):
+            exchanged = (*chosen[:index], *chosen[index + 1 :], outside)
+            if not first_addable and _weighted_independent(first, exchanged):
+                first_arcs.append((inside, outside))
+            if not second_addable and _weighted_independent(second, exchanged):
+                second_arcs.append((outside, inside))
+    return first_arcs, second_arcs, sources, sinks
+
+
+def _weighted_independent(matroid: LinearMatroid, subset: Sequence[int]) -> bool:
+    return len(subset) == _weighted_rank(matroid, subset)
+
+
+def _weighted_rank(matroid: LinearMatroid, indices: Sequence[int]) -> int:
+    if not indices:
+        return 0
+    matrix = _selected_columns_matrix(matroid, list(indices))
+    return pf_rank_admitted(matrix)
+
+
+def _weighted_tight_adjacency(
+    first_arcs: list[tuple[int, int]],
+    second_arcs: list[tuple[int, int]],
+    first_split: list[int],
+    second_split: list[int],
+    ground_size: int,
+) -> list[list[int]]:
+    adjacency: list[list[int]] = [[] for _ in range(ground_size)]
+    for inside, outside in first_arcs:
+        if first_split[inside] == first_split[outside]:
+            adjacency[inside].append(outside)
+    for outside, inside in second_arcs:
+        if second_split[inside] == second_split[outside]:
+            adjacency[outside].append(inside)
+    return adjacency
+
+
+def _weighted_tight_path(
+    adjacency: list[list[int]],
+    sources: tuple[int, ...],
+    sinks: set[int],
+) -> tuple[tuple[int, ...] | None, set[int]]:
+    parent: dict[int, int | None] = dict.fromkeys(sources)
+    queue: deque[int] = deque(sources)
+    endpoint: int | None = None
+    while queue and endpoint is None:
+        node = queue.popleft()
+        if node in sinks:
+            endpoint = node
+            break
+        for target in adjacency[node]:
+            if target not in parent:
+                parent[target] = node
+                queue.append(target)
+    if endpoint is None:
+        return None, set(parent)
+    path: list[int] = []
+    path_node: int | None = endpoint
+    while path_node is not None:
+        path.append(path_node)
+        path_node = parent[path_node]
+    return tuple(path), set(parent)
+
+
+def _weighted_exchange_slacks(
+    first_arcs: list[tuple[int, int]],
+    second_arcs: list[tuple[int, int]],
+    sources: list[int],
+    sinks: list[int],
+    reachable: set[int],
+    max_first_source: int,
+    max_second_sink: int,
+    first_split: list[int],
+    second_split: list[int],
+) -> list[int]:
+    return [
+        *(
+            first_split[inside] - first_split[outside]
+            for inside, outside in first_arcs
+            if inside in reachable and outside not in reachable
+        ),
+        *(
+            second_split[inside] - second_split[outside]
+            for outside, inside in second_arcs
+            if outside in reachable and inside not in reachable
+        ),
+        *(
+            max_first_source - first_split[element]
+            for element in sources
+            if element not in reachable
+        ),
+        *(
+            max_second_sink - second_split[element]
+            for element in sinks
+            if element in reachable
+        ),
+    ]
+
+
+def maximum_weight_matroid_intersection(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+) -> MatroidWeightedIntersectionOptimizationResult:
+    """Compute one maximum-weight common independent set exactly.
+
+    The solver uses Frank's integral weight-splitting augmenting algorithm.
+    The independently published supplied-certificate operations remain
+    available to check authored split or rank-dual witnesses.
+    """
+    first, second = _admit_pair(first, second)
+    weights, canonical_function = _canonical_weight_function(first, weight_function)
+    _weighted_intersection_optimization_admission(first, second, weights)
+    _admit_prime(first.matrix.prime)
+    selected = _weighted_matroid_intersection_admitted(first, second, weights)
+    rank_first = _weighted_rank(first, selected)
+    rank_second = _weighted_rank(second, selected)
+    if rank_first != len(selected) or rank_second != len(selected):
+        raise OperationDomainValidationError(
+            location=("common_independent",),
+            code="matroid.weighted_intersection.optimizer_invariant",
+            message="weighted-intersection kernel did not return a common independent set",
+        )
+    total_weight = sum(weights[index] for index in selected)
+    canonical_request = MatroidWeightedIntersectionOptimizationRequest.model_construct(
+        first=first,
+        second=second,
+        weight_function=canonical_function,
+    )
+    return MatroidWeightedIntersectionOptimizationResult._from_kernel(
+        request=canonical_request,
+        common_independent=selected,
+        total_weight=total_weight,
+    )
+
+
 def replay_common_basis_result(result: MatroidCommonBasisResult) -> None:
     """Check a serialized common-basis outcome and all retained source ranks."""
     first, second = _admit_pair(result.first, result.second)
@@ -551,12 +923,224 @@ def verify_weighted_intersection_result(
         return False
 
 
+def _weighted_rank_dual_ranks(
+    sources: tuple[LinearMatroid, LinearMatroid],
+    families: tuple[
+        tuple[MatroidRankMultiplier, ...], tuple[MatroidRankMultiplier, ...]
+    ],
+    ground_size: int,
+    maximum_positive_weight: int,
+) -> tuple[tuple[int, ...], tuple[int, ...]]:
+    """Recompute listed ranks and enforce their coefficient bounds."""
+    ranks_by_side: list[tuple[int, ...]] = []
+    for source, family in zip(sources, families, strict=True):
+        ranks = tuple(_weighted_rank(source, term.subset) for term in family)
+        for term, rank in zip(family, ranks, strict=True):
+            bound = maximum_positive_weight
+            if rank > 0:
+                bound *= ground_size
+            if term.multiplier > bound:
+                raise OperationDomainValidationError(
+                    location=("rank_terms",),
+                    code="matroid.weighted_intersection.rank_dual.multiplier",
+                    message=(
+                        "rank multiplier exceeds the normalized coefficient "
+                        "bound for its rank and objective"
+                    ),
+                )
+        ranks_by_side.append(ranks)
+    return ranks_by_side[0], ranks_by_side[1]
+
+
+def _weighted_rank_dual_values_and_cover(
+    families: tuple[
+        tuple[MatroidRankMultiplier, ...], tuple[MatroidRankMultiplier, ...]
+    ],
+    ranks_by_side: tuple[tuple[int, ...], tuple[int, ...]],
+    ground_size: int,
+) -> tuple[int, list[int]]:
+    """Return the rank-dual objective and its coordinatewise coverage."""
+    dual_value = 0
+    coverage = [0] * ground_size
+    for family, ranks in zip(families, ranks_by_side, strict=True):
+        dual_value += sum(
+            term.multiplier * rank for term, rank in zip(family, ranks, strict=True)
+        )
+        for term in family:
+            for element in term.subset:
+                coverage[element] += term.multiplier
+    return dual_value, coverage
+
+
+def weighted_intersection_rank_certificate(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    common_independent: tuple[int, ...],
+    first_rank_terms: tuple[MatroidRankMultiplier, ...],
+    second_rank_terms: tuple[MatroidRankMultiplier, ...],
+) -> MatroidWeightedIntersectionRankCertificateResult:
+    """Check a sparse rank-inequality dual for a common independent set.
+
+    The dual bound is computed from the caller's listed rank multipliers. No
+    independent-set enumeration or optimizer is used. The returned split is
+    derived from the first-side dual coverage, clipped coordinatewise to the
+    positive objective weights, and can be passed to the existing supplied
+    weight-splitting checker.
+    """
+    try:
+        canonical_request = MatroidWeightedIntersectionRankCertificateRequest(
+            first=first,
+            second=second,
+            weight_function=weight_function,
+            common_independent=common_independent,
+            first_rank_terms=first_rank_terms,
+            second_rank_terms=second_rank_terms,
+        ).model_dump(mode="python")
+        request = MatroidWeightedIntersectionRankCertificateRequest.model_validate(
+            canonical_request
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="matroid.weighted_intersection.rank_dual.request",
+            message="weighted-intersection rank certificate arguments are not canonical",
+        ) from exc
+
+    first, second = _admit_pair(request.first, request.second)
+    # Rank calls validate the characteristic themselves, but an empty
+    # certificate can bypass every rank call. Establish the shared field once
+    # before any empty-input shortcut, then use the admitted rank entry point.
+    _admit_prime(first.matrix.prime)
+    objective, _ = _canonical_weight_function(first, request.weight_function)
+    n = first.ground_size
+    w_plus = max(0, max(objective, default=0))
+    candidate = request.common_independent
+    terms = (request.first_rank_terms, request.second_rank_terms)
+    sources = (first, second)
+    rank_costs = tuple(
+        sum(_rank_work(len(source.matrix.entries), len(term.subset)) for term in family)
+        + _rank_work(len(source.matrix.entries), len(candidate))
+        for source, family in zip(sources, terms, strict=True)
+    )
+    rank_work = sum(rank_costs)
+    cover_work = n * sum(len(family) for family in terms)
+    split_values_first = [0] * n
+    for term in request.first_rank_terms:
+        for element in term.subset:
+            split_values_first[element] += term.multiplier
+    split_values_first = [
+        min(value, max(0, objective[element]))
+        for element, value in enumerate(split_values_first)
+    ]
+    split_values_second = [
+        objective[element] - split_values_first[element] for element in range(n)
+    ]
+    first_split = MatroidWeightFunction(
+        ground_axis=first.ground_axis,
+        values=tuple(split_values_first),
+    )
+    second_split = MatroidWeightFunction(
+        ground_axis=second.ground_axis,
+        values=tuple(split_values_second),
+    )
+    require_bounded_retained_axis(
+        first,
+        second,
+        location=("first", "second", "rank_terms"),
+        code="matroid.weighted_intersection.rank_dual.work_bound",
+    )
+    total_work = rank_work + cover_work + _WEIGHTED_INTERSECTION_PRIME_VALIDATION_WORK
+    if (
+        rank_work > MAX_WEIGHTED_INTERSECTION_WORK
+        or total_work > MAX_WEIGHTED_INTERSECTION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("first", "second", "rank_terms"),
+            code="matroid.weighted_intersection.rank_dual.work_bound",
+            message=(
+                "rank-dual certificate rank work or retained axis allocation "
+                f"exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
+            ),
+        )
+
+    ranks_by_side = _weighted_rank_dual_ranks(sources, terms, n, w_plus)
+
+    first_candidate_rank = _weighted_rank(first, candidate)
+    second_candidate_rank = _weighted_rank(second, candidate)
+    if first_candidate_rank != len(candidate) or second_candidate_rank != len(
+        candidate
+    ):
+        raise OperationDomainValidationError(
+            location=("common_independent",),
+            code="matroid.weighted_intersection.rank_dual.feasibility",
+            message="candidate must be independent in both source matroids",
+        )
+
+    dual_value, coverage = _weighted_rank_dual_values_and_cover(terms, ranks_by_side, n)
+    if any(coverage[element] < objective[element] for element in range(n)):
+        raise OperationDomainValidationError(
+            location=("first_rank_terms", "second_rank_terms"),
+            code="matroid.weighted_intersection.rank_dual.cover",
+            message="rank-dual multipliers must cover every objective weight coordinatewise",
+        )
+
+    candidate_weight = sum(objective[element] for element in candidate)
+    if dual_value != candidate_weight:
+        raise OperationDomainValidationError(
+            location=("common_independent", "first_rank_terms", "second_rank_terms"),
+            code="matroid.weighted_intersection.rank_dual.optimality",
+            message="rank-dual objective must equal the feasible candidate weight",
+        )
+    return MatroidWeightedIntersectionRankCertificateResult._from_kernel(
+        request=request,
+        total_weight=candidate_weight,
+        first_split=first_split,
+        second_split=second_split,
+    )
+
+
+def verify_weighted_intersection_rank_certificate(
+    result: MatroidWeightedIntersectionRankCertificateResult,
+) -> bool:
+    """Explicitly recompute a serialized rank-dual certificate."""
+    try:
+        request = MatroidWeightedIntersectionRankCertificateRequest(
+            first=result.first,
+            second=result.second,
+            weight_function=result.weight_function,
+            common_independent=result.common_independent,
+            first_rank_terms=result.first_rank_terms,
+            second_rank_terms=result.second_rank_terms,
+        )
+        return (
+            weighted_intersection_rank_certificate(
+                request.first,
+                request.second,
+                request.weight_function,
+                request.common_independent,
+                request.first_rank_terms,
+                request.second_rank_terms,
+            )
+            == result
+        )
+    except (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+        TypeError,
+        ValueError,
+    ):
+        return False
+
+
 __all__ = [
     "matroid_common_basis",
     "matroid_intersection",
     "replay_common_basis_result",
     "replay_intersection_result",
     "verify_common_basis_result",
+    "verify_weighted_intersection_rank_certificate",
     "verify_weighted_intersection_result",
     "weighted_intersection_certificate",
+    "weighted_intersection_rank_certificate",
 ]

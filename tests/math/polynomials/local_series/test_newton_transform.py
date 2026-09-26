@@ -137,6 +137,25 @@ def test_newton_transform_rejects_invalid_and_multiple_roots() -> None:
     )
 
 
+def test_newton_transform_rejects_noncanonical_native_root_before_conversion() -> None:
+    source = _polynomial(
+        (
+            (0, _window((-1, -1), lower=2, precision=4)),
+            (2, _window((1, 0, 0, 0), lower=0, precision=4)),
+        )
+    )
+    request = NewtonTransformRequest.model_construct(
+        polynomial=source,
+        edge_index=0,
+        initial_root=CanonicalRational.model_construct(num=1, den=0),
+    )
+    with pytest.raises(OperationDomainValidationError) as invalid_root:
+        newton_transform(request)
+    assert invalid_root.value.errors()[0]["type"] == (
+        "local_series.newton_transform_root_canonical"
+    )
+
+
 def test_newton_transform_pre_admits_expanded_output_slots() -> None:
     precision = 4_000
     source = _polynomial(

@@ -216,15 +216,35 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
         )
     if not isinstance(request.initial_root, CanonicalRational):
         _domain("root_type", "initial_root must be a canonical rational", ("initial_root",))
+    # Native callers may bypass Pydantic with model_construct; validate the
+    # canonical representation before any helper converts it to Fraction.
+    root_value = request.initial_root
+    canonical_root = None
+    if (
+        type(root_value.num) is int
+        and type(root_value.den) is int
+        and root_value.den > 0
+    ):
+        canonical_root = Fraction(root_value.num, root_value.den)
+    if (
+        canonical_root is None
+        or canonical_root.numerator != root_value.num
+        or canonical_root.denominator != root_value.den
+    ):
+        _domain(
+            "root_canonical",
+            "initial_root must have canonical integer numerator and positive denominator",
+            ("initial_root",),
+        )
     try:
         require_bounded_rational(
-            request.initial_root,
+            root_value,
             max_digits=MAX_NEWTON_POLYGON_SCALAR_DIGITS,
             label="Newton initial root",
         )
     except ValueError as error:
         _resource("root_coefficient_bound", str(error), ("initial_root",))
-    root = request.initial_root.as_fraction()
+    root = root_value.as_fraction()
     if root == 0:
         _domain("zero_root", "the selected Newton edge root must be nonzero", ("initial_root",))
 

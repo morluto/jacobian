@@ -7,6 +7,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology.simplicial_sets._models import (
+    MAX_SIMPLEX_LABEL_LENGTH,
     MAX_SIMPLICES_PER_DEGREE,
     MAX_SIMPLICIAL_SET_DEGREE,
     MAX_TOTAL_SIMPLICES,
@@ -28,7 +29,7 @@ def admit_tables(
     degeneracy_maps: MapTable,
 ) -> tuple[int, ...]:
     """Shared native+catalog admission; return admitted degree sizes."""
-    if not isinstance(max_degree, int) or not 0 <= max_degree <= (
+    if type(max_degree) is not int or not 0 <= max_degree <= (
         MAX_SIMPLICIAL_SET_DEGREE
     ):
         raise OperationDomainValidationError(
@@ -46,14 +47,21 @@ def admit_tables(
     for degree, level in enumerate(sets):
         if (
             not isinstance(level, tuple)
-            or not 1 <= len(level) <= MAX_SIMPLICES_PER_DEGREE
-            or any(not isinstance(label, str) or not label for label in level)
+            or not 0 <= len(level) <= MAX_SIMPLICES_PER_DEGREE
+            or any(
+                not isinstance(label, str)
+                or not 1 <= len(label) <= MAX_SIMPLEX_LABEL_LENGTH
+                for label in level
+            )
             or len(set(level)) != len(level)
         ):
             raise OperationDomainValidationError(
                 location=("sets", degree),
                 code="simplicial_set.degree_set_invalid",
-                message=f"degree-{degree} labels must be unique nonempty strings",
+                message=(
+                    f"degree-{degree} labels must be unique nonempty strings "
+                    f"of at most {MAX_SIMPLEX_LABEL_LENGTH} characters"
+                ),
             )
         sizes.append(len(level))
     if sum(sizes) > MAX_TOTAL_SIMPLICES:
@@ -92,8 +100,7 @@ def _admit_index_table(table: MapTable, sizes: tuple[int, ...], *, kind: str) ->
                 not isinstance(row, tuple)
                 or len(row) != sizes[degree]
                 or any(
-                    not isinstance(target, int)
-                    or not 0 <= target < sizes[target_degree]
+                    type(target) is not int or not 0 <= target < sizes[target_degree]
                     for target in row
                 )
             ):
@@ -120,6 +127,17 @@ def from_tables(
 ) -> SimplicialSetTablesResult:
     """Check every simplicial identity in degrees <= N for finite tables."""
     sizes = admit_tables(max_degree, sets, face_maps, degeneracy_maps)
+    return _from_admitted_tables(max_degree, sets, face_maps, degeneracy_maps, sizes)
+
+
+def _from_admitted_tables(
+    max_degree: int,
+    sets: DegreeSets,
+    face_maps: MapTable,
+    degeneracy_maps: MapTable,
+    sizes: tuple[int, ...],
+) -> SimplicialSetTablesResult:
+    """Check identities after ``admit_tables`` validated the exact axes."""
     checked = 0
     face_face_obstruction = _check_face_face(max_degree, face_maps, sizes)
     if face_face_obstruction is not None:

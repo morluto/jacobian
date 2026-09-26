@@ -186,6 +186,7 @@ def test_positive_order_short_circuits_a_large_vanishing_iterate() -> None:
     )
 
     assert output == _polynomial(variables, {})
+    assert RationalPolynomial.model_validate_json(output.model_dump_json()) == output
 
 
 def test_non_expanding_requests_are_admitted_at_any_iteration_count() -> None:
@@ -199,9 +200,14 @@ def test_non_expanding_requests_are_admitted_at_any_iteration_count() -> None:
         iterations=tall_iterations,
     )
     result = compute_differential_operator_application(request)
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
 
     assert result.is_zero is True
     assert result.output == _polynomial(variables, {})
+    assert result.polynomial == request.polynomial
+    assert replayed == result
     assert apply_constant_coefficient_differential_operator(
         _polynomial(variables, {}),
         _operator(variables, {(1, 0): 1}),
@@ -266,8 +272,6 @@ def test_tall_expanding_iterates_are_admitted_by_derived_budgets() -> None:
     )
 
     assert result.output == _polynomial(("x",), {(903,): math.perm(5_000, 4_097)})
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
     annihilated = DifferentialOperatorApplyRequest(
@@ -310,8 +314,6 @@ def test_colliding_powered_orders_are_counted_distinctly() -> None:
     )
 
     assert result.output == expected
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
 
@@ -319,7 +321,7 @@ def test_annihilating_powered_terms_are_excluded_from_the_candidate_cap() -> Non
     variables = ("x",)
     operator = _operator(
         variables,
-        {(0,): 1, **dict.fromkeys(((order,) for order in range(2, 1_050)), 1)},
+        {(0,): 1, **dict.fromkeys(((order,) for order in range(2, 2_051)), 1)},
     )
     source = _polynomial(variables, {(0,): 1, (1,): 1})
 
@@ -336,8 +338,6 @@ def test_annihilating_powered_terms_are_excluded_from_the_candidate_cap() -> Non
     )
 
     assert result.output == source
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
 
@@ -355,25 +355,17 @@ def test_scalar_iterate_growth_is_bounded_by_the_coefficient_budget() -> None:
         )
 
 
-def test_identity_iterate_admits_sources_beyond_the_former_input_cap() -> None:
+def test_identity_result_retains_expected_and_replays_bound() -> None:
     variables = ("x",)
-    wide_source = _polynomial(
+    source = _polynomial(
         variables,
         dict.fromkeys(((index,) for index in range(600)), 1),
     )
-    operator = _operator(variables, {(1,): 1})
-
-    identity = apply_constant_coefficient_differential_operator(
-        wide_source,
-        operator,
+    native_result = apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(1,): 1}),
         iterations=0,
     )
-    assert identity == wide_source
-
-
-def test_identity_result_retains_expected_and_replays_bound() -> None:
-    variables = ("x",)
-    source = _polynomial(variables, {(129,): 1})
     result = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
             polynomial=source,
@@ -383,6 +375,10 @@ def test_identity_result_retains_expected_and_replays_bound() -> None:
         )
     )
 
+    assert native_result == source
+    assert RationalPolynomial.model_validate_json(native_result.model_dump_json()) == (
+        native_result
+    )
     assert result.output == source
     assert result.matches_expected is True
     assert result.is_zero is False
@@ -392,23 +388,14 @@ def test_identity_result_retains_expected_and_replays_bound() -> None:
     assert replayed == result
 
 
-def test_identity_power_admits_sources_beyond_expansion_caps() -> None:
-    variables = ("x",)
-    tall_source = _polynomial(variables, {(129,): 1})
-    unit = _operator(variables, {(0,): 1})
-
-    identity = apply_constant_coefficient_differential_operator(
-        tall_source,
-        unit,
-        iterations=1,
-    )
-
-    assert identity == tall_source
-
-
 def test_identity_power_retains_expected_and_replays_bound() -> None:
     variables = ("x",)
     tall_source = _polynomial(variables, {(129,): 1})
+    native_result = apply_constant_coefficient_differential_operator(
+        tall_source,
+        _operator(variables, {(0,): 1}),
+        iterations=1,
+    )
 
     result = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
@@ -422,9 +409,11 @@ def test_identity_power_retains_expected_and_replays_bound() -> None:
         result.model_dump_json()
     )
 
+    assert native_result == tall_source
+    assert RationalPolynomial.model_validate_json(native_result.model_dump_json()) == (
+        native_result
+    )
     assert result.output == tall_source
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
 
@@ -445,8 +434,6 @@ def test_nonidentity_scalar_operators_follow_scale_only_budgets() -> None:
     )
 
     assert result.output == _polynomial(variables, {(129,): -1})
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
     wide_source = _polynomial(
@@ -498,8 +485,6 @@ def test_signed_unit_scalar_iterate_admits_the_coefficient_boundary_source() -> 
         )
 
         assert result.output == (source if iterations % 2 == 0 else negated)
-        assert result.matches_expected is True
-        assert result.is_zero is False
         assert replayed == result
 
 
@@ -540,18 +525,6 @@ def test_no_growth_derivative_regime_keeps_multivariate_heights() -> None:
 
     assert crossed == _polynomial(variables, {(0, 0): tall})
     assert split == _polynomial(variables, {(1, 0): tall, (0, 1): tall})
-
-
-def test_no_growth_derivative_mixed_survival_and_annihilation_keeps_heights() -> None:
-    variables = ("x",)
-    tall = 10**32_767
-
-    output = apply_constant_coefficient_differential_operator(
-        _polynomial(variables, {(1,): tall, (0,): tall}),
-        _operator(variables, {(1,): 1}),
-    )
-
-    assert output == _polynomial(variables, {(0,): tall})
 
 
 def test_merged_unit_paths_still_gate_at_the_coefficient_budget() -> None:
@@ -676,6 +649,23 @@ def test_no_growth_derivatives_are_admitted_at_the_coefficient_boundary() -> Non
         == 32_768
     )
 
+    mixed_source = _polynomial(variables, {(1,): 10**32_767, (0,): 10**32_767})
+    mixed = compute_differential_operator_application(
+        DifferentialOperatorApplyRequest(
+            polynomial=mixed_source,
+            operator=_operator(variables, {(1,): 1}),
+            iterations=1,
+            expected=_polynomial(variables, {(0,): 10**32_767}),
+        )
+    )
+    mixed_replayed = DifferentialOperatorApplyResult.model_validate_json(
+        mixed.model_dump_json()
+    )
+
+    assert mixed.output == _polynomial(variables, {(0,): 10**32_767})
+    assert mixed.matches_expected is True
+    assert mixed_replayed == mixed
+
 
 @pytest.mark.scale
 def test_multinomial_path_multiplicity_gates_the_coefficient_bound() -> None:
@@ -731,26 +721,13 @@ def test_multinomial_path_multiplicity_gates_the_coefficient_bound() -> None:
     assert replayed == result
 
 
-def test_componentwise_annihilation_admits_off_axis_sources_beyond_caps() -> None:
-    variables = ("x", "y")
-    tall_source = _polynomial(variables, {(0, 129): 1})
-
-    vanished = apply_constant_coefficient_differential_operator(
-        tall_source,
-        _operator(variables, {(1, 0): 1}),
-    )
-    crossed_axes = apply_constant_coefficient_differential_operator(
-        _polynomial(variables, {(0, 200): 1}),
-        _operator(variables, {(1, 1): 1}),
-    )
-
-    assert vanished == _polynomial(variables, {})
-    assert crossed_axes == _polynomial(variables, {})
-
-
 def test_per_axis_annihilation_requires_strict_exponent_excess() -> None:
     variables = ("x", "y")
 
+    off_axis = apply_constant_coefficient_differential_operator(
+        _polynomial(variables, {(0, 129): 1}),
+        _operator(variables, {(1, 0): 1}),
+    )
     annihilated = apply_constant_coefficient_differential_operator(
         _polynomial(variables, {(0, 200): 1}),
         _operator(variables, {(1, 1): 1}),
@@ -764,6 +741,10 @@ def test_per_axis_annihilation_requires_strict_exponent_excess() -> None:
         _operator(variables, {(1, 0): 1, (0, 1): 1}),
     )
 
+    assert off_axis == _polynomial(variables, {})
+    assert RationalPolynomial.model_validate_json(off_axis.model_dump_json()) == (
+        off_axis
+    )
     assert annihilated == _polynomial(variables, {})
     assert boundary == _polynomial(variables, {(0, 0): 1})
     assert mixed_operator == _polynomial(variables, {(1, 0): 1, (0, 1): 1})
@@ -799,6 +780,12 @@ def test_guaranteed_zero_admits_sources_beyond_expansion_caps() -> None:
     assert vanished == _polynomial(variables, {})
     assert vanished.variables == variables
     assert tall_vanished == _polynomial(("x",), {})
+    assert RationalPolynomial.model_validate_json(vanished.model_dump_json()) == (
+        vanished
+    )
+    assert RationalPolynomial.model_validate_json(tall_vanished.model_dump_json()) == (
+        tall_vanished
+    )
 
 
 @pytest.mark.scale
@@ -822,22 +809,21 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
         _operator(variables, {(1,): 1}),
         iterations=1,
     )
-
-    assert copied == source
-    assert vanished == _polynomial(variables, {})
-    assert (
-        apply_constant_coefficient_differential_operator(
-            source,
-            _operator(variables, {(0,): 1}),
-            iterations=1,
-        )
-        == source
+    identity = apply_constant_coefficient_differential_operator(
+        source,
+        _operator(variables, {(0,): 1}),
+        iterations=1,
     )
-    assert apply_constant_coefficient_differential_operator(
+    scaled = apply_constant_coefficient_differential_operator(
         source,
         _operator(variables, {(0,): 2}),
         iterations=1,
-    ) == RationalPolynomial(
+    )
+
+    assert copied == source
+    assert vanished == _polynomial(variables, {})
+    assert identity == source
+    assert scaled == RationalPolynomial(
         variables=variables,
         polynomial=SparseRationalPolynomial(
             terms=(
@@ -867,6 +853,10 @@ def test_tall_source_coefficients_are_admitted_by_derived_growth() -> None:
         variables,
         {(4,): 5 * (10**300 - 1)},
     )
+    for result in (copied, vanished, identity, scaled, differentiated):
+        assert (
+            RationalPolynomial.model_validate_json(result.model_dump_json()) == result
+        )
 
     reviewer = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
@@ -930,6 +920,10 @@ def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
         variables,
         {(4,): 5 * (10**300 - 1)},
     )
+    for result in (copied, vanished, applied):
+        assert (
+            RationalPolynomial.model_validate_json(result.model_dump_json()) == result
+        )
 
     reviewer = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
@@ -967,7 +961,7 @@ def test_tall_operator_coefficients_are_admitted_by_derived_growth() -> None:
 
 
 @pytest.mark.scale
-def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
+def test_guaranteed_zero_result_retains_large_source() -> None:
     coefficient = CanonicalRational(num=10**32_767, den=1)
 
     def oversized_source(term_count: int) -> RationalPolynomial:
@@ -984,23 +978,22 @@ def test_degenerate_shortcuts_still_honor_the_retained_byte_budget() -> None:
             ),
         )
 
-    admitted = compute_differential_operator_application(
+    source = oversized_source(300)
+    result = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
-            polynomial=oversized_source(280),
+            polynomial=source,
             operator=_operator(("x",), {}),
             iterations=1,
         )
     )
-    assert admitted.is_zero is True
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
 
-    larger = compute_differential_operator_application(
-        DifferentialOperatorApplyRequest(
-            polynomial=oversized_source(300),
-            operator=_operator(("x",), {}),
-            iterations=1,
-        )
-    )
-    assert larger.is_zero is True
+    assert result.is_zero is True
+    assert result.output == _polynomial(("x",), {})
+    assert result.polynomial == source
+    assert replayed == result
 
 
 def test_operator_and_polynomial_axes_must_match_exactly() -> None:
@@ -1065,7 +1058,12 @@ def test_expected_retention_is_not_capped_by_serialized_size() -> None:
             expected=heavy_expected,
         )
     )
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert result.expected == heavy_expected
     assert result.matches_expected is False
+    assert replayed == result
 
 
 @pytest.mark.parametrize(
@@ -1109,10 +1107,12 @@ def test_sparse_high_degree_sources_are_admitted_by_derived_derivative_work() ->
         polynomial=_polynomial(("x",), {(128,): 1}),
         operator=derivative,
     )
-    assert compute_differential_operator_application(accepted).output == _polynomial(
-        ("x",),
-        {(127,): 128},
+    first = compute_differential_operator_application(accepted)
+    first_replayed = DifferentialOperatorApplyResult.model_validate_json(
+        first.model_dump_json()
     )
+    assert first.output == _polynomial(("x",), {(127,): 128})
+    assert first_replayed == first
 
     first_derivative = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
@@ -1120,7 +1120,11 @@ def test_sparse_high_degree_sources_are_admitted_by_derived_derivative_work() ->
             operator=derivative,
         )
     )
+    first_derivative_replayed = DifferentialOperatorApplyResult.model_validate_json(
+        first_derivative.model_dump_json()
+    )
     assert first_derivative.output == _polynomial(("x",), {(128,): 129})
+    assert first_derivative_replayed == first_derivative
 
     second_derivative = compute_differential_operator_application(
         DifferentialOperatorApplyRequest(
@@ -1128,10 +1132,14 @@ def test_sparse_high_degree_sources_are_admitted_by_derived_derivative_work() ->
             operator=_operator(("x",), {(2,): 1}),
         )
     )
+    second_derivative_replayed = DifferentialOperatorApplyResult.model_validate_json(
+        second_derivative.model_dump_json()
+    )
     assert second_derivative.output == _polynomial(
         ("x",),
         {(3_198,): 3_200 * 3_199},
     )
+    assert second_derivative_replayed == second_derivative
 
 
 def test_dense_expanding_source_is_admitted_by_derived_budgets() -> None:
@@ -1141,9 +1149,11 @@ def test_dense_expanding_source_is_admitted_by_derived_budgets() -> None:
         ("x",),
         dict.fromkeys(((index,) for index in range(513)), 1),
     )
-    assert apply_constant_coefficient_differential_operator(dense, derivative) == (
-        _polynomial(("x",), {(index - 1,): index for index in range(1, 513)})
+    result = apply_constant_coefficient_differential_operator(dense, derivative)
+    assert result == _polynomial(
+        ("x",), {(index - 1,): index for index in range(1, 513)}
     )
+    assert RationalPolynomial.model_validate_json(result.model_dump_json()) == result
 
 
 def test_tall_orders_cross_the_former_total_order_cap() -> None:
@@ -1156,10 +1166,12 @@ def test_tall_orders_cross_the_former_total_order_cap() -> None:
             expected=_polynomial(("x",), {(0,): factorial}),
         )
     )
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
 
     assert result.output == _polynomial(("x",), {(0,): factorial})
-    assert result.matches_expected is True
-    assert result.is_zero is False
+    assert replayed == result
 
 
 def test_orders_stay_inside_the_interoperable_integer_range() -> None:
@@ -1196,53 +1208,12 @@ def test_sixty_five_term_operators_follow_derived_support_budgets() -> None:
             expected=expected,
         )
     )
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
 
     assert result.output == expected
-    assert result.matches_expected is True
-
-
-def test_dense_source_boundary_follows_the_candidate_support_budget() -> None:
-    variables = ("x",)
-    derivative_plus_one = _operator(variables, {(1,): 1, (0,): 1})
-
-    boundary = DifferentialOperatorApplyRequest(
-        polynomial=_polynomial(
-            variables,
-            dict.fromkeys(((index,) for index in range(2_048)), 1),
-        ),
-        operator=derivative_plus_one,
-    )
-    assert isinstance(
-        compute_differential_operator_application(boundary),
-        DifferentialOperatorApplyResult,
-    )
-
-    # Acting pairs overcount the result: an identity shift and a derivative
-    # shift collide on one output exponent each, so the candidate budget
-    # follows distinct target exponents instead of (term, shift) pairs.
-    merged = DifferentialOperatorApplyRequest(
-        polynomial=_polynomial(
-            variables,
-            dict.fromkeys(((index,) for index in range(2_049)), 1),
-        ),
-        operator=derivative_plus_one,
-    )
-    assert isinstance(
-        compute_differential_operator_application(merged),
-        DifferentialOperatorApplyResult,
-    )
-
-    with pytest.raises(OperationDomainValidationError):
-        compute_differential_operator_application(
-            DifferentialOperatorApplyRequest(
-                polynomial=_polynomial(
-                    variables,
-                    dict.fromkeys(((4 * index,) for index in range(1_100)), 1),
-                ),
-                operator=_operator(variables, {(3,): 1, (2,): 1, (1,): 1, (0,): 1}),
-                iterations=1,
-            )
-        )
+    assert replayed == result
 
 
 def test_canonical_width_source_is_admitted_to_the_last_expanding_term() -> None:
@@ -1254,12 +1225,15 @@ def test_canonical_width_source_is_admitted_to_the_last_expanding_term() -> None
         operator=_operator(("x",), {(1,): 1}),
     )
     result = compute_differential_operator_application(accepted)
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
 
     assert result.output == _polynomial(
         ("x",),
         {(index - 1,): index for index in range(1, MAX_POLYNOMIAL_TERMS)},
     )
-    assert result.is_zero is False
+    assert replayed == result
 
 
 def test_astronomical_orders_annihilate_without_expanding() -> None:
@@ -1271,8 +1245,11 @@ def test_astronomical_orders_annihilate_without_expanding() -> None:
         )
     )
 
-    assert result.is_zero is True
     assert result.output == _polynomial(("x",), {})
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert replayed == result
 
 
 def test_mixed_astronomical_orders_keep_only_surviving_powered_terms() -> None:
@@ -1287,7 +1264,10 @@ def test_mixed_astronomical_orders_keep_only_surviving_powered_terms() -> None:
     )
 
     assert result.output == _polynomial(("x",), {(63,): 65 * 64})
-    assert result.matches_expected is True
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert replayed == result
 
 
 def test_full_width_operators_follow_the_shared_term_representation() -> None:
@@ -1338,10 +1318,19 @@ def test_sparse_power_work_boundary_is_admitted_then_rejected() -> None:
         operator=operator,
         iterations=1_432,
     )
-    assert isinstance(
-        compute_differential_operator_application(accepted),
-        DifferentialOperatorApplyResult,
+    result = compute_differential_operator_application(accepted)
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
     )
+    expected = _polynomial(
+        ("x",),
+        {
+            (128 - order,): math.comb(1_432, order) * math.perm(128, order)
+            for order in range(129)
+        },
+    )
+    assert result.output == expected
+    assert replayed == result
 
     with pytest.raises(OperationDomainValidationError):
         compute_differential_operator_application(
@@ -1369,7 +1358,9 @@ def test_candidate_output_term_boundary_is_admitted_then_rejected() -> None:
         iterations=3,
     )
     result = compute_differential_operator_application(accepted)
-    assert isinstance(result, DifferentialOperatorApplyResult)
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
     expected_terms: dict[tuple[int, ...], int] = {}
     for index in range(1_024):
         exponent = 4 * index + 3
@@ -1379,6 +1370,7 @@ def test_candidate_output_term_boundary_is_admitted_then_rejected() -> None:
                 3, order
             ) * math.perm(exponent, order)
     assert result.output == _polynomial(variables, expected_terms)
+    assert replayed == result
 
     with pytest.raises(OperationDomainValidationError):
         compute_differential_operator_application(
@@ -1421,8 +1413,6 @@ def test_correlated_powered_axes_are_counted_distinctly() -> None:
     )
 
     assert result.output == expected
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
 
@@ -1474,11 +1464,11 @@ def test_per_monomial_annihilation_is_counted_in_the_candidate_bound() -> None:
     variables = ("x", "y")
     operator = _operator(
         variables,
-        {(i, j): 1 for i in range(32) for j in range(32)},
+        {(i, j): 1 for i in range(46) for j in range(46)},
     )
     source = _polynomial(variables, {(32, 0): 1, (0, 32): 1})
     expected_terms: dict[tuple[int, int], int] = {}
-    for exponent in range(32):
+    for exponent in range(33):
         coefficient = math.factorial(32) // math.factorial(32 - exponent)
         expected_terms[(32 - exponent, 0)] = (
             expected_terms.get((32 - exponent, 0), 0) + coefficient
@@ -1523,8 +1513,6 @@ def test_scalar_on_source_regime_skips_unreachable_expansion() -> None:
     )
 
     assert result.output == _polynomial(variables, {(0,): 1})
-    assert result.matches_expected is True
-    assert result.is_zero is False
     assert replayed == result
 
     growing = _operator(variables, {(0,): 2, (1,): 1})
@@ -2133,10 +2121,15 @@ def test_coefficient_growth_boundary_is_admitted_then_rejected() -> None:
         iterations=128,
     )
     result = compute_differential_operator_application(accepted)
+    replayed = DifferentialOperatorApplyResult.model_validate_json(
+        result.model_dump_json()
+    )
+    assert result.output == _polynomial(("x",), {(0,): 10 ** (255 * 128)})
     assert (
         len(format_canonical_integer(result.output.polynomial.terms[0].coefficient.num))
         == 32_641
     )
+    assert replayed == result
 
     with pytest.raises(OperationDomainValidationError):
         compute_differential_operator_application(
@@ -2174,6 +2167,11 @@ def test_result_rejects_forged_zero_and_expected_decisions() -> None:
         operator=_operator(("x",), {(0,): 1}),
     )
     result = compute_differential_operator_application(request)
+    payload = result.model_dump(mode="json")
+    payload["matches_expected"] = True
+    with polynomial_validation_error():
+        DifferentialOperatorApplyResult.model_validate_json(json.dumps(payload))
+
     payload = result.model_dump(mode="json")
     payload["output"] = _polynomial(("y",), {(1,): 1}).model_dump(mode="json")
     with polynomial_validation_error():

@@ -138,7 +138,9 @@ def test_operation_manifest_uses_the_plane_curve_divisor_id() -> None:
     )
 
 
-def test_native_nonhomogeneous_high_exponent_is_domain_error_before_degree_budget() -> None:
+def test_native_nonhomogeneous_high_exponent_is_domain_error_before_degree_budget() -> (
+    None
+):
     request = _cuspidal_cubic_request()
     polynomial = RationalPolynomial.model_construct(
         domain="QQ",
@@ -167,10 +169,12 @@ def test_forged_rational_fields_are_domain_errors_not_helper_exceptions() -> Non
         domain="QQ",
         variables=("x", "y", "z"),
         polynomial=SparseRationalPolynomial.model_construct(
-            terms=(RationalPolynomialTerm.model_construct(
-                coefficient=CanonicalRational.model_construct(num="bad", den=1),
-                exponents=(1, 0, 0),
-            ),)
+            terms=(
+                RationalPolynomialTerm.model_construct(
+                    coefficient=CanonicalRational.model_construct(num="bad", den=1),
+                    exponents=(1, 0, 0),
+                ),
+            )
         ),
     )
     with pytest.raises(OperationDomainValidationError) as error:

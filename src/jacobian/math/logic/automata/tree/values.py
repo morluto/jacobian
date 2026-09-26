@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import dataclass
+from itertools import pairwise
 from math import comb
 from typing import Annotated, NoReturn, Self
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
+from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -46,6 +49,74 @@ class TreeAutomatonTransition(StrictModel):
     symbol: int = Field(ge=0, le=MAX_TA_SYMBOLS - 1)
     child_states: tuple[int, ...] = Field(max_length=MAX_TA_ARITY)
     target_state: int = Field(ge=0, le=MAX_TA_STATES - 1)
+
+
+class RegularTreeProduction(StrictModel):
+    """One unit-free regular tree grammar production ``A -> f(B1,...,Bk)``."""
+
+    nonterminal: StrictInt = Field(ge=0, le=MAX_TA_STATES - 1)
+    symbol: StrictInt = Field(ge=0, le=MAX_TA_SYMBOLS - 1)
+    children: tuple[StrictInt, ...] = Field(max_length=MAX_TA_ARITY)
+
+
+class RegularTreeGrammar(StrictModel):
+    """A finite ranked regular tree grammar over explicitly indexed symbols.
+
+    Nonterminals are ``0..nonterminal_count-1`` and the start nonterminal is
+    explicit. Productions have the unit-free ranked form
+    ``A -> f(B1,...,Bk)``; their child count must equal the arity of ``f``.
+    """
+
+    nonterminal_count: StrictInt = Field(ge=1, le=MAX_TA_STATES)
+    arity: tuple[Annotated[StrictInt, Field(ge=0, le=MAX_TA_ARITY)], ...] = Field(
+        max_length=MAX_TA_SYMBOLS
+    )
+    start_nonterminal: StrictInt = Field(ge=0, le=MAX_TA_STATES - 1)
+    productions: tuple[RegularTreeProduction, ...] = Field(
+        max_length=MAX_TA_TRANSITIONS
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_productions(self) -> Self:
+        if self.start_nonterminal >= self.nonterminal_count:
+            raise _validation_error(
+                "grammar_start_out_of_range",
+                "start nonterminal must be in the declared nonterminal set",
+            )
+        for production in self.productions:
+            if production.nonterminal >= self.nonterminal_count:
+                raise _validation_error(
+                    "grammar_nonterminal_out_of_range",
+                    "production left side must be a declared nonterminal",
+                )
+            if production.symbol >= len(self.arity):
+                raise _validation_error(
+                    "grammar_symbol_out_of_range",
+                    "production symbol must be in the declared ranked signature",
+                )
+            if len(production.children) != self.arity[production.symbol]:
+                raise _validation_error(
+                    "grammar_rank_mismatch",
+                    "production child count must match its ranked symbol",
+                )
+            if any(child >= self.nonterminal_count for child in production.children):
+                raise _validation_error(
+                    "grammar_child_out_of_range",
+                    "production children must be declared nonterminals",
+                )
+        productions = tuple(
+            sorted(
+                self.productions,
+                key=lambda rule: (rule.nonterminal, rule.symbol, rule.children),
+            )
+        )
+        if any(left == right for left, right in pairwise(productions)):
+            raise _validation_error(
+                "grammar_duplicate_production",
+                "duplicate productions do not add a new derivation rule",
+            )
+        object.__setattr__(self, "productions", productions)
+        return self
 
 
 class RankedTree(StrictModel):
@@ -142,6 +213,34 @@ class BottomUpTreeAutomaton(StrictModel):
         for f in self.final_states:
             if not 0 <= f < self.state_count:
                 raise ValueError("final state out of range")
+
+
+class DeterministicBottomUpTreeAutomaton(BottomUpTreeAutomaton):
+    """A partial or complete deterministic bottom-up tree automaton."""
+
+    @model_validator(mode="after")
+    def require_deterministic_transitions(self) -> Self:
+        keys = tuple((row.symbol, row.child_states) for row in self.transitions)
+        if len(keys) != len(set(keys)):
+            raise _validation_error(
+                "transitions_not_deterministic",
+                "deterministic automata have at most one target for each symbol and child-state tuple",
+            )
+        return self
+
+
+class CompleteDeterministicBottomUpTreeAutomaton(DeterministicBottomUpTreeAutomaton):
+    """A deterministic bottom-up tree automaton with a total transition table."""
+
+    @model_validator(mode="after")
+    def require_complete_transition_table(self) -> Self:
+        required = sum(self.state_count**rank for rank in self.arity)
+        if len(self.transitions) != required:
+            raise _validation_error(
+                "transition_table_incomplete",
+                "complete automata need exactly one transition for every symbol and child-state tuple",
+            )
+        return self
 
 
 def _reject_tree(message: str, *, resource: bool = True) -> NoReturn:
@@ -484,6 +583,130 @@ def accepted_tree_count_work_bound(
     return work
 
 
+def _ground_reachable_states(automaton: BottomUpTreeAutomaton) -> frozenset[int]:
+    """Saturate ground reachability once, in linear transition-incidence work."""
+    waiting: list[list[int]] = [[] for _ in range(automaton.state_count)]
+    missing: list[int] = []
+    reached: set[int] = set()
+    queue: deque[int] = deque()
+    for index, transition in enumerate(automaton.transitions):
+        missing.append(len(transition.child_states))
+        if not transition.child_states and transition.target_state not in reached:
+            reached.add(transition.target_state)
+            queue.append(transition.target_state)
+        for child in transition.child_states:
+            waiting[child].append(index)
+        if index % 256 == 0:
+            request_checkpoint("during tree-automaton reachability indexing")
+    visited = 0
+    while queue:
+        request_checkpoint("during tree-automaton reachability saturation")
+        for index in waiting[queue.popleft()]:
+            missing[index] -= 1
+            if missing[index] == 0:
+                target = automaton.transitions[index].target_state
+                if target not in reached:
+                    reached.add(target)
+                    queue.append(target)
+            visited += 1
+            if visited % 8192 == 0:
+                request_checkpoint("during tree-automaton reachability saturation")
+    return frozenset(reached)
+
+
+@dataclass(frozen=True)
+class _RunCountAdmission:
+    work: int
+    reachable: frozenset[int]
+    zero: bool
+
+
+def _admit_nondeterministic_run_counts(
+    automaton: BottomUpTreeAutomaton, max_size: int
+) -> _RunCountAdmission:
+    """Admit the grouped polynomial DP for exact accepting-run counts.
+
+    Each run assigns one state to every node of one ranked tree. Counting
+    these assignments is a sum/product recurrence over transitions, distinct
+    from the subset recurrence that counts each accepted tree once.
+    """
+
+    if type(max_size) is not int or not 1 <= max_size <= 100:
+        _reject_tree("run-count maximum size must be in 1..100", resource=False)
+
+    # No finite ground tree exists without a nullary symbol. Likewise, an
+    # empty final-state set makes every accepting-run count zero. Avoid charging
+    # polynomial work for these constant-answer profiles.
+    if not automaton.final_states or not any(
+        not transition.child_states for transition in automaton.transitions
+    ):
+        return _RunCountAdmission(0, frozenset(), True)
+
+    # Both indexing and saturation visit at most one incident edge per child
+    # occurrence, plus one queue step per state. Price them before running.
+    reachability_work = (
+        4 * automaton.state_count
+        + 4 * len(automaton.transitions)
+        + 3 * sum(len(row.child_states) for row in automaton.transitions)
+    )
+    if reachability_work > MAX_TREE_AUTOMATON_WORK:
+        _reject_tree("nondeterministic run-count reachability work bound exceeded")
+    reachable = _ground_reachable_states(automaton)
+    if not any(state in reachable for state in automaton.final_states):
+        return _RunCountAdmission(reachability_work, reachable, True)
+
+    # An ordered tree shape has at most 4**n possibilities, each node has at
+    # most 32 symbols and 64 assigned states: at most 8192**n runs. This also
+    # bounds every nonnegative intermediate coefficient. Reserve one digit
+    # for the strict inequality and log rounding.
+    max_coefficient_digits = 4 * max_size + 1
+    # Add JSON string quotes, separators, and result-field overhead.
+    profile_digits = 4 * sum(range(1, max_size + 1)) + 4 * max_size + 64
+    if max_coefficient_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        _reject_tree("run-count coefficients exceed the exact integer digit bound")
+    source_chars = (
+        256
+        + 4 * len(automaton.arity)
+        + 4 * len(automaton.final_states)
+        + sum(64 + 3 * len(row.child_states) for row in automaton.transitions)
+    )
+    if source_chars + profile_digits > 1_000_000:
+        _reject_tree("run-count profile exceeds the exact output bound")
+
+    groups: dict[tuple[int, tuple[int, ...]], int] = {}
+    for transition in automaton.transitions:
+        if any(child not in reachable for child in transition.child_states):
+            continue
+        if transition.target_state not in reachable:
+            continue
+        key = (transition.symbol, transition.child_states)
+        groups[key] = groups.get(key, 0) + 1
+
+    reachable_transition_count = sum(groups.values())
+    width = max_size + 1
+    work = (
+        sum(
+            width
+            + (width * width if len(child_states) == 2 else 0)
+            + (2 * width * width * width * max(0, len(child_states) - 2))
+            for _, child_states in groups
+        )
+        + reachable_transition_count * width
+        + automaton.state_count * width
+    )
+    total_work = work + reachability_work
+    if total_work > MAX_TREE_AUTOMATON_WORK:
+        _reject_tree("nondeterministic run-count work bound exceeded")
+    return _RunCountAdmission(total_work, reachable, False)
+
+
+def nondeterministic_run_counts_work_bound(
+    automaton: BottomUpTreeAutomaton, max_size: int
+) -> int:
+    """Return the admitted combined reachability and DP work estimate."""
+    return _admit_nondeterministic_run_counts(automaton, max_size).work
+
+
 __all__ = [
     "MAX_REACHABILITY_WITNESS_NODES",
     "MAX_RUN_TREE_DEPTH",
@@ -495,12 +718,17 @@ __all__ = [
     "MAX_TREE_AUTOMATON_REACHABILITY_WORK",
     "MAX_TREE_AUTOMATON_WORK",
     "BottomUpTreeAutomaton",
+    "CompleteDeterministicBottomUpTreeAutomaton",
+    "DeterministicBottomUpTreeAutomaton",
     "RankedTree",
     "ReachableStateProfile",
+    "RegularTreeGrammar",
+    "RegularTreeProduction",
     "TreeAutomatonTransition",
     "TreeStateChartEntry",
     "TreeStateWitness",
     "accepted_tree_count_work_bound",
+    "nondeterministic_run_counts_work_bound",
     "ranked_tree_node_count",
     "validate_ranked_tree",
 ]

@@ -6,25 +6,44 @@ from collections import defaultdict
 from collections.abc import Iterator
 from itertools import product
 from math import prod
+from typing import Literal
 
+from pydantic import ValidationError
+
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountResult,
+    RankedTreePositionsResult,
+    RankedTreeSubtreeResult,
+    TreeAutomatonBooleanProductResult,
+    TreeAutomatonComplementResult,
+    TreeAutomatonCompletionResult,
+    TreeAutomatonMinimizeResult,
     TreeAutomatonTrimResult,
     TreeDeterminizeResult,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.values import (
+    MAX_RUN_TREE_DEPTH,
     MAX_RUN_TREE_NODES,
+    MAX_TA_ARITY,
+    MAX_TA_STATES,
+    MAX_TA_SYMBOLS,
+    MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_WORK,
     BottomUpTreeAutomaton,
+    CompleteDeterministicBottomUpTreeAutomaton,
+    DeterministicBottomUpTreeAutomaton,
     RankedTree,
     ReachableStateProfile,
+    RegularTreeGrammar,
     TreeAutomatonTransition,
     TreeStateChartEntry,
+    _admit_nondeterministic_run_counts,
     _build_reachable_state_profile,
     _reject_tree,
     accepted_tree_count_work_bound,
@@ -34,8 +53,16 @@ from jacobian.math.logic.automata.tree.values import (
 __all__ = [
     "ReachableStateProfile",
     "accepted_tree_count",
+    "boolean_product_tree_automata",
+    "complement_tree_automaton",
+    "complete_deterministic_tree_automaton",
     "determinize_tree_automaton",
+    "minimize_tree_automaton",
+    "nondeterministic_run_counts",
+    "ranked_tree_positions",
+    "ranked_tree_subtree",
     "reachable_state_profile",
+    "regular_tree_grammar_to_automaton",
     "run_tree_automaton",
     "tree_state_chart",
     "trim_tree_automaton",
@@ -47,8 +74,868 @@ __all__ = [
 ]
 
 
+def _complete_deterministic_rows(
+    machine: CompleteDeterministicBottomUpTreeAutomaton, side: str
+) -> dict[tuple[int, tuple[int, ...]], int]:
+    table = {}
+    for row in machine.transitions:
+        key = (row.symbol, row.child_states)
+        if key in table:
+            raise OperationDomainValidationError(
+                location=(side, "transitions"),
+                code="tree_automata.product_nondeterministic",
+                message="Boolean products require deterministic input automata",
+            )
+        table[key] = row.target_state
+    required = sum(machine.state_count**rank for rank in machine.arity)
+    if len(table) != required:
+        raise OperationDomainValidationError(
+            location=(side, "transitions"),
+            code="tree_automata.product_incomplete",
+            message="Boolean products require complete deterministic input automata",
+        )
+    return table
+
+
+_TREE_BOOLEAN_CONNECTIVES: tuple[str, ...] = (
+    "intersection",
+    "union",
+    "difference",
+    "symmetric_difference",
+)
+
+
+def _boolean_final(connective: str, left_final: bool, right_final: bool) -> bool:
+    if connective == "intersection":
+        return left_final and right_final
+    if connective == "union":
+        return left_final or right_final
+    if connective == "difference":
+        return left_final and not right_final
+    return left_final != right_final
+
+
+def ranked_tree_positions(
+    tree: RankedTree,
+) -> RankedTreePositionsResult:
+    """Return all node positions as zero-based child-index paths in preorder."""
+
+    if type(tree) is not RankedTree:
+        raise OperationDomainValidationError(
+            location=("tree",),
+            code="tree_automata.positions.tree_type",
+            message="tree must be a canonical RankedTree value",
+        )
+
+    # The first pass bounds the input structure and prices every path cell
+    # without retaining result paths. Only after that plan fits the work and
+    # allocation bounds do we materialize the complete position tuple.
+    node_count = 0
+    coordinate_count = 0
+    stack = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        if (
+            type(node) is not RankedTree
+            or type(node.symbol) is not int
+            or not 0 <= node.symbol < MAX_TA_SYMBOLS
+            or type(node.children) is not tuple
+            or len(node.children) > MAX_TA_ARITY
+        ):
+            raise OperationDomainValidationError(
+                location=("tree",),
+                code="tree_automata.positions.tree_shape",
+                message="tree nodes must satisfy the canonical ranked-tree shape",
+            )
+        node_count += 1
+        if node_count > MAX_RUN_TREE_NODES:
+            raise OperationResourceAdmissionError(
+                location=("tree",),
+                code="tree_automata.positions.node_count_bound",
+                message="ranked tree node count exceeds the position-operation bound",
+            )
+        if depth > MAX_RUN_TREE_DEPTH:
+            raise OperationResourceAdmissionError(
+                location=("tree",),
+                code="tree_automata.positions.depth_bound",
+                message="ranked tree depth exceeds the position-operation bound",
+            )
+        coordinate_count += depth - 1
+        stack.extend((child, depth + 1) for child in node.children)
+
+    work_bound = 2 * node_count + coordinate_count
+    if work_bound > MAX_RANKED_TREE_POSITIONS_WORK:
+        raise OperationResourceAdmissionError(
+            location=("tree",),
+            code="tree_automata.positions.work_bound",
+            message="ranked tree position traversal exceeds its work bound",
+        )
+    result_cells = node_count + coordinate_count
+    if result_cells > MAX_RANKED_TREE_POSITIONS_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("tree",),
+            code="tree_automata.positions.result_cells_bound",
+            message="complete ranked-tree positions exceed the result allocation bound",
+        )
+
+    positions: list[tuple[int, ...]] = []
+    position_stack: list[tuple[RankedTree, tuple[int, ...]]] = [(tree, ())]
+    while position_stack:
+        node, position = position_stack.pop()
+        positions.append(position)
+        for child_index in range(len(node.children) - 1, -1, -1):
+            position_stack.append(
+                (node.children[child_index], (*position, child_index))
+            )
+        if len(positions) % 512 == 0:
+            request_checkpoint("during ranked-tree position materialization")
+
+    return RankedTreePositionsResult._from_kernel(tree=tree, positions=tuple(positions))
+
+
+def ranked_tree_subtree(
+    tree: RankedTree,
+    position: tuple[int, ...],
+) -> RankedTreeSubtreeResult:
+    """Return the source-bound subtree rooted at a child-index position."""
+
+    if type(tree) is not RankedTree or type(position) is not tuple:
+        raise OperationDomainValidationError(
+            location=("tree",),
+            code="tree_automata.subtree.input_type",
+            message="tree and position must be canonical ranked-tree values",
+        )
+
+    node_count = 0
+    stack: list[tuple[RankedTree, int]] = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        if (
+            type(node) is not RankedTree
+            or type(node.symbol) is not int
+            or not 0 <= node.symbol < MAX_TA_SYMBOLS
+            or type(node.children) is not tuple
+            or len(node.children) > MAX_TA_ARITY
+        ):
+            raise OperationDomainValidationError(
+                location=("tree",),
+                code="tree_automata.subtree.tree_shape",
+                message="tree nodes must satisfy the canonical ranked-tree shape",
+            )
+        node_count += 1
+        if node_count > MAX_RUN_TREE_NODES:
+            raise OperationResourceAdmissionError(
+                location=("tree",),
+                code="tree_automata.subtree.node_count_bound",
+                message="ranked tree exceeds the subtree-operation node bound",
+            )
+        if depth > MAX_RUN_TREE_DEPTH:
+            raise OperationResourceAdmissionError(
+                location=("tree",),
+                code="tree_automata.subtree.depth_bound",
+                message="ranked tree exceeds the subtree-operation depth bound",
+            )
+        stack.extend((child, depth + 1) for child in node.children)
+
+    current = tree
+    for depth, index in enumerate(position):
+        if type(index) is not int or index < 0 or index >= len(current.children):
+            raise OperationDomainValidationError(
+                location=("position", depth),
+                code="tree_automata.subtree.position_missing",
+                message="position does not identify a node in the source tree",
+            )
+        current = current.children[index]
+
+    # The result retains the source tree, selected subtree, and address. Admit
+    # by retained nodes and address cells instead of serialized transport size.
+    work_bound = 2 * node_count + len(position)
+    if work_bound > MAX_RANKED_TREE_POSITIONS_WORK:
+        raise OperationResourceAdmissionError(
+            location=("tree",),
+            code="tree_automata.subtree.work_bound",
+            message="ranked-tree subtree selection exceeds its traversal bound",
+        )
+    if 2 * node_count + len(position) > MAX_RANKED_TREE_SUBTREE_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("tree",),
+            code="tree_automata.subtree.result_cells_bound",
+            message="source-bound ranked-tree subtree exceeds its result allocation bound",
+        )
+    return RankedTreeSubtreeResult._from_kernel(
+        tree=tree, position=position, subtree=current
+    )
+
+
+def boolean_product_tree_automata(
+    left: CompleteDeterministicBottomUpTreeAutomaton,
+    right: CompleteDeterministicBottomUpTreeAutomaton,
+    connective: Literal["intersection", "union", "difference", "symmetric_difference"],
+) -> TreeAutomatonBooleanProductResult:
+    """Construct the exact direct product for two complete deterministic machines.
+
+    Completeness makes every product state pair total, so each Boolean language
+    connective is represented by the corresponding final-state predicate.
+    """
+    if connective not in _TREE_BOOLEAN_CONNECTIVES:
+        raise OperationDomainValidationError(
+            location=("connective",),
+            code="tree_automata.product_connective",
+            message=(
+                "connective must be one of " + ", ".join(_TREE_BOOLEAN_CONNECTIVES)
+            ),
+        )
+    admitted: dict[str, CompleteDeterministicBottomUpTreeAutomaton] = {}
+    for side, machine in (("left", left), ("right", right)):
+        if not isinstance(machine, CompleteDeterministicBottomUpTreeAutomaton):
+            raise OperationDomainValidationError(
+                location=(side,),
+                code="tree_automata.product_automaton_type",
+                message=(
+                    "Boolean products require complete deterministic input automata"
+                ),
+            )
+        try:
+            admitted[side] = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+                machine.model_dump(), strict=True
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=(side,),
+                code="tree_automata.product_automaton_shape",
+                message="inputs must satisfy the complete deterministic carrier shape",
+            ) from exc
+    left, right = admitted["left"], admitted["right"]
+
+    if left.arity != right.arity:
+        raise OperationDomainValidationError(
+            location=("right", "arity"),
+            code="tree_automata.product_signature",
+            message="Boolean products require the same ordered ranked signature",
+        )
+
+    left_rows = _complete_deterministic_rows(left, "left")
+    right_rows = _complete_deterministic_rows(right, "right")
+    pair_count = left.state_count * right.state_count
+    if pair_count > MAX_TA_STATES:
+        raise OperationResourceAdmissionError(
+            location=("left", "state_count"),
+            code="tree_automata.product_states_bound",
+            message=f"the product has {pair_count} state pairs; at most {MAX_TA_STATES} are admitted",
+        )
+
+    # Join by symbol and preflight the full output before constructing rows.
+    left_by_symbol = defaultdict(list)
+    right_by_symbol = defaultdict(list)
+    for (symbol, children), target in left_rows.items():
+        left_by_symbol[symbol].append((children, target))
+    for (symbol, children), target in right_rows.items():
+        right_by_symbol[symbol].append((children, target))
+    row_count = sum(
+        len(left_by_symbol[symbol]) * len(right_by_symbol[symbol])
+        for symbol in range(len(left.arity))
+    )
+    work = sum(
+        len(left_by_symbol[symbol])
+        * len(right_by_symbol[symbol])
+        * (left.arity[symbol] + 1)
+        for symbol in range(len(left.arity))
+    )
+    if row_count > MAX_TA_TRANSITIONS or work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("transitions",),
+            code="tree_automata.product_transitions_bound",
+            message="the direct product transition table exceeds its admitted output or work bound",
+        )
+
+    state_pairs = tuple(
+        (a, b) for a in range(left.state_count) for b in range(right.state_count)
+    )
+    state_id = {pair: index for index, pair in enumerate(state_pairs)}
+    left_finals, right_finals = set(left.final_states), set(right.final_states)
+
+    transitions = []
+    for symbol in range(len(left.arity)):
+        for left_children, left_target in left_by_symbol[symbol]:
+            for right_children, right_target in right_by_symbol[symbol]:
+                paired_children = tuple(
+                    state_id[(a, b)]
+                    for a, b in zip(left_children, right_children, strict=True)
+                )
+                transitions.append(
+                    TreeAutomatonTransition(
+                        symbol=symbol,
+                        child_states=paired_children,
+                        target_state=state_id[(left_target, right_target)],
+                    )
+                )
+    product_automaton = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=pair_count,
+        arity=left.arity,
+        transitions=tuple(
+            sorted(transitions, key=lambda row: (row.symbol, row.child_states))
+        ),
+        final_states=tuple(
+            index
+            for index, (a, b) in enumerate(state_pairs)
+            if _boolean_final(connective, a in left_finals, b in right_finals)
+        ),
+    )
+    return TreeAutomatonBooleanProductResult._from_kernel(
+        left=left,
+        right=right,
+        connective=connective,
+        product=product_automaton,
+        state_pairs=state_pairs,
+    )
+
+
 MAX_DETERMINIZE_WORK = 500_000
 MAX_DETERMINIZE_SAMPLE_TREES = 4096
+MAX_COMPLEMENT_OUTPUT_CELLS = (
+    2 * MAX_TA_TRANSITIONS * (MAX_TA_ARITY + 1) + MAX_TA_STATES * 4 + MAX_TA_SYMBOLS * 2
+)
+MAX_COMPLETION_OUTPUT_CELLS = MAX_TA_TRANSITIONS * (MAX_TA_ARITY + 2)
+MAX_MINIMIZE_WORK = MAX_TREE_AUTOMATON_WORK
+MAX_RANKED_TREE_POSITIONS_WORK = 600_000
+MAX_RANKED_TREE_POSITIONS_RESULT_CELLS = MAX_RUN_TREE_NODES * (MAX_RUN_TREE_DEPTH + 1)
+MAX_RANKED_TREE_SUBTREE_RESULT_CELLS = 2 * MAX_RUN_TREE_NODES + MAX_RUN_TREE_DEPTH
+MAX_TREE_GRAMMAR_CONVERSION_WORK = 5_000_000
+
+
+def regular_tree_grammar_to_automaton(
+    grammar: RegularTreeGrammar,
+) -> BottomUpTreeAutomaton:
+    """Translate each production to the corresponding bottom-up transition."""
+
+    if (
+        not isinstance(grammar, RegularTreeGrammar)
+        or type(getattr(grammar, "arity", None)) is not tuple
+        or len(grammar.arity) > MAX_TA_SYMBOLS
+        or type(getattr(grammar, "productions", None)) is not tuple
+        or len(grammar.productions) > MAX_TA_TRANSITIONS
+    ):
+        raise OperationDomainValidationError(
+            location=("grammar",),
+            code="tree_automata.invalid_regular_tree_grammar",
+            message="conversion requires a canonical bounded regular tree grammar",
+        )
+    try:
+        grammar = RegularTreeGrammar.model_validate(grammar.model_dump(), strict=True)
+    except (ValidationError, TypeError, ValueError, AttributeError) as exc:
+        raise OperationDomainValidationError(
+            location=("grammar",),
+            code="tree_automata.invalid_regular_tree_grammar",
+            message="conversion requires a canonical bounded regular tree grammar",
+        ) from exc
+    transition_work = sum(2 + len(rule.children) for rule in grammar.productions)
+    production_count = len(grammar.productions)
+    sorting_work = (
+        4
+        * production_count
+        * (production_count + 1).bit_length()
+        * max(grammar.arity, default=0)
+    )
+    # Sixteen passes cover request validation, output construction, and
+    # source/result relation validation; sorting uses bounded rank-sized keys.
+    work_bound = (
+        sorting_work
+        + 16 * transition_work
+        + 8 * grammar.nonterminal_count
+        + 4 * len(grammar.arity)
+    )
+    if work_bound > MAX_TREE_GRAMMAR_CONVERSION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("grammar", "productions"),
+            code="tree_automata.grammar_conversion_work_bound",
+            message="regular tree grammar conversion exceeds its work envelope",
+        )
+    transitions = tuple(
+        TreeAutomatonTransition(
+            symbol=rule.symbol,
+            child_states=rule.children,
+            target_state=rule.nonterminal,
+        )
+        for rule in grammar.productions
+    )
+    automaton = BottomUpTreeAutomaton(
+        state_count=grammar.nonterminal_count,
+        arity=grammar.arity,
+        transitions=transitions,
+        final_states=(grammar.start_nonterminal,),
+    )
+    request_checkpoint("tree grammar conversion")
+    return automaton
+
+
+def _tree_automaton_minimization_partition(
+    automaton: DeterministicBottomUpTreeAutomaton,
+    reachable_states: tuple[int, ...],
+    rows: dict[tuple[int, tuple[int, ...]], int],
+) -> dict[int, int]:
+    final_states = set(automaton.final_states)
+    # Every missing row behaves as a transition to one implicit rejecting
+    # sink (state id -1): a ground-tree context that gets stuck never
+    # accepts, so the sink joins the initial nonfinal block and missing rows
+    # compare by the sink's current class instead of a fixed sentinel.
+    classes: dict[int, int] = {
+        state: int(state in final_states) for state in reachable_states
+    }
+    classes[-1] = 0
+    context_combos = sum(
+        rank * len(reachable_states) ** (rank - 1)
+        for rank in automaton.arity
+        if rank > 0
+    )
+    combos_since_checkpoint = 0
+    while True:
+        request_checkpoint("during tree-automaton partition refinement")
+        sink_class = classes[-1]
+        refined_by_signature: dict[tuple[object, ...], list[int]] = {}
+        for state in classes:
+            signature: list[object] = [state in final_states, classes[state]]
+            if state == -1:
+                signature.extend([sink_class] * context_combos)
+                refined_by_signature.setdefault(tuple(signature), []).append(state)
+                continue
+            for symbol, rank in enumerate(automaton.arity):
+                for position in range(rank):
+                    other_positions = tuple(
+                        index for index in range(rank) if index != position
+                    )
+                    for other_states in product(reachable_states, repeat=rank - 1):
+                        children = [0] * rank
+                        children[position] = state
+                        for index, other_state in zip(
+                            other_positions, other_states, strict=True
+                        ):
+                            children[index] = other_state
+                        target = rows.get((symbol, tuple(children)))
+                        signature.append(
+                            sink_class if target is None else classes[target]
+                        )
+                        combos_since_checkpoint += 1
+                        if combos_since_checkpoint >= 8192:
+                            request_checkpoint(
+                                "during tree-automaton partition refinement"
+                            )
+                            combos_since_checkpoint = 0
+            refined_by_signature.setdefault(tuple(signature), []).append(state)
+        # The synthetic -1 sink is not a caller state. Its block must be
+        # ordered by its least real representative (or last if sink-only),
+        # matching the canonical quotient axis and result decoder.
+        blocks = sorted(
+            refined_by_signature.values(),
+            key=lambda block: min(
+                (state for state in block if state >= 0),
+                default=automaton.state_count,
+            ),
+        )
+        refined = {
+            state: block_id for block_id, block in enumerate(blocks) for state in block
+        }
+        if all(refined[state] == classes[state] for state in classes):
+            return {state: classes[state] for state in reachable_states}
+        classes = refined
+
+
+def _deterministic_quotient_value(
+    *,
+    state_count: int,
+    arity: tuple[int, ...],
+    transitions: tuple[TreeAutomatonTransition, ...],
+    final_states: tuple[int, ...],
+) -> DeterministicBottomUpTreeAutomaton:
+    # A total quotient table carries the established completeness fact on the
+    # complete carrier, so it flows directly into complement and products.
+    if len(transitions) == sum(state_count**rank for rank in arity):
+        return CompleteDeterministicBottomUpTreeAutomaton(
+            state_count=state_count,
+            arity=arity,
+            transitions=transitions,
+            final_states=final_states,
+        )
+    return DeterministicBottomUpTreeAutomaton(
+        state_count=state_count,
+        arity=arity,
+        transitions=transitions,
+        final_states=final_states,
+    )
+
+
+def _tree_automaton_minimized_value(
+    automaton: DeterministicBottomUpTreeAutomaton,
+    reachable_states: tuple[int, ...],
+    classes: dict[int, int],
+) -> tuple[DeterministicBottomUpTreeAutomaton, tuple[int, ...], tuple[int, ...]]:
+    blocks = tuple(sorted(set(classes.values())))
+    class_to_quotient = {block: index for index, block in enumerate(blocks)}
+    old_to_new = tuple(
+        -1 if state not in classes else class_to_quotient[classes[state]]
+        for state in range(automaton.state_count)
+    )
+    representatives = tuple(
+        min(state for state in reachable_states if classes[state] == block)
+        for block in blocks
+    )
+    reachable = set(reachable_states)
+    quotient_rows: dict[tuple[int, tuple[int, ...]], int] = {}
+    for row in automaton.transitions:
+        if row.target_state not in reachable or any(
+            child not in reachable for child in row.child_states
+        ):
+            continue
+        key = (row.symbol, tuple(old_to_new[child] for child in row.child_states))
+        target = old_to_new[row.target_state]
+        previous = quotient_rows.setdefault(key, target)
+        if previous != target:
+            raise RuntimeError(
+                "partition refinement did not produce a transition congruence"
+            )
+    final_states = set(automaton.final_states)
+    minimized = _deterministic_quotient_value(
+        state_count=len(blocks),
+        arity=automaton.arity,
+        transitions=tuple(
+            TreeAutomatonTransition(
+                symbol=symbol, child_states=children, target_state=target
+            )
+            for (symbol, children), target in sorted(quotient_rows.items())
+        ),
+        final_states=tuple(
+            index
+            for index, representative in enumerate(representatives)
+            if representative in final_states
+        ),
+    )
+    return minimized, old_to_new, representatives
+
+
+def minimize_tree_automaton(
+    automaton: DeterministicBottomUpTreeAutomaton,
+) -> TreeAutomatonMinimizeResult:
+    """Return the smallest reachable quotient of a deterministic tree automaton.
+
+    Missing transitions remain undefined. States are equivalent exactly when
+    every ground-tree context with a hole accepts from both or neither state.
+    """
+
+    if not isinstance(automaton, DeterministicBottomUpTreeAutomaton):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.minimize_automaton_type",
+            message="minimization requires a deterministic bottom-up automaton",
+        )
+    try:
+        automaton = DeterministicBottomUpTreeAutomaton.model_validate(
+            automaton.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.minimize_automaton_shape",
+            message="automaton must satisfy its deterministic ranked carrier shape",
+        ) from exc
+    n, transition_count = automaton.state_count, len(automaton.transitions)
+    rows = {
+        (row.symbol, row.child_states): row.target_state
+        for row in automaton.transitions
+    }
+    has_ground_tree_seed = any(
+        not row.child_states and automaton.arity[row.symbol] == 0
+        for row in automaton.transitions
+    )
+    if not has_ground_tree_seed:
+        minimized = _deterministic_quotient_value(
+            state_count=1, arity=automaton.arity, transitions=(), final_states=()
+        )
+        return TreeAutomatonMinimizeResult._from_kernel(
+            automaton=automaton,
+            minimized=minimized,
+            old_to_new=(-1,) * n,
+            new_to_old=(None,),
+            reachable_states=(),
+        )
+    maximum_rank = max(automaton.arity, default=0)
+    reachability_work = (n + 1) * (transition_count + 1) * (maximum_rank + 1)
+    context_cells = sum(rank * n ** (rank - 1) for rank in automaton.arity if rank > 0)
+    refinement_work = n * n * context_cells
+    if reachability_work + refinement_work > MAX_MINIMIZE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_automata.minimize_work_bound",
+            message="the reachable-state and partition-refinement bound is exceeded",
+        )
+    if transition_count * (maximum_rank + 1) > MAX_TA_TRANSITIONS * (MAX_TA_ARITY + 1):
+        raise OperationResourceAdmissionError(
+            location=("automaton", "transitions"),
+            code="tree_automata.minimize_output_bound",
+            message="the quotient transition output exceeds its admitted cell bound",
+        )
+
+    reachable: set[int] = set()
+    changed = True
+    while changed:
+        changed = False
+        for row in automaton.transitions:
+            if (
+                all(state in reachable for state in row.child_states)
+                and row.target_state not in reachable
+            ):
+                reachable.add(row.target_state)
+                changed = True
+    reachable_states = tuple(sorted(reachable))
+
+    classes = _tree_automaton_minimization_partition(automaton, reachable_states, rows)
+    minimized, old_to_new, representatives = _tree_automaton_minimized_value(
+        automaton, reachable_states, classes
+    )
+    return TreeAutomatonMinimizeResult._from_kernel(
+        automaton=automaton,
+        minimized=minimized,
+        old_to_new=old_to_new,
+        new_to_old=representatives,
+        reachable_states=reachable_states,
+    )
+
+
+def complete_deterministic_tree_automaton(
+    automaton: DeterministicBottomUpTreeAutomaton,
+) -> TreeAutomatonCompletionResult:
+    """Fill missing deterministic transitions with one nonfinal sink state."""
+
+    if not isinstance(automaton, DeterministicBottomUpTreeAutomaton):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.completion_automaton_type",
+            message="automaton must be a deterministic bottom-up tree automaton",
+        )
+    try:
+        automaton = DeterministicBottomUpTreeAutomaton.model_validate(
+            automaton.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.completion_automaton_shape",
+            message="automaton must satisfy its deterministic ranked carrier shape",
+        ) from exc
+
+    original_row_count = sum(automaton.state_count**rank for rank in automaton.arity)
+    if original_row_count > MAX_TA_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "arity"),
+            code="tree_automata.completion_transition_bound",
+            message=(
+                "even the source-state transition table exceeds the admitted "
+                f"{MAX_TA_TRANSITIONS}-row completion bound"
+            ),
+        )
+    missing_count = original_row_count - len(automaton.transitions)
+    if missing_count < 0:
+        raise OperationDomainValidationError(
+            location=("automaton", "transitions"),
+            code="tree_automata.completion_transition_count",
+            message="the deterministic transition table exceeds its ranked domain",
+        )
+
+    sink_state: int | None = None
+    completed_state_count = automaton.state_count
+    if missing_count:
+        if automaton.state_count >= MAX_TA_STATES:
+            raise OperationResourceAdmissionError(
+                location=("automaton", "state_count"),
+                code="tree_automata.completion_state_bound",
+                message="completion needs one sink state beyond the admitted state bound",
+            )
+        sink_state = automaton.state_count
+        completed_state_count += 1
+
+    output_row_count = sum(completed_state_count**rank for rank in automaton.arity)
+    output_cells = sum(
+        completed_state_count**rank * (rank + 2) for rank in automaton.arity
+    )
+    work_bound = sum(
+        completed_state_count**rank * (rank + 1) for rank in automaton.arity
+    )
+    if (
+        output_row_count > MAX_TA_TRANSITIONS
+        or output_cells > MAX_COMPLETION_OUTPUT_CELLS
+        or work_bound > MAX_TREE_AUTOMATON_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("automaton", "arity"),
+            code="tree_automata.completion_output_bound",
+            message=(
+                "the completed transition table exceeds its admitted row, "
+                "cell, or work envelope"
+            ),
+        )
+
+    existing = {
+        (transition.symbol, transition.child_states): transition.target_state
+        for transition in automaton.transitions
+    }
+
+    def completed_target(symbol: int, children: tuple[int, ...]) -> int:
+        target = existing.get((symbol, children))
+        if target is not None:
+            return target
+        if sink_state is None:
+            raise RuntimeError(
+                "a complete source automaton is missing an admitted transition"
+            )
+        return sink_state
+
+    transitions = tuple(
+        TreeAutomatonTransition(
+            symbol=symbol,
+            child_states=children,
+            target_state=completed_target(symbol, children),
+        )
+        for symbol, rank in enumerate(automaton.arity)
+        for children in product(range(completed_state_count), repeat=rank)
+    )
+    completed = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=completed_state_count,
+        arity=automaton.arity,
+        transitions=transitions,
+        final_states=automaton.final_states,
+    )
+    return TreeAutomatonCompletionResult._from_kernel(
+        automaton=automaton,
+        completed=completed,
+        source_to_completed=tuple(range(automaton.state_count)),
+        sink_state=sink_state,
+    )
+
+
+def complement_tree_automaton(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+) -> TreeAutomatonComplementResult:
+    """Complement a complete deterministic bottom-up tree automaton.
+
+    The ranked signature is the explicit ``arity`` tuple: symbol IDs are its
+    indices. State labels are canonicalized by first occurrence in the
+    lexicographically ordered complete transition table, with absent states
+    appended in their source order. The result carries both state maps.
+    """
+    if not isinstance(automaton, CompleteDeterministicBottomUpTreeAutomaton):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.complement_automaton_type",
+            message="automaton must be a complete deterministic tree automaton",
+        )
+    try:
+        automaton = CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+            automaton.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.complement_automaton_shape",
+            message="automaton must satisfy its complete ranked carrier shape",
+        ) from exc
+
+    # This arithmetic is cheap even at the carrier's maximum arity. Refuse
+    # before building transition keys or expanding any child-state product.
+    transition_count = sum(automaton.state_count**arity for arity in automaton.arity)
+    if transition_count > MAX_TA_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "arity"),
+            code="tree_automata.complement_transition_bound",
+            message=(
+                "the complete transition table exceeds the admitted output "
+                f"bound of {MAX_TA_TRANSITIONS} rows"
+            ),
+        )
+    transition_cells = sum(
+        automaton.state_count**arity * (arity + 1) for arity in automaton.arity
+    )
+    output_cells = (
+        2 * transition_cells + 4 * automaton.state_count + 2 * len(automaton.arity)
+    )
+    if output_cells > MAX_COMPLEMENT_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "arity"),
+            code="tree_automata.complement_output_bound",
+            message="the complete complement result exceeds its admitted output-cell bound",
+        )
+
+    keyed: dict[tuple[int, tuple[int, ...]], int] = {}
+    for transition in automaton.transitions:
+        key = (transition.symbol, transition.child_states)
+        if key in keyed:
+            raise OperationDomainValidationError(
+                location=("automaton", "transitions"),
+                code="tree_automata.complement_nondeterministic",
+                message=(
+                    "complement requires exactly one target per symbol and "
+                    "ordered child-state tuple"
+                ),
+            )
+        keyed[key] = transition.target_state
+    if len(keyed) != transition_count:
+        raise OperationDomainValidationError(
+            location=("automaton", "transitions"),
+            code="tree_automata.complement_incomplete",
+            message=(
+                "complement requires one transition for every symbol and "
+                "ordered child-state tuple"
+            ),
+        )
+
+    canonical_rows = sorted(
+        automaton.transitions,
+        key=lambda row: (row.symbol, row.child_states, row.target_state),
+    )
+    state_order: list[int] = []
+    seen: set[int] = set()
+    for row in canonical_rows:
+        for state in (*row.child_states, row.target_state):
+            if state not in seen:
+                seen.add(state)
+                state_order.append(state)
+    state_order.extend(
+        state for state in range(automaton.state_count) if state not in seen
+    )
+    old_to_new_list = [0] * automaton.state_count
+    for new, old in enumerate(state_order):
+        old_to_new_list[old] = new
+    old_to_new = tuple(old_to_new_list)
+    new_to_old = tuple(state_order)
+    source_finals = set(automaton.final_states)
+    complement = CompleteDeterministicBottomUpTreeAutomaton(
+        state_count=automaton.state_count,
+        arity=automaton.arity,
+        transitions=tuple(
+            sorted(
+                (
+                    TreeAutomatonTransition(
+                        symbol=row.symbol,
+                        child_states=tuple(
+                            old_to_new[state] for state in row.child_states
+                        ),
+                        target_state=old_to_new[row.target_state],
+                    )
+                    for row in canonical_rows
+                ),
+                key=lambda row: (row.symbol, row.child_states, row.target_state),
+            )
+        ),
+        final_states=tuple(
+            state
+            for state in range(automaton.state_count)
+            if new_to_old[state] not in source_finals
+        ),
+    )
+    return TreeAutomatonComplementResult._from_kernel(
+        automaton=automaton,
+        complement=complement,
+        old_to_new=old_to_new,
+        new_to_old=new_to_old,
+        transition_count=transition_count,
+    )
 
 
 def reachable_state_profile(
@@ -252,6 +1139,95 @@ def accepted_tree_count(
         return 0
     accepted_tree_count_work_bound(automaton, tree_size)
     return _accepted_tree_count_admitted(automaton, tree_size)
+
+
+def nondeterministic_run_counts(
+    automaton: BottomUpTreeAutomaton, max_size: int
+) -> tuple[int, ...]:
+    """Count accepting runs by exact node size through ``max_size``.
+
+    A run is a ranked tree together with one state assignment to every node,
+    where every assigned parent/children tuple is a transition and the root
+    state is final. A tree with several accepting assignments contributes
+    once per assignment.
+    """
+
+    automaton = _validate_native_tree_automaton(automaton)
+    admission = _admit_nondeterministic_run_counts(automaton, max_size)
+    if admission.zero:
+        return (0,) * max_size
+    return _nondeterministic_run_counts_admitted(
+        automaton, max_size, admission.reachable
+    )
+
+
+def _validate_native_tree_automaton(
+    automaton: BottomUpTreeAutomaton,
+) -> BottomUpTreeAutomaton:
+    if not isinstance(automaton, BottomUpTreeAutomaton):
+        _reject_tree(
+            "automaton must be a validated bottom-up tree automaton", resource=False
+        )
+    try:
+        return BottomUpTreeAutomaton.model_validate(automaton.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton", "tree"),
+            code="tree_automata.admission",
+            message="automaton is invalid",
+        ) from exc
+
+
+def _nondeterministic_run_counts_admitted(
+    automaton: BottomUpTreeAutomaton,
+    max_size: int,
+    reachable: frozenset[int],
+) -> tuple[int, ...]:
+    by_key: dict[tuple[int, tuple[int, ...]], list[int]] = defaultdict(list)
+    for transition in automaton.transitions:
+        if any(child not in reachable for child in transition.child_states):
+            continue
+        if transition.target_state not in reachable:
+            continue
+        by_key[(transition.symbol, transition.child_states)].append(
+            transition.target_state
+        )
+
+    # counts[q][n] is the number of runs on n-node trees whose root is q.
+    counts = [[0] * (max_size + 1) for _ in range(automaton.state_count)]
+    output: list[int] = []
+    for size in range(1, max_size + 1):
+        child_size = size - 1
+        for (_, child_states), targets in by_key.items():
+            request_checkpoint("during nondeterministic tree run counting")
+            if not child_states:
+                coefficient = int(child_size == 0)
+            elif len(child_states) == 1:
+                coefficient = counts[child_states[0]][child_size]
+            elif len(child_states) == 2:
+                left, right = child_states
+                coefficient = sum(
+                    counts[left][left_size] * counts[right][child_size - left_size]
+                    for left_size in range(child_size + 1)
+                )
+            else:
+                # Truncated polynomial multiplication computes the number of
+                # child-run tuples with total size ``child_size``.
+                coefficients = [1]
+                for state in child_states:
+                    next_coefficients = [0] * (child_size + 1)
+                    for left_size, left_count in enumerate(coefficients):
+                        for right_size in range(child_size - left_size + 1):
+                            next_coefficients[left_size + right_size] += (
+                                left_count * counts[state][right_size]
+                            )
+                    coefficients = next_coefficients
+                coefficient = coefficients[child_size]
+            if coefficient:
+                for target in targets:
+                    counts[target][size] += coefficient
+        output.append(sum(counts[state][size] for state in automaton.final_states))
+    return tuple(output)
 
 
 def _accepted_tree_count_admitted(
@@ -611,14 +1587,16 @@ def _canonical_dfa(
     automaton: BottomUpTreeAutomaton,
     subsets: list[tuple[int, ...]],
     rows: dict[tuple[int, tuple[int, ...]], int],
-) -> tuple[BottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
+) -> tuple[DeterministicBottomUpTreeAutomaton, tuple[tuple[int, ...], ...]]:
     """Order subsets lexicographically and build the deterministic machine."""
 
     order = sorted(range(len(subsets)), key=lambda index: subsets[index])
     renumber = {old: new for new, old in enumerate(order)}
     canonical = tuple(subsets[old] for old in order)
     source_finals = set(automaton.final_states)
-    deterministic = BottomUpTreeAutomaton(
+    # Subset construction rows are keyed by one (symbol, child-state) tuple,
+    # so the carrier records the established determinism.
+    deterministic = DeterministicBottomUpTreeAutomaton(
         state_count=max(1, len(canonical)),
         arity=automaton.arity,
         transitions=tuple(
@@ -783,7 +1761,7 @@ def determinize_tree_automaton(
             sample_agreement=False,
         )
     if not subsets:
-        deterministic = BottomUpTreeAutomaton(
+        deterministic = DeterministicBottomUpTreeAutomaton(
             state_count=1, arity=automaton.arity, transitions=(), final_states=()
         )
         return TreeDeterminizeResult._from_kernel(

@@ -9,6 +9,22 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
+    NondeterministicRunCountsRequest,
+    NondeterministicRunCountsResult,
+    RankedTreePositionsRequest,
+    RankedTreePositionsResult,
+    RankedTreeSubtreeRequest,
+    RankedTreeSubtreeResult,
+    RegularTreeGrammarToAutomatonRequest,
+    RegularTreeGrammarToAutomatonResult,
+    TreeAutomatonBooleanProductRequest,
+    TreeAutomatonBooleanProductResult,
+    TreeAutomatonComplementRequest,
+    TreeAutomatonComplementResult,
+    TreeAutomatonCompletionRequest,
+    TreeAutomatonCompletionResult,
+    TreeAutomatonMinimizeRequest,
+    TreeAutomatonMinimizeResult,
     TreeAutomatonReachabilityRequest,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
@@ -19,14 +35,23 @@ from jacobian.math.logic.automata.tree._models import (
 )
 from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
+    _nondeterministic_run_counts_admitted,
     _tree_state_chart_unchecked,
+    boolean_product_tree_automata,
+    complement_tree_automaton,
+    complete_deterministic_tree_automaton,
     determinize_tree_automaton,
+    minimize_tree_automaton,
+    ranked_tree_positions,
+    ranked_tree_subtree,
     reachable_state_profile,
+    regular_tree_grammar_to_automaton,
     trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
     TreeStateChartEntry,
+    _admit_nondeterministic_run_counts,
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
@@ -62,6 +87,53 @@ def compute_accepted_tree_count(
     )
 
 
+def compute_nondeterministic_run_counts(
+    request: NondeterministicRunCountsRequest,
+) -> NondeterministicRunCountsResult:
+    admission = _admit_nondeterministic_run_counts(request.automaton, request.max_size)
+    counts = (
+        (0,) * request.max_size
+        if admission.zero
+        else _nondeterministic_run_counts_admitted(
+            request.automaton, request.max_size, admission.reachable
+        )
+    )
+    return NondeterministicRunCountsResult._from_kernel(
+        request,
+        run_counts_by_size=counts,
+        estimated_work_bound=admission.work,
+    )
+
+
+def compute_regular_tree_grammar_to_automaton(
+    request: RegularTreeGrammarToAutomatonRequest,
+) -> RegularTreeGrammarToAutomatonResult:
+    return RegularTreeGrammarToAutomatonResult._from_kernel(
+        grammar=request.grammar,
+        automaton=regular_tree_grammar_to_automaton(request.grammar),
+    )
+
+
+def compute_ranked_tree_positions(
+    request: RankedTreePositionsRequest,
+) -> RankedTreePositionsResult:
+    return ranked_tree_positions(request.tree)
+
+
+def compute_ranked_tree_subtree(
+    request: RankedTreeSubtreeRequest,
+) -> RankedTreeSubtreeResult:
+    return ranked_tree_subtree(request.tree, request.position)
+
+
+def compute_tree_automaton_boolean_product(
+    request: TreeAutomatonBooleanProductRequest,
+) -> TreeAutomatonBooleanProductResult:
+    return boolean_product_tree_automata(
+        request.left, request.right, request.connective
+    )
+
+
 def compute_tree_automaton_reachability(
     request: TreeAutomatonReachabilityRequest,
 ) -> ReachableStateProfile:
@@ -88,6 +160,25 @@ def compute_tree_automaton_determinize(
         request.max_subset_states,
         request.sample_max_height,
     )
+
+
+def compute_tree_automaton_complement(
+    request: TreeAutomatonComplementRequest,
+) -> TreeAutomatonComplementResult:
+    """Complement an admitted complete deterministic bottom-up automaton."""
+    return complement_tree_automaton(request.automaton)
+
+
+def compute_tree_automaton_completion(
+    request: TreeAutomatonCompletionRequest,
+) -> TreeAutomatonCompletionResult:
+    return complete_deterministic_tree_automaton(request.automaton)
+
+
+def compute_tree_automaton_minimize(
+    request: TreeAutomatonMinimizeRequest,
+) -> TreeAutomatonMinimizeResult:
+    return minimize_tree_automaton(request.automaton)
 
 
 # Automaton: states {0, 1}, symbols {a (arity 0), f (arity 2)}
@@ -140,6 +231,55 @@ _DETERMINIZE_EXAMPLE = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="tree_automaton.boolean_product.compute",
+        title="Boolean product of deterministic tree automata",
+        description=(
+            "Construct the exact synchronous product of two complete deterministic "
+            "bottom-up automata over the same ranked signature. Choose intersection, "
+            "union, left difference, or symmetric difference. A missing transition "
+            "is rejected at the input boundary; state-pair and transition-output bounds are admitted "
+            "before product expansion."
+        ),
+        request_type=TreeAutomatonBooleanProductRequest,
+        result_type=TreeAutomatonBooleanProductResult,
+        run=compute_tree_automaton_boolean_product,
+        tags=("tree-automata", "boolean-operations", "product", "exact"),
+        discovery_terms=(
+            "tree language intersection",
+            "tree language union",
+            "tree automaton product",
+        ),
+        examples=(
+            OperationExample(
+                name="intersect_complete_nullary_machines",
+                description=(
+                    "Build an intersection product of two complete one-state "
+                    "machines over one nullary symbol; Boolean products "
+                    "require complete deterministic inputs."
+                ),
+                input={
+                    "left": {
+                        "state_count": 1,
+                        "arity": [0],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0}
+                        ],
+                        "final_states": [0],
+                    },
+                    "right": {
+                        "state_count": 1,
+                        "arity": [0],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0}
+                        ],
+                        "final_states": [0],
+                    },
+                    "connective": "intersection",
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="tree_automaton.states.reachable.compute",
         title="Compute bottom-up tree-automaton reachable states",
@@ -223,6 +363,124 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="tree_automaton.deterministic.complete.compute",
+        title="Complete a partial deterministic tree automaton",
+        description=(
+            "Fill every missing symbol and child-state transition with one "
+            "appended nonfinal sink state. Preserve the source state order, "
+            "return the source-to-completed state map and sink identity, and "
+            "preserve the accepted tree language. A complete input is returned "
+            "unchanged with no sink. State, transition-row, output-cell, and "
+            "work bounds are checked before Cartesian expansion."
+        ),
+        request_type=TreeAutomatonCompletionRequest,
+        result_type=TreeAutomatonCompletionResult,
+        run=compute_tree_automaton_completion,
+        tags=("tree-automata", "completion", "deterministic", "exact"),
+        discovery_terms=(
+            "complete partial tree automaton",
+            "add sink transition",
+            "total deterministic bottom-up automaton",
+        ),
+        examples=(
+            OperationExample(
+                name="complete_nullary_unary_automaton",
+                description=(
+                    "Complete a one-state partial automaton over a constant "
+                    "and unary symbol by adding a nonfinal sink."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 1,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {
+                                "symbol": 0,
+                                "child_states": [],
+                                "target_state": 0,
+                            }
+                        ],
+                        "final_states": [0],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.complement.compute",
+        title="Complement a complete deterministic tree automaton",
+        description=(
+            "Require a complete deterministic bottom-up automaton over its "
+            "explicit finite ranked signature. Canonically relabel states, "
+            "return the exact old/new maps, preserve the full transition "
+            "table, and complement the final-state set. Incomplete or "
+            "nondeterministic input is rejected; transition product and result "
+            "cells are admitted before expansion."
+        ),
+        request_type=TreeAutomatonComplementRequest,
+        result_type=TreeAutomatonComplementResult,
+        run=compute_tree_automaton_complement,
+        tags=("tree-automata", "complement", "complete-deterministic", "exact"),
+        discovery_terms=("complement tree language", "tree automaton complement"),
+        examples=(
+            OperationExample(
+                name="complement_complete_unary_automaton",
+                description="Complement a complete automaton over a nullary and unary signature.",
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                            {"symbol": 1, "child_states": [0], "target_state": 0},
+                            {"symbol": 1, "child_states": [1], "target_state": 1},
+                        ],
+                        "final_states": [0],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.deterministic.minimize.compute",
+        title="Minimize a deterministic bottom-up tree automaton",
+        description=(
+            "Return the smallest deterministic quotient over the same ranked "
+            "signature, restricted to states reachable by finite ground trees. "
+            "States are merged exactly when every ground-tree context accepts "
+            "from both or neither; undefined transitions stay undefined. "
+            "The old-to-new map uses -1 for unreachable source states, and the "
+            "refinement work bound is checked before partition expansion."
+        ),
+        request_type=TreeAutomatonMinimizeRequest,
+        result_type=TreeAutomatonMinimizeResult,
+        run=compute_tree_automaton_minimize,
+        tags=("tree-automata", "minimization", "deterministic", "exact"),
+        discovery_terms=(
+            "minimize tree automaton",
+            "minimal deterministic tree automaton",
+        ),
+        examples=(
+            OperationExample(
+                name="merge_equivalent_reachable_states",
+                description="Merge two nonfinal states with identical unary behavior and remove an unreachable state.",
+                input={
+                    "automaton": {
+                        "state_count": 4,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0},
+                            {"symbol": 1, "child_states": [0], "target_state": 1},
+                            {"symbol": 1, "child_states": [1], "target_state": 1},
+                            {"symbol": 1, "child_states": [2], "target_state": 2},
+                        ],
+                        "final_states": [],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tree_automaton.run.compute",
         title="Run a bottom-up tree automaton on a ranked tree",
         description="Execute a nondeterministic bottom-up tree automaton on a ranked "
@@ -259,6 +517,155 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 input={
                     "automaton": _RUN_EXAMPLE["automaton"],
                     "tree_size": 1,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.nondeterministic.run_counts.compute",
+        title="Count accepting runs by tree size",
+        description=(
+            "Count accepting runs of a nondeterministic bottom-up tree automaton "
+            "for every node size from 1 through max_size. A run is one state "
+            "assignment over a ranked tree; the same tree contributes multiple "
+            "times when it has multiple accepting assignments. This differs from "
+            "accepted_tree_count, which counts distinct trees once. Transition "
+            "work, exact integer digits, and profile output are bounded before "
+            "dynamic programming."
+        ),
+        request_type=NondeterministicRunCountsRequest,
+        result_type=NondeterministicRunCountsResult,
+        run=compute_nondeterministic_run_counts,
+        tags=("tree-automata", "counting", "exact", "nondeterministic"),
+        examples=(
+            OperationExample(
+                name="nullary_runs",
+                description=(
+                    "The leaf has two possible states; every f-node is final "
+                    "from either child state, so a single tree can have two runs."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0},
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                            {"symbol": 1, "child_states": [0], "target_state": 0},
+                            {"symbol": 1, "child_states": [1], "target_state": 0},
+                        ],
+                        "final_states": [0],
+                    },
+                    "max_size": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="ranked_tree.positions.compute",
+        title="List all positions in a ranked tree",
+        description=(
+            "Return every node address as a zero-based child-index path in "
+            "root-first preorder. The complete tree is retained, and node, "
+            "depth, traversal-work, and result-byte bounds are admitted before "
+            "the position list is materialized."
+        ),
+        request_type=RankedTreePositionsRequest,
+        result_type=RankedTreePositionsResult,
+        run=compute_ranked_tree_positions,
+        tags=("ranked-tree", "positions", "exact"),
+        discovery_terms=("tree node positions", "ranked tree paths"),
+        examples=(
+            OperationExample(
+                name="binary_tree_positions",
+                description="List positions for a root with a leaf and a unary child.",
+                input={
+                    "tree": {
+                        "symbol": 0,
+                        "children": [
+                            {"symbol": 1, "children": []},
+                            {
+                                "symbol": 2,
+                                "children": [{"symbol": 3, "children": []}],
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="ranked_tree.subtree.compute",
+        title="Extract a ranked-tree subtree",
+        description=(
+            "Return the subtree at a zero-based child-index position, retaining "
+            "the complete source tree and source position. Tree validation, "
+            "traversal work, and the duplicated source-bound result size are "
+            "bounded before the exact result is constructed."
+        ),
+        request_type=RankedTreeSubtreeRequest,
+        result_type=RankedTreeSubtreeResult,
+        run=compute_ranked_tree_subtree,
+        tags=("ranked-tree", "subtree", "exact"),
+        discovery_terms=(
+            "subtree extraction",
+            "tree node address",
+            "ranked tree context",
+        ),
+        examples=(
+            OperationExample(
+                name="extract_left_child",
+                description="Extract the left subtree at position [0].",
+                input={
+                    "tree": {
+                        "symbol": 0,
+                        "children": [
+                            {"symbol": 1, "children": []},
+                            {"symbol": 2, "children": []},
+                        ],
+                    },
+                    "position": [0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="regular_tree_grammar.to_automaton.compute",
+        title="Translate a regular tree grammar to a tree automaton",
+        description=(
+            "Convert each unit-free ranked production A -> f(B1,...,Bk) to "
+            "the bottom-up transition f(B1,...,Bk) -> A. Nonterminals retain "
+            "their integer state IDs and the start nonterminal becomes the "
+            "sole final state. Production-derived work is preflighted, while "
+            "the state, signature, rank, and row limits bound the complete "
+            "source-bound output."
+        ),
+        request_type=RegularTreeGrammarToAutomatonRequest,
+        result_type=RegularTreeGrammarToAutomatonResult,
+        run=compute_regular_tree_grammar_to_automaton,
+        tags=("regular-tree-grammar", "tree-automata", "exact"),
+        discovery_terms=(
+            "convert regular tree grammar",
+            "regular tree grammar to bottom-up automaton",
+            "tree grammar recognition",
+        ),
+        examples=(
+            OperationExample(
+                name="binary_tree_grammar",
+                description=(
+                    "Translate a grammar for binary trees whose leaves have "
+                    "symbol 0 and whose internal nodes have symbol 1."
+                ),
+                input={
+                    "grammar": {
+                        "nonterminal_count": 1,
+                        "arity": [0, 2],
+                        "start_nonterminal": 0,
+                        "productions": [
+                            {"nonterminal": 0, "symbol": 0, "children": []},
+                            {"nonterminal": 0, "symbol": 1, "children": [0, 0]},
+                        ],
+                    }
                 },
             ),
         ),

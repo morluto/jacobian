@@ -782,7 +782,12 @@ def verify_common_basis_result(result: MatroidCommonBasisResult) -> bool:
 
 
 def weighted_intersection_certificate(
-    request: MatroidWeightedIntersectionCertificateRequest,
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    common_independent: tuple[int, ...],
+    first_split: MatroidWeightFunction,
+    second_split: MatroidWeightFunction,
 ) -> MatroidWeightedIntersectionResult:
     """Check a supplied integral weight-splitting certificate for a candidate.
 
@@ -791,15 +796,16 @@ def weighted_intersection_certificate(
     bounded greedy kernel and accepts only when their sum equals the feasible
     candidate's objective value.
     """
-    if type(request) is not MatroidWeightedIntersectionCertificateRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.request",
-            message="request must be a canonical weighted-intersection certificate",
-        )
     try:
         request = MatroidWeightedIntersectionCertificateRequest.model_validate(
-            request.model_dump(mode="python")
+            {
+                "first": first,
+                "second": second,
+                "weight_function": weight_function,
+                "common_independent": common_independent,
+                "first_split": first_split,
+                "second_split": second_split,
+            }
         )
     except Exception as exc:
         raise OperationDomainValidationError(

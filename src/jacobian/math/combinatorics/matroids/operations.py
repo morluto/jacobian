@@ -168,6 +168,16 @@ def _canonical_weight_function(
             code="matroid.weights.carrier",
             message="weight_function must be a canonical ground-axis table",
         )
+    try:
+        weight_function = MatroidWeightFunction.model_validate(
+            weight_function.model_dump(mode="python")
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("weight_function",),
+            code="matroid.weights.carrier",
+            message="weight_function is malformed",
+        ) from exc
     if (
         len(weight_function.ground_axis) != len(weight_function.values)
         or len(set(weight_function.ground_axis)) != len(weight_function.ground_axis)

@@ -308,11 +308,27 @@ def feasible_size_profile(d: FiniteDeltaMatroid) -> DeltaMatroidFeasibleSizeProf
     symmetric exchange is not needed to establish the returned histogram.
     """
 
-    d = _admit_delta(d)
     # Bound family scanning before reconstruction/counting; memberships is the
     # canonical row-work envelope.
     from jacobian.math.combinatorics.matroids.delta.values import MAX_DELTA_MEMBERSHIPS
 
+    if type(d) is not FiniteDeltaMatroid:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.carrier",
+            message="value must be a canonical finite delta-matroid",
+        )
+    # These tuple lengths are constant-time facts available on the retained
+    # carrier. Reject oversized profiles before model_dump/model_validate copies
+    # the entire feasible family.
+    raw_feasible = getattr(d, "feasible", None)
+    if isinstance(raw_feasible, tuple) and len(raw_feasible) > MAX_DELTA_MEMBERSHIPS:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid", "feasible"),
+            code="delta_matroid.feasible_size_profile_work",
+            message="feasible family exceeds profile work envelope",
+        )
+    d = _admit_delta(d)
     if len(d.feasible) > MAX_DELTA_MEMBERSHIPS:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),

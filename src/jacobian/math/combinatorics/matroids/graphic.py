@@ -13,7 +13,6 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.matroids._models import (
     MAX_GROUND_AXIS_CODEPOINTS,
     MAX_GROUND_SIZE,
-    GraphicMatroidRequest,
     LinearMatroid,
 )
 from jacobian.math.graphs.values import (
@@ -31,12 +30,10 @@ def _refuse(location: tuple[str, ...], code: str, message: str) -> None:
     raise OperationResourceAdmissionError(location=location, code=code, message=message)
 
 
-def graphic_matroid(request: GraphicMatroidRequest) -> LinearMatroid:
+def graphic_matroid(request: SimpleUndirectedGraph) -> LinearMatroid:
     """Return the binary incidence-column representation of a simple graph."""
 
-    if not isinstance(request, GraphicMatroidRequest):
-        _reject(("request",), "matroid.graphic.request_type", "invalid graph request")
-    graph = request.graph
+    graph = request
     if not isinstance(graph, SimpleUndirectedGraph):
         _reject(("graph",), "matroid.graphic.graph_type", "graph must be canonical")
     if len(graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:

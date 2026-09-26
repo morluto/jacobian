@@ -42,6 +42,10 @@ def _run_closure(request: MatroidClosureRequest) -> MatroidClosureResult:
     return closure_result(request.matroid, request.subset)
 
 
+def _run_graphic_matroid(request: GraphicMatroidRequest) -> LinearMatroid:
+    return graphic_matroid(request.graph)
+
+
 def _run_maximum_weight_basis(
     request: MaximumWeightBasisRequest,
 ) -> MaximumWeightBasisResult:
@@ -65,7 +69,14 @@ def _run_common_basis(
 def _run_weighted_intersection_certificate(
     request: MatroidWeightedIntersectionCertificateRequest,
 ) -> MatroidWeightedIntersectionResult:
-    return weighted_intersection_certificate(request)
+    return weighted_intersection_certificate(
+        request.first,
+        request.second,
+        request.weight_function,
+        request.common_independent,
+        request.first_split,
+        request.second_split,
+    )
 
 
 def _run_weighted_intersection_rank_certificate(
@@ -143,7 +154,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=GraphicMatroidRequest,
         result_type=LinearMatroid,
-        run=graphic_matroid,
+        run=_run_graphic_matroid,
         tags=("matroid", "graphic-matroid", "graph", "GF(2)", "exact"),
         discovery_terms=(
             "graphic matroid of a graph",

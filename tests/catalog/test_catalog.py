@@ -71,6 +71,34 @@ def test_open_reuses_the_compiled_builtin_catalog() -> None:
     assert Catalog.open() is Catalog.open()
 
 
+def test_builtin_snapshot_reuses_compilation_without_sharing_mutable_schemas(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    catalog = Catalog.open()
+    first = catalog.snapshot()
+    first_descriptor = next(
+        item
+        for item in first.operations
+        if item.operation_id == "matrix.determinant.compute"
+    )
+    first_descriptor.input_schema["properties"]["tampered"] = True
+
+    def fail_descriptor(*_args: object) -> None:
+        raise AssertionError("a compiled built-in snapshot should be reused")
+
+    monkeypatch.setattr(catalog_module, "_descriptor", fail_descriptor)
+
+    second = catalog.snapshot()
+    second_descriptor = next(
+        item
+        for item in second.operations
+        if item.operation_id == "matrix.determinant.compute"
+    )
+
+    assert "tampered" not in second_descriptor.input_schema["properties"]
+    assert second_descriptor is not first_descriptor
+
+
 def test_output_schema_describes_serialized_exact_integers() -> None:
     descriptor = Catalog.open().inspect(
         "number_theory.euler_phi.preimage_power_sums.compute"

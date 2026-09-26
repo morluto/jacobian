@@ -281,20 +281,20 @@ _UNIT_CUBE_EXAMPLE = {
 TOOLS: MathTools = (
     MathTool(
         operation_id="crystallographic.translation_torus.quotient_chains.compute",
-        title="Construct quotient chains of a translation 3-torus",
+        title="Construct quotient chains of a translation torus",
         description=(
             "Return the integral product cellular chain complex for a verified "
-            "rank-three pure translation group with a parallelepiped fundamental "
-            "domain. This bounded slice has eight vertices, six facets, and "
-            "opposite facet translations; it does not construct general "
-            "three-dimensional Bieberbach face orbits."
+            "rank-one through rank-four pure translation group with a "
+            "parallelepiped fundamental domain. The domain has 2^rank vertices "
+            "and 2*rank facets paired by opposite translations; this does not "
+            "construct general Bieberbach face orbits."
         ),
         request_type=CrystallographicFundamentalDomainResult,
         result_type=BieberbachTranslationTorusChains,
         run=translation_torus_quotient_chains,
         tags=("Bieberbach-group", "quotient-chains", "integral-homology", "exact"),
         discovery_terms=(
-            "integral cellular chains of a three dimensional torus",
+            "integral cellular chains of a torus quotient by a translation lattice",
             "quotient homology of a crystallographic translation lattice",
             "Bieberbach translation group quotient chain complex",
         ),

@@ -15,3 +15,4 @@
 - [Rational coordinate covariant derivatives](rational-covariant-derivatives.md)
 - [Plane-curve blowups](plane-curve-blowups.md)
 - [Two-dimensional Bieberbach polygon quotient chains](bieberbach-polygon-quotient-chains.md)
+- [Translation torus quotient chains](bieberbach-translation-torus-chains.md)

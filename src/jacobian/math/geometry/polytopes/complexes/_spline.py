@@ -10,6 +10,7 @@ from typing import Any, NoReturn
 import sympy as sp
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -24,14 +25,30 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PieceAssignment,
     PieceCompatibilityRow,
     PiecewiseEvaluationResult,
+    PiecewiseFacetSmoothness,
+    PiecewisePolynomialAdditionRequest,
+    PiecewisePolynomialMultiplicationRequest,
     PiecewisePolynomialResult,
+    PiecewiseSmoothnessRequest,
+    PiecewiseSmoothnessResult,
     PolytopalComplexClosureResult,
+    SplineDimensionRequest,
+    SplineDimensionResult,
+    SplineEvaluationRequest,
+    SplineEvaluationResult,
     SplineSpaceResult,
 )
 from jacobian.math.geometry.polytopes.operations import facet_incidence
 from jacobian.math.geometry.polytopes.values import Vertex
 from jacobian.math.matrices.values import RationalMatrix
+from jacobian.math.polynomials._multiply_kernel import rational_polynomial_multiply
+from jacobian.math.polynomials._multiply_models import (
+    MAX_MULTIPLY_PRODUCT_WORK,
+    _maximum_product_coefficient_digits,
+)
 from jacobian.math.polynomials.values import (
+    MAX_POLYNOMIAL_EXPONENT,
+    MAX_POLYNOMIAL_TERMS,
     RationalPolynomial,
     RationalPolynomialTerm,
     SparseRationalPolynomial,
@@ -121,7 +138,7 @@ def _admit_complex(  # noqa: C901
                 _reject("complex_source", "cell provenance indices are malformed")
             vertices = tuple(
                 RationalPolytopeVertex(
-                    vertex_id=f"v{position}", coordinates=point.coordinates
+                    vertex_id=f"v{position:03d}", coordinates=point.coordinates
                 )
                 for position, point in enumerate(cell.vertices)
             )
@@ -192,6 +209,9 @@ def _affine_ideal(face: Any, symbols: tuple[Any, ...]) -> list[Any]:
 
 MAX_PIECE_COMPATIBILITY_WORK = 50_000_000
 MAX_PIECE_RESULT_DIGITS = 64 * 1024 * 1024
+MAX_PIECE_MULTIPLICATION_WORK = 1_000_000
+MAX_PIECE_MULTIPLICATION_OUTPUT_DIGITS = 10 * 1024 * 1024
+"""Decimal-digit ceiling summed over all stored rational components of a product."""
 MAX_RATIONAL_SCALAR_DIGITS = 2 * 32_768
 
 
@@ -339,6 +359,428 @@ def piecewise_polynomial_from_maximal_pieces(
     )
 
 
+def piecewise_polynomial_add(  # noqa: C901
+    request: PiecewisePolynomialAdditionRequest,
+) -> PiecewisePolynomialResult:
+    """Add two compatible C0 functions on the identical canonical complex."""
+    if not isinstance(request, PiecewisePolynomialAdditionRequest):
+        _reject("addition_type", "expected two canonical piecewise-polynomial values")
+    left, right = request.left, request.right
+    try:
+        left_payload = left.model_dump(mode="python")
+        right_payload = right.model_dump(mode="python")
+        left = PiecewisePolynomialResult.model_validate(left_payload)
+        right = PiecewisePolynomialResult.model_validate(right_payload)
+    except Exception:
+        _reject(
+            "addition_input",
+            "both summands must be canonical piecewise-polynomial values",
+        )
+    if left_payload != left.model_dump(
+        mode="python"
+    ) or right_payload != right.model_dump(mode="python"):
+        _reject(
+            "addition_input",
+            "both summands must be canonical piecewise-polynomial values",
+        )
+    if left.complex.model_dump(mode="python") != right.complex.model_dump(
+        mode="python"
+    ):
+        _reject("addition_complex", "summands must use the identical canonical complex")
+    if left.status != "COMPATIBLE" or right.status != "COMPATIBLE":
+        _reject(
+            "addition_continuity",
+            "only compatible C0 piecewise-polynomial functions can be added",
+        )
+
+    left_by_id = {piece.cell_id: piece.polynomial for piece in left.pieces}
+    right_by_id = {piece.cell_id: piece.polynomial for piece in right.pieces}
+    if set(left_by_id) != set(right_by_id) or not left_by_id:
+        _reject(
+            "addition_piece_axis", "summands must assign exactly the same maximal cells"
+        )
+    if any(
+        left_by_id[cell].variables != right_by_id[cell].variables for cell in left_by_id
+    ):
+        _reject(
+            "addition_piece_ring",
+            "summand pieces must use the same ordered polynomial ring",
+        )
+
+    # Preflight the exact union support and every rational sum before any
+    # coefficient arithmetic or compatibility reduction is performed.
+    output_term_count = 0
+    max_piece_term_count = 0
+    output_digit_bound = 0
+    maximum_degree = 0
+    for cell_id in sorted(left_by_id):
+        first = left_by_id[cell_id].polynomial.terms
+        second = right_by_id[cell_id].polynomial.terms
+        first_by_exponent = {term.exponents: term.coefficient for term in first}
+        second_by_exponent = {term.exponents: term.coefficient for term in second}
+        exponents = first_by_exponent.keys() | second_by_exponent.keys()
+        if len(exponents) > MAX_POLYNOMIAL_TERMS:
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.addition_terms",
+                message=f"a sum piece may contain at most {MAX_POLYNOMIAL_TERMS} terms",
+            )
+        output_term_count += len(exponents)
+        max_piece_term_count = max(max_piece_term_count, len(exponents))
+        for exponent in exponents:
+            maximum_degree = max(maximum_degree, sum(exponent))
+            left_coefficient = first_by_exponent.get(exponent)
+            right_coefficient = second_by_exponent.get(exponent)
+            if left_coefficient is not None and right_coefficient is not None:
+                if (
+                    left_coefficient.num == -right_coefficient.num
+                    and left_coefficient.den == right_coefficient.den
+                ):
+                    # Canonical reduced form makes exact cancellation an
+                    # equality test on the components.  The zero sum never
+                    # enters the output, so the growth bound does not apply.
+                    continue
+                numerator_digits = (
+                    max(
+                        _decimal_digits_upper(left_coefficient.num)
+                        + _decimal_digits_upper(right_coefficient.den),
+                        _decimal_digits_upper(right_coefficient.num)
+                        + _decimal_digits_upper(left_coefficient.den),
+                    )
+                    + 1
+                )
+                denominator_digits = _decimal_digits_upper(
+                    left_coefficient.den
+                ) + _decimal_digits_upper(right_coefficient.den)
+                if (
+                    max(numerator_digits, denominator_digits)
+                    > MAX_CANONICAL_RATIONAL_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("pieces", cell_id),
+                        code="polytopal_complex.addition_scalar_growth",
+                        message="a sum coefficient may exceed the canonical rational digit envelope",
+                    )
+                output_digit_bound += numerator_digits + denominator_digits
+            elif left_coefficient is not None:
+                output_digit_bound += _decimal_digits_upper(
+                    left_coefficient.num
+                ) + _decimal_digits_upper(left_coefficient.den)
+            elif right_coefficient is not None:
+                output_digit_bound += _decimal_digits_upper(
+                    right_coefficient.num
+                ) + _decimal_digits_upper(right_coefficient.den)
+            else:
+                raise ArithmeticError("sum support disagrees with its operand union")
+    if output_digit_bound > MAX_PIECE_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("pieces",),
+            code="polytopal_complex.addition_output",
+            message="the sum polynomial output exceeds the admitted digit envelope",
+        )
+
+    dimension = len(left.complex.space.axes)
+    reduced_terms = max_piece_term_count * comb(maximum_degree + dimension, dimension)
+    if reduced_terms > 4_096:
+        raise OperationResourceAdmissionError(
+            location=("pieces",),
+            code="polytopal_complex.addition_compatibility_terms",
+            message="the sum's reduced compatibility polynomials exceed the admitted term envelope",
+        )
+    pair_count = sum(
+        len(face.maximal_cell_ids) * (len(face.maximal_cell_ids) - 1) // 2
+        for face in left.complex.faces
+    )
+    aggregate_work = 3 * pair_count * max(reduced_terms, 1) * (dimension + 1) ** 3
+    if aggregate_work > MAX_PIECE_COMPATIBILITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.addition_work",
+            message="input validation and sum compatibility exceed the admitted work envelope",
+        )
+
+    left_checked = piecewise_polynomial_from_maximal_pieces(left.complex, left.pieces)
+    right_checked = piecewise_polynomial_from_maximal_pieces(
+        right.complex, right.pieces
+    )
+    if left_checked.status != "COMPATIBLE" or right_checked.status != "COMPATIBLE":
+        _reject("addition_continuity", "summand compatibility claims must be exact")
+    if tuple(
+        (row.first_cell_id, row.second_cell_id, row.face_id)
+        for row in left_checked.compatibility
+    ) != tuple(
+        (row.first_cell_id, row.second_cell_id, row.face_id)
+        for row in right_checked.compatibility
+    ):
+        _reject(
+            "addition_compatibility_profile",
+            "summands do not share one canonical interface profile",
+        )
+
+    sum_pieces = []
+    for cell_id in sorted(left_by_id):
+        first_coefficients = {
+            term.exponents: term.coefficient.as_fraction()
+            for term in left_by_id[cell_id].polynomial.terms
+        }
+        second_coefficients = {
+            term.exponents: term.coefficient.as_fraction()
+            for term in right_by_id[cell_id].polynomial.terms
+        }
+        terms = []
+        for exponent in sorted(
+            first_coefficients.keys() | second_coefficients.keys(), reverse=True
+        ):
+            coefficient = first_coefficients.get(
+                exponent, Fraction(0)
+            ) + second_coefficients.get(exponent, Fraction(0))
+            if coefficient:
+                terms.append(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                        exponents=exponent,
+                    )
+                )
+        sum_pieces.append(
+            PieceAssignment(
+                cell_id=cell_id,
+                polynomial=RationalPolynomial(
+                    variables=left_by_id[cell_id].variables,
+                    polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+                ),
+            )
+        )
+    # Normal-form restriction is linear. Since both input ledgers have been
+    # recomputed and every row is zero, the sum has the same exact zero ledger.
+    return PiecewisePolynomialResult(
+        complex=left_checked.complex,
+        pieces=tuple(sum_pieces),
+        compatibility=left_checked.compatibility,
+        status="COMPATIBLE",
+    )
+
+
+def piecewise_polynomial_multiply(  # noqa: C901
+    request: PiecewisePolynomialMultiplicationRequest,
+) -> PiecewisePolynomialResult:
+    """Multiply two compatible functions cellwise on one exact complex.
+
+    Restriction to a shared face is a ring homomorphism, so products of two
+    functions with equal restrictions again have equal restrictions. The
+    returned ledger records those exact zero differences after both source
+    ledgers have been recomputed.
+    """
+    if not isinstance(request, PiecewisePolynomialMultiplicationRequest):
+        _reject(
+            "multiplication_type", "expected two canonical piecewise-polynomial values"
+        )
+    left, right = request.left, request.right
+    try:
+        left_payload = left.model_dump(mode="python")
+        right_payload = right.model_dump(mode="python")
+        left = PiecewisePolynomialResult.model_validate(left_payload)
+        right = PiecewisePolynomialResult.model_validate(right_payload)
+    except Exception:
+        _reject(
+            "multiplication_input",
+            "both factors must be canonical piecewise-polynomial values",
+        )
+    if left_payload != left.model_dump(
+        mode="python"
+    ) or right_payload != right.model_dump(mode="python"):
+        _reject(
+            "multiplication_input",
+            "both factors must be canonical piecewise-polynomial values",
+        )
+    if left.complex.model_dump(mode="python") != right.complex.model_dump(
+        mode="python"
+    ):
+        _reject(
+            "multiplication_complex", "factors must use the identical canonical complex"
+        )
+    if left.status != "COMPATIBLE" or right.status != "COMPATIBLE":
+        _reject(
+            "multiplication_continuity",
+            "only compatible C0 piecewise-polynomial functions can be multiplied",
+        )
+
+    left_by_id = {piece.cell_id: piece.polynomial for piece in left.pieces}
+    right_by_id = {piece.cell_id: piece.polynomial for piece in right.pieces}
+    if set(left_by_id) != set(right_by_id) or not left_by_id:
+        _reject(
+            "multiplication_piece_axis",
+            "factors must assign exactly the same maximal cells",
+        )
+    if any(
+        left_by_id[cell].variables != right_by_id[cell].variables for cell in left_by_id
+    ):
+        _reject(
+            "multiplication_piece_ring",
+            "factor pieces must use the same ordered polynomial ring",
+        )
+
+    # Preflight aggregate sparse convolution work, support, degree, coefficient
+    # height, and serialized output before multiplying any cell polynomials.
+    maximum_result_terms = 0
+    maximum_coefficient_digits = 1
+    maximum_dimension = 0
+    aggregate_convolution_work = 0
+    for cell_id in sorted(left_by_id):
+        first = left_by_id[cell_id]
+        second = right_by_id[cell_id]
+        first_terms = first.polynomial.terms
+        second_terms = second.polynomial.terms
+        convolution_work = len(first_terms) * len(second_terms)
+        aggregate_convolution_work += convolution_work
+        maximum_dimension = max(maximum_dimension, len(first.variables))
+        if aggregate_convolution_work > MAX_PIECE_MULTIPLICATION_WORK:
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.multiplication_work",
+                message="aggregate piecewise polynomial convolution exceeds the admitted work envelope",
+            )
+        if convolution_work > MAX_MULTIPLY_PRODUCT_WORK:
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.multiplication_work",
+                message="one piece polynomial convolution exceeds the admitted work envelope",
+            )
+        maximum_exponents = tuple(
+            max((term.exponents[axis] for term in first_terms), default=0)
+            + max((term.exponents[axis] for term in second_terms), default=0)
+            for axis in range(len(first.variables))
+        )
+        if any(exponent > MAX_POLYNOMIAL_EXPONENT for exponent in maximum_exponents):
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.multiplication_exponent",
+                message="a product exponent exceeds the canonical polynomial limit",
+            )
+        support_bound = 1
+        for exponent in maximum_exponents:
+            support_bound *= exponent + 1
+        result_term_bound = min(convolution_work, support_bound)
+        if result_term_bound > MAX_POLYNOMIAL_TERMS:
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.multiplication_terms",
+                message="a product piece may exceed the canonical polynomial term limit",
+            )
+        maximum_result_terms = max(maximum_result_terms, result_term_bound)
+        coefficient_digits = _maximum_product_coefficient_digits(first, second)
+        if coefficient_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.multiplication_scalar_growth",
+                message="a product coefficient may exceed the canonical rational digit limit",
+            )
+        maximum_coefficient_digits = max(maximum_coefficient_digits, coefficient_digits)
+
+    pair_count = sum(
+        len(face.maximal_cell_ids) * (len(face.maximal_cell_ids) - 1) // 2
+        for face in left.complex.faces
+    )
+    compatibility_term_bound = maximum_result_terms * comb(
+        max(
+            (
+                sum(term.exponents)
+                for polynomial in left_by_id.values()
+                for term in polynomial.polynomial.terms
+            ),
+            default=0,
+        )
+        + max(
+            (
+                sum(term.exponents)
+                for polynomial in right_by_id.values()
+                for term in polynomial.polynomial.terms
+            ),
+            default=0,
+        )
+        + maximum_dimension,
+        maximum_dimension,
+    )
+    compatibility_work = (
+        3 * pair_count * max(compatibility_term_bound, 1) * (maximum_dimension + 1) ** 3
+    )
+    if compatibility_work > MAX_PIECE_COMPATIBILITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.multiplication_compatibility_work",
+            message="product compatibility validation exceeds the admitted work envelope",
+        )
+
+    # The product ledger stores two reduced rational components per retained
+    # term coefficient and at most max_exponent_digits decimal digits per
+    # exponent. The zero compatibility ledger, cell IDs, and transported
+    # complex are fixed-cardinality structural data admitted by the complex
+    # and work envelopes above; transport byte policy is enforced downstream.
+    max_exponent_digits = 5
+    result_term_count = len(left_by_id) * maximum_result_terms
+    product_output_digit_bound = result_term_count * (
+        2 * maximum_coefficient_digits + maximum_dimension * max_exponent_digits
+    )
+    if product_output_digit_bound > MAX_PIECE_MULTIPLICATION_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("pieces",),
+            code="polytopal_complex.multiplication_output",
+            message="piecewise polynomial product may exceed the admitted digit envelope",
+        )
+
+    left_checked = piecewise_polynomial_from_maximal_pieces(left.complex, left.pieces)
+    right_checked = piecewise_polynomial_from_maximal_pieces(
+        right.complex, right.pieces
+    )
+    if left_checked.status != "COMPATIBLE" or right_checked.status != "COMPATIBLE":
+        _reject(
+            "multiplication_continuity",
+            "factor compatibility claims must be exact",
+        )
+    profile = tuple(
+        (row.first_cell_id, row.second_cell_id, row.face_id)
+        for row in left_checked.compatibility
+    )
+    if profile != tuple(
+        (row.first_cell_id, row.second_cell_id, row.face_id)
+        for row in right_checked.compatibility
+    ):
+        _reject(
+            "multiplication_compatibility_profile",
+            "factors do not share one canonical interface profile",
+        )
+
+    product_pieces = tuple(
+        PieceAssignment(
+            cell_id=cell_id,
+            polynomial=rational_polynomial_multiply(
+                left_by_id[cell_id], right_by_id[cell_id]
+            ),
+        )
+        for cell_id in sorted(left_by_id)
+    )
+    variables = product_pieces[0].polynomial.variables
+    zero = RationalPolynomial(
+        variables=variables,
+        polynomial=SparseRationalPolynomial(terms=()),
+    )
+    compatibility = tuple(
+        PieceCompatibilityRow(
+            first_cell_id=row.first_cell_id,
+            second_cell_id=row.second_cell_id,
+            face_id=row.face_id,
+            reduced_difference=zero,
+            compatible=True,
+        )
+        for row in left_checked.compatibility
+    )
+    return PiecewisePolynomialResult(
+        complex=left_checked.complex,
+        pieces=product_pieces,
+        compatibility=compatibility,
+        status="COMPATIBLE",
+    )
+
+
 def _contains(cell: Any, point: tuple[Fraction, ...]) -> bool:
     vertices = tuple(Vertex(coordinates=vertex.coordinates) for vertex in cell.vertices)
     profile = facet_incidence(vertices, cell.dimension)
@@ -473,6 +915,15 @@ def _monomials(dimension: int, degree: int) -> tuple[tuple[int, ...], ...]:
     )
 
 
+def _facet_remainder_dimension(dimension: int, degree: int, smoothness: int) -> int:
+    """Count degree-bounded monomials modulo a facet equation to power r+1."""
+    normal_orders = range(min(degree, smoothness) + 1)
+    return sum(
+        comb(dimension - 1 + degree - normal_order, dimension - 1)
+        for normal_order in normal_orders
+    )
+
+
 def _linear_form(face: Any, symbols: tuple[Any, ...]) -> Any:
     ideal = _affine_ideal(face, symbols)
     if len(ideal) != 1:
@@ -483,10 +934,85 @@ def _linear_form(face: Any, symbols: tuple[Any, ...]) -> Any:
     return sp.Poly(ideal[0], *symbols, domain=sp.QQ)
 
 
+def piecewise_polynomial_smoothness(
+    request: PiecewiseSmoothnessRequest,
+) -> PiecewiseSmoothnessResult:
+    """Return exact C^r orders on every interior facet of a piecewise polynomial."""
+    if not isinstance(request, PiecewiseSmoothnessRequest):
+        _reject("smoothness_request", "expected a canonical smoothness request")
+    try:
+        request = PiecewiseSmoothnessRequest.model_validate(
+            request.model_dump(mode="python", warnings=False), strict=True
+        )
+    except (AttributeError, TypeError, ValueError):
+        _reject(
+            "smoothness_request", "request fields must satisfy the smoothness schema"
+        )
+    function = request.function
+    complex_value = _admit_pieces(function.complex, function.pieces)
+    if any(
+        cell.dimension != complex_value.dimension
+        for cell in complex_value.maximal_cells
+    ):
+        _reject("smoothness_purity", "facet smoothness profiles require a pure complex")
+    # Recompute the supplied continuity claim from its exact cell pieces.
+    function = piecewise_polynomial_from_maximal_pieces(complex_value, function.pieces)
+    cells = {row.cell_id: row.polynomial for row in function.pieces}
+    dimension = complex_value.dimension
+    facets = tuple(
+        face
+        for face in complex_value.faces
+        if face.dimension == dimension - 1 and len(face.maximal_cell_ids) == 2
+    )
+    term_count = max((len(poly.polynomial.terms) for poly in cells.values()), default=1)
+    work = (
+        len(facets) * term_count * (dimension + 1) ** 3 * (request.max_smoothness + 1)
+    )
+    if work > MAX_PIECE_COMPATIBILITY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("function",),
+            code="polytopal_complex.smoothness_work",
+            message="facet smoothness reduction exceeds the admitted envelope",
+        )
+    symbols = _poly_symbols(next(iter(cells.values())))
+    rows: list[PiecewiseFacetSmoothness] = []
+    for face in facets:
+        first, second = face.maximal_cell_ids
+        difference = _to_poly(cells[first], symbols) - _to_poly(cells[second], symbols)
+        defining_form = _linear_form(face, symbols)
+        order_found = -1
+        for order in range(request.max_smoothness + 1):
+            _, remainder = sp.div(difference, defining_form ** (order + 1))
+            if not remainder.is_zero:
+                break
+            order_found = order
+        rows.append(
+            PiecewiseFacetSmoothness(
+                first_cell_id=first,
+                second_cell_id=second,
+                face_id=face.face_id,
+                smoothness=order_found,
+            )
+        )
+    global_order = min((row.smoothness for row in rows), default=request.max_smoothness)
+    return PiecewiseSmoothnessResult(
+        function=function,
+        max_smoothness=request.max_smoothness,
+        facets=tuple(rows),
+        smoothness=global_order,
+    )
+
+
 MAX_SPLINE_CONSTRAINT_CELLS = 1_048_576
 MAX_SPLINE_RESULT_CELLS = 1_000_000
 MAX_SPLINE_RESULT_DIGITS = 64 * 1024 * 1024
 MAX_SPLINE_SCALAR_DIGITS = 2 * 32_768
+MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS = 1_048_576
+MAX_SPLINE_DIMENSION_RANK_WORK = 32_000_000
+MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
+MAX_SPLINE_DIMENSION_OUTPUT_DIGITS = 10 * 1024 * 1024
+"""Decimal-digit ceiling summed over stored rational cells of the matrix."""
+MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
 
 
 def _admit_spline(
@@ -558,55 +1084,10 @@ def _admit_spline(
 def spline_space(
     complex_value: PolytopalComplexClosureResult, degree: int, smoothness: int
 ) -> SplineSpaceResult:
-    complex_value, cells, width = _admit_spline(complex_value, degree, smoothness)
-    dimension = len(complex_value.space.axes)
-    monomials = _monomials(dimension, degree)
-    coefficient_axis = tuple(
-        (cell.cell_id, monomial) for cell in cells for monomial in monomials
+    complex_value, coefficient_axis, constraint_rows, width = _spline_constraint_data(
+        complex_value, degree, smoothness
     )
-    if len(coefficient_axis) != width:
-        raise ArithmeticError("spline coefficient-axis admission mismatch")
-    symbols = tuple(sp.Symbol(axis) for axis in complex_value.space.axes)
-    constraint_rows: list[list[Fraction]] = []
-    cell_index = {cell.cell_id: i for i, cell in enumerate(cells)}
-    for face in complex_value.faces:
-        supports = tuple(sorted(face.maximal_cell_ids))
-        if len(supports) != 2 or face.dimension != dimension - 1 or smoothness < 0:
-            continue
-        ell = _linear_form(face, symbols)
-        divisor = sp.Poly(ell.as_expr() ** (smoothness + 1), *symbols, domain=sp.QQ)
-        remainders = []
-        for cell_id, sign in ((supports[0], 1), (supports[1], -1)):
-            for monomial in monomials:
-                expr = sp.Poly(
-                    sp.prod(symbols[i] ** monomial[i] for i in range(dimension)),
-                    *symbols,
-                    domain=sp.QQ,
-                )
-                rem = expr.div(divisor)[1] * sign
-                remainders.append((cell_id, monomial, rem))
-        support_coeffs: set[tuple[int, ...]] = set()
-        for _, _, rem in remainders:
-            support_coeffs.update(exp for exp, _ in rem.terms())
-        for exponent in sorted(support_coeffs, reverse=True):
-            row = [Fraction(0) for _ in range(width)]
-            for cell_id, monomial, rem in remainders:
-                coeff = rem.coeff_monomial(exponent)
-                if coeff:
-                    col = cell_index[cell_id] * len(monomials) + monomials.index(
-                        monomial
-                    )
-                    row[col] += Fraction(int(coeff.p), int(coeff.q))
-            if any(row):
-                constraint_rows.append(row)
-    matrix = RationalMatrix(
-        row_count=len(constraint_rows),
-        column_count=width,
-        entries=tuple(
-            tuple(CanonicalRational.from_fraction(v) for v in row)
-            for row in constraint_rows
-        ),
-    )
+    matrix = _spline_constraint_matrix(constraint_rows, width)
     # Retain the coefficient-axis width even when there are no interface
     # constraints.  ``sp.Matrix([])`` is 0x0 and would silently erase the
     # polynomial coefficient domain; a shaped zero-row matrix has the correct
@@ -649,8 +1130,418 @@ def spline_space(
     )
 
 
+def _spline_constraint_data(
+    complex_value: PolytopalComplexClosureResult,
+    degree: int,
+    smoothness: int,
+    *,
+    dimension_only: bool = False,
+) -> tuple[
+    PolytopalComplexClosureResult,
+    tuple[tuple[str, tuple[int, ...]], ...],
+    tuple[tuple[Fraction, ...], ...],
+    int,
+]:
+    """Build the admitted exact spline matrix once for basis and dimension paths."""
+    if dimension_only:
+        complex_value, width, _, _ = _admit_spline_dimension(
+            complex_value, degree, smoothness
+        )
+        cells = tuple(
+            sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id)
+        )
+    else:
+        complex_value, cells, width = _admit_spline(complex_value, degree, smoothness)
+    dimension = len(complex_value.space.axes)
+    monomials = _monomials(dimension, degree)
+    coefficient_axis = tuple(
+        (cell.cell_id, monomial) for cell in cells for monomial in monomials
+    )
+    if len(coefficient_axis) != width:
+        raise ArithmeticError("spline coefficient-axis admission mismatch")
+    symbols = tuple(sp.Symbol(axis) for axis in complex_value.space.axes)
+    constraint_rows: list[list[Fraction]] = []
+    cell_index = {cell.cell_id: i for i, cell in enumerate(cells)}
+    for face in complex_value.faces:
+        supports = tuple(sorted(face.maximal_cell_ids))
+        if len(supports) != 2 or face.dimension != dimension - 1 or smoothness < 0:
+            continue
+        ell = _linear_form(face, symbols)
+        divisor = sp.Poly(ell.as_expr() ** (smoothness + 1), *symbols, domain=sp.QQ)
+        remainders = []
+        for cell_id, sign in ((supports[0], 1), (supports[1], -1)):
+            for monomial in monomials:
+                expr = sp.Poly(
+                    sp.prod(symbols[i] ** monomial[i] for i in range(dimension)),
+                    *symbols,
+                    domain=sp.QQ,
+                )
+                rem = expr.div(divisor)[1] * sign
+                remainders.append((cell_id, monomial, rem))
+        support_coeffs: set[tuple[int, ...]] = set()
+        for _, _, rem in remainders:
+            support_coeffs.update(exp for exp, _ in rem.terms())
+        for exponent in sorted(support_coeffs, reverse=True):
+            row = [Fraction(0) for _ in range(width)]
+            for cell_id, monomial, rem in remainders:
+                coeff = rem.coeff_monomial(exponent)
+                if coeff:
+                    col = cell_index[cell_id] * len(monomials) + monomials.index(
+                        monomial
+                    )
+                    row[col] += Fraction(int(coeff.p), int(coeff.q))
+            if any(row):
+                constraint_rows.append(row)
+    upper_rows = sum(
+        1
+        for face in complex_value.faces
+        if len(face.maximal_cell_ids) == 2
+        and face.dimension == dimension - 1
+        and smoothness >= 0
+    ) * _facet_remainder_dimension(dimension, degree, smoothness)
+    if len(constraint_rows) > upper_rows:
+        raise ArithmeticError("spline constraint row admission mismatch")
+    return (
+        complex_value,
+        coefficient_axis,
+        tuple(tuple(row) for row in constraint_rows),
+        width,
+    )
+
+
+def _spline_constraint_matrix(
+    rows: tuple[tuple[Fraction, ...], ...], width: int
+) -> RationalMatrix:
+    return RationalMatrix(
+        row_count=len(rows),
+        column_count=width,
+        entries=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in row)
+            for row in rows
+        ),
+    )
+
+
+def _admit_spline_dimension(
+    complex_value: PolytopalComplexClosureResult,
+    degree: int,
+    smoothness: int,
+) -> tuple[PolytopalComplexClosureResult, int, int, int]:
+    """Preflight compact matrix construction and exact rank work."""
+    complex_value = _admit_complex(complex_value)
+    if type(degree) is not int or type(smoothness) is not int:
+        _reject("spline_type", "spline degree and smoothness must be exact integers")
+    if degree < 0 or degree > 12 or smoothness < -1 or smoothness > 4:
+        _reject(
+            "spline_parameters", "degree must be in [0, 12] and smoothness in [-1, 4]"
+        )
+    dimension = len(complex_value.space.axes)
+    if any(not axis.strip() for axis in complex_value.space.axes):
+        _reject("spline_axes", "complex coordinate axes must be nonempty symbols")
+    monomial_count = comb(dimension + degree, degree)
+    width = len(complex_value.maximal_cells) * monomial_count
+    if width > 4096:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_width",
+            message="spline coefficient axis exceeds the admitted envelope",
+        )
+    interfaces = sum(
+        len(face.maximal_cell_ids) == 2
+        and face.dimension == dimension - 1
+        and smoothness >= 0
+        for face in complex_value.faces
+    )
+    row_bound = interfaces * _facet_remainder_dimension(dimension, degree, smoothness)
+    matrix_cells = row_bound * width
+    rank_work = 2 * row_bound * width * min(row_bound, width)
+    if matrix_cells > MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.spline_dimension_matrix",
+            message="spline dimension compatibility matrix exceeds its cell envelope",
+        )
+    if rank_work > MAX_SPLINE_DIMENSION_RANK_WORK:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.spline_dimension_work",
+            message="spline dimension exact rank exceeds its admitted work envelope",
+        )
+    return complex_value, width, row_bound, rank_work
+
+
+def _spline_dimension_output_digit_bound(
+    rows: tuple[tuple[Fraction, ...], ...],
+    width: int,
+    max_entry_digits: int,
+) -> int:
+    """Bound the stored rational height of the exact compatibility matrix.
+
+    The complex and coefficient axis are fixed-cardinality structural data
+    already admitted by the input and width envelopes; the matrix is the only
+    component that can grow, and every stored cell is a reduced rational with
+    numerator and denominator within the measured entry-height bound.
+    """
+    return len(rows) * width * 2 * max_entry_digits
+
+
+def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
+    """Return the exact spline dimension without constructing a nullspace basis."""
+    if not isinstance(request, SplineDimensionRequest):
+        _reject(
+            "spline_dimension_type", "expected a canonical spline dimension request"
+        )
+    # Matrix construction has a row bound admitted above.  Measure exact scalar
+    # heights and serialized matrix output before handing the matrix to rank().
+    complex_value, axis, rows, width = _spline_constraint_data(
+        request.complex,
+        request.degree,
+        request.smoothness,
+        dimension_only=True,
+    )
+    dimension = len(complex_value.space.axes)
+    row_bound = sum(
+        len(face.maximal_cell_ids) == 2
+        and face.dimension == dimension - 1
+        and request.smoothness >= 0
+        for face in complex_value.faces
+    ) * _facet_remainder_dimension(dimension, request.degree, request.smoothness)
+    if len(rows) > row_bound or any(len(row) != width for row in rows):
+        raise ArithmeticError("spline dimension matrix shape admission mismatch")
+    max_entry_digits = max(
+        (
+            max(
+                decimal_digit_width(value.numerator),
+                decimal_digit_width(value.denominator),
+            )
+            for row in rows
+            for value in row
+        ),
+        default=1,
+    )
+    output_digits = _spline_dimension_output_digit_bound(rows, width, max_entry_digits)
+    if output_digits > MAX_SPLINE_DIMENSION_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_dimension_output",
+            message="spline dimension exact matrix exceeds its output envelope",
+        )
+    pivot_size = min(len(rows), width)
+    intermediate_digits = (pivot_size + 1) * (
+        max_entry_digits + len(str(max(len(rows), width))) + 2
+    )
+    intermediate_bytes = len(rows) * width * (2 * intermediate_digits + 16)
+    if (
+        intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
+        or intermediate_bytes > MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_dimension_height",
+            message="spline dimension rank intermediates exceed their height or storage envelope",
+        )
+    matrix = _spline_constraint_matrix(rows, width)
+    if rows:
+        from flint import fmpq, fmpq_mat
+
+        backend = fmpq_mat(
+            [
+                [fmpq(value.numerator, value.denominator) for value in row]
+                for row in rows
+            ]
+        )
+        rank = int(backend.rank())
+    else:
+        rank = 0
+    nullity = width - rank
+    return SplineDimensionResult(
+        complex=complex_value,
+        degree=request.degree,
+        smoothness=request.smoothness,
+        coefficient_axis=axis,
+        compatibility_matrix=matrix,
+        rank=rank,
+        nullity=nullity,
+    )
+
+
+def _canonical_spline_evaluation_inputs(
+    request: SplineEvaluationRequest,
+) -> tuple[ComplexPoint, tuple[CanonicalRational, ...]]:
+    point = request.point
+    try:
+        point = ComplexPoint.model_validate(point.model_dump(mode="python"))
+    except Exception:
+        _reject("point_shape", "evaluation point must be a canonical complex point")
+    if (
+        not isinstance(request.basis_coefficients, tuple)
+        or len(request.basis_coefficients) > 4096
+        or any(
+            not isinstance(value, CanonicalRational)
+            or value.num.bit_length() > 4 * MAX_CANONICAL_RATIONAL_DIGITS
+            or value.den.bit_length() > 4 * MAX_CANONICAL_RATIONAL_DIGITS
+            for value in request.basis_coefficients
+        )
+    ):
+        _reject(
+            "spline_basis_coordinates",
+            "basis coefficients must be a bounded canonical rational tuple",
+        )
+    try:
+        basis_coefficients = tuple(
+            CanonicalRational.model_validate(value.model_dump(mode="python"))
+            for value in request.basis_coefficients
+        )
+    except Exception:
+        _reject(
+            "spline_basis_coordinates",
+            "basis coefficients must be a bounded canonical rational tuple",
+        )
+    return point, basis_coefficients
+
+
+def _decimal_digits_upper(value: int) -> int:
+    if value == 0:
+        return 1
+    # log10(2) < 30103/100000, so avoid stringifying caller-sized integers.
+    return (abs(value).bit_length() * 30_103) // 100_000 + 1
+
+
+def _containing_cell_ids(
+    complex_value: PolytopalComplexClosureResult, point: ComplexPoint
+) -> frozenset[str]:
+    coordinates = tuple(value.as_fraction() for value in point.coordinates)
+    return frozenset(
+        cell.cell_id
+        for cell in complex_value.maximal_cells
+        if _contains(cell, coordinates)
+    )
+
+
+def _admit_spline_evaluation_growth(
+    spline: SplineSpaceResult,
+    coefficients: tuple[CanonicalRational, ...],
+    point: ComplexPoint,
+    containing_ids: frozenset[str],
+) -> None:
+    """Bound the full rational sum before constructing its products."""
+
+    estimated_digits = 0
+    for basis_index, scalar in enumerate(coefficients):
+        scalar_digits = _decimal_digits_upper(scalar.num) + _decimal_digits_upper(
+            scalar.den
+        )
+        if not scalar.num:
+            continue
+        for column, (cell_id, exponents) in enumerate(spline.coefficient_axis):
+            if cell_id not in containing_ids:
+                continue
+            basis_scalar = spline.nullspace_basis.entries[basis_index][column]
+            if not basis_scalar.num:
+                continue
+            numerator_digits = scalar_digits + _decimal_digits_upper(basis_scalar.num)
+            denominator_digits = _decimal_digits_upper(basis_scalar.den)
+            for coordinate, power in zip(point.coordinates, exponents, strict=True):
+                numerator_digits += power * _decimal_digits_upper(coordinate.num)
+                denominator_digits += power * _decimal_digits_upper(coordinate.den)
+            estimated_digits += numerator_digits + denominator_digits + 1
+            if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("basis_coefficients",),
+                    code="polytopal_complex.spline_evaluation_growth",
+                    message=(
+                        "spline evaluation exceeds the canonical rational output envelope"
+                    ),
+                )
+
+
+def _evaluate_spline_basis_combination(
+    spline: SplineSpaceResult,
+    coefficients: tuple[CanonicalRational, ...],
+    point: ComplexPoint,
+    containing_ids: frozenset[str],
+) -> tuple[tuple[str, ...], Fraction | None]:
+    cells = tuple(
+        cell for cell in spline.complex.maximal_cells if cell.cell_id in containing_ids
+    )
+    point_fractions = tuple(value.as_fraction() for value in point.coordinates)
+    if not cells:
+        return (), None
+    coefficient_fractions = tuple(value.as_fraction() for value in coefficients)
+    basis_values = tuple(
+        tuple(value.as_fraction() for value in row)
+        for row in spline.nullspace_basis.entries
+    )
+    combined = [Fraction(0) for _ in spline.coefficient_axis]
+    for basis_index, scalar in enumerate(coefficient_fractions):
+        if not scalar:
+            continue
+        for column, entry in enumerate(basis_values[basis_index]):
+            if entry:
+                combined[column] += scalar * entry
+    by_cell: dict[str, list[Fraction]] = {cell.cell_id: [] for cell in cells}
+    for coefficient, (cell_id, exponents) in zip(
+        combined, spline.coefficient_axis, strict=True
+    ):
+        if cell_id not in by_cell or not coefficient:
+            continue
+        monomial = Fraction(1)
+        for coordinate, power in zip(point_fractions, exponents, strict=True):
+            monomial *= coordinate**power
+        by_cell[cell_id].append(coefficient * monomial)
+    values = tuple(sum(terms, Fraction(0)) for terms in by_cell.values())
+    if any(other != values[0] for other in values[1:]):
+        raise ArithmeticError("canonical spline basis disagrees on a shared face")
+    return tuple(cell.cell_id for cell in cells), values[0]
+
+
+def spline_evaluate(
+    request: SplineEvaluationRequest,
+) -> SplineEvaluationResult:
+    """Evaluate a linear combination of the canonical spline-space basis.
+
+    The request carries the complex and spline parameters rather than a
+    caller-constructed basis, so the coefficient coordinates are interpreted
+    against the exact nullspace produced by this operation.  Admission and
+    basis construction are the same bounded path used by ``spline_space``.
+    """
+
+    if not isinstance(request, SplineEvaluationRequest):
+        _reject("spline_evaluation_type", "expected a canonical spline evaluation")
+    point, basis_coefficients = _canonical_spline_evaluation_inputs(request)
+    spline = spline_space(request.complex, request.degree, request.smoothness)
+    if len(basis_coefficients) != spline.nullity:
+        _reject(
+            "spline_basis_coordinates",
+            "basis_coefficients must have one entry per canonical spline basis row",
+        )
+    axes = tuple(spline.complex.space.axes)
+    if len(point.coordinates) != len(axes):
+        _reject("point_axis", "evaluation point must use the complex coordinate axes")
+    containing_ids = _containing_cell_ids(spline.complex, point)
+    if containing_ids:
+        _admit_spline_evaluation_growth(
+            spline, basis_coefficients, point, containing_ids
+        )
+    cell_ids, value = _evaluate_spline_basis_combination(
+        spline, basis_coefficients, point, containing_ids
+    )
+    return SplineEvaluationResult(
+        complex=spline.complex,
+        degree=spline.degree,
+        smoothness=spline.smoothness,
+        basis_coefficients=basis_coefficients,
+        point=point,
+        containing_cell_ids=cell_ids,
+        value=None if value is None else CanonicalRational.from_fraction(value),
+    )
+
+
 __all__ = [
+    "piecewise_polynomial_add",
     "piecewise_polynomial_evaluate",
     "piecewise_polynomial_from_maximal_pieces",
+    "piecewise_polynomial_multiply",
+    "spline_evaluate",
     "spline_space",
 ]

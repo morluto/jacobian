@@ -63,6 +63,15 @@ MAX_COMPLEX_COORDINATE_DIGITS = 32
 MAX_COMPLEX_SOURCE_PRESENTATIONS = 64
 """Structural ceiling on the raw cell list before native envelope admission."""
 
+MAX_AFFINE_TRANSFORM_WORK = 2_000_000
+"""Maximum matrix-coordinate products admitted for affine complex transport."""
+
+MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS = 512
+"""Maximum conservative decimal-height bound for transformed coordinates."""
+
+MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS = 10 * 1024 * 1024
+"""Maximum decimal digits summed over source, target, and transport rationals."""
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"polytopal_complex.{reason}", message)
@@ -337,6 +346,20 @@ class PiecewisePolynomialResult(StrictModel):
         return self
 
 
+class PiecewisePolynomialAdditionRequest(StrictModel):
+    """Add two compatible piecewise-polynomial functions on one complex."""
+
+    left: PiecewisePolynomialResult
+    right: PiecewisePolynomialResult
+
+
+class PiecewisePolynomialMultiplicationRequest(StrictModel):
+    """Multiply two compatible piecewise-polynomial functions on one complex."""
+
+    left: PiecewisePolynomialResult
+    right: PiecewisePolynomialResult
+
+
 class PiecewiseEvaluationRequest(StrictModel):
     function: PiecewisePolynomialResult
     point: ComplexPoint
@@ -374,6 +397,38 @@ class PiecewiseEvaluationResult(StrictModel):
         return self
 
 
+class PiecewiseSmoothnessRequest(StrictModel):
+    """Profile exact C^r continuity across the interior facets of a piecewise polynomial."""
+
+    function: PiecewisePolynomialResult
+    max_smoothness: int = Field(ge=0, le=4)
+
+
+class PiecewiseFacetSmoothness(StrictModel):
+    first_cell_id: str
+    second_cell_id: str
+    face_id: str
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class PiecewiseSmoothnessResult(StrictModel):
+    function: PiecewisePolynomialResult
+    max_smoothness: int = Field(ge=0, le=4)
+    facets: tuple[PiecewiseFacetSmoothness, ...]
+    smoothness: int = Field(ge=-1, le=4)
+
+    @model_validator(mode="after")
+    def require_profile_minimum(self) -> Self:
+        if self.smoothness != min(
+            (row.smoothness for row in self.facets), default=self.max_smoothness
+        ):
+            raise _validation_error(
+                "smoothness_profile",
+                "global smoothness must be the minimum facet smoothness",
+            )
+        return self
+
+
 class SplineSpaceRequest(StrictModel):
     complex: PolytopalComplexClosureResult
     degree: int = Field(ge=0, le=12)
@@ -389,6 +444,87 @@ class SplineSpaceResult(StrictModel):
     rank: int
     nullity: int
     nullspace_basis: RationalMatrix
+
+
+class SplineDimensionRequest(StrictModel):
+    """Compute only the exact dimension profile of a bounded spline space."""
+
+    complex: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class SplineDimensionResult(StrictModel):
+    """Source-bound compatibility matrix and exact spline dimension data."""
+
+    complex: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+    coefficient_axis: tuple[tuple[str, tuple[int, ...]], ...] = Field(
+        min_length=1, max_length=4096
+    )
+    compatibility_matrix: RationalMatrix
+    rank: int = Field(ge=0)
+    nullity: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_dimension_shape(self) -> Self:
+        if self.compatibility_matrix.column_count != len(self.coefficient_axis):
+            raise _validation_error(
+                "spline_dimension_axis",
+                "compatibility matrix columns must match the coefficient axis",
+            )
+        if self.rank > min(
+            self.compatibility_matrix.row_count,
+            self.compatibility_matrix.column_count,
+        ):
+            raise _validation_error(
+                "spline_dimension_rank",
+                "compatibility matrix rank exceeds its row count",
+            )
+        if self.nullity != len(self.coefficient_axis) - self.rank:
+            raise _validation_error(
+                "spline_dimension_nullity",
+                "nullity must equal coefficient width minus matrix rank",
+            )
+        return self
+
+
+class SplineEvaluationRequest(StrictModel):
+    """Evaluate one coefficient vector in the canonical spline basis."""
+
+    complex: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=0, le=4)
+    basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
+    point: ComplexPoint
+
+
+class SplineEvaluationResult(StrictModel):
+    """Exact evaluation bound to the complex and spline-basis coordinates."""
+
+    complex: PolytopalComplexClosureResult
+    degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=0, le=4)
+    basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
+    point: ComplexPoint
+    containing_cell_ids: tuple[str, ...] = Field(max_length=MAX_COMPLEX_CELLS)
+    value: CanonicalRational | None = None
+
+    @model_validator(mode="after")
+    def require_evaluation_shape(self) -> Self:
+        if self.containing_cell_ids:
+            if self.value is None:
+                raise _validation_error(
+                    "spline_evaluation_value",
+                    "a point in the complex requires an exact evaluated value",
+                )
+        elif self.value is not None:
+            raise _validation_error(
+                "spline_evaluation_value",
+                "a point outside the complex must not carry a value",
+            )
+        return self
 
 
 class PolytopalComplexClosureRequest(StrictModel):
@@ -412,7 +548,213 @@ class PolytopalComplexClosureRequest(StrictModel):
     )
 
 
+class CommonRefinementRequest(StrictModel):
+    """Refine equal-support, full-dimensional bounded complexes."""
+
+    left: PolytopalComplexClosureResult
+    right: PolytopalComplexClosureResult
+
+
+class CommonRefinementCellPair(StrictModel):
+    """Source top cells whose intersection is one top cell of the refinement."""
+
+    left_cell_id: str = Field(min_length=1, max_length=64)
+    right_cell_id: str = Field(min_length=1, max_length=64)
+    refined_cell_id: str = Field(min_length=1, max_length=64)
+
+
+class CommonRefinementResult(StrictModel):
+    """Canonical overlay complex with explicit source-cell pair provenance."""
+
+    left: PolytopalComplexClosureResult
+    right: PolytopalComplexClosureResult
+    refinement: PolytopalComplexClosureResult
+    cell_pairs: tuple[CommonRefinementCellPair, ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_CELLS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_pair_transport(self) -> Self:
+        left_ids = {cell.cell_id for cell in self.left.maximal_cells}
+        right_ids = {cell.cell_id for cell in self.right.maximal_cells}
+        refined_ids = {cell.cell_id for cell in self.refinement.maximal_cells}
+        pairs = {(row.left_cell_id, row.right_cell_id) for row in self.cell_pairs}
+        if len(pairs) != len(self.cell_pairs):
+            raise _validation_error(
+                "refinement_pair_unique", "source cell pairs must be unique"
+            )
+        if any(
+            row.left_cell_id not in left_ids
+            or row.right_cell_id not in right_ids
+            or row.refined_cell_id not in refined_ids
+            for row in self.cell_pairs
+        ):
+            raise _validation_error(
+                "refinement_pair_binding",
+                "every source pair must bind cells in its complexes",
+            )
+        if {row.refined_cell_id for row in self.cell_pairs} != refined_ids:
+            raise _validation_error(
+                "refinement_pair_coverage",
+                "every refined maximal cell must have source-pair provenance",
+            )
+        return self
+
+
+class ComplexCellTransport(StrictModel):
+    """One maximal-cell identity carried through an invertible affine map."""
+
+    source_cell_id: str = Field(min_length=1, max_length=64)
+    target_cell_id: str = Field(min_length=1, max_length=64)
+
+
+class ComplexFaceTransport(StrictModel):
+    """One face identity carried through an invertible affine map."""
+
+    source_face_id: str = Field(min_length=1, max_length=64)
+    target_face_id: str = Field(min_length=1, max_length=64)
+
+
+class PolytopalComplexAffineTransformRequest(StrictModel):
+    """Apply ``x -> matrix*x + translation`` in the complex's labelled space."""
+
+    complex: PolytopalComplexClosureResult
+    matrix: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_DIMENSION
+    )
+    translation: tuple[CanonicalRational, ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_DIMENSION
+    )
+
+    @model_validator(mode="after")
+    def require_square_space_bound_map(self) -> Self:
+        dimension = len(self.complex.space.axes)
+        if (
+            dimension > MAX_COMPLEX_DIMENSION
+            or len(self.matrix) != dimension
+            or len(self.translation) != dimension
+            or any(len(row) != dimension for row in self.matrix)
+        ):
+            raise _validation_error(
+                "affine_transform_shape",
+                "matrix and translation dimensions must match the complex axes",
+            )
+        return self
+
+
+class PolytopalComplexAffineTransformResult(StrictModel):
+    """Affine image with complete source-bound face and maximal-cell maps."""
+
+    source: PolytopalComplexClosureResult
+    target: PolytopalComplexClosureResult
+    matrix: tuple[tuple[CanonicalRational, ...], ...]
+    translation: tuple[CanonicalRational, ...]
+    cell_transport: tuple[ComplexCellTransport, ...] = Field(
+        min_length=1, max_length=MAX_COMPLEX_CELLS
+    )
+    face_transport: tuple[ComplexFaceTransport, ...] = Field(
+        min_length=2, max_length=MAX_COMPLEX_TOTAL_FACES
+    )
+
+    @model_validator(mode="after")
+    def require_complete_incidence_transport(self) -> Self:
+        dimension = len(self.source.space.axes)
+        if (
+            len(self.matrix) != dimension
+            or len(self.translation) != dimension
+            or any(len(row) != dimension for row in self.matrix)
+        ):
+            raise _validation_error(
+                "affine_transform_result_shape",
+                "the retained affine map must match the source coordinate axes",
+            )
+        source_cells = {cell.cell_id: cell for cell in self.source.maximal_cells}
+        target_cells = {cell.cell_id: cell for cell in self.target.maximal_cells}
+        source_faces = {face.face_id: face for face in self.source.faces}
+        target_faces = {face.face_id: face for face in self.target.faces}
+        cell_map = {
+            row.source_cell_id: row.target_cell_id for row in self.cell_transport
+        }
+        face_map = {
+            row.source_face_id: row.target_face_id for row in self.face_transport
+        }
+        if (
+            self.source.space.axes != self.target.space.axes
+            or self.source.dimension != self.target.dimension
+            or self.source.f_vector != self.target.f_vector
+            or len(cell_map) != len(self.cell_transport)
+            or set(cell_map) != set(source_cells)
+            or set(cell_map.values()) != set(target_cells)
+            or len(face_map) != len(self.face_transport)
+            or set(face_map) != set(source_faces)
+            or set(face_map.values()) != set(target_faces)
+        ):
+            raise _validation_error(
+                "affine_transform_transport_coverage",
+                "affine transport must bijectively cover source and target cells and faces",
+            )
+        for source_face_id, target_face_id in face_map.items():
+            source_face = source_faces[source_face_id]
+            target_face = target_faces[target_face_id]
+            if source_face.dimension != target_face.dimension or {
+                cell_map[cell_id] for cell_id in source_face.maximal_cell_ids
+            } != set(target_face.maximal_cell_ids):
+                raise _validation_error(
+                    "affine_transform_face_incidence",
+                    "face transport must preserve dimension and maximal-cell incidence",
+                )
+        target_covers = {
+            (row.lower_face_id, row.upper_face_id)
+            for row in self.target.cover_relations
+        }
+        if {
+            (face_map[row.lower_face_id], face_map[row.upper_face_id])
+            for row in self.source.cover_relations
+        } != target_covers:
+            raise _validation_error(
+                "affine_transform_cover_incidence",
+                "face transport must preserve every cover relation",
+            )
+        for source_cell_id, target_cell_id in cell_map.items():
+            if {
+                face_map[face_id]
+                for face_id in source_cells[source_cell_id].facet_face_ids
+            } != set(target_cells[target_cell_id].facet_face_ids):
+                raise _validation_error(
+                    "affine_transform_cell_incidence",
+                    "cell transport must preserve every facet incidence",
+                )
+
+        def pair_profile(
+            value: PolytopalComplexClosureResult,
+        ) -> dict[tuple[str, str], tuple[str, str | None]]:
+            profile: dict[tuple[str, str], tuple[str, str | None]] = {}
+            for row in value.pairwise_intersections:
+                first, second = sorted((row.first_cell_id, row.second_cell_id))
+                profile[(first, second)] = (row.status, row.intersection_face_id)
+            return profile
+
+        source_pairs = pair_profile(self.source)
+        target_pairs = pair_profile(self.target)
+        mapped_pairs = {
+            tuple(sorted((cell_map[first], cell_map[second]))): (
+                status,
+                None if face_id is None else face_map[face_id],
+            )
+            for (first, second), (status, face_id) in source_pairs.items()
+        }
+        if mapped_pairs != target_pairs:
+            raise _validation_error(
+                "affine_transform_pairwise_incidence",
+                "cell transport must preserve pairwise-intersection incidence",
+            )
+        return self
+
+
 __all__ = [
+    "MAX_AFFINE_TRANSFORM_COMPONENT_DIGITS",
+    "MAX_AFFINE_TRANSFORM_OUTPUT_DIGITS",
+    "MAX_AFFINE_TRANSFORM_WORK",
     "MAX_COMPLEX_CELLS",
     "MAX_COMPLEX_COORDINATE_DIGITS",
     "MAX_COMPLEX_COVER_RELATIONS",
@@ -422,7 +764,12 @@ __all__ = [
     "MAX_COMPLEX_PAIRWISE_INTERSECTIONS",
     "MAX_COMPLEX_SOURCE_PRESENTATIONS",
     "MAX_COMPLEX_TOTAL_FACES",
+    "CommonRefinementCellPair",
+    "CommonRefinementRequest",
+    "CommonRefinementResult",
+    "ComplexCellTransport",
     "ComplexFace",
+    "ComplexFaceTransport",
     "ComplexPoint",
     "FaceCoverRelation",
     "MaximalCellRecord",
@@ -431,11 +778,20 @@ __all__ = [
     "PieceCompatibilityRow",
     "PiecewiseEvaluationRequest",
     "PiecewiseEvaluationResult",
+    "PiecewiseFacetSmoothness",
+    "PiecewisePolynomialAdditionRequest",
+    "PiecewisePolynomialMultiplicationRequest",
     "PiecewisePolynomialRequest",
     "PiecewisePolynomialResult",
+    "PiecewiseSmoothnessRequest",
+    "PiecewiseSmoothnessResult",
+    "PolytopalComplexAffineTransformRequest",
+    "PolytopalComplexAffineTransformResult",
     "PolytopalComplexClosureRequest",
     "PolytopalComplexClosureResult",
     "SourceCellTransport",
+    "SplineEvaluationRequest",
+    "SplineEvaluationResult",
     "SplineSpaceRequest",
     "SplineSpaceResult",
 ]

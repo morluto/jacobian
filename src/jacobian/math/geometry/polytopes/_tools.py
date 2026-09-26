@@ -10,6 +10,8 @@ from jacobian.math.geometry.polytopes._models import (
     FacetIncidenceResult,
     JoinRequest,
     JoinResult,
+    PolytopeFaceLatticeRequest,
+    PolytopeFaceLatticeResult,
     PolytopeSupportRequest,
     PolytopeSupportResult,
     PolytopeVolumeRequest,
@@ -25,6 +27,7 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.operations import (
     facet_incidence,
     polytope_edge_profile,
+    polytope_face_lattice,
     polytope_join,
     polytope_prism,
     polytope_pyramid,
@@ -32,7 +35,14 @@ from jacobian.math.geometry.polytopes.operations import (
     polytope_vertex_figure,
     polytope_volume,
 )
-from jacobian.math.geometry.polytopes.values import Vertex
+from jacobian.math.geometry.polytopes.polyhedron_conversion import (
+    halfspaces_to_v_presentation,
+)
+from jacobian.math.geometry.polytopes.values import (
+    RationalHPolyhedron,
+    RationalPolyhedronVPresentation,
+    Vertex,
+)
 
 
 def compute_polytope_support(request: PolytopeSupportRequest) -> PolytopeSupportResult:
@@ -75,6 +85,13 @@ def compute_polytope_vertex_figure(request: VertexFigureRequest) -> VertexFigure
     return polytope_vertex_figure(request.polytope, request.vertex_id)
 
 
+def compute_polytope_face_lattice(
+    request: PolytopeFaceLatticeRequest,
+) -> PolytopeFaceLatticeResult:
+    """Unpack a request and compute its exact rank-three face lattice."""
+    return polytope_face_lattice(request.polytope)
+
+
 def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeResult:
     """Unpack a request and project the native volume result."""
     vertices = request.vertices
@@ -90,6 +107,135 @@ def compute_polytope_volume(request: PolytopeVolumeRequest) -> PolytopeVolumeRes
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="polytope.face_lattice.compute",
+        title="Compute the complete face lattice of a three-dimensional polytope",
+        description=(
+            "From an ordered, labelled rational V-representation in dimension three, "
+            "recompute the complete exact facet incidence, identify the extreme "
+            "source rows, and return every face including the empty and whole faces "
+            "with all Hasse cover relations. Face labels are sorted source-vertex "
+            "indices; redundant input rows remain in the source but are excluded "
+            "from the face vertices. Admission bounds coordinate height, exact facet "
+            "enumeration, postprocessing work, face and cover counts, and result size."
+        ),
+        request_type=PolytopeFaceLatticeRequest,
+        result_type=PolytopeFaceLatticeResult,
+        run=compute_polytope_face_lattice,
+        tags=("polytope", "face-lattice", "face-poset", "exact-rational"),
+        discovery_terms=(
+            "face lattice of a polytope",
+            "polytope face poset",
+            "Hasse diagram of a three-dimensional polytope",
+        ),
+        examples=(
+            OperationExample(
+                name="tetrahedron_face_lattice",
+                description=(
+                    "The standard tetrahedron has four vertices, six edges, "
+                    "four triangular facets, and its empty and whole faces."
+                ),
+                input={
+                    "polytope": {
+                        "space": {"axes": ["x", "y", "z"]},
+                        "vertices": [
+                            {
+                                "vertex_id": "ex",
+                                "coordinates": [
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "ey",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "ez",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                    {"num": "1", "den": "1"},
+                                ],
+                            },
+                            {
+                                "vertex_id": "origin",
+                                "coordinates": [
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                    {"num": "0", "den": "1"},
+                                ],
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polytope.rational.h_to_v.compute",
+        title="Convert an exact rational H-polyhedron to finite points and directions",
+        description=(
+            "Convert inequalities a·x <= b to a serializable exact V-presentation "
+            "containing finite points, oriented recession rays, and lineality directions. "
+            "The value distinguishes empty from nonempty affine, bounded, and unbounded "
+            "polyhedra. Generators are exact but are not promised minimal or canonical. "
+            "Work, coefficient growth, and a conservative result-byte bound are admitted "
+            "before double-description expansion."
+        ),
+        request_type=RationalHPolyhedron,
+        result_type=RationalPolyhedronVPresentation,
+        run=halfspaces_to_v_presentation,
+        tags=("polyhedron", "H-to-V", "exact-rational", "recession-cone"),
+        discovery_terms=(
+            "H to V polyhedron conversion",
+            "rational polyhedron vertices rays lineality",
+        ),
+        examples=(
+            OperationExample(
+                name="unit_square",
+                description="Convert the four defining inequalities of the unit square on ordered axes [x,y].",
+                input={
+                    "space": {"axes": ["x", "y"]},
+                    "inequalities": [
+                        {
+                            "normal": [
+                                {"num": "-1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "bound": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "normal": [
+                                {"num": "0", "den": "1"},
+                                {"num": "-1", "den": "1"},
+                            ],
+                            "bound": {"num": "0", "den": "1"},
+                        },
+                        {
+                            "normal": [
+                                {"num": "1", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                            "bound": {"num": "1", "den": "1"},
+                        },
+                        {
+                            "normal": [
+                                {"num": "0", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "bound": {"num": "1", "den": "1"},
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="polytope.rational.support.compute",
         title="Compute an exact rational polytope support value",

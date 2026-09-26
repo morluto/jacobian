@@ -180,6 +180,38 @@ def test_profile_value_rejects_open_retained_holonomy():
             }
         )
 
+    open_field = FiniteGroupGaugeField(
+        lattice=GaugeLattice(
+            vertices=("v", "w"),
+            edges=(GaugeEdge(edge_id="e", tail="v", head="w"),),
+        ),
+        group=group,
+        edge_values=loop.field.edge_values,
+    )
+    open_walk = finite_group_gauge_holonomy(
+        FiniteGroupGaugeHolonomyRequest(
+            field=open_field,
+            path=OrientedGaugePath(steps=(GaugePathStep(edge_id="e", forward=True),)),
+        )
+    )
+    forged_closed = FiniteGroupGaugeHolonomyResult.model_construct(
+        field=open_walk.field,
+        path=open_walk.path,
+        holonomy=open_walk.holonomy,
+        contributions=open_walk.contributions,
+        start="v",
+        end="v",
+    )
+    with pytest.raises(ValueError, match="closed based loop"):
+        FiniteGroupConjugacyProfile.model_validate(
+            {
+                "loop": forged_closed.model_dump(),
+                "conjugate_indices": [index[(1, 0, 2)]],
+                "class_representative_index": index[(1, 0, 2)],
+                "class_size": 1,
+            }
+        )
+
 
 def test_forged_request_nested_values_are_domain_rejected():
     with pytest.raises(OperationDomainValidationError, match="requires a finite-group"):

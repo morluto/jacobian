@@ -13,12 +13,40 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
+    GaugeLattice,
     OrientedGaugePath,
 )
 from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
 
 MAX_HOLONOMY_CONJUGACY_WORK = 2_000
 MAX_HOLONOMY_CONJUGACY_OUTPUT_BYTES = 1_000_000
+
+
+def _path_endpoints(
+    lattice: GaugeLattice, path: OrientedGaugePath
+) -> tuple[str, str] | None:
+    """Replay the bounded edge walk to recover its actual lattice endpoints."""
+
+    edge_by_id = {edge.edge_id: edge for edge in lattice.edges}
+    if not path.steps:
+        basepoint = path.basepoint
+        if basepoint not in lattice.vertices:
+            return None
+        return basepoint, basepoint
+    start = cursor = None
+    for step in path.steps:
+        edge = edge_by_id.get(step.edge_id)
+        if edge is None:
+            return None
+        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+        if cursor is not None and cursor != tail:
+            return None
+        if start is None:
+            start = tail
+        cursor = head
+    if start is None or cursor is None:
+        return None
+    return start, cursor
 
 
 class FiniteGroupConjugacyProfileRequest(StrictModel):
@@ -42,8 +70,11 @@ class FiniteGroupConjugacyProfile(StrictModel):
             loop = FiniteGroupGaugeHolonomyResult.model_validate(self.loop.model_dump())
         except (AttributeError, TypeError, ValueError, ValidationError):
             raise ValueError("conjugacy profile must retain a canonical loop") from None
-        if loop.start != loop.end or (
-            loop.path.basepoint is not None and loop.path.basepoint != loop.start
+        if (
+            _path_endpoints(loop.field.lattice, loop.path)
+            != (loop.start, loop.end)
+            or loop.start != loop.end
+            or (loop.path.basepoint is not None and loop.path.basepoint != loop.start)
         ):
             raise ValueError("conjugacy profile must retain a closed based loop")
         indices = self.conjugate_indices

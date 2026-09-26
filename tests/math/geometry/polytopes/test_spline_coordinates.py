@@ -269,6 +269,16 @@ def test_discontinuous_piecewise_value_uses_the_unconstrained_spline_slice():
         CanonicalRational(num=0, den=1),
         CanonicalRational(num=1, den=1),
     )
+    evaluated = spline_evaluate(
+        SplineEvaluationRequest(
+            complex=result.spline_space.complex,
+            degree=result.spline_space.degree,
+            smoothness=result.spline_space.smoothness,
+            basis_coefficients=result.basis_coordinates,
+            point=ComplexPoint(coordinates=(CanonicalRational(num=1, den=4),)),
+        )
+    )
+    assert evaluated.value == CanonicalRational(num=0, den=1)
 
 
 def test_forged_continuity_status_does_not_establish_spline_membership():

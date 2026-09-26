@@ -519,7 +519,7 @@ class SplineEvaluationRequest(StrictModel):
 
     complex: PolytopalComplexClosureResult
     degree: int = Field(ge=0, le=12)
-    smoothness: int = Field(ge=0, le=4)
+    smoothness: int = Field(ge=-1, le=4)
     basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
     point: ComplexPoint
 
@@ -529,7 +529,7 @@ class SplineEvaluationResult(StrictModel):
 
     complex: PolytopalComplexClosureResult
     degree: int = Field(ge=0, le=12)
-    smoothness: int = Field(ge=0, le=4)
+    smoothness: int = Field(ge=-1, le=4)
     basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
     point: ComplexPoint
     containing_cell_ids: tuple[str, ...] = Field(max_length=MAX_COMPLEX_CELLS)

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from math import comb
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -390,7 +390,17 @@ def one_skeleton(request: OneSkeletonRequest) -> OneSkeletonResult:
             code="topology.one_skeleton.complex_type",
             message="complex must be a SimplicialComplexRequest",
         )
-    source = _canonical(request.complex)
+    try:
+        complex_request = SimplicialComplexRequest.model_validate(
+            request.complex.model_dump()
+        )
+    except (ValidationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.one_skeleton.invalid_complex",
+            message="complex request fields are invalid",
+        ) from error
+    source = _canonical(complex_request)
     faces = source.faces_by_dimension[1].faces if source.dimension >= 1 else ()
     vertex_index = {label: index for index, label in enumerate(source.vertices)}
     edges = tuple(

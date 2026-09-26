@@ -2,6 +2,7 @@ from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
 from jacobian.math.topology.release import (
     OneSkeletonRequest,
     OneSkeletonResult,
+    SimplicialComplexRequest,
     graph_clique_complex,
     one_skeleton,
 )
@@ -39,6 +40,23 @@ def test_one_skeleton_matches_independent_face_oracle_and_retains_isolates() -> 
         for edge in result.graph.edges
     )
     assert OneSkeletonResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_one_skeleton_revalidates_forged_nested_request() -> None:
+    forged_complex = SimplicialComplexRequest.model_construct(
+        vertices=None, facets=()
+    )
+    forged_request = OneSkeletonRequest.model_construct(complex=forged_complex)
+
+    try:
+        one_skeleton(forged_request)
+    except Exception as error:
+        from jacobian.catalog.models import OperationDomainValidationError
+
+        assert isinstance(error, OperationDomainValidationError)
+        assert error.errors()[0]["type"] == "topology.one_skeleton.invalid_complex"
+    else:
+        raise AssertionError("a forged nested request was accepted")
 
 
 def test_one_skeleton_graph_value_composes_unchanged_with_graph_clique() -> None:

@@ -102,8 +102,9 @@ The cardinality bound follows from Sperner's theorem: an antichain of subsets
 of an `n`-element set has at most `binom(n, floor(n/2))` members ([MIT OCW
 combinatorics notes](https://ocw.mit.edu/courses/18-226-probabilistic-methods-in-combinatorics-fall-2022/mit18_226_f22_lec_full.pdf)).
 
-`one_skeleton.compute` returns the exact graph on the canonical vertex axis as
-an `IndexedSimpleUndirectedGraph`, which graph operations can consume unchanged.
+`jacobian.math.topology.one_skeleton` returns the exact graph on the
+canonical vertex axis as an `IndexedSimpleUndirectedGraph`, which graph
+operations can consume unchanged.
 The accompanying `vertex_labels` tuple maps graph indices to source labels,
 and `edge_faces` is aligned with the graph edge list, preserving the exact
 source 1-face for each edge. Isolated vertices remain in the graph axis. The

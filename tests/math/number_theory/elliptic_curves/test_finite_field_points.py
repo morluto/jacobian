@@ -108,6 +108,39 @@ def test_generated_subgroup_membership_matches_hand_computed_f5_subgroup() -> No
     assert yes.candidate == member
 
 
+def test_subgroup_membership_checks_cancellation_during_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    generator = FiniteFieldEllipticPoint.affine(
+        curve,
+        FiniteFieldElement(presentation=field, coordinates=(2,)),
+        FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+
+    class Cancelled(Exception):
+        pass
+
+    checkpoints: list[str] = []
+
+    def cancel(message: str) -> None:
+        checkpoints.append(message)
+        raise Cancelled
+
+    monkeypatch.setattr(finite_field_module, "request_checkpoint", cancel)
+    with pytest.raises(Cancelled):
+        finite_field_point_membership_in_generated_subgroup(
+            curve, (generator,), generator
+        )
+    assert checkpoints == ["during finite-field subgroup closure"]
+
+
 def test_subgroup_membership_admits_before_expanding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

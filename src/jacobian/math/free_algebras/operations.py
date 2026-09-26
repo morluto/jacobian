@@ -451,9 +451,10 @@ def _preflight_substitution_expansion(
                 maximum_output_word_length = max(
                     maximum_output_word_length, output_length
                 )
-            source_maximum_contribution_digits = max(
-                source_maximum_contribution_digits, contribution_digits
-            )
+            if expansion:
+                source_maximum_contribution_digits = max(
+                    source_maximum_contribution_digits, contribution_digits
+                )
         source_coefficient_digits = (
             source_expansion_count * source_maximum_contribution_digits
             + (len(str(source_expansion_count)) if source_expansion_count > 1 else 0)
@@ -489,7 +490,9 @@ def _preflight_substitution_expansion(
         _reject_resource(
             next(
                 location
-                for location, count in zip(locations, source_expansion_counts, strict=True)
+                for location, count in zip(
+                    locations, source_expansion_counts, strict=True
+                )
                 if count > MAX_FREE_ALGEBRA_RESULT_TERMS
             ),
             "substitution_result_term_budget",
@@ -502,7 +505,9 @@ def _preflight_substitution_expansion(
         _reject_resource(
             next(
                 location
-                for location, digits in zip(locations, source_coefficient_digit_bounds, strict=True)
+                for location, digits in zip(
+                    locations, source_coefficient_digit_bounds, strict=True
+                )
                 if digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
             ),
             "substitution_coefficient_growth",

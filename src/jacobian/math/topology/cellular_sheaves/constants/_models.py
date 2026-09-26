@@ -25,7 +25,8 @@ class ConstantSheafRequest(StrictModel):
         max_length=MAX_SHEAF_STALK_RANK,
         description=(
             "Ordered basis identifiers of the common stalk vector space. The "
-            "empty tuple requests the zero vector space."
+            "identifiers must be unique; the empty tuple requests the zero "
+            "vector space."
         ),
     )
 

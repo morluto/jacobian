@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import combinations
+from itertools import combinations, pairwise
 from math import comb, gcd
 from typing import Any, NoReturn
 
@@ -42,6 +42,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     SplineCellRefinementLineage,
     SplineCoordinatesRequest,
     SplineCoordinatesResult,
+    SplineDimensionProfileRequest,
+    SplineDimensionProfileResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
@@ -1157,6 +1159,7 @@ MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS = 1_048_576
 MAX_SPLINE_DIMENSION_RANK_WORK = 32_000_000
 MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
 MAX_SPLINE_DIMENSION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SPLINE_PROFILE_OUTPUT_BYTES = 2 * 1024 * 1024 * 1024
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
 MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 MAX_SPLINE_REFINEMENT_MAP_WORK = 32_000_000
@@ -1538,6 +1541,7 @@ def _spline_constraint_data(
     smoothness: int,
     *,
     dimension_only: bool = False,
+    validate_complex: bool = True,
 ) -> tuple[
     PolytopalComplexClosureResult,
     tuple[tuple[str, tuple[int, ...]], ...],
@@ -1547,7 +1551,10 @@ def _spline_constraint_data(
     """Build the admitted exact spline matrix once for basis and dimension paths."""
     if dimension_only:
         complex_value, width, _, _ = _admit_spline_dimension(
-            complex_value, degree, smoothness
+            complex_value,
+            degree,
+            smoothness,
+            validate_complex=validate_complex,
         )
         cells = tuple(
             sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id)
@@ -1652,9 +1659,12 @@ def _admit_spline_dimension(
     complex_value: PolytopalComplexClosureResult,
     degree: int,
     smoothness: int,
+    *,
+    validate_complex: bool = True,
 ) -> tuple[PolytopalComplexClosureResult, int, int, int]:
     """Preflight compact matrix construction and exact rank work."""
-    complex_value = _admit_complex(complex_value)
+    if validate_complex:
+        complex_value = _admit_complex(complex_value)
     if type(degree) is not int or type(smoothness) is not int:
         _reject("spline_type", "spline degree and smoothness must be exact integers")
     if degree < 0 or degree > 12 or smoothness < -1 or smoothness > 4:
@@ -1859,6 +1869,112 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         compatibility_matrix=matrix,
         rank=rank,
         nullity=nullity,
+    )
+
+
+def _spline_dimension_nullity_admitted(
+    complex_value: PolytopalComplexClosureResult, degree: int, smoothness: int
+) -> int:
+    """Rank one profile matrix after the aggregate prefix admission."""
+    _, _, rows, width = _spline_constraint_data(
+        complex_value,
+        degree,
+        smoothness,
+        dimension_only=True,
+        validate_complex=False,
+    )
+    dimension = len(complex_value.space.axes)
+    row_bound = sum(
+        len(face.maximal_cell_ids) == 2
+        and face.dimension == dimension - 1
+        and smoothness >= 0
+        for face in complex_value.faces
+    ) * _facet_remainder_dimension(dimension, degree, smoothness)
+    if len(rows) > row_bound:
+        raise ArithmeticError("spline dimension matrix shape admission mismatch")
+    _admit_spline_rank_matrix(rows, width)
+    if rows:
+        from flint import fmpq, fmpq_mat
+
+        rank = int(
+            fmpq_mat(
+                [
+                    [fmpq(value.numerator, value.denominator) for value in row]
+                    for row in rows
+                ]
+            ).rank()
+        )
+    else:
+        rank = 0
+    return width - rank
+
+
+def spline_dimension_profile(
+    request: SplineDimensionProfileRequest,
+) -> SplineDimensionProfileResult:
+    """Compute an admitted finite prefix of exact spline dimensions.
+
+    The finite differences describe only the supplied prefix; no eventual
+    Hilbert polynomial or extrapolation is inferred.
+    """
+    if not isinstance(request, SplineDimensionProfileRequest):
+        _reject("spline_profile_type", "expected a canonical spline profile request")
+    if type(request.max_degree) is not int or not 0 <= request.max_degree <= 12:
+        _reject("spline_profile_degree", "maximum degree must be in [0, 12]")
+    # Admit the complete requested workload before constructing any degree
+    # matrix. These are conservative source-derived matrix and rank bounds.
+    complex_value = _admit_complex(request.complex)
+    total_cells = 0
+    total_rank_work = 0
+    for degree in range(request.max_degree + 1):
+        _, width, row_bound, rank_work = _admit_spline_dimension(
+            complex_value, degree, request.smoothness, validate_complex=False
+        )
+        total_cells += row_bound * width
+        total_rank_work += rank_work
+    if total_cells > MAX_SPLINE_DIMENSION_CONSTRAINT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_matrix",
+            message="finite spline profile matrices exceed the aggregate cell envelope",
+        )
+    if total_rank_work > MAX_SPLINE_DIMENSION_RANK_WORK:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_work",
+            message="finite spline profile ranks exceed the aggregate work envelope",
+        )
+    # The profile omits the degree-specific matrices. Bound its canonical
+    # output from the source and fixed maximum integer widths before computing.
+    try:
+        source_size = len(encode_strict_json(complex_value.model_dump(mode="json")))
+    except CanonicalizationError as exc:
+        raise OperationResourceAdmissionError(
+            location=("complex",),
+            code="polytopal_complex.spline_profile_output",
+            message="spline profile source exceeds its output envelope",
+        ) from exc
+    output_bound = source_size + 1024 + (request.max_degree + 1) * 24
+    if output_bound > MAX_SPLINE_PROFILE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_output",
+            message="finite spline profile exceeds its intrinsic output envelope",
+        )
+    dimensions = tuple(
+        _spline_dimension_nullity_admitted(complex_value, degree, request.smoothness)
+        for degree in range(request.max_degree + 1)
+    )
+    differences = [dimensions]
+    while len(differences[-1]) > 1:
+        previous = differences[-1]
+        differences.append(tuple(b - a for a, b in pairwise(previous)))
+    return SplineDimensionProfileResult(
+        complex=complex_value,
+        max_degree=request.max_degree,
+        smoothness=request.smoothness,
+        dimensions=dimensions,
+        forward_differences=tuple(differences),
     )
 
 

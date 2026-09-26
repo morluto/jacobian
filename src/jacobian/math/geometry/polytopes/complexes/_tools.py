@@ -21,6 +21,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
     PolytopalComplexClosureResult,
     SplineCoordinatesRequest,
     SplineCoordinatesResult,
+    SplineDimensionProfileRequest,
+    SplineDimensionProfileResult,
     SplineDimensionRequest,
     SplineDimensionResult,
     SplineEvaluationRequest,
@@ -42,6 +44,7 @@ from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_common_refinement,
     spline_coordinates,
     spline_dimension,
+    spline_dimension_profile,
     spline_evaluate,
     spline_refinement_map,
     spline_space,
@@ -159,6 +162,12 @@ def _run_spline_dimension(
     request: SplineDimensionRequest,
 ) -> SplineDimensionResult:
     return spline_dimension(request)
+
+
+def _run_spline_dimension_profile(
+    request: SplineDimensionProfileRequest,
+) -> SplineDimensionProfileResult:
+    return spline_dimension_profile(request)
 
 
 def _run_spline_coordinates(
@@ -596,6 +605,33 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "the one unconstrained coefficient gives dimension one."
                 ),
                 input={"complex": _COMPLEX, "degree": 0, "smoothness": 0},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="polyhedral_complex.spline_dimension_profile.compute",
+        title="Compute a finite exact spline dimension profile",
+        description=(
+            "Compute exact dimensions for degrees zero through a supplied "
+            "maximum and their finite differences. The differences describe "
+            "only this finite prefix and do not assert an eventual Hilbert polynomial. "
+            "The aggregate matrix cells, exact rank work, and output are admitted "
+            "before any degree matrix is constructed."
+        ),
+        request_type=SplineDimensionProfileRequest,
+        result_type=SplineDimensionProfileResult,
+        run=_run_spline_dimension_profile,
+        tags=("geometry", "spline", "dimension", "hilbert-function", "exact-rational"),
+        discovery_terms=(
+            "spline Hilbert function",
+            "spline dimension profile",
+            "finite spline dimensions",
+        ),
+        examples=(
+            OperationExample(
+                name="two_interval_continuity_profile",
+                description="Return dimensions for a finite degree prefix on one segment.",
+                input={"complex": _COMPLEX, "max_degree": 2, "smoothness": 0},
             ),
         ),
     ),

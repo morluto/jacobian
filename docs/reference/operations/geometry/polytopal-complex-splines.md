@@ -55,6 +55,17 @@ so its matrix and nullity survive JSON transport with their mathematical
 meaning intact. For an unconstrained one-cell space, the matrix has zero rows
 and retains its full coefficient width.
 
+`polyhedral_complex.spline_dimension_profile.compute` computes dimensions for
+every degree from zero through a supplied maximum (currently at most 12), and
+returns the forward-difference rows of that finite sequence. It pre-admits the
+aggregate matrix cells and exact rank work for the entire requested prefix
+before constructing any degree matrix. The output contains dimensions rather
+than the per-degree matrices. The differences are descriptive data for the
+supplied prefix; the operation does not extrapolate an eventual Hilbert
+polynomial. For two adjacent intervals with `C^0` matching, degrees zero
+through three have dimensions `(1, 3, 5, 7)`, obtained by matching the two
+polynomials at their shared endpoint.
+
 ## Refinement maps between spline spaces
 
 `polyhedral_complex.spline.refinement_map.compute` takes a coarse complex and

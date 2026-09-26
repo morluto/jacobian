@@ -19,10 +19,11 @@ Conventions fixed by this owner:
 
 from __future__ import annotations
 
+from itertools import pairwise
 from math import comb
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -653,6 +654,58 @@ class SplineDimensionResult(StrictModel):
             raise _validation_error(
                 "spline_dimension_nullity",
                 "nullity must equal coefficient width minus matrix rank",
+            )
+        return self
+
+
+class SplineDimensionProfileRequest(StrictModel):
+    """Compute exact spline dimensions over a supplied finite degree prefix."""
+
+    complex: PolytopalComplexClosureResult
+    max_degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+
+
+class SplineDimensionProfileResult(StrictModel):
+    """Exact dimensions and forward differences on degrees zero through max_degree."""
+
+    complex: PolytopalComplexClosureResult
+    max_degree: int = Field(ge=0, le=12)
+    smoothness: int = Field(ge=-1, le=4)
+    dimensions: tuple[Annotated[StrictInt, Field(ge=0, le=4096)], ...] = Field(
+        min_length=1, max_length=13
+    )
+    forward_differences: tuple[
+        Annotated[
+            tuple[Annotated[StrictInt, Field(ge=-4096, le=4096)], ...],
+            Field(max_length=13),
+        ],
+        ...,
+    ] = Field(min_length=1, max_length=13)
+
+    @model_validator(mode="after")
+    def require_finite_difference_profile(self) -> Self:
+        if len(self.dimensions) != self.max_degree + 1:
+            raise _validation_error(
+                "spline_profile_length",
+                "dimensions must cover degrees zero through max_degree",
+            )
+        if any(
+            type(value) is not int or not 0 <= value <= 4096
+            for value in self.dimensions
+        ):
+            raise _validation_error(
+                "spline_profile_dimensions",
+                "dimensions must be admitted nonnegative coefficient widths",
+            )
+        expected = [self.dimensions]
+        while len(expected[-1]) > 1:
+            row = expected[-1]
+            expected.append(tuple(right - left for left, right in pairwise(row)))
+        if self.forward_differences != tuple(expected):
+            raise _validation_error(
+                "spline_profile_differences",
+                "forward differences must be derived from the finite dimension prefix",
             )
         return self
 

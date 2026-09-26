@@ -1,6 +1,7 @@
 # Number theory operations
 
 - [Finite-field elliptic extension counts](elliptic-curve-extension-counts.md)
+- [Finite-field elliptic curve base change](elliptic-curve-base-change.md)
 - [Finite-field elliptic model isomorphism](elliptic-curve-isomorphism.md)
 - [Finite-field elliptic isogeny classes](elliptic-curve-isogeny-class.md)
 - [Finite-field elliptic point orders](elliptic-curve-point-order.md)
@@ -20,9 +21,6 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Powerful-number decision](integer-powerful-number-decision.md)
 - [Integer prime factorization](integer-prime-factorization-verification.md)
 - [Simple number-field embeddings](number-field-embeddings.md)
-- [Exact simple number-field map](exact-number-field-map.md)
-- [Composita of quadratic splitting fields](galois-compositum.md)
 - [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)
 - [Kempner arithmetic-progression decisions](kempner-arithmetic-progressions.md)
-- [Dense Kempner reciprocal-series enclosures](kempner-dense-series.md)

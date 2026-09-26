@@ -95,10 +95,11 @@ def test_operation_manifest_uses_the_existing_anonymous_deck_carrier() -> None:
 
 def test_decoded_degree_values_remain_bounded() -> None:
     result = anonymous_vertex_deck_degree_multiset(_vertex_deck(_graph(3, 0b011)))
-    with pytest.raises(ValidationError):
-        AnonymousVertexDeckDegreeMultiset.model_validate(
-            {
-                "edge_count": result.edge_count.model_dump(mode="python"),
-                "degrees": (99, 1, 1),
-            }
-        )
+    for degrees in ((99, 1, 1), (1, 2), (1, 2, 0), ()):
+        with pytest.raises(ValidationError):
+            AnonymousVertexDeckDegreeMultiset.model_validate(
+                {
+                    "edge_count": result.edge_count.model_dump(mode="python"),
+                    "degrees": degrees,
+                }
+            )

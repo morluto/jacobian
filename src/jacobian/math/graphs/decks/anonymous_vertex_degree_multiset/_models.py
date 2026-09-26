@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.math.graphs.decks.anonymous_vertex_edge_count._models import (
@@ -25,3 +25,12 @@ class AnonymousVertexDeckDegreeMultiset(StrictModel):
 
     edge_count: AnonymousVertexDeckEdgeCount
     degrees: tuple[Degree, ...] = Field(max_length=MAX_ANONYMOUS_VERTEX_DECK_ORDER)
+
+    @model_validator(mode="after")
+    def require_canonical_degrees(self) -> Self:
+        if len(self.degrees) != self.edge_count.source_order:
+            raise ValueError("degree count must equal the source graph order")
+        adjacent_degrees = zip(self.degrees, self.degrees[1:], strict=False)
+        if any(left < right for left, right in adjacent_degrees):
+            raise ValueError("degrees must be in nonincreasing order")
+        return self

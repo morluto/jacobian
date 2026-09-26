@@ -780,6 +780,24 @@ def _rref_character_coordinates_hecke(
 
     sturm_precision = _character_sturm_precision(space)
     source_precision = index * (sturm_precision - 1) + 1
+    max_admitted_index = (
+        MAX_CHARACTER_HECKE_INDEX
+        if sturm_precision == 1
+        else min(
+            MAX_CHARACTER_HECKE_INDEX,
+            (MAX_CHARACTER_BASIS_PRECISION - 1) // (sturm_precision - 1),
+        )
+    )
+    if index > max_admitted_index:
+        raise OperationResourceAdmissionError(
+            location=("index",),
+            code="modular_form.character_hecke_precision_bound",
+            message=(
+                f"this space admits Hecke indices through {max_admitted_index}; "
+                "the source prefix n * (S - 1) + 1 must fit the "
+                f"{MAX_CHARACTER_BASIS_PRECISION}-coefficient basis envelope"
+            ),
+        )
     divisor_count = sum(index % divisor == 0 for divisor in range(1, index + 1))
     # PARI's character worker caps each raw power-basis coordinate at four
     # digits. Dividing one raw vector by its first nonzero Sturm coefficient

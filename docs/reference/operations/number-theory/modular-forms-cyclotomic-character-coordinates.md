@@ -25,14 +25,16 @@ reconstruction while retaining the same space and coefficient-field parent.
 
 `modular_form.character_coordinates.hecke.apply` also accepts a
 one-dimensional character space in this q-Sturm RREF basis. It applies `T_n`
-for `1 <= n <= 32` coprime to the represented level and returns coordinates
-with the identical space and basis identifier: this Hecke action is an
-endomorphism, so it does not create an inflated target space. Before basis
-expansion, the operation admits the required source precision
-`n * (B - 1) + 1`, where `B` is the target Sturm prefix length, along with
-work, coefficient growth, and output size. The transformed form is checked
-through the full target Sturm prefix. Multidimensional q-Sturm RREF character
-spaces remain unsupported by this Hecke operation.
+for coprime `n <= 32` when its required source precision
+`n * (B - 1) + 1` fits the 128-coefficient basis envelope; here `B` is the
+space's Sturm precision. Thus the maximum admitted index can be lower for
+spaces with larger Sturm precision (for example, at most 18 when `B = 8`). It
+returns coordinates with the identical space and basis identifier: this Hecke
+action is an endomorphism, so it does not create an inflated target space.
+Along with the source precision, the operation admits work, coefficient growth,
+and output size before basis expansion. The transformed form is checked through
+the full target Sturm prefix. Multidimensional q-Sturm RREF character spaces
+remain unsupported by this Hecke operation.
 
 The existing `modular_form.equal.check` operation compares two character
 coordinate vectors when they have the identical exact space and canonical

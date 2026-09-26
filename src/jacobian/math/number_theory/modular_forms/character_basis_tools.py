@@ -157,7 +157,9 @@ TOOLS: MathTools = (
         operation_id="modular_form.character_coordinates.hecke.apply",
         title="Apply a Hecke operator to a character-valued modular form",
         description=(
-            "Apply T_n, for n at most 32 and coprime to the represented level, "
+            "Apply T_n for an index coprime to the represented level and at "
+            "most 32, subject to n * (S - 1) + 1 <= 128, where S is the "
+            "space's Sturm precision and 128 is the source-basis envelope, "
             "to either legacy one-dimensional S2(Gamma0(13), chi) coordinates "
             "or a one-dimensional canonical q-Sturm RREF character space at "
             "levels 13, 26, or 39 over Q(zeta_6). The action is reconstructed "

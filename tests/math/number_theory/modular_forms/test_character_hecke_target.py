@@ -7,7 +7,10 @@ from cypari import pari
 from pydantic import TypeAdapter
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
@@ -129,3 +132,8 @@ def test_character_hecke_scales_nonunit_coordinate_once() -> None:
 def test_character_hecke_rejects_bad_prime_for_its_exact_level() -> None:
     with pytest.raises(OperationDomainValidationError, match="gcd"):
         modular_character_coordinates_hecke(_form(), 2)
+
+
+def test_character_hecke_advertises_precision_limited_index_for_level_26() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="through 18"):
+        modular_character_coordinates_hecke(_form(), 19)

@@ -1,4 +1,4 @@
-"""Bounded exact Cohen--Oesterle dimensions for the order-six character slice."""
+"""Bounded exact Cohen--Oesterle dimensions for conductor-thirteen characters."""
 
 from __future__ import annotations
 
@@ -61,11 +61,14 @@ def _validated_character_table(
     for value in table.values():
         root_order = value.order // gcd(value.order, value.exponent)
         value_order = value_order * root_order // gcd(value_order, root_order)
-    if value_order != 6:
+    if value_order > 6 or 6 % value_order:
         raise OperationDomainValidationError(
             location=("space", "character"),
             code="modular_form.character_dimension_order",
-            message="the bounded character dimension slice requires exact order six",
+            message=(
+                "the bounded character dimension slice requires character values "
+                "in Q(zeta_6)"
+            ),
         )
     if table[(-1) % level].exponent != 0:
         raise OperationDomainValidationError(
@@ -137,12 +140,12 @@ def character_space_dimensions(
     character: DirichletCharacter,
     field: RationalCyclotomicField,
 ) -> tuple[int, int]:
-    """Return (cusp, full) dimensions for the explicit order-six inflation slice.
+    """Return (cusp, full) dimensions for the explicit conductor-13 slice.
 
     Admission is intentionally limited to weight two and levels 13, 26, 39,
-    with a character of conductor 13 and values in Q(zeta_6). This is enough
-    to cover the first nontrivial inflation targets while keeping every
-    character sum and the conductor claim independently checked here.
+    with an even character of conductor 13 and values in Q(zeta_6). The
+    Cohen--Oesterle character sums are evaluated directly in that exact field;
+    no backend dimension claim is used as the mathematical expectation.
     """
     if (
         type(level) is not int

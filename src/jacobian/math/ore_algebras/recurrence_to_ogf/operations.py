@@ -136,6 +136,7 @@ def _admit_transform(
     """Bound output shape, coefficient height, work, and bytes before expansion."""
     polynomials: list[tuple[int, _Poly]] = []
     maximum_degree = 0
+    maximum_output_degree = 0
     input_scalars: list[Fraction] = []
     work = (operator.order + 1) * (len(operator.terms) + 1)
     for term in operator.terms:
@@ -150,6 +151,9 @@ def _admit_transform(
             )
         degree = max(numerator, default=0)
         maximum_degree = max(maximum_degree, degree)
+        maximum_output_degree = max(
+            maximum_output_degree, operator.order - term.exponent + degree
+        )
         input_scalars.extend(numerator.values())
         polynomials.append((term.exponent, numerator))
         work += len(numerator) * (degree + 1) ** 2
@@ -160,7 +164,9 @@ def _admit_transform(
             code="ore_algebra.recurrence_ogf_differential_order",
             message="the recurrence coefficient degree exceeds the differential-operator order bound",
         )
-    maximum_output_degree = operator.order + maximum_degree
+    # Boundary forcing has degree at most r-1 independently of coefficient
+    # degree; the operator term degree is r-i+deg(q_i).
+    maximum_output_degree = max(maximum_output_degree, max(operator.order - 1, 0))
     if maximum_output_degree > MAX_SHIFT_COEFFICIENT_DEGREE:
         raise OperationResourceAdmissionError(
             location=("recurrence", "terms"),

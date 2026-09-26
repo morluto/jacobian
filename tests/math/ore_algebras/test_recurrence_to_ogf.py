@@ -171,6 +171,21 @@ def test_sparse_high_shift_with_unit_coefficients_is_admitted() -> None:
     assert len(result.initial_coefficients.values) == 64
 
 
+def test_high_shift_canceled_by_x_power_uses_actual_output_degree() -> None:
+    # n*a_(n+64)=0 clears to xD-64, not a degree-65 coefficient.
+    result = polynomial_recurrence_to_ogf_equation(
+        _recurrence((64, [(1, 1)])),
+        {"values": [1] * 64},
+    )
+    assert [
+        (term.order, _polynomial(term.coefficient))
+        for term in result.differential_operator.terms
+    ] == [(0, {0: Fraction(-64)}), (1, {1: Fraction(1)})]
+    assert _polynomial(result.forcing) == {
+        degree: Fraction(degree - 64) for degree in range(64)
+    }
+
+
 def test_initial_coefficient_width_is_described_in_request_schema() -> None:
     schema = __import__(
         "jacobian.math.ore_algebras.recurrence_to_ogf._models",

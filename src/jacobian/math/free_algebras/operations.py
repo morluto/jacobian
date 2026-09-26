@@ -515,14 +515,12 @@ def _admit_substitution_images(
         (len(letter) for letter in substitution.target_alphabet),
         default=0,
     )
-    for letter, image in zip(
-        substitution.source_alphabet,
-        substitution.images,
-        strict=True,
+    for image_index, (letter, image) in enumerate(
+        zip(substitution.source_alphabet, substitution.images, strict=True)
     ):
         if len(image.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
             _reject_resource(
-                (*location_prefix, "images", letter, "terms"),
+                (*location_prefix, "images", image_index, "terms"),
                 "substitution_image_term_budget",
                 "each generator image is limited to 64 terms",
             )
@@ -534,7 +532,14 @@ def _admit_substitution_images(
         for index, term in enumerate(image.terms):
             if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
                 _reject_resource(
-                    (*location_prefix, "images", letter, "terms", index, "word"),
+                    (
+                        *location_prefix,
+                        "images",
+                        image_index,
+                        "terms",
+                        index,
+                        "word",
+                    ),
                     "substitution_image_word_budget",
                     "generator image words are limited to 32 letters",
                 )

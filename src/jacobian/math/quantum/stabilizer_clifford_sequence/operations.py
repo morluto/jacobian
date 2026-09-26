@@ -99,11 +99,12 @@ def _admit_sequence_shape(
         )
     ids = register.qubit_ids
     for index, gate in enumerate(gates):
-        arity = 2 if isinstance(gate, CliffordGate) and gate.gate == "CNOT" else 1
+        gate_name = getattr(gate, "gate", None)
         axes = getattr(gate, "qubits", None)
+        arity = 2 if gate_name == "CNOT" else 1
         if (
             not isinstance(gate, CliffordGate)
-            or gate.gate not in ("H", "S", "CNOT")
+            or gate_name not in ("H", "S", "CNOT")
             or type(axes) is not tuple
             or len(axes) != arity
             or any(type(axis) is not str for axis in axes)

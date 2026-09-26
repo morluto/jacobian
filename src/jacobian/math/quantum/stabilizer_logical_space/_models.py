@@ -362,15 +362,25 @@ class LogicalPauliSpace(StrictModel):
     def normalizer_coordinate_positions(self) -> tuple[int, ...]:
         matrix = self.normalizer_embedding.matrix.entries
         dimension = len(self.normalizer_embedding.source_axis.labels)
-        return tuple(
-            next(
-                position
-                for position, row in enumerate(matrix)
-                if tuple(row[column] for column in range(dimension))
-                == tuple(int(index == coordinate) for index in range(dimension))
+        positions: list[int] = []
+        for coordinate in range(dimension):
+            selector = tuple(int(index == coordinate) for index in range(dimension))
+            position = next(
+                (
+                    row_index
+                    for row_index, row in enumerate(matrix)
+                    if len(row) >= dimension
+                    and tuple(row[column] for column in range(dimension)) == selector
+                ),
+                None,
             )
-            for coordinate in range(dimension)
-        )
+            if position is None:
+                raise _validation_error(
+                    "normalizer_embedding_coordinates",
+                    "normalizer embedding must retain coordinate selector rows",
+                )
+            positions.append(position)
+        return tuple(positions)
 
     @property
     def normalizer_basis(self) -> tuple[PhaseFreeQubitPauli, ...]:

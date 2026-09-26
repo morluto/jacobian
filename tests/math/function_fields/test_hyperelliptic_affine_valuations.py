@@ -87,6 +87,27 @@ def test_affine_valuation_at_branch_and_unramified_points(point, coordinates, ex
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_affine_valuation_canonicalizes_equivalent_shared_parent_presentations():
+    canonical = _field()
+    scaled_field = canonical.model_copy(
+        update={
+            "defining_polynomial": (
+                _rational((0, 2, 0, 3), (2,)),
+                _rf((0,)),
+                _rf((1,)),
+            )
+        }
+    )
+    place = _place(0, 0).model_copy(update={"field": scaled_field})
+    element = _element((0,), (1,)).model_copy(update={"field": scaled_field})
+
+    result = function_field_hyperelliptic_affine_valuation(place, element)
+
+    assert result.place.field == canonical
+    assert result.element.field == canonical
+    assert result.valuation.value == 1
+
+
 def test_affine_valuation_is_additive_on_products_and_handles_poles():
     place = _place(0, 0)
     y = _element((0,), (1,))

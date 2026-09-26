@@ -10,7 +10,6 @@ from jacobian.math.function_fields._models import (
 )
 from jacobian.math.function_fields._tools import TOOLS
 from jacobian.math.function_fields.hyperelliptic_affine_places import (
-    MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES,
     HyperellipticAffinePlacesRequest,
     enumerate_hyperelliptic_affine_places,
 )
@@ -55,9 +54,7 @@ def test_composite_characteristic_is_rejected_before_rational_normalization() ->
     # coefficient normalization attempts inversion modulo a composite.
     def rational(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:
         return PrimeFieldRationalFunction(
-            numerator=PrimeFieldPolynomial(
-                characteristic=4, coefficients=coefficients
-            ),
+            numerator=PrimeFieldPolynomial(characteristic=4, coefficients=coefficients),
             denominator=PrimeFieldPolynomial(characteristic=4, coefficients=(1,)),
         )
 
@@ -69,7 +66,9 @@ def test_composite_characteristic_is_rejected_before_rational_normalization() ->
     )
     with pytest.raises(OperationDomainValidationError) as exc_info:
         enumerate_hyperelliptic_affine_places(field)
-    assert exc_info.value.errors()[0]["type"] == "function_field.characteristic_not_prime"
+    assert (
+        exc_info.value.errors()[0]["type"] == "function_field.characteristic_not_prime"
+    )
 
 
 def test_non_squarefree_model_is_rejected_by_shape_recognition() -> None:
@@ -130,16 +129,12 @@ def test_enumeration_accepts_the_maximum_admitted_prime_characteristic():
     result = enumerate_hyperelliptic_affine_places(field)
     assert len(result.places) <= 2 * prime
     assert len(result.places) <= 514
-    assert (
-        len(result.model_dump_json().encode("utf-8"))
-        <= MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES
-    )
     assert len(result.places) == sum(
         (y * y - (x**3 - x)) % prime == 0 for x in range(prime) for y in range(prime)
     )
 
 
-def test_output_byte_bound_accepts_maximum_supported_field_shape():
+def test_intrinsic_output_cardinality_accepts_maximum_supported_field_shape():
     prime = 257
 
     def rational(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:
@@ -162,9 +157,7 @@ def test_output_byte_bound_accepts_maximum_supported_field_shape():
         ),
     )
     result = enumerate_hyperelliptic_affine_places(field)
-    serialized_size = len(result.model_dump_json().encode("utf-8"))
-    assert serialized_size <= MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES
-    assert serialized_size < MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES
+    assert len(result.places) == 514
 
 
 def test_tool_is_published_and_advertised_example_is_valid_json():

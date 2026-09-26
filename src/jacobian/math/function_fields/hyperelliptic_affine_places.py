@@ -23,10 +23,6 @@ from jacobian.math.function_fields.operations import (
 
 MAX_AFFINE_PLACE_ENUMERATION_WORK = 5_000_000
 MAX_AFFINE_PLACE_ENUMERATION_OUTPUT = 514
-MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES = 2_000_000
-# The place's non-field JSON fields (coordinates, local parameter, and GF(p)
-# residue presentation), including object punctuation, fit within this cap.
-_PLACE_RESULT_OVERHEAD_BYTES = 256
 _PLACE_RESULT_FIXED_WORK = 64
 _FIELD_COEFFICIENT_VALIDATION_WORK = 4
 # Conservative Euclidean polynomial-gcd bound for admitted coefficient degree.
@@ -107,17 +103,9 @@ def enumerate_hyperelliptic_affine_places(
         )
 
     prime = field.characteristic
-    # Admission includes the square table and Horner scan, up to two output
-    # records per x, structural validation of each repeated field/residue, and
-    # the maximum serialized output size. All estimates precede either result
-    # collection, so transport serialization cannot exceed the admitted bound.
+    # Admission counts the square table and Horner scan, then bounds up to two
+    # result records per x and validation of their retained field coefficients.
     output_count_bound = 2 * prime
-    field_json_bytes = len(field.model_dump_json().encode("utf-8"))
-    result_bytes_bound = (
-        field_json_bytes
-        + output_count_bound * (field_json_bytes + _PLACE_RESULT_OVERHEAD_BYTES)
-        + _PLACE_RESULT_OVERHEAD_BYTES
-    )
     field_coefficient_count = sum(
         len(polynomial.coefficients)
         for coefficient in field.defining_polynomial
@@ -131,14 +119,7 @@ def enumerate_hyperelliptic_affine_places(
             _PLACE_RESULT_FIXED_WORK
             + _FIELD_COEFFICIENT_VALIDATION_WORK * field_coefficient_count
         )
-        + result_bytes_bound
     )
-    if result_bytes_bound > MAX_AFFINE_PLACE_ENUMERATION_RESULT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("result",),
-            code="function_field.affine_enumeration_output_exceeds_envelope",
-            message="affine place output exceeds its admitted serialized-byte bound",
-        )
     if work > MAX_AFFINE_PLACE_ENUMERATION_WORK:
         raise OperationResourceAdmissionError(
             location=("field",),
@@ -155,7 +136,7 @@ def enumerate_hyperelliptic_affine_places(
     residue = FiniteFieldPresentation(
         characteristic=prime,
         modulus_coefficients=(0, 1),
-        generator="z",
+        generator="a",
     )
     places: list[HyperellipticAffinePlace] = []
     for x in range(prime):

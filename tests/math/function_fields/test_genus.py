@@ -87,15 +87,21 @@ def test_genus_rejects_composite_characteristic_before_classifying_field() -> No
 
 
 def _hyperelliptic_field(
-    branch: tuple[int, ...], *, characteristic: int = 5
+    branch: tuple[int, ...],
+    *,
+    characteristic: int = 5,
+    denominator: tuple[int, ...] = (1,),
 ) -> FiniteFunctionField:
-    def rational_function(coefficients: tuple[int, ...]) -> PrimeFieldRationalFunction:
+    def rational_function(
+        coefficients: tuple[int, ...], denominator_coefficients: tuple[int, ...] = (1,)
+    ) -> PrimeFieldRationalFunction:
         return PrimeFieldRationalFunction(
             numerator=PrimeFieldPolynomial(
                 characteristic=characteristic, coefficients=coefficients
             ),
             denominator=PrimeFieldPolynomial(
-                characteristic=characteristic, coefficients=(1,)
+                characteristic=characteristic,
+                coefficients=denominator_coefficients,
             ),
         )
 
@@ -106,7 +112,8 @@ def _hyperelliptic_field(
         # The field equation is y^2 - f(x) = 0.
         defining_polynomial=(
             rational_function(
-                tuple((-coefficient) % characteristic for coefficient in branch)
+                tuple((-coefficient) % characteristic for coefficient in branch),
+                denominator,
             ),
             rational_function((0,)),
             rational_function((1,)),
@@ -116,7 +123,12 @@ def _hyperelliptic_field(
 
 @pytest.mark.parametrize(
     ("branch", "genus"),
-    [((0, 4, 0, 1), 1), ((4, 0, 0, 0, 1), 1), ((1, 1, 0, 0, 0, 1), 2)],
+    [
+        ((0, 4, 0, 1), 1),
+        ((4, 0, 0, 0, 1), 1),
+        ((1, 1, 0, 0, 0, 1), 2),
+        ((0, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1), 5),
+    ],
 )
 def test_hyperelliptic_function_field_genus_and_parent_composition(
     branch: tuple[int, ...], genus: int
@@ -150,6 +162,9 @@ def test_hyperelliptic_function_field_genus_and_parent_composition(
     [
         _hyperelliptic_field((0, 0, 0, 1)),  # repeated root
         _hyperelliptic_field((1, 4, 4, 1)),  # (x - 1)^2 (x + 1)
+        _hyperelliptic_field((1, 1, 0, 1), characteristic=2),
+        _hyperelliptic_field((2,)),  # constant branch polynomial
+        _hyperelliptic_field((0, 4, 0, 1), denominator=(1, 1)),
     ],
 )
 def test_genus_rejects_unsupported_quadratic_curve_models(

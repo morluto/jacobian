@@ -119,6 +119,32 @@ def test_infinite_residue_of_regular_functions() -> None:
     ).residue.coordinates == (3,)
 
 
+def test_zero_element_has_zero_residue_at_every_place() -> None:
+    zero = _element((0,))
+    at_x = function_field_place_residue(_finite_place((0, 1)), zero)
+    assert at_x.residue.coordinates == (0,)
+    at_shifted = function_field_place_residue(_finite_place((2, 1)), zero)
+    assert at_shifted.residue.coordinates == (0,)
+    at_infinity = function_field_place_residue(
+        FunctionFieldPlace(field=_field(), kind="INFINITE", degree=1), zero
+    )
+    assert at_infinity.residue.coordinates == (0,)
+
+
+def test_residue_detects_zero_before_the_valuation_routine(monkeypatch) -> None:
+    # The order-division routine cannot express the valuation of zero.  The
+    # residue operation must detect the zero rational function structurally
+    # rather than relying on the routine to mishandle it.
+    import jacobian.math.function_fields.operations as operations
+
+    def forbidden(value: object, place: object) -> int:
+        raise AssertionError("zero element reached the valuation routine")
+
+    monkeypatch.setattr(operations, "_rf_valuation", forbidden)
+    result = function_field_place_residue(_finite_place((0, 1)), _element((0,)))
+    assert result.residue.coordinates == (0,)
+
+
 def test_residue_rejects_a_pole() -> None:
     infinity = FunctionFieldPlace(field=_field(), kind="INFINITE", degree=1)
     with pytest.raises(OperationDomainValidationError) as error:

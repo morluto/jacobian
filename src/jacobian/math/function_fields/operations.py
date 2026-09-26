@@ -58,6 +58,9 @@ from jacobian.math.function_fields._models import (
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbedding,
@@ -77,10 +80,14 @@ from jacobian.math.function_fields._models import (
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRow,
     FunctionFieldRiemannRochSpace,
     FunctionFieldValuation,
     HyperellipticAffinePlace,
     HyperellipticAffinePlaceValuationResult,
+    HyperellipticInfinityPlace,
+    HyperellipticInfinityPlaceValuationResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -350,8 +357,25 @@ def function_field_base_embedding_apply(
             code="function_field.base_embedding_request_type",
             message="embedding and element must be function-field values",
         )
-    embedding = FunctionFieldBaseEmbedding.model_validate(embedding.model_dump())
-    element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    # A model_construct carrier bypasses Pydantic's nested checks, so
+    # re-admission may fail while dumping or revalidating.  Translate those
+    # malformed native values into the operation's stable domain errors.
+    try:
+        embedding = FunctionFieldBaseEmbedding.model_validate(embedding.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("embedding",),
+            code="function_field.invalid_base_embedding",
+            message="embedding has malformed field, target, or variable-image data",
+        ) from exc
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
     if element.field != embedding.source:
         raise OperationDomainValidationError(
             location=("element", "field"),
@@ -458,6 +482,11 @@ def _admit_addition_resources(
         else:
             numerator_degree = max(ln + rd, rn + ld)
             denominator_degree = ld + rd
+            # Identical denominators are shared, not multiplied. This exact
+            # common-denominator case also admits cancellation such as a + (-a).
+            if left_coordinate.denominator == right_coordinate.denominator:
+                numerator_degree = max(ln, rn)
+                denominator_degree = ld
             output_degree = max(numerator_degree, denominator_degree)
             # Bound the two cross products, numerator addition, denominator
             # product, and bounded Euclidean normalization in GF(p)[x].
@@ -519,6 +548,41 @@ def _admit_multiplication_resources(
 ) -> None:
     """Preflight the existing product envelope for canonical operands."""
 
+    if field.degree == 1:
+        work = 0
+        for a, b in zip(left.coordinates, right.coordinates, strict=True):
+            work += (a.numerator.degree + 1) * (b.numerator.degree + 1)
+            work += (a.denominator.degree + 1) * (b.denominator.degree + 1)
+        if work > MAX_MULTIPLICATION_WORK:
+            raise OperationResourceAdmissionError(
+                location=("left", "coordinates"),
+                code="function_field.multiplication_work_exceeds_envelope",
+                message="rational-function multiplication exceeds its work envelope",
+            )
+        degree_bound = max(
+            (
+                a.numerator.degree + b.numerator.degree
+                for a, b in zip(left.coordinates, right.coordinates, strict=True)
+            ),
+            default=0,
+        )
+        degree_bound = max(
+            degree_bound,
+            max(
+                (
+                    a.denominator.degree + b.denominator.degree
+                    for a, b in zip(left.coordinates, right.coordinates, strict=True)
+                ),
+                default=0,
+            ),
+        )
+        if degree_bound > MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("left", "coordinates"),
+                code="function_field.coefficient_growth_exceeds_envelope",
+                message="the rational-function product exceeds the coefficient envelope",
+            )
+        return
     max_terms = 1
     total_degree = 0
     max_numerator_degree = 0
@@ -621,13 +685,14 @@ def _admit_elements(
             code="function_field.element_field_mismatch",
             message="both elements must be bound to the identical function field",
         )
-    _admit_field(left_field)
+    _admit_field_resources(left_field)
     canonical_left = _canonical_element(left, left_field)
     canonical_right = _canonical_element(right, left_field)
     if operation == "addition":
         _admit_addition_resources(left_field, canonical_left, canonical_right)
     else:
         _admit_multiplication_resources(left_field, canonical_left, canonical_right)
+    _admit_field_algebra(left_field)
     return left_field, canonical_left, canonical_right
 
 
@@ -822,13 +887,23 @@ def function_field_element_inverse(
         coefficient[1].__len__() - 1 for coefficient in _field_kpoly(field)
     )
     degree = field.degree
-    coefficient_bound = degree**2 * (
-        numerator_degree
-        + denominator_degree
-        + field_numerator_degree
-        + field_denominator_degree
-        + 1
-    )
+    if degree == 1:
+        coefficient_bound = max(numerator_degree, denominator_degree)
+        if coefficient_bound > MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.inverse_coefficient_growth_exceeds_envelope",
+                message="the exact rational inverse exceeds the coefficient envelope",
+            )
+        work = numerator_degree + denominator_degree + 1
+    else:
+        coefficient_bound = degree**2 * (
+            numerator_degree
+            + denominator_degree
+            + field_numerator_degree
+            + field_denominator_degree
+            + 1
+        )
     if coefficient_bound > MAX_POLYNOMIAL_X_DEGREE:
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
@@ -999,7 +1074,14 @@ def _canonical_place(place: object) -> FunctionFieldPlace:
             message="place must be a function-field place value",
         )
     try:
-        return FunctionFieldPlace.model_validate(place.model_dump())
+        validated = FunctionFieldPlace.model_validate(place.model_dump())
+        field = _canonical_field(_validated_field(validated.field))
+        return FunctionFieldPlace.model_construct(
+            field=field,
+            kind=validated.kind,
+            prime_polynomial=validated.prime_polynomial,
+            degree=validated.degree,
+        )
     except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("place",),
@@ -1009,7 +1091,7 @@ def _canonical_place(place: object) -> FunctionFieldPlace:
 
 
 def _admit_rational_place_field(field: FiniteFunctionField) -> FiniteFunctionField:
-    field = _validated_field(field)
+    field = _canonical_field(_validated_field(field))
     if not _is_prime(field.characteristic):
         raise OperationDomainValidationError(
             location=("field",),
@@ -1134,7 +1216,18 @@ def _monic_polynomial(poly: PrimeFieldPolynomial) -> PrimeFieldPolynomial:
 
 def _admit_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
     place = _canonical_place(place)
-    field = _admit_rational_place_field(place.field)
+    field = place.field
+    if place.kind == "FINITE" or _is_rational_field(field):
+        field = _admit_rational_place_field(field)
+    else:
+        _admit_field(field)
+        branch = _hyperelliptic_branch_polynomial(field)
+        if branch is None or (len(branch) - 1) % 2 == 0:
+            raise OperationDomainValidationError(
+                location=("place", "field"),
+                code="function_field.odd_hyperelliptic_infinity_required",
+                message="extension-field places are supported only at odd-degree hyperelliptic infinity",
+            )
     prime_polynomial = place.prime_polynomial
     if place.kind == "FINITE":
         if prime_polynomial is None:
@@ -1243,12 +1336,27 @@ def function_field_place_valuation(
             code="function_field.invalid_element",
             message="element has malformed coordinate data",
         ) from exc
-    if element.field != place.field:
+    element_field = _canonical_field(_validated_field(element.field))
+    if element_field != place.field:
         raise OperationDomainValidationError(
             location=("element", "field"),
             code="function_field.parent_mismatch",
             message="place and element must share the exact function field",
         )
+    element = _canonical_element(element, place.field)
+    if place.kind == "INFINITE" and not _is_rational_field(place.field):
+        residue_field = FiniteFieldPresentation(
+            characteristic=place.field.characteristic,
+            modulus_coefficients=(0, 1),
+            generator="z",
+        )
+        result = function_field_hyperelliptic_infinity_valuation(
+            HyperellipticInfinityPlace(field=place.field, residue_field=residue_field),
+            element,
+        )
+        if isinstance(result.valuation, FunctionFieldPositiveInfinityValuation):
+            return None
+        return result.valuation.value
     coordinate = element.coordinates[0]
     if coordinate.numerator.is_zero():
         return None
@@ -1320,8 +1428,7 @@ def _hyperelliptic_numerator_series(
         inverse_two_y = pow(2 * place.y, -1, prime)
         for degree in range(1, size):
             lower_terms = sum(
-                y_series[i] * y_series[degree - i]
-                for i in range(1, degree)
+                y_series[i] * y_series[degree - i] for i in range(1, degree)
             )
             y_series[degree] = (
                 (branch_series[degree] - lower_terms) * inverse_two_y
@@ -1338,10 +1445,13 @@ def _hyperelliptic_numerator_series(
         ]
 
     derivative = poly_derivative(branch, prime)
-    slope = sum(
-        coefficient * pow(place.x, degree, prime)
-        for degree, coefficient in enumerate(derivative)
-    ) % prime
+    slope = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(derivative)
+        )
+        % prime
+    )
     if not slope:
         raise OperationDomainValidationError(
             location=("place",),
@@ -1359,14 +1469,20 @@ def _hyperelliptic_numerator_series(
     # Here y is t and x-x0 starts at t^2. Solve f(x(t))=t^2 in O(d*N^2).
     for degree in range(2, size):
         for exponent in range(2, len(branch)):
-            powers[exponent][degree] = sum(
-                x_series[index] * powers[exponent - 1][degree - index]
-                for index in range(2, degree + 1)
-            ) % prime
-        known = sum(
-            taylor[exponent] * powers[exponent][degree]
-            for exponent in range(2, len(branch))
-        ) % prime
+            powers[exponent][degree] = (
+                sum(
+                    x_series[index] * powers[exponent - 1][degree - index]
+                    for index in range(2, degree + 1)
+                )
+                % prime
+            )
+        known = (
+            sum(
+                taylor[exponent] * powers[exponent][degree]
+                for exponent in range(2, len(branch))
+            )
+            % prime
+        )
         target = 1 if degree == 2 else 0
         x_series[degree] = ((target - known) * inverse_slope) % prime
         powers[1][degree] = x_series[degree]
@@ -1404,7 +1520,14 @@ def function_field_hyperelliptic_affine_valuation(
             code="function_field.invalid_affine_place",
             message="affine place has malformed parent, coordinates, or residue data",
         ) from exc
-    field = _validated_field(place.field)
+    field = _canonical_field(_validated_field(place.field))
+    place = HyperellipticAffinePlace.model_construct(
+        field=field,
+        x=place.x,
+        y=place.y,
+        local_parameter=place.local_parameter,
+        residue_field=place.residue_field,
+    )
     _admit_field(field)
     branch = _hyperelliptic_branch_polynomial(field)
     if branch is None:
@@ -1414,10 +1537,13 @@ def function_field_hyperelliptic_affine_valuation(
             message="affine places require an odd-characteristic squarefree y^2=f(x) model",
         )
     prime = field.characteristic
-    curve_value = sum(
-        coefficient * pow(place.x, degree, prime)
-        for degree, coefficient in enumerate(branch)
-    ) % prime
+    curve_value = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(branch)
+        )
+        % prime
+    )
     if place.y * place.y % prime != curve_value:
         raise OperationDomainValidationError(
             location=("place",),
@@ -1425,10 +1551,13 @@ def function_field_hyperelliptic_affine_valuation(
             message="retained affine coordinates must satisfy y^2=f(x)",
         )
     if place.local_parameter == "y":
-        slope = sum(
-            coefficient * pow(place.x, degree, prime)
-            for degree, coefficient in enumerate(poly_derivative(branch, prime))
-        ) % prime
+        slope = (
+            sum(
+                coefficient * pow(place.x, degree, prime)
+                for degree, coefficient in enumerate(poly_derivative(branch, prime))
+            )
+            % prime
+        )
         if slope == 0:
             raise OperationDomainValidationError(
                 location=("place",),
@@ -1449,7 +1578,8 @@ def function_field_hyperelliptic_affine_valuation(
             code="function_field.invalid_element",
             message="element has malformed coordinate data",
         ) from exc
-    if element.field != field:
+    element_field = _canonical_field(_validated_field(element.field))
+    if element_field != field:
         raise OperationDomainValidationError(
             location=("element", "field"),
             code="function_field.parent_mismatch",
@@ -1463,13 +1593,18 @@ def function_field_hyperelliptic_affine_valuation(
     u_degree = (len(first[0]) - 1) + (len(second[1]) - 1)
     v_degree = (len(second[0]) - 1) + (len(first[1]) - 1)
     norm_degree_bound = max(2 * u_degree, 2 * v_degree + len(branch) - 1)
-    if max(denominator_degree, u_degree, v_degree, norm_degree_bound) > 4 * MAX_POLYNOMIAL_X_DEGREE + 12:
+    if (
+        max(denominator_degree, u_degree, v_degree, norm_degree_bound)
+        > 4 * MAX_POLYNOMIAL_X_DEGREE + 12
+    ):
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
             code="function_field.affine_valuation_growth_exceeds_envelope",
             message="norm and common-coordinate growth exceed the admitted envelope",
         )
-    admitted_work = (len(branch) + max(u_degree, v_degree) + 1) * (norm_degree_bound + 1) ** 2
+    admitted_work = (len(branch) + max(u_degree, v_degree) + 1) * (
+        norm_degree_bound + 1
+    ) ** 2
     if admitted_work > 1_000_000:
         raise OperationResourceAdmissionError(
             location=("element", "coordinates"),
@@ -1479,7 +1614,9 @@ def function_field_hyperelliptic_affine_valuation(
     denominator = poly_mul(first[1], second[1], prime)
     u = poly_mul(first[0], second[1], prime)
     v = poly_mul(second[0], first[1], prime)
-    norm = poly_sub(poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime)
+    norm = poly_sub(
+        poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime
+    )
     if not norm:
         return HyperellipticAffinePlaceValuationResult(
             place=place,
@@ -1504,6 +1641,99 @@ def function_field_hyperelliptic_affine_valuation(
         valuation=_function_field_valuation(
             numerator_order - ramification_index * denominator_order
         ),
+    )
+
+
+def function_field_hyperelliptic_infinity_valuation(
+    place: HyperellipticInfinityPlace | FunctionFieldPlace,
+    element: FiniteFunctionFieldElement,
+) -> HyperellipticInfinityPlaceValuationResult:
+    """Value a quadratic hyperelliptic function at its odd-degree infinity.
+
+    For odd ``d = deg(f)``, the unique place over infinity has
+    ``v(x)=-2`` and ``v(y)=-d``. For ``a(x)+b(x)y``, the two nonzero
+    summands have valuations of opposite parity, so their leading terms
+    cannot cancel. The valuation is therefore their minimum.
+    """
+
+    if isinstance(place, FunctionFieldPlace):
+        place = _admit_place(place)
+        if place.kind != "INFINITE":
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.infinity_place_type",
+                message="hyperelliptic infinity valuation requires an infinite place",
+            )
+        place = HyperellipticInfinityPlace(
+            field=place.field,
+            residue_field=FiniteFieldPresentation(
+                characteristic=place.field.characteristic,
+                modulus_coefficients=(0, 1),
+                generator="z",
+            ),
+        )
+    if not isinstance(place, HyperellipticInfinityPlace):
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.infinity_place_type",
+            message="place must be the typed hyperelliptic point at infinity",
+        )
+    try:
+        place = HyperellipticInfinityPlace.model_validate(place.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.invalid_infinity_place",
+            message="infinity place has malformed field or residue-parent data",
+        ) from exc
+    field = _validated_field(place.field)
+    _admit_field(field)
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None or (len(branch) - 1) % 2 == 0:
+        raise OperationDomainValidationError(
+            location=("place", "field"),
+            code="function_field.odd_hyperelliptic_infinity_required",
+            message=(
+                "the represented unique rational point at infinity requires an "
+                "odd-degree squarefree hyperelliptic model"
+            ),
+        )
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="place and element must retain the identical function field",
+        )
+    element = _canonical_element(element, field)
+    degree_y = len(branch) - 1
+    valuations: list[int] = []
+    for coordinate_index, coordinate in enumerate(element.coordinates):
+        if coordinate.numerator.is_zero():
+            continue
+        rational_order = coordinate.denominator.degree - coordinate.numerator.degree
+        term_value = 2 * rational_order
+        if coordinate_index == 1:
+            term_value -= degree_y
+        valuations.append(term_value)
+    value = min(valuations) if valuations else None
+    return HyperellipticInfinityPlaceValuationResult(
+        place=place,
+        element=element,
+        valuation=_function_field_valuation(value),
     )
 
 
@@ -1547,7 +1777,15 @@ def function_field_place_residue(
         coordinate.denominator.coefficients,
         prime,
     )
-    valuation = _rf_valuation(_from_internal_rational_function(rational, prime), place)
+    # A valuation routine cannot express the zero rational function, whose
+    # valuation is infinite.  Zero is regular at every place with residue
+    # zero, so detect it before the finite order-division loop.
+    if not any(rational[0]):
+        valuation = 0
+    else:
+        valuation = _rf_valuation(
+            _from_internal_rational_function(rational, prime), place
+        )
     if valuation < 0:
         raise OperationDomainValidationError(
             location=("element",),
@@ -1575,6 +1813,14 @@ def function_field_place_residue(
                 message="a finite place requires its prime polynomial",
             )
         degree = phi.degree
+        # Reject structurally impossible residue carriers before prime-place
+        # admission invokes polynomial factorization.
+        if prime**degree > 65_536:
+            raise OperationResourceAdmissionError(
+                location=("place",),
+                code="function_field.residue_field_order_exceeds_envelope",
+                message="the residue field exceeds the finite-field carrier order bound",
+            )
         # The existing finite-field carrier is bounded by order 65536.
         if prime**degree > 65_536:
             raise OperationResourceAdmissionError(
@@ -1731,6 +1977,7 @@ def _admit_divisor(divisor: FunctionFieldDivisor) -> FunctionFieldDivisor:
             message="divisor has malformed field or support data",
         ) from exc
     field = _validated_field(field_value)
+    _admit_field(field)
     if type(terms) is not tuple or len(terms) > 256:
         raise OperationDomainValidationError(
             location=("divisor", "terms"),
@@ -1812,6 +2059,52 @@ def function_field_divisor_add(
             code="function_field.parent_mismatch",
             message="divisors must belong to the same exact function field",
         )
+    # Combine structurally canonical place keys and enforce output support
+    # before either operand triggers irreducibility factorization.
+    raw_support: dict[str, tuple[FunctionFieldPlace, int]] = {}
+    for operand in (left, right):
+        terms = getattr(operand, "terms", None)
+        if type(terms) is not tuple or len(terms) > 256:
+            raise OperationDomainValidationError(
+                location=("divisor", "terms"),
+                code="function_field.divisor_shape",
+                message="divisor terms must be a bounded canonical tuple",
+            )
+        for term in terms:
+            place = _canonical_place(getattr(term, "place", None))
+            if place.field != left_field:
+                raise OperationDomainValidationError(
+                    location=("divisor", "terms", "place", "field"),
+                    code="function_field.divisor_parent",
+                    message="every divisor place must belong to divisor.field",
+                )
+            if place.kind == "FINITE":
+                polynomial = place.prime_polynomial
+                if polynomial is None:
+                    raise OperationDomainValidationError(
+                        location=("divisor", "terms", "place"),
+                        code="function_field.invalid_place",
+                        message="finite places require a prime polynomial",
+                    )
+                canonical_polynomial = _monic_polynomial(polynomial)
+                place = FunctionFieldPlace(
+                    field=place.field,
+                    kind=place.kind,
+                    prime_polynomial=canonical_polynomial,
+                    degree=canonical_polynomial.degree,
+                )
+            key = place.model_dump_json()
+            previous = raw_support.get(key)
+            raw_support[key] = (
+                place,
+                getattr(term, "multiplicity", 0) + (previous[1] if previous else 0),
+            )
+    if sum(bool(multiplicity) for _, multiplicity in raw_support.values()) > 256:
+        raise OperationResourceAdmissionError(
+            location=("result", "terms"),
+            code="function_field.divisor_support_exceeds_envelope",
+            message="the combined divisor support exceeds 256 places",
+        )
     left = _admit_divisor(left)
     right = _admit_divisor(right)
     support: dict[str, tuple[FunctionFieldPlace, int]] = {}
@@ -1876,6 +2169,38 @@ def function_field_divisor_scale(
             code="function_field.divisor_scalar_exceeds_envelope",
             message=f"divisor scalars may use at most {MAX_DIVISOR_MULTIPLICITY_BITS} bits",
         )
+    if not isinstance(divisor, FunctionFieldDivisor):
+        raise OperationDomainValidationError(
+            location=("divisor",),
+            code="function_field.divisor_type",
+            message="divisor must be a function-field divisor value",
+        )
+    field = _canonical_field(_validated_field(getattr(divisor, "field", None)))
+    _admit_field_resources(field)
+    raw_terms = getattr(divisor, "terms", None)
+    if type(raw_terms) is not tuple or len(raw_terms) > 256:
+        raise OperationDomainValidationError(
+            location=("divisor", "terms"),
+            code="function_field.divisor_shape",
+            message="divisor terms must be a bounded canonical tuple",
+        )
+    for index, term in enumerate(raw_terms):
+        if (
+            not isinstance(term, FunctionFieldDivisorTerm)
+            or type(term.multiplicity) is not int
+        ):
+            raise OperationDomainValidationError(
+                location=("divisor", "terms", index),
+                code="function_field.divisor_term_type",
+                message="divisor terms must be typed place/multiplicity values",
+            )
+        product = term.multiplicity * scalar
+        if product.bit_length() > MAX_DIVISOR_MULTIPLICITY_BITS:
+            raise OperationResourceAdmissionError(
+                location=("result", "terms", index, "multiplicity"),
+                code="function_field.divisor_result_multiplicity_exceeds_envelope",
+                message="the exact scaled divisor exceeds the 4096-bit result envelope",
+            )
     divisor = _admit_divisor(divisor)
     terms = tuple(
         FunctionFieldDivisorTerm(place=t.place, multiplicity=t.multiplicity * scalar)
@@ -1967,7 +2292,7 @@ def function_field_divisor_effective_parts(
 def function_field_genus(field: FiniteFunctionField) -> FunctionFieldGenusResult:
     """Return genus for GF(p)(x) or a squarefree odd-characteristic hyperelliptic model."""
 
-    field = _validated_field(field)
+    field = _canonical_field(_validated_field(field))
     # The shape and work envelope are admitted before recognizing either
     # supported model. A squarefree branch polynomial proves irreducibility
     # and separability for the accepted hyperelliptic family below.
@@ -2040,19 +2365,6 @@ def _preflight_riemann_roch_input(
             code="function_field.characteristic_not_prime",
             message="the constant field characteristic must be prime",
         )
-    rational_field = len(field.defining_polynomial) == 1 and (
-        field.defining_polynomial[0].numerator.is_one()
-        and field.defining_polynomial[0].denominator.is_one()
-    )
-    if not rational_field:
-        raise OperationDomainValidationError(
-            location=("divisor", "field", "defining_polynomial"),
-            code="function_field.riemann_roch_requires_rational_field",
-            message=(
-                "Riemann-Roch spaces are currently supported only for "
-                "divisors over the rational function field GF(p)(x)"
-            ),
-        )
     terms = getattr(divisor, "terms", None)
     if type(terms) is not tuple or len(terms) > 256:
         raise OperationDomainValidationError(
@@ -2071,6 +2383,7 @@ def _preflight_riemann_roch_profile(
     finite_negative_degree = 0
     infinity_multiplicity = 0
     positive_x_multiplicity = 0
+    canonical_support: set[str] = set()
     for index, term in enumerate(terms):
         location = ("divisor", "terms", index)
         if not isinstance(term, FunctionFieldDivisorTerm):
@@ -2096,12 +2409,20 @@ def _preflight_riemann_roch_profile(
                 ),
             )
         place = _canonical_place(getattr(term, "place", None))
-        if place.field != field:
+        if _canonical_field(place.field) != _canonical_field(field):
             raise OperationDomainValidationError(
                 location=(*location, "place", "field"),
                 code="function_field.divisor_parent",
                 message="every divisor place must belong to divisor.field",
             )
+        place_key = place.model_dump_json()
+        if place_key in canonical_support:
+            raise OperationDomainValidationError(
+                location=("divisor", "terms"),
+                code="function_field.divisor_duplicate",
+                message="divisor support must contain each canonical place once",
+            )
+        canonical_support.add(place_key)
         if place.kind == "INFINITE":
             infinity_multiplicity = multiplicity
             continue
@@ -2115,7 +2436,9 @@ def _preflight_riemann_roch_profile(
         contribution = multiplicity * prime_polynomial.degree
         if contribution > 0:
             finite_positive_degree += contribution
-            if prime_polynomial.coefficients == (0, 1):
+            # The place contract permits any prime associate, so recognize the
+            # x place by its monic representative, matching _admit_divisor.
+            if _monic_polynomial(prime_polynomial).coefficients == (0, 1):
                 positive_x_multiplicity = multiplicity
         else:
             finite_negative_degree -= contribution
@@ -2128,11 +2451,11 @@ def _preflight_riemann_roch_profile(
 
 
 def _preflight_riemann_roch_divisor(
-    divisor: FunctionFieldDivisor,
+    field: FiniteFunctionField,
+    terms: tuple[FunctionFieldDivisorTerm, ...],
 ) -> tuple[FiniteFunctionField, int, int, int, int, int]:
     """Bound scalar and basis growth before any finite-place factorization."""
 
-    field, terms = _preflight_riemann_roch_input(divisor)
     (
         finite_positive_degree,
         finite_negative_degree,
@@ -2210,8 +2533,164 @@ def _multiply_prime_field_polynomials(
     return tuple(product)
 
 
-def function_field_riemann_roch_space(
+MAX_HYPERELLIPTIC_INFINITY_RR_OUTPUT_BYTES = 2_000_000
+MAX_HYPERELLIPTIC_INFINITY_RR_WORK = 20_000_000
+_BASIS_ENTRY_OVERHEAD_BYTES = 4_096
+
+
+def _is_rational_field(field: FiniteFunctionField) -> bool:
+    return len(field.defining_polynomial) == 1 and (
+        field.defining_polynomial[0].numerator.is_one()
+        and field.defining_polynomial[0].denominator.is_one()
+    )
+
+
+def _hyperelliptic_infinity_dimension(multiplicity: int, branch_degree: int) -> int:
+    if multiplicity < 0:
+        return 0
+    x_count = multiplicity // 2 + 1
+    y_count = max(0, (multiplicity - branch_degree) // 2 + 1)
+    return x_count + y_count
+
+
+def _preflight_hyperelliptic_infinity_riemann_roch(
+    field: FiniteFunctionField,
+    terms: tuple[FunctionFieldDivisorTerm, ...],
+) -> tuple[FiniteFunctionField, tuple[int, ...], int, int]:
+    """Admit ``m [infinity]`` for an odd-degree hyperelliptic model.
+
+    The hyperelliptic infinity formula is a private path of the canonical
+    Riemann-Roch operation. Only the unique degree-one infinity place of an
+    odd-degree squarefree model is accepted; arbitrary divisors remain
+    unsupported.
+    """
+
+    field = _canonical_field(field)
+    _admit_field_resources(field)
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None:
+        raise OperationDomainValidationError(
+            location=("divisor", "field", "defining_polynomial"),
+            code="function_field.riemann_roch_requires_supported_model",
+            message=(
+                "Riemann-Roch spaces are supported for the rational function "
+                "field GF(p)(x) and for odd-degree squarefree hyperelliptic "
+                "models y^2=f(x) at the unique infinity place"
+            ),
+        )
+    degree = len(branch) - 1
+    if degree % 2 == 0:
+        raise OperationDomainValidationError(
+            location=("divisor", "field", "defining_polynomial"),
+            code="function_field.hyperelliptic_riemann_roch_requires_odd_model",
+            message=(
+                "the hyperelliptic infinity Riemann-Roch slice requires an "
+                "odd-degree squarefree model y^2=f(x)"
+            ),
+        )
+    multiplicity = 0
+    canonical_support: set[str] = set()
+    for index, term in enumerate(terms):
+        location = ("divisor", "terms", index)
+        if not isinstance(term, FunctionFieldDivisorTerm):
+            raise OperationDomainValidationError(
+                location=location,
+                code="function_field.divisor_term_type",
+                message="divisor terms must be typed place/multiplicity values",
+            )
+        value = getattr(term, "multiplicity", None)
+        if type(value) is not int or value == 0:
+            raise OperationDomainValidationError(
+                location=(*location, "multiplicity"),
+                code="function_field.divisor_multiplicity",
+                message="divisor multiplicities must be nonzero strict integers",
+            )
+        if value.bit_length() > MAX_DIVISOR_MULTIPLICITY_BITS:
+            raise OperationResourceAdmissionError(
+                location=(*location, "multiplicity"),
+                code="function_field.riemann_roch_multiplicity_exceeds_envelope",
+                message=(
+                    "Riemann-Roch divisor multiplicities may use at most "
+                    f"{MAX_DIVISOR_MULTIPLICITY_BITS} bits"
+                ),
+            )
+        place = _canonical_place(getattr(term, "place", None))
+        if _canonical_field(place.field) != field:
+            raise OperationDomainValidationError(
+                location=(*location, "place", "field"),
+                code="function_field.divisor_parent",
+                message="every divisor place must belong to divisor.field",
+            )
+        place_key = place.model_dump_json()
+        if place_key in canonical_support:
+            raise OperationDomainValidationError(
+                location=("divisor", "terms"),
+                code="function_field.divisor_duplicate",
+                message="divisor support must contain each canonical place once",
+            )
+        canonical_support.add(place_key)
+        if place.kind != "INFINITE" or place.degree != 1:
+            raise OperationDomainValidationError(
+                location=(*location, "place"),
+                code=(
+                    "function_field.hyperelliptic_riemann_roch_requires_"
+                    "infinity_support"
+                ),
+                message=(
+                    "the odd-degree hyperelliptic Riemann-Roch slice supports "
+                    "only multiples of the unique infinity place"
+                ),
+            )
+        multiplicity = value
+    dimension = _hyperelliptic_infinity_dimension(multiplicity, degree)
+    if dimension > MAX_RIEMANN_ROCH_BASIS_DIMENSION:
+        raise OperationResourceAdmissionError(
+            location=("divisor", "terms"),
+            code="function_field.riemann_roch_basis_exceeds_envelope",
+            message=(
+                "the exact Riemann-Roch basis exceeds the admitted "
+                f"dimension {MAX_RIEMANN_ROCH_BASIS_DIMENSION}"
+            ),
+        )
+    maximum_exponent = max(0, multiplicity // 2, (multiplicity - degree) // 2)
+    if maximum_exponent > MAX_POLYNOMIAL_X_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("divisor", "terms"),
+            code="function_field.riemann_roch_output_exceeds_envelope",
+            message=(
+                "the canonical hyperelliptic basis exceeds the "
+                f"degree-{MAX_POLYNOMIAL_X_DEGREE} coefficient envelope"
+            ),
+        )
+    field_bytes = len(field.model_dump_json().encode("utf-8"))
+    output_bytes = (
+        2 * field_bytes
+        + dimension * (field_bytes + _BASIS_ENTRY_OVERHEAD_BYTES)
+        + 1_024
+    )
+    if output_bytes > MAX_HYPERELLIPTIC_INFINITY_RR_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("divisor",),
+            code="function_field.hyperelliptic_riemann_roch_output_exceeds_envelope",
+            message="the exact basis exceeds its admitted serialized-byte bound",
+        )
+    work = dimension * (field_bytes + maximum_exponent + 1)
+    if work > MAX_HYPERELLIPTIC_INFINITY_RR_WORK:
+        raise OperationResourceAdmissionError(
+            location=("divisor",),
+            code="function_field.hyperelliptic_riemann_roch_work_exceeds_envelope",
+            message=(
+                "basis construction and field-bound result validation exceed "
+                "the admitted work bound"
+            ),
+        )
+    return field, branch, dimension, multiplicity
+
+
+def _rational_riemann_roch_space(
     divisor: FunctionFieldDivisor,
+    field: FiniteFunctionField,
+    terms: tuple[FunctionFieldDivisorTerm, ...],
 ) -> FunctionFieldRiemannRochSpace:
     """Return a canonical exact basis of L(D) for the rational field GF(p)(x)."""
 
@@ -2222,7 +2701,7 @@ def function_field_riemann_roch_space(
         admitted_positive_degree,
         admitted_negative_degree,
         admitted_positive_x_multiplicity,
-    ) = _preflight_riemann_roch_divisor(divisor)
+    ) = _preflight_riemann_roch_divisor(field, terms)
     divisor = _admit_divisor(divisor)
     degree = divisor.degree
     if degree != admitted_degree:
@@ -2299,6 +2778,215 @@ def function_field_riemann_roch_space(
     )
 
 
+def function_field_riemann_roch_membership(
+    element: FiniteFunctionFieldElement,
+    divisor: FunctionFieldDivisor,
+) -> FunctionFieldRiemannRochMembership:
+    """Decide exact membership in ``L(D)`` over the rational field GF(p)(x)."""
+
+    field, terms = _preflight_riemann_roch_input(divisor)
+    _preflight_riemann_roch_profile(field, terms)
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate or parent data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="element and divisor must belong to the same exact function field",
+        )
+    canonical_element = _canonical_element(element, field)
+    coordinate = canonical_element.coordinates[0]
+    is_zero = coordinate.numerator.is_zero()
+
+    # A rational function of numerator and denominator degrees at most 12 has
+    # at most their summed number of finite prime factors and one infinity
+    # place. This bounds the complete support union before any factorization.
+    support_rows_bound = len(terms)
+    if not is_zero:
+        support_rows_bound += (
+            coordinate.numerator.degree + coordinate.denominator.degree + 1
+        )
+    if support_rows_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS:
+        raise OperationResourceAdmissionError(
+            location=("result", "profile"),
+            code="function_field.riemann_roch_membership_profile_exceeds_envelope",
+            message=(
+                "the complete divisor/function support union exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS}-place profile bound"
+            ),
+        )
+
+    input_bytes = len(
+        encode_strict_json(
+            {
+                "element": element.model_dump(mode="json"),
+                "divisor": divisor.model_dump(mode="json"),
+            }
+        )
+    )
+    output_bytes_bound = 4096 + 2 * input_bytes + 4096 * support_rows_bound
+    if output_bytes_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="function_field.riemann_roch_membership_output_exceeds_envelope",
+            message=(
+                "the complete exact membership profile exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES}-byte output envelope"
+            ),
+        )
+
+    prime_bits = field.characteristic.bit_length()
+    factor_work = sum(max(1, term.place.degree**3) * prime_bits for term in terms)
+    if not is_zero:
+        factor_work += (
+            max(1, coordinate.numerator.degree**3)
+            + max(1, coordinate.denominator.degree**3)
+        ) * prime_bits
+    if factor_work > MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK:
+        raise OperationResourceAdmissionError(
+            location=("divisor",),
+            code="function_field.riemann_roch_membership_work_exceeds_envelope",
+            message=(
+                "place and element factorization exceed the admitted "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK}-unit work bound"
+            ),
+        )
+
+    admitted_divisor = _admit_divisor(divisor)
+    canonical_element = _canonical_element(element, admitted_divisor.field)
+    if is_zero:
+        return FunctionFieldRiemannRochMembership(
+            element=canonical_element,
+            divisor=admitted_divisor,
+            status="IN_SPACE",
+            profile=(),
+        )
+
+    principal = function_field_principal_divisor(
+        admitted_divisor.field, canonical_element
+    )
+    divisor_multiplicities = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in admitted_divisor.terms
+    }
+    element_valuations = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in principal.divisor.terms
+    }
+    profile: list[FunctionFieldRiemannRochMembershipRow] = []
+    for key in sorted(divisor_multiplicities.keys() | element_valuations.keys()):
+        divisor_row = divisor_multiplicities.get(key)
+        element_row = element_valuations.get(key)
+        if divisor_row is None:
+            assert element_row is not None
+            place = element_row[0]
+            divisor_multiplicity = 0
+        else:
+            place, divisor_multiplicity = divisor_row
+        element_valuation = element_row[1] if element_row is not None else 0
+        total = element_valuation + divisor_multiplicity
+        profile.append(
+            FunctionFieldRiemannRochMembershipRow(
+                place=place,
+                element_valuation=element_valuation,
+                divisor_multiplicity=divisor_multiplicity,
+                sum=total,
+            )
+        )
+    return FunctionFieldRiemannRochMembership(
+        element=principal.element,
+        divisor=admitted_divisor,
+        status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),
+        profile=tuple(profile),
+    )
+
+
+def _hyperelliptic_infinity_riemann_roch_space(
+    field: FiniteFunctionField,
+    branch: tuple[int, ...],
+    dimension: int,
+    multiplicity: int,
+) -> FunctionFieldRiemannRochSpace:
+    """Construct the private hyperelliptic basis for ``L(m P_infinity)``."""
+
+    degree = len(branch) - 1
+    prime = field.characteristic
+    one_poly = PrimeFieldPolynomial(characteristic=prime, coefficients=(1,))
+    zero = PrimeFieldRationalFunction(
+        numerator=PrimeFieldPolynomial(characteristic=prime, coefficients=(0,)),
+        denominator=one_poly,
+    )
+
+    def monomial(exponent: int) -> PrimeFieldRationalFunction:
+        coefficients = (0,) * exponent + (1,)
+        return PrimeFieldRationalFunction(
+            numerator=PrimeFieldPolynomial(
+                characteristic=prime, coefficients=coefficients
+            ),
+            denominator=one_poly,
+        )
+
+    basis: list[FiniteFunctionFieldElement] = []
+    if multiplicity >= 0:
+        for exponent in range(multiplicity // 2 + 1):
+            basis.append(
+                FiniteFunctionFieldElement(
+                    field=field, coordinates=(monomial(exponent), zero)
+                )
+            )
+        for exponent in range(max(0, (multiplicity - degree) // 2 + 1)):
+            basis.append(
+                FiniteFunctionFieldElement(
+                    field=field, coordinates=(zero, monomial(exponent))
+                )
+            )
+    if len(basis) != dimension:
+        raise ArithmeticError(
+            "hyperelliptic Riemann-Roch basis count changed after admission"
+        )
+    canonical_terms: tuple[FunctionFieldDivisorTerm, ...] = ()
+    if multiplicity != 0:
+        canonical_terms = (
+            FunctionFieldDivisorTerm(
+                place=FunctionFieldPlace(field=field, kind="INFINITE", degree=1),
+                multiplicity=multiplicity,
+            ),
+        )
+    return FunctionFieldRiemannRochSpace(
+        divisor=FunctionFieldDivisor(field=field, terms=canonical_terms),
+        dimension=dimension,
+        basis=tuple(basis),
+    )
+
+
+def function_field_riemann_roch_space(
+    divisor: FunctionFieldDivisor,
+) -> FunctionFieldRiemannRochSpace:
+    """Return a canonical exact basis of L(D) for a supported function field."""
+
+    field, terms = _preflight_riemann_roch_input(divisor)
+    if _is_rational_field(field):
+        return _rational_riemann_roch_space(divisor, field, terms)
+    field, branch, dimension, multiplicity = (
+        _preflight_hyperelliptic_infinity_riemann_roch(field, terms)
+    )
+    return _hyperelliptic_infinity_riemann_roch_space(
+        field, branch, dimension, multiplicity
+    )
+
+
 __all__ = [
     "_element_inverse",
     "function_field_base_embedding",
@@ -2312,4 +3000,5 @@ __all__ = [
     "function_field_place_valuation",
     "function_field_principal_divisor",
     "function_field_rational_places_degree_bounded",
+    "function_field_riemann_roch_membership",
 ]

@@ -32,6 +32,9 @@ MAX_DIVISOR_MULTIPLICITY_DIGITS = 1234
 MAX_DIVISOR_DEGREE_DIGITS = 1240
 MAX_RIEMANN_ROCH_BASIS_DIMENSION = MAX_POLYNOMIAL_X_DEGREE + 1
 MAX_RIEMANN_ROCH_CONSTRUCTION_WORK = 4096
+MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS = 256 + 2 * MAX_POLYNOMIAL_X_DEGREE + 1
+MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES = 4 * 1024 * 1024
+MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK = 5_000_000
 MAX_RATIONAL_PLACE_DEGREE = 12
 MAX_RATIONAL_PLACE_CANDIDATES = 16_384
 MAX_RATIONAL_PLACE_OUTPUT = 16_385
@@ -230,6 +233,7 @@ class HyperellipticAffinePlace(StrictModel):
         if (
             self.residue_field.characteristic != prime
             or self.residue_field.modulus_coefficients != (0, 1)
+            or self.residue_field.generator != "a"
         ):
             raise _validation_error(
                 "affine_place_residue_parent",
@@ -243,18 +247,57 @@ class HyperellipticAffinePlace(StrictModel):
         return self
 
 
+class HyperellipticInfinityPlace(StrictModel):
+    """The unique degree-one place at infinity on an odd-degree model."""
+
+    field: FiniteFunctionField
+    residue_field: FiniteFieldPresentation
+
+    @model_validator(mode="after")
+    def require_prime_constant_residue(self) -> Self:
+        prime = self.field.characteristic
+        if (
+            self.residue_field.characteristic != prime
+            or self.residue_field.modulus_coefficients != (0, 1)
+        ):
+            raise _validation_error(
+                "infinity_place_residue_parent",
+                "the odd-degree point at infinity is rational over GF(p)",
+            )
+        return self
+
+
 class HyperellipticAffinePlaceValuationRequest(StrictModel):
     place: HyperellipticAffinePlace
     element: FiniteFunctionFieldElement
 
     @model_validator(mode="after")
     def require_shared_parent(self) -> Self:
-        if self.place.field != self.element.field:
+        from jacobian.math.function_fields.operations import _canonical_field
+
+        try:
+            place_field = FiniteFunctionField.model_validate(
+                self.place.field.model_dump()
+            )
+            element_field = FiniteFunctionField.model_validate(
+                self.element.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "affine_valuation_parent_malformed",
+                "the point and function element fields must be valid",
+            ) from error
+        if _canonical_field(place_field) != _canonical_field(element_field):
             raise _validation_error(
                 "affine_valuation_parent_mismatch",
                 "the point and function element must share the exact function field",
             )
         return self
+
+
+class HyperellipticInfinityPlaceValuationRequest(StrictModel):
+    place: HyperellipticInfinityPlace
+    element: FiniteFunctionFieldElement
 
 
 class FunctionFieldFiniteValuation(StrictModel):
@@ -289,6 +332,12 @@ class HyperellipticAffinePlaceValuationResult(StrictModel):
                 "the point and function element must retain the exact function field",
             )
         return self
+
+
+class HyperellipticInfinityPlaceValuationResult(StrictModel):
+    place: HyperellipticInfinityPlace
+    element: FiniteFunctionFieldElement
+    valuation: FunctionFieldValuation
 
 
 class FunctionFieldDivisorTerm(StrictModel):
@@ -473,11 +522,19 @@ class FunctionFieldBaseEmbedding(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_base_inclusion(self) -> Self:
+        # The source must be the rational-field sentinel itself, not a merely
+        # degree-one linear presentation, so that applying this embedding is
+        # the canonical inclusion and never an implicit change of parent.
+        rational_sentinel = len(self.source.defining_polynomial) == 1 and (
+            self.source.defining_polynomial[0].numerator.is_one()
+            and self.source.defining_polynomial[0].denominator.is_one()
+        )
         if (
-            self.source.degree != 1
+            not rational_sentinel
             or self.target.degree <= 1
             or self.source.characteristic != self.target.characteristic
             or self.source.variable != self.target.variable
+            or self.source.generator != self.target.generator
         ):
             raise _validation_error(
                 "base_embedding_parent",
@@ -587,12 +644,101 @@ class FunctionFieldRiemannRochSpace(StrictModel):
 class FunctionFieldRiemannRochSpaceRequest(StrictModel):
     divisor: FunctionFieldDivisor = Field(
         description=(
-            "A finite divisor over GF(p)(x), with at most 256 terms and "
-            "multiplicities of at most 4096 bits. Positive-dimensional outputs "
-            "are admitted only when their exact canonical basis fits the "
-            "degree-12 rational-function coefficient envelope."
+            "A finite divisor over GF(p)(x), or m times the unique infinity "
+            "place of an odd-degree squarefree hyperelliptic model y^2=f(x). "
+            "Support is limited to 256 terms and multiplicities to 4096 bits. "
+            "Positive-dimensional outputs are admitted only when their exact "
+            "canonical basis fits the degree-12 coefficient envelope."
         )
     )
+
+
+class FunctionFieldRiemannRochMembershipRequest(StrictModel):
+    """A function and finite divisor whose exact Riemann-Roch membership is asked."""
+
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.element.field != self.divisor.field:
+            raise _validation_error(
+                "riemann_roch_membership_parent",
+                "element and divisor must belong to the same exact function field",
+            )
+        return self
+
+
+class FunctionFieldRiemannRochMembershipRow(StrictModel):
+    """One exact valuation inequality at a place in the complete support union."""
+
+    place: FunctionFieldPlace
+    element_valuation: int = Field(
+        strict=True, ge=-MAX_POLYNOMIAL_X_DEGREE, le=MAX_POLYNOMIAL_X_DEGREE
+    )
+    divisor_multiplicity: DivisorMultiplicity
+    sum: DivisorMultiplicity
+
+    @model_validator(mode="after")
+    def require_exact_sum(self) -> Self:
+        if self.sum != self.element_valuation + self.divisor_multiplicity:
+            raise _validation_error(
+                "riemann_roch_membership_sum",
+                "the returned sum must equal valuation plus divisor multiplicity",
+            )
+        if self.element_valuation == 0 and self.divisor_multiplicity == 0:
+            raise _validation_error(
+                "riemann_roch_membership_empty_row",
+                "profile rows must belong to the union of nonzero supports",
+            )
+        return self
+
+
+class FunctionFieldRiemannRochMembership(StrictModel):
+    """Exact membership in ``L(D)`` with the complete support inequalities."""
+
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+    status: Literal["IN_SPACE", "NOT_IN_SPACE"]
+    profile: tuple[FunctionFieldRiemannRochMembershipRow, ...] = Field(
+        max_length=MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_profile_shape(self) -> Self:
+        if self.element.field != self.divisor.field:
+            raise _validation_error(
+                "riemann_roch_membership_parent",
+                "element and divisor must retain one exact function field",
+            )
+        places = tuple(row.place.model_dump_json() for row in self.profile)
+        if len(set(places)) != len(places) or places != tuple(sorted(places)):
+            raise _validation_error(
+                "riemann_roch_membership_profile_order",
+                "membership profile places must be unique and canonically ordered",
+            )
+        if any(row.place.field != self.divisor.field for row in self.profile):
+            raise _validation_error(
+                "riemann_roch_membership_profile_parent",
+                "every profile place must belong to the divisor function field",
+            )
+        zero = all(
+            coordinate.numerator.is_zero() for coordinate in self.element.coordinates
+        )
+        if zero:
+            if self.status != "IN_SPACE" or self.profile:
+                raise _validation_error(
+                    "riemann_roch_membership_zero_branch",
+                    "zero belongs to every L(D) through its structural empty-profile branch",
+                )
+            return self
+        in_space = all(row.sum >= 0 for row in self.profile)
+        if (self.status == "IN_SPACE") != in_space:
+            raise _validation_error(
+                "riemann_roch_membership_status",
+                "membership status must agree with every returned valuation inequality",
+            )
+        return self
 
 
 class FunctionFieldElementMultiplyRequest(StrictModel):

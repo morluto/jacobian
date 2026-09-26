@@ -382,9 +382,9 @@ class AffineFiberGraph(StrictModel):
     semigroup: PositiveAffineSemigroup
     target: tuple[ExactInteger, ...]
     moves: tuple[tuple[ExactInteger, ...], ...]
-    vertices: tuple[tuple[ExactInteger, ...], ...]
-    edges: tuple[tuple[int, int], ...]
-    components: tuple[tuple[int, ...], ...]
+    vertices: tuple[tuple[ExactInteger, ...], ...] = Field(max_length=MAX_AFFINE_FIBER)
+    edges: tuple[tuple[int, int], ...] = Field(max_length=MAX_AFFINE_GRAPH_EDGES)
+    components: tuple[tuple[int, ...], ...] = Field(max_length=MAX_AFFINE_FIBER)
 
     @model_validator(mode="after")
     def _graph_shape(self) -> Self:
@@ -417,17 +417,42 @@ class AffineFiberGraph(StrictModel):
                 "graph_vertices", "fiber graph vertices must be sorted and unique"
             )
         if any(
-            len(vertex) != self.semigroup.configuration.columns
+            len(vertex) != configuration.columns
+            or any(value < 0 for value in vertex)
+            or not _factorization_matches(self.semigroup, self.target, vertex)
             for vertex in self.vertices
         ):
             raise _err(
-                "graph_vertex_axis", "fiber graph vertices must use the generator axis"
+                "graph_vertex_fiber",
+                "fiber graph vertices must be nonnegative factorizations of the target",
             )
         if self.edges != tuple(sorted(set(self.edges))):
             raise _err("graph_edges", "fiber graph edges must be sorted and unique")
         if any(not (0 <= left < right < n_vertices) for left, right in self.edges):
             raise _err(
                 "graph_edge_indices", "fiber graph edges must index distinct vertices"
+            )
+        normalized_moves = {
+            move
+            if next(value for value in move if value) > 0
+            else tuple(-v for v in move)
+            for move in self.moves
+        }
+        if any(
+            tuple(
+                a - b
+                for a, b in zip(self.vertices[right], self.vertices[left], strict=True)
+            )
+            not in normalized_moves
+            and tuple(
+                b - a
+                for a, b in zip(self.vertices[right], self.vertices[left], strict=True)
+            )
+            not in normalized_moves
+            for left, right in self.edges
+        ):
+            raise _err(
+                "graph_edge_move", "each edge must be induced by a supplied move"
             )
         if self.components != tuple(
             sorted(self.components, key=lambda part: part[0] if part else -1)
@@ -445,6 +470,10 @@ class AffineFiberGraph(StrictModel):
             )
         if len(self.edges) > MAX_AFFINE_GRAPH_EDGES:
             raise _err("graph_edge_bound", "fiber graph exceeds its edge envelope")
+        if self.components != _graph_components(n_vertices, set(self.edges)):
+            raise _err(
+                "graph_components", "components must be the graph connected components"
+            )
         return self
 
 

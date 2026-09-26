@@ -352,47 +352,7 @@ class AnonymousCardDegreeProfileRequest(StrictModel):
     @classmethod
     def admit_combined_resources_before_nested_validation(cls, value: Any) -> Any:
         """Reject over-budget profiles before parsing card classes."""
-        _admit_anonymous_profile_wire_resources(value)
         return _normalize_anonymous_profile_json_tuples(value)
-
-
-def _admit_anonymous_profile_wire_resources(value: Any) -> None:
-    if type(value) is not dict:
-        return
-    multiset = value.get("multiset")
-    if type(multiset) is not dict:
-        return
-    order = multiset.get("card_order")
-    classes = multiset.get("classes")
-    if (
-        type(order) is not int
-        or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
-        or type(classes) not in (list, tuple)
-    ):
-        return
-    classes = cast(list[Any] | tuple[Any, ...], classes)
-    if len(classes) > MAX_ANONYMOUS_CARD_CLASSES:
-        raise _validation_error(
-            "card_profile_class_bound", "profile input has too many card classes"
-        )
-    total_work, cells, output_bytes = _anonymous_profile_resource_estimates(
-        order, len(classes)
-    )
-    if total_work > MAX_ANONYMOUS_CARD_PROFILE_WORK:
-        raise _validation_error(
-            "card_profile_work_bound",
-            "degree profiling exceeds the shared work bound",
-        )
-    if cells > MAX_ANONYMOUS_CARD_PROFILE_CELLS:
-        raise _validation_error(
-            "card_profile_cell_bound",
-            "degree-profile cells exceed the materialization bound",
-        )
-    if output_bytes > MAX_ANONYMOUS_CARD_PROFILE_RESULT_BYTES:
-        raise _validation_error(
-            "card_profile_output_bound",
-            "degree-profile output exceeds the byte bound",
-        )
 
 
 def _normalize_anonymous_profile_json_tuples(value: Any) -> Any:

@@ -11,13 +11,10 @@ The result is `AnonymousGraphCardMultiset`: an ordered tuple of distinct
 isomorphism classes with fixed-width labels `v00`, `v01`, and so on. Its
 canonical form is the lexicographically least zero/one adjacency vector over
 all vertex permutations, using pair order `(0,1), (0,2), ..., (n-2,n-1)`.
-This makes relabelings serialize to the same value. Deserialization checks the
-same permutation-minimality condition and rejects repeated isomorphism
-classes. That check admits work before canonicalization, charging every
-permutation for adjacency-vector generation and a worst-case full-vector
-comparison (which is reached when candidates tie, such as for empty or complete
-graphs), along with per-order setup. Operation construction uses a trusted
-kernel path after its own request admission to avoid repeating the computation.
+This makes relabelings serialize to the same value. Deserialization checks fixed-axis structure, edge validity, row ordering, and
+multiplicity bounds; it does not establish permutation-minimality or reject
+repeated isomorphism classes. Operations canonicalize supplied representatives
+when their mathematical result depends on those relations.
 
 This anonymous value stores neither a source graph nor deletion identifiers.
 It does not assert that the card multiset is realizable as a vertex or edge
@@ -32,13 +29,10 @@ the total card multiplicity, so an empty card multiset of order `n` produces an
 empty histogram with order `n` and total zero. This invariant profile makes no
 source-deck realizability claim.
 
-The request admits the combined canonical-validation and profile work, degree
-cells, and result bytes from the declared order and class count before nested
-card parsing begins. Native calls perform the same combined admission before
-defensively validating the untrusted card value, including its exact
-permutation canonical form. The catalog parser then establishes that canonical
-form once, and its adapter runs the profile kernel without repeating resource
-admission or canonicalization.
+The profile operation admits degree-profile work, degree cells, and result bytes
+from the declared order and class count, then validates the supplied structural
+carrier before computing its degree histogram. It does not require permutation
+canonicalization.
 
 `graph.deck.isomorphism_classes.compute` consumes a complete
 `VertexDeletionFamily` and returns canonical representatives, exact class

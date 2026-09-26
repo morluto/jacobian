@@ -9,7 +9,7 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs.decks import (
     AnonymousCardDegreeProfile,
     AnonymousCardDegreeProfileRequest,
@@ -225,7 +225,7 @@ def test_catalog_round_trip_profiles_without_isomorphism_canonicalization(
     assert decoded.total_card_multiplicity == 3
 
 
-def test_catalog_rejects_combined_bound_before_nested_canonicalization(
+def test_catalog_admits_profile_budget_in_owner_operation_before_kernel(
     monkeypatch,
 ) -> None:
     operation = Catalog.open().operation("graph.deck.card_invariant_profile.compute")
@@ -240,8 +240,13 @@ def test_catalog_rejects_combined_bound_before_nested_canonicalization(
         return original(vertices, edges)
 
     monkeypatch.setattr(deck_models, "_canonical_card_edges", counted)
-    monkeypatch.setattr(deck_models, "MAX_ANONYMOUS_CARD_PROFILE_WORK", 1)
-    with pytest.raises(OperationRequestValidationError) as error:
+    monkeypatch.setattr(deck_operations, "MAX_ANONYMOUS_CARD_PROFILE_WORK", 1)
+    with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
         invoke_operation(operation.operation_id, payload, Catalog.open())
-    assert "shared work bound" in str(error.value.cause)
     assert calls == 0
+
+
+def test_native_constructed_profile_request_missing_multiset_is_structured() -> None:
+    request = AnonymousCardDegreeProfileRequest.model_construct()
+    with pytest.raises(Exception, match="multiset"):
+        anonymous_card_degree_profile(request)

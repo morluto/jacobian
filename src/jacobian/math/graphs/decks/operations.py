@@ -375,7 +375,7 @@ def anonymous_card_degree_profile(
             code="graph_deck.card_profile_request_carrier",
             message="request must be an AnonymousCardDegreeProfileRequest",
         )
-    return _compute_anonymous_card_degree_profile(request.multiset)
+    return _compute_anonymous_card_degree_profile(getattr(request, "multiset", None))
 
 
 def _admit_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:

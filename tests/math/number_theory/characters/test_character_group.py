@@ -114,6 +114,22 @@ def test_group_value_round_trips_through_json() -> None:
     assert DirichletCharacterGroup.model_validate_json(group.model_dump_json()) == group
 
 
+def test_group_checker_rejects_noncanonical_native_coordinate_rows() -> None:
+    group = character_group(3)
+    forged = DirichletCharacterGroup.model_construct(
+        **{
+            **group.model_dump(),
+            "unit_coordinates": ((0,), (3,)),
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        require_complete_character_group(forged)
+    assert excinfo.value.errors()[0]["type"] == (
+        "dirichlet_character.group.coordinate_range"
+    )
+
+
 def test_group_checker_rejects_a_forged_coordinate_claim() -> None:
     group = character_group(12)
     payload = group.model_dump(mode="json")

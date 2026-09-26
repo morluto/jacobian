@@ -1162,6 +1162,19 @@ def require_complete_character_group(
             code="dirichlet_character.group.exponent_mismatch",
             message="the common exponent must be the least common multiple of orders",
         )
+    if any(
+        len(row) != len(expected_orders)
+        or any(
+            coordinate < 0 or coordinate >= order
+            for coordinate, order in zip(row, expected_orders, strict=True)
+        )
+        for row in cast(tuple[tuple[int, ...], ...], unit_coordinates)
+    ):
+        raise OperationDomainValidationError(
+            location=("group", "unit_coordinates"),
+            code="dirichlet_character.group.coordinate_range",
+            message="generator coordinates must lie in their canonical order ranges",
+        )
     _require_generator_coordinate_round_trip(group)
     return group
 

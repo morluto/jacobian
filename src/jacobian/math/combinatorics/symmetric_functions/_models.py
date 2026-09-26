@@ -23,11 +23,55 @@ _MAX_SCHUR_RESULT_DIGITS = 4000
 _MAX_SCHUR_PARTITION_LENGTH = 50
 _MAX_SCHUR_VARIABLE_NAME_LENGTH = MAX_OPAQUE_LABEL_LENGTH
 
+# LR tableau enumeration is exponential in the skew-cell count. The operation
+# bound is intentionally separate from the 500-cell partition carrier bound.
+MAX_LR_SKEW_CELLS = 8
+MAX_LR_SEARCH_STATES = 100_000
+MAX_SCHUR_PRODUCT_WORK = 1_000_000
+MAX_SCHUR_PRODUCT_TERMS = 22  # p(8)
+
+
+def _lr_prefix_state_bound(content: IntegerPartition) -> int:
+    """Count all distinct multiset-word prefixes before tableau pruning."""
+    state_count = 0
+
+    def visit(index: int, chosen: tuple[int, ...]) -> None:
+        nonlocal state_count
+        if index == len(content.parts):
+            length = sum(chosen)
+            ways = 1
+            for factor in range(2, length + 1):
+                ways *= factor
+            for count in chosen:
+                for factor in range(2, count + 1):
+                    ways //= factor
+            state_count += ways
+            return
+        for count in range(content.parts[index] + 1):
+            visit(index + 1, (*chosen, count))
+
+    visit(0, ())
+    return state_count
+
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by symmetric-function contracts."""
 
     return PydanticCustomError(f"symmetric_function.{reason}", message)
+
+
+def _lr_inner_content_orientation(
+    left: IntegerPartition, right: IntegerPartition
+) -> tuple[IntegerPartition, IntegerPartition]:
+    """Orient a commutative LR lower pair by the cheaper content-prefix bound.
+
+    ``c^outer_{inner, content}`` is symmetric in its lower pair, so the
+    Schur-product kernel may swap the operands freely. Admission and the
+    kernel call this one owner helper so both agree on the same orientation.
+    """
+    if _lr_prefix_state_bound(right) <= _lr_prefix_state_bound(left):
+        return left, right
+    return right, left
 
 
 PointCoordinate = Annotated[
@@ -165,11 +209,148 @@ class SchurExpansionResult(StrictModel):
         return self
 
 
+class LittlewoodRichardsonCoefficientRequest(StrictModel):
+    """Compute ``c^outer_{inner, content}`` using LR tableaux.
+
+    The reading word scans each skew row right-to-left, from top to bottom;
+    every prefix must contain at least as many ``i`` as ``i+1`` for all i.
+    Complete search admits at most {MAX_LR_SKEW_CELLS} skew cells and
+    {MAX_LR_SEARCH_STATES} distinct content-word prefixes. Admission bounds
+    the skew diagram ``|outer| - |inner|`` and the content, not the ambient
+    diagrams, whose row-scan work is bounded by the shared 500-cell partition
+    carrier.
+    """
+
+    outer: IntegerPartition
+    inner: IntegerPartition
+    content: IntegerPartition
+
+    @model_validator(mode="after")
+    def require_bounded_search(self) -> Self:
+        # The tableau search runs only when the inner diagram is contained in
+        # the outer diagram and the sizes agree, so its cell count equals the
+        # admitted skew size, which then equals the content size.
+        skew_size = sum(self.outer.parts) - sum(self.inner.parts)
+        if skew_size > MAX_LR_SKEW_CELLS:
+            raise _validation_error(
+                "lr_skew_size_exceeded",
+                f"LR skew size |outer|-|inner| must not exceed {MAX_LR_SKEW_CELLS}",
+            )
+        if sum(self.content.parts) > MAX_LR_SKEW_CELLS:
+            raise _validation_error(
+                "lr_content_size_exceeded",
+                f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
+            )
+        if _lr_prefix_state_bound(self.content) > MAX_LR_SEARCH_STATES:
+            raise _validation_error(
+                "lr_search_states_exceeded",
+                f"LR search prefix bound must not exceed {MAX_LR_SEARCH_STATES}",
+            )
+        return self
+
+
+class LittlewoodRichardsonCoefficientResult(StrictModel):
+    """One exact LR coefficient, bound to its three partition arguments."""
+
+    outer: IntegerPartition
+    inner: IntegerPartition
+    content: IntegerPartition
+    coefficient: StrictInt = Field(ge=0)
+
+
+class SchurProductRequest(StrictModel):
+    """Compute a complete Schur product inside the bounded LR envelope."""
+
+    left: IntegerPartition
+    right: IntegerPartition
+
+    @model_validator(mode="after")
+    def require_bounded_complete_product(self) -> Self:
+        total = sum(self.left.parts) + sum(self.right.parts)
+        if total > MAX_LR_SKEW_CELLS:
+            raise _validation_error(
+                "schur_product_size_exceeded",
+                f"Schur product total degree must not exceed {MAX_LR_SKEW_CELLS}",
+            )
+        # Every possible outer shape of this degree is sent through the same
+        # admitted LR tableau kernel. The lower pair commutes, so the kernel
+        # searches with whichever operand has the cheaper content-prefix
+        # bound. Charge that orientation once per candidate before generating
+        # candidates or tableaux, and bound the expansion by term
+        # cardinality, not transport bytes.
+        candidates = _partition_count(total)
+        _inner, content = _lr_inner_content_orientation(self.left, self.right)
+        prefix_bound = _lr_prefix_state_bound(content)
+        if prefix_bound > MAX_LR_SEARCH_STATES:
+            raise _validation_error(
+                "schur_product_search_states_exceeded",
+                f"LR content-prefix bound must not exceed {MAX_LR_SEARCH_STATES}",
+            )
+        work = candidates * prefix_bound
+        if work > MAX_SCHUR_PRODUCT_WORK:
+            raise _validation_error(
+                "schur_product_work_exceeded",
+                f"complete Schur product work bound must not exceed {MAX_SCHUR_PRODUCT_WORK}",
+            )
+        if candidates > MAX_SCHUR_PRODUCT_TERMS:
+            raise _validation_error(
+                "schur_product_terms_exceeded",
+                "complete Schur product admits at most "
+                f"{MAX_SCHUR_PRODUCT_TERMS} candidate terms",
+            )
+        return self
+
+
+class SchurProductTerm(StrictModel):
+    partition: IntegerPartition
+    coefficient: StrictInt = Field(gt=0)
+
+
+class SchurProductResult(StrictModel):
+    left: IntegerPartition
+    right: IntegerPartition
+    terms: tuple[SchurProductTerm, ...] = Field(max_length=MAX_SCHUR_PRODUCT_TERMS)
+
+    @model_validator(mode="after")
+    def require_canonical_terms(self) -> Self:
+        sizes = [sum(term.partition.parts) for term in self.terms]
+        if any(size != sum(self.left.parts) + sum(self.right.parts) for size in sizes):
+            raise _validation_error(
+                "schur_product_degree_mismatch", "term degree must equal product degree"
+            )
+        keys = [term.partition.parts for term in self.terms]
+        if keys != sorted(set(keys), key=lambda parts: tuple(-part for part in parts)):
+            # Canonical ordering is reverse lexicographic, largest first.
+            raise _validation_error(
+                "schur_product_terms_not_canonical",
+                "Schur product terms must be unique and canonically ordered",
+            )
+        return self
+
+
+def _partition_count(total: int) -> int:
+    counts = [0] * (total + 1)
+    counts[0] = 1
+    for part in range(1, total + 1):
+        for size in range(part, total + 1):
+            counts[size] += counts[size - part]
+    return counts[total]
+
+
 __all__ = [
+    "MAX_LR_SEARCH_STATES",
+    "MAX_LR_SKEW_CELLS",
+    "MAX_SCHUR_PRODUCT_TERMS",
+    "MAX_SCHUR_PRODUCT_WORK",
     "IntegerPartition",
+    "LittlewoodRichardsonCoefficientRequest",
+    "LittlewoodRichardsonCoefficientResult",
     "PartitionConjugateResult",
     "PartitionRequest",
     "SchurExpansionRequest",
     "SchurExpansionResult",
+    "SchurProductRequest",
+    "SchurProductResult",
+    "SchurProductTerm",
     "SchurVariableName",
 ]

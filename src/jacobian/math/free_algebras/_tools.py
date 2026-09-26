@@ -1,4 +1,4 @@
-"""Public declaration for exact free associative algebra multiplication."""
+"""Public declarations for exact free associative algebra operations."""
 
 from jacobian.catalog.models import (
     MathTool,
@@ -14,6 +14,9 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraIdealPrefixResult,
     FreeAlgebraPolynomial,
     FreeAlgebraPolynomialAddRequest,
+    FreeAlgebraPolynomialHomomorphism,
+    FreeAlgebraPolynomialHomomorphismCompositionRequest,
+    FreeAlgebraPolynomialPowerRequest,
     FreeAlgebraPolynomialProductRequest,
     FreeAlgebraPolynomialProductResult,
     FreeAlgebraPolynomialSubstitutionRequest,
@@ -40,12 +43,14 @@ from jacobian.math.free_algebras._models import (
 from jacobian.math.free_algebras.operations import (
     add,
     compare_words,
+    compose_polynomial_homomorphisms,
     concatenate_words,
     groebner_shirshov_through_degree,
     ideal_degree_component,
     ideal_generated_prefix,
     ideal_membership,
     multiply,
+    power_polynomial,
     power_word,
     quotient_normal_word_profile,
     reverse_word,
@@ -63,6 +68,12 @@ def _run_multiply(
     request: FreeAlgebraPolynomialProductRequest,
 ) -> FreeAlgebraPolynomialProductResult:
     return multiply(request.left, request.right)
+
+
+def _run_polynomial_power(
+    request: FreeAlgebraPolynomialPowerRequest,
+) -> FreeAlgebraPolynomial:
+    return power_polynomial(request.polynomial, request.exponent)
 
 
 def _run_add(request: FreeAlgebraPolynomialAddRequest) -> FreeAlgebraPolynomial:
@@ -121,6 +132,12 @@ def _run_polynomial_substitute(
     request: FreeAlgebraPolynomialSubstitutionRequest,
 ) -> FreeAlgebraPolynomial:
     return substitute_polynomial(request.substitution, request.polynomial)
+
+
+def _run_homomorphism_compose(
+    request: FreeAlgebraPolynomialHomomorphismCompositionRequest,
+) -> FreeAlgebraPolynomialHomomorphism:
+    return compose_polynomial_homomorphisms(request.f, request.g)
 
 
 _EXAMPLE_ALPHABET = ["x", "y"]
@@ -227,7 +244,8 @@ TOOLS = (
             "generators. Admission bounds each alphabet to 26 distinct "
             "letters, operand words to 32 letters, operand terms to 64, "
             "product term pairs and result terms to 4096, and predicted "
-            "coefficient growth to 64 digits before expansion; the bounded "
+            "coefficient growth to 64 digits and output allocation before "
+            "expansion; the bounded "
             "term-pair and collected-like-word ledger is returned."
         ),
         request_type=FreeAlgebraPolynomialProductRequest,
@@ -250,6 +268,43 @@ TOOLS = (
                     "the distinct words x*y and y*x must not be collected."
                 ),
                 input={"left": _EXAMPLE_LEFT, "right": _EXAMPLE_RIGHT},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.polynomial.power.compute",
+        title="Raise a free-algebra polynomial to an exact power",
+        description=(
+            "Compute a nonnegative integer power in a free associative QQ-algebra. "
+            "Exponentiation by squaring uses the existing exact product kernel; "
+            "each intermediate term-pair convolution, coefficient-growth bound, "
+            "and output allocation is admitted before expansion. Exponents range "
+            "from 0 through 64. Exponent zero returns the unit polynomial over "
+            "the input alphabet, and exponent one returns the input value."
+        ),
+        request_type=FreeAlgebraPolynomialPowerRequest,
+        result_type=FreeAlgebraPolynomial,
+        run=_run_polynomial_power,
+        tags=("free-algebra", "polynomial", "power", "exact"),
+        discovery_terms=(
+            "noncommutative polynomial power",
+            "free associative algebra polynomial exponentiation",
+            "power a free algebra polynomial",
+        ),
+        examples=(
+            OperationExample(
+                name="square_sum_of_generators",
+                description="Square x+y in the free algebra; xy and yx remain distinct.",
+                input={
+                    "polynomial": {
+                        "alphabet": ["x", "y"],
+                        "terms": [
+                            {"coefficient": {"num": "1", "den": "1"}, "word": ["y"]},
+                            {"coefficient": {"num": "1", "den": "1"}, "word": ["x"]},
+                        ],
+                    },
+                    "exponent": 2,
+                },
             ),
         ),
     ),
@@ -502,7 +557,9 @@ TOOLS = (
             "Extend a specified generator-to-polynomial map uniquely to a "
             "unital QQ-algebra homomorphism between free associative algebras. "
             "Source and target ordered alphabets are explicit, and a generator "
-            "may map to zero. Expansion count, word length, exact coefficient "
+            "may map to zero. The source admits at most 64 terms with words of "
+            "at most 32 letters; each generator image has the same limits. "
+            "Expansion count, word length, exact coefficient "
             "growth, work, support, and output allocation are admitted before "
             "word-by-word expansion."
         ),
@@ -553,6 +610,78 @@ TOOLS = (
                                 "word": ["x", "y"],
                             },
                             {"coefficient": {"num": "1", "den": "1"}, "word": []},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.homomorphism.compose.compute",
+        title="Compose exact free-algebra homomorphisms",
+        description=(
+            "Compose the supplied maps f:A→B and g:B→C in that input order, "
+            "returning g∘f:A→C. The ordered intermediate alphabet must match "
+            "exactly. The result reuses the canonical "
+            "FreeAlgebraPolynomialHomomorphism value. All image substitutions "
+            "are aggregate-preflighted for expansion, work, coefficient growth, "
+            "and output allocation before any image is expanded."
+        ),
+        request_type=FreeAlgebraPolynomialHomomorphismCompositionRequest,
+        result_type=FreeAlgebraPolynomialHomomorphism,
+        run=_run_homomorphism_compose,
+        tags=("free-algebra", "homomorphism", "composition", "exact"),
+        discovery_terms=(
+            "compose free algebra homomorphisms",
+            "homomorphism composition g after f",
+            "free associative algebra map composition",
+        ),
+        examples=(
+            OperationExample(
+                name="compose_generator_maps",
+                description="Apply f first, then g; composition is g after f.",
+                input={
+                    "f": {
+                        "source_alphabet": ["x"],
+                        "target_alphabet": ["u", "v"],
+                        "images": [
+                            {
+                                "alphabet": ["u", "v"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["v"],
+                                    },
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["u"],
+                                    },
+                                ],
+                            }
+                        ],
+                    },
+                    "g": {
+                        "source_alphabet": ["u", "v"],
+                        "target_alphabet": ["a"],
+                        "images": [
+                            {
+                                "alphabet": ["a"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["a"],
+                                    }
+                                ],
+                            },
+                            {
+                                "alphabet": ["a"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "2", "den": "1"},
+                                        "word": ["a"],
+                                    }
+                                ],
+                            },
                         ],
                     },
                 },

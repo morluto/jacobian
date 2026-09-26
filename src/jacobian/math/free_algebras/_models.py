@@ -34,6 +34,7 @@ MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH = 2 * MAX_FREE_ALGEBRA_WORD_LENGTH
 # carry this many letters.
 MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH = MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
 MAX_FREE_WORD_POWER_EXPONENT = 64
+MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT = 64
 # Prefix/suffix/factor families are bounded over canonical word values, since
 # those non-growing consumers admit producers through the full 64-letter range.
 MAX_FREE_WORD_SPLITS = MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1
@@ -65,6 +66,7 @@ MAX_FREE_ALGEBRA_ADDITION_TERMS = 2 * MAX_FREE_ALGEBRA_OPERAND_TERMS
 # canonical result's allocation, not any transport serialization.
 MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS = 150_000
 MAX_FREE_ALGEBRA_RESULT_TERMS = 4_096
+MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS = 1_500_000
 MAX_FREE_ALGEBRA_TERM_PAIRS = MAX_FREE_ALGEBRA_OPERAND_TERMS**2
 MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS = 64
 MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS = 65_536
@@ -539,8 +541,10 @@ class FreeAlgebraPolynomial(StrictModel):
 class TermPairMultiplicationLedger(StrictModel):
     """Bounded accounting for one distributive noncommutative product."""
 
-    left_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_OPERAND_TERMS)
-    right_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_OPERAND_TERMS)
+    # Power operations use the same kernel for admitted intermediate values,
+    # whose support can exceed the public product's 64-term operand limit.
+    left_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
+    right_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
     term_pair_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_TERM_PAIRS)
     distinct_product_word_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
     collected_pair_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_TERM_PAIRS)
@@ -575,6 +579,13 @@ class FreeAlgebraPolynomialAddRequest(StrictModel):
 
     left: FreeAlgebraPolynomial
     right: FreeAlgebraPolynomial
+
+
+class FreeAlgebraPolynomialPowerRequest(StrictModel):
+    """A bounded nonnegative power of one canonical free-algebra polynomial."""
+
+    polynomial: FreeAlgebraPolynomial
+    exponent: int = Field(ge=0, le=MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT)
 
 
 class FreeAlgebraPolynomialProductResult(StrictModel):
@@ -656,8 +667,18 @@ class FreeAlgebraPolynomialHomomorphism(StrictModel):
 
 
 class FreeAlgebraPolynomialSubstitutionRequest(StrictModel):
-    substitution: FreeAlgebraPolynomialHomomorphism
-    polynomial: FreeAlgebraPolynomial
+    substitution: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "Map source generators to target polynomials. Each image is limited "
+            "to 64 terms whose words contain at most 32 letters."
+        )
+    )
+    polynomial: FreeAlgebraPolynomial = Field(
+        description=(
+            "Source polynomial limited at execution to 64 terms whose words "
+            "contain at most 32 letters."
+        )
+    )
 
     @model_validator(mode="after")
     def require_source_alphabet(self) -> Self:
@@ -665,6 +686,32 @@ class FreeAlgebraPolynomialSubstitutionRequest(StrictModel):
             raise _validation_error(
                 "polynomial_substitution_source_alphabet",
                 "polynomial must use the substitution source alphabet",
+            )
+        return self
+
+
+class FreeAlgebraPolynomialHomomorphismCompositionRequest(StrictModel):
+    """Maps ``f:A→B`` and ``g:B→C`` in the order used by ``g ∘ f``."""
+
+    f: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The first map f:A→B, applied before g. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+    g: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The second map g:B→C, applied after f. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_matching_intermediate_alphabet(self) -> Self:
+        if self.f.target_alphabet != self.g.source_alphabet:
+            raise _validation_error(
+                "homomorphism_composition_alphabet",
+                "f target alphabet must equal g source alphabet in the same order",
             )
         return self
 
@@ -1111,6 +1158,8 @@ __all__ = [
     "MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS",
     "MAX_FREE_ALGEBRA_LETTER_LENGTH",
     "MAX_FREE_ALGEBRA_OPERAND_TERMS",
+    "MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT",
+    "MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES",
     "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_RESULT_TERMS",
@@ -1134,6 +1183,7 @@ __all__ = [
     "FreeAlgebraLetter",
     "FreeAlgebraPolynomial",
     "FreeAlgebraPolynomialAddRequest",
+    "FreeAlgebraPolynomialPowerRequest",
     "FreeAlgebraPolynomialProductRequest",
     "FreeAlgebraPolynomialProductResult",
     "FreeAlgebraQuotientDegreeComponent",

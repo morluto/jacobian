@@ -6,6 +6,7 @@ import json
 import textwrap
 from pathlib import Path
 
+import pytest
 from tests.process.tooling.ci import run_ci_script
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -18,65 +19,48 @@ def test_release_consistency_passes_on_clean_tree() -> None:
     assert "All present release surfaces agree." in result.stdout
 
 
-def test_release_consistency_detects_npm_lockfile_drift(tmp_path: Path) -> None:
-    """Reproduce the #904 defect: package.json bumped, lockfile not."""
-
+@pytest.mark.parametrize(
+    "surface", ["npm/package-lock.json (top-level)", "pyproject.toml"]
+)
+def test_release_consistency_detects_version_drift(
+    tmp_path: Path, surface: str
+) -> None:
+    """Version-bearing package surfaces cannot disagree with package.json."""
     npm_dir = tmp_path / "npm"
     npm_dir.mkdir()
     (npm_dir / "package.json").write_text(
-        json.dumps({"name": "jacobian", "version": "0.11.0"}), encoding="utf-8"
+        json.dumps({"name": "jacobian", "version": "0.11.0"}),
+        encoding="utf-8",
     )
+    lock_version = "0.10.0" if surface.startswith("npm/") else "0.11.0"
     (npm_dir / "package-lock.json").write_text(
         json.dumps(
             {
                 "name": "jacobian",
-                "version": "0.10.0",
+                "version": lock_version,
                 "lockfileVersion": 3,
-                "packages": {"": {"name": "jacobian", "version": "0.10.0"}},
+                "packages": {"": {"name": "jacobian", "version": lock_version}},
             }
         ),
         encoding="utf-8",
     )
+    if surface == "pyproject.toml":
+        (tmp_path / "pyproject.toml").write_text(
+            textwrap.dedent(
+                """
+                [project]
+                name = "jacobian"
+                version = "0.10.0"
+                """
+            ).strip(),
+            encoding="utf-8",
+        )
 
     result = run_ci_script("check-release-consistency", "--root", tmp_path, check=False)
     assert result.returncode == 1
-    assert "npm/package-lock.json (top-level)" in result.stderr
-    assert "0.10.0 (expected 0.11.0)" in result.stderr
-
-
-def test_release_consistency_detects_pyproject_drift(tmp_path: Path) -> None:
-    """A pyproject.toml version mismatch is also caught."""
-
-    npm_dir = tmp_path / "npm"
-    npm_dir.mkdir()
-    (npm_dir / "package.json").write_text(
-        json.dumps({"name": "jacobian", "version": "0.11.0"}), encoding="utf-8"
-    )
-    (npm_dir / "package-lock.json").write_text(
-        json.dumps(
-            {
-                "name": "jacobian",
-                "version": "0.11.0",
-                "lockfileVersion": 3,
-                "packages": {"": {"name": "jacobian", "version": "0.11.0"}},
-            }
-        ),
-        encoding="utf-8",
-    )
-    (tmp_path / "pyproject.toml").write_text(
-        textwrap.dedent(
-            """
-            [project]
-            name = "jacobian"
-            version = "0.10.0"
-            """
-        ).strip(),
-        encoding="utf-8",
-    )
-
-    result = run_ci_script("check-release-consistency", "--root", tmp_path, check=False)
-    assert result.returncode == 1
-    assert "pyproject.toml" in result.stderr
+    assert surface in result.stderr
+    if surface.startswith("npm/"):
+        assert "0.10.0 (expected 0.11.0)" in result.stderr
 
 
 def test_release_consistency_accepts_explicit_expected(tmp_path: Path) -> None:

@@ -473,15 +473,48 @@ replace it: either strengthen the oracle or report the narrower claim and the
 unresolved case rather than presenting the weaker check as the required
 evidence.
 
-### Derived contract bounds in match strings
+### Assert error codes, not message wording
 
-When an assertion matches a validation message that carries a computed bound
-(such as a digit limit, byte budget, or combinatorial ceiling), import the
-owning constant or helper from source and build the expected string from it
-rather than hardcoding the numeric value. A test that writes `match="10-digit
-bound"` will break with an opaque regex mismatch whenever a scale-cap commit on
-main raises the bound — even on an unrelated open branch. Instead, import the
-constant and interpolate:
+A typed rejection's stable contract is its error **code**, not its
+human-readable message. Assert the code. The message is prose: it may be
+reworded, and a different internal bound may trip first, so a `match=` on the
+message breaks opaquely even while the rejection is still correct.
+
+For coded errors (`OperationDomainValidationError`,
+`OperationResourceAdmissionError`, and other typed owner errors), capture the
+exception and assert its code:
+
+```python
+with pytest.raises(OperationDomainValidationError) as exc_info:
+    invoke_operation("polytope.facets.compute", payload, Catalog.open())
+
+# The contract is a typed admission rejection with this stable code; the message
+# wording (and which internal bound trips first) may change without changing it.
+assert exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
+```
+
+Do **not** pin the message with
+`match=f"{MAX_COMPUTED_FACETS}-facet result bound"`. Interpolating the constant
+tracks the number but still pins the surrounding wording, so a reword or a
+different bound tripping first fails the test even though the contract holds.
+This is assertion debt: it couples the test to prose instead of behavior.
+
+Some failures have no stable, reason-specific code. A Python `ValueError` has
+no structured error identifier; a Pydantic `ValidationError` may expose a
+custom, owner-specific `errors()[0]["type"]`, or only a generic type such as
+`value_error`. Prefer the specific type whenever it exists. Do not treat a
+generic type as identifying a particular bound when the message is the only
+thing that distinguishes it.
+
+For a code-less failure, first make the test input otherwise valid and isolate
+the boundary it is meant to exercise. If rejection alone establishes the
+contract, assert the exception class and keep the message out of the test. A
+message match is justified only when the exact failure reason or ordering is
+itself part of the test and there is no stable identifier for it. Prefer adding
+a stable owner error code when callers or tests need to distinguish such
+reasons. When a message match is justified, derive any embedded bound from the
+owning source constant rather than hardcoding it, so a scale-cap change does
+not break the assertion:
 
 ```python
 from jacobian.math.number_theory.diophantine_approximation._models import (
@@ -489,20 +522,16 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
 )
 
 cap = _convergent_component_digit_cap(4)
-with pytest.raises(ValueError, match=rf"{cap}-digit bound"):
+with pytest.raises(ValueError, match=rf"{cap}-digit"):
     ...
 ```
 
-The message text stays pinned; only the number is derived from the same source
-the production code uses. Boundary test inputs (the value that triggers the
-error) should likewise be computed from the constant, not hardcoded:
+Prefer adding a stable code to an owner error over growing message-text matches.
+Boundary test inputs (the value that triggers the error) should likewise be
+computed from the constant, not hardcoded:
 
 ```python
 beyond = "9" * (_MAX_MULTIVARIATE_COEFFICIENT_DIGITS + 1)
-with pytest.raises(
-    ValueError, match=rf"{_MAX_MULTIVARIATE_COEFFICIENT_DIGITS}-digit bound"
-):
-    ...
 ```
 
 When the owning constant is private (underscore-prefixed), importing it from

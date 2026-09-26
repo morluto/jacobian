@@ -25,9 +25,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
 def _deck(cards: tuple[SimpleUndirectedGraph, ...]) -> AnonymousGraphCardMultiset:
-    return anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=4, cards=cards)
-    )
+    return anonymous_graph_card_multiset(4, cards)
 
 
 def _oracle_component_orders(
@@ -106,9 +104,7 @@ def test_cardwise_profile_is_unchanged_by_independent_relabelling_and_order() ->
 
 
 def test_zero_order_empty_deck_and_catalog_example() -> None:
-    empty_deck = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=0, cards=())
-    )
+    empty_deck = anonymous_graph_card_multiset(0, ())
     result = card_component_profile(
         AnonymousDeckComponentProfileRequest(deck=empty_deck)
     )

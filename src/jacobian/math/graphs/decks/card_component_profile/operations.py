@@ -9,7 +9,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CLASSES,
-    MAX_ANONYMOUS_CARD_RESULT_BYTES,
+    MAX_ANONYMOUS_CARD_RESULT_UNITS,
     MAX_UNLABELLED_DECK_VERTICES,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
@@ -54,11 +54,11 @@ def _admit_deck(
     input_bytes = len(classes) * (64 + 16 * pair_count)
     profile_rows = min(len(classes), _PARTITION_COUNTS_THROUGH_TEN[order])
     output_bytes = 128 + profile_rows * (64 + 4 * order)
-    if input_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
+    if input_bytes > MAX_ANONYMOUS_CARD_RESULT_UNITS:
         raise OperationResourceAdmissionError(
             location=("deck",),
             code="graph_deck.component_profile_input_bound",
-            message="deck class input exceeds the canonical representation byte bound",
+            message="deck class input exceeds the canonical representation unit bound",
         )
     if output_bytes > MAX_CARD_COMPONENT_PROFILE_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(

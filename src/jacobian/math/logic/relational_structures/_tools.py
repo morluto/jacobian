@@ -170,7 +170,7 @@ def _invariant_relation_closure(
 def _polymorphism_enumeration(
     request: RelationalPolymorphismEnumerationRequest,
 ) -> RelationalPolymorphismFamily:
-    return enumerate_polymorphisms(request.source, request.arity)
+    return enumerate_polymorphisms(request)
 
 
 def _pp_formula_evaluation(request: PPFormulaEvaluationRequest) -> PPDefinedRelation:
@@ -502,12 +502,10 @@ TOOLS: MathTools = (
             "and closed under coordinatewise application of every supplied "
             "operation. Every operation table is checked against every basic "
             "relation of the exact source before closure. Admission bounds the "
-            "supplied tables, preservation work, and fixed result frames before "
-            "expansion, and refuses a reachable closure beyond "
-            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES} generated rows, "
-            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_WORK} closure steps, or "
-            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES} bytes. The "
-            "reachable closure, not the ambient power A^r, is charged. This "
+            f"power to {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES} rows, all "
+            f"preservation and incremental closure work to {MAX_RELATIONAL_INVARIANT_CLOSURE_WORK} "
+            "steps, and a conservative result size to "
+            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_OUTPUT_BYTES} bytes before expansion. This "
             "computes closure under the supplied finite operations; it does not "
             "claim the input is a complete polymorphism clone."
         ),

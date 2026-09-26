@@ -66,7 +66,9 @@ def test_all_binary_relations_return_exact_complete_binary_families() -> None:
             if _is_polymorphism(source, 2, table)
         )
 
-        result = enumerate_polymorphisms(source, 2)
+        result = enumerate_polymorphisms(
+            RelationalPolymorphismEnumerationRequest(source=source, arity=2)
+        )
 
         assert result.operation_tables == expected
         assert result.source == source
@@ -81,7 +83,7 @@ def test_unary_singleton_example_roundtrips_as_a_source_bound_value() -> None:
     )
     request = RelationalPolymorphismEnumerationRequest(source=source, arity=1)
 
-    result = enumerate_polymorphisms(source, 1)
+    result = enumerate_polymorphisms(request)
 
     assert result.operation_tables == ((0, 0), (0, 1))
     restored = RelationalPolymorphismFamily.model_validate_json(
@@ -92,7 +94,11 @@ def test_unary_singleton_example_roundtrips_as_a_source_bound_value() -> None:
 
 
 def test_empty_signature_three_element_binary_family_is_complete() -> None:
-    result = enumerate_polymorphisms(FiniteRelationalStructure(carrier_size=3), 2)
+    result = enumerate_polymorphisms(
+        RelationalPolymorphismEnumerationRequest(
+            source=FiniteRelationalStructure(carrier_size=3), arity=2
+        )
+    )
 
     assert len(result.operation_tables) == 3**9
     assert result.operation_tables[0] == (0,) * 9
@@ -110,7 +116,9 @@ def test_empty_carrier_has_one_empty_operation_and_checks_nullary_relations() ->
         relation_tables=((), ((),), ()),
     )
 
-    result = enumerate_polymorphisms(source, 3)
+    result = enumerate_polymorphisms(
+        RelationalPolymorphismEnumerationRequest(source=source, arity=3)
+    )
 
     assert result.operation_tables == ((),)
 
@@ -132,14 +140,18 @@ def test_candidate_and_work_refusals_precede_function_space_iteration(
         OperationResourceAdmissionError, match="complete function space"
     ):
         enumerate_polymorphisms(
-            too_many_candidates, 2
+            RelationalPolymorphismEnumerationRequest(
+                source=too_many_candidates, arity=2
+            )
         )
 
     # This cardinality is vastly larger than Python's decimal conversion
     # limit. Admission must cap it without formatting the exact integer.
     with pytest.raises(OperationResourceAdmissionError, match="candidate envelope"):
         enumerate_polymorphisms(
-            FiniteRelationalStructure(carrier_size=64), 2
+            RelationalPolymorphismEnumerationRequest(
+                source=FiniteRelationalStructure(carrier_size=64), arity=2
+            )
         )
 
     full_binary = tuple(product(range(3), repeat=2))
@@ -153,7 +165,7 @@ def test_candidate_and_work_refusals_precede_function_space_iteration(
     )
     with pytest.raises(OperationResourceAdmissionError, match="family enumeration"):
         enumerate_polymorphisms(
-            too_much_work, 2
+            RelationalPolymorphismEnumerationRequest(source=too_much_work, arity=2)
         )
 
 

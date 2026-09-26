@@ -19,8 +19,6 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_enumeration,
     admit_homomorphism_search,
     admit_induced_substructure,
-    admit_invariant_closure_growth,
-    admit_invariant_closure_output,
     admit_invariant_relation_closure,
     admit_polymorphism_check,
     admit_polymorphism_family,
@@ -466,18 +464,13 @@ def close_relation_under_polymorphisms(
             message="request must contain canonical source-bound tuples and operations",
         ) from exc
 
-    preservation_work, fixed_output_bytes = admit_invariant_relation_closure(
+    state_count, _work = admit_invariant_relation_closure(
         source,
         admitted.relation_arity,
         admitted.generator_tuples,
         admitted.polymorphisms,
     )
     carrier_size = source.carrier_size
-
-    def closure_work(step_count: int) -> int:
-        """Charge preservation, generation, and queue sorting so far."""
-
-        return preservation_work + step_count + 8 * len(closure) * len(closure)
 
     # A supplied operation is a claim. Recheck the entire defining preservation
     # relation here because this operation relies on it to call the closure
@@ -517,14 +510,10 @@ def close_relation_under_polymorphisms(
     pending = sorted(closure)
     cursor = 0
     generated_steps = 0
-    admit_invariant_closure_growth(len(closure), closure_work(0))
     while cursor < len(pending):
         newest = pending[cursor]
         cursor += 1
         available = tuple(sorted(closure))
-        # The queue sorts the generated relation once per discovered row.
-        # Charge that sort before it runs so growth is refused in advance.
-        admit_invariant_closure_growth(len(closure), closure_work(generated_steps))
         for operation in admitted.polymorphisms:
             for position in range(operation.arity):
                 for remaining in product(available, repeat=operation.arity - 1):
@@ -542,21 +531,13 @@ def close_relation_under_polymorphisms(
                     generated_steps += 1
                     if generated_steps % 4_096 == 0:
                         request_checkpoint("during relational invariant closure")
-                        admit_invariant_closure_growth(
-                            len(closure), closure_work(generated_steps)
-                        )
                     if output not in closure:
                         closure.add(output)
-                        admit_invariant_closure_growth(
-                            len(closure), closure_work(generated_steps)
-                        )
                         pending.append(output)
+        if len(closure) > state_count:
+            raise RuntimeError("generated relation exceeded its admitted power")
 
     result_tuples = tuple(sorted(closure))
-    admit_invariant_closure_growth(len(result_tuples), closure_work(generated_steps))
-    admit_invariant_closure_output(
-        fixed_output_bytes, admitted.relation_arity, len(result_tuples)
-    )
     return RelationalInvariantClosure._from_kernel(
         source=source,
         relation_arity=admitted.relation_arity,
@@ -611,25 +592,25 @@ def _contains_sorted_relation_row(
 
 
 def enumerate_polymorphisms(
-    source: FiniteRelationalStructure, arity: int
+    request: RelationalPolymorphismEnumerationRequest,
 ) -> RelationalPolymorphismFamily:
     """Return every fixed-arity polymorphism of one exact structure."""
 
-    source = _admit_structure(source, "source")
-    if type(arity) is not int:
+    if not isinstance(request, RelationalPolymorphismEnumerationRequest):
         raise OperationDomainValidationError(
-            location=("arity",),
-            code="relational.polymorphism.enumeration_arity_type",
-            message="arity must be an exact positive integer",
+            location=("request",),
+            code="relational.polymorphism.enumeration_request_type",
+            message="request must name a structure and positive operation arity",
         )
+    source = _admit_structure(request.source, "source")
     try:
         admitted = RelationalPolymorphismEnumerationRequest.model_validate(
-            {"source": source.model_dump(), "arity": arity},
+            {"source": source.model_dump(), "arity": request.arity},
             strict=True,
         )
     except Exception as exc:
         raise OperationDomainValidationError(
-            location=("arity",),
+            location=("request",),
             code="relational.polymorphism.enumeration_request_shape",
             message="request must contain a bounded positive arity and exact structure",
         ) from exc

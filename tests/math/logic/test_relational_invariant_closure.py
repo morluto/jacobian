@@ -16,18 +16,11 @@ from jacobian.catalog.models import (
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
-    FiniteRelationSymbol,
     RelationalInvariantClosure,
     RelationalInvariantClosureRequest,
     RelationalPolymorphism,
     close_relation_under_polymorphisms,
-)
-from jacobian.math.logic.relational_structures._admission import (
-    admit_invariant_closure_growth,
-)
-from jacobian.math.logic.relational_structures.values import (
-    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
-    MAX_RELATIONAL_INVARIANT_CLOSURE_WORK,
+    operations,
 )
 
 
@@ -103,8 +96,8 @@ def test_closure_is_exact_on_nonempty_source_relations() -> None:
     source = FiniteRelationalStructure(
         carrier_size=2,
         signature=(
-            FiniteRelationSymbol(symbol_id="E", arity=2),
-            FiniteRelationSymbol(symbol_id="P", arity=1),
+            {"symbol_id": "E", "arity": 2},
+            {"symbol_id": "P", "arity": 1},
         ),
         relation_tables=(((0, 0), (1, 1)), ((0,), (1,))),
     )
@@ -140,7 +133,7 @@ def test_two_supplied_operations_generate_the_least_common_closed_relation() -> 
 def test_non_polymorphism_is_rejected_before_it_can_claim_invariance() -> None:
     source = FiniteRelationalStructure(
         carrier_size=2,
-        signature=(FiniteRelationSymbol(symbol_id="P", arity=1),),
+        signature=({"symbol_id": "P", "arity": 1},),
         relation_tables=(((0,),),),
     )
     constant_one = _operation(source, 1, (1, 1))
@@ -181,7 +174,9 @@ def test_empty_and_nullary_relations_keep_exact_power_semantics() -> None:
     assert nullary.tuples == ((),)
 
 
-def test_empty_closure_admits_large_ambient_power() -> None:
+def test_admission_refuses_large_power_before_product_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     source = FiniteRelationalStructure(carrier_size=64)
     unary = _operation(source, 1, (0,) * 64)
     request = RelationalInvariantClosureRequest(
@@ -190,80 +185,12 @@ def test_empty_closure_admits_large_ambient_power() -> None:
         generator_tuples=(),
         polymorphisms=(unary,),
     )
-    result = close_relation_under_polymorphisms(request)
-    assert result.tuples == ()
-    assert result.source == source
 
+    def forbidden(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("tuple products were expanded before admission")
 
-def test_reachable_closure_admits_large_ambient_power() -> None:
-    # The least relation generated here is one row, so admission must charge
-    # the reachable closure rather than the 64**3 ambient power.
-    source = FiniteRelationalStructure(carrier_size=64)
-    unary_identity = _operation(source, 1, tuple(range(64)))
-    request = RelationalInvariantClosureRequest(
-        source=source,
-        relation_arity=3,
-        generator_tuples=((0, 0, 0),),
-        polymorphisms=(unary_identity,),
-    )
-
-    result = close_relation_under_polymorphisms(request)
-
-    assert result.tuples == ((0, 0, 0),)
-    assert result.source == source
-
-
-def test_empty_operation_family_returns_generators() -> None:
-    source = FiniteRelationalStructure(carrier_size=3)
-    request = RelationalInvariantClosureRequest(
-        source=source,
-        relation_arity=2,
-        generator_tuples=((0, 1), (1, 2)),
-        polymorphisms=(),
-    )
-
-    result = close_relation_under_polymorphisms(request)
-
-    assert result.polymorphisms == ()
-    assert result.tuples == ((0, 1), (1, 2))
-    restored = RelationalInvariantClosure.model_validate_json(result.model_dump_json())
-    assert restored == result
-
-
-def test_closure_growth_refuses_work_beyond_envelope() -> None:
-    with pytest.raises(
-        OperationResourceAdmissionError, match="generated-relation closure"
-    ):
-        admit_invariant_closure_growth(1, MAX_RELATIONAL_INVARIANT_CLOSURE_WORK + 1)
-
-
-def test_closure_growth_refuses_tuple_beyond_envelope() -> None:
+    monkeypatch.setattr(operations, "product", forbidden)
     with pytest.raises(OperationResourceAdmissionError, match="generated relation"):
-        admit_invariant_closure_growth(MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES + 1, 0)
-
-
-def test_admission_refuses_reachable_closure_beyond_work_envelope() -> None:
-    # Binary addition on Z/9 generates all of (Z/9)^4, so the reachable
-    # closure crosses the work envelope before any ambient power is charged.
-    source = FiniteRelationalStructure(carrier_size=9)
-    addition_table = tuple(
-        (left + right) % 9 for left in range(9) for right in range(9)
-    )
-    addition = _operation(source, 2, addition_table)
-    seeds = tuple(
-        tuple(1 if axis == coordinate else 0 for coordinate in range(4))
-        for axis in range(4)
-    )
-    request = RelationalInvariantClosureRequest(
-        source=source,
-        relation_arity=4,
-        generator_tuples=seeds,
-        polymorphisms=(addition,),
-    )
-
-    with pytest.raises(
-        OperationResourceAdmissionError, match="generated-relation closure"
-    ):
         close_relation_under_polymorphisms(request)
 
 

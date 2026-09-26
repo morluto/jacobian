@@ -532,6 +532,16 @@ def test_v2_operator_image_dilates_exact_q_prefix() -> None:
     assert result.image.codomain.level == 2
 
 
+def test_operator_image_rejects_non_level_one_source() -> None:
+    higher_level = ModularFormCoordinates(
+        space=ModularFormSpace(level=2, weight=4, kind="M"),
+        basis_id="gamma0-two-weight-2-4-monomials-v1",
+        coordinates=_coordinate_values((1, 1), (0, 1)),
+    )
+    with pytest.raises(OperationDomainValidationError, match="level-one"):
+        modular_form_operator_image(higher_level, "U", 3)
+
+
 def test_operator_image_rejects_composite_prime_and_insufficient_source_order() -> None:
     delta = ModularFormCoordinates(
         space=_space(12, "S"),

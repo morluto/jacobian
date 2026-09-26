@@ -390,6 +390,8 @@ class AffineFiberGraph(StrictModel):
     def _graph_shape(self) -> Self:
         n_vertices = len(self.vertices)
         configuration = self.semigroup.configuration
+        if len(self.target) != configuration.rows:
+            raise _err("target_shape", "graph target must use the ambient row axis")
         if self.moves != tuple(sorted(set(self.moves))):
             raise _err("graph_moves", "fiber graph moves must be sorted and unique")
         for move in self.moves:

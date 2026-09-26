@@ -92,6 +92,8 @@ def _factorization(r: AffineFactorizationRequest) -> AffineFactorization:
         )
     except OperationResourceAdmissionError:
         raise
+    except OperationDomainValidationError:
+        raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(
             location=("coordinates",),
@@ -115,6 +117,8 @@ def _fiber_graph(r: AffineFiberGraphRequest) -> AffineFiberGraph:
     try:
         return fiber_graph(r.semigroup, r.target, r.moves)
     except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
         raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(

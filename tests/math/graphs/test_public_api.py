@@ -106,6 +106,7 @@ def test_exact_public_api_symbols() -> None:
         "ColoredUndirectedGraph",
         "IndependenceNumberResult",
         "IndexedSimpleUndirectedGraph",
+        "LoopedSimpleGraph",
         "SimpleUndirectedGraph",
         "biconnected_components",
         "compose_graphs",

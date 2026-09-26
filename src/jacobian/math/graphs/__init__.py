@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from jacobian.math.graphs.values import (
         ColoredUndirectedGraph,
         IndexedSimpleUndirectedGraph,
+        LoopedSimpleGraph,
         SimpleUndirectedGraph,
     )
 
@@ -28,6 +29,7 @@ __all__ = [
     "ColoredUndirectedGraph",
     "IndependenceNumberResult",
     "IndexedSimpleUndirectedGraph",
+    "LoopedSimpleGraph",
     "SimpleUndirectedGraph",
     "biconnected_components",
     "compose_graphs",
@@ -43,6 +45,7 @@ __all__ = [
 _OWNER_MODULES = {
     "ColoredUndirectedGraph": "values",
     "IndexedSimpleUndirectedGraph": "values",
+    "LoopedSimpleGraph": "values",
     "SimpleUndirectedGraph": "values",
     "IndependenceNumberResult": "independence",
     "independence_number": "independence",

@@ -55,8 +55,8 @@ class SimplicialCohomologyRequest(StrictModel):
 class CohomologyGroupResult(StrictModel):
     """Exact cochain data and quotient basis in one cohomological degree."""
 
-    dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
-    cochain_dimension: StrictInt = Field(ge=1, le=MAX_TOPOLOGY_CHAIN_GROUP)
+    dimension: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
+    cochain_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     outgoing_coboundary_rank: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     cocycle_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
     incoming_coboundary_rank: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_CHAIN_GROUP)
@@ -137,12 +137,18 @@ class SimplicialCohomologyResult(StrictModel):
     @model_validator(mode="after")
     def require_complete_dimension_range(self) -> Self:
         dimensions = tuple(group.dimension for group in self.groups)
-        if dimensions != tuple(range(len(self.groups))):
+        empty_reduced = (
+            self.complex.dimension == -1
+            and self.convention is HomologyConvention.REDUCED
+        )
+        expected_dimensions = (-1,) if empty_reduced else tuple(range(len(self.groups)))
+        expected_range = (-1, -1) if empty_reduced else (0, len(self.groups) - 1)
+        if dimensions != expected_dimensions:
             raise _validation_error(
                 "topology.require_cohomology_range_2",
                 "cohomology groups must cover contiguous dimensions",
             )
-        if self.dimension_range != (0, len(self.groups) - 1):
+        if self.dimension_range != expected_range:
             raise _validation_error(
                 "topology.require_cohomology_range_3",
                 "dimension_range does not cover every returned group",

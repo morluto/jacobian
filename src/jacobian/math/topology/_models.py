@@ -543,6 +543,21 @@ class ChainComplexResult(StrictModel):
                 "boundary matrices must align with simplex bases",
             )
         for matrix in self.boundary_matrices:
+            degree = matrix.source_dimension
+            expected_rows = (
+                len(self.simplex_bases[degree - 1].simplices) if degree else 0
+            )
+            expected_columns = len(self.simplex_bases[degree].simplices)
+            if (
+                matrix.target_dimension != degree - 1
+                or matrix.rows != expected_rows
+                or matrix.columns != expected_columns
+            ):
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_7",
+                    "boundary matrix rows and columns must match adjacent simplex bases",
+                )
+        for matrix in self.boundary_matrices:
             if any(entry.value not in allowed_values for entry in matrix.entries):
                 raise _validation_error(
                     "topology.require_coherent_chain_contract_3",

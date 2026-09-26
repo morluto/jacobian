@@ -229,7 +229,7 @@ class DiscreteMorseMatchingResult(StrictModel):
                 "euler_identity_violated",
                 "critical-count Euler characteristic must equal the closure value",
             )
-        if not self.topological_order:
+        if canonical_cells and not self.topological_order:
             raise _validation_error(
                 "topological_order_required",
                 "an acyclic result requires its Hasse topological order",
@@ -525,7 +525,7 @@ class MorseComplexResult(StrictModel):
     critical_profile: CriticalCellProfile
     coefficient_field: Literal["GF(2)"] = "GF(2)"
     critical_cells_by_dimension: tuple[CriticalCellBasis, ...] = Field(
-        min_length=1, max_length=MAX_TOPOLOGY_DIMENSION + 1
+        min_length=0, max_length=MAX_TOPOLOGY_DIMENSION + 1
     )
     boundary_entries: tuple[MorseBoundaryEntry, ...] = Field(
         default=(), max_length=MAX_MORSE_BOUNDARY_ENTRIES

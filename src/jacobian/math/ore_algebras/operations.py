@@ -2276,9 +2276,12 @@ def differential_operator_to_coefficient_recurrence(
         maximum_numerator_bits + common_denominator_bits + 8 * value.order + 18
     )
     output_denominator_digits = _digits_for_bit_bound(common_denominator_bits)
+    # The returned recurrence is itself a ShiftOreOperator consumed by the
+    # shift-operation envelope; admit its generated coefficients against that
+    # same bound before expanding falling factorials.
     if (
         max(output_numerator_digits, output_denominator_digits)
-        > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+        > MAX_SHIFT_COEFFICIENT_DIGITS
     ):
         raise OperationResourceAdmissionError(
             location=("operator", "terms"),

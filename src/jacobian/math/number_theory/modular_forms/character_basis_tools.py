@@ -229,17 +229,40 @@ def _equality_example() -> dict[str, object]:
             (0, 0),
         )
     )
-    transported = ModularCharacterTransportedForm(
+    target_q_expansion = ModularCharacterQExpansion(
+        space=target_space,
+        basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
+        coefficients=q_coefficients,
+    )
+    from_level_13 = ModularCharacterTransportedForm(
         source_form=form,
         inclusion=inclusion,
         target_form=coordinates,
-        target_q_expansion=ModularCharacterQExpansion(
-            space=target_space,
-            basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
-            coefficients=q_coefficients,
+        target_q_expansion=target_q_expansion,
+    )
+    target_character = cast(DirichletCharacter, target_space.character)
+    target_field = cast(RationalCyclotomicField, target_space.coefficient_domain)
+    identity_inclusion = ModularCharacterSpaceInclusion(
+        source_space=target_space,
+        target_space=target_space,
+        character_map=CyclotomicCharacterMap(
+            source=target_character, target=target_character
         ),
-    ).model_dump(mode="json")
-    return {"left": transported, "right": transported}
+        coefficient_field_map=CyclotomicIdentityFieldMap(
+            source=target_field,
+            target=target_field,
+        ),
+    )
+    from_level_26 = ModularCharacterTransportedForm(
+        source_form=coordinates,
+        inclusion=identity_inclusion,
+        target_form=coordinates,
+        target_q_expansion=target_q_expansion,
+    )
+    return {
+        "left": from_level_13.model_dump(mode="json"),
+        "right": from_level_26.model_dump(mode="json"),
+    }
 
 
 TOOLS: MathTools = (

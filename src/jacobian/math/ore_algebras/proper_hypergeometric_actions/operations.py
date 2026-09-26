@@ -170,7 +170,7 @@ def _admit_action(operator: ShiftOreOperator, n_ratio: RationalFunction) -> None
         )
 
 
-def _apply(
+def _apply_in_process(
     operator: ShiftOreOperator, term: ProperHypergeometricTerm
 ) -> RationalFunction:
     from sympy import Integer
@@ -198,6 +198,16 @@ def _apply(
         ),
         symbols=(n, k),
     )
+
+
+def _apply(
+    operator: ShiftOreOperator, term: ProperHypergeometricTerm
+) -> RationalFunction:
+    from jacobian.math.ore_algebras.proper_hypergeometric_actions._action_process import (
+        run_action_worker,
+    )
+
+    return run_action_worker(operator, term)
 
 
 def proper_hypergeometric_operator_action(

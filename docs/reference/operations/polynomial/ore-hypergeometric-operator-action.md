@@ -30,6 +30,10 @@ worst-case cross-multiplied expansion exceeds these limits are rejected before
 expansion; lower-order operators remain accepted whenever their derived
 expansion fits.
 
+The exact symbolic normalization runs in a killable worker under the request's
+remaining deadline. A timeout or cancellation means no multiplier was computed
+and establishes no mathematical conclusion.
+
 This operation supplies the operator-action primitive for constructing and
 replaying creative-telescoping identities; it does not search for a
 telescoper, interpret summation bounds, or assign values at support boundaries.

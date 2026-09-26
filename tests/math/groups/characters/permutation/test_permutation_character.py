@@ -96,7 +96,9 @@ def test_character_serialization_and_tampering_are_checked() -> None:
     ]
     forged_partition["axis"]["class_sizes"] = [1, 1, 1]
     forged_partition["axis"]["class_representatives"] = [
-        [0, 1, 2], [1, 0, 2], [1, 2, 0]
+        [0, 1, 2],
+        [1, 0, 2],
+        [1, 2, 0],
     ]
     forged_partition["axis"]["group_order"] = 3
     forged_partition["values"] = [
@@ -107,7 +109,9 @@ def test_character_serialization_and_tampering_are_checked() -> None:
     structurally_valid_but_incomplete = FiniteCharacter.model_validate_json(
         json.dumps(forged_partition)
     )
-    assert structurally_valid_but_incomplete.partition.classes != result.partition.classes
+    assert (
+        structurally_valid_but_incomplete.partition.classes != result.partition.classes
+    )
 
     oversized_partition = result.model_dump(mode="json")
     oversized_partition["partition"]["classes"] = [[]] * 65

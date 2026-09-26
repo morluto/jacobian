@@ -172,9 +172,7 @@ def test_sparse_rank_admits_a_2016_by_128_active_support_profile() -> None:
 
 
 def test_sparse_rank_request_preflights_its_scalar_budget() -> None:
-    with pytest.raises(
-        ValidationError, match=rf"{MAX_INPUT_SCALAR_DIGITS} decimal digits"
-    ):
+    with pytest.raises(ValidationError) as error:
         MatrixRankRequest.model_validate(
             {
                 "matrix": {
@@ -193,6 +191,7 @@ def test_sparse_rank_request_preflights_its_scalar_budget() -> None:
                 }
             }
         )
+    assert error.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_sparse_rank_accepts_a_max_axis_diagonal() -> None:

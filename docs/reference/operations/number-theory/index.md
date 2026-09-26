@@ -29,6 +29,8 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Function-field rational base inclusion](function-field-base-embedding.md)
 - [Exact function-field element addition](function-field-element-addition.md)
 - [Exact function-field element inversion](function-field-element-inversion.md)
+- [Exact simple number-field map](exact-number-field-map.md)
+- [Composita of quadratic splitting fields](galois-compositum.md)
 - [Real-embedded binary power-sum gap profiles](binary-power-sum-gap-profile.md)
 - [Exact finite-sequence autocorrelation](finite-sequence-autocorrelation.md)
 - [Kempner arithmetic-progression decisions](kempner-arithmetic-progressions.md)

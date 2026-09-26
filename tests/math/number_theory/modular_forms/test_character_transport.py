@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from itertools import product
 from math import gcd
 from typing import Literal, cast
@@ -24,12 +25,14 @@ from jacobian.math.number_theory.characters.operations import (
     dirichlet_character_value,
 )
 from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     CyclotomicCharacterMap,
     CyclotomicIdentityFieldMap,
+    ModularCharacterCommonTargetPrefix,
     ModularCharacterCoordinatesTransportRequest,
     ModularCharacterEqualityRequest,
     ModularCharacterSpaceInclusion,
@@ -91,6 +94,15 @@ def _element(constant: int, zeta: int = 0) -> RationalCyclotomicElement:
     )
 
 
+def _sum_cyclotomic(
+    values: Iterable[RationalCyclotomicElement],
+) -> RationalCyclotomicElement:
+    total = _element(0)
+    for value in values:
+        total = cyclotomic.add(total, value)
+    return total
+
+
 def _inclusion(
     source_space: ModularFormSpace, target_space: ModularFormSpace
 ) -> ModularCharacterSpaceInclusion:
@@ -129,8 +141,8 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
 
     assert transported.inclusion == inclusion
     assert transported.source_form.space == source_space
-    assert transported.target_form.space == target_space
     assert type(transported.target_form) is ModularFormCoordinates
+    assert transported.target_form.space == target_space
     assert transported.target_form.basis_id == _GENERIC_BASIS
     assert transported.target_form.coordinates == (_element(1), _element(-1, -1))
     assert len(transported.target_q_expansion.coefficients) == 8
@@ -167,6 +179,7 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     from_level_13 = modular_character_coordinates_transport(
         _level_13_form(source_space), _inclusion(source_space, target_space)
     )
+    assert type(from_level_13.target_form) is ModularFormCoordinates
     target_form_same_f = modular_character_coordinates_transport(
         from_level_13.target_form, _inclusion(target_space, target_space)
     )
@@ -193,6 +206,136 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     ).equal
 
 
+def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_13 = _space(13, source_character)
+    source_26 = _space(26, _inflate(source_character, 26))
+    source_39 = _space(39, _inflate(source_character, 39))
+    target_78 = _space(78, _inflate(source_character, 78))
+
+    form_26 = modular_character_coordinates_transport(
+        _level_13_form(source_13), _inclusion(source_13, source_26)
+    ).target_form
+    form_39 = modular_character_coordinates_transport(
+        _level_13_form(source_13), _inclusion(source_13, source_39)
+    ).target_form
+    assert type(form_26) is ModularFormCoordinates
+    assert type(form_39) is ModularFormCoordinates
+    left = modular_character_coordinates_transport(
+        form_26, _inclusion(source_26, target_78)
+    )
+    right = modular_character_coordinates_transport(
+        form_39, _inclusion(source_39, target_78)
+    )
+    equal = modular_character_coordinates_equal_in_common_space(left, right)
+
+    assert left.target_form is None and right.target_form is None
+    assert left.target_q_expansion.space == right.target_q_expansion.space == target_78
+    assert len(left.target_q_expansion.coefficients) == 29
+    assert len(right.target_q_expansion.coefficients) == 29
+    for source_space, source_form, transported in (
+        (source_26, form_26, left),
+        (source_39, form_39, right),
+    ):
+        source_basis = modular_character_basis_q_expansions(source_space, precision=29)
+        direct_prefix = tuple(
+            _sum_cyclotomic(
+                cyclotomic.multiply(
+                    coordinate,
+                    source_basis.elements[index].expansion.coefficients[q],
+                )
+                for index, coordinate in enumerate(
+                    cast(
+                        tuple[RationalCyclotomicElement, ...],
+                        source_form.coordinates,
+                    )
+                )
+            )
+            for q in range(29)
+        )
+        assert transported.target_q_expansion.coefficients == direct_prefix
+    assert equal.equal is True
+    assert equal.equal is (
+        left.target_q_expansion.coefficients == right.target_q_expansion.coefficients
+    )
+    assert (
+        TypeAdapter(ModularCharacterTransportedForm).validate_json(
+            left.model_dump_json()
+        )
+        == left
+    )
+
+    twice_39 = ModularFormCoordinates(
+        space=source_39,
+        basis_id=form_39.basis_id,
+        coordinates=tuple(
+            cyclotomic.multiply(value, _element(2))
+            for value in cast(
+                tuple[RationalCyclotomicElement, ...], form_39.coordinates
+            )
+        ),
+    )
+    unequal_right = modular_character_coordinates_transport(
+        twice_39, _inclusion(source_39, target_78)
+    )
+    unequal = modular_character_coordinates_equal_in_common_space(left, unequal_right)
+
+    assert unequal.equal is False
+    assert unequal.equal is (
+        left.target_q_expansion.coefficients
+        == unequal_right.target_q_expansion.coefficients
+    )
+    assert (
+        left.target_q_expansion.coefficients[1]
+        != (unequal_right.target_q_expansion.coefficients[1])
+    )
+
+
+def test_level_78_common_prefix_admits_source_expansion_and_rejects_height(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.number_theory.modular_forms import character_basis
+
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(78, _inflate(source_character, 78))
+    transported = modular_character_coordinates_transport(
+        _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    assert transported.target_form is None
+    assert type(transported.target_q_expansion) is ModularCharacterCommonTargetPrefix
+    assert transported.target_q_expansion.precision == 29
+    assert len(transported.target_q_expansion.coefficients) == 29
+
+    source_39 = _space(39, _inflate(source_character, 39))
+    boundary = ModularFormCoordinates(
+        space=source_39,
+        basis_id=_GENERIC_BASIS,
+        coordinates=(_element(10**40), _element(0), _element(0)),
+    )
+    admitted = modular_character_coordinates_transport(
+        boundary, _inclusion(source_39, target_space)
+    )
+    assert type(admitted.target_q_expansion) is ModularCharacterCommonTargetPrefix
+    assert admitted.target_q_expansion.precision == 29
+
+    def backend_must_not_run(*args: object, **kwargs: object) -> None:
+        raise AssertionError("source basis backend ran after output-height rejection")
+
+    monkeypatch.setattr(character_basis, "pari_character_basis", backend_must_not_run)
+    oversized = ModularFormCoordinates(
+        space=source_39,
+        basis_id=_GENERIC_BASIS,
+        coordinates=(_element(10**41), _element(0), _element(0)),
+    )
+    with pytest.raises(
+        OperationResourceAdmissionError, match="expansion or target solve exceeds"
+    ):
+        modular_character_coordinates_transport(
+            oversized, _inclusion(source_39, target_space)
+        )
+
+
 def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
     source_character = dirichlet_character(character_group(13), (2,))
     target_character = _inflate(source_character, 26)
@@ -200,6 +343,10 @@ def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
     target_space = _space(26, target_character)
     left = modular_character_coordinates_transport(
         _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    assert type(left.target_form) is ModularFormCoordinates
+    right = modular_character_coordinates_transport(
+        left.target_form, _inclusion(target_space, target_space)
     )
     forged = left.model_copy(
         update={
@@ -211,15 +358,42 @@ def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
         }
     )
     with pytest.raises(OperationDomainValidationError, match="do not match"):
-        modular_character_coordinates_equal_in_common_space(left, forged)
+        modular_character_coordinates_equal_in_common_space(right, forged)
+
+
+def test_global_equality_requires_the_least_common_source_level() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_13 = _space(13, source_character)
+    target_26 = _space(26, _inflate(source_character, 26))
+    first = modular_character_coordinates_transport(
+        _level_13_form(source_13), _inclusion(source_13, target_26)
+    )
+    assert type(first.target_form) is ModularFormCoordinates
+    second = modular_character_coordinates_transport(
+        first.target_form, _inclusion(target_26, target_26)
+    )
+    identity = modular_character_coordinates_transport(
+        _level_13_form(source_13), _inclusion(source_13, source_13)
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="least common multiple"):
+        modular_character_coordinates_equal_in_common_space(first, first)
+    assert identity.target_form is None
+    assert len(identity.target_q_expansion.coefficients) == 3
+    assert modular_character_coordinates_equal_in_common_space(identity, identity).equal
+    assert modular_character_coordinates_equal_in_common_space(second, second).equal
 
 
 def test_global_equality_retains_revalidated_nested_target_dictionaries() -> None:
     source_character = dirichlet_character(character_group(13), (2,))
     source_space = _space(13, source_character)
     target_space = _space(26, _inflate(source_character, 26))
-    canonical = modular_character_coordinates_transport(
+    transported = modular_character_coordinates_transport(
         _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    assert type(transported.target_form) is ModularFormCoordinates
+    canonical = modular_character_coordinates_transport(
+        transported.target_form, _inclusion(target_space, target_space)
     )
     forged = ModularCharacterTransportedForm.model_construct(
         **canonical.model_dump(mode="python")
@@ -284,6 +458,94 @@ def test_transport_request_model_round_trip() -> None:
     )
 
 
+def test_transport_rejects_malformed_constructed_inclusion_with_typed_error() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    inclusion = _inclusion(source_space, target_space)
+    malformed_source = source_space.model_dump()
+    malformed_source["level"] = "13"
+    forged_inclusion = inclusion.model_copy(update={"source_space": malformed_source})
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_character_coordinates_transport(
+            _level_13_form(source_space), forged_inclusion
+        )
+
+    assert error.value.errors()[0]["type"] == "modular_form.character_inclusion_invalid"
+
+
+def test_transport_consumes_canonicalized_inclusion_for_basis_selection() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    canonical = _inclusion(source_space, target_space)
+    # A native caller may retain a valid serialized target space while bypassing
+    # field validation; admission must canonicalize it before selecting bases.
+    uncanonical = canonical.model_copy(
+        update={"target_space": target_space.model_dump()}
+    )
+
+    transported = modular_character_coordinates_transport(
+        _level_13_form(source_space), uncanonical
+    )
+    expected = modular_character_coordinates_transport(
+        _level_13_form(source_space), canonical
+    )
+
+    assert transported == expected
+    assert transported.inclusion == canonical
+
+
+def test_transport_rejects_malformed_constructed_form_with_typed_error() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    malformed_space = source_space.model_dump()
+    malformed_space["level"] = "13"
+    forged_form = _level_13_form(source_space).model_copy(
+        update={"space": malformed_space}
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_character_coordinates_transport(
+            forged_form, _inclusion(source_space, target_space)
+        )
+
+    assert (
+        error.value.errors()[0]["type"] == "modular_form.character_coordinates_invalid"
+    )
+
+
+def test_common_equality_rejects_malformed_constructed_transport_with_typed_error() -> (
+    None
+):
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    transported = modular_character_coordinates_transport(
+        _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    malformed_space = source_space.model_dump()
+    malformed_space["level"] = "13"
+    forged = transported.model_copy(
+        update={
+            "source_form": {
+                **transported.source_form.model_dump(),
+                "space": malformed_space,
+            }
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        modular_character_coordinates_equal_in_common_space(forged, transported)
+
+    assert (
+        error.value.errors()[0]["type"]
+        == "modular_form.character_transport_value_invalid"
+    )
+
+
 def test_transport_height_boundary_is_admitted_before_basis_materialization(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -328,6 +590,7 @@ def test_transport_accepts_admitted_height_boundary_through_exact_expansion() ->
         form, _inclusion(source_space, target_space)
     )
 
+    assert type(transported.target_form) is ModularFormCoordinates
     assert transported.target_form.coordinates == (
         _element(coefficient),
         _element(-coefficient, -coefficient),
@@ -335,12 +598,26 @@ def test_transport_accepts_admitted_height_boundary_through_exact_expansion() ->
 
 
 @pytest.mark.parametrize(
-    ("level", "precision", "dimension"),
-    [(13, 3, 1), (13, 8, 1), (13, 10, 1), (26, 8, 2), (26, 10, 2), (39, 10, 3)],
+    ("level", "precision", "dimension", "coefficient_digits"),
+    [
+        (13, 3, 1, 1),
+        (13, 8, 1, 1),
+        (13, 10, 1, 1),
+        (13, 29, 1, 1),
+        (26, 8, 2, 1),
+        (26, 10, 2, 1),
+        (26, 29, 2, 1),
+        (39, 10, 3, 1),
+        (39, 29, 3, 1),
+    ],
 )
 @pytest.mark.parametrize("character_coordinate", [2, 10])
 def test_transport_sturm_basis_coefficient_envelope(
-    level: int, precision: int, dimension: int, character_coordinate: int
+    level: int,
+    precision: int,
+    dimension: int,
+    coefficient_digits: int,
+    character_coordinate: int,
 ) -> None:
     character = dirichlet_character(character_group(13), (character_coordinate,))
     character = _inflate(character, level)
@@ -350,7 +627,8 @@ def test_transport_sturm_basis_coefficient_envelope(
 
     assert len(basis.elements) == dimension
     assert all(
-        value.den == 1 and abs(int(value.num)) < 10
+        len(str(abs(int(value.num)))) <= coefficient_digits
+        and len(str(int(value.den))) <= coefficient_digits
         for element in basis.elements
         for coefficient in element.expansion.coefficients
         for value in coefficient.coefficients_ascending

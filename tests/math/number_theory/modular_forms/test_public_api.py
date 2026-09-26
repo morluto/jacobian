@@ -10,6 +10,7 @@ def test_exact_public_api_symbols() -> None:
         "LevelOneModularQExpansion",
         "ModularCharacterBasis",
         "ModularCharacterBasisElement",
+        "ModularCharacterCommonTargetPrefix",
         "ModularCharacterEqualityResult",
         "ModularCharacterHeckeMatrix",
         "ModularCharacterQExpansion",

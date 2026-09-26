@@ -51,13 +51,26 @@ Other character spaces and general field-valued Gamma0 bases remain unsupported.
 
 For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
 supports explicit nested-level inclusion from level 13, 26, or 39 into level
-26 or 39 when the source level divides the target. The request preserves both
+26 or 39 when the source level divides the target, and identity inclusion at
+level 13. It also supports a common level-78 target for the nonnested 26-vs-39
+case. The request preserves both
 exact space parents and carries the character pullback and identity map of
 `Q(zeta_6)` parents. It checks the character map on every target unit and
 requires each character's explicit modulus to equal its space level. The
 operation returns target coordinates and the exact q-prefix through the target
-Sturm precision, extending the source basis while retaining its canonical
-q-Sturm RREF normalization when needed. Before either basis is materialized,
+Sturm precision for levels 26 and 39, extending the source basis while
+retaining its canonical q-Sturm RREF normalization when needed. At targets 13
+and 78, it retains the explicit source inclusion and returns a typed Sturm
+prefix rather than target basis coordinates. The common q-expansion principle
+gives the same equality postcondition in either case: the explicit character
+map establishes membership in the target, identity pullback preserves the
+source q-expansion, and equality compares every coefficient through the
+target Sturm bound (3 coefficients at level 13, 29 at level 78). Level 13
+uses the same prefix representation to keep one equality postcondition and
+avoid relabeling the legacy level-13 coordinate value as a level-26/39-family
+coordinate type. At level 78, the current basis adapter failed exact
+reconstruction of an admitted included form, so target coordinates lack a
+sound canonical basis contract. Before either source basis is materialized,
 it bounds exact cyclotomic expansion and target-solve coefficient growth
 against the canonical 256-digit field-element limit. This bound is based on
 the represented source dimension, target dimension, and submitted coordinate
@@ -65,10 +78,11 @@ height; values whose full expansion or reconstruction could exceed the limit
 are rejected before PARI work.
 
 The coefficient-growth estimate relies on a finite canonical-basis contract:
-at the transport precisions `(13,3)`, `(13,8)`, `(13,10)`, `(26,8)`,
-`(26,10)`, and `(39,10)`, the S2 basis dimensions are respectively
-`1, 1, 1, 2, 2, 3`, and each cyclotomic rational coordinate is an integer of
-absolute value below 10. The basis producer admits the resulting cell/output
+at the transport precisions `(13,3)`, `(13,8)`, `(13,10)`, `(13,29)`,
+`(26,8)`, `(26,10)`, `(26,29)`, `(39,10)`, and `(39,29)`, the S2 basis
+dimensions are respectively `1, 1, 1, 1, 2, 2, 2, 3, 3`, and each cyclotomic
+rational coordinate is an integer of absolute value below 10. The basis
+producer admits the resulting cell/output
 envelope before PARI and checks the coefficient bound before publishing the
 basis. Regression fixtures cover both conjugate characters at each pair.
 
@@ -77,8 +91,9 @@ they land in the identical target space and coefficient field. It recomputes
 each inclusion from the retained source form, checks the submitted target
 coordinates and q-prefix, and compares all coefficients through the target
 Sturm bound. This is a narrow global-equality decision for these represented
-spaces; it does not add arbitrary-character transport, implicit character
-inflation, coefficient-field embeddings, or Hecke support. The dimension
+spaces, including the exact 26-vs-39 comparison at common level 78; it does
+not add arbitrary-character transport, implicit character inflation,
+coefficient-field embeddings, or Hecke support. The dimension
 formula and PARI cross-check boundaries above remain unchanged.
 
 For this represented character slice,

@@ -6,7 +6,7 @@ from fractions import Fraction
 from math import gcd
 from typing import Literal, NoReturn, cast
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -58,9 +58,12 @@ _TRANSPORT_STURM_BASIS_ENVELOPE = {
     (13, 3): (1, 1),
     (13, 8): (1, 1),
     (13, 10): (1, 1),
+    (13, 29): (1, 1),
     (26, 8): (2, 1),
     (26, 10): (2, 1),
+    (26, 29): (2, 1),
     (39, 10): (3, 1),
+    (39, 29): (3, 1),
 }
 
 
@@ -329,7 +332,8 @@ def _character_basis_from_admission(
         space.kind == "S"
         and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
         and any(
-            value.den != 1 or abs(value.num) >= 10
+            canonical_rational_component_digits(value)
+            > _TRANSPORT_STURM_BASIS_ENVELOPE[(space.level, precision)][1]
             for vector in normalized
             for coefficient in vector
             for value in coefficient.coefficients_ascending
@@ -338,7 +342,7 @@ def _character_basis_from_admission(
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.character_basis_transport_height",
-            message="transportable cusp Sturm bases require integral one-digit cyclotomic coefficients",
+            message="transportable cusp Sturm bases exceed their declared cyclotomic coefficient envelope",
         )
     basis_id = (
         CHARACTER_BASIS_ID

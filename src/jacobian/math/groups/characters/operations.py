@@ -425,7 +425,7 @@ def _admit_partition_source(source: object) -> tuple[int, tuple[tuple[int, ...],
         )
     degree = getattr(source, "degree", None)
     generators = getattr(source, "generators", None)
-    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+    if type(degree) is not int or not 0 <= degree <= MAX_GROUP_DEGREE:
         raise OperationDomainValidationError(
             location=("partition", "source"),
             code="groups.characters.partition_source",
@@ -570,6 +570,13 @@ def character_table(
     groups are domain-invalid rather than receiving a guessed partial table.
     """
     partition = _admit_character_partition(partition)
+    return _character_table_from_admitted_partition(partition)
+
+
+def _character_table_from_admitted_partition(
+    partition: GroupConjugacyClassesResult,
+) -> CharacterTableResult:
+    """Build a table from a partition authenticated by the caller."""
     order = sum(len(cls) for cls in partition.classes)
     if (
         order > MAX_GROUP_ORDER
@@ -596,37 +603,39 @@ def character_table(
                 label="trivial", degree=1, values=(_make_value(1, (Fraction(1),)),)
             )
         )
-    elif order == 6 and sizes == (1, 3, 2):
+    elif order == 6 and len(sizes) == 3 and set(sizes) == {1, 2, 3}:
         _admit_character_table(
             order=order,
             class_count=len(sizes),
             cyclotomic_order=1,
             row_count=3,
         )
-        # The class order is identity, transpositions, 3-cycles for the
-        # canonical permutation-class ordering.
+        # Canonical conjugacy ordering may permute the transposition and
+        # 3-cycle classes for non-natural embeddings; identify by class size.
+        labels = ("trivial", "sign", "standard")
+        degrees = (1, 1, 2)
         rows = [
             CharacterRow(
-                label="trivial",
-                degree=1,
+                label=label,
+                degree=degree,
                 values=tuple(
-                    _make_value(order, (Fraction(v), Fraction(0))) for v in (1, 1, 1)
+                    _make_value(
+                        order,
+                        (
+                            Fraction(
+                                {"trivial": 1, "sign": 1, "standard": 2}[label]
+                                if size == 1
+                                else {"trivial": 1, "sign": -1, "standard": 0}[label]
+                                if size == 3
+                                else {"trivial": 1, "sign": 1, "standard": -1}[label]
+                            ),
+                            Fraction(0),
+                        ),
+                    )
+                    for size in sizes
                 ),
-            ),
-            CharacterRow(
-                label="sign",
-                degree=1,
-                values=tuple(
-                    _make_value(order, (Fraction(v), Fraction(0))) for v in (1, -1, 1)
-                ),
-            ),
-            CharacterRow(
-                label="standard",
-                degree=2,
-                values=tuple(
-                    _make_value(order, (Fraction(v), Fraction(0))) for v in (2, 0, -1)
-                ),
-            ),
+            )
+            for label, degree in zip(labels, degrees, strict=True)
         ]
     else:
         generator = _cyclic_generator(partition)
@@ -699,7 +708,7 @@ def character_tensor_decomposition(
         )
     request = CharacterTensorDecompositionRequest.model_validate(request.model_dump())
     partition = _admit_character_partition(request.partition)
-    table = character_table(partition)
+    table = _character_table_from_admitted_partition(partition)
     if (
         table.axis.group_order != 6
         or table.axis.class_sizes != (1, 3, 2)
@@ -782,10 +791,11 @@ def character_tensor_decomposition(
     # At most three copies of the bounded degree-256 permutation group are
     # retained. Values use at most 512 digits; this estimate stays below both
     # the operation's 2 MB cap and the canonical 10 MB transport limit.
-    if axis.group is None:
+    group = axis.group
+    if group is None:
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    degree = axis.group.degree
-    generator_count = len(axis.group.generators)
+    degree = group.degree
+    generator_count = len(group.generators)
     group_bytes = 512 + generator_count * (degree * 8 + 16)
     structure_bytes = 3 * group_bytes + 12 * degree * 8 + 128_000
     value_bytes = 12 * dimension * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 24)

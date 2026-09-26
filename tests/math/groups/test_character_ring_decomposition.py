@@ -18,6 +18,7 @@ from jacobian.math.groups.characters._cyclotomic import euler_phi
 from jacobian.math.groups.characters._models import (
     CharacterRingDecompositionRequest,
     CharacterRingElement,
+    CharacterTableResult,
     ClassAxis,
     CyclotomicValue,
     FiniteClassFunction,
@@ -40,7 +41,9 @@ def _partition(generators: tuple[tuple[int, ...], ...]) -> GroupConjugacyClasses
     )
 
 
-def _function_from_rows(table, coordinates: tuple[int, ...]) -> FiniteClassFunction:
+def _function_from_rows(
+    table: CharacterTableResult, coordinates: tuple[int, ...]
+) -> FiniteClassFunction:
     order = table.axis.cyclotomic_order
     values: list[CyclotomicValue] = []
     for class_index in range(len(table.axis.class_sizes)):
@@ -127,6 +130,32 @@ def test_s3_irreducible_and_reducible_virtual_coordinates() -> None:
     assert decomposed.ring_element.irreducible_multiplicities == (1, 0, 1)
 
 
+def test_backend_group_order_is_computed_once_for_decomposition(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sympy.combinatorics.perm_groups import (
+        PermutationGroup as SympyPermutationGroup,
+    )
+
+    order_calls = 0
+    backend_order = SympyPermutationGroup.order
+
+    def counting_order(self: SympyPermutationGroup) -> object:
+        nonlocal order_calls
+        order_calls += 1
+        return backend_order(self)
+
+    standard = _s3_class_function((Fraction(2), Fraction(0), Fraction(-1)))
+    monkeypatch.setattr(SympyPermutationGroup, "order", counting_order)
+    result = class_function_character_decomposition(
+        CharacterRingDecompositionRequest(class_function=standard)
+    )
+    assert result.ring_element.irreducible_multiplicities == (0, 0, 1)
+    # Admission builds the backend group and computes the Schreier-Sims order
+    # once; class enumeration reuses both instead of replaying the order.
+    assert order_calls == 1
+
+
 def test_s3_virtual_character_keeps_signed_coordinates() -> None:
     virtual = _s3_class_function((Fraction(-1), Fraction(1), Fraction(2)))
     result = class_function_character_decomposition(
@@ -158,15 +187,17 @@ def test_nonintegral_class_function_is_not_a_virtual_character() -> None:
         )
 
 
-def test_work_and_height_are_admitted_before_conjugacy_expansion(monkeypatch) -> None:
+def test_work_and_height_are_admitted_before_conjugacy_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     partition = _partition(((1, 2, 0),))
     oversized = _function_on_partition(partition, Fraction(10**511))
 
-    def unexpected_expansion(*args, **kwargs):
+    def unexpected_expansion(*args: object, **kwargs: object) -> None:
         pytest.fail("conjugacy classes expanded before exact arithmetic admission")
 
     monkeypatch.setattr(
-        ring_operations, "group_conjugacy_classes", unexpected_expansion
+        ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
     with pytest.raises(OperationResourceAdmissionError, match=r"height|envelope"):
         class_function_character_decomposition(
@@ -184,6 +215,24 @@ def test_maximum_supported_cyclic_group_decomposes_exactly() -> None:
 
 
 def test_trivial_group_decomposition_and_round_trip() -> None:
+    degree_zero_group = PermutationGroup(degree=0, generators=((),))
+    degree_zero_classes = group_conjugacy_classes(0, [[]])
+    degree_zero_partition = GroupConjugacyClassesResult._from_kernel(
+        degree_zero_group,
+        tuple(tuple(tuple(element) for element in cls) for cls in degree_zero_classes),
+    )
+    degree_zero_function = _function_on_partition(degree_zero_partition, Fraction(7))
+    degree_zero_result = class_function_character_decomposition(
+        CharacterRingDecompositionRequest(class_function=degree_zero_function)
+    )
+    assert degree_zero_result.ring_element.irreducible_multiplicities == (7,)
+    assert (
+        type(degree_zero_result).model_validate_json(
+            degree_zero_result.model_dump_json()
+        )
+        == degree_zero_result
+    )
+
     partition = _partition(((0,),))
     constant = _function_on_partition(partition, Fraction(7))
     result = class_function_character_decomposition(
@@ -194,7 +243,7 @@ def test_trivial_group_decomposition_and_round_trip() -> None:
 
 
 def test_group_order_above_table_envelope_rejects_before_class_expansion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     generator = (*range(1, 61), 0)
     source = PermutationGroup(degree=61, generators=(generator,))
@@ -207,11 +256,11 @@ def test_group_order_above_table_envelope_rejects_before_class_expansion(
     one = CyclotomicValue(order=1, coefficients=(CanonicalRational(num=1, den=1),))
     function = FiniteClassFunction(axis=axis, values=(one,) * 61)
 
-    def unexpected_expansion(*args, **kwargs):
+    def unexpected_expansion(*args: object, **kwargs: object) -> None:
         pytest.fail("group-order rejection must precede conjugacy expansion")
 
     monkeypatch.setattr(
-        ring_operations, "group_conjugacy_classes", unexpected_expansion
+        ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
     with pytest.raises(OperationResourceAdmissionError, match="group order"):
         class_function_character_decomposition(
@@ -233,4 +282,8 @@ def test_catalog_example_executes() -> None:
     operation = catalog.operation(operation_id)
     assert operation is not None
     result = invoke_operation(operation_id, operation.examples[0].input, catalog)
-    assert result.output["ring_element"]["irreducible_multiplicities"] == [0, 0, 1]
+    assert result.output["ring_element"]["irreducible_multiplicities"] == [
+        "0",
+        "0",
+        "1",
+    ]

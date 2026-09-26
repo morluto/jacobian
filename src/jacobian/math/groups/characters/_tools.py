@@ -719,7 +719,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "equals chi(1)^2; its normalized character value is the scalar "
             "root of unity. The result retains selected canonical classes and "
             "their exact scalar values. Supported groups are trivial, cyclic "
-            "of order at most 60, and S3."
+            "of order at most 60 subject to the operation's output envelope, "
+            "and S3. Larger cyclic tables may be rejected before expansion."
         ),
         request_type=CharacterCenterRequest,
         result_type=CharacterCenter,

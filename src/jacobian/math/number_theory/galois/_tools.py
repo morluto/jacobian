@@ -3,7 +3,6 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
-from jacobian.math.number_theory.galois._compositum import galois_compositum
 from jacobian.math.number_theory.galois._models import (
     AutomorphismApplyRequest,
     AutomorphismApplyResult,
@@ -12,14 +11,22 @@ from jacobian.math.number_theory.galois._models import (
     AutomorphismInverseRequest,
     AutomorphismRequest,
     AutomorphismResult,
+    ElementEmbeddingOrbitRequest,
+    ElementEmbeddingOrbitResult,
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
-    GaloisCompositumRequest,
-    GaloisCompositumResult,
+    GaloisAutomorphismSubgroup,
+    GaloisCorrespondenceRequest,
+    GaloisCorrespondenceResult,
     GaloisFactorRequest,
     GaloisFactorResult,
+    GaloisFixedFieldRequest,
+    GaloisFixedFieldResult,
     GaloisGroupRequest,
     GaloisGroupResult,
+    GaloisSubgroupRequest,
+    IntermediateFieldStabilizerRequest,
+    IntermediateFieldStabilizerResult,
     PolynomialDiscriminantRequest,
     PolynomialDiscriminantResult,
     QQFieldAutomorphism,
@@ -33,9 +40,14 @@ from jacobian.math.number_theory.galois.operations import (
     apply_automorphism_to_element,
     automorphisms,
     compose_automorphisms,
+    element_embedding_orbit,
     frobenius_cycle,
+    galois_correspondence,
     galois_factor,
+    galois_fixed_field,
     galois_group,
+    galois_subgroup,
+    intermediate_field_stabilizer,
     inverse_automorphism,
     polynomial_discriminant,
     solvable,
@@ -68,10 +80,6 @@ def _splitting(request: SplittingFieldRequest) -> SplittingFieldResult:
     return splitting_field(request.polynomial)
 
 
-def _compositum(request: GaloisCompositumRequest) -> GaloisCompositumResult:
-    return galois_compositum(request.left, request.right)
-
-
 def _automorphisms(request: AutomorphismRequest) -> AutomorphismResult:
     return automorphisms(request.field)
 
@@ -96,6 +104,32 @@ def _apply_element(
     return apply_automorphism_to_element(request.automorphism, request.element)
 
 
+def _element_orbit(
+    request: ElementEmbeddingOrbitRequest,
+) -> ElementEmbeddingOrbitResult:
+    return element_embedding_orbit(request)
+
+
+def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
+    return galois_subgroup(request.field, request.elements)
+
+
+def _fixed_field(request: GaloisFixedFieldRequest) -> GaloisFixedFieldResult:
+    return galois_fixed_field(request.subgroup)
+
+
+def _correspondence(
+    request: GaloisCorrespondenceRequest,
+) -> GaloisCorrespondenceResult:
+    return galois_correspondence(request.field)
+
+
+def _intermediate_stabilizer(
+    request: IntermediateFieldStabilizerRequest,
+) -> IntermediateFieldStabilizerResult:
+    return intermediate_field_stabilizer(request.field, request.inclusion)
+
+
 def _discriminant(
     request: PolynomialDiscriminantRequest,
 ) -> PolynomialDiscriminantResult:
@@ -109,18 +143,6 @@ _SPLIT_X2 = {
             "terms": [
                 {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
                 {"coefficient": {"num": "-2", "den": "1"}, "exponents": [0]},
-            ]
-        },
-    }
-}
-
-_SPLIT_X3 = {
-    "polynomial": {
-        "variables": ["x"],
-        "polynomial": {
-            "terms": [
-                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
-                {"coefficient": {"num": "-3", "den": "1"}, "exponents": [0]},
             ]
         },
     }
@@ -154,27 +176,6 @@ _FIELD_X2 = {
     "source": _SPLIT_X2["polynomial"],
     "extension": _X2_EXTENSION,
     "root_values": [_X2_ALPHA, _X2_NEG_ALPHA],
-    "root_multiplicities": [1, 1],
-}
-_X3_EXTENSION = {"domain": "QQ", "coefficients_descending": ["1", "0", "-3"]}
-_X3_ALPHA = {
-    "presentation": _X3_EXTENSION,
-    "coefficients_ascending": [
-        {"num": "0", "den": "1"},
-        {"num": "1", "den": "1"},
-    ],
-}
-_X3_NEG_ALPHA = {
-    "presentation": _X3_EXTENSION,
-    "coefficients_ascending": [
-        {"num": "0", "den": "1"},
-        {"num": "-1", "den": "1"},
-    ],
-}
-_FIELD_X3 = {
-    "source": _SPLIT_X3["polynomial"],
-    "extension": _X3_EXTENSION,
-    "root_values": [_X3_ALPHA, _X3_NEG_ALPHA],
     "root_multiplicities": [1, 1],
 }
 _AUT_X2_ID = {
@@ -246,29 +247,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="split_x2_minus2",
                 description="Represent both roots of x^2-2 exactly in QQ(alpha), alpha^2=2.",
                 input=_SPLIT_X2,
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="number_field.galois.compositum.compute",
-        title="Compute the compositum of two small splitting fields",
-        description=(
-            "Compute the compositum of two exact QQ splitting fields of degree "
-            "at most two. The source-bound result retains both exact inclusions; "
-            "its degree is at most four."
-        ),
-        request_type=GaloisCompositumRequest,
-        result_type=GaloisCompositumResult,
-        run=_compositum,
-        tags=("galois-theory", "compositum", "exact"),
-        examples=(
-            OperationExample(
-                name="compositum_of_sqrt2_and_sqrt3",
-                description=(
-                    "The two quadratic splitting fields generate a degree-four "
-                    "field with primitive element sqrt(8)+sqrt(12)."
-                ),
-                input={"left": _FIELD_X2, "right": _FIELD_X3},
             ),
         ),
     ),
@@ -368,6 +346,155 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                     },
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.element.embedding_orbit.compute",
+        title="Compute an exact element embedding orbit",
+        description=(
+            "Compute the complete orbit of one exact field element under every "
+            "QQ-automorphism of a degree-at-most-two splitting field. The result "
+            "retains every exact map/image pair, the distinct orbit, its exact "
+            "stabilizer, orbit size, and the minimal polynomial over QQ."
+        ),
+        request_type=ElementEmbeddingOrbitRequest,
+        result_type=ElementEmbeddingOrbitResult,
+        run=_element_orbit,
+        tags=("galois-theory", "embedding", "orbit", "exact"),
+        discovery_terms=(
+            "number field element conjugates",
+            "Galois orbit of an algebraic number",
+            "element stabilizer under automorphisms",
+            "minimal polynomial from exact conjugates",
+        ),
+        examples=(
+            OperationExample(
+                name="orbit_of_sqrt2",
+                description="The two exact conjugates of sqrt(2) in QQ(sqrt(2)).",
+                input={
+                    "field": _FIELD_X2,
+                    "element": {
+                        "presentation": _X2_EXTENSION,
+                        "coefficients_ascending": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.subgroup.compute",
+        title="Validate a subgroup of a supported Galois group",
+        description=(
+            "Canonicalize a supplied subset of exact automorphisms as a subgroup "
+            "of the retained QQ splitting field. Supported fields have degree at "
+            "most two, so the complete subgroup has at most two elements. The "
+            "result retains each exact field map and its root action."
+        ),
+        request_type=GaloisSubgroupRequest,
+        result_type=GaloisAutomorphismSubgroup,
+        run=_subgroup,
+        tags=("galois-theory", "subgroup", "exact"),
+        examples=(
+            OperationExample(
+                name="full_quadratic_galois_group",
+                description="The identity and conjugation form Gal(Q(sqrt(2))/Q).",
+                input={
+                    "field": _FIELD_X2,
+                    "elements": [_AUT_X2_ID, _AUT_X2_CONJUGATION],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.fixed_field.compute",
+        title="Compute an exact Galois fixed field",
+        description=(
+            "Compute the fixed field of a typed subgroup of the exact "
+            "automorphisms of a degree-at-most-two QQ splitting field. The "
+            "result includes an exact embedding of the fixed field into the "
+            "extension, so the inclusion is preserved."
+        ),
+        request_type=GaloisFixedFieldRequest,
+        result_type=GaloisFixedFieldResult,
+        run=_fixed_field,
+        tags=("galois-theory", "fixed-field", "exact"),
+        examples=(
+            OperationExample(
+                name="quadratic_fixed_by_conjugation",
+                description="Conjugation fixes the embedded rational field in Q(sqrt(2)).",
+                input={
+                    "subgroup": {
+                        "field": _FIELD_X2,
+                        "elements": [_AUT_X2_ID, _AUT_X2_CONJUGATION],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.intermediate_stabilizer.compute",
+        title="Compute an intermediate field stabilizer",
+        description=(
+            "Return the exact automorphisms of a degree-at-most-two QQ "
+            "splitting field that fix a supplied embedded intermediate field "
+            "pointwise. The embedding is checked by exact power-basis arithmetic."
+        ),
+        request_type=IntermediateFieldStabilizerRequest,
+        result_type=IntermediateFieldStabilizerResult,
+        run=_intermediate_stabilizer,
+        tags=("galois-theory", "intermediate-field", "stabilizer", "exact"),
+        examples=(
+            OperationExample(
+                name="stabilizer_of_rational_subfield",
+                description="Every automorphism fixes the canonical embedded QQ subfield.",
+                input={
+                    "field": _FIELD_X2,
+                    "inclusion": {
+                        "source": _QQ_EXTENSION,
+                        "target": _X2_EXTENSION,
+                        "generator_image": {
+                            "presentation": _X2_EXTENSION,
+                            "coefficients_ascending": [
+                                {"num": "0", "den": "1"},
+                                {"num": "0", "den": "1"},
+                            ],
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois_correspondence.compute",
+        title="Compute the complete bounded Galois correspondence",
+        description=(
+            "Return every subgroup and embedded intermediate field of a "
+            "degree-at-most-two QQ splitting field, paired by H ↔ L^H. "
+            "The result includes both finite inclusion posets, both exact "
+            "directions of the correspondence, normal-subgroup data, and "
+            "the subgroup-index/fixed-field degree identities."
+        ),
+        request_type=GaloisCorrespondenceRequest,
+        result_type=GaloisCorrespondenceResult,
+        run=_correspondence,
+        tags=("galois-theory", "galois-correspondence", "fixed-field", "exact"),
+        discovery_terms=(
+            "complete Galois correspondence",
+            "subgroups and intermediate fields",
+            "fixed fields inclusion reversing lattice",
+        ),
+        examples=(
+            OperationExample(
+                name="quadratic_galois_correspondence",
+                description=(
+                    "Pair the trivial and full subgroups of Gal(Q(sqrt(2))/Q) "
+                    "with the whole field and the rational fixed field."
+                ),
+                input={"field": _FIELD_X2},
             ),
         ),
     ),

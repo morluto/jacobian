@@ -20,6 +20,7 @@ that need more context than an operation card:
 - [Stabilizer code spaces](quantum-stabilizer-code-space.md)
 - [Exact elementary Clifford Pauli conjugation](quantum-pauli-clifford-conjugation.md)
 - [Exact Clifford transport of stabilizer groups](quantum-stabilizer-clifford-transport.md)
+- [Finite Clifford sequences on stabilizer groups](quantum-stabilizer-clifford-sequences.md)
 - [Pauli measurement on stabilizer states](quantum-stabilizer-state-measurement.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)

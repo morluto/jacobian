@@ -174,8 +174,7 @@ def conjugate_stabilizer_group(
             "gate axes must name distinct qubits in the group's register",
         )
 
-    # Bound complete source semantic validation plus all gate transformations
-    # and compact output before reduction or transformed row allocation.
+    # Bound full source validation before canonicalizing caller-supplied rows.
     pair_count = count * (count - 1) // 2
     source_validation = (
         2 * pair_count * width
@@ -185,8 +184,24 @@ def conjugate_stabilizer_group(
         + count * width
     )
     label_bytes = sum(6 * len(q) + 4 for q in ids)
-    gate_work = count * (12 * width + label_bytes + 32)
-    output_bound = (count + 1) * label_bytes + count * (24 * width + 128) + 256
+    if source_validation > MAX_STABILIZER_CLIFFORD_WORK:
+        raise OperationResourceAdmissionError(
+            location=("group",),
+            code="quantum.stabilizer_clifford.over_envelope",
+            message="source group validation exceeds its exact work envelope",
+        )
+
+    canonical = stabilizer_group_from_generators(
+        ExactStabilizerGroupRequest(
+            register=register,
+            generators=generators,
+        )
+    )
+    canonical_count = len(canonical.generators)
+    gate_work = canonical_count * (12 * width + label_bytes + 32)
+    output_bound = (
+        (canonical_count + 1) * label_bytes + canonical_count * (24 * width + 128) + 256
+    )
     if (
         source_validation + gate_work > MAX_STABILIZER_CLIFFORD_WORK
         or output_bound > MAX_STABILIZER_CLIFFORD_RESULT_BYTES
@@ -196,13 +211,6 @@ def conjugate_stabilizer_group(
             code="quantum.stabilizer_clifford.over_envelope",
             message="group validation or exact transported result exceeds its envelope",
         )
-
-    canonical = stabilizer_group_from_generators(
-        ExactStabilizerGroupRequest(
-            register=register,
-            generators=generators,
-        )
-    )
     transported = tuple(
         _transport_pauli(pauli, gate, axes) for pauli in canonical.generators
     )

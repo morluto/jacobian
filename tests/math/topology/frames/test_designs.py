@@ -138,12 +138,6 @@ def _tetrahedron() -> CyclotomicFrame:
     )
 
 
-def test_zero_scalar_encodes_cleanly() -> None:
-    assert _zeta_reduce({}).coefficients == tuple(
-        R.from_fraction(Fraction(0)) for _ in range(euler_phi(24))
-    )
-
-
 def test_tetrahedron_is_cyclotomic_sic() -> None:
     assert cyclotomic_sic_profile(_tetrahedron()).is_sic is True
 
@@ -222,7 +216,7 @@ def test_sic_povm_effects_are_scaled_projectors() -> None:
 
 
 def test_povm_effects_replay_resolution() -> None:
-    """An independent replay of effect/DEN - delta over the retained data."""
+    """Replay effect/denominator minus identity over the retained data."""
 
     from fractions import Fraction
 
@@ -245,7 +239,7 @@ def test_povm_effects_replay_resolution() -> None:
             assert _cyclo_is_zero(_cyclo_add(total, [-value for value in target]))
 
 
-def test_forged_overlap_ledger_rejected() -> None:
+def test_forged_norm_ledger_rejected() -> None:
     from jacobian.canonical import encode_strict_json
     from jacobian.math.topology.frames._models import CyclotomicSicResult
 

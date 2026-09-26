@@ -8,6 +8,7 @@ from fractions import Fraction
 from math import factorial
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import (
@@ -85,11 +86,16 @@ class _BracketPlan:
 def _as_algebra(
     value: FiniteDimensionalLieAlgebra | Mapping[str, Any],
 ) -> FiniteDimensionalLieAlgebra:
-    return (
-        value
-        if isinstance(value, FiniteDimensionalLieAlgebra)
-        else FiniteDimensionalLieAlgebra.model_validate(value)
-    )
+    if isinstance(value, FiniteDimensionalLieAlgebra):
+        return value
+    try:
+        return FiniteDimensionalLieAlgebra.model_validate(value)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code="lie_algebra.input",
+            message="algebra must be a valid finite-dimensional Lie algebra",
+        ) from exc
 
 
 def _as_element(value: LieAlgebraElement | Mapping[str, Any]) -> LieAlgebraElement:
@@ -548,11 +554,7 @@ def lie_algebra_is_semisimple(
     computes the exact nullspace; only the resulting decision is returned.
     """
 
-    canonical_algebra = (
-        algebra
-        if isinstance(algebra, FiniteDimensionalLieAlgebra)
-        else FiniteDimensionalLieAlgebra.model_validate(algebra)
-    )
+    canonical_algebra = _as_algebra(algebra)
     killing_radical = lie_killing_form_radical(canonical_algebra)
     return LieSemisimplicityResult(
         algebra=canonical_algebra,

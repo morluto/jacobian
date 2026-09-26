@@ -28,6 +28,9 @@ from jacobian.math.matrices.cyclic_linear._models import (
 from jacobian.math.number_theory.arithmetic_functions._models import (
     MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
     DirichletConvolutionResult,
+    DirichletInverseResult,
+    MobiusTransformResult,
+    SummatoryFunctionResult,
 )
 from jacobian.math.number_theory.characters._models import (
     MAX_GENERALIZED_BERNOULLI_INDEX,
@@ -291,9 +294,15 @@ def dirichlet_character_jacobi_sum(
     )
 
 
-def _mixed_jacobi_admission(modulus: int, order: int) -> tuple[int, tuple[int, ...]]:
+def _mixed_jacobi_admission(
+    modulus: int, order: int, *, group_rank: int, unit_count: int
+) -> tuple[int, tuple[int, ...]]:
     degree = _euler_phi(order)
-    work = modulus * modulus + order * degree
+    work = (
+        modulus * modulus
+        + order * degree
+        + group_rank * (unit_count + 2 * unit_count * unit_count)
+    )
     if (
         order > MAX_CYCLIC_PERIOD
         or work > MAX_CHARACTER_SUM_WORK
@@ -412,7 +421,12 @@ def dirichlet_character_mixed_jacobi_sum(
             message="mixed Jacobi-sum characters must use the identical group parent",
         )
     order = group.exponent
-    degree, phi = _mixed_jacobi_admission(group.modulus, order)
+    degree, phi = _mixed_jacobi_admission(
+        group.modulus,
+        order,
+        group_rank=len(group.generator_orders),
+        unit_count=len(group.unit_residues),
+    )
     powers = _mixed_jacobi_power_coefficients(chars, order)
     coefficients = _reduce_mixed_jacobi_coefficients(powers, order, degree, phi)
     value = RationalCyclotomicElement(
@@ -2350,6 +2364,15 @@ def _admit_sequence_twist_source(
                 message="an existing cyclotomic sequence keeps its authored index origin",
             )
         index_origin = sequence.index_origin
+    elif isinstance(sequence, FiniteRationalSequence):
+        try:
+            sequence = FiniteRationalSequence.model_validate(sequence.model_dump())
+        except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("sequence",),
+                code="dirichlet_character.sequence_twist.sequence_invalid",
+                message="rational source sequence is malformed",
+            ) from exc
     if index_origin is None:
         raise OperationDomainValidationError(
             location=("index_origin",),
@@ -2524,22 +2547,31 @@ def dirichlet_character_sequence_twist(
 
 
 def dirichlet_character_arithmetic_function_twist(
-    function: DirichletConvolutionResult,
+    function: DirichletConvolutionResult | DirichletInverseResult | MobiusTransformResult | SummatoryFunctionResult,
     character: DirichletCharacter,
 ) -> FiniteCyclotomicSequence:
     """Twist a finite arithmetic-function prefix on indices 1 through M."""
-    if not isinstance(function, DirichletConvolutionResult):
+    prefix_types = (
+        DirichletConvolutionResult,
+        DirichletInverseResult,
+        MobiusTransformResult,
+        SummatoryFunctionResult,
+    )
+    if not isinstance(function, prefix_types):
         raise OperationDomainValidationError(
             location=("function",),
             code="dirichlet_character.arithmetic_function_twist.function_type",
             message="source must be an exact arithmetic-function prefix value",
         )
-    if (
-        type(function.values) is not tuple
-        or type(function.length) is not int
-        or function.length != len(function.values)
-        or not 1 <= function.length <= MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH
-    ):
+    try:
+        function = type(function).model_validate(function.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.source_invalid",
+            message="source must be a canonical arithmetic-function prefix",
+        ) from exc
+    if not 1 <= function.length <= MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH:
         raise OperationDomainValidationError(
             location=("function",),
             code="dirichlet_character.arithmetic_function_twist.source_shape",
@@ -2547,9 +2579,7 @@ def dirichlet_character_arithmetic_function_twist(
         )
     # The existing sequence operation admits coefficient growth, cyclotomic
     # degree, work, and result bytes before expanding any character values.
-    sequence = FiniteRationalSequence.model_construct(
-        domain="rational", values=function.values
-    )
+    sequence = FiniteRationalSequence(values=function.values)
     return dirichlet_character_sequence_twist(sequence, character, index_origin=1)
 
 
@@ -2626,7 +2656,7 @@ def _compute_generalized_gauss_sum(
         coefficient_bound *= reduction_l1_bound
     if coefficient_bound > 10**digit_limit - 1:
         raise OperationResourceAdmissionError(
-            location=("character",),
+            location=("primitive_character", "character"),
             code=f"dirichlet_character.{error_name}.coefficient_bound",
             message=(
                 "Gauss sum may exceed the "
@@ -2718,10 +2748,21 @@ def dirichlet_character_primitive_gauss_norm(
     cyclotomic conjugate. The operation checks the claimed conductor against
     the exact least conductor before relying on the primitive-character theorem.
     """
-    if not isinstance(primitive_character, PrimitiveDirichletCharacter):
-        primitive_character = PrimitiveDirichletCharacter.model_validate(
-            primitive_character
-        )
+    try:
+        if isinstance(primitive_character, PrimitiveDirichletCharacter):
+            primitive_character = PrimitiveDirichletCharacter.model_validate(
+                primitive_character.model_dump()
+            )
+        else:
+            primitive_character = PrimitiveDirichletCharacter.model_validate(
+                primitive_character
+            )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("primitive_character",),
+            code="dirichlet_character.primitive_character_invalid",
+            message="primitive_character must be a canonical conductor-bound value",
+        ) from exc
     character = _require_character(primitive_character.character)
     modulus = character.group.modulus
     if primitive_character.conductor != modulus:

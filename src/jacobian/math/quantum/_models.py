@@ -965,6 +965,15 @@ class StabilizerErrorCoset(StrictModel):
                 and len(z_bits) <= MAX_QUBITS
             )
 
+        # Check retained parents before rebuilding the nested check-space:
+        # its own validator would otherwise report a generic structure error.
+        if any(
+            getattr(row, "qubit_register", None) != register for row in basis
+        ):
+            raise _validation_error(
+                "error_coset_register",
+                "coset check rows must share the check register",
+            )
         if any(not bounded_pauli(row) for row in (*basis, self.representative)):
             raise _validation_error(
                 "error_coset_structure",

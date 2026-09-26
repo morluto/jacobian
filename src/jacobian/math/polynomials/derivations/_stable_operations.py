@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from math import comb, lcm, prod
+from math import comb, factorial, lcm, prod
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, CanonicalRational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -20,6 +22,7 @@ from jacobian.math.polynomials.derivations._models import (
 )
 from jacobian.math.polynomials.derivations._stable_models import (
     MAX_GA_SUBREPRESENTATION_DIMENSION,
+    PolynomialGaFixedSubspace,
     PolynomialGaStableSubrepresentation,
     PolynomialGaStableSubrepresentationRequest,
 )
@@ -37,6 +40,27 @@ MAX_GA_SUBREPRESENTATION_SOURCE_TERMS = 128
 MAX_GA_SUBREPRESENTATION_EXPANSION_WORK = 1_000_000
 MAX_GA_SUBREPRESENTATION_COORDINATE_WORK = 5_000_000
 MAX_GA_SUBREPRESENTATION_COMPOSITION_WORK = 25_000
+MAX_GA_FIXED_KERNEL_WORK = MAX_GA_SUBREPRESENTATION_DIMENSION**3
+MAX_GA_FIXED_COORDINATE_DIGITS = MAX_DERIVATION_COEFFICIENT_DIGITS
+MAX_GA_FIXED_ROW_DENOMINATOR_DIGITS = 512
+MAX_GA_FIXED_MINOR_DIGITS = 10_000
+# With the minor bound above, each Gauss-Jordan update combines products of at
+# most three minor-bounded ratios; this caps transient exact integer size too.
+MAX_GA_FIXED_INTERMEDIATE_DIGITS = 3 * MAX_GA_FIXED_MINOR_DIGITS + 2
+MAX_GA_FIXED_MATRIX_TERMS = MAX_GA_ACTION_OUTPUT_BYTES // 384
+MAX_GA_FIXED_SUPPORT_TERMS = 4_096
+MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS = 512
+# A retained action-matrix or basis term carries an admitted 128-digit
+# coefficient, while a fixed representative may use the full 512-digit
+# numerator and denominator budgets. Charge the admitted widths rather than a
+# 128-digit placeholder so the estimate cannot understate the serialized size.
+MAX_GA_FIXED_RETAINED_TERM_BYTES = 384
+MAX_GA_FIXED_TERM_BYTES = 2 * MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS + 256
+
+
+def _integer_digits(value: int) -> int:
+    return len(format_canonical_integer(abs(value)))
+
 
 _Terms = dict[tuple[int, ...], Fraction]
 
@@ -718,4 +742,418 @@ def ga_stable_subrepresentation(
     )
 
 
-__all__ = ["ga_stable_subrepresentation"]
+def _infinitesimal_matrix(
+    representation: PolynomialGaStableSubrepresentation,
+) -> list[list[Fraction]]:
+    size = len(representation.basis)
+    matrix = [[Fraction(0) for _ in range(size)] for _ in range(size)]
+    for row in range(size):
+        for column in range(size):
+            for term in representation.action_matrix[row][column].polynomial.terms:
+                if term.exponents == (1,):
+                    matrix[row][column] = term.coefficient.as_fraction()
+                    break
+    return matrix
+
+
+def _admit_and_integerize_kernel_matrix(
+    matrix: list[list[Fraction]],
+) -> list[list[Fraction]]:
+    """Clear row denominators under an exact Hadamard bound.
+
+    Every minor of the integer matrix has at most ``MAX_GA_FIXED_MINOR_DIGITS``
+    decimal digits. Gauss-Jordan entries are ratios of such minors. An update
+    multiplies two ratios and subtracts a third, so unreduced temporaries have
+    at most three times this digit bound plus two digits. The bound on row
+    denominators is checked before clearing, and the Hadamard bound is checked
+    before elimination.
+    """
+    size = len(matrix)
+    if size**3 > MAX_GA_FIXED_KERNEL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.kernel_work",
+            message="exact fixed-space elimination exceeds its admitted work budget",
+        )
+    if MAX_GA_FIXED_INTERMEDIATE_DIGITS > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.intermediate_growth",
+            message="the exact elimination intermediate envelope exceeds the integer limit",
+        )
+
+    row_denominators: list[int] = []
+    for row in matrix:
+        if any(
+            max(_integer_digits(value.numerator), _integer_digits(value.denominator))
+            > MAX_DERIVATION_COEFFICIENT_DIGITS
+            for value in row
+        ):
+            raise OperationResourceAdmissionError(
+                location=("subrepresentation",),
+                code="polynomial_ga_fixed_subspace.matrix_coefficient_growth",
+                message=(
+                    "infinitesimal matrix coefficients exceed the "
+                    f"{MAX_DERIVATION_COEFFICIENT_DIGITS}-digit input envelope"
+                ),
+            )
+        denominator_width_bound = sum(len(str(value.denominator)) for value in row)
+        if denominator_width_bound > MAX_GA_FIXED_ROW_DENOMINATOR_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("subrepresentation",),
+                code="polynomial_ga_fixed_subspace.denominator_growth",
+                message=(
+                    "fixed-space row denominator lcm exceeds the "
+                    f"{MAX_GA_FIXED_ROW_DENOMINATOR_DIGITS}-digit preflight bound"
+                ),
+            )
+        row_denominators.append(lcm(*(value.denominator for value in row)))
+
+    integer_matrix: list[list[Fraction]] = []
+    maximum_entry_digits = 1
+    for row, denominator in zip(matrix, row_denominators, strict=True):
+        integer_row = []
+        for value in row:
+            integer = value.numerator * (denominator // value.denominator)
+            maximum_entry_digits = max(maximum_entry_digits, _integer_digits(integer))
+            integer_row.append(Fraction(integer))
+        integer_matrix.append(integer_row)
+
+    minor_digits_bound = size * maximum_entry_digits + len(str(factorial(size)))
+    if minor_digits_bound > MAX_GA_FIXED_MINOR_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.minor_growth",
+            message=(
+                "the Hadamard bound for exact fixed-space minors is "
+                f"{minor_digits_bound} digits, exceeding the "
+                f"{MAX_GA_FIXED_MINOR_DIGITS}-digit envelope"
+            ),
+        )
+    return integer_matrix
+
+
+def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction, ...]]:
+    """Return a deterministic nullspace basis by exact reduced row elimination."""
+    size = len(matrix)
+    pivot_columns: list[int] = []
+    pivot_row = 0
+    for column in range(size):
+        selected = next(
+            (row for row in range(pivot_row, size) if matrix[row][column]), None
+        )
+        if selected is None:
+            continue
+        matrix[pivot_row], matrix[selected] = matrix[selected], matrix[pivot_row]
+        pivot = matrix[pivot_row][column]
+        matrix[pivot_row] = [value / pivot for value in matrix[pivot_row]]
+        for row in range(size):
+            if row != pivot_row and matrix[row][column]:
+                factor = matrix[row][column]
+                matrix[row] = [
+                    value - factor * pivot_value
+                    for value, pivot_value in zip(
+                        matrix[row], matrix[pivot_row], strict=True
+                    )
+                ]
+        pivot_columns.append(column)
+        pivot_row += 1
+        if pivot_row == size:
+            break
+    pivot_rows = {column: row for row, column in enumerate(pivot_columns)}
+    free_columns = [column for column in range(size) if column not in pivot_rows]
+    basis = []
+    for free in free_columns:
+        vector = [Fraction(0) for _ in range(size)]
+        vector[free] = Fraction(1)
+        for pivot_column, row in pivot_rows.items():
+            vector[pivot_column] = -matrix[row][free]
+        basis.append(tuple(vector))
+    return basis
+
+
+def _admit_claimed_action_matrix(
+    representation: PolynomialGaStableSubrepresentation,
+) -> None:
+    """Bound a caller-supplied matrix before reconstruction and comparison.
+
+    The shared wire carrier admits 32,768-digit rational components and
+    exponents, so a term-count check alone would let a mismatched claim drive
+    a full stable-representation reconstruction and an equality comparison
+    over hundreds of millions of digits. Every claimed term must fit the
+    operation's admitted input widths, and the aggregate encoded size must
+    fit the output envelope.
+    """
+    max_image_parameter_degree = max(
+        (
+            term.exponents[-1]
+            for image in representation.action.generator_images
+            for term in image.polynomial.terms
+        ),
+        default=0,
+    )
+    max_basis_degree = max(
+        (
+            sum(term.exponents)
+            for value in representation.basis
+            for term in value.polynomial.terms
+        ),
+        default=0,
+    )
+    degree_bound = max_image_parameter_degree * max_basis_degree
+    term_count = 0
+    encoded_bytes = 0
+    for row in representation.action_matrix:
+        for entry in row:
+            for term in entry.polynomial.terms:
+                numerator_digits = len(str(abs(term.coefficient.num)))
+                denominator_digits = len(str(term.coefficient.den))
+                if (
+                    numerator_digits > MAX_DERIVATION_COEFFICIENT_DIGITS
+                    or denominator_digits > MAX_DERIVATION_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("subrepresentation", "action_matrix"),
+                        code="polynomial_ga_fixed_subspace.matrix_coefficient_growth",
+                        message=(
+                            "supplied action matrix coefficients exceed the "
+                            f"{MAX_DERIVATION_COEFFICIENT_DIGITS}-digit input "
+                            "envelope"
+                        ),
+                    )
+                if any(exponent > degree_bound for exponent in term.exponents):
+                    raise OperationResourceAdmissionError(
+                        location=("subrepresentation", "action_matrix"),
+                        code="polynomial_ga_fixed_subspace.matrix_degree_growth",
+                        message=(
+                            "supplied action matrix exponents exceed the "
+                            f"{degree_bound}-degree action envelope"
+                        ),
+                    )
+                term_count += 1
+                encoded_bytes += numerator_digits + denominator_digits + 128
+    if (
+        term_count > MAX_GA_FIXED_MATRIX_TERMS
+        or encoded_bytes > MAX_GA_ACTION_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation", "action_matrix"),
+            code="polynomial_ga_fixed_subspace.matrix_terms",
+            message="the supplied action matrix exceeds the bounded term envelope",
+        )
+
+
+def _admit_fixed_output_support(
+    representation: PolynomialGaStableSubrepresentation,
+    coordinates: list[tuple[Fraction, ...]],
+) -> int:
+    candidate_terms = sum(
+        len(polynomial.polynomial.terms)
+        for vector in coordinates
+        for coefficient, polynomial in zip(vector, representation.basis, strict=True)
+        if coefficient
+    )
+    if candidate_terms > MAX_GA_FIXED_SUPPORT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.output_terms",
+            message=(
+                "fixed polynomial representatives have an aggregate support "
+                "upper bound above the 4096-term envelope"
+            ),
+        )
+    return candidate_terms
+
+
+def _admit_fixed_result_bytes(
+    representation: PolynomialGaStableSubrepresentation,
+    coordinates: list[tuple[Fraction, ...]],
+    fixed_support_terms: int,
+) -> int:
+    """Bound the serialized result before representatives are constructed.
+
+    Retained representation terms carry admitted 128-digit coefficients, while
+    a fixed representative may use the full admitted 512-digit numerator and
+    denominator budgets. Coordinate cells are charged their actual admitted
+    component widths rather than a placeholder, so a result near any of these
+    ceilings cannot slip past the advertised output-byte envelope.
+    """
+    retained_terms = (
+        sum(
+            len(image.polynomial.terms)
+            for image in representation.action.generator_images
+        )
+        + sum(len(value.polynomial.terms) for value in representation.basis)
+        + sum(
+            len(entry.polynomial.terms)
+            for row in representation.action_matrix
+            for entry in row
+        )
+    )
+    coordinate_bytes = sum(
+        _integer_digits(value.numerator) + _integer_digits(value.denominator) + 128
+        for vector in coordinates
+        for value in vector
+    )
+    estimated_result_bytes = retained_terms * MAX_GA_FIXED_RETAINED_TERM_BYTES
+    estimated_result_bytes += fixed_support_terms * MAX_GA_FIXED_TERM_BYTES
+    estimated_result_bytes += coordinate_bytes
+    estimated_result_bytes += len(representation.basis) ** 2 * 256 + 1_024
+    if estimated_result_bytes > MAX_GA_ACTION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.output_bytes",
+            message=(
+                "the fixed basis and retained representation exceed the "
+                "output-byte envelope"
+            ),
+        )
+    return estimated_result_bytes
+
+
+def _fixed_polynomial_basis(
+    representation: PolynomialGaStableSubrepresentation,
+    coordinates: list[tuple[Fraction, ...]],
+) -> tuple[RationalPolynomial, ...]:
+    from math import gcd
+
+    from jacobian.math.polynomials.values import (
+        RationalPolynomialTerm,
+        SparseRationalPolynomial,
+    )
+
+    output = []
+    for vector in coordinates:
+        grouped: dict[tuple[int, ...], list[Fraction]] = {}
+        for coordinate, polynomial in zip(vector, representation.basis, strict=True):
+            for term in polynomial.polynomial.terms:
+                if coordinate:
+                    grouped.setdefault(term.exponents, []).append(
+                        coordinate * term.coefficient.as_fraction()
+                    )
+        terms = []
+        for exponents, contributions in grouped.items():
+            denominator = 1
+            for value in contributions:
+                factor = denominator // gcd(denominator, value.denominator)
+                if (
+                    len(str(factor)) + len(str(value.denominator))
+                    > MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS
+                ):
+                    raise OperationResourceAdmissionError(
+                        location=("subrepresentation",),
+                        code="polynomial_ga_fixed_subspace.coefficient_growth",
+                        message=(
+                            "fixed polynomial coefficient denominator exceeds "
+                            f"{MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS} digits"
+                        ),
+                    )
+                denominator = factor * value.denominator
+            numerator_bound = max(
+                len(str(abs(value.numerator)))
+                + len(str(denominator // value.denominator))
+                for value in contributions
+            ) + len(str(len(contributions)))
+            if numerator_bound > MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS:
+                raise OperationResourceAdmissionError(
+                    location=("subrepresentation",),
+                    code="polynomial_ga_fixed_subspace.coefficient_growth",
+                    message=(
+                        "fixed polynomial coefficient numerator exceeds "
+                        f"{MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS} digits"
+                    ),
+                )
+            coefficient = sum(contributions, Fraction(0))
+            if coefficient:
+                terms.append(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                        exponents=exponents,
+                    )
+                )
+        output.append(
+            RationalPolynomial(
+                variables=representation.action.source_variables,
+                polynomial=SparseRationalPolynomial(
+                    terms=tuple(
+                        sorted(terms, key=lambda term: term.exponents, reverse=True)
+                    )
+                ),
+            )
+        )
+    return tuple(output)
+
+
+def ga_fixed_subspace(
+    subrepresentation: PolynomialGaStableSubrepresentation | Mapping[str, object],
+) -> PolynomialGaFixedSubspace:
+    """Compute the exact fixed subspace of a checked finite Ga-representation.
+
+    In characteristic zero, the fixed vectors are the kernel of the coefficient
+    of ``t`` in the representation matrix: differentiating the group law gives
+    ``M'(t)=M(t)M'(0)``, so this kernel is fixed for every parameter value.
+    """
+    from jacobian.math.polynomials.derivations._stable_models import (
+        PolynomialGaStableSubrepresentation,
+    )
+
+    try:
+        # Native callers can bypass validation through model_construct or
+        # model_copy(update=...), so serialize and revalidate typed instances
+        # here as the stable-subrepresentation boundary does.
+        claim = PolynomialGaStableSubrepresentation.model_validate(
+            subrepresentation.model_dump(warnings=False)
+            if isinstance(subrepresentation, PolynomialGaStableSubrepresentation)
+            else subrepresentation
+        )
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.request_shape",
+            message="the request must contain a canonical finite Ga-subrepresentation",
+        ) from exc
+
+    _admit_claimed_action_matrix(claim)
+
+    # A consumer may rely on the claimed matrix only after checking its defining
+    # relation against the action and basis. The producer has operation-specific
+    # admission for this exact reconstruction.
+    checked = ga_stable_subrepresentation(claim.action, claim.basis)
+    if checked.action_matrix != claim.action_matrix:
+        raise OperationDomainValidationError(
+            location=("subrepresentation", "action_matrix"),
+            code="polynomial_ga_fixed_subspace.unverified_subrepresentation",
+            message="the supplied matrix is not the action matrix of the supplied basis",
+        )
+
+    integer_matrix = _admit_and_integerize_kernel_matrix(_infinitesimal_matrix(checked))
+    coordinate_vectors = _rational_kernel_basis(integer_matrix)
+    if any(
+        max(_integer_digits(value.numerator), _integer_digits(value.denominator))
+        > MAX_GA_FIXED_COORDINATE_DIGITS
+        for vector in coordinate_vectors
+        for value in vector
+    ):
+        raise OperationResourceAdmissionError(
+            location=("subrepresentation",),
+            code="polynomial_ga_fixed_subspace.coordinate_growth",
+            message=(
+                "fixed-space coordinates exceed the "
+                f"{MAX_GA_FIXED_COORDINATE_DIGITS}-digit envelope"
+            ),
+        )
+    fixed_candidate_terms = _admit_fixed_output_support(checked, coordinate_vectors)
+    _admit_fixed_result_bytes(checked, coordinate_vectors, fixed_candidate_terms)
+    fixed_basis = _fixed_polynomial_basis(checked, coordinate_vectors)
+
+    return PolynomialGaFixedSubspace.model_construct(
+        subrepresentation=checked,
+        coordinates=tuple(
+            tuple(CanonicalRational.from_fraction(value) for value in vector)
+            for vector in coordinate_vectors
+        ),
+        basis=tuple(fixed_basis),
+    )
+
+
+__all__ = ["ga_fixed_subspace", "ga_stable_subrepresentation"]

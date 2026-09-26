@@ -1,10 +1,13 @@
 """Native exact polynomial-derivation operations."""
 
 from jacobian.math.polynomials.derivations._stable_models import (
+    PolynomialGaFixedSubspace,
+    PolynomialGaFixedSubspaceRequest,
     PolynomialGaStableSubrepresentation,
     PolynomialGaStableSubrepresentationRequest,
 )
 from jacobian.math.polynomials.derivations._stable_operations import (
+    ga_fixed_subspace,
     ga_stable_subrepresentation,
 )
 from jacobian.math.polynomials.derivations._weight_models import (
@@ -27,6 +30,8 @@ from jacobian.math.polynomials.derivations.operations import (
 )
 
 __all__ = [
+    "PolynomialGaFixedSubspace",
+    "PolynomialGaFixedSubspaceRequest",
     "PolynomialGaStableSubrepresentation",
     "PolynomialGaStableSubrepresentationRequest",
     "PolynomialWeightAction",
@@ -40,6 +45,7 @@ __all__ = [
     "diagonal_weight_action",
     "ga_action_from_certificate",
     "ga_action_from_derivation",
+    "ga_fixed_subspace",
     "ga_stable_subrepresentation",
     "gm_invariants_through_degree",
 ]

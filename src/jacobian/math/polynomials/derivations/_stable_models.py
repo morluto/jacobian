@@ -7,6 +7,7 @@ from typing import Annotated, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.math.polynomials.derivations._models import PolynomialGaAction
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -69,5 +70,47 @@ class PolynomialGaStableSubrepresentation(StrictModel):
         ):
             raise _error(
                 "parameter_axis", "action matrix entries must use the parameter axis"
+            )
+        return self
+
+
+class PolynomialGaFixedSubspaceRequest(StrictModel):
+    """A serialized finite Ga-subrepresentation whose fixed vectors are wanted."""
+
+    subrepresentation: PolynomialGaStableSubrepresentation
+
+
+class PolynomialGaFixedSubspace(StrictModel):
+    """A canonical basis of fixed vectors in the supplied subrepresentation.
+
+    Each coordinate row and corresponding polynomial are one basis vector.
+    The coordinate axis is the original ordered subrepresentation basis.
+    """
+
+    subrepresentation: PolynomialGaStableSubrepresentation
+    coordinates: Annotated[
+        tuple[tuple[CanonicalRational, ...], ...],
+        Field(max_length=MAX_GA_SUBREPRESENTATION_DIMENSION),
+    ]
+    basis: Annotated[
+        tuple[RationalPolynomial, ...],
+        Field(max_length=MAX_GA_SUBREPRESENTATION_DIMENSION),
+    ]
+
+    @model_validator(mode="after")
+    def require_axis_shape(self) -> Self:
+        size = len(self.subrepresentation.basis)
+        if len(self.coordinates) != len(self.basis):
+            raise _error("basis_shape", "coordinates and fixed basis must align")
+        if len(self.basis) > size or any(len(row) != size for row in self.coordinates):
+            raise _error(
+                "basis_shape", "fixed coordinates must use the supplied basis axis"
+            )
+        if any(
+            value.variables != self.subrepresentation.action.source_variables
+            for value in self.basis
+        ):
+            raise _error(
+                "ordered_ring", "fixed basis must retain the action source ring"
             )
         return self

@@ -938,7 +938,7 @@ def _check_raw_loop_family_shape(value: object) -> None:
     if "loops" not in value:
         return
     loops = value.get("loops")
-    if type(loops) not in (tuple, list):
+    if not isinstance(loops, (tuple, list)) or type(loops) not in (tuple, list):
         raise _validation_error(
             "loop_family_container", "loops must be a built-in list or tuple"
         )
@@ -958,13 +958,13 @@ def _check_raw_loop_family_shape(value: object) -> None:
             if isinstance(path, dict)
             else getattr(path, "steps", None)
         )
-        if type(steps) not in (tuple, list):
-            if steps is not None:
-                raise _validation_error(
-                    "loop_family_path_container",
-                    "path steps must be a built-in list or tuple",
-                )
+        if steps is None:
             continue
+        if not isinstance(steps, (tuple, list)) or type(steps) not in (tuple, list):
+            raise _validation_error(
+                "loop_family_path_container",
+                "path steps must be a built-in list or tuple",
+            )
         if len(steps) > MAX_GAUGE_PATH_LENGTH:
             raise _validation_error(
                 "loop_family_path_length",
@@ -1044,10 +1044,25 @@ class GaugeLoopFamilyHolonomies(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:  # noqa: C901
+        if type(self.loops) is not tuple or any(
+            type(entry) is not GaugeLoopHolonomy
+            or type(entry.path) is not OrientedGaugePath
+            or type(entry.path.steps) is not tuple
+            or any(
+                type(step) is not GaugePathStep
+                or type(step.edge_id) is not str
+                or type(step.forward) is not bool
+                for step in entry.path.steps
+            )
+            or type(entry.holonomy) is not PermutationLabel
+            or type(entry.holonomy.image) is not tuple
+            for entry in self.loops
+        ):
+            raise _validation_error(
+                "loop_family_parent", "loop-family entries must be canonical values"
+            )
         try:
             field = GaugeField.model_validate(self.field.model_dump())
-            if type(self.loops) is not tuple:
-                raise ValueError("loops must be a tuple")
             loops = tuple(
                 GaugeLoopHolonomy.model_validate(entry.model_dump())
                 for entry in self.loops

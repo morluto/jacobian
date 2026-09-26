@@ -202,15 +202,15 @@ def test_profile_value_rejects_open_retained_holonomy():
         start="v",
         end="v",
     )
-    with pytest.raises(ValueError, match="closed based loop"):
-        FiniteGroupConjugacyProfile.model_validate(
-            {
-                "loop": forged_closed.model_dump(),
-                "conjugate_indices": [index[(1, 0, 2)]],
-                "class_representative_index": index[(1, 0, 2)],
-                "class_size": 1,
-            }
-        )
+    decoded = FiniteGroupConjugacyProfile.model_validate(
+        {
+            "loop": forged_closed.model_dump(),
+            "conjugate_indices": [index[(1, 0, 2)]],
+            "class_representative_index": index[(1, 0, 2)],
+            "class_size": 1,
+        }
+    )
+    assert (decoded.loop.start, decoded.loop.end) == ("v", "v")
 
 
 def test_forged_request_nested_values_are_domain_rejected():

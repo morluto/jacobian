@@ -22,6 +22,7 @@ from jacobian.math.gauge._models import (
     MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS,
     MAX_GAUGE_LOOP_FAMILY_SIZE,
     MAX_GAUGE_LOOP_FAMILY_STEPS,
+    GaugeLoopHolonomy,
 )
 from jacobian.math.gauge._tools import TOOLS
 
@@ -206,6 +207,22 @@ def test_raw_catalog_request_preflights_family_and_aggregate_lengths() -> None:
     with pytest.raises(ValueError, match="loop_family_path_length"):
         GaugeLoopFamilyRequest.model_validate(
             {"field": _self_loop_field(), "loops": (forged_long_path,)}
+        )
+
+
+def test_family_result_rejects_mutable_nested_path_before_revalidation() -> None:
+    field = _self_loop_field()
+    valid = loop_family_holonomies(field, (_path(("loop", True)),)).loops[0]
+    forged_path = OrientedGaugePath.model_construct(
+        steps=list(valid.path.steps), basepoint=valid.path.basepoint
+    )
+    forged_loop = GaugeLoopHolonomy.model_construct(
+        path=forged_path, basepoint=valid.basepoint, holonomy=valid.holonomy
+    )
+
+    with pytest.raises(ValueError, match="entries must be canonical"):
+        GaugeLoopFamilyHolonomies.model_validate(
+            {"field": field, "loops": (forged_loop,)}
         )
 
 

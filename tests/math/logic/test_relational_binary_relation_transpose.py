@@ -7,7 +7,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
@@ -17,7 +16,6 @@ from jacobian.math.logic.relational_structures import (
     transpose_binary_relation,
 )
 from jacobian.math.logic.relational_structures._admission import (
-    MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK,
     admit_binary_relation_transpose,
 )
 from jacobian.math.logic.relational_structures._models import (
@@ -88,11 +86,7 @@ def test_native_kernel_rejects_unknown_and_nonbinary_symbols() -> None:
     assert unary.value.errors()[0]["type"] == "relational.structure.transpose_arity"
 
 
-def test_admission_covers_complete_output_reconstruction(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from jacobian.math.logic.relational_structures import _admission
-
+def test_admission_covers_complete_output_reconstruction() -> None:
     source = _structure(3, ((0, 1), (1, 2)))
     work = admit_binary_relation_transpose(source, 0)
     expected = sum(
@@ -100,15 +94,19 @@ def test_admission_covers_complete_output_reconstruction(
         for symbol, table in zip(source.signature, source.relation_tables, strict=True)
     ) + 2 * len(source.relation_tables[0])
     assert work == expected
-    assert work <= MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK
 
-    monkeypatch.setattr(_admission, "MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK", 0)
-    with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        transpose_binary_relation(source, "E")
-    assert (
-        exc_info.value.errors()[0]["type"]
-        == "relational.structure.transpose_work_bound"
+    # Full-carrier accepted case: every pair on 64 points transposes
+    # without refusal; the visit count is the exact reconstruction cost.
+    full_relation = tuple((x, y) for x in range(64) for y in range(64))
+    full_source = FiniteRelationalStructure(
+        carrier_size=64,
+        signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
+        relation_tables=(full_relation,),
     )
+    full_work = admit_binary_relation_transpose(full_source, 0)
+    assert full_work == 1 + len(full_relation) * 3 + 2 * len(full_relation)
+    result = transpose_binary_relation(full_source, "E")
+    assert result.relation_tables[0] == tuple(sorted((y, x) for x, y in full_relation))
 
 
 def test_request_envelope_checks_selected_symbol_before_execution() -> None:
@@ -124,15 +122,10 @@ def test_request_envelope_checks_selected_symbol_before_execution() -> None:
     assert unknown.value.errors()[0]["type"] == "relational.structure.transpose_symbol"
 
 
-def test_catalog_example_runs_and_returns_canonical_structure() -> None:
-    tool = next(
-        entry
-        for entry in TOOLS
-        if entry.operation_id
-        == "relational_structure.transpose_binary_relation.compute"
+def test_transpose_remains_native_only_without_catalog_entry() -> None:
+    source = _structure(3, ((0, 1), (1, 2)))
+    assert transpose_binary_relation(source, "E").relation_tables[0] == ((1, 0), (2, 1))
+    assert all(
+        tool.operation_id != "relational_structure.transpose_binary_relation.compute"
+        for tool in TOOLS
     )
-    request = tool.request_type.model_validate(tool.examples[0].input)
-    result = tool.run(request)
-
-    assert result.relation_tables == (((1, 0), (2, 1)), ((2,),))
-    assert result.model_dump_json()

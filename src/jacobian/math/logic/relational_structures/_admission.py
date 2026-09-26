@@ -47,20 +47,18 @@ MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
-# A transformed structure reconstructs every complete relation table. This
-# exact schema-derived limit admits the maximum legal source plus the selected
-# binary table's coordinate swap without importing a transport byte ceiling.
-MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK = (
-    MAX_RELATIONAL_SYMBOLS
-    * (1 + MAX_RELATIONAL_TABLE_ROWS * (MAX_RELATIONAL_ARITY + 1))
-    + 2 * MAX_RELATIONAL_TABLE_ROWS
-)
 
 
 def admit_binary_relation_transpose(
     source: FiniteRelationalStructure, symbol_index: int
 ) -> int:
-    """Admit whole-structure reconstruction and selected coordinate work."""
+    """Admit whole-structure reconstruction and selected coordinate work.
+
+    Every schema-valid source is accepted: the carrier, signature, and
+    row bounds already cap reconstruction work, so no separate
+    operation-owned refusal exists. The returned visit count documents
+    the exact reconstruction cost.
+    """
 
     if not 0 <= symbol_index < len(source.signature):
         raise OperationDomainValidationError(
@@ -81,15 +79,6 @@ def admit_binary_relation_transpose(
             source.signature, source.relation_tables, strict=True
         )
     ) + 2 * len(source.relation_tables[symbol_index])
-    if work > MAX_RELATIONAL_STRUCTURE_TRANSFORM_WORK:
-        raise OperationResourceAdmissionError(
-            location=("source", "relation_tables"),
-            code="relational.structure.transpose_work_bound",
-            message=(
-                "binary relation transposition exceeds the admitted "
-                "whole-structure reconstruction bound"
-            ),
-        )
     return work
 
 

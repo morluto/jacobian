@@ -33,6 +33,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_ENTRY_DIGITS,
     MAX_SHEAF_PRIME,
     MAX_SHEAF_RESTRICTION_CELLS,
+    MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK,
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     MAX_SHEAF_TOTAL_STALK_RANK,
@@ -41,6 +42,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     FiniteCellularSheaf,
     FromCoverMapsResult,
     SheafCoboundaryLedgerEntry,
+    SheafCochainComplex,
     SheafCochainCoordinate,
     SheafCohomologyGroup,
     SheafCohomologyResult,
@@ -727,6 +729,44 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
             f"{MAX_SHEAF_SIMPLICES} nonempty simplices",
             ("sheaf",),
         )
+    restriction_digit_work = 0
+    for field_name, restrictions in (
+        ("cover_restrictions", sheaf.cover_restrictions),
+        ("derived_restrictions", sheaf.derived_restrictions),
+    ):
+        for restriction_index, restriction in enumerate(restrictions):
+            for row_index, row in enumerate(restriction.entries):
+                for column_index, scalar in enumerate(row):
+                    digits = sheaf_scalar_digits(scalar)
+                    location = (
+                        "sheaf",
+                        field_name,
+                        restriction_index,
+                        "entries",
+                        row_index,
+                        column_index,
+                    )
+                    # Cover maps are the coefficients expanded into coboundaries;
+                    # derived entries are already-computed source data and may
+                    # legitimately exceed this per-coefficient arithmetic cap.
+                    if (
+                        field_name == "cover_restrictions"
+                        and digits > MAX_SHEAF_ENTRY_DIGITS
+                    ):
+                        raise _resource(
+                            "cohomology.scalar_digits",
+                            "restriction coefficients exceed the "
+                            f"{MAX_SHEAF_ENTRY_DIGITS}-digit cochain envelope",
+                            location,
+                        )
+                    restriction_digit_work += digits
+                    if restriction_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
+                        raise _resource(
+                            "cohomology.scalar_digit_work",
+                            "the source restriction diagram exceeds the "
+                            f"{MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK}-digit work envelope",
+                            ("sheaf", field_name, restriction_index),
+                        )
     for index, stalk in enumerate(sheaf.stalks):
         if len(stalk.basis) > MAX_SHEAF_STALK_RANK:
             raise _resource(
@@ -761,17 +801,12 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
     return field
 
 
-def sheaf_cohomology(  # noqa: C901
+def _assemble_sheaf_cochain_complex(  # noqa: C901
     sheaf: FiniteCellularSheaf,
-) -> SheafCohomologyResult:
-    """Compute cellular cohomology of a checked finite cellular sheaf.
-
-    The kernel assembles the signed-incidence cochain complex from the
-    complete restriction diagram, replays ``delta^2 = 0`` and the
-    Euler-characteristic identity, and returns Betti numbers with
-    representative cocycles. Diamond commutativity, already established
-    by construction, is what makes the signed coboundary square to zero.
-    """
+    *,
+    build_value: bool = True,
+) -> tuple[SheafCochainComplex | None, _ExactField, list[list[list[Scalar]]]]:
+    """Admit once, assemble signed incidence blocks, and establish delta squared zero."""
     field = _cohomology_admission(sheaf)
     basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
     parsed: dict[CoverKey, Matrix] = {}
@@ -861,7 +896,6 @@ def sheaf_cohomology(  # noqa: C901
                         ] = _cochain_add(field, current, value)
         scalar_coboundaries.append(block)
 
-    ledger: list[SheafCoboundaryLedgerEntry] = []
     for degree in range(max(0, dimension - 1)):
         product = _cochain_mat_mul(
             field, scalar_coboundaries[degree + 1], scalar_coboundaries[degree]
@@ -872,15 +906,54 @@ def sheaf_cohomology(  # noqa: C901
                 "the cellular coboundary must square to zero",
                 ("sheaf",),
             )
-        ledger.append(
-            SheafCoboundaryLedgerEntry(
-                degree=degree,
-                product_rows=cochain_sizes[degree + 2],
-                product_columns=cochain_sizes[degree],
-                nonzero_entries=0,
-            )
+    result = None
+    if build_value:
+        result = SheafCochainComplex._from_kernel(
+            sheaf=sheaf,
+            cochain_dimensions=tuple(cochain_sizes),
+            cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
+            coboundary_matrices=tuple(
+                tuple(tuple(field.typed(value) for value in row) for row in block)
+                for block in scalar_coboundaries
+            ),
         )
+    return result, field, scalar_coboundaries
 
+
+def sheaf_cochain_complex(sheaf: FiniteCellularSheaf) -> SheafCochainComplex:
+    """Return the checked signed-incidence cellular sheaf cochain complex."""
+    result = _assemble_sheaf_cochain_complex(sheaf)[0]
+    assert result is not None
+    return result
+
+
+def sheaf_cohomology(
+    sheaf: FiniteCellularSheaf,
+) -> SheafCohomologyResult:
+    """Compute cohomology from the checked cellular sheaf cochain complex."""
+    _, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(
+        sheaf, build_value=False
+    )
+    basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
+    cochain_bases = [
+        [
+            SheafCochainCoordinate(simplex=face, basis_label=label)
+            for face in group.faces
+            for label in basis_for[face]
+        ]
+        for group in sheaf.complex.faces_by_dimension
+    ]
+    cochain_sizes = [len(basis) for basis in cochain_bases]
+    dimension = sheaf.complex.dimension
+    ledger = [
+        SheafCoboundaryLedgerEntry(
+            degree=degree,
+            product_rows=cochain_sizes[degree + 2],
+            product_columns=cochain_sizes[degree],
+            nonzero_entries=0,
+        )
+        for degree in range(max(0, dimension - 1))
+    ]
     groups: list[SheafCohomologyGroup] = []
     euler_cohomology = 0
     for degree in range(dimension + 1):
@@ -926,9 +999,7 @@ def sheaf_cohomology(  # noqa: C901
         )
         euler_cohomology += betti if degree % 2 == 0 else -betti
     euler_stalk = sum(
-        (len(basis_for[face]) if degree % 2 == 0 else -len(basis_for[face]))
-        for degree, faces in enumerate(faces_by_degree)
-        for face in faces
+        size if degree % 2 == 0 else -size for degree, size in enumerate(cochain_sizes)
     )
     if euler_stalk != euler_cohomology:
         raise _domain(
@@ -960,7 +1031,7 @@ def _transpose_rows(rows: list[list[Scalar]]) -> list[list[Scalar]]:
     ]
 
 
-__all__ = ["from_cover_maps", "sheaf_cohomology"]
+__all__ = ["from_cover_maps", "sheaf_cochain_complex", "sheaf_cohomology"]
 
 
 def from_cover_maps(

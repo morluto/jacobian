@@ -184,6 +184,19 @@ def test_trace_result_deserialization_rejects_inconsistent_entry_chain() -> None
         RSKWordTraceResult.model_validate(payload)
 
 
+def test_trace_result_deserialization_rejects_entry_ranks_outside_alphabet() -> None:
+    result = row_insertion_rsk_trace(
+        FiniteWord(alphabet=("a", "b"), letters=("b", "a"))
+    )
+    payload = result.model_dump(mode="python")
+    payload["insertion_events"][1]["bump_path"] = (
+        {"row": 0, "column": 0, "bumped_entry": 3},
+    )
+    payload["insertion_events"][1]["added_entry"] = 3
+    with pytest.raises(ValidationError, match="rsk_trace_entry_chain"):
+        RSKWordTraceResult.model_validate(payload)
+
+
 def test_trace_result_deserialization_rejects_missing_source_positions() -> None:
     result = row_insertion_rsk_trace(
         FiniteWord(alphabet=("a", "b"), letters=("b", "a"))

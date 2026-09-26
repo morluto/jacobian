@@ -347,16 +347,22 @@ class RSKWordTraceResult(StrictModel):
         rank_by_letter = {
             letter: rank for rank, letter in enumerate(self.word.alphabet, start=1)
         }
+        alphabet_size = len(self.word.alphabet)
         for event in self.insertion_events:
             carried = rank_by_letter[event.letter]
             for step in event.bump_path:
+                if not 1 <= step.bumped_entry <= alphabet_size:
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_trace_entry_chain",
+                        "bumped entries must be ranks in the retained alphabet",
+                    )
                 if step.bumped_entry <= carried:
                     raise PydanticCustomError(
                         "algebraic_combinatorics.rsk_trace_entry_chain",
                         "each bumped entry must be strictly larger than the carried entry",
                     )
                 carried = step.bumped_entry
-            if event.added_entry != carried:
+            if not 1 <= event.added_entry <= alphabet_size or event.added_entry != carried:
                 raise PydanticCustomError(
                     "algebraic_combinatorics.rsk_trace_entry_chain",
                     "the terminal entry must equal the final carried entry",

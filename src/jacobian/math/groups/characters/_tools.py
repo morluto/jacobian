@@ -751,7 +751,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "in the canonical irreducible basis, and the canonical character "
             "table is rebuilt from its concrete group. The exact cyclotomic "
             "trace equality is equivalent to identity action. Supported "
-            "groups are trivial, cyclic of order at most 60, and S3. The "
+            "groups are trivial, S3, and cyclic groups of order n satisfying "
+            "n^2*phi(n) <= 100000, the canonical table cell bound. The "
             "result retains both the ambient group and its kernel subgroup."
         ),
         request_type=CharacterKernelRequest,

@@ -763,6 +763,73 @@ def _admit_tensor_arithmetic(
     return order, classes, dimension
 
 
+def _admit_lambda_square_arithmetic(
+    element: CharacterRingElement,
+    table: CharacterTableResult,
+    source_work: int,
+) -> None:
+    """Price the square algorithm from its authenticated table dimensions."""
+    order = table.axis.cyclotomic_order
+    classes = len(table.axis.class_sizes)
+    rows = len(table.rows)
+    dimension = euler_phi(order)
+    coefficient_digits = max(
+        1,
+        *(len(str(abs(value))) for value in element.irreducible_multiplicities),
+    )
+    table_digits = max(
+        1,
+        *(
+            max(len(str(abs(value.num))), len(str(value.den)))
+            for row in table.rows
+            for class_value in row.values
+            for value in class_value.coefficients
+        ),
+    )
+    expanded_digits = coefficient_digits + table_digits + len(str(rows))
+    product_digits = 2 * expanded_digits + dimension + 3
+    result_digits = product_digits + table_digits + len(str(order))
+    # The operation expands the input and reconstructed result once each,
+    # multiplies/adds cyclotomic values classwise, then computes all exact
+    # character inner products. Each field operation is quadratic in phi(order).
+    work = (
+        3 * rows * classes * dimension * expanded_digits**2
+        + 8 * classes * dimension * dimension * product_digits**2
+        + rows
+        * classes
+        * (2 * dimension * dimension + 6 * dimension)
+        * result_digits**2
+        + order * order * max(1, len(element.table.partition.source.generators))
+        + source_work
+    )
+    if work > MAX_CHARACTER_TENSOR_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.lambda_square_work_exceeds_envelope",
+            message="symmetric or exterior square exceeds its exact work envelope",
+        )
+    if result_digits > MAX_VALUE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.lambda_square_output_height",
+            message="square coordinates exceed the exact coefficient envelope",
+        )
+    output_bytes = (
+        rows * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 32)
+        + MAX_CHARACTER_TABLE_CELLS * 40
+        + 65_536
+    )
+    if (
+        output_bytes > MAX_CHARACTER_TENSOR_PRODUCT_OUTPUT_BYTES
+        or output_bytes > CanonicalLimits().max_output_bytes
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="groups.characters.lambda_square_output_exceeds_envelope",
+            message="square result exceeds the exact output envelope",
+        )
+
+
 def character_tensor_product(
     request: CharacterTensorProductRequest,
 ) -> CharacterRingElement:
@@ -867,7 +934,7 @@ def _character_lambda_square(
             "request must contain one table-bound virtual character",
             ("request",),
         )
-    element = request.character
+    element = getattr(request, "character", None)
     if not isinstance(element, CharacterRingElement):
         raise _invalid(
             "groups.characters.lambda_square_input_type",
@@ -883,39 +950,9 @@ def _character_lambda_square(
             code="groups.characters.lambda_square_group_order_exceeds_envelope",
             message="symmetric and exterior squares admit group order at most 60",
         )
-    # Reuse the tensor admission's exact height, basis-pairing, reconstruction,
-    # and serialized-result envelope, then charge for the class squaring map
-    # and the addition/division used by the lambda identity.
-    coordinate_digits = max(
-        1, *(len(str(abs(value))) for value in element.irreducible_multiplicities)
-    )
-    table_digits = max(
-        1,
-        *(
-            max(len(str(abs(value.num))), len(str(value.den)))
-            for row in element.table.rows
-            for class_value in row.values
-            for value in class_value.coefficients
-        ),
-    )
-    lambda_digits = coordinate_digits + table_digits + len(str(actual_order)) + 2
-    lambda_work = (
-        actual_order
-        * euler_phi(actual_order)
-        * euler_phi(actual_order)
-        * lambda_digits**2
-        + actual_order * source.degree * (max(1, actual_order.bit_length()) + 2)
-        + actual_order * euler_phi(actual_order) * lambda_digits**2
-    )
-    order, classes, dimension = _admit_tensor_arithmetic(
-        element,
-        element,
-        source,
-        source_work,
-        actual_order,
-        additional_work=lambda_work,
-    )
-
+    # The group closure is bounded before canonical table reconstruction. The
+    # lambda-square envelope then uses the authenticated row and class counts,
+    # instead of charging as if both were the full group order.
     raw_classes = group_conjugacy_classes(
         source.degree, [list(generator) for generator in source.generators]
     )
@@ -929,6 +966,7 @@ def _character_lambda_square(
             "input must retain the exact canonical character table for its group",
             ("character", "table"),
         )
+    _admit_lambda_square_arithmetic(element, table, source_work)
     order = table.axis.cyclotomic_order
     classes = len(table.axis.class_sizes)
     dimension = euler_phi(order)
@@ -1142,7 +1180,7 @@ def character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
             "request must contain one table-bound ordinary character",
             ("request",),
         )
-    element = request.character
+    element = getattr(request, "character", None)
     if not isinstance(element, CharacterRingElement):
         raise _invalid(
             "groups.characters.kernel_input_type",

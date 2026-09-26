@@ -30,6 +30,11 @@ from jacobian.math.groups.characters.representation_ring_operations import (
 from jacobian.math.groups.operations import group_conjugacy_classes, group_order
 
 
+def test_model_constructed_kernel_request_is_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        character_kernel(CharacterKernelRequest.model_construct())
+
+
 def _s3_table():
     source = PermutationGroup(degree=3, generators=((1, 2, 0), (1, 0, 2)))
     classes = group_conjugacy_classes(3, [list(g) for g in source.generators])

@@ -30,7 +30,9 @@ def _partial_accepts(automaton: BottomUpTreeAutomaton, tree: RankedTree) -> bool
         child_states = tuple(state(child) for child in node.children)
         if any(child is None for child in child_states):
             return None
-        return table.get((node.symbol, child_states))
+        return table.get(
+            (node.symbol, tuple(child for child in child_states if child is not None))
+        )
 
     result = state(tree)
     return result is not None and result in automaton.final_states

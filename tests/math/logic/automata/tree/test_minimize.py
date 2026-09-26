@@ -181,6 +181,7 @@ def test_minimize_translates_forged_carrier_shape_errors() -> None:
 
 def test_minimize_is_published_in_catalog() -> None:
     tool = Catalog.open().operation("tree_automaton.deterministic.minimize.compute")
+    assert tool is not None
     request = TreeAutomatonMinimizeRequest(
         automaton=DeterministicBottomUpTreeAutomaton(
             state_count=1,
@@ -204,7 +205,9 @@ def _stuck_rejects(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
         children = tuple(state(child) for child in node.children)
         if any(child is None for child in children):
             return None
-        return table.get((node.symbol, children))
+        return table.get(
+            (node.symbol, tuple(child for child in children if child is not None))
+        )
 
     root = state(tree)
     return root is not None and root in machine.final_states
@@ -286,7 +289,9 @@ def _context_acceptance(
         children = tuple(evaluate(child) for child in node[1])
         if any(child is None for child in children):
             return None
-        return table.get((node[0], children))
+        return table.get(
+            (node[0], tuple(child for child in children if child is not None))
+        )
 
     return tuple(evaluate(context) in finals for context in contexts)
 

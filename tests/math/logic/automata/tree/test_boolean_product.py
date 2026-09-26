@@ -1,6 +1,6 @@
 """Independent language oracle for bounded tree-automaton Boolean products."""
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import ValidationError
@@ -48,11 +48,13 @@ def _accepts(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
         (row.symbol, row.child_states): row.target_state for row in machine.transitions
     }
 
-    def state(node: RankedTree):
+    def state(node: RankedTree) -> int | None:
         children = tuple(state(child) for child in node.children)
         if any(child is None for child in children):
             return None
-        return rows.get((node.symbol, children))
+        return rows.get(
+            (node.symbol, tuple(child for child in children if child is not None))
+        )
 
     root = state(tree)
     return root is not None and root in machine.final_states
@@ -101,7 +103,7 @@ def test_partial_input_is_rejected_instead_of_claiming_union() -> None:
     with pytest.raises(ValidationError):
         TreeAutomatonBooleanProductRequest(
             left=left,
-            right=right,
+            right=cast(CompleteDeterministicBottomUpTreeAutomaton, right),
             connective="union",
         )
 
@@ -155,7 +157,7 @@ def test_rejects_nondeterministic_input_and_mismatched_signature() -> None:
     )
     with pytest.raises(ValidationError, match="valid dictionary or instance"):
         TreeAutomatonBooleanProductRequest(
-            left=nondeterministic,
+            left=cast(CompleteDeterministicBottomUpTreeAutomaton, nondeterministic),
             right=left,
             connective="intersection",
         )
@@ -215,7 +217,11 @@ def test_native_product_rejects_non_carrier_operands(junk: Any) -> None:
         state_count=1, arity=(0,), transitions=(), final_states=()
     )
     with pytest.raises(OperationDomainValidationError):
-        boolean_product_tree_automata(partial, left, "intersection")
+        boolean_product_tree_automata(
+            cast(CompleteDeterministicBottomUpTreeAutomaton, partial),
+            left,
+            "intersection",
+        )
 
 
 def test_native_product_rejects_forged_complete_carrier() -> None:
@@ -237,6 +243,7 @@ def test_native_product_rejects_forged_complete_carrier() -> None:
 
 def test_boolean_product_example_states_the_completeness_precondition() -> None:
     operation = Catalog.open().operation("tree_automaton.boolean_product.compute")
+    assert operation is not None
     example = operation.examples[0]
 
     assert "partial" not in example.name

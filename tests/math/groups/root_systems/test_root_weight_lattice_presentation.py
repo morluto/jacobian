@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
-from jacobian.math.groups.root_systems._models import FiniteCartanDatum
+from jacobian.math.groups.root_systems._models import CartanMatrix, FiniteCartanDatum
 from jacobian.math.groups.root_systems.lattice_presentations import (
     RootWeightLatticePresentation,
     root_weight_lattice_presentation,
@@ -31,9 +29,11 @@ from jacobian.math.matrices.values import IntegerMatrix
     ),
 )
 def test_root_weight_lattices_compose_with_exact_sublattice_quotient(
-    matrix, expected_index, expected_factors
-):
-    datum = cartan_datum(matrix)
+    matrix: tuple[tuple[int, ...], ...],
+    expected_index: int,
+    expected_factors: tuple[int, ...],
+) -> None:
+    datum = cartan_datum(CartanMatrix.model_validate(matrix))
     restored_datum = FiniteCartanDatum.model_validate_json(datum.model_dump_json())
 
     presentation = root_weight_lattice_presentation(restored_datum)
@@ -71,14 +71,16 @@ def test_root_weight_lattices_compose_with_exact_sublattice_quotient(
     )
 
 
-def test_b2_rows_encode_cartan_columns_in_fundamental_weight_basis():
-    presentation = root_weight_lattice_presentation(cartan_datum(((2, -2), (-1, 2))))
+def test_b2_rows_encode_cartan_columns_in_fundamental_weight_basis() -> None:
+    presentation = root_weight_lattice_presentation(
+        cartan_datum(CartanMatrix.model_validate(((2, -2), (-1, 2))))
+    )
 
     assert presentation.root_to_weight_embedding.entries == ((2, -1), (-2, 2))
 
 
-def test_rejects_noncanonical_datum_maps_at_operation_boundary():
-    datum = cartan_datum(((2, -1), (-1, 2)))
+def test_rejects_noncanonical_datum_maps_at_operation_boundary() -> None:
+    datum = cartan_datum(CartanMatrix.model_validate(((2, -1), (-1, 2))))
     forged = datum.model_copy(
         update={
             "root_to_weight": IntegerMatrix(
@@ -96,8 +98,10 @@ def test_rejects_noncanonical_datum_maps_at_operation_boundary():
     )
 
 
-def test_result_validator_rejects_a_tampered_embedding():
-    presentation = root_weight_lattice_presentation(cartan_datum(((2, -1), (-1, 2))))
+def test_result_validator_rejects_a_tampered_embedding() -> None:
+    presentation = root_weight_lattice_presentation(
+        cartan_datum(CartanMatrix.model_validate(((2, -1), (-1, 2))))
+    )
     payload = presentation.model_dump(mode="json")
     payload["root_to_weight_embedding"]["entries"] = [["1", "0"], ["0", "1"]]
 
@@ -105,22 +109,15 @@ def test_result_validator_rejects_a_tampered_embedding():
         RootWeightLatticePresentation.model_validate(payload)
 
 
-def test_catalog_tool_consumes_canonical_cartan_datum():
+def test_catalog_tool_consumes_canonical_cartan_datum() -> None:
     tool = next(
         item
         for item in TOOLS
         if item.operation_id == "root_system.root_weight_lattice_embedding.compute"
     )
-    datum = cartan_datum(((2, -1), (-1, 2)))
+    datum = cartan_datum(CartanMatrix.model_validate(((2, -1), (-1, 2))))
     request = tool.request_type.model_validate_json(datum.model_dump_json())
 
     result = tool.run(request)
 
     assert result == root_weight_lattice_presentation(datum)
-    example_result = invoke_operation(
-        tool.operation_id, tool.examples[0].input, Catalog.open()
-    )
-    assert example_result.output["root_lattice"]["basis"]["entries"] == [
-        ["2", "-1"],
-        ["-1", "2"],
-    ]

@@ -13,10 +13,12 @@ from jacobian.math.lie_algebras._models import (
     LieIdealRequest,
     LieQuotientRequest,
     LieQuotientResult,
+    LieSubalgebraRequest,
     LieSubspace,
 )
 from jacobian.math.lie_algebras.operations import (
     check_ideal,
+    check_subalgebra,
     lie_center,
     lie_direct_sum,
     lie_killing_form,
@@ -24,6 +26,28 @@ from jacobian.math.lie_algebras.operations import (
 )
 
 F = Fraction
+
+
+def test_subalgebra_check_returns_exact_closure_witness() -> None:
+    borel = check_subalgebra(SL2, SL2_BOREL)
+    assert borel.is_subalgebra
+    assert borel.witness is None
+    assert type(borel).model_validate_json(borel.model_dump_json()) == borel
+
+    nonclosed = check_subalgebra(
+        HEISENBERG, _subspace(("x", "y", "z"), ((1, 0, 0), (0, 1, 0)))
+    )
+    assert not nonclosed.is_subalgebra
+    assert nonclosed.witness is not None
+    assert (nonclosed.witness.left_row, nonclosed.witness.right_row) == (0, 1)
+
+    with pytest.raises(ValidationError):
+        LieSubalgebraRequest.model_validate(
+            {
+                "algebra": SL2.model_dump(),
+                "candidate": _subspace(("x",), ((1,),)).model_dump(),
+            }
+        )
 
 
 def _algebra(

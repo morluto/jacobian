@@ -5,28 +5,50 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
+    LieAdjointRepresentationResult,
+    LieAdjointRequest,
+    LieAdjointResult,
     LieAlgebraRequest,
     LieBracketRequest,
     LieBracketResult,
     LieCenterResult,
+    LieCentralizerRequest,
+    LieCentralizerResult,
     LieDerivedSeriesResult,
     LieDirectSumRequest,
+    LieGeneratedIdealRequest,
+    LieGeneratedSubalgebraRequest,
+    LieIdeal,
     LieIdealCheckResult,
     LieIdealRequest,
+    LieKillingRadicalResult,
     LieKillingResult,
     LieLowerCentralSeriesResult,
     LieQuotientRequest,
     LieQuotientResult,
+    LieSubalgebra,
+    LieSubalgebraCheckResult,
+    LieSubalgebraRequest,
+    LieUpperCentralSeriesResult,
 )
 from jacobian.math.lie_algebras.operations import (
     check_ideal,
+    check_subalgebra,
+    lie_adjoint,
+    lie_adjoint_representation,
     lie_bracket,
     lie_center,
     lie_derived_series,
+    lie_derived_subalgebra,
     lie_direct_sum,
+    lie_generated_ideal,
+    lie_generated_subalgebra,
     lie_killing_form,
+    lie_killing_form_radical,
     lie_lower_central_series,
     lie_quotient,
+    lie_subalgebra_centralizer,
+    lie_upper_central_series,
 )
 
 
@@ -38,12 +60,36 @@ def _run_lie_killing_form(request: LieAlgebraRequest) -> LieKillingResult:
     return lie_killing_form(request.algebra)
 
 
+def _run_lie_killing_form_radical(
+    request: LieAlgebraRequest,
+) -> LieKillingRadicalResult:
+    return lie_killing_form_radical(request.algebra)
+
+
+def _run_lie_adjoint_representation(
+    request: LieAlgebraRequest,
+) -> LieAdjointRepresentationResult:
+    return lie_adjoint_representation(request.algebra)
+
+
+def _run_lie_adjoint(request: LieAdjointRequest) -> LieAdjointResult:
+    return lie_adjoint(request.algebra, request.element)
+
+
 def _run_lie_center(request: LieAlgebraRequest) -> LieCenterResult:
     return lie_center(request.algebra)
 
 
+def _run_lie_centralizer(request: LieCentralizerRequest) -> LieCentralizerResult:
+    return lie_subalgebra_centralizer(request.algebra, request.elements)
+
+
 def _run_lie_derived_series(request: LieAlgebraRequest) -> LieDerivedSeriesResult:
     return lie_derived_series(request.algebra)
+
+
+def _run_lie_derived_subalgebra(request: LieAlgebraRequest) -> LieIdeal:
+    return lie_derived_subalgebra(request.algebra)
 
 
 def _run_lie_lower_central_series(
@@ -52,8 +98,30 @@ def _run_lie_lower_central_series(
     return lie_lower_central_series(request.algebra)
 
 
+def _run_lie_upper_central_series(
+    request: LieAlgebraRequest,
+) -> LieUpperCentralSeriesResult:
+    return lie_upper_central_series(request.algebra)
+
+
 def _run_lie_ideal_check(request: LieIdealRequest) -> LieIdealCheckResult:
     return check_ideal(request.algebra, request.candidate)
+
+
+def _run_lie_subalgebra_check(
+    request: LieSubalgebraRequest,
+) -> LieSubalgebraCheckResult:
+    return check_subalgebra(request.algebra, request.candidate)
+
+
+def _run_lie_generated_subalgebra(
+    request: LieGeneratedSubalgebraRequest,
+) -> LieSubalgebra:
+    return lie_generated_subalgebra(request.algebra, request.generators)
+
+
+def _run_lie_generated_ideal(request: LieGeneratedIdealRequest) -> LieIdeal:
+    return lie_generated_ideal(request.algebra, request.generators)
 
 
 def _run_lie_quotient(request: LieQuotientRequest) -> LieQuotientResult:
@@ -88,6 +156,54 @@ def _element(coords: list[int]) -> dict[str, Any]:
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="lie_algebra.adjoint.compute",
+        title="Compute the exact adjoint action of a Lie-algebra element",
+        description=(
+            "Return the exact rational matrix ad_x(y) = [x,y] for one element "
+            "x in a finite-dimensional Lie algebra over QQ, acting on column "
+            "coordinate vectors in the retained ordered basis. The element must "
+            "use the algebra's basis axis. Dimension is at most 8; admission "
+            "establishes every Jacobi identity and bounds coefficient growth, "
+            "arithmetic work, and matrix output before expansion."
+        ),
+        request_type=LieAdjointRequest,
+        result_type=LieAdjointResult,
+        run=_run_lie_adjoint,
+        tags=("lie-algebra", "adjoint", "exact", "rational"),
+        discovery_terms=(
+            "adjoint action of a Lie algebra element",
+            "ad_x matrix",
+            "inner derivation matrix",
+            "matrix of x bracket y",
+        ),
+        examples=(
+            OperationExample(
+                name="heisenberg_adjoint_x",
+                description=(
+                    "Compute ad_x in the Heisenberg algebra [x,y] = z, "
+                    "retaining the exact ordered basis."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["x", "y", "z"],
+                        "structure_constants": [
+                            {
+                                "i": 0,
+                                "j": 1,
+                                "k": 2,
+                                "coefficient": _rational(1),
+                            }
+                        ],
+                    },
+                    "element": {
+                        "basis": ["x", "y", "z"],
+                        "coordinates": [_rational(1), _rational(0), _rational(0)],
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="lie_algebra.bracket.compute",
         title="Compute the exact bracket of two Lie-algebra elements",
@@ -127,6 +243,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="lie_algebra.adjoint_representation.compute",
+        title="Compute the exact adjoint representation matrices",
+        description=(
+            "Return one exact rational matrix ad(b_i) per ordered basis element "
+            "of a finite-dimensional Lie algebra over QQ, acting on column "
+            "coordinate vectors. The source algebra and basis order are retained. "
+            "Dimension is at most 8; admission verifies every Jacobi identity, "
+            "establishing [ad(x), ad(y)] = ad([x,y])."
+        ),
+        request_type=LieAlgebraRequest,
+        result_type=LieAdjointRepresentationResult,
+        run=_run_lie_adjoint_representation,
+        tags=("lie-algebra", "adjoint", "representation", "exact", "rational"),
+        discovery_terms=(
+            "Lie algebra adjoint representation",
+            "adjoint matrices",
+            "ad_x matrix",
+            "adjoint action of basis vectors",
+        ),
+        examples=(
+            OperationExample(
+                name="sl2_adjoint_representation",
+                description=(
+                    "Return ad(e), ad(f), and ad(h) in the declared sl2 basis "
+                    "order after Jacobi admission."
+                ),
+                input={"algebra": _SL2_ALGEBRA},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="lie_algebra.killing_form.compute",
         title="Compute the exact Killing form of a Lie algebra",
         description=(
@@ -157,6 +304,49 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "and Jacobi."
                 ),
                 input={"algebra": _SL2_ALGEBRA},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.killing_form.radical.compute",
+        title="Compute the radical of a Lie algebra's Killing form",
+        description=(
+            "Compute the nullspace of the exact Killing-form matrix over QQ, "
+            "returning its canonical RREF rows on the source algebra basis "
+            "together with the source algebra and complete KillingResult. "
+            "This is the radical of the bilinear form and is not asserted to "
+            "be the solvable radical of the Lie algebra."
+        ),
+        request_type=LieAlgebraRequest,
+        result_type=LieKillingRadicalResult,
+        run=_run_lie_killing_form_radical,
+        tags=("lie-algebra", "killing-form", "radical", "exact", "rational"),
+        discovery_terms=(
+            "Killing form radical",
+            "nullspace of Killing form",
+            "radical of the Killing bilinear form",
+        ),
+        examples=(
+            OperationExample(
+                name="heisenberg_killing_form_radical",
+                description=(
+                    "The three-dimensional Heisenberg algebra has zero Killing "
+                    "form, so its bilinear-form radical is the full source "
+                    "space; this result does not label it the solvable radical."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["x", "y", "z"],
+                        "structure_constants": [
+                            {
+                                "i": 0,
+                                "j": 1,
+                                "k": 2,
+                                "coefficient": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    }
+                },
             ),
         ),
     ),
@@ -201,6 +391,86 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 "k": 2,
                                 "coefficient": {"num": "1", "den": "1"},
                             }
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.subalgebra.centralizer.compute",
+        title="Compute the exact centralizer of Lie algebra elements",
+        description=(
+            "Return the complete common centralizer of up to dim(g) exact "
+            "rational vectors in a finite-dimensional Lie algebra over QQ as "
+            "a canonical RREF LieSubalgebra bound to the source algebra. The "
+            "empty family has centralizer g. Admission establishes Jacobi, "
+            "bounds coordinate digits and the stacked linear system, and "
+            "the defining equations are [x,s]=0 for every supplied vector s."
+        ),
+        request_type=LieCentralizerRequest,
+        result_type=LieCentralizerResult,
+        run=_run_lie_centralizer,
+        tags=("lie-algebra", "centralizer", "subalgebra", "exact", "rational"),
+        discovery_terms=(
+            "Lie algebra centralizer",
+            "centralizer of a Lie subalgebra",
+            "vectors commuting with a Lie algebra element",
+            "common kernel of adjoint maps",
+        ),
+        examples=(
+            OperationExample(
+                name="heisenberg_centralizer_of_x",
+                description=(
+                    "In the three-dimensional Heisenberg algebra, the "
+                    "centralizer of x is span(x,z)."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["x", "y", "z"],
+                        "structure_constants": [
+                            {"i": 0, "j": 1, "k": 2, "coefficient": _rational(1)}
+                        ],
+                    },
+                    "elements": [
+                        {
+                            "basis": ["x", "y", "z"],
+                            "coordinates": [_rational(1), _rational(0), _rational(0)],
+                        }
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.derived_subalgebra.compute",
+        title="Compute the derived subalgebra",
+        description=(
+            "Return [g,g] = span{[b_i,b_j]} as a canonical exact LieIdeal "
+            "in the source algebra's ordered basis. Admission establishes "
+            "antisymmetry and every Jacobi identity before bracket expansion; "
+            "the result retains the ambient algebra and composes with ideal "
+            "operations such as quotient construction."
+        ),
+        request_type=LieAlgebraRequest,
+        result_type=LieIdeal,
+        run=_run_lie_derived_subalgebra,
+        tags=("lie-algebra", "derived-subalgebra", "commutator", "exact", "rational"),
+        discovery_terms=(
+            "Lie derived subalgebra",
+            "commutator ideal",
+            "span of Lie brackets",
+            "[g,g]",
+        ),
+        examples=(
+            OperationExample(
+                name="heisenberg_derived_subalgebra",
+                description="The Heisenberg derived ideal is the central span of z.",
+                input={
+                    "algebra": {
+                        "basis": ["x", "y", "z"],
+                        "structure_constants": [
+                            {"i": 0, "j": 1, "k": 2, "coefficient": _rational(1)}
                         ],
                     }
                 },
@@ -296,6 +566,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="lie_algebra.upper_central_series.compute",
+        title="Compute the upper central series with its nilpotency decision",
+        description=(
+            "Compute Z_0 = 0 and Z_(i+1)/Z_i = center(L/Z_i) over QQ as "
+            "canonical RREF subspaces on the original ordered basis. The chain "
+            "ends at L exactly for nilpotent algebras; otherwise it stops at "
+            "the first stable proper term. Dimension is bounded by 8."
+        ),
+        request_type=LieAlgebraRequest,
+        result_type=LieUpperCentralSeriesResult,
+        run=_run_lie_upper_central_series,
+        tags=("lie-algebra", "central-series", "nilpotent", "exact", "rational"),
+        discovery_terms=(
+            "Lie algebra upper central series",
+            "nilpotency decision",
+            "ascending central series",
+        ),
+        examples=(
+            OperationExample(
+                name="heisenberg_upper_central_series",
+                description=(
+                    "Compute the Heisenberg upper central dimensions 0, 1, 3; "
+                    "the constants must satisfy antisymmetry and Jacobi."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["x", "y", "z"],
+                        "structure_constants": [
+                            {"i": 0, "j": 1, "k": 2, "coefficient": _rational(1)}
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="lie_algebra.ideal.check",
         title="Decide whether a subspace is a Lie-algebra ideal",
         description=(
@@ -350,6 +656,124 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             ],
                         },
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.subalgebra.check",
+        title="Decide whether a subspace is a Lie subalgebra",
+        description=(
+            "Decide whether an RREF subspace is closed under its own Lie "
+            "bracket. Bilinearity reduces the check to generator pairs; a "
+            "failed decision retains the first exact escaping bracket."
+        ),
+        request_type=LieSubalgebraRequest,
+        result_type=LieSubalgebraCheckResult,
+        run=_run_lie_subalgebra_check,
+        tags=("lie-algebra", "subalgebra", "closure", "exact", "rational"),
+        discovery_terms=(
+            "Lie subalgebra check",
+            "bracket-closed subspace",
+            "subalgebra membership",
+        ),
+        examples=(
+            OperationExample(
+                name="sl2_positive_borel_is_subalgebra",
+                description="The span of h and e is closed under brackets in sl2.",
+                input={
+                    "algebra": _SL2_ALGEBRA,
+                    "candidate": {
+                        "basis": ["e", "f", "h"],
+                        "generators": {
+                            "domain": "QQ",
+                            "row_count": 2,
+                            "column_count": 3,
+                            "entries": [
+                                [_rational(1), _rational(0), _rational(0)],
+                                [_rational(0), _rational(0), _rational(1)],
+                            ],
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.subalgebra.generated.compute",
+        title="Generate the Lie subalgebra spanned by exact vectors",
+        description=(
+            "Return the smallest Lie subalgebra containing up to dim(g) exact "
+            "rational vectors in a finite-dimensional Lie algebra over QQ. The "
+            "canonical RREF rows retain the exact ambient algebra and ordered "
+            "basis; the empty generator family generates zero. Admission "
+            "establishes Jacobi and bounds closure work and coefficient growth."
+        ),
+        request_type=LieGeneratedSubalgebraRequest,
+        result_type=LieSubalgebra,
+        run=_run_lie_generated_subalgebra,
+        tags=("lie-algebra", "generated-subalgebra", "exact", "rational"),
+        discovery_terms=(
+            "Lie subalgebra generated by vectors",
+            "Lie closure of generators",
+            "smallest Lie subalgebra containing elements",
+        ),
+        examples=(
+            OperationExample(
+                name="sl2_generators_e_f_generate_sl2",
+                description="The generators e and f generate h by their bracket, hence all of sl2.",
+                input={
+                    "algebra": _SL2_ALGEBRA,
+                    "generators": [_element([1, 0, 0]), _element([0, 1, 0])],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lie_algebra.ideal.generated.compute",
+        title="Generate the Lie ideal spanned by exact vectors",
+        description=(
+            "Return the smallest ideal of a finite-dimensional Lie algebra "
+            "over QQ containing up to dim(g) exact rational vectors. The "
+            "canonical RREF rows retain the exact ambient algebra and ordered "
+            "basis; the empty family generates the zero ideal. Admission "
+            "establishes Jacobi and bounds closure work, coefficient growth, "
+            "and intermediate output size."
+        ),
+        request_type=LieGeneratedIdealRequest,
+        result_type=LieIdeal,
+        run=_run_lie_generated_ideal,
+        tags=("lie-algebra", "generated-ideal", "exact", "rational"),
+        discovery_terms=(
+            "Lie ideal generated by vectors",
+            "smallest ideal containing elements",
+            "ideal closure under ambient brackets",
+        ),
+        examples=(
+            OperationExample(
+                name="heisenberg_ideal_generated_by_x",
+                description=(
+                    "In the Heisenberg algebra, the ideal generated by x is "
+                    "span(x, z), since bracketing x with y adds z."
+                ),
+                input={
+                    "algebra": {
+                        "basis": ["x", "y", "z"],
+                        "structure_constants": [
+                            {
+                                "i": 0,
+                                "j": 1,
+                                "k": 2,
+                                "coefficient": _rational(1),
+                            }
+                        ],
+                    },
+                    "generators": [
+                        {
+                            "basis": ["x", "y", "z"],
+                            "coordinates": [_rational(1), _rational(0), _rational(0)],
+                        }
+                    ],
                 },
             ),
         ),

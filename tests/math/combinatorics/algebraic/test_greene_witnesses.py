@@ -105,6 +105,14 @@ def test_greene_witness_envelope_accepts_exact_word_and_k_bounds() -> None:
     assert result.families[-1].decreasing_total == 8
 
 
+def test_native_greene_witness_accepts_canonical_word_and_k() -> None:
+    word = FiniteWord(alphabet=("a", "b"), letters=("a", "b", "a"))
+
+    assert compute_greene_witnesses(word, 2) == compute_greene_witnesses(
+        GreeneWitnessRequest(word=word, k=2)
+    )
+
+
 def test_greene_witness_operation_is_exported_and_catalogued() -> None:
     assert "compute_greene_witnesses" in algebraic_combinatorics.__all__
     assert any(tool.operation_id == "word.greene_witnesses.compute" for tool in TOOLS)

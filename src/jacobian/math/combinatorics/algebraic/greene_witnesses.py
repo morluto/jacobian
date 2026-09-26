@@ -17,6 +17,7 @@ from jacobian.math.combinatorics.algebraic.biword import (
     GreeneWitnessResult,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
+from jacobian.math.logic.languages.words.values import FiniteWord
 
 _MAX_RELAXATIONS = 6_000_000
 _MAX_OUTPUT_MEMBERSHIPS = 512
@@ -183,16 +184,14 @@ def _maximum_relaxation_bound(n: int, k: int) -> int:
 
 
 def compute_greene_witnesses(
-    request: GreeneWitnessRequest,
+    word: FiniteWord | GreeneWitnessRequest, k: int | None = None
 ) -> GreeneWitnessResult:
     """Return disjoint weak-increasing and strict-decreasing Greene witnesses."""
 
-    if type(request) is not GreeneWitnessRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="algebraic_combinatorics.greene_witness_request",
-            message="expected a canonical Greene witness request",
-        )
+    if isinstance(word, GreeneWitnessRequest) and k is None:
+        request = word
+    else:
+        request = GreeneWitnessRequest(word=word, k=k)
     try:
         request = GreeneWitnessRequest.model_validate(request.model_dump(mode="python"))
     except Exception as exc:

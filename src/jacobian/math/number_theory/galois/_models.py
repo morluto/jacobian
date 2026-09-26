@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
 from jacobian.canonical import format_canonical_integer
+from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.number_theory.number_fields._field_embedding import (
     SimpleNumberFieldEmbedding,
 )
@@ -17,7 +18,7 @@ from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldElement,
     SimpleNumberFieldPresentation,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.polynomials.values import MonicPolynomial, RationalPolynomial
 
 MAX_FACTOR_DEGREE = 128
 MAX_GALOIS_GROUP_DEGREE = 6
@@ -547,6 +548,38 @@ class AutomorphismElementApplyRequest(StrictModel):
     element: SimpleNumberFieldElement
 
 
+class ElementEmbeddingOrbitRequest(StrictModel):
+    """An element of one supported splitting field over QQ."""
+
+    field: QQSplittingField
+    element: SimpleNumberFieldElement
+
+    @model_validator(mode="after")
+    def require_element_parent(self) -> Self:
+        if self.element.presentation != self.field.extension:
+            raise _validation_error(
+                "element_orbit_parent",
+                "element must belong to the exact splitting-field presentation",
+            )
+        return self
+
+
+class ElementAutomorphismImage(StrictModel):
+    """One exact map and its image of the orbit's source element."""
+
+    automorphism: QQFieldAutomorphism
+    image: SimpleNumberFieldElement
+
+    @model_validator(mode="after")
+    def require_map_image_parents(self) -> Self:
+        if self.image.presentation != self.automorphism.field.extension:
+            raise _validation_error(
+                "element_orbit_image_parent",
+                "automorphism image must lie in its exact target field",
+            )
+        return self
+
+
 class GaloisAutomorphismSubgroup(StrictModel):
     """A subgroup of the exact automorphisms of one supported splitting field."""
 
@@ -565,6 +598,58 @@ class GaloisAutomorphismSubgroup(StrictModel):
             raise _validation_error(
                 "subgroup_elements",
                 "subgroup automorphisms must be unique and sorted by root action",
+            )
+        return self
+
+
+class ElementEmbeddingOrbitResult(StrictModel):
+    """Complete exact element action under the supported QQ automorphism group."""
+
+    field: QQSplittingField
+    source_element: SimpleNumberFieldElement
+    action: tuple[ElementAutomorphismImage, ...] = Field(min_length=1, max_length=2)
+    orbit: tuple[SimpleNumberFieldElement, ...] = Field(min_length=1, max_length=2)
+    stabilizer: GaloisAutomorphismSubgroup
+    orbit_size: StrictInt = Field(ge=1, le=2)
+    minimal_polynomial: MonicPolynomial
+
+    @model_validator(mode="after")
+    def require_complete_bound_result(self) -> Self:
+        if self.source_element.presentation != self.field.extension:
+            raise _validation_error(
+                "element_orbit_source_parent",
+                "source element must belong to the retained splitting field",
+            )
+        if self.stabilizer.field != self.field:
+            raise _validation_error(
+                "element_orbit_stabilizer_parent",
+                "stabilizer must belong to the retained splitting field",
+            )
+        if any(
+            item.automorphism.field != self.field
+            or item.image.presentation != self.field.extension
+            for item in self.action
+        ):
+            raise _validation_error(
+                "element_orbit_action_parent",
+                "every action map and image must use the retained field",
+            )
+        if any(value.presentation != self.field.extension for value in self.orbit):
+            raise _validation_error(
+                "element_orbit_value_parent",
+                "every orbit element must use the retained field",
+            )
+        if self.orbit_size != len(self.orbit) or self.orbit_size * len(
+            self.stabilizer.elements
+        ) != len(self.action):
+            raise _validation_error(
+                "element_orbit_cardinality",
+                "orbit, action, and stabilizer cardinalities are inconsistent",
+            )
+        if len(set(self.orbit)) != len(self.orbit):
+            raise _validation_error(
+                "element_orbit_duplicates",
+                "orbit elements must be distinct and canonically ordered",
             )
         return self
 
@@ -613,6 +698,126 @@ class IntermediateFieldStabilizerResult(StrictModel):
             raise _validation_error(
                 "stabilizer_parent",
                 "intermediate-field inclusion and stabilizer must share the exact extension parent",
+            )
+        return self
+
+
+class GaloisCorrespondenceRequest(StrictModel):
+    """The complete subgroup/embedded-subfield correspondence for ``L/QQ``."""
+
+    field: QQSplittingField
+
+
+class GaloisCorrespondencePair(StrictModel):
+    """One exact pair ``H <-> L^H`` in a complete correspondence."""
+
+    subgroup_label: Annotated[str, Field(pattern=r"^H[0-1]$", strict=True)]
+    field_label: Annotated[str, Field(pattern=r"^F[0-1]$", strict=True)]
+    subgroup: GaloisAutomorphismSubgroup
+    inclusion: SimpleNumberFieldEmbedding
+    stabilizer: GaloisAutomorphismSubgroup
+    subgroup_order: ExactInteger = Field(ge=1, le=2)
+    subgroup_index: ExactInteger = Field(ge=1, le=2)
+    fixed_field_degree: ExactInteger = Field(ge=1, le=2)
+    relative_field_degree: ExactInteger = Field(ge=1, le=2)
+    normal: bool
+
+
+class GaloisCorrespondenceResult(StrictModel):
+    """Complete degree-at-most-two Galois correspondence, bound to ``L/QQ``.
+
+    Each pair is indexed in both finite posets: its subgroup and embedded fixed
+    field are the two objects identified by the Galois correspondence.
+    """
+
+    field: QQSplittingField
+    pairs: Annotated[
+        tuple[GaloisCorrespondencePair, ...], Field(min_length=1, max_length=2)
+    ]
+    subgroup_inclusion_poset: FinitePoset
+    intermediate_field_inclusion_poset: FinitePoset
+    normal_subgroup_labels: Annotated[tuple[str, ...], Field(max_length=2)]
+
+    @model_validator(mode="after")
+    def require_complete_correspondence_shape(self) -> Self:
+        if len(self.pairs) != self.field.degree:
+            raise _validation_error(
+                "correspondence_cardinality",
+                "the bounded correspondence must enumerate every subgroup of the supported Galois group",
+            )
+        subgroup_labels = tuple(f"H{index}" for index in range(len(self.pairs)))
+        field_labels = tuple(f"F{index}" for index in range(len(self.pairs)))
+        if (
+            tuple(pair.subgroup_label for pair in self.pairs) != subgroup_labels
+            or tuple(pair.field_label for pair in self.pairs) != field_labels
+        ):
+            raise _validation_error(
+                "correspondence_pair_axis",
+                "subgroup/fixed-field pairs must use their canonical parallel axes",
+            )
+        if any(
+            pair.subgroup.field != self.field
+            or pair.stabilizer != pair.subgroup
+            or pair.inclusion.target != self.field.extension
+            or pair.inclusion.source.degree != pair.fixed_field_degree
+            or pair.subgroup_order != len(pair.subgroup.elements)
+            or pair.subgroup_index * pair.subgroup_order != self.field.degree
+            or pair.fixed_field_degree != pair.subgroup_index
+            or pair.relative_field_degree != pair.subgroup_order
+            or pair.fixed_field_degree * pair.relative_field_degree != self.field.degree
+            or not pair.normal
+            for pair in self.pairs
+        ):
+            raise _validation_error(
+                "correspondence_degree_identity",
+                "each pair must retain the exact parent, normal subgroup, and Galois degree/index identities",
+            )
+        if self.normal_subgroup_labels != subgroup_labels:
+            raise _validation_error(
+                "correspondence_normal_subgroups",
+                "all subgroups of a degree-at-most-two Galois group are normal",
+            )
+        if (
+            self.subgroup_inclusion_poset.elements != subgroup_labels
+            or self.intermediate_field_inclusion_poset.elements != field_labels
+        ):
+            raise _validation_error(
+                "correspondence_poset_axis",
+                "the two inclusion posets must use the exact paired object axes",
+            )
+        subgroup_relations = {
+            (pair.lower, pair.upper)
+            for pair in self.subgroup_inclusion_poset.strict_order_pairs
+        }
+        field_relations = {
+            (pair.lower, pair.upper)
+            for pair in self.intermediate_field_inclusion_poset.strict_order_pairs
+        }
+        expected_subgroup_relations = (
+            {(subgroup_labels[1], subgroup_labels[0])}
+            if self.field.degree == 2
+            else set()
+        )
+        expected_field_relations = (
+            {(field_labels[0], field_labels[1])} if self.field.degree == 2 else set()
+        )
+        if (
+            subgroup_relations != expected_subgroup_relations
+            or field_relations != expected_field_relations
+            or {
+                (pair.lower, pair.upper)
+                for pair in self.subgroup_inclusion_poset.cover_relations
+            }
+            != expected_subgroup_relations
+            or {
+                (pair.lower, pair.upper)
+                for pair in self.intermediate_field_inclusion_poset.cover_relations
+            }
+            != expected_field_relations
+        ):
+            raise _validation_error(
+                "correspondence_poset_order",
+                "subgroup and intermediate-field inclusion posets must be complete and inclusion reversing",
             )
         return self
 
@@ -750,6 +955,9 @@ __all__ = [
     "FinitePermutationGroup",
     "FrobeniusCycleRequest",
     "FrobeniusCycleResult",
+    "GaloisCorrespondencePair",
+    "GaloisCorrespondenceRequest",
+    "GaloisCorrespondenceResult",
     "GaloisFactorRequest",
     "GaloisFactorResult",
     "GaloisGroupRequest",

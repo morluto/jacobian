@@ -1840,7 +1840,6 @@ def weyl_antidominant_representative(
             cartan, weight, weight, element
         )
 
-
     coordinate_bounds = _weight_coordinate_bounds(rows, weight)
     if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
         raise OperationDomainValidationError(
@@ -1877,7 +1876,6 @@ def weyl_antidominant_representative(
                 "admitted work or output envelope"
             ),
         )
-
 
     dominant_word: list[int] = []
     dominant = _dominant_weight(

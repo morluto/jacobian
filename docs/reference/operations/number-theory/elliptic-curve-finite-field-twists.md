@@ -1,18 +1,20 @@
 # Elliptic curve quadratic twists over finite fields
 
-`elliptic_curve.finite_field.quadratic_twist.compute` takes a nonsingular
-short-Weierstrass curve
+The public
+`elliptic_curve.finite_field.quadratic_twist_relation.compute` operation takes a
+nonsingular short-Weierstrass curve
 \(E:y^2=x^3+Ax+B\) over a finite field of characteristic greater than three.
 It chooses the first nonsquare `d` in the field's canonical base-p
-power-basis encoding and returns
+power-basis encoding and returns a source-bound relation containing the model
 \[
 E^{(d)}:y^2=x^3+d^2Ax+d^3B.
 \]
 
 This is the unique nontrivial quadratic twist up to isomorphism over the
 source field. The chosen `d` makes the returned coefficient pair canonical for
-the declared field presentation. The result retains that field and composes
-directly with point enumeration, cardinality, and extension-count operations.
+the declared field presentation. The result retains that field; pass its
+`twisted_curve` directly to point enumeration, cardinality, and extension-count
+operations.
 The expected independent cardinality relation is
 \[
 #E(\mathbb F_q)+#E^{(d)}(\mathbb F_q)=2(q+1),

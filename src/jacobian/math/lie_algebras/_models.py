@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from itertools import pairwise
-from typing import Annotated, Self
+from typing import Annotated, Any, Self
 
-from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic import (
+    Field,
+    StrictBool,
+    StringConstraints,
+    TypeAdapter,
+    model_validator,
+)
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.canonical import decimal_digit_width
 from jacobian.math.matrices.values import RationalMatrix
 
 LieBasisLabel = Annotated[
@@ -20,6 +28,19 @@ LieBasisLabel = Annotated[
 MAX_LIE_DIMENSION = 8
 MAX_STRUCTURE_NONZEROS = 256
 MAX_STRUCTURE_COEFFICIENT_DIGITS = 64
+# Jacobi is alternating, so it suffices to check increasing basis triples.
+# For each of three cyclic terms there are at most n choices for the inner
+# bracket output and n for the outer bracket output.
+MAX_LIE_JACOBI_WORK = (
+    3
+    * (MAX_LIE_DIMENSION * (MAX_LIE_DIMENSION - 1) * (MAX_LIE_DIMENSION - 2) // 6)
+    * MAX_LIE_DIMENSION**2
+)
+MAX_LIE_JACOBI_TERMS_PER_TRIPLE = 3 * MAX_LIE_DIMENSION**2
+MAX_LIE_JACOBI_INTERMEDIATE_DIGITS = (
+    2 * MAX_STRUCTURE_COEFFICIENT_DIGITS * MAX_LIE_JACOBI_TERMS_PER_TRIPLE
+    + len(str(MAX_LIE_JACOBI_TERMS_PER_TRIPLE))
+)
 MAX_ELEMENT_COEFFICIENT_DIGITS = 64
 MAX_BRACKET_LEDGER_ROWS = MAX_LIE_DIMENSION * (MAX_LIE_DIMENSION - 1) // 2
 # A bracket pair performs two coordinate products and every retained ledger
@@ -70,20 +91,109 @@ class StructureConstant(StrictModel):
         return self
 
 
+class LieAlgebraStructureConstant(StructureConstant):
+    """A structure coefficient at the finite-dimensional algebra boundary."""
+
+    coefficient: CanonicalRational = Field(
+        description=(
+            "Exact rational with at most 64 decimal digits in each reduced "
+            "numerator and denominator."
+        ),
+        json_schema_extra={
+            "properties": {
+                "num": {
+                    "maxLength": MAX_STRUCTURE_COEFFICIENT_DIGITS + 1,
+                    "pattern": rf"^(?:0|-?[1-9][0-9]{{0,{MAX_STRUCTURE_COEFFICIENT_DIGITS - 1}}})(?![\s\S])",
+                },
+                "den": {
+                    "maxLength": MAX_STRUCTURE_COEFFICIENT_DIGITS,
+                    "pattern": rf"^[1-9][0-9]{{0,{MAX_STRUCTURE_COEFFICIENT_DIGITS - 1}}}(?![\s\S])",
+                },
+            }
+        },
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_coefficient(self) -> Self:
+        if (
+            decimal_digit_width(self.coefficient.num) > MAX_STRUCTURE_COEFFICIENT_DIGITS
+            or decimal_digit_width(self.coefficient.den)
+            > MAX_STRUCTURE_COEFFICIENT_DIGITS
+        ):
+            raise _validation_error(
+                "structure_coefficient_bound",
+                "structure constants must use at most "
+                f"{MAX_STRUCTURE_COEFFICIENT_DIGITS} decimal digits",
+            )
+        return self
+
+
 class FiniteDimensionalLieAlgebra(StrictModel):
-    """One finite-dimensional Lie algebra over QQ by ordered structure constants."""
+    """A structurally canonical bracket claim over QQ on an ordered basis."""
+
+    @classmethod
+    def _from_jacobi_proved_kernel(
+        cls,
+        *,
+        basis: tuple[LieBasisLabel, ...],
+        structure_constants: tuple[StructureConstant, ...],
+    ) -> Self:
+        """Build an internal result after its operation proves Jacobi exactly.
+
+        Kernel outputs use the canonical field representation after structural
+        validation. Their defining operation proves Jacobi; consumers re-admit
+        the value at their own operation boundary in case a caller mutates it.
+        """
+        basis = TypeAdapter(tuple[LieBasisLabel, ...]).validate_python(
+            basis, strict=True
+        )
+        if len(basis) > MAX_LIE_DIMENSION:
+            raise _validation_error(
+                "dimension_bound", "Lie-algebra dimension exceeds 8"
+            )
+        if len(set(basis)) != len(basis):
+            raise _validation_error(
+                "duplicate_basis", "Lie-algebra basis labels must be unique"
+            )
+        if len(structure_constants) > MAX_STRUCTURE_NONZEROS:
+            raise _validation_error(
+                "structure_constant_bound", "too many Lie-algebra structure constants"
+            )
+        canonical_constants = tuple(
+            LieAlgebraStructureConstant.model_validate(
+                constant.model_dump(mode="python")
+            )
+            for constant in structure_constants
+        )
+        keys = tuple(
+            (constant.i, constant.j, constant.k) for constant in canonical_constants
+        )
+        if tuple(sorted(keys)) != keys or len(set(keys)) != len(keys):
+            raise _validation_error(
+                "constant_order", "structure constants must be unique and ordered"
+            )
+        if any(
+            constant.i >= len(basis)
+            or constant.j >= len(basis)
+            or constant.k >= len(basis)
+            for constant in canonical_constants
+        ):
+            raise _validation_error(
+                "constant_axis", "structure-constant indices must lie on the basis axis"
+            )
+        return cls.model_construct(basis=basis, structure_constants=canonical_constants)
 
     basis: tuple[LieBasisLabel, ...] = Field(
         max_length=MAX_LIE_DIMENSION,
         description="Ordered basis axis; row order is a transport convention",
     )
-    structure_constants: tuple[StructureConstant, ...] = Field(
+    structure_constants: tuple[LieAlgebraStructureConstant, ...] = Field(
         min_length=0,
         max_length=MAX_STRUCTURE_NONZEROS,
         description=(
             "Sparse nonzero bracket coefficients with i < j in lexicographic "
-            "(i, j, k) order; antisymmetry is canonical and Jacobi is "
-            "established by consuming-operation admission."
+            "(i, j, k) order; antisymmetry is canonical. Consumers admit "
+            "Jacobi on the complete basis before relying on the bracket."
         ),
     )
 
@@ -114,6 +224,31 @@ class FiniteDimensionalLieAlgebra(StrictModel):
                 "structure-constant indices must lie on the basis axis",
             )
         return self
+
+    def model_copy(
+        self,
+        *,
+        update: Mapping[str, Any] | None = None,
+        deep: bool = False,
+    ) -> Self:
+        """Revalidate field updates through the canonical structural schema."""
+        if not update:
+            return super().model_copy(deep=deep)
+        payload = self.model_dump(mode="python")
+        payload.update(update)
+        return type(self).model_validate(payload)
+
+    def __eq__(self, other: object) -> bool:
+        if type(other) is not type(self):
+            return NotImplemented
+        assert isinstance(other, FiniteDimensionalLieAlgebra)
+        return (
+            self.basis == other.basis
+            and self.structure_constants == other.structure_constants
+        )
+
+    def __hash__(self) -> int:
+        return hash((type(self), self.basis, self.structure_constants))
 
 
 class LieAlgebraElement(StrictModel):
@@ -361,9 +496,9 @@ class LieAlgebraRequest(StrictModel):
         description=(
             "Finite-dimensional Lie algebra over QQ of dimension at most "
             f"{MAX_LIE_DIMENSION} by ordered basis labels and sparse "
-            "structure constants; antisymmetry is canonical and every "
-            "basis-triple Jacobi identity is established by operation "
-            "admission before computation."
+            "structure constants with bounded rational entries; "
+            "antisymmetry is canonical; consuming operations admit "
+            "Jacobi before relying on the bracket."
         )
     )
 

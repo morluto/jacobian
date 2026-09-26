@@ -4,6 +4,7 @@ from fractions import Fraction
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
 )
@@ -11,6 +12,7 @@ from jacobian.math.lie_algebras import lie_adjoint, lie_adjoint_matrices
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieAlgebraElement,
+    StructureConstant,
 )
 from jacobian.math.lie_algebras.operations import (
     lie_adjoint as native_lie_adjoint,
@@ -37,12 +39,31 @@ def _algebra(
     )
 
 
+def _unchecked_algebra(
+    basis: tuple[str, ...], constants: tuple[tuple[int, int, int, int], ...]
+) -> FiniteDimensionalLieAlgebra:
+    return FiniteDimensionalLieAlgebra.model_construct(
+        basis=basis,
+        structure_constants=tuple(
+            StructureConstant.model_construct(
+                i=i,
+                j=j,
+                k=k,
+                coefficient=CanonicalRational.model_construct(num=value, den=1),
+            )
+            for i, j, k, value in constants
+        ),
+    )
+
+
 def _entries(matrix: RationalMatrix) -> tuple[tuple[Fraction, ...], ...]:
     return tuple(tuple(entry.as_fraction() for entry in row) for row in matrix.entries)
 
 
 SL2 = _algebra(("e", "f", "h"), ((0, 1, 2, 1), (0, 2, 0, -2), (1, 2, 1, 2)))
-JACOBI_VIOLATOR = _algebra(("e", "f", "h"), ((0, 1, 2, 1), (0, 2, 0, 1), (1, 2, 0, 1)))
+JACOBI_VIOLATOR = _unchecked_algebra(
+    ("e", "f", "h"), ((0, 1, 2, 1), (0, 2, 0, 1), (1, 2, 0, 1))
+)
 
 ZERO = Fraction(0)
 

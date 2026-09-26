@@ -848,6 +848,12 @@ def function_field_element_power(
         _admit_field_algebra(field)
         return canonical
 
+    internal = _internal_coordinates(canonical)
+    if all(coordinate == ZERO_RF for coordinate in internal):
+        return canonical
+    if internal == _unit_internal(field.degree):
+        return canonical
+
     result_degree = _preflight_power_schedule(field, canonical, exponent)
     _preflight_power_output(field, result_degree)
     _admit_field_algebra(field)
@@ -908,8 +914,13 @@ def _preflight_power_schedule(
         if field.degree == 1:
             bound = left_degree + right_degree
         elif polynomial_coefficients:
-            # Polynomial sums do not grow degree when reduction combines terms.
-            bound = left_degree + right_degree + field_coefficient_degree
+            # A degree-n relation can contribute through n-1 successive
+            # reductions; each step can multiply by a defining coefficient.
+            bound = (
+                left_degree
+                + right_degree
+                + (field.degree - 1) * field_coefficient_degree
+            )
         else:
             # A common denominator can accumulate across each of the at most
             # `degree` raw products and reduction contributions.

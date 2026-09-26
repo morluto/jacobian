@@ -106,6 +106,33 @@ def test_zero_and_one_exponents_keep_the_exact_parent() -> None:
     assert function_field_element_power(y, 1) == y
 
 
+def test_power_admission_bounds_chained_cubic_reduction() -> None:
+    # f(y)=y^3+x^12*y^2+x over GF(2)(x). Squaring y^2 reduces
+    # through the cubic relation twice and yields an x^24 coefficient.
+    field = FiniteFunctionField(
+        characteristic=2,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            _rf(2, (0, 1)),
+            _rf(2, (0,)),
+            _rf(2, (0,) * 12 + (1,)),
+            _rf(2, (1,)),
+        ),
+    )
+    y_squared = _element(field, (_rf(2, (0,)), _rf(2, (0,)), _rf(2, (1,))))
+
+    with pytest.raises(OperationResourceAdmissionError):
+        function_field_element_power(y_squared, 2)
+
+
+def test_unit_power_skips_unnecessary_degree_growth_admission() -> None:
+    field = _quadratic_field()
+    unit = _element(field, (_rf(2, (1,)), _rf(2, (0,))))
+
+    assert function_field_element_power(unit, 16) == unit
+
+
 def test_degree_growth_is_rejected_before_coefficient_arithmetic(monkeypatch) -> None:
     import jacobian.math.function_fields.operations as operations
 

@@ -13,6 +13,13 @@ from jacobian.math.polynomials.derivations._models import (
     LocallyNilpotentCertificate,
     PolynomialGaAction,
 )
+from jacobian.math.polynomials.derivations._stable_models import (
+    PolynomialGaStableSubrepresentation,
+    PolynomialGaStableSubrepresentationRequest,
+)
+from jacobian.math.polynomials.derivations._stable_operations import (
+    ga_stable_subrepresentation,
+)
 from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightActionRequest,
     PolynomialWeightActionResult,
@@ -181,6 +188,87 @@ _TOOLS += (
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     *_TOOLS,
+    MathTool(
+        operation_id="algebraic_group.ga.stable_subrepresentation.compute",
+        title="Check a supplied finite polynomial Ga-stable subspace",
+        description=(
+            "Given a checked additive-group action and an ordered linearly "
+            "independent finite list of QQ polynomials, compute the exact "
+            "QQ[t] action matrix on their span if every action image lies in "
+            "that span. This operation checks only the explicitly supplied "
+            "span; it does not search for all finite-dimensional "
+            "subrepresentations. Expansion work, degree, dimension, terms, "
+            "and coefficient growth are admitted before polynomial expansion."
+        ),
+        request_type=PolynomialGaStableSubrepresentationRequest,
+        result_type=PolynomialGaStableSubrepresentation,
+        run=lambda request: ga_stable_subrepresentation(request),
+        tags=("algebraic-group", "ga", "polynomial", "representation", "exact"),
+        discovery_terms=(
+            "finite-dimensional additive group subrepresentation",
+            "Ga-stable polynomial span",
+            "polynomial action matrix on a supplied basis",
+        ),
+        examples=(
+            OperationExample(
+                name="translation_on_linear_polynomials",
+                description=(
+                    "For x maps to x+t, the supplied ordered basis (1,x) is "
+                    "stable, with action matrix columns (1,0) and (t,1)."
+                ),
+                input={
+                    "action": {
+                        "source_variables": ["x"],
+                        "parameter": "t",
+                        "generator_images": [
+                            {
+                                "domain": "QQ",
+                                "variables": ["x", "t"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [1, 0],
+                                        },
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [0, 1],
+                                        },
+                                    ]
+                                },
+                            }
+                        ],
+                    },
+                    "basis": [
+                        {
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [0],
+                                    }
+                                ]
+                            },
+                        },
+                        {
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [1],
+                                    }
+                                ]
+                            },
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="algebraic_group.gm.invariants_through_degree.compute",
         title="Compute the bounded exact G_m invariant polynomial slice",

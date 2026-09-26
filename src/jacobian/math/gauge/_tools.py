@@ -2,6 +2,8 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeBasepointTransportRequest,
+    FiniteGroupGaugeBasepointTransportResult,
     FiniteGroupGaugeComplex,
     FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeCurvatureRequest,
@@ -25,6 +27,7 @@ from jacobian.math.gauge._su2_models import (
     SU2WilsonTraceResult,
 )
 from jacobian.math.gauge.finite_group import (
+    finite_group_gauge_basepoint_transport,
     finite_group_gauge_curvature,
     finite_group_gauge_holonomy,
 )
@@ -78,6 +81,12 @@ def _run_finite_group_holonomy(
     request: FiniteGroupGaugeHolonomyRequest,
 ) -> FiniteGroupGaugeHolonomyResult:
     return finite_group_gauge_holonomy(request)
+
+
+def _run_finite_group_basepoint_transport(
+    request: FiniteGroupGaugeBasepointTransportRequest,
+) -> FiniteGroupGaugeBasepointTransportResult:
+    return finite_group_gauge_basepoint_transport(request)
 
 
 def _run_finite_group_complex(
@@ -373,6 +382,126 @@ TOOLS = (
         discovery_terms=(
             "finite group lattice gauge holonomy",
             "table group edge transport",
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.basepoint_transport.compute",
+        title="Transport finite-group loop holonomy to another basepoint",
+        description=(
+            "Given a based loop and a connector from its basepoint to another "
+            "vertex, return the transported loop reverse(connector) * loop * "
+            "connector and its exact holonomy. The output records the identity "
+            "Hol(connector)^-1 * Hol(loop) * Hol(connector) in one finite "
+            "multiplication-table parent."
+        ),
+        request_type=FiniteGroupGaugeBasepointTransportRequest,
+        result_type=FiniteGroupGaugeBasepointTransportResult,
+        run=_run_finite_group_basepoint_transport,
+        tags=("lattice-gauge", "finite-group", "basepoint", "holonomy", "exact"),
+        discovery_terms=(
+            "finite group loop basepoint transport",
+            "conjugate holonomy along a path",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_triangle_basepoint_transport",
+                description=(
+                    "Move the triangle loop at a to basepoint b along edge ab; "
+                    "the loop holonomy is conjugated by the connector holonomy."
+                ),
+                input={
+                    "field": {
+                        "lattice": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [
+                                {"edge_id": "ab", "tail": "a", "head": "b"},
+                                {"edge_id": "bc", "tail": "b", "head": "c"},
+                                {"edge_id": "ca", "tail": "c", "head": "a"},
+                            ],
+                        },
+                        "group": {
+                            "multiplication": [
+                                [0, 1, 2, 3, 4, 5],
+                                [1, 0, 3, 2, 5, 4],
+                                [2, 4, 0, 5, 1, 3],
+                                [3, 5, 1, 4, 0, 2],
+                                [4, 2, 5, 0, 3, 1],
+                                [5, 3, 4, 1, 2, 0],
+                            ],
+                            "identity": 0,
+                            "inverse": [0, 1, 2, 4, 3, 5],
+                        },
+                        "edge_values": [
+                            {
+                                "edge_id": "ab",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [
+                                            [0, 1, 2, 3, 4, 5],
+                                            [1, 0, 3, 2, 5, 4],
+                                            [2, 4, 0, 5, 1, 3],
+                                            [3, 5, 1, 4, 0, 2],
+                                            [4, 2, 5, 0, 3, 1],
+                                            [5, 3, 4, 1, 2, 0],
+                                        ],
+                                        "identity": 0,
+                                        "inverse": [0, 1, 2, 4, 3, 5],
+                                    },
+                                    "index": 1,
+                                },
+                            },
+                            {
+                                "edge_id": "bc",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [
+                                            [0, 1, 2, 3, 4, 5],
+                                            [1, 0, 3, 2, 5, 4],
+                                            [2, 4, 0, 5, 1, 3],
+                                            [3, 5, 1, 4, 0, 2],
+                                            [4, 2, 5, 0, 3, 1],
+                                            [5, 3, 4, 1, 2, 0],
+                                        ],
+                                        "identity": 0,
+                                        "inverse": [0, 1, 2, 4, 3, 5],
+                                    },
+                                    "index": 2,
+                                },
+                            },
+                            {
+                                "edge_id": "ca",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [
+                                            [0, 1, 2, 3, 4, 5],
+                                            [1, 0, 3, 2, 5, 4],
+                                            [2, 4, 0, 5, 1, 3],
+                                            [3, 5, 1, 4, 0, 2],
+                                            [4, 2, 5, 0, 3, 1],
+                                            [5, 3, 4, 1, 2, 0],
+                                        ],
+                                        "identity": 0,
+                                        "inverse": [0, 1, 2, 4, 3, 5],
+                                    },
+                                    "index": 0,
+                                },
+                            },
+                        ],
+                    },
+                    "loop": {
+                        "steps": [
+                            {"edge_id": "ab", "forward": True},
+                            {"edge_id": "bc", "forward": True},
+                            {"edge_id": "ca", "forward": True},
+                        ],
+                        "basepoint": "a",
+                    },
+                    "connector": {
+                        "steps": [{"edge_id": "ab", "forward": True}],
+                        "basepoint": "a",
+                    },
+                },
+            ),
         ),
     ),
     MathTool(

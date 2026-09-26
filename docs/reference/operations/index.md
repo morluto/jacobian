@@ -36,4 +36,5 @@ that need more context than an operation card:
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 
 - [Finite lattice gauge identity paths](lattice-gauge-identities.md)
+- [Finite-group loop basepoint transport](lattice-gauge-finite-group-basepoint-transport.md)
 - [Rational SU(2) lattice gauge operations](lattice-gauge-su2.md)

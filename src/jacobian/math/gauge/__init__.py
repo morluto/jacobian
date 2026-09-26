@@ -1,6 +1,8 @@
 """Exact finite lattice-gauge values and native operations."""
 
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeBasepointTransportRequest,
+    FiniteGroupGaugeBasepointTransportResult,
     FiniteGroupGaugeComplex,
     FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeContribution,
@@ -33,6 +35,7 @@ from jacobian.math.gauge._su2_models import (
     SU2WilsonTraceResult,
 )
 from jacobian.math.gauge.finite_group import (
+    finite_group_gauge_basepoint_transport,
     finite_group_gauge_curvature,
     finite_group_gauge_holonomy,
 )
@@ -52,6 +55,8 @@ from jacobian.math.gauge.su2 import (
 )
 
 __all__ = [
+    "FiniteGroupGaugeBasepointTransportRequest",
+    "FiniteGroupGaugeBasepointTransportResult",
     "FiniteGroupGaugeComplex",
     "FiniteGroupGaugeComplexRequest",
     "FiniteGroupGaugeContribution",
@@ -81,6 +86,7 @@ __all__ = [
     "SU2HolonomyResult",
     "SU2WilsonTraceResult",
     "construct_finite_group_gauge_complex",
+    "finite_group_gauge_basepoint_transport",
     "finite_group_gauge_curvature",
     "finite_group_gauge_holonomy",
     "gauge_transform",

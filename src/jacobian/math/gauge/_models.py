@@ -559,6 +559,54 @@ class FiniteGroupGaugeHolonomyResult(StrictModel):
     end: GaugeLabel
 
 
+class FiniteGroupGaugeBasepointTransportRequest(StrictModel):
+    """Move a based finite-group loop along an exact lattice path."""
+
+    field: FiniteGroupGaugeField
+    loop: OrientedGaugePath
+    connector: OrientedGaugePath
+
+
+class FiniteGroupGaugeBasepointTransportResult(StrictModel):
+    """The source loop, connector, and exactly conjugated loop holonomy."""
+
+    field: FiniteGroupGaugeField
+    loop: OrientedGaugePath
+    connector: OrientedGaugePath
+    transported_loop: OrientedGaugePath
+    source_basepoint: GaugeLabel
+    target_basepoint: GaugeLabel
+    source_holonomy: FiniteGroupTableElement
+    connector_holonomy: FiniteGroupTableElement
+    transported_holonomy: FiniteGroupTableElement
+
+    @model_validator(mode="after")
+    def require_parent_binding(self) -> Self:
+        if (
+            not isinstance(self.field, FiniteGroupGaugeField)
+            or not isinstance(self.loop, OrientedGaugePath)
+            or not isinstance(self.connector, OrientedGaugePath)
+            or not isinstance(self.transported_loop, OrientedGaugePath)
+            or self.source_basepoint not in self.field.lattice.vertices
+            or self.target_basepoint not in self.field.lattice.vertices
+            or self.transported_loop.basepoint != self.target_basepoint
+            or any(
+                not isinstance(value, FiniteGroupTableElement)
+                or value.group != self.field.group
+                for value in (
+                    self.source_holonomy,
+                    self.connector_holonomy,
+                    self.transported_holonomy,
+                )
+            )
+        ):
+            raise _validation_error(
+                "basepoint_transport_parent",
+                "transport paths, endpoints, and holonomies must bind to the field",
+            )
+        return self
+
+
 class EdgeContribution(StrictModel):
     """The resolved oriented group value of one path step."""
 
@@ -817,6 +865,8 @@ __all__ = [
     "MAX_GAUGE_VERTICES",
     "MIN_GAUGE_DEGREE",
     "EdgeContribution",
+    "FiniteGroupGaugeBasepointTransportRequest",
+    "FiniteGroupGaugeBasepointTransportResult",
     "FiniteGroupGaugeComplex",
     "FiniteGroupGaugeComplexRequest",
     "FiniteGroupGaugeFace",

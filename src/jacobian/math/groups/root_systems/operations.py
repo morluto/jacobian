@@ -1555,6 +1555,17 @@ def _validated_weyl_element(element: WeylElement, location: str) -> WeylElement:
             )
         ):
             raise ValueError("Weyl endpoint has an invalid bounded matrix")
+        cartan_matrix = getattr(matrix, "matrix", None)
+        cartan_entries = getattr(cartan_matrix, "entries", None)
+        if (
+            not isinstance(cartan_entries, (tuple, list))
+            or len(cartan_entries) > MAX_RANK
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) > MAX_RANK
+                for row in cartan_entries
+            )
+        ):
+            raise ValueError("Cartan endpoint has an invalid bounded matrix")
         return WeylElement.model_validate(element.model_dump(mode="python"))
     except (ValidationError, TypeError, ValueError, AttributeError, KeyError) as error:
         raise OperationDomainValidationError(

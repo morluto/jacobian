@@ -70,9 +70,21 @@ def _admit_scalar(s: TropicalScalar, semiring: TropicalSemiring) -> None:
             message="scalar must carry the request semiring",
         )
     if s.kind == "FINITE":
-        if not isinstance(s.value, CanonicalRational) or (
-            semiring.base == "ZZ" and s.value.den != 1
-        ):
+        if not isinstance(s.value, CanonicalRational):
+            raise OperationDomainValidationError(
+                location=("scalar",),
+                code="tropical.scalar_shape",
+                message="finite scalar is not valid for its semiring",
+            )
+        try:
+            CanonicalRational.model_validate(s.value.model_dump(mode="python"))
+        except (AttributeError, TypeError, ValueError) as error:
+            raise OperationDomainValidationError(
+                location=("scalar",),
+                code="tropical.scalar_shape",
+                message="finite scalar must satisfy the canonical rational contract",
+            ) from error
+        if semiring.base == "ZZ" and s.value.den != 1:
             raise OperationDomainValidationError(
                 location=("scalar",),
                 code="tropical.scalar_shape",
@@ -160,21 +172,30 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
             code="tropical.semiring_invalid",
             message="matrix semiring must satisfy the tropical semiring contract",
         ) from error
-    labels = (*matrix.row_axis, *matrix.column_axis)
-    if any(not _is_valid_tropical_axis_label(label) for label in labels):
+    if (
+        len(matrix.row_axis) > 128
+        or len(matrix.column_axis) > 128
+        or len(matrix.row_axis) != len(matrix.entries)
+        or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="tropical.matrix_shape",
+            message="matrix entries must match row and column axes",
+        )
+    if any(
+        not _is_valid_tropical_axis_label(label)
+        for axis in (matrix.row_axis, matrix.column_axis)
+        for label in axis
+    ):
         raise OperationDomainValidationError(
             location=("matrix", "axis"),
             code="tropical.matrix_axis_label",
             message="matrix axis labels must satisfy the opaque-label contract",
         )
-    if (
-        len(matrix.row_axis) != len(matrix.entries)
-        or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
-        or len(set(matrix.row_axis)) != len(matrix.row_axis)
-        or len(set(matrix.column_axis)) != len(matrix.column_axis)
-        or len(matrix.row_axis) > 128
-        or len(matrix.column_axis) > 128
-    ):
+    if len(set(matrix.row_axis)) != len(matrix.row_axis) or len(
+        set(matrix.column_axis)
+    ) != len(matrix.column_axis):
         raise OperationDomainValidationError(
             location=("matrix",),
             code="tropical.matrix_shape",

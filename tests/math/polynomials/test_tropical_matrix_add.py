@@ -186,6 +186,35 @@ def test_matrix_add_rejects_malformed_native_axes(
         tropical_matrix_add(matrix, matrix)
 
 
+def test_matrix_add_rejects_noncanonical_nested_rational() -> None:
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="QQ")
+    rational = CanonicalRational.model_construct(num=1, den=0)
+    scalar = TropicalScalar.model_construct(
+        semiring=semiring, kind="FINITE", value=rational
+    )
+    matrix = TropicalMatrix.model_construct(
+        semiring=semiring,
+        row_axis=("r",),
+        column_axis=("c",),
+        entries=((scalar,),),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(matrix, matrix)
+
+
+def test_matrix_add_rejects_oversized_axes_before_inspecting_labels() -> None:
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="QQ")
+    row_axis = tuple(["r"] * 129)
+    matrix = TropicalMatrix.model_construct(
+        semiring=semiring,
+        row_axis=row_axis,
+        column_axis=(),
+        entries=tuple(() for _ in row_axis),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_add(matrix, matrix)
+
+
 def test_matrix_add_rejects_invalid_semiring_on_empty_native_matrices() -> None:
     matrix = TropicalMatrix.model_construct(
         semiring="bad", row_axis=(), column_axis=(), entries=()

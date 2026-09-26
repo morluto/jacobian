@@ -66,6 +66,12 @@ def _admit_scalar(s: TropicalScalar, semiring: TropicalSemiring) -> None:
             code="tropical.semiring_mismatch",
             message="scalar must carry the request semiring",
         )
+    if s.kind not in ("FINITE", "POSITIVE_INFINITY", "NEGATIVE_INFINITY"):
+        raise OperationDomainValidationError(
+            location=("scalar",),
+            code="tropical.scalar_shape",
+            message="scalar kind must be finite or a declared infinity",
+        )
     if s.kind == "FINITE":
         if not isinstance(s.value, CanonicalRational) or (
             semiring.base == "ZZ" and s.value.den != 1
@@ -159,7 +165,9 @@ def _admit_polynomial(poly: TropicalPolynomial) -> None:
             or not label
             or label != label.strip()
             or len(label) > 64
-            or any(unicodedata.category(character) in ("Cc", "Cs") for character in label)
+            or any(
+                unicodedata.category(character) in ("Cc", "Cs") for character in label
+            )
             for label in poly.variables
         )
         or len(set(poly.variables)) != len(poly.variables)
@@ -760,7 +768,16 @@ def tropical_polynomial_power(
     return result
 
 
-def _substitution_support(
+def _substitution_term_is_annihilated(
+    exponents: tuple[int, ...], image_supports: list[set[tuple[int, ...]]]
+) -> bool:
+    return any(
+        exponent > 0 and not image_support
+        for exponent, image_support in zip(exponents, image_supports, strict=True)
+    )
+
+
+def _substitution_support(  # noqa: C901
     polynomial: TropicalPolynomial,
     images: tuple[TropicalPolynomial, ...],
     target_variables: tuple[str, ...],
@@ -808,6 +825,8 @@ def _substitution_support(
     image_supports = [{term.exponents for term in image.terms} for image in images]
     result_support: set[tuple[int, ...]] = set()
     for term in polynomial.terms:
+        if _substitution_term_is_annihilated(term.exponents, image_supports):
+            continue
         monomial_support = {zero}
         for exponent, image_support in zip(term.exponents, image_supports, strict=True):
             if exponent == 0:

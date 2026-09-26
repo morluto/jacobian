@@ -5,7 +5,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.polynomials.tropical._models import (
     PolynomialSubstituteRequest,
@@ -211,7 +214,7 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
         update={"variables": ("x", "x")}
     )
     zero = _polynomial(("t",), ())
-    with pytest.raises(Exception, match="tropical.polynomial_axis"):
+    with pytest.raises(Exception, match=r"tropical\.polynomial_axis"):
         compute_polynomial_substitute(
             PolynomialSubstituteRequest(
                 polynomial=source,
@@ -219,6 +222,19 @@ def test_substitution_rejects_forged_duplicate_source_axis() -> None:
                 images=(zero, zero),
             )
         )
+
+
+def test_scalar_dual_rejects_unknown_forged_kind() -> None:
+    from jacobian.math.polynomials.tropical.operations import tropical_scalar_dual
+
+    scalar = TropicalScalar(
+        semiring=TropicalSemiring(convention="MAX_PLUS", base="QQ"),
+        kind="NEGATIVE_INFINITY",
+        value=None,
+    ).model_copy(update={"kind": "BOGUS"})
+    with pytest.raises(OperationDomainValidationError) as error:
+        tropical_scalar_dual(scalar)
+    assert error.value.errors()[0]["type"] == "tropical.scalar_shape"
 
 
 def test_substitution_accepts_full_exponent_boundary() -> None:
@@ -248,6 +264,20 @@ def test_substitution_rejects_exponent_growth_before_coefficients() -> None:
         compute_polynomial_substitute(request)
 
     assert error.value.errors()[0]["type"] == "tropical.substitution_exponent_bound"
+
+
+def test_annihilating_later_image_precedes_support_expansion() -> None:
+    from jacobian.math.polynomials.tropical.operations import (
+        tropical_polynomial_substitute,
+    )
+
+    source = _polynomial(("x", "y"), (((512, 1), 0),))
+    growing = _polynomial(("t",), (((0,), 0), ((1,), 0)))
+    zero = _polynomial(("t",), ())
+
+    result = tropical_polynomial_substitute(source, ("t",), (growing, zero))
+
+    assert result.terms == ()
 
 
 def test_substitution_rejects_inflated_support_before_coefficient_expansion() -> None:

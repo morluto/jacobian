@@ -62,7 +62,6 @@ __all__ = [
     "LocalPolynomialCoefficient",
     "LocalPolynomialInSeries",
     "LocalPolynomialNewtonPolygonResult",
-    "NewtonEdgeCharacteristicRequest",
     "NewtonEdgeCharacteristicResult",
     "NewtonEdgeCharacteristicRoot",
     "NewtonEdgeCharacteristicRootsResult",

@@ -311,8 +311,7 @@ class StabilizerCodeRequest(StrictModel):
             )
         if any(value not in (-1, 1) for value in self.generator_eigenvalues):
             raise _validation_error(
-                "code_character_sign",
-                "stabilizer generator eigenvalues must be +1 or -1",
+                "code_character_sign", "stabilizer generator eigenvalues must be +1 or -1"
             )
         return self
 
@@ -325,6 +324,116 @@ class StabilizerCodeValue(StrictModel):
     @property
     def logical_qubits(self) -> int:
         return len(self.group.register.qubit_ids) - len(self.group.generators)
+
+
+class StabilizerStatePauliMeasurementRequest(StrictModel):
+    """Measure one exact Hermitian Pauli on a pure stabilizer code value."""
+
+    state: StabilizerCodeValue
+    observable: ExactQubitPauli
+
+
+class StabilizerMeasurementBranch(StrictModel):
+    """One exact binary measurement branch and its compact post-state."""
+
+    outcome: Literal[-1, 1]
+    probability_numerator: Literal[1]
+    probability_denominator: Literal[2]
+    state: StabilizerCodeValue
+
+    @model_validator(mode="after")
+    def require_pure_post_state(self) -> Self:
+        if self.state.logical_qubits != 0:
+            raise _validation_error(
+                "measurement_branch_state", "measurement branch must retain a pure stabilizer state"
+            )
+        return self
+
+
+class StabilizerStatePauliMeasurementResult(StrictModel):
+    """Deterministic or equiprobable exact Pauli measurement on a stabilizer state."""
+
+    status: Literal["DETERMINISTIC", "UNIFORM_BINARY"]
+    source_state: StabilizerCodeValue
+    observable: ExactQubitPauli
+    deterministic_outcome: Literal[-1, 1] | None = None
+    relation_generator_bits: tuple[StrictInt, ...] | None = None
+    relation_phase: Literal[0, 2] | None = None
+    deterministic_state: StabilizerCodeValue | None = None
+    positive_branch: StabilizerMeasurementBranch | None = None
+    negative_branch: StabilizerMeasurementBranch | None = None
+
+    @model_validator(mode="after")
+    def require_exact_branch(self) -> Self:
+        register = self.source_state.group.register
+        if self.source_state.logical_qubits != 0:
+            raise _validation_error(
+                "measurement_source_state", "measurement source must encode no logical qubits"
+            )
+        if self.observable.register != register:
+            raise _validation_error(
+                "measurement_register", "observable and state must share the ordered register"
+            )
+        if self.status == "DETERMINISTIC":
+            if (
+                self.deterministic_outcome not in (-1, 1)
+                or self.relation_generator_bits is None
+                or len(self.relation_generator_bits) != len(self.source_state.group.generators)
+                or any(bit not in (0, 1) for bit in self.relation_generator_bits)
+                or self.relation_phase not in (0, 2)
+                or self.deterministic_state is None
+                or self.deterministic_state.logical_qubits != 0
+                or self.deterministic_state.group.register != register
+                or self.deterministic_state != self.source_state
+                or self.positive_branch is not None
+                or self.negative_branch is not None
+            ):
+                raise _validation_error(
+                    "measurement_deterministic_branch",
+                    "deterministic result needs a generator relation and unchanged state only",
+                )
+            expected = 1 if self.relation_phase == 0 else -1
+            if self.deterministic_outcome != expected:
+                raise _validation_error(
+                    "measurement_relation_outcome",
+                    "observable relation phase must determine its exact eigenvalue",
+                )
+        else:
+            if any(
+                value is not None
+                for value in (
+                    self.deterministic_outcome,
+                    self.relation_generator_bits,
+                    self.relation_phase,
+                    self.deterministic_state,
+                )
+            ) or self.positive_branch is None or self.negative_branch is None:
+                raise _validation_error(
+                    "measurement_uniform_branch",
+                    "uniform result needs exactly the positive and negative branches",
+                )
+            for branch, outcome in (
+                (self.positive_branch, 1),
+                (self.negative_branch, -1),
+            ):
+                if (
+                    branch.outcome != outcome
+                    or branch.probability_numerator != 1
+                    or branch.probability_denominator != 2
+                    or branch.state.group.register != register
+                ):
+                    raise _validation_error(
+                        "measurement_uniform_probability",
+                        "uniform branches must have outcomes +/-1, probability 1/2, and the source register",
+                    )
+        if any(
+            type(bit) is not int or bit not in (0, 1)
+            for bit in (self.relation_generator_bits or ())
+        ):
+            raise _validation_error(
+                "measurement_relation_bits", "generator relation coordinates must be bits"
+            )
+        return self
 
 
 class PauliProductRequest(StrictModel):
@@ -570,6 +679,15 @@ class PauliFamilyCommutationResult(StrictModel):
             raise _validation_error(
                 "commutation_matrix_bits", "commutation matrix entries must be binary"
             )
+        if any(matrix[i][i] != 0 for i in range(count)) or any(
+            matrix[i][j] != matrix[j][i]
+            for i in range(count)
+            for j in range(i + 1, count)
+        ):
+            raise _validation_error(
+                "commutation_matrix_form",
+                "commutation matrix must be alternating and symmetric over GF(2)",
+            )
         return self
 
 
@@ -707,8 +825,12 @@ class StabilizerSyndromeResult(StrictModel):
             )
         if any(bit not in (0, 1) for bit in self.syndrome):
             raise _validation_error("syndrome_bits", "syndrome entries must be bits")
-        if type(self.zero_syndrome) is not bool:
-            raise _validation_error("syndrome_zero", "zero_syndrome must be boolean")
+        if type(self.zero_syndrome) is not bool or self.zero_syndrome != all(
+            bit == 0 for bit in self.syndrome
+        ):
+            raise _validation_error(
+                "syndrome_zero", "zero_syndrome must match the exact syndrome"
+            )
         return self
 
     @classmethod
@@ -754,6 +876,19 @@ class StabilizerErrorEquivalenceResult(StrictModel):
             raise _validation_error(
                 "equivalence_register", "errors and check space must share a register"
             )
+        expected = tuple(
+            (left + right) % 2
+            for left, right in zip(
+                (*self.left.x_bits, *self.left.z_bits),
+                (*self.right.x_bits, *self.right.z_bits),
+                strict=True,
+            )
+        )
+        if (*self.difference.x_bits, *self.difference.z_bits) != expected:
+            raise _validation_error(
+                "equivalence_difference",
+                "difference must be left plus right over GF(2)",
+            )
         if type(self.equivalent_mod_stabilizers) is not bool:
             raise _validation_error(
                 "equivalence_decision", "equivalence decision must be boolean"
@@ -791,18 +926,8 @@ class CSSCheckSpaceRequest(StrictModel):
 
 
 class CSSNonOrthogonalWitness(StrictModel):
-    """Register-bound input row indices the kernel found with inner product one.
+    """Input row indices whose CSS inner product is one."""
 
-    The kernel computes the GF(2) pairing once when it selects the obstruction;
-    validation and transport stay structural. A consumer that relies on the
-    nonorthogonality recomputes it against these retained rows on this
-    retained register.
-    """
-
-    model_config = ConfigDict(populate_by_name=True)
-    qubit_register: QubitRegister = Field(
-        alias="register", serialization_alias="register"
-    )
     x_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     z_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     x_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
@@ -810,42 +935,18 @@ class CSSNonOrthogonalWitness(StrictModel):
     dot_product: Literal[1] = 1
 
     @model_validator(mode="after")
-    def require_register_bound_shape(self) -> Self:
-        if not isinstance(self.qubit_register, QubitRegister):
+    def require_nonorthogonality(self) -> Self:
+        if len(self.x_bits) != len(self.z_bits) or any(
+            bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)
+        ):
             raise _validation_error(
-                "css_witness_register", "CSS witness requires its source register"
+                "css_witness_shape", "CSS witness rows must be matching binary vectors"
             )
-        width = len(self.qubit_register.qubit_ids)
-        if len(self.x_bits) != width or len(self.z_bits) != width:
+        if sum(x * z for x, z in zip(self.x_bits, self.z_bits, strict=True)) % 2 != 1:
             raise _validation_error(
-                "css_witness_shape", "CSS witness rows must span the retained register"
-            )
-        if any(bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)):
-            raise _validation_error(
-                "css_witness_bits", "CSS witness rows must be binary vectors"
+                "css_witness_pairing", "CSS witness rows must have odd inner product"
             )
         return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        *,
-        register: QubitRegister,
-        x_row: int,
-        z_row: int,
-        x_bits: tuple[int, ...],
-        z_bits: tuple[int, ...],
-    ) -> Self:
-        """Build a trusted obstruction without replaying its kernel pairing."""
-
-        return cls.model_construct(
-            qubit_register=register,
-            x_row=x_row,
-            z_row=z_row,
-            x_bits=x_bits,
-            z_bits=z_bits,
-            dot_product=1,
-        )
 
 
 class CSSCheckSpaceValue(StrictModel):
@@ -897,6 +998,41 @@ class CSSCheckSpaceResult(StrictModel):
         return self
 
 
+def _binary_row_rank(rows: tuple[PhaseFreeQubitPauli, ...], width: int) -> int:
+    matrix = [[*row.x_bits, *row.z_bits] for row in rows]
+    rank = 0
+    for column in range(width):
+        pivot = next(
+            (index for index in range(rank, len(matrix)) if matrix[index][column]),
+            None,
+        )
+        if pivot is None:
+            continue
+        matrix[rank], matrix[pivot] = matrix[pivot], matrix[rank]
+        for index in range(rank + 1, len(matrix)):
+            if matrix[index][column]:
+                matrix[index] = [
+                    (left + right) % 2
+                    for left, right in zip(matrix[index], matrix[rank], strict=True)
+                ]
+        rank += 1
+    return rank
+
+
+def _pauli_symplectic_pairing(
+    left: PhaseFreeQubitPauli, right: PhaseFreeQubitPauli
+) -> int:
+    return (
+        sum(
+            x_left * z_right + z_left * x_right
+            for x_left, z_left, x_right, z_right in zip(
+                left.x_bits, left.z_bits, right.x_bits, right.z_bits, strict=True
+            )
+        )
+        % 2
+    )
+
+
 class LogicalPauliFrame(StrictModel):
     """A paired phase-free symplectic basis of ``S-perp/S``."""
 
@@ -907,10 +1043,6 @@ class LogicalPauliFrame(StrictModel):
 
     @model_validator(mode="after")
     def require_quotient_frame(self) -> Self:
-        # Structural deserialization only: the producing kernel establishes the
-        # isotropic rank, S-perp membership, and canonical symplectic pairings
-        # once via _from_kernel. Replaying GF(2) elimination here would redo
-        # that mathematical work on every model_validate round trip.
         if not isinstance(self.check_space, CheckSpaceValue):
             raise _validation_error(
                 "logical_frame_parent", "frame requires a check space"
@@ -937,6 +1069,20 @@ class LogicalPauliFrame(StrictModel):
                 "logical_frame_check_space",
                 "check rows must be valid phase-free values on the source register",
             )
+        if any(
+            _pauli_symplectic_pairing(left, right)
+            for i, left in enumerate(source_rows)
+            for right in source_rows[i + 1 :]
+        ):
+            raise _validation_error(
+                "logical_frame_nonisotropic", "source check space must be isotropic"
+            )
+        rank = _binary_row_rank(source_rows, 2 * n)
+        if self.logical_qubits != n - rank:
+            raise _validation_error(
+                "logical_frame_dimension",
+                "logical_qubit count must equal n minus the check-space rank",
+            )
         logical_rows = (*self.x_logical_basis, *self.z_logical_basis)
         if any(
             not isinstance(row, PhaseFreeQubitPauli)
@@ -949,6 +1095,29 @@ class LogicalPauliFrame(StrictModel):
             raise _validation_error(
                 "logical_frame_register",
                 "logical representatives must be valid values on the source register",
+            )
+        if any(
+            _pauli_symplectic_pairing(check, logical)
+            for check in source_rows
+            for logical in logical_rows
+        ):
+            raise _validation_error(
+                "logical_frame_normalizer",
+                "every logical representative must lie in S-perp",
+            )
+        if any(
+            _pauli_symplectic_pairing(left, right)
+            for family in (self.x_logical_basis, self.z_logical_basis)
+            for index, left in enumerate(family)
+            for right in family[index + 1 :]
+        ) or any(
+            _pauli_symplectic_pairing(left, right) != int(i == j)
+            for i, left in enumerate(self.x_logical_basis)
+            for j, right in enumerate(self.z_logical_basis)
+        ):
+            raise _validation_error(
+                "logical_frame_pairing",
+                "logical representatives must have canonical symplectic pairings",
             )
         return self
 
@@ -1048,12 +1217,11 @@ class CSSDistanceResult(StrictModel):
             (self.x_distance, self.x_representative, "x"),
             (self.z_distance, self.z_representative, "z"),
         ):
-            if distance is None or representative is None:
-                raise _validation_error(
-                    "css_distance_missing_sector",
-                    "both logical sectors require an exact distance and representative",
-                )
-            if representative.qubit_register != register:
+            assert distance is not None and representative is not None
+            if (
+                representative.qubit_register != register
+                or representative.weight != distance
+            ):
                 raise _validation_error(
                     "css_distance_representative",
                     "minimum representative must have the declared weight on the source register",
@@ -1089,7 +1257,10 @@ class StabilizerDistanceResult(StrictModel):
                 "distance_missing_representative",
                 "a positive-k code needs a minimum logical Pauli",
             )
-        if self.representative.qubit_register != self.check_space.qubit_register:
+        if (
+            self.representative.qubit_register != self.check_space.qubit_register
+            or self.representative.weight != self.distance
+        ):
             raise _validation_error(
                 "distance_representative",
                 "minimum representative must have the declared weight on the source register",
@@ -1128,6 +1299,9 @@ __all__ = [
     "QubitRegister",
     "StabilizerErrorEquivalenceRequest",
     "StabilizerErrorEquivalenceResult",
+    "StabilizerMeasurementBranch",
+    "StabilizerStatePauliMeasurementRequest",
+    "StabilizerStatePauliMeasurementResult",
     "StabilizerSyndromeRequest",
     "StabilizerSyndromeResult",
 ]

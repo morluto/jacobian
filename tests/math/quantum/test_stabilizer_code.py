@@ -33,12 +33,11 @@ def _small_pauli_matrix(pauli: ExactQubitPauli) -> np.ndarray:
     n = len(pauli.register.qubit_ids)
     dimension = 1 << n
     matrix = np.zeros((dimension, dimension), dtype=complex)
-    flip_mask = sum(
-        bit << (n - qubit - 1) for qubit, bit in enumerate(pauli.phase_free.x_bits)
-    )
+    flip_mask = sum(bit << (n - qubit - 1) for qubit, bit in enumerate(pauli.phase_free.x_bits))
     for basis in range(dimension):
         sign = (-1) ** sum(
-            pauli.phase_free.z_bits[qubit] * ((basis >> (n - qubit - 1)) & 1)
+            pauli.phase_free.z_bits[qubit]
+            * ((basis >> (n - qubit - 1)) & 1)
             for qubit in range(n)
         )
         matrix[basis ^ flip_mask, basis] = (1j**pauli.phase) * sign
@@ -52,9 +51,7 @@ def _eigenspace_projector(
     identity = np.eye(dimension, dtype=complex)
     projector = identity.copy()
     for generator, eigenvalue in zip(generators, eigenvalues, strict=True):
-        projector = (
-            projector @ (identity + eigenvalue * _small_pauli_matrix(generator)) / 2
-        )
+        projector = projector @ (identity + eigenvalue * _small_pauli_matrix(generator)) / 2
     return projector
 
 

@@ -231,6 +231,8 @@ def transition_liveness_profile(
             code="petri_net.transition_liveness.work_bound",
             message="transition-liveness validation exceeds its graph-admission bound",
         )
+    if not source_graph.truncated:
+        _validate_terminal_scc_net_values(source_graph)
     output_bound = _output_size(source_graph, transition_count)
     if output_bound > min(
         MAX_TRANSITION_LIVENESS_OUTPUT_BYTES,
@@ -282,7 +284,6 @@ def transition_liveness_profile(
                 for transition in range(transition_count)
             ),
         )
-    _validate_terminal_scc_net_values(graph)
     _, reverse = _terminal_scc_adjacency(graph, graph.net, state_indices)
     return TransitionLivenessResult.model_construct(
         source_graph=graph,

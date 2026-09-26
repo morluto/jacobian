@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.logic.automata.petri_nets.profiles._models import (
     ReachabilityTokenProfileRequest,
     ReachabilityTokenProfileResult,
@@ -35,6 +35,46 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Petri-net reachable token minimum maximum",
             "place boundedness from complete finite reachability graph",
             "token extrema per place",
+        ),
+        examples=(
+            OperationExample(
+                name="two_marking_bounded_place",
+                description=(
+                    "A marked place that drains to empty reports both extrema."
+                ),
+                input={
+                    "source_graph": {
+                        "net": {
+                            "place_count": 1,
+                            "transition_count": 1,
+                            "pre": [[1]],
+                            "post": [[0]],
+                        },
+                        "initial_marking": {"tokens": [1]},
+                        "max_states": 2,
+                        "states": [
+                            {
+                                "state_index": 0,
+                                "place_axis": [0],
+                                "marking": {"tokens": [1]},
+                            },
+                            {
+                                "state_index": 1,
+                                "place_axis": [0],
+                                "marking": {"tokens": [0]},
+                            },
+                        ],
+                        "edges": [
+                            {
+                                "source_state": 0,
+                                "transition": 0,
+                                "target_state": 1,
+                            }
+                        ],
+                        "truncated": False,
+                    }
+                },
+            ),
         ),
     ),
 )

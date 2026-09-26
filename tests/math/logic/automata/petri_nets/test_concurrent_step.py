@@ -5,7 +5,10 @@ from itertools import product
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.automata.petri_nets import (
     concurrent_step,
@@ -129,3 +132,24 @@ def test_occurrence_cap_is_enforced_before_step_expansion():
     )
     with pytest.raises(OperationResourceAdmissionError, match="multiplicity"):
         concurrent_step(net, Marking(tokens=(0,)), (1001,))
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [None, [1, 1], "ab", 1, {0: 1, 1: 1}, (1, 1, 1), (1.0, 1), (1, -1), (True, 0)],
+)
+def test_malformed_count_containers_get_the_stable_domain_error(malformed):
+    # A direct native caller must never see a bare len() TypeError or a
+    # silently coerced non-canonical container; the declared canonical
+    # tuple is admitted before its length is inspected.
+    net = PetriNet(place_count=1, transition_count=2, pre=((1, 1),), post=((0, 0),))
+    with pytest.raises(OperationDomainValidationError):
+        concurrent_step(net, Marking(tokens=(1,)), malformed)
+
+
+def test_canonical_step_still_matches_the_independent_oracle():
+    net = PetriNet(place_count=1, transition_count=2, pre=((1, 1),), post=((2, 2),))
+    actual = concurrent_step(net, Marking(tokens=(1,)), (1, 1))
+    expected = _oracle(net, (1,), (1, 1))
+    assert (actual.status, actual.required, actual.deficit) == expected[:3]
+    assert actual.transition_counts == (1, 1)

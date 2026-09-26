@@ -4,7 +4,11 @@ from collections import deque
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import encode_strict_json
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.logic.automata.petri_nets._models import (
     ReachabilityRequest,
     ReachabilityResult,
@@ -17,6 +21,7 @@ from jacobian.math.logic.automata.petri_nets.profiles._tools import (
     compute_reachability_token_profile,
 )
 from jacobian.math.logic.automata.petri_nets.profiles.operations import (
+    _token_profile_output_bound,
     reachability_token_profile,
 )
 from jacobian.math.logic.automata.petri_nets.values import (
@@ -213,3 +218,63 @@ def test_oversized_arc_integer_is_rejected_before_output_stringification() -> No
     )
     with pytest.raises(OperationDomainValidationError, match="bounded nonnegative"):
         reachability_token_profile(graph)
+
+
+def test_work_bound_charges_axis_label_characters() -> None:
+    net = PetriNet.model_construct(
+        place_count=1,
+        transition_count=0,
+        place_ids=("x" * 1_100_000,),
+        transition_ids=None,
+        pre=((),),
+        post=((),),
+    )
+    graph = ReachabilityResult.model_construct(
+        net=net,
+        initial_marking=Marking(tokens=(0,)),
+        max_states=1,
+        states=(
+            PetriMarkingState(
+                state_index=0, place_axis=(0,), marking=Marking(tokens=(0,))
+            ),
+        ),
+        edges=(),
+        truncated=False,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
+        reachability_token_profile(graph)
+
+
+@pytest.mark.parametrize(
+    ("net", "initial", "max_states"),
+    [
+        # The minimal graph: the borrowed liveness estimate omitted the fixed
+        # completeness and total-extremum fields and was 54 bytes too small.
+        (PetriNet(place_count=1, transition_count=0, pre=((),), post=((),)), (0,), 1),
+        (
+            PetriNet(
+                place_count=2,
+                transition_count=2,
+                pre=((1, 0), (0, 2)),
+                post=((0, 1), (2, 0)),
+                place_ids=("p\u00e9", "post"),
+                transition_ids=("t0", "t1"),
+            ),
+            (1, 0),
+            16,
+        ),
+    ],
+)
+def test_output_bound_covers_the_encoded_profile(
+    net: PetriNet, initial: tuple[int, ...], max_states: int
+) -> None:
+    graph = compute_reachability(
+        ReachabilityRequest(
+            net=net, initial_marking=Marking(tokens=initial), max_states=max_states
+        )
+    )
+    result = reachability_token_profile(graph)
+    encoded = encode_strict_json(result.model_dump(mode="json"))
+    assert _token_profile_output_bound(
+        graph, net.transition_count, net.place_count
+    ) >= len(encoded)

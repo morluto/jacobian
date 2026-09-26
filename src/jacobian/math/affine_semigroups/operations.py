@@ -13,11 +13,9 @@ from jacobian.math.affine_semigroups._kernel import (
     compute_relation_lattice_data,
 )
 from jacobian.math.affine_semigroups._models import (
-    MAX_CIRCUIT_CONTEXT_BYTES,
-    MAX_CIRCUIT_COORDINATE_DIGITS,
     MAX_CIRCUIT_KERNEL_WORK,
-    MAX_CIRCUIT_OUTPUT_BYTES,
     MAX_CIRCUIT_RANK_WORK,
+    MAX_CIRCUIT_SUPPORTS,
     MAX_RELATION_LATTICE_DIMENSION,
     MAX_RELATION_LATTICE_INPUT_DIGITS,
     IntegerConfigurationCircuitsResult,
@@ -156,15 +154,17 @@ def _admit_circuit_configuration(configuration: object) -> IntegerMatrix:
         )
     # A support-minimal relation on at most 12 columns is determined by
     # cofactors of an at-most 11 by 11 minor. Hadamard's bound gives at most
-    # 94 decimal digits per coordinate for the admitted 8-digit inputs.
-    output_bound = MAX_CIRCUIT_CONTEXT_BYTES + support_count * (
-        columns * (MAX_CIRCUIT_COORDINATE_DIGITS + 2) + columns + 2
-    )
-    if output_bound > MAX_CIRCUIT_OUTPUT_BYTES:
+    # 94 decimal digits per coordinate for the admitted 8-digit inputs, and
+    # each circuit occupies one nonzero support, so the result is at most
+    # MAX_CIRCUIT_SUPPORTS vectors of at most 12 such coordinates.
+    if support_count > MAX_CIRCUIT_SUPPORTS or columns > MAX_RELATION_LATTICE_DIMENSION:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="affine_semigroup.circuit_output",
-            message="worst-case circuit result exceeds its 8 MiB output envelope",
+            message=(
+                "worst-case circuit result exceeds the "
+                f"{MAX_CIRCUIT_SUPPORTS}-vector output envelope"
+            ),
         )
     return admitted
 

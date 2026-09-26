@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from itertools import product
-from math import comb, gcd
+from math import gcd
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.affine_semigroups.graver_models import (
+    MAX_GRAVER_BASIS_VECTORS,
     IntegerConfigurationGraverBasis,
     IntegerConfigurationMarkovBasis,
 )
@@ -31,21 +32,43 @@ from jacobian.math.polynomials.values import (
 )
 
 MAX_GRAVER_WORK = 100_000_000
-MAX_GRAVER_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_TORIC_IDEAL_GENERATORS = 64
-MAX_TORIC_IDEAL_OUTPUT_BYTES = 8 * 1024 * 1024
 _POLYNOMIAL_VARIABLE = re.compile(r"[A-Za-z][A-Za-z0-9_]{0,31}\Z")
+
+
+def _admit_graver_configuration(configuration: object) -> IntegerMatrix:
+    """Revalidate a native configuration before any kernel code reads it.
+
+    Catalog requests are validated by the request model; native callers can
+    bypass wire validation (for example with ``model_construct``), so the
+    complete declared shape and scalar types are re-admitted here before
+    ``graver_basis`` or its delegate ``markov_basis`` enumerates an axis.
+    """
+    if type(configuration) is not IntegerMatrix:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="affine_semigroup.graver_configuration",
+            message="configuration must be a canonical integer matrix",
+        )
+    try:
+        return IntegerMatrix.model_validate(configuration.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="affine_semigroup.graver_configuration",
+            message="configuration is malformed",
+        ) from exc
 
 
 def _normalized_graver_weights(configuration: IntegerMatrix) -> tuple[int, ...]:
     rows, columns = configuration.row_count, configuration.column_count
-    entries = tuple(int(value) for value in configuration.entries[0]) if rows else ()
     if rows != 1 or not 1 <= columns <= 5:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="affine_semigroup.graver_shape",
             message="Graver enumeration currently admits one-row configurations with 1..5 columns",
         )
+    entries = tuple(int(value) for value in configuration.entries[0])
     if any(abs(value) >= 10**8 for value in entries):
         raise OperationResourceAdmissionError(
             location=("configuration",),
@@ -85,13 +108,15 @@ def _admit_graver_search(entries: tuple[int, ...]) -> tuple[int, int]:
                 "complete Graver enumeration exceeds the 100,000,000 candidate-pair work envelope"
             ),
         )
-    max_digits = max(1, len(str(bound)))
-    output_bound = ((candidate_states - 1) // 2) * (columns * (max_digits + 2) + 2)
-    if output_bound > MAX_GRAVER_OUTPUT_BYTES:
+    vector_bound = (candidate_states - 1) // 2
+    if vector_bound > MAX_GRAVER_BASIS_VECTORS:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="affine_semigroup.graver_output",
-            message="worst-case Graver result exceeds the 8 MiB output envelope",
+            message=(
+                "worst-case Graver basis exceeds the "
+                f"{MAX_GRAVER_BASIS_VECTORS}-vector output envelope"
+            ),
         )
 
     return bound, candidate_states
@@ -145,6 +170,7 @@ def graver_basis(configuration: IntegerMatrix) -> IntegerConfigurationGraverBasi
     Graver vector lies in the admitted coordinate box. We enumerate that full
     box and retain exactly the componentwise minima in each sign orthant.
     """
+    configuration = _admit_graver_configuration(configuration)
     if configuration.row_count == 1 and configuration.column_count <= 5:
         entries = _normalized_graver_weights(configuration)
         bound, _candidate_states = _admit_graver_search(entries)
@@ -181,25 +207,9 @@ def markov_basis(configuration: IntegerMatrix) -> IntegerConfigurationMarkovBasi
     """
     graver = graver_basis(configuration)
     return IntegerConfigurationMarkovBasis(
-        configuration=configuration,
+        configuration=graver.configuration,
         moves=graver.vectors,
     )
-
-
-def _toric_candidate_count_bound(columns: int, entries: tuple[int, ...]) -> int:
-    """Bound sign-normalized Graver outputs by the complete l1 candidate ball."""
-    if not any(entries):
-        # The zero row has exactly the signed unit vectors as its Graver basis.
-        return columns
-    maximum = max(entries)
-    radius = 2 * maximum
-    lattice_points = sum(
-        (1 << support) * comb(columns, support) * comb(radius, support)
-        for support in range(min(columns, radius) + 1)
-    )
-    # The one-row Graver proof bounds each vector's l1 norm by 2*maximum.
-    # The ball is symmetric, and the ideal keeps one of every opposite pair.
-    return (lattice_points - 1) // 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -289,13 +299,8 @@ def _small_toric_plan(
                 f"exponent limit {MAX_POLYNOMIAL_EXPONENT}"
             ),
         )
-    output_bound = 4096 + len(vectors) * (2048 + 5 * 256)
-    if output_bound > MAX_TORIC_IDEAL_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("configuration",),
-            code="affine_semigroup.toric_output_bound",
-            message="the complete toric ideal presentation exceeds its 8 MiB output envelope",
-        )
+    # The closed form contributes at most two binomials on at most two
+    # variables, so the exponent limit above bounds the presentation cardinality.
     return _ToricIdealPlan(configuration, entries, 0, vectors)
 
 
@@ -309,16 +314,6 @@ def _graver_toric_plan(
     for weight in entries:
         divisor = gcd(divisor, weight)
     reduced = tuple(weight // divisor for weight in entries) if divisor else entries
-    generator_bound = _toric_candidate_count_bound(columns, reduced)
-    if generator_bound > MAX_TORIC_IDEAL_GENERATORS:
-        raise OperationResourceAdmissionError(
-            location=("configuration",),
-            code="affine_semigroup.toric_generator_bound",
-            message=(
-                "the l1 Graver candidate envelope permits more than "
-                f"{MAX_TORIC_IDEAL_GENERATORS} ideal generators"
-            ),
-        )
 
     maximum = max(reduced, default=0)
     # Match the Graver kernel's exact complete-box and candidate-pair estimate.
@@ -343,16 +338,23 @@ def _graver_toric_plan(
                 f"polynomial exponent limit {MAX_POLYNOMIAL_EXPONENT}"
             ),
         )
-    # At most 64 generators, two unit-coefficient terms each, five bounded
-    # exponents per term, and five variable labels (repeated in each value).
-    output_bound = 4096 + generator_bound * (2048 + 5 * 256)
-    if output_bound > MAX_TORIC_IDEAL_OUTPUT_BYTES:
+    # The box enumeration is bounded by the admitted candidate-pair work
+    # envelope above, so enumerate it once and count the exact sign-normalized
+    # Graver outputs instead of estimating them from a loose candidate ball.
+    vectors = _enumerate_graver_vectors(reduced, radius)
+    if len(vectors) > MAX_TORIC_IDEAL_GENERATORS:
         raise OperationResourceAdmissionError(
             location=("configuration",),
-            code="affine_semigroup.toric_output_bound",
-            message="the complete toric ideal presentation exceeds its 8 MiB output envelope",
+            code="affine_semigroup.toric_generator_bound",
+            message=(
+                "the complete Graver enumeration yields more than "
+                f"{MAX_TORIC_IDEAL_GENERATORS} ideal generators"
+            ),
         )
-    return _ToricIdealPlan(configuration, reduced, radius, None)
+    # Each generator contributes two unit-coefficient terms on the admitted
+    # 1..5 variable axis, so the generator and exponent limits above bound
+    # the presentation cardinality.
+    return _ToricIdealPlan(configuration, reduced, radius, vectors)
 
 
 def _admit_toric_configuration(value: object) -> _ToricIdealPlan:

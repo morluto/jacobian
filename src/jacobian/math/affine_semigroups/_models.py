@@ -27,8 +27,6 @@ MAX_RELATION_LATTICE_BASIS_ENTRIES = (
 )
 MAX_CIRCUIT_SUPPORTS = (1 << MAX_RELATION_LATTICE_DIMENSION) - 1
 MAX_CIRCUIT_COORDINATE_DIGITS = 94
-MAX_CIRCUIT_OUTPUT_BYTES = 8 * 1024 * 1024
-MAX_CIRCUIT_CONTEXT_BYTES = 4096
 MAX_CIRCUIT_RANK_WORK = sum(
     comb(MAX_RELATION_LATTICE_DIMENSION, size)
     * MAX_RELATION_LATTICE_DIMENSION
@@ -163,6 +161,15 @@ class IntegerConfigurationCircuitsResult(StrictModel):
     @model_validator(mode="after")
     def require_structural_consistency(self) -> Self:
         n = self.configuration.column_count
+        if not (
+            1 <= self.configuration.row_count <= MAX_RELATION_LATTICE_DIMENSION
+            and 1 <= n <= MAX_RELATION_LATTICE_DIMENSION
+        ):
+            raise _validation_error(
+                "circuit_shape",
+                "circuit results require configuration axes in "
+                f"1..{MAX_RELATION_LATTICE_DIMENSION}",
+            )
         if any(len(vector) != n for vector in self.circuits):
             raise _validation_error(
                 "circuit_axis_mismatch",
@@ -189,14 +196,6 @@ class IntegerConfigurationCircuitsResult(StrictModel):
             raise _validation_error(
                 "circuit_coordinate_bound",
                 "circuit coordinates exceed their determinant-derived digit bound",
-            )
-        if (
-            MAX_CIRCUIT_CONTEXT_BYTES
-            + len(self.circuits) * (n * (MAX_CIRCUIT_COORDINATE_DIGITS + 2) + n + 2)
-            > MAX_CIRCUIT_OUTPUT_BYTES
-        ):
-            raise _validation_error(
-                "circuit_output_bound", "circuit result exceeds its output envelope"
             )
         return self
 

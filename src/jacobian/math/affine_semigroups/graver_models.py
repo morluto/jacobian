@@ -13,6 +13,17 @@ from jacobian._models import StrictModel
 from jacobian.math.affine_semigroups.semigroup import AffineConfiguration
 from jacobian.math.matrices.values import IntegerMatrix
 
+MAX_GRAVER_BASIS_VECTORS = 5_000
+
+
+def _graver_configuration_json_schema() -> JsonSchemaValue:
+    schema = IntegerMatrix.model_json_schema()
+    properties = schema["properties"]
+    properties["row_count"].update(minimum=1, maximum=12)
+    properties["column_count"].update(minimum=1, maximum=12)
+    schema["description"] = "Integer matrix with both axes in 1..12."
+    return schema
+
 
 def _toric_configuration_json_schema() -> JsonSchemaValue:
     schema = AffineConfiguration.model_json_schema()
@@ -42,7 +53,9 @@ class IntegerConfigurationGraverBasis(StrictModel):
     """Complete sign-normalized Graver basis on the retained generator axis."""
 
     configuration: IntegerMatrix
-    vectors: tuple[tuple[ExactInteger, ...], ...] = Field(max_length=5_000)
+    vectors: tuple[tuple[ExactInteger, ...], ...] = Field(
+        max_length=MAX_GRAVER_BASIS_VECTORS
+    )
     convention: Literal["PRIMITIVE_CONFORMAL_MINIMA_FIRST_NONZERO_POSITIVE"] = (
         "PRIMITIVE_CONFORMAL_MINIMA_FIRST_NONZERO_POSITIVE"
     )
@@ -76,7 +89,9 @@ class IntegerConfigurationGraverBasis(StrictModel):
 class IntegerConfigurationGraverRequest(StrictModel):
     """Request the complete Graver basis in an admitted exact slice."""
 
-    configuration: IntegerMatrix
+    configuration: Annotated[
+        IntegerMatrix, WithJsonSchema(_graver_configuration_json_schema())
+    ]
 
     @model_validator(mode="after")
     def require_bounded_axes(self) -> Self:
@@ -97,7 +112,9 @@ class IntegerConfigurationMarkovBasis(StrictModel):
     """A globally fiber-connecting generating set for a bounded configuration."""
 
     configuration: IntegerMatrix
-    moves: tuple[tuple[ExactInteger, ...], ...] = Field(max_length=5_000)
+    moves: tuple[tuple[ExactInteger, ...], ...] = Field(
+        max_length=MAX_GRAVER_BASIS_VECTORS
+    )
     property: Literal["GENERATES_TORIC_IDEAL_AND_CONNECTS_EVERY_NONNEGATIVE_FIBER"] = (
         "GENERATES_TORIC_IDEAL_AND_CONNECTS_EVERY_NONNEGATIVE_FIBER"
     )
@@ -132,7 +149,9 @@ class IntegerConfigurationMarkovBasis(StrictModel):
 class IntegerConfigurationMarkovBasisRequest(StrictModel):
     """Request a globally connecting move family in a bounded exact slice."""
 
-    configuration: IntegerMatrix
+    configuration: Annotated[
+        IntegerMatrix, WithJsonSchema(_graver_configuration_json_schema())
+    ]
 
     @model_validator(mode="after")
     def require_bounded_axes(self) -> Self:
@@ -159,8 +178,8 @@ class IntegerConfigurationToricIdealRequest(StrictModel):
         description=(
             "A one-row nonnegative integer configuration with 1..5 labelled "
             "generators. Generator labels must be polynomial variable names. "
-            "Admission bounds the Graver candidate work, the number of possible "
-            "ideal generators, polynomial exponents, and serialized output."
+            "Admission bounds the Graver candidate work, the number of ideal "
+            "generators, polynomial exponents, and presentation cardinality."
         )
     )
 

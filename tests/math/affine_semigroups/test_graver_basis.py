@@ -2,8 +2,12 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.affine_semigroups.graver import graver_basis
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.affine_semigroups import graver as graver_module
+from jacobian.math.affine_semigroups.graver import graver_basis, markov_basis
 from jacobian.math.matrices.values import IntegerMatrix
 
 
@@ -153,3 +157,29 @@ def test_multirow_kernel_with_nullity_above_one_is_rejected_without_search():
         graver_basis(
             IntegerMatrix.model_validate({"entries": [[1, 0, 1, 0], [0, 1, 0, 1]]})
         )
+
+
+def test_forged_native_matrix_is_refused_before_enumeration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_if_called(*_args, **_kwargs):
+        raise AssertionError("enumeration ran before configuration admission")
+
+    monkeypatch.setattr(graver_module, "_enumerate_graver_vectors", fail_if_called)
+    forged = IntegerMatrix.model_construct(
+        domain="ZZ", row_count=1, column_count=2, entries=((1,),)
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="configuration is malformed"
+    ):
+        graver_basis(forged)
+    with pytest.raises(
+        OperationDomainValidationError, match="configuration is malformed"
+    ):
+        markov_basis(forged)
+
+
+def test_admitted_result_retains_a_roundtrippable_configuration() -> None:
+    result = graver_basis(_matrix((1, 2, 3)))
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded == result

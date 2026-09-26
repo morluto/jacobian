@@ -173,10 +173,10 @@ _GRAVER_TOOLS = (
             "integer weights. Polynomial variables retain the configuration's "
             "ordered generator labels. One- and two-column cases use the exact "
             "primitive-kernel formula; three-to-five columns use the complete "
-            "Graver enumeration after preflighting its l1 generator envelope, "
-            "100,000,000 candidate-pair work limit, polynomial exponent limit, "
-            "64-generator ideal-carrier limit, and serialized output size. This "
-            "is a generating presentation, not a minimal one."
+            "Graver enumeration after preflights bound its 100,000,000 "
+            "candidate-pair work envelope and polynomial exponent limit, then "
+            "admits the exact basis against the 64-generator ideal-carrier "
+            "limit. This is a generating presentation, not a minimal one."
         ),
         request_type=IntegerConfigurationToricIdealRequest,
         result_type=RationalPolynomialIdeal,

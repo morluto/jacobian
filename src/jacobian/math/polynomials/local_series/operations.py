@@ -7,6 +7,7 @@ from fractions import Fraction
 from math import comb, lcm
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -43,7 +44,7 @@ from jacobian.math.polynomials.local_series.arithmetic_models import (
     RationalFunctionExpansionResult,
 )
 from jacobian.math.polynomials.local_series.puiseux_arithmetic import (
-    MAX_PUISEUX_OUTPUT_BYTES,
+    MAX_PUISEUX_RESULT_DIGITS,
 )
 from jacobian.math.polynomials.local_series.puiseux_arithmetic import (
     _check as _check_puiseux,
@@ -70,15 +71,16 @@ from jacobian.math.polynomials.local_series.values import (
     MAX_LOCAL_SERIES_TERMS,
     TruncatedLaurentWindow,
 )
-from jacobian.math.polynomials.rational_functions._models import (
-    require_canonical_rational_function,
-)
 from jacobian.math.polynomials.series._models import (
     MAX_RATIONAL_DIGITS,
     MAX_TRUNCATION_ORDER,
     TruncatedSeries,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import (
+    RationalFunction,
+    SparseRationalPolynomial,
+    require_canonical_rational_function,
+)
 
 
 def laurent_valuation_profile(
@@ -86,6 +88,7 @@ def laurent_valuation_profile(
 ) -> ValuationProfileResult:
     """Return ZERO_AT_PRECISION or the exact valuation profile of a window."""
 
+    _check_laurent(series)
     if not isinstance(series, TruncatedLaurentWindow):
         raise OperationDomainValidationError(
             location=("series",),
@@ -175,7 +178,7 @@ def _admit_expansion_recurrence(
     denominator: list[Fraction],
     count: int,
     *,
-    source_bytes_bound: int,
+    source_digit_bound: int,
 ) -> None:
     """Bound recurrence coefficient height and serialized output before division."""
     if count == 0:
@@ -253,16 +256,16 @@ def _admit_expansion_recurrence(
         )
     # The result carries both the shifted series and its normalized unit
     # quotient, plus the admitted source rational function.
-    output_bound = (
-        source_bytes_bound + 1024 + count * (4 * maximum_coefficient_digits + 192)
+    result_digits = (
+        source_digit_bound + 1024 + count * (4 * maximum_coefficient_digits + 192)
     )
-    if output_bound > MAX_PUISEUX_OUTPUT_BYTES:
+    if result_digits > MAX_PUISEUX_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("result",),
-            code="local_series.expansion_output_bound",
+            code="local_series.expansion_result_envelope",
             message=(
                 "requested Laurent prefix exceeds the "
-                f"{MAX_PUISEUX_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_PUISEUX_RESULT_DIGITS}-digit result envelope"
             ),
         )
 
@@ -287,7 +290,10 @@ def _check_expansion_center(center: CanonicalRational) -> Fraction:
             code="local_series.expansion_center",
             message="center must be in canonical reduced form",
         )
-    center_digits = max(len(str(abs(center.num))), len(str(center.den)))
+    center_digits = max(
+        len(format_canonical_integer(abs(center.num))),
+        len(format_canonical_integer(center.den)),
+    )
     if center_digits > 30:
         raise OperationResourceAdmissionError(
             location=("center",),
@@ -297,7 +303,7 @@ def _check_expansion_center(center: CanonicalRational) -> Fraction:
     return value
 
 
-def _source_function_output_bytes(function: RationalFunction) -> int:
+def _source_function_digit_estimate(function: RationalFunction) -> int:
     """Conservatively price the source function repeated in the result."""
     # At most 256 terms in each polynomial; each term has two 128-digit
     # rational components, an exponent, field names, and JSON punctuation.
@@ -315,7 +321,7 @@ def rational_function_at_point(
     _check_expansion_precision(precision)
     x0 = _check_expansion_center(center)
 
-    def translate(polynomial: object) -> list[Fraction]:
+    def translate(polynomial: SparseRationalPolynomial) -> list[Fraction]:
         terms = polynomial.terms
         degree = max((term.exponents[0] for term in terms), default=0)
         coefficients = [Fraction(0) for _ in range(degree + 1)]
@@ -378,7 +384,7 @@ def rational_function_at_point(
         a,
         b,
         coefficient_count,
-        source_bytes_bound=_source_function_output_bytes(function),
+        source_digit_bound=_source_function_digit_estimate(function),
     )
     quotient: list[Fraction] = []
     for n in range(coefficient_count):
@@ -439,7 +445,7 @@ def rational_function_at_infinity(
     _check_expansion_function(function)
     _check_expansion_precision(precision)
 
-    def reverse(polynomial: object) -> list[Fraction]:
+    def reverse(polynomial: SparseRationalPolynomial) -> list[Fraction]:
         degree = max((term.exponents[0] for term in polynomial.terms), default=0)
         coefficients = [Fraction(0) for _ in range(degree + 1)]
         for term in polynomial.terms:
@@ -455,6 +461,7 @@ def rational_function_at_infinity(
     denominator_degree = max(
         (term.exponents[0] for term in function.denominator.terms), default=0
     )
+    quotient: list[Fraction]
     if numerator_degree < 0:
         lower = 0
         coefficients = [Fraction(0)] * precision
@@ -477,12 +484,12 @@ def rational_function_at_infinity(
                     f"{MAX_LOCAL_SERIES_TERMS}-coefficient work envelope"
                 ),
             )
-        quotient: list[Fraction] = []
+        quotient = []
         _admit_expansion_recurrence(
             numerator,
             denominator,
             coefficient_count,
-            source_bytes_bound=_source_function_output_bytes(function),
+            source_digit_bound=_source_function_digit_estimate(function),
         )
         for n in range(coefficient_count):
             value = numerator[n] if n < len(numerator) else Fraction(0)
@@ -560,43 +567,52 @@ def residue_puiseux(series: TruncatedPuiseuxWindow) -> PuiseuxResidueResult:
     """Extract the t^-1 coefficient when it is known by the retained window."""
     _, lower, terms, precision = _check_puiseux(series)
     exponent = Fraction(-1)
-    if not lower <= exponent < precision:
+    if precision <= exponent:
         raise OperationDomainValidationError(
             location=("series", "precision"),
             code="local_series.puiseux_residue_precision",
             message="Puiseux window must contain exponent -1 to determine its residue",
         )
-    value = next(
-        (coefficient for term_exp, coefficient in terms if term_exp == exponent),
-        Fraction(0),
-    )
+    if exponent < lower:
+        # An exponent below the known valuation lower bound is known absent,
+        # so its residue is exactly zero, matching the integral carrier.
+        value = Fraction(0)
+    else:
+        value = next(
+            (coefficient for term_exp, coefficient in terms if term_exp == exponent),
+            Fraction(0),
+        )
 
     # The result repeats the source window and adds a rational scalar. Bound
-    # its compact JSON size from the already admitted canonical values before
-    # constructing that output.
-    def rational_bytes(number: Fraction) -> int:
-        return len(str(abs(number.numerator))) + len(str(number.denominator)) + 24
+    # its digit envelope from the already admitted canonical values before
+    # constructing that result.
+    def rational_digits(number: Fraction) -> int:
+        return (
+            len(format_canonical_integer(abs(number.numerator)))
+            + len(format_canonical_integer(number.denominator))
+            + 24
+        )
 
-    output_bound = (
+    result_digits = (
         512
         + len(series.variable.encode("utf-8"))
-        + rational_bytes(series.center.as_fraction())
-        + rational_bytes(lower)
-        + rational_bytes(precision)
-        + len(str(series.ramification_index))
-        + rational_bytes(value)
+        + rational_digits(series.center.as_fraction())
+        + rational_digits(lower)
+        + rational_digits(precision)
+        + len(format_canonical_integer(series.ramification_index))
+        + rational_digits(value)
         + sum(
-            64 + rational_bytes(term_exponent) + rational_bytes(coefficient)
+            64 + rational_digits(term_exponent) + rational_digits(coefficient)
             for term_exponent, coefficient in terms
         )
     )
-    if output_bound > MAX_PUISEUX_OUTPUT_BYTES:
+    if result_digits > MAX_PUISEUX_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("result",),
-            code="local_series.puiseux_residue_output_bound",
+            code="local_series.puiseux_residue_result_envelope",
             message=(
                 "source-bound Puiseux residue exceeds the "
-                f"{MAX_PUISEUX_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_PUISEUX_RESULT_DIGITS}-digit result envelope"
             ),
         )
     return PuiseuxResidueResult(

@@ -69,8 +69,9 @@ output support and bytes, term work, normalized unit denominators, recurrence
 coefficient growth, and all generated exact coefficients.
 
 `local_series.puiseux.residue.compute` returns the exact coefficient of
-`t^-1`, source-bound to the input window. It accepts the result only when the
-known exponent interval contains `-1`; a window above or below that exponent
-does not establish a zero residue because the omitted portion is unknown.
-When `-1` lies inside the interval but has no retained sparse term, its
-coefficient is known to be zero.
+`t^-1`, source-bound to the input window. It admits the result only when the
+window's exclusive cutoff is above `-1`; a cutoff at or below `-1` leaves the
+residue in the unknown tail and is rejected. A retained interval that starts
+above `-1` is known to omit the exponent `-1`, so its residue is exactly
+zero. When `-1` lies inside the interval but has no retained sparse term,
+its coefficient is likewise known to be zero.

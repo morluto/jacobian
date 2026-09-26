@@ -5,10 +5,18 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.arithmetic_functions._models import (
+    MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
+    MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH,
     DirichletConvolutionRequest,
     DirichletConvolutionResult,
+    DirichletInverseResult,
+    MobiusTransformResult,
+    SummatoryFunctionResult,
 )
 from jacobian.math.number_theory.arithmetic_functions._tools import (
     compute_dirichlet_convolution,
@@ -120,6 +128,39 @@ def test_native_twist_rejects_a_non_arithmetic_function_value() -> None:
 
     assert error.value.errors()[0]["type"] == (
         "dirichlet_character.arithmetic_function_twist.function_type"
+    )
+
+
+class _NonIterableTuple(tuple):
+    def __iter__(self):
+        raise AssertionError("oversized source was traversed before its bound")
+
+
+@pytest.mark.parametrize(
+    ("carrier", "limit", "fields"),
+    [
+        (
+            MobiusTransformResult,
+            MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
+            {"inverse": False},
+        ),
+        (DirichletInverseResult, MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH, {}),
+        (SummatoryFunctionResult, MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH, {}),
+    ],
+)
+def test_oversized_result_prefix_is_rejected_before_revalidation(
+    carrier, limit: int, fields: dict[str, object]
+) -> None:
+    value = _rational(1)
+    values = _NonIterableTuple([value] * (limit + 1))
+    function = carrier.model_construct(values=values, length=limit + 1, **fields)
+    character = DirichletCharacter(group=character_group(3), coordinates=(1,))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        dirichlet_character_arithmetic_function_twist(function, character)
+
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.arithmetic_function_twist.prefix_length"
     )
 
 

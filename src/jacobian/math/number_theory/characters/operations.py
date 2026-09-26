@@ -27,6 +27,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 )
 from jacobian.math.number_theory.arithmetic_functions._models import (
     MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH,
+    MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH,
     DirichletConvolutionResult,
     DirichletInverseResult,
     MobiusTransformResult,
@@ -2577,6 +2578,31 @@ def dirichlet_character_arithmetic_function_twist(
             location=("function",),
             code="dirichlet_character.arithmetic_function_twist.function_type",
             message="source must be an exact arithmetic-function prefix value",
+        )
+    try:
+        values = function.values
+    except AttributeError as exc:
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.source_invalid",
+            message="source must be a canonical arithmetic-function prefix",
+        ) from exc
+    if not isinstance(values, tuple):
+        raise OperationDomainValidationError(
+            location=("function",),
+            code="dirichlet_character.arithmetic_function_twist.source_invalid",
+            message="source values must be an immutable tuple",
+        )
+    max_prefix_length = (
+        MAX_SUMMATORY_FUNCTION_PREFIX_LENGTH
+        if isinstance(function, SummatoryFunctionResult)
+        else MAX_ARITHMETIC_FUNCTION_PREFIX_LENGTH
+    )
+    if len(values) > max_prefix_length:
+        raise OperationResourceAdmissionError(
+            location=("function", "values"),
+            code="dirichlet_character.arithmetic_function_twist.prefix_length",
+            message="source prefix exceeds the admitted value count",
         )
     try:
         function = type(function).model_validate(function.model_dump())

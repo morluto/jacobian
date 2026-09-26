@@ -173,7 +173,6 @@ def _admit_product(
             ),
         )
 
-    max_operand_digits = 0
     for side, polynomial in (("left", left), ("right", right)):
         if len(polynomial.terms) > operand_term_limit:
             _reject_resource(
@@ -191,10 +190,6 @@ def _admit_product(
                     f"{MAX_FREE_ALGEBRA_WORD_LENGTH}-letter multiplication "
                     "budget",
                 )
-            max_operand_digits = max(
-                max_operand_digits,
-                canonical_rational_component_digits(term.coefficient),
-            )
 
     term_pair_count = len(left.terms) * len(right.terms)
     if term_pair_count > MAX_FREE_ALGEBRA_TERM_PAIRS:
@@ -216,17 +211,41 @@ def _admit_product(
         _word_code(term.word, letter_code, base) for term in right.terms
     )
     right_place_values = tuple(base**len(term.word) for term in right.terms)
-    product_support = {
-        (
-            len(left_term.word) + len(right_term.word),
-            left_code * right_place + right_code,
-        )
-        for left_term, left_code in zip(left.terms, left_codes, strict=True)
-        for right_term, right_code, right_place in zip(
-            right.terms, right_codes, right_place_values, strict=True
-        )
-    }
-    distinct_product_words = len(product_support)
+    support_bounds: dict[tuple[int, int], list[int]] = {}
+    left_fractions = tuple(term.coefficient.as_fraction() for term in left.terms)
+    right_fractions = tuple(term.coefficient.as_fraction() for term in right.terms)
+    left_word_widths = tuple(
+        sum(len(letter) + 4 for letter in term.word) for term in left.terms
+    )
+    right_word_widths = tuple(
+        sum(len(letter) + 4 for letter in term.word) for term in right.terms
+    )
+    for left_index, (left_term, left_code) in enumerate(
+        zip(left.terms, left_codes, strict=True)
+    ):
+        left_fraction = left_fractions[left_index]
+        left_numerator_digits = len(str(abs(left_fraction.numerator)))
+        left_denominator_digits = len(str(left_fraction.denominator))
+        for right_index, (right_term, right_code, right_place) in enumerate(
+            zip(right.terms, right_codes, right_place_values, strict=True)
+        ):
+            right_fraction = right_fractions[right_index]
+            numerator_digits = left_numerator_digits + len(
+                str(abs(right_fraction.numerator))
+            )
+            denominator_digits = left_denominator_digits + len(
+                str(right_fraction.denominator)
+            )
+            key = (
+                len(left_term.word) + len(right_term.word),
+                left_code * right_place + right_code,
+            )
+            bound = support_bounds.setdefault(key, [0, 0, 0, 0])
+            bound[0] += denominator_digits
+            bound[1] = max(bound[1], numerator_digits - denominator_digits)
+            bound[2] += 1
+            bound[3] = left_word_widths[left_index] + right_word_widths[right_index]
+    distinct_product_words = len(support_bounds)
     if distinct_product_words > MAX_FREE_ALGEBRA_RESULT_TERMS:
         _reject_resource(
             ("left", "terms"),
@@ -235,23 +254,24 @@ def _admit_product(
             f"{MAX_FREE_ALGEBRA_RESULT_TERMS}-term result budget",
         )
 
-    addition_digits = len(str(term_pair_count - 1)) if term_pair_count >= 2 else 0
-    predicted_coefficient_digits = 2 * max_operand_digits + addition_digits
-    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+    coefficient_digit_bounds = tuple(
+        denominator_digits
+        + max(0, numerator_minus_denominator)
+        + len(str(contribution_count))
+        for denominator_digits, numerator_minus_denominator, contribution_count, _ in support_bounds.values()
+    )
+    if max(coefficient_digit_bounds, default=1) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
         _reject_resource(
             ("left", "terms"),
             "coefficient_growth_budget",
             "predicted product coefficient growth exceeds the "
             f"{MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS}-digit multiplication budget",
         )
-    maximum_output_word_length = max(
-        (len(term.word) for term in left.terms), default=0
-    ) + max((len(term.word) for term in right.terms), default=0)
-    maximum_letter_scalars = max((len(letter) for letter in left.alphabet), default=0)
-    output_cell_bound = distinct_product_words * (
-        128
-        + maximum_output_word_length * (maximum_letter_scalars + 4)
-        + 2 * (predicted_coefficient_digits + 1)
+    output_cell_bound = sum(
+        128 + word_width + 2 * (coefficient_digits + 1)
+        for (_, _, _, word_width), coefficient_digits in zip(
+            support_bounds.values(), coefficient_digit_bounds, strict=True
+        )
     )
     if output_cell_bound > MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS:
         _reject_resource(

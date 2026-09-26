@@ -354,8 +354,16 @@ def quotient_face_orbit_complex(
             "polygon_size_bound",
             "polygon exceeds the 32-vertex/facet exact face-orbit envelope",
         )
-    source_bytes = len(checked.model_dump_json().encode("utf-8"))
-    predicted_bytes = source_bytes + 256 * vertex_count + 512 * facet_count + 64_000
+    # The result retains O(V+F) bounded records. Translation coordinates are
+    # admitted to 33 decimal digits and orbit labels to 128; charge their
+    # maximum encoded widths rather than serializing the caller's payload.
+    predicted_bytes = (
+        16_384
+        + 256 * vertex_count
+        + 512 * facet_count
+        + 2 * vertex_count * (128 * 2 + 512)
+        + 4 * facet_count * (33 * 2 + 512)
+    )
     if predicted_bytes > MAX_FACE_ORBIT_RESULT_BYTES:
         _resource("result_bound", "face-orbit complex exceeds its result byte envelope")
     recomputed = check_crystallographic_fundamental_domain(pairing_result)
@@ -380,6 +388,15 @@ def quotient_face_orbit_complex(
         for vertex in pairing_result.facet_profile.vertices
     )
     pairing_by_source = {p.source_facet_index: p for p in pairing_result.pairings}
+    if any(
+        pairing.source_facet_index == pairing.target_facet_index
+        for pairing in pairing_result.pairings
+    ):
+        _domain(
+            "self_paired_facet",
+            "a polygon side cannot be paired with itself in a quotient polygon",
+            ("source", "pairings"),
+        )
     profile_edges = {
         index: frozenset(facet.source_vertex_indices)
         for index, facet in enumerate(pairing_result.facet_profile.facets)

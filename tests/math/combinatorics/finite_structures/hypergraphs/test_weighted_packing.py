@@ -58,9 +58,7 @@ def _brute_force_optimum(
         while frontier:
             current = frontier.pop()
             neighbors = {
-                index
-                for index in remaining
-                if edge_sets[current] & edge_sets[index]
+                index for index in remaining if edge_sets[current] & edge_sets[index]
             }
             remaining.difference_update(neighbors)
             component.update(neighbors)
@@ -69,11 +67,11 @@ def _brute_force_optimum(
 
     best_ids: list[str] = []
     best_weight = Fraction(0)
-    for component in components:
+    for component_indices in components:
         local_best: tuple[str, ...] = ()
         local_weight = Fraction(0)
-        for size in range(len(component) + 1):
-            for combo in combinations(component, size):
+        for size in range(len(component_indices) + 1):
+            for combo in combinations(component_indices, size):
                 picked = [edge_sets[i] for i in combo]
                 if any(
                     picked[left] & picked[right]

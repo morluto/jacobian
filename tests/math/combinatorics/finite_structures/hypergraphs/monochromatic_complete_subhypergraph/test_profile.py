@@ -104,13 +104,13 @@ def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
     lookup = {
         frozenset(edge): color for edge, color in zip(members, colors, strict=True)
     }
-    source_ids = {
-        frozenset(edge): f"e{index}" for index, edge in enumerate(members)
-    }
-    for target in combinations(vertices, 4):
-        target_colors = {lookup[frozenset(edge)] for edge in combinations(target, 3)}
+    source_ids = {frozenset(edge): f"e{index}" for index, edge in enumerate(members)}
+    for candidate_vertices in combinations(vertices, 4):
+        target_colors = {
+            lookup[frozenset(edge)] for edge in combinations(candidate_vertices, 3)
+        }
         if len(target_colors) == 1:
-            expected[target] = target_colors.pop()
+            expected[candidate_vertices] = target_colors.pop()
 
     assert {
         members: color
@@ -121,17 +121,15 @@ def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
     assert expected
     assert result.source_edge_witnesses
 
-    for (_, target), candidate_color, witness in zip(
+    for (_, target_members), candidate_color, witness in zip(
         result.hypergraph.edges,
         result.candidate_colors,
         result.source_edge_witnesses,
         strict=True,
     ):
-        required = tuple(combinations(tuple(sorted(target)), 3))
+        required = tuple(combinations(tuple(sorted(target_members)), 3))
         assert witness == tuple(source_ids[frozenset(edge)] for edge in required)
-        assert {
-            lookup[frozenset(edge)] for edge in required
-        } == {candidate_color}
+        assert {lookup[frozenset(edge)] for edge in required} == {candidate_color}
 
 
 def test_target_equal_source_uniformity_returns_each_source_edge() -> None:

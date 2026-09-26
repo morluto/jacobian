@@ -9,12 +9,12 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternProfileRequest,
 )
+from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._tools import (
+    TOOLS,
+)
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile.operations import (
     compute_edge_pattern_profile,
     verify_edge_pattern_profile,
-)
-from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._tools import (
-    TOOLS,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,

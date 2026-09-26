@@ -1,7 +1,14 @@
 """Public operation declaration for generic-j twist-class decisions."""
 
+import rfc8785
+
 from jacobian._models import StrictModel
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import (
+    MathTool,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldShortWeierstrassCurve,
 )
@@ -16,6 +23,48 @@ class FiniteFieldTwistClassRequest(StrictModel):
 
     source: FiniteFieldShortWeierstrassCurve
     target: FiniteFieldShortWeierstrassCurve
+
+
+def _run_twist_class(
+    request: FiniteFieldTwistClassRequest,
+) -> FiniteFieldTwistClassResult:
+    field = request.source.field
+    maximum_coordinate = str(field.characteristic - 1)
+    element = {
+        "presentation": field.model_dump(mode="json"),
+        "coordinates": [maximum_coordinate] * field.degree,
+    }
+    maximum_curve = {
+        "field": field.model_dump(mode="json"),
+        "coefficient_a": element,
+        "coefficient_b": element,
+    }
+    maximum_result = {
+        "source": request.source.model_dump(mode="json"),
+        "target": request.target.model_dump(mode="json"),
+        "relation": "QUADRATIC_TWIST",
+        "source_j_invariant": element,
+        "target_j_invariant": element,
+        "isomorphism": None,
+        "twist": {
+            "source_curve": request.source.model_dump(mode="json"),
+            "twisted_curve": maximum_curve,
+            "parameter": element,
+        },
+        "twist_to_target": {
+            "source": maximum_curve,
+            "target": request.target.model_dump(mode="json"),
+            "isomorphic": True,
+            "scaling": element,
+        },
+    }
+    if len(rfc8785.dumps(maximum_result)) > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="elliptic_curve.finite_field.twist_class_output_bound",
+            message="twist-class result exceeds the delivery output envelope",
+        )
+    return finite_field_twist_class(request.source, request.target)
 
 
 _F5 = {
@@ -48,7 +97,7 @@ TOOLS = (
         ),
         request_type=FiniteFieldTwistClassRequest,
         result_type=FiniteFieldTwistClassResult,
-        run=lambda request: finite_field_twist_class(request.source, request.target),
+        run=_run_twist_class,
         tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
         discovery_terms=(
             "classify finite-field elliptic curves up to quadratic twist",

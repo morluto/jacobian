@@ -2,7 +2,14 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool, OperationExample
+import rfc8785
+
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import (
+    MathTool,
+    OperationExample,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.elliptic_curves.point_transport._models import (
     FiniteFieldPointTransportRequest,
     FiniteFieldPointTransportResult,
@@ -10,6 +17,36 @@ from jacobian.math.number_theory.elliptic_curves.point_transport._models import 
 from jacobian.math.number_theory.elliptic_curves.point_transport.operations import (
     transport_point,
 )
+
+
+def _run_transport(
+    request: FiniteFieldPointTransportRequest,
+) -> FiniteFieldPointTransportResult:
+    field = request.isomorphism.target.field
+    maximum_coordinate = str(field.characteristic - 1)
+    element = {
+        "presentation": field.model_dump(mode="json"),
+        "coordinates": [maximum_coordinate] * field.degree,
+    }
+    maximum_target_point = {
+        "curve": request.isomorphism.target.model_dump(mode="json"),
+        "at_infinity": False,
+        "x": element,
+        "y": element,
+    }
+    maximum_result = {
+        "isomorphism": request.isomorphism.model_dump(mode="json"),
+        "source_point": request.point.model_dump(mode="json"),
+        "target_point": maximum_target_point,
+    }
+    if len(rfc8785.dumps(maximum_result)) > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="elliptic_curve.finite_field.point_transport_output_bound",
+            message="transported point result exceeds the delivery output envelope",
+        )
+    return transport_point(request.isomorphism, request.point)
+
 
 _F5 = {
     "characteristic": "5",
@@ -50,7 +87,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FiniteFieldPointTransportRequest,
         result_type=FiniteFieldPointTransportResult,
-        run=lambda request: transport_point(request.isomorphism, request.point),
+        run=_run_transport,
         tags=("elliptic-curve", "finite-field", "isomorphism", "exact"),
         discovery_terms=(
             "transport a point between isomorphic short Weierstrass curves over a finite field",

@@ -4,11 +4,9 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-import rfc8785
 from pydantic import model_validator
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -25,7 +23,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldShortWeierstrassCurve,
     _coordinates,
     _curve_admit,
-    _element,
     _multiply,
     _power,
     finite_field_discriminant,
@@ -93,6 +90,7 @@ class FiniteFieldTwistClassResult(StrictModel):
                 and self.isomorphism.source == self.source
                 and self.isomorphism.target == self.target
                 and self.isomorphism.isomorphic
+                and _valid_isomorphism_witness(self.isomorphism)
                 and self.twist is None
                 and self.twist_to_target is None
             )
@@ -106,6 +104,8 @@ class FiniteFieldTwistClassResult(StrictModel):
                 and self.twist_to_target.source == self.twist.twisted_curve
                 and self.twist_to_target.target == self.target
                 and self.twist_to_target.isomorphic
+                and _valid_twist_witness(self.twist)
+                and _valid_isomorphism_witness(self.twist_to_target)
             )
         if not valid:
             raise ValueError(
@@ -219,31 +219,6 @@ def _admit_pair(
             location=("source", "target", "field"),
             code="elliptic_curve.finite_field.twist_class_work_bound",
             message="complete twist-class decision exceeds its exact-work envelope",
-        )
-    max_element = _element(field, (field.characteristic - 1,) * field.degree)
-    # Admit the complete largest result shape, including both possible maps,
-    # before invoking the exhaustive searches.
-    max_curve = FiniteFieldShortWeierstrassCurve(
-        field=field, coefficient_a=max_element, coefficient_b=max_element
-    )
-    maximum_result = {
-        "source": source.model_dump(mode="json"),
-        "target": target.model_dump(mode="json"),
-        "relation": "QUADRATIC_TWIST",
-        "source_j_invariant": max_element.model_dump(mode="json"),
-        "target_j_invariant": max_element.model_dump(mode="json"),
-        "twist": FiniteFieldQuadraticTwistRelation.model_construct(
-            source_curve=max_curve, twisted_curve=max_curve, parameter=max_element
-        ).model_dump(mode="json"),
-        "twist_to_target": FiniteFieldIsomorphismResult.model_construct(
-            source=max_curve, target=max_curve, isomorphic=True, scaling=max_element
-        ).model_dump(mode="json"),
-    }
-    if len(rfc8785.dumps(maximum_result)) > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("source", "target"),
-            code="elliptic_curve.finite_field.twist_class_output_bound",
-            message="twist-class result exceeds the canonical output-byte envelope",
         )
     return source, target, q, source_j, target_j
 

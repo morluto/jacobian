@@ -75,7 +75,7 @@ def test_component_and_product_growth_bounds_precede_expansion() -> None:
             )
         )
 
-    # Each operand fits, but their denominator products exceed the output cap.
+    # Each operand fits, but their reduced output coordinates exceed the cap.
     m = 10**128
     first = q(
         Fraction(m * m - 1, m * m + 1),
@@ -91,3 +91,28 @@ def test_component_and_product_growth_bounds_precede_expansion() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError):
         multiply_rational_unit_quaternions(first, second)
+
+
+def test_exact_cancellation_within_the_envelope_is_admitted() -> None:
+    # A 512-digit operand times its exact inverse is the identity, even though
+    # unreduced intermediate denominators would exceed the component envelope.
+    m = 4 * 10**255
+    value = q(
+        Fraction(m * m - 1, m * m + 1),
+        Fraction(2 * m, m * m + 1),
+        Fraction(0),
+        Fraction(0),
+    )
+    identity = q(Fraction(1), Fraction(0), Fraction(0), Fraction(0))
+    assert (
+        multiply_rational_unit_quaternions(
+            value, inverse_rational_unit_quaternion(value)
+        )
+        == identity
+    )
+    assert (
+        multiply_rational_unit_quaternions(
+            inverse_rational_unit_quaternion(value), value
+        )
+        == identity
+    )

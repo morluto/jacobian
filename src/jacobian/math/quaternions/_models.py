@@ -62,7 +62,6 @@ def _raw_integer_too_wide(value: object) -> bool:
 
 
 def _preflight_raw_coordinates(data: object) -> object:
-    data = canonicalize_json_containers(data)
     if not isinstance(data, dict):
         return data
     coordinates = data.get("coordinates")
@@ -114,7 +113,7 @@ class RationalUnitQuaternion(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_coordinates(cls, data: object) -> object:
-        return _preflight_raw_coordinates(data)
+        return _preflight_raw_coordinates(canonicalize_json_containers(data))
 
     @model_validator(mode="after")
     def require_unit_norm(self) -> Self:

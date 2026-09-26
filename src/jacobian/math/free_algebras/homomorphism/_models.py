@@ -24,10 +24,16 @@ class FreeAlgebraHomomorphismApplyRequest(StrictModel):
     homomorphism: FreeAlgebraPolynomialHomomorphism = Field(
         description=(
             "The canonical map specified by source and target alphabets and one "
-            "target polynomial image per source generator."
+            "target polynomial image per source generator. Each image admits "
+            "at most 64 terms, with words of at most 32 letters."
         )
     )
-    polynomial: FreeAlgebraPolynomial
+    polynomial: FreeAlgebraPolynomial = Field(
+        description=(
+            "The source polynomial, limited at execution to 64 terms with "
+            "words of at most 32 letters."
+        )
+    )
 
     @model_validator(mode="after")
     def require_source_axis(self) -> Self:

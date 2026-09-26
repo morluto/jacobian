@@ -11,6 +11,7 @@ Additional references document mathematical contracts or external boundaries
 that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
+- [Degree-truncated free-algebra quotients](free-algebra-truncated-quotients.md)
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Root-system coroots](groups/root-coroots.md)

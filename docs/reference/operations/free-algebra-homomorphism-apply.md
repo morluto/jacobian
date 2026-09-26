@@ -1,6 +1,6 @@
 # Free associative algebra homomorphism application
 
-`free_algebra.homomorphism.apply.compute` evaluates the unique unital
+`free_algebra.polynomial.substitute.compute` evaluates the unique unital
 `QQ`-algebra homomorphism specified by a source alphabet, a target alphabet,
 and one target polynomial image for each source generator. It substitutes each
 word in its original letter order, extends linearly, and collects like target

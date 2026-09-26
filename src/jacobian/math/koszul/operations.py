@@ -106,20 +106,26 @@ def _converted_chain_complex(
     if any(size > MAX_BASIS_SIZE for size in basis_sizes):
         return None
     cells = sum(
-        basis_sizes[index] * basis_sizes[index + 1]
-        for index in range(len(basis_sizes) - 1)
+        (
+            basis_sizes[index] * basis_sizes[index + 1]
+            for index in range(len(basis_sizes) - 1)
+        ),
+        0,
     )
     if cells > MAX_MATRIX_CELLS:
         return None
-    matrices: list[tuple[tuple[str, ...], ...]] = []
+    matrices: list[tuple[tuple[int | Fraction, ...], ...]] = []
     for matrix in differentials:
-        dense = [["0"] * matrix.column_count for _ in range(matrix.row_count)]
+        dense: list[list[int | Fraction]] = [
+            [0] * matrix.column_count for _ in range(matrix.row_count)
+        ]
         for entry in matrix.entries:
-            dense[entry.row][entry.column] = _scalar_spelling(
-                {
-                    term.exponents: Fraction(term.coefficient.num, term.coefficient.den)
+            dense[entry.row][entry.column] = sum(
+                (
+                    Fraction(term.coefficient.num, term.coefficient.den)
                     for term in entry.polynomial.polynomial.terms
-                }
+                ),
+                Fraction(0),
             )
         matrices.append(tuple(tuple(row) for row in dense))
     return construct_chain_complex(

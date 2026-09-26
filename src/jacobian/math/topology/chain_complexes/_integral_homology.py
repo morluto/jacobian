@@ -941,7 +941,7 @@ def _require_height(bound: SmithHeightBound, *, label: str) -> None:
 def _copy_integer_differentials(source: ChainComplexValue) -> tuple[Matrix, ...]:
     parsed: list[Matrix] = []
     for matrix in source.differential_matrices:
-        parsed.append([list(row) for row in matrix])
+        parsed.append([[int(entry) for entry in row] for row in matrix])
     return tuple(parsed)
 
 

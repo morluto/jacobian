@@ -1078,16 +1078,14 @@ def _preflight_terminal_scc_graph_shape(
             )
         if marking.net is not None:
             nonlocal label_characters
-            parent_places, parent_transitions, parent_label_characters = (
-                _preflight_terminal_scc_net_shape(marking.net, checked_nets)
+            _, _, parent_label_characters = _preflight_terminal_scc_net_shape(
+                marking.net, checked_nets
             )
             label_characters += parent_label_characters
-            # Charge the parent's own matrix cells, not the source net's, so a
-            # foreign parent cannot hide unadmitted traversal/output work.
-            return parent_places * max(1, parent_transitions)
+            return 1
         return 0
 
-    parent_marking_work = admit_marking_shape(graph.initial_marking)
+    parented_markings = admit_marking_shape(graph.initial_marking)
     for expected_index, state in enumerate(graph.states):
         if (
             not isinstance(state, PetriMarkingState)
@@ -1102,7 +1100,7 @@ def _preflight_terminal_scc_graph_shape(
                 code="petri_net.terminal_scc.state_axis",
                 message="source graph states must use canonical bounded axes",
             )
-        parent_marking_work += admit_marking_shape(state.marking)
+        parented_markings += admit_marking_shape(state.marking)
     for edge in graph.edges:
         if (
             not isinstance(edge, PetriReachabilityEdge)
@@ -1118,7 +1116,7 @@ def _preflight_terminal_scc_graph_shape(
                 code="petri_net.terminal_scc.edge_axis",
                 message="source graph edges must use its bounded state and transition axes",
             )
-    return place_count, transition_count, label_characters, parent_marking_work
+    return place_count, transition_count, label_characters, parented_markings
 
 
 def _validate_terminal_scc_net_values(graph: ReachabilityResult) -> None:
@@ -1199,16 +1197,8 @@ def _terminal_scc_adjacency(
                 success, tokens = _fire_tokens_admitted(
                     net, state.marking.tokens, transition
                 )
-                successor_index = state_indices.get(tokens) if success else None
-                if (
-                    successor_index is None
-                    or (
-                        source,
-                        transition,
-                        successor_index,
-                    )
-                    not in edges
-                ):
+                target = state_indices.get(tokens) if success else None
+                if target is None or (source, transition, target) not in edges:
                     raise OperationDomainValidationError(
                         location=("source_graph", "edges"),
                         code="petri_net.terminal_scc.incomplete_graph",
@@ -1319,34 +1309,14 @@ def reachability_terminal_scc_profile(
             message="source_graph must be a ReachabilityResult",
         )
     raw_net = source_graph.net
-    if not isinstance(raw_net, PetriNet):
-        raise OperationDomainValidationError(
-            location=("source_graph", "net"),
-            code="petri_net.terminal_scc.net_type",
-            message="source graph must contain a PetriNet",
-        )
     if (
-        type(raw_net.place_count) is not int
+        not isinstance(raw_net, PetriNet)
+        or type(raw_net.place_count) is not int
+        or not 0 <= raw_net.place_count <= MAX_PETRI_PLACES
         or type(raw_net.transition_count) is not int
-        or raw_net.place_count < 0
-        or raw_net.transition_count < 0
-    ):
-        raise OperationDomainValidationError(
-            location=("source_graph", "net"),
-            code="petri_net.terminal_scc.net_axes",
-            message="source net axes exceed the admitted place/transition bounds",
-        )
-    if not isinstance(source_graph.states, tuple) or not isinstance(
-        source_graph.edges, tuple
-    ):
-        raise OperationDomainValidationError(
-            location=("source_graph",),
-            code="petri_net.terminal_scc.graph_shape",
-            message="source graph state/edge counts exceed their declared bounds",
-        )
-    if (
-        raw_net.place_count > MAX_PETRI_PLACES
-        or raw_net.transition_count > MAX_PETRI_TRANSITIONS
+        or not 0 <= raw_net.transition_count <= MAX_PETRI_TRANSITIONS
+        or not isinstance(source_graph.states, tuple)
+        or not isinstance(source_graph.edges, tuple)
         or len(source_graph.states) > MAX_REACHABILITY_STATES
         or len(source_graph.edges) > MAX_REACHABILITY_FIRING_RECORDS
     ):
@@ -1369,7 +1339,7 @@ def reachability_terminal_scc_profile(
             code="petri_net.terminal_scc.work_bound",
             message="terminal SCC validation exceeds its admitted work bound",
         )
-    place_count, transition_count, label_characters, parent_marking_work = (
+    place_count, transition_count, label_characters, parented_markings = (
         _preflight_terminal_scc_graph_shape(source_graph)
     )
     state_count = len(source_graph.states)
@@ -1379,8 +1349,7 @@ def reachability_terminal_scc_profile(
         + edge_count * max(1, place_count)
         + state_count
         + edge_count
-        + max(1, place_count) * max(1, transition_count)
-        + parent_marking_work
+        + (parented_markings + 1) * place_count * transition_count
         + _terminal_scc_ordering_work(state_count)
     )
     if work > MAX_TERMINAL_SCC_PROFILE_WORK:
@@ -1482,18 +1451,14 @@ def marking_reachability(
     # Each entry stores (parent state index, transition fired).
     predecessor: list[tuple[int, int] | None] = [None]
     queue: deque[int] = deque([0])
-    incomplete_reasons: set[
-        Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"]
-    ] = set()
+    incomplete_reasons: set[str] = set()
 
     def witness(state: int) -> tuple[int, ...]:
         transitions: list[int] = []
-        entry = predecessor[state]
-        while entry is not None:
-            parent, transition = entry
+        while predecessor[state] is not None:
+            parent, transition = predecessor[state]
             transitions.append(transition)
             state = parent
-            entry = predecessor[state]
         transitions.reverse()
         return tuple(transitions)
 

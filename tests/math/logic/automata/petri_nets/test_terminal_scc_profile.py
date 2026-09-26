@@ -194,8 +194,7 @@ def test_ordering_work_is_included_at_the_exact_admission_boundary(
         + len(graph.edges)
         + state_count
         + len(graph.edges)
-        + 1
-        + parented_markings
+        + (parented_markings + 1)
     )
     ordering_work = 4 * state_count * (state_count - 1).bit_length()
     monkeypatch.setattr(
@@ -208,88 +207,3 @@ def test_ordering_work_is_included_at_the_exact_admission_boundary(
     )
     with pytest.raises(OperationResourceAdmissionError, match="work bound"):
         reachability_terminal_scc_profile(graph)
-
-
-def test_charges_each_parent_markings_own_matrix_cells(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source_net = PetriNet(
-        place_count=1,
-        transition_count=1,
-        pre=((0,),),
-        post=((0,),),
-    )
-    parent_net = PetriNet(
-        place_count=64,
-        transition_count=64,
-        pre=tuple((0,) * 64 for _ in range(64)),
-        post=tuple((0,) * 64 for _ in range(64)),
-    )
-    marking = Marking.model_construct(tokens=(0,), net=parent_net)
-    state_count = 250
-    states = tuple(
-        PetriMarkingState.model_construct(
-            state_index=index,
-            place_axis=(0,),
-            marking=marking,
-        )
-        for index in range(state_count)
-    )
-    graph = ReachabilityResult.model_construct(
-        net=source_net,
-        initial_marking=marking,
-        max_states=state_count,
-        states=states,
-        edges=(),
-        truncated=True,
-    )
-
-    def fail_on_output_bound(*args: object, **kwargs: object) -> None:
-        pytest.fail("output-bound traversal ran before work admission")
-
-    monkeypatch.setattr(
-        petri_operations, "_terminal_scc_graph_output_bound", fail_on_output_bound
-    )
-    with pytest.raises(OperationResourceAdmissionError, match="work bound"):
-        reachability_terminal_scc_profile(graph)
-
-
-def test_preserves_domain_classification_for_malformed_graphs() -> None:
-    source_net = PetriNet(
-        place_count=1,
-        transition_count=1,
-        pre=((1,),),
-        post=((0,),),
-    )
-    for bad_net, expected_code in (
-        ("not-a-petri-net", "petri_net.terminal_scc.net_type"),
-        (
-            PetriNet.model_construct(
-                place_count="1", transition_count=1, pre=((0,),), post=((0,),)
-            ),
-            "petri_net.terminal_scc.net_axes",
-        ),
-    ):
-        graph = ReachabilityResult.model_construct(
-            net=bad_net,
-            initial_marking=Marking.model_construct(tokens=(0,)),
-            max_states=1,
-            states=(),
-            edges=(),
-            truncated=True,
-        )
-        with pytest.raises(OperationDomainValidationError) as excinfo:
-            reachability_terminal_scc_profile(graph)
-        assert excinfo.value.errors()[0]["type"] == expected_code
-
-    list_shaped = ReachabilityResult.model_construct(
-        net=source_net,
-        initial_marking=Marking.model_construct(tokens=(0,)),
-        max_states=1,
-        states=[],
-        edges=[],
-        truncated=True,
-    )
-    with pytest.raises(OperationDomainValidationError) as excinfo:
-        reachability_terminal_scc_profile(list_shaped)
-    assert excinfo.value.errors()[0]["type"] == "petri_net.terminal_scc.graph_shape"

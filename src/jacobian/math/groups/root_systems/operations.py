@@ -90,6 +90,7 @@ from jacobian.math.groups.root_systems._models import (
     WeightLatticeVector,
     WeylBruhatIntervalResult,
     WeylDescentsResult,
+    WeylDominantRepresentativeResult,
     WeylElement,
     WeylElementLengthResult,
     WeylElementOrderResult,
@@ -1898,9 +1899,16 @@ def _fraction_inverse(
 
 
 def _weight_coordinate_bounds(
-    rows: tuple[tuple[int, ...], ...], weight: tuple[int, ...]
+    rows: tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...],
+    *,
+    enforce_interoperable_bound: bool = True,
 ) -> tuple[int, ...]:
-    """Bound every Weyl image coordinate using its invariant exact norm."""
+    """Bound every Weyl image coordinate using its invariant exact norm.
+
+    A normalization path may temporarily exceed the public coordinate limit;
+    only its input and returned dominant weight use that representation.
+    """
     rank = len(rows)
     symmetrizer = positive_symmetrizer(rows)
     inverse_cartan = _fraction_inverse(
@@ -1924,7 +1932,7 @@ def _weight_coordinate_bounds(
     bounds: list[int] = []
     for index in range(rank):
         coordinate_bound_squared = norm_squared * inverse_gram[index][index]
-        if coordinate_bound_squared > limit_squared:
+        if enforce_interoperable_bound and coordinate_bound_squared > limit_squared:
             raise OperationDomainValidationError(
                 location=("weight",),
                 code="root_system.weight_orbit_coordinate_bound",
@@ -1939,9 +1947,17 @@ def _weight_coordinate_bounds(
 
 
 def _dominant_weight(
-    rows: tuple[tuple[int, ...], ...], weight: tuple[int, ...]
+    rows: tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...],
+    *,
+    word: list[int] | None = None,
+    max_steps: int = MAX_WEIGHT_ORBIT_SIZE,
+    bound_code: str = "root_system.weight_orbit_size_bound",
+    bound_message: str = (
+        f"the complete weight orbit exceeds {MAX_WEIGHT_ORBIT_SIZE} values"
+    ),
 ) -> tuple[int, ...]:
-    """Reflect a weight into the closed dominant chamber under a fixed cap."""
+    """Reflect into the dominant chamber, optionally recording its word."""
     dominant = weight
     normalization_steps = 0
     while True:
@@ -1950,14 +1966,131 @@ def _dominant_weight(
         )
         if negative is None:
             return dominant
-        if normalization_steps >= MAX_WEIGHT_ORBIT_SIZE:
+        if normalization_steps >= max_steps:
             raise OperationDomainValidationError(
                 location=("weight",),
-                code="root_system.weight_orbit_size_bound",
-                message=f"the complete weight orbit exceeds {MAX_WEIGHT_ORBIT_SIZE} values",
+                code=bound_code,
+                message=bound_message,
             )
         dominant = _weight_reflect(dominant, negative, rows)
+        if word is not None:
+            word.append(negative)
         normalization_steps += 1
+
+
+def weyl_dominant_representative(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...] | list[int],
+) -> WeylDominantRepresentativeResult:
+    """Return the dominant representative and a Weyl element mapping to it."""
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    if isinstance(weight, list):
+        weight = tuple(weight)
+    if (
+        not isinstance(weight, tuple)
+        or len(weight) != rank
+        or any(
+            type(coordinate) is not int
+            or abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+            for coordinate in weight
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.invalid_integral_weight",
+            message=(
+                "weight must have one bounded integer fundamental-weight "
+                "coordinate per simple coroot"
+            ),
+        )
+
+    if all(coordinate >= 0 for coordinate in weight):
+        dominant_value = weight_lattice_vector(cartan, weight)
+        element = WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank,
+                column_count=rank,
+                entries=tuple(
+                    tuple(int(i == j) for j in range(rank)) for i in range(rank)
+                ),
+            ),
+        )
+        return WeylDominantRepresentativeResult._from_kernel(
+            cartan, dominant_value, dominant_value, element
+        )
+
+    # The full-orbit norm envelope can exceed representable coordinates even
+    # when the deterministic normalization path stays within bounds. Check the
+    # actual path before expanding it; each reflection is integral and bounded
+    # work is enforced by the word limit below.
+    work_bound = MAX_WEYL_WORD_LENGTH * rank**3
+    output_bytes_bound = rank * rank * 16 + rank * 32 + 2048
+    if work_bound > 1_000_000 or output_bytes_bound > 16_384:
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.dominant_representative_bounds",
+            message="the dominant representative and transporter exceed the admitted work or output envelope",
+        )
+
+    # The invariant positive-definite norm bounds *all* intermediate Weyl
+    # images without imposing the wire limit on private reflection prefixes.
+    intermediate_bounds = _weight_coordinate_bounds(
+        rows, weight, enforce_interoperable_bound=False
+    )
+    word: list[int] = []
+    dominant = weight
+    for _ in range(MAX_WEYL_WORD_LENGTH + 1):
+        negative = next((i for i, value in enumerate(dominant) if value < 0), None)
+        if negative is None:
+            break
+        dominant = _weight_reflect(dominant, negative, rows)
+        if any(
+            abs(value) > bound
+            for value, bound in zip(dominant, intermediate_bounds, strict=True)
+        ):
+            raise RuntimeError("Weyl reflection exceeded its invariant norm bound")
+        word.append(negative)
+    else:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.dominant_representative_word_bound",
+            message=(
+                "the dominant transporter exceeds the admitted "
+                f"{MAX_WEYL_WORD_LENGTH}-reflection word bound"
+            ),
+        )
+    if any(abs(value) > MAX_REFLECTION_REPRESENTABLE for value in dominant):
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.dominant_representative_coordinate_bound",
+            message="the dominant weight exceeds the interoperable integer bound",
+        )
+    root_action = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    for index in word:
+        reflection = _reflection_matrix(rows, index, transpose=False)
+        root_action = _integer_matrix_product(
+            [list(row) for row in reflection], root_action
+        )
+    element = WeylElement.model_construct(
+        matrix=cartan,
+        root_action=IntegerMatrix(
+            row_count=rank,
+            column_count=rank,
+            entries=root_action,
+        ),
+    )
+    return WeylDominantRepresentativeResult._from_kernel(
+        cartan,
+        weight_lattice_vector(cartan, weight),
+        weight_lattice_vector(cartan, dominant),
+        element,
+    )
 
 
 def _stabilizer_order(
@@ -2306,6 +2439,7 @@ __all__ = [
     "simple_reflection",
     "simple_reflections",
     "weight_lattice_vector",
+    "weyl_dominant_representative",
     "weyl_element_descents",
     "weyl_element_length",
     "weyl_group_order",

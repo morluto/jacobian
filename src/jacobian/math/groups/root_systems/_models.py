@@ -1281,6 +1281,74 @@ class WeylWeightOrbitResult(StrictModel):
         return cls.model_construct(matrix=matrix, weight=weight, orbit=orbit)
 
 
+class WeylDominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight in fundamental-weight coordinates."""
+
+    weight: tuple[
+        Annotated[
+            int,
+            Field(ge=-MAX_REFLECTION_REPRESENTABLE, le=MAX_REFLECTION_REPRESENTABLE),
+        ],
+        ...,
+    ] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description=(
+            "Fundamental-weight coordinates; length must equal Cartan rank, "
+            f"and each integer must lie in [-{MAX_REFLECTION_REPRESENTABLE}, "
+            f"{MAX_REFLECTION_REPRESENTABLE}]."
+        ),
+    )
+
+
+class WeylDominantRepresentativeResult(StrictModel):
+    """The dominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: WeightLatticeVector
+    dominant_weight: WeightLatticeVector
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_dominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            self.weight.datum.cartan_matrix != self.matrix
+            or self.dominant_weight.datum.cartan_matrix != self.matrix
+            or len(self.weight.coordinates) != rank
+            or len(self.dominant_weight.coordinates) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (
+                    *self.weight.coordinates,
+                    *self.dominant_weight.coordinates,
+                )
+            )
+            or any(value < 0 for value in self.dominant_weight.coordinates)
+        ):
+            raise _validation_error(
+                "dominant_representative_shape",
+                "the source, dominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: WeightLatticeVector,
+        dominant_weight: WeightLatticeVector,
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            dominant_weight=dominant_weight,
+            element=element,
+        )
+
+
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 

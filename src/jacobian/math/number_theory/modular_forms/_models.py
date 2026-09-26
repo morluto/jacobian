@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -24,6 +24,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormFramedCoordinates,
     ModularFormOperatorImage,
     ModularFormSpace,
+    ModularFormSpaceInclusion,
 )
 
 
@@ -111,10 +112,30 @@ class ModularFormCoordinatesFieldExtensionRequest(StrictModel):
 
 
 class ModularFormCoordinatesTransportRequest(StrictModel):
-    """Transport exact coordinates along a nested trivial-character Gamma0 inclusion."""
+    """Transport exact coordinates along a typed Gamma0 inclusion."""
 
     form: ModularFormCoordinates
+    inclusion: ModularFormSpaceInclusion
+
+
+class ModularFormSpaceInclusionRequest(StrictModel):
+    """Construct the natural inclusion between two supported Gamma0 spaces."""
+
+    source_space: ModularFormSpace
     target_space: ModularFormSpace
+
+
+class ModularFormEqualityRequest(StrictModel):
+    """Compare two complete modular forms represented in supported spaces."""
+
+    left: ModularFormCoordinates
+    right: ModularFormCoordinates
+
+
+class ModularFormEqualityResult(StrictModel):
+    """Exact equality result for two represented modular forms."""
+
+    equal: StrictBool
 
 
 class ModularFormCoordinatesHeckeRequest(StrictModel):
@@ -330,10 +351,13 @@ __all__ = [
     "ModularFormCoordinatesUPrimeRequest",
     "ModularFormCoordinatesV2Request",
     "ModularFormCoordinatesV3Request",
+    "ModularFormEqualityRequest",
+    "ModularFormEqualityResult",
     "ModularFormFramedHeckeMatrixRequest",
     "ModularFormHeckeMatrixRequest",
     "ModularFormOperatorImagePrefixRequest",
     "ModularFormOperatorImageRequest",
+    "ModularFormSpaceInclusionRequest",
     "SpaceDimensionRequest",
     "SpaceDimensionResult",
 ]

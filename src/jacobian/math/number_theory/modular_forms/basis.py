@@ -53,7 +53,9 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormOperatorImage,
     ModularFormOperatorImagePrefix,
     ModularFormSpace,
+    ModularFormSpaceInclusion,
     ModularQExpansion,
+    natural_gamma0_inclusion_issue,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
 
@@ -1386,8 +1388,219 @@ def _require_canonical_coordinate_space(
         )
 
 
+def modular_form_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Decide exact equality in a shared supported modular-form ambient space."""
+
+    if not isinstance(left, ModularFormCoordinates) or not isinstance(
+        right, ModularFormCoordinates
+    ):
+        raise OperationDomainValidationError(
+            location=(),
+            code="modular_form.coordinates_type",
+            message="both operands must be exact modular-form coordinate values",
+        )
+    for side, form in (("left", left), ("right", right)):
+        _require_canonical_coordinate_space(form, side)
+    if left.space == right.space:
+        if left.space.coefficient_domain != "QQ":
+            if left.space.character != "TRIVIAL":
+                from jacobian.math.number_theory.modular_forms.character_basis import (
+                    modular_character_coordinates_equal,
+                )
+
+                return modular_character_coordinates_equal(left, right)
+            from jacobian.math.number_theory.modular_forms.field_coordinates import (
+                modular_form_field_coordinates_equal,
+            )
+
+            return modular_form_field_coordinates_equal(left, right)
+        plan_precision = (
+            sturm_bound(left.space).bound + 1 if left.space.level > 4 else 1
+        )
+        plan = _admit_basis(left.space, plan_precision, materialize_pari=False)
+        _, left_coordinates = _admit_coordinates(
+            left,
+            plan_precision,
+            admitted_plan=plan,
+            materialize_pari=False,
+            check_expansion_growth=False,
+        )
+        _, right_coordinates = _admit_coordinates(
+            right,
+            plan_precision,
+            admitted_plan=plan,
+            materialize_pari=False,
+            check_expansion_growth=False,
+        )
+        return left_coordinates == right_coordinates
+
+    left_space = left.space
+    right_space = right.space
+    if (
+        left_space.character != "TRIVIAL"
+        or right_space.character != "TRIVIAL"
+        or left_space.coefficient_domain != "QQ"
+        or right_space.coefficient_domain != "QQ"
+    ):
+        raise OperationDomainValidationError(
+            location=("right", "space"),
+            code="modular_form.equality_parent_unsupported",
+            message=(
+                "cross-space equality currently requires rational "
+                "trivial-character forms"
+            ),
+        )
+    if left_space.weight != right_space.weight:
+        raise OperationDomainValidationError(
+            location=("right", "space", "weight"),
+            code="modular_form.equality_weight_mismatch",
+            message="cross-space equality requires equal weights",
+        )
+
+    # Both forms embed into M_k(Gamma0(lcm(N1,N2))). The Sturm theorem there
+    # makes equality of this finite prefix equivalent to equality of forms;
+    # cusp forms embed in its ambient holomorphic space as well.
+    common_level = (
+        left_space.level * right_space.level // gcd(left_space.level, right_space.level)
+    )
+    common_space = ModularFormSpace(
+        level=common_level, weight=left_space.weight, kind="M"
+    )
+    precision = sturm_bound(common_space).bound + 1
+    left_plan = _admit_basis(left_space, precision, materialize_pari=False)
+    right_plan = _admit_basis(right_space, precision, materialize_pari=False)
+    _, left_coordinates = _admit_coordinates(
+        left, precision, admitted_plan=left_plan, materialize_pari=False
+    )
+    _, right_coordinates = _admit_coordinates(
+        right, precision, admitted_plan=right_plan, materialize_pari=False
+    )
+
+    # Admit both basis materializations and the two exact linear combinations
+    # together, before either PARI expansion. Rational sums of d products with
+    # coordinate height C and basis coefficient height B have height at most
+    # d(C+B)+digits(d)+2.
+    combined_work = (
+        left_plan.work
+        + right_plan.work
+        + precision * (left_plan.dimension + right_plan.dimension)
+    )
+    combined_basis_bytes = sum(
+        plan.dimension * precision * (2 * plan.rref_digit_bound + 32)
+        if plan.basis_id == PARI_STURM_RREF_BASIS_ID
+        else plan.dimension * precision * (plan.coefficient_digits + 8)
+        for plan in (left_plan, right_plan)
+    )
+    if combined_work > MAX_PARI_BASIS_WORK:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.equality_work_bound",
+            message="combined equality basis and coefficient work exceeds its envelope",
+        )
+    if combined_basis_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.equality_basis_output_bound",
+            message="combined equality basis output exceeds its exact envelope",
+        )
+    expansion_digit_bounds = []
+    for plan, coordinates in (
+        (left_plan, left_coordinates),
+        (right_plan, right_coordinates),
+    ):
+        coordinate_digits = max(
+            (
+                max(
+                    len(format_canonical_integer(abs(value.numerator))),
+                    len(format_canonical_integer(value.denominator)),
+                )
+                for value in coordinates
+            ),
+            default=1,
+        )
+        expansion_digit_bounds.append(
+            plan.dimension * (coordinate_digits + plan.coefficient_digits)
+            + len(str(max(1, plan.dimension)))
+            + 2
+        )
+    max_expansion_digits = max(expansion_digit_bounds, default=1)
+    combined_expansion_bytes = 2 * precision * (2 * max_expansion_digits + 32)
+    if max_expansion_digits > MAX_COORDINATE_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.equality_coefficient_growth",
+            message="common Sturm prefix coefficient growth exceeds its exact envelope",
+        )
+    if combined_expansion_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="modular_form.equality_output_bound",
+            message="common Sturm comparison exceeds its exact output envelope",
+        )
+
+    request_checkpoint("before common-space equality basis materialization")
+    if left_plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        left_plan = _materialize_pari_basis(left_plan)
+    if right_plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        right_plan = _materialize_pari_basis(right_plan)
+    left_basis = _basis_coefficients(left_plan)
+    right_basis = _basis_coefficients(right_plan)
+    left_expansion = tuple(
+        sum(
+            (
+                scalar * basis[index]
+                for scalar, basis in zip(left_coordinates, left_basis, strict=True)
+            ),
+            Fraction(0),
+        )
+        for index in range(precision)
+    )
+    right_expansion = tuple(
+        sum(
+            (
+                scalar * basis[index]
+                for scalar, basis in zip(right_coordinates, right_basis, strict=True)
+            ),
+            Fraction(0),
+        )
+        for index in range(precision)
+    )
+    request_checkpoint("after exact common-space equality comparison")
+    return left_expansion == right_expansion
+
+
+def modular_form_space_inclusion(
+    source_space: ModularFormSpace, target_space: ModularFormSpace
+) -> ModularFormSpaceInclusion:
+    """Construct the natural supported inclusion of nested Gamma0 spaces."""
+
+    issue = natural_gamma0_inclusion_issue(
+        "natural_gamma0_level_inclusion", source_space, target_space
+    )
+    if issue is not None:
+        reason, message = issue
+        location = ("source_space",)
+        if reason.startswith("inclusion_target_") or reason in (
+            "inclusion_weight",
+            "inclusion_level",
+        ):
+            location = ("target_space",)
+        raise OperationDomainValidationError(
+            location=location,
+            code=f"modular_form.inclusion_{reason}",
+            message=message,
+        )
+    return ModularFormSpaceInclusion.model_construct(
+        map_kind="natural_gamma0_level_inclusion",
+        source_space=source_space,
+        target_space=target_space,
+    )
+
+
 def modular_form_coordinates_transport(
-    form: ModularFormCoordinates, target_space: ModularFormSpace
+    form: ModularFormCoordinates, inclusion: ModularFormSpaceInclusion
 ) -> ModularFormCoordinates:
     """Express a rational trivial-character form in a nested Gamma0 space.
 
@@ -1402,49 +1615,58 @@ def modular_form_coordinates_transport(
             code="modular_form.transport_form_type",
             message="form must be an exact modular-form coordinate value",
         )
-    if not isinstance(target_space, ModularFormSpace):
+    if type(inclusion) is not ModularFormSpaceInclusion:
         raise OperationDomainValidationError(
-            location=("target_space",),
-            code="modular_form.transport_target_type",
-            message="target_space must be an exact modular-form space value",
+            location=("inclusion",),
+            code="modular_form.transport_inclusion_type",
+            message="inclusion must be an exact modular-form space inclusion value",
+        )
+    required_fields = ("map_kind", "source_space", "target_space")
+    if any(not hasattr(inclusion, field) for field in required_fields):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="modular_form.transport_inclusion_incomplete",
+            message="inclusion must contain its map kind, source space, and target space",
         )
     source_space = form.space
-    if (
-        source_space.character != "TRIVIAL"
-        or target_space.character != "TRIVIAL"
-        or source_space.coefficient_domain != "QQ"
-        or target_space.coefficient_domain != "QQ"
+    for endpoint_name, endpoint in (
+        ("source_space", inclusion.source_space),
+        ("target_space", inclusion.target_space),
     ):
+        if any(
+            not hasattr(endpoint, field)
+            for field in (
+                "group",
+                "character",
+                "coefficient_domain",
+                "level",
+                "weight",
+                "kind",
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("inclusion", endpoint_name),
+                code="modular_form.transport_inclusion_space_incomplete",
+                message="inclusion spaces must contain all required fields",
+            )
+    issue = natural_gamma0_inclusion_issue(
+        inclusion.map_kind, inclusion.source_space, inclusion.target_space
+    )
+    if issue is not None:
+        reason, message = issue
         raise OperationDomainValidationError(
-            location=("target_space",),
-            code="modular_form.transport_parent_unsupported",
-            message="coordinate transport currently supports QQ trivial-character spaces only",
+            location=("inclusion",),
+            code=f"modular_form.transport_inclusion_{reason}",
+            message=message,
         )
-    if source_space.weight != target_space.weight:
+    if source_space != inclusion.source_space:
         raise OperationDomainValidationError(
-            location=("target_space", "weight"),
-            code="modular_form.transport_weight_mismatch",
-            message="source and target weights must agree",
+            location=("inclusion", "source_space"),
+            code="modular_form.transport_source_mismatch",
+            message="inclusion source must equal the coordinate form space",
         )
-    if source_space.level <= 0 or target_space.level <= 0:
-        raise OperationDomainValidationError(
-            location=("target_space", "level"),
-            code="modular_form.transport_level_value",
-            message="source and target levels must be positive",
-        )
-    if target_space.level % source_space.level:
-        raise OperationDomainValidationError(
-            location=("target_space", "level"),
-            code="modular_form.transport_level_not_nested",
-            message="source Gamma0 level must divide the target level",
-        )
-    if source_space.kind == "M" and target_space.kind == "S":
-        raise OperationDomainValidationError(
-            location=("target_space", "kind"),
-            code="modular_form.transport_kind_not_nested",
-            message="the full holomorphic space does not embed into the cuspidal subspace",
-        )
-
+    target_space = inclusion.target_space
+    source_space = form.space
     target_precision = sturm_bound(target_space).bound + 1
     # Admitting the source at the target's determining precision also proves
     # the source representation can supply every target comparison term.
@@ -1469,7 +1691,7 @@ def modular_form_coordinates_transport(
     total_work += solve_work
     if total_work > MAX_PARI_BASIS_WORK:
         raise OperationResourceAdmissionError(
-            location=("target_space",),
+            location=("inclusion", "target_space"),
             code="modular_form.transport_work_bound",
             message="combined source and target basis work exceeds the transport envelope",
         )
@@ -1506,7 +1728,7 @@ def modular_form_coordinates_transport(
     allocation_bytes = target_plan.dimension * (2 * result_digit_bound + 32) + 512
     if allocation_bytes > MAX_PARI_BASIS_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
-            location=("target_space",),
+            location=("inclusion", "target_space"),
             code="modular_form.transport_output_bound",
             message="transport coordinates exceed the exact output-byte envelope",
         )
@@ -3341,6 +3563,7 @@ __all__ = [
     "GAMMA0_TWO_BASIS_ID",
     "modular_form_basis_q_expansions",
     "modular_form_coordinates_atkin_lehner",
+    "modular_form_coordinates_equal",
     "modular_form_coordinates_hecke",
     "modular_form_coordinates_q_expansion",
     "modular_form_coordinates_u2",

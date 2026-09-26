@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
@@ -18,6 +19,7 @@ from jacobian.math.geometry.polytopes.values import (
     RationalHPolyhedron,
     RationalPolyhedronVPresentation,
 )
+from jacobian.math.geometry.polytopes._polyhedral_conversion import rational_rank
 
 MAX_TROPICAL_SCALAR_DIGITS = 8_192
 MAX_TROPICAL_VECTOR_DIMENSION = 128
@@ -639,6 +641,72 @@ class TropicalPolynomialEssentialPart(StrictModel):
             raise _validation_error(
                 "essential_part_face_incidence",
                 "each lifted source face must map to its finite-normal parent faces",
+            )
+        if any(
+            term.coefficient.kind != "FINITE" or term.coefficient.value is None
+            for term in self.source.terms
+        ):
+            raise _validation_error(
+                "essential_part_source_height",
+                "lifted hull incidence requires finite source coefficients",
+            )
+        points = tuple(
+            (
+                *(Fraction(exponent) for exponent in term.exponents),
+                Fraction(term.coefficient.value.num, term.coefficient.value.den),
+            )
+            for term in self.source.terms
+        )
+
+        def support_dimension(indices: tuple[int, ...]) -> int:
+            if len(indices) < 2:
+                return 0
+            origin = points[indices[0]]
+            rows = [
+                [points[index][axis] - origin[axis] for axis in range(len(origin))]
+                for index in indices[1:]
+            ]
+            return rational_rank(rows, len(origin))
+
+        def matches_support(face: TropicalEssentialLiftedFace) -> bool:
+            normal = tuple(
+                Fraction(component.num, component.den) for component in face.normal
+            )
+            offset = Fraction(face.offset.num, face.offset.den)
+            values = tuple(
+                sum((a * b for a, b in zip(normal, point, strict=True)), Fraction(0))
+                for point in points
+            )
+            equality = tuple(i for i, value in enumerate(values) if value == offset)
+            return (
+                equality == face.source_term_indices
+                and support_dimension(equality) == face.dimension
+                and (
+                    all(value <= offset for value in values)
+                    or all(value >= offset for value in values)
+                )
+            )
+
+        if (
+            any(not matches_support(face) for face in self.hull_facets)
+            or any(not matches_support(face) for face in self.finite_faces)
+            or any(
+                face.face_index is not None
+                and (
+                    face.face_index >= len(self.hull_facets)
+                    or face != self.hull_facets[face.face_index]
+                )
+                for face in self.finite_faces
+            )
+            or any(
+                support_dimension(face.source_term_indices) != face.dimension
+                for face in self.face_incidence
+            )
+            or support_dimension(all_indices) != self.lifted_affine_dimension
+        ):
+            raise _validation_error(
+                "essential_part_face_geometry",
+                "lifted face equations, incidence, dimensions, and hull indices must match the source points",
             )
         return self
 

@@ -10,6 +10,7 @@ from pydantic import (
     StrictBool,
     StrictInt,
     StringConstraints,
+    ValidationError,
     model_validator,
 )
 from pydantic_core import PydanticCustomError
@@ -925,7 +926,14 @@ class GaugeLoopFamilyRequest(StrictModel):
     """Evaluate an explicit finite family of loops over one permutation field."""
 
     field: GaugeField
-    loops: tuple[OrientedGaugePath, ...] = Field(max_length=MAX_GAUGE_LOOP_FAMILY_SIZE)
+    loops: tuple[OrientedGaugePath, ...] = Field(
+        max_length=MAX_GAUGE_LOOP_FAMILY_SIZE,
+        description=(
+            f"At most {MAX_GAUGE_LOOP_FAMILY_SIZE} loops, each with at most "
+            f"{MAX_GAUGE_PATH_LENGTH} steps and at most "
+            f"{MAX_GAUGE_LOOP_FAMILY_STEPS} steps total across the family."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -963,7 +971,14 @@ class GaugeLoopFamilyHolonomies(StrictModel):
     """Holonomies of explicit loops, bound to one source field exactly once."""
 
     field: GaugeField
-    loops: tuple[GaugeLoopHolonomy, ...] = Field(max_length=MAX_GAUGE_LOOP_FAMILY_SIZE)
+    loops: tuple[GaugeLoopHolonomy, ...] = Field(
+        max_length=MAX_GAUGE_LOOP_FAMILY_SIZE,
+        description=(
+            f"At most {MAX_GAUGE_LOOP_FAMILY_SIZE} loops, each with at most "
+            f"{MAX_GAUGE_PATH_LENGTH} steps and at most "
+            f"{MAX_GAUGE_LOOP_FAMILY_STEPS} steps total across the family."
+        ),
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -973,21 +988,24 @@ class GaugeLoopFamilyHolonomies(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:
-        if (
-            not isinstance(self.field, GaugeField)
-            or not isinstance(self.field.lattice, GaugeLattice)
-            or type(self.loops) is not tuple
-            or any(not isinstance(edge, GaugeEdge) for edge in self.field.lattice.edges)
-        ):
+        try:
+            field = GaugeField.model_validate(self.field.model_dump())
+            if type(self.loops) is not tuple:
+                raise ValueError("loops must be a tuple")
+            loops = tuple(
+                GaugeLoopHolonomy.model_validate(entry.model_dump())
+                for entry in self.loops
+            )
+        except (AttributeError, TypeError, ValueError, ValidationError):
             raise _validation_error("loop_family_parent", "loop-family source is malformed")
-        lattice = self.field.lattice
+        lattice = field.lattice
         by_edge = {edge.edge_id: edge for edge in lattice.edges}
         if type(self.field.degree) is not int or not 1 <= self.field.degree <= 8:
             raise _validation_error(
                 "loop_family_degree", "source field has an invalid permutation degree"
             )
         total_steps = 0
-        for entry in self.loops:
+        for entry in loops:
             if (
                 not isinstance(entry, GaugeLoopHolonomy)
                 or not isinstance(entry.path, OrientedGaugePath)
@@ -1015,9 +1033,9 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                     "aggregate loop-family paths may contain at most 4096 steps",
                 )
             if (
-                entry.holonomy.degree != self.field.degree
-                or len(entry.holonomy.image) != self.field.degree
-                or sorted(entry.holonomy.image) != list(range(self.field.degree))
+                entry.holonomy.degree != field.degree
+                or len(entry.holonomy.image) != field.degree
+                or sorted(entry.holonomy.image) != list(range(field.degree))
             ):
                 raise _validation_error(
                     "loop_family_holonomy",
@@ -1060,7 +1078,7 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                     "loop_family_closed",
                     "each result path must be a closed loop at its retained basepoint",
                 )
-        if _loop_family_output_units(self.field, self.loops) > (
+        if _loop_family_output_units(field, loops) > (
             MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS
         ):
             raise _validation_error(

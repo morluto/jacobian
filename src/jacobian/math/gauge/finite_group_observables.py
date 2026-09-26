@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -38,8 +38,14 @@ class FiniteGroupConjugacyProfile(StrictModel):
 
     @model_validator(mode="after")
     def require_canonical_summary(self) -> FiniteGroupConjugacyProfile:
+        try:
+            loop = FiniteGroupGaugeHolonomyResult.model_validate(
+                self.loop.model_dump()
+            )
+        except (AttributeError, TypeError, ValueError, ValidationError):
+            raise ValueError("conjugacy profile must retain a canonical loop") from None
         indices = self.conjugate_indices
-        order = len(self.loop.field.group.multiplication)
+        order = len(loop.field.group.multiplication)
         if (
             type(indices) is not tuple
             or not indices

@@ -146,6 +146,7 @@ to another polynomial operation.
 
 ## Focused contracts
 
+- [Cubic resolvent of a monic quartic](quartic-cubic-resolvent.md)
 - [Exact cyclotomic polynomials](cyclotomic.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Rational discrete antiderivatives](rational-discrete-antiderivative.md)

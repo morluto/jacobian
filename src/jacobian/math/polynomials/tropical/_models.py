@@ -513,6 +513,17 @@ class BivariateRegularSubdivisionRequest(StrictModel):
         return self
 
 
+class EssentialPartRequest(StrictModel):
+    """Compute attained terms within the essential-part specific input envelope."""
+
+    polynomial: TropicalPolynomial = Field(
+        description=(
+            "Canonical tropical polynomial with at most 4 variables and 64 terms; "
+            "each finite coefficient is limited to 32 decimal digits."
+        )
+    )
+
+
 class BivariateHypersurfaceRequest(StrictModel):
     """Compute the complete bounded exact corner complex of one polynomial."""
 
@@ -729,6 +740,7 @@ __all__ = [
     "AssignmentResult",
     "BivariateHypersurfaceRequest",
     "BivariateRegularSubdivisionRequest",
+    "EssentialPartRequest",
     "FinitePowerSumResult",
     "InfinityCase",
     "MatrixAddRequest",

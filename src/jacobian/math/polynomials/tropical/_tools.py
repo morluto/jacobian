@@ -3,6 +3,7 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.polynomials.tropical._models import *  # noqa: F403
+from jacobian.math.polynomials.tropical.essential_part import compute_essential_part
 from jacobian.math.polynomials.tropical.hypersurface import (
     compute_bivariate_hypersurface,
 )
@@ -560,6 +561,47 @@ TOOLS: MathTools = (
                             {"exponents": [0], "coefficient": _finite(0)},
                             {"exponents": [1], "coefficient": _finite(2)},
                             {"exponents": [3], "coefficient": _finite(0)},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tropical.polynomial.essential_part.compute",
+        title="Compute the tie-inclusive attained part of a tropical polynomial",
+        description=(
+            "Return exactly the source monomials that attain the polynomial value "
+            "somewhere on the finite affine domain, including terms that only tie. "
+            "The result retains the source, equivalent subpolynomial, all lifted "
+            "facet incidences, affine-rank equations, and complete finite-normal "
+            "lower/upper face incidence. This bounded exact hull transform is not "
+            "the unique-region functional normal form. Inputs admit at most 4 "
+            "variables, 64 terms, and 32 decimal digits per coefficient. The "
+            "complete face-closure work is bounded before hull expansion."
+        ),
+        request_type=EssentialPartRequest,
+        result_type=TropicalPolynomialEssentialPart,
+        run=compute_essential_part,
+        tags=("tropical", "polynomial", "essential-part", "exact"),
+        examples=(
+            OperationExample(
+                name="tie_inclusive_square_support",
+                description=(
+                    "Retain all four square terms and the center term because they "
+                    "tie at the origin. Essential-part inputs are limited to 4 "
+                    "variables, 64 terms, and 32 decimal digits per coefficient."
+                ),
+                input={
+                    "polynomial": {
+                        "semiring": _s(),
+                        "variables": ["x", "y"],
+                        "terms": [
+                            {"exponents": [0, 0], "coefficient": _finite(0)},
+                            {"exponents": [0, 2], "coefficient": _finite(0)},
+                            {"exponents": [1, 1], "coefficient": _finite(0)},
+                            {"exponents": [2, 0], "coefficient": _finite(0)},
+                            {"exponents": [2, 2], "coefficient": _finite(0)},
                         ],
                     }
                 },

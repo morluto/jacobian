@@ -11,7 +11,9 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
+    twist_result_serialized_bytes,
 )
 from jacobian.math.combinatorics.matroids.delta._tools import (
     TOOLS,
@@ -109,6 +111,7 @@ def test_twist_request_publishes_admission_limits() -> None:
     assert limits["max_feasible_set_memberships"] == 16_384
     assert limits["max_ground_label_utf8_bytes"] == 2_048
     assert limits["max_symmetric_exchange_candidate_checks_per_replay"] == 250_000
+    assert limits["max_source_bound_result_compact_json_bytes"] == 1_000_000
     description = schema["properties"]["delta_matroid"]["description"]
     assert "16384" in description.replace(",", "")
     assert "2048" in description.replace(",", "")
@@ -117,7 +120,21 @@ def test_twist_request_publishes_admission_limits() -> None:
     request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
     result = _twist(request)
 
-    assert result == FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
+    assert result.delta_matroid == source
+    assert result.subset == (0,)
+    assert result.twisted == FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+    assert (
+        DeltaMatroidTwistResult.model_validate_json(result.model_dump_json()) == result
+    )
+    assert twist_result_serialized_bytes(source, (0,), result.twisted) == len(
+        result.model_dump_json().encode("utf-8")
+    )
+    twist_tool = next(
+        tool for tool in TOOLS if tool.operation_id == "delta_matroid.twist.compute"
+    )
+    assert twist_tool.result_type is DeltaMatroidTwistResult
     assert (
         DeltaMatroidTwistRequest.model_validate_json(request.model_dump_json())
         == request
@@ -393,11 +410,13 @@ def test_dense_twist_composes_with_width_and_inverse_twist() -> None:
     )
     subset = tuple(range(33))
     result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=subset))
-    restored = FiniteDeltaMatroid.model_validate_json(result.model_dump_json())
+    restored = DeltaMatroidTwistResult.model_validate_json(
+        result.model_dump_json()
+    ).twisted
     assert sum(map(len, restored.feasible)) == 1089
     assert _width(DeltaMatroidWidthRequest(delta_matroid=restored)).width == 1
     assert (
-        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset))
+        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset)).twisted
         == source
     )
 
@@ -427,9 +446,92 @@ def test_native_transforms_accept_canonical_mathematical_values() -> None:
 
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
     result = twist(source, (0,))
-    assert result == _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    bound = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    assert result == bound.twisted
     assert width(result) == _width(DeltaMatroidWidthRequest(delta_matroid=result)).width
     assert twist(result, (0,)) == source
+
+
+def test_twist_result_binds_exact_source_axis_and_row_bijection() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("left", "middle", "right"),
+        feasible=((), (0,), (0, 1), (0, 1, 2), (0, 2), (1,), (1, 2), (2,)),
+    )
+    subset = (0, 2)
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=subset))
+
+    assert result.delta_matroid.ground == result.twisted.ground == source.ground
+    assert set(result.twisted.feasible) == {
+        tuple(sorted(set(row) ^ set(subset))) for row in source.feasible
+    }
+    assert len(result.twisted.feasible) == len(source.feasible)
+
+
+def test_twist_result_composition_uses_symmetric_difference() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("a", "b", "c"), feasible=((), (0,), (0, 1), (1,))
+    )
+    first = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0, 2)))
+    second = _twist(
+        DeltaMatroidTwistRequest(delta_matroid=first.twisted, subset=(1, 2))
+    )
+    direct = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0, 1)))
+
+    assert second.twisted == direct.twisted
+
+
+def test_empty_twist_result_roundtrips_and_is_identity() -> None:
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source))
+
+    assert result.subset == ()
+    assert result.twisted == source
+    assert (
+        DeltaMatroidTwistResult.model_validate_json(result.model_dump_json()) == result
+    )
+
+
+def test_twist_result_json_rejects_a_different_ground_axis() -> None:
+    import json
+
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source))
+    payload = json.loads(result.model_dump_json())
+    payload["twisted"]["ground"] = ["different"]
+
+    with pytest.raises(ValueError, match="twisted delta-matroid must preserve"):
+        DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
+
+
+def test_twist_result_json_rejects_changed_feasible_family_cardinality() -> None:
+    import json
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    payload = json.loads(result.model_dump_json())
+    payload["twisted"]["feasible"] = [[], [0]]
+
+    with pytest.raises(ValueError, match="twisting must preserve the number"):
+        DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
+
+
+def test_twist_result_membership_admission_has_exact_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta.operations as operations_module
+    import jacobian.math.combinatorics.matroids.delta._tools as tools_module
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
+    # The twisted family has rows {0}, {}, and {0, 1}: exactly three
+    # memberships. Admission must accept that boundary and reject one below it.
+    monkeypatch.setattr(operations_module, "MAX_DELTA_MEMBERSHIPS", 3)
+    assert tools_module._twist(request).twisted.feasible == ((), (0,), (0, 1))
+
+    monkeypatch.setattr(operations_module, "MAX_DELTA_MEMBERSHIPS", 2)
+    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+        tools_module._twist(request)
 
 
 def test_even_subset_width_uses_linear_admission() -> None:

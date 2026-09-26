@@ -7,12 +7,14 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidDistanceRequest,
     DeltaMatroidDistanceResult,
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
 )
@@ -53,6 +55,7 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
+    canonical_feasible_rows,
 )
 
 
@@ -71,9 +74,24 @@ def _from_feasible_sets(
         ) from exc
 
 
-def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
+def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     try:
-        return twist(request.delta_matroid, request.subset)
+        # The source envelope bounds retained labels and memberships; twisting
+        # preserves row count and is admitted by its projected membership count.
+        # No transport-size serialization pass is needed before construction.
+        twisted = twist(request.delta_matroid, request.subset)
+        source = FiniteDeltaMatroid.model_construct(
+            ground=request.delta_matroid.ground,
+            feasible=canonical_feasible_rows(
+                FiniteFeasibleSetSystem(
+                    ground=request.delta_matroid.ground,
+                    feasible=request.delta_matroid.feasible,
+                )
+            ),
+        )
+        return DeltaMatroidTwistResult._from_kernel(source, request.subset, twisted)
+    except OperationResourceAdmissionError:
+        raise
     except DeltaMatroidAdmissionError as exc:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
@@ -314,10 +332,11 @@ TOOLS: MathTools = (  # noqa: RUF005
             "difference X for each source feasible set F; the subset uses sorted "
             "ground indices. Source and output families are admitted at 16,384 "
             "memberships, 2,048 UTF-8 label bytes, and 250,000 symmetric-exchange "
-            "candidate checks."
+            "candidate checks. Return the source, canonical subset, and twisted "
+            "target together; the compact JSON result is bounded to 1,000,000 bytes."
         ),
         request_type=DeltaMatroidTwistRequest,
-        result_type=FiniteDeltaMatroid,
+        result_type=DeltaMatroidTwistResult,
         run=_twist,
         tags=("delta-matroid", "twist", "exact"),
         examples=(

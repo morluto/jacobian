@@ -31,7 +31,15 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-`delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
+`delta_matroid.twist.compute` returns a `DeltaMatroidTwistResult` that retains
+the source `FiniteDeltaMatroid`, the sorted ground-index subset, and the exact
+twisted target. Its postcondition is that each feasible row `F` in the source
+maps bijectively to `F △ A` in the target, on the same ordered ground axis.
+The catalog result is limited to 1,000,000 compact JSON bytes, including the
+repeated source and target families. The native `twist` function continues to
+return the target `FiniteDeltaMatroid` directly. This adds the source-bound
+twist result contract only; it does not complete the broader delta-matroid
+capabilities in issue #1954.
 `delta_matroid.distance.compute` returns the exact minimum
 `|X symmetric_difference F|` over every feasible set `F`, together with the
 lexicographically first nearest feasible set. Its work is linear in the

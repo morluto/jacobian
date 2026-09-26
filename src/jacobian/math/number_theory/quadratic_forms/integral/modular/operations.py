@@ -25,6 +25,7 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular._models import
     ModularInteger,
     ModularQuadraticCrossTerm,
     ModularQuadraticPolynomial,
+    ModularQuadraticReduction,
     ModularReductionRequest,
 )
 
@@ -55,6 +56,12 @@ def _digits(value: int) -> int:
 def _check_integral_form(form: IntegralQuadraticForm) -> tuple[int, ...]:
     if not isinstance(form, IntegralQuadraticForm):
         raise _domain_error("form_type", "expected a canonical integral quadratic form")
+    if (
+        not isinstance(form.axis, tuple)
+        or not isinstance(form.diagonal_coefficients, tuple)
+        or not isinstance(form.cross_terms, tuple)
+    ):
+        raise _domain_error("form_shape", "source form containers must be tuples")
     n = len(form.axis)
     if n > MAX_MODULAR_QUADRATIC_FORM_AXIS:
         raise _resource_error(
@@ -62,6 +69,10 @@ def _check_integral_form(form: IntegralQuadraticForm) -> tuple[int, ...]:
         )
     if (
         form.domain != "ZZ"
+        or any(
+            not isinstance(label, str) or not label or len(label) > 128
+            for label in form.axis
+        )
         or len(set(form.axis)) != n
         or len(form.diagonal_coefficients) != n
         or n + len(form.cross_terms) > MAX_INTEGRAL_QUADRATIC_FORM_TERMS
@@ -87,7 +98,11 @@ def _check_integral_form(form: IntegralQuadraticForm) -> tuple[int, ...]:
                 "cross_term_type", "source cross terms must be canonical"
             )
         if (
-            term.left < 0
+            not isinstance(term.left, int)
+            or isinstance(term.left, bool)
+            or not isinstance(term.right, int)
+            or isinstance(term.right, bool)
+            or term.left < 0
             or term.left >= term.right
             or term.right >= n
             or not isinstance(term.coefficient, int)
@@ -122,7 +137,7 @@ def _admit_modulus(modulus: int) -> int:
 
 def reduce_integral_form_modulus(
     request: ModularReductionRequest,
-) -> ModularQuadraticPolynomial:
+) -> ModularQuadraticReduction:
     """Reduce polynomial coefficients canonically into the ring ``Z/mZ``."""
 
     if not isinstance(request, ModularReductionRequest):
@@ -138,7 +153,18 @@ def reduce_integral_form_modulus(
             "work_bound", "coefficient reduction exceeds its digit-work bound"
         )
     label_size = sum(len(label) for label in request.form.axis)
-    result_digits = modulus_digits + label_size + support * modulus_digits + 8 * support
+    # Bound the complete returned value, including retained source coefficients
+    # and the axis/support structures duplicated in source and target.
+    source_coefficient_digits = sum(
+        _digits(coefficient) for coefficient in coefficients
+    )
+    result_digits = (
+        modulus_digits
+        + 2 * label_size
+        + source_coefficient_digits
+        + support * modulus_digits
+        + 16 * support
+    )
     if result_digits > MAX_MODULAR_QUADRATIC_RESULT_DIGITS:
         raise _resource_error(
             "result_bound", "modular polynomial exceeds its exact-result bound"
@@ -155,12 +181,13 @@ def reduce_integral_form_modulus(
         for term in request.form.cross_terms
         if (residue := term.coefficient % modulus) != 0
     )
-    return ModularQuadraticPolynomial(
+    target = ModularQuadraticPolynomial(
         modulus=modulus,
         axis=request.form.axis,
         diagonal_residues=diagonal,
         cross_terms=cross_terms,
     )
+    return ModularQuadraticReduction(source=request.form, target=target)
 
 
 def _check_modular_polynomial(
@@ -212,14 +239,25 @@ def _check_modular_polynomial(
         raise _domain_error(
             "polynomial_shape", "modular polynomial support must be canonical"
         )
+    if not isinstance(polynomial.cross_terms, tuple):
+        raise _domain_error("polynomial_shape", "mixed terms must be a tuple")
+    if any(
+        not isinstance(term, ModularQuadraticCrossTerm)
+        for term in polynomial.cross_terms
+    ):
+        raise _domain_error("polynomial_shape", "mixed terms must be canonical")
     positions = tuple((term.left, term.right) for term in polynomial.cross_terms)
     if (
         len(polynomial.cross_terms) + n > MAX_MODULAR_QUADRATIC_FORM_TERMS
         or positions != tuple(sorted(set(positions)))
-        or any(
-            term.left < 0
-            or term.left >= term.right
-            or term.right >= n
+            or any(
+            not isinstance(term.left, int)
+            or isinstance(term.left, bool)
+            or not isinstance(term.right, int)
+            or isinstance(term.right, bool)
+            or not 0 <= term.left < term.right < n
+            or not isinstance(term.coefficient, int)
+            or isinstance(term.coefficient, bool)
             or not 0 < term.coefficient < polynomial.modulus
             for term in polynomial.cross_terms
         )

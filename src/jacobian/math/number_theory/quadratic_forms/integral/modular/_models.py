@@ -138,6 +138,16 @@ class ModularInteger(StrictModel):
         return self
 
 
+class ModularQuadraticReduction(StrictModel):
+    """Source-bound coefficient quotient from ZZ to the specified Z/mZ."""
+
+    map: Literal["ZZ_TO_Z_MOD_N_COEFFICIENT_REDUCTION"] = (
+        "ZZ_TO_Z_MOD_N_COEFFICIENT_REDUCTION"
+    )
+    source: IntegralQuadraticForm
+    target: ModularQuadraticPolynomial
+
+
 class ModularReductionRequest(StrictModel):
     """Reduce one integral polynomial's coefficients into a finite residue ring."""
 
@@ -177,5 +187,6 @@ __all__ = [
     "ModularInteger",
     "ModularQuadraticCrossTerm",
     "ModularQuadraticPolynomial",
+    "ModularQuadraticReduction",
     "ModularReductionRequest",
 ]

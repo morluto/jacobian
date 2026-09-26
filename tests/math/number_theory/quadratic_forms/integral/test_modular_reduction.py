@@ -13,6 +13,7 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
 from jacobian.math.number_theory.quadratic_forms.integral.modular import (
     ModularCoordinateVector,
     ModularEvaluationRequest,
+    ModularQuadraticCrossTerm,
     ModularQuadraticPolynomial,
     ModularReductionRequest,
     evaluate_modular_form,
@@ -29,13 +30,15 @@ def test_composite_modulus_evaluation_matches_exhaustive_independent_oracle() ->
     reduced = reduce_integral_form_modulus(
         ModularReductionRequest(form=form, modulus=6)
     )
-    assert reduced.diagonal_residues == (2, 5)
-    assert reduced.cross_terms[0].coefficient == 3
+    assert reduced.map == "ZZ_TO_Z_MOD_N_COEFFICIENT_REDUCTION"
+    assert reduced.source == form
+    assert reduced.target.diagonal_residues == (2, 5)
+    assert reduced.target.cross_terms[0].coefficient == 3
 
     for x, y in product(range(6), repeat=2):
         vector = ModularCoordinateVector(modulus=6, axis=("x", "y"), coordinates=(x, y))
         actual = evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=reduced, vector=vector)
+            ModularEvaluationRequest(polynomial=reduced.target, vector=vector)
         )
         expected = (2 * x**2 + 3 * x * y - y**2) % 6
         assert (actual.modulus, actual.residue) == (6, expected)
@@ -50,15 +53,69 @@ def test_zero_ring_and_zero_mixed_residue_are_canonical() -> None:
     reduced = reduce_integral_form_modulus(
         ModularReductionRequest(form=form, modulus=1)
     )
-    assert reduced.diagonal_residues == (0, 0)
-    assert reduced.cross_terms == ()
+    assert reduced.target.diagonal_residues == (0, 0)
+    assert reduced.target.cross_terms == ()
     vector = ModularCoordinateVector(modulus=1, axis=("x", "y"), coordinates=(0, 0))
     assert (
         evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=reduced, vector=vector)
+            ModularEvaluationRequest(polynomial=reduced.target, vector=vector)
         ).residue
         == 0
     )
+
+
+def test_forged_mixed_term_indices_are_rejected_before_indexing() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    polynomial = ModularQuadraticPolynomial.model_construct(
+        modulus=7,
+        axis=("x", "y"),
+        diagonal_residues=(0, 0),
+        cross_terms=(
+            ModularQuadraticCrossTerm.model_construct(left=-1, right=1, coefficient=2),
+        ),
+    )
+    vector = ModularCoordinateVector(modulus=7, axis=("x", "y"), coordinates=(2, 3))
+    with pytest.raises(OperationDomainValidationError):
+        evaluate_modular_form(
+            ModularEvaluationRequest.model_construct(
+                polynomial=polynomial, vector=vector
+            )
+        )
+
+
+def test_forged_boolean_mixed_term_indices_are_rejected() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    polynomial = ModularQuadraticPolynomial.model_construct(
+        modulus=7,
+        axis=("x", "y"),
+        diagonal_residues=(0, 0),
+        cross_terms=(
+            ModularQuadraticCrossTerm.model_construct(
+                left=False, right=True, coefficient=2
+            ),
+        ),
+    )
+    vector = ModularCoordinateVector(modulus=7, axis=("x", "y"), coordinates=(2, 3))
+    with pytest.raises(OperationDomainValidationError):
+        evaluate_modular_form(
+            ModularEvaluationRequest.model_construct(
+                polynomial=polynomial, vector=vector
+            )
+        )
+
+
+def test_forged_source_axis_labels_are_rejected() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    form = IntegralQuadraticForm.model_construct(
+        domain="ZZ", axis=([],), diagonal_coefficients=(1,), cross_terms=()
+    )
+    with pytest.raises(OperationDomainValidationError):
+        reduce_integral_form_modulus(
+            ModularReductionRequest.model_construct(form=form, modulus=7)
+        )
 
 
 def test_target_parent_axis_and_canonical_residues_are_enforced() -> None:
@@ -115,7 +172,7 @@ def test_zero_form_at_maximum_axis_is_admitted() -> None:
     )
     assert (
         evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=reduced, vector=vector)
+            ModularEvaluationRequest(polynomial=reduced.target, vector=vector)
         ).residue
         == 0
     )

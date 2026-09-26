@@ -14,6 +14,7 @@ from jacobian.math.logic.relational_structures._models import (
     BinaryRelationTransposeRequest,
     CspAssignmentProfile,
     CspAssignmentRequest,
+    CspSolutions,
     EmbeddingSearchRequest,
     EmbeddingSearchResult,
     FiniteCspInstance,
@@ -31,6 +32,8 @@ from jacobian.math.logic.relational_structures._models import (
     InducedSubstructureResult,
     RelationalPolymorphismCheckResult,
     RelationalPolymorphismRequest,
+    RelationalProductRequest,
+    RelationalProductResult,
     RelationalQuotient,
     RelationalQuotientRequest,
     RelationalReductRequest,
@@ -42,6 +45,8 @@ from jacobian.math.logic.relational_structures.operations import (
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
+    direct_product_structure,
+    enumerate_csp_solutions,
     enumerate_homomorphisms,
     induced_substructure,
     profile_csp_assignment,
@@ -122,6 +127,10 @@ def _csp_assignment_profile(
     return profile_csp_assignment(request.instance, request.assignment)
 
 
+def _csp_solutions(request: FiniteCspInstance) -> CspSolutions:
+    return enumerate_csp_solutions(request)
+
+
 def _induced_substructure(
     request: InducedSubstructureRequest,
 ) -> InducedSubstructureResult:
@@ -140,6 +149,10 @@ def _transpose_binary_relation(
 
 def _quotient(request: RelationalQuotientRequest) -> RelationalQuotient:
     return quotient_structure(request.source, request.classes)
+
+
+def _direct_product(request: RelationalProductRequest) -> RelationalProductResult:
+    return direct_product_structure(request.left, request.right)
 
 
 def _polymorphism_check(
@@ -190,6 +203,43 @@ _EDGE_INTO_CYCLE_EXAMPLE = {
 
 
 TOOLS: MathTools = (
+    MathTool(
+        operation_id="relational.structure.direct_product.compute",
+        title="Form a direct product of finite relational structures",
+        description=(
+            "Form the direct product of two finite structures with identical "
+            "ranked signatures. Pair (i,j) receives canonical label "
+            "i*|B|+j; each relation contains exactly the coordinatewise "
+            "pairs from the two factor relations. The result retains both "
+            "factors and the two projection maps. Carrier, relation-row, and "
+            "coordinate-work bounds are checked before Cartesian relation "
+            "expansion; the admitted visits bound the product and its "
+            "projections."
+        ),
+        request_type=RelationalProductRequest,
+        result_type=RelationalProductResult,
+        run=_direct_product,
+        tags=("relational-structures", "direct-product", "homomorphism", "exact"),
+        discovery_terms=(
+            "direct product of finite relational structures",
+            "relational structure Cartesian product",
+            "product structure projections",
+            "power of a finite relational structure",
+        ),
+        examples=(
+            OperationExample(
+                name="product_of_two_directed_edges",
+                description=(
+                    "Form the edge relation by coordinatewise pairing; both "
+                    "factors must have identical ordered ranked signatures."
+                ),
+                input={
+                    "left": _DIRECTED_EDGE_STRUCTURE,
+                    "right": _DIRECTED_EDGE_STRUCTURE,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="relational.induced_substructure.compute",
         title="Take an induced finite relational substructure",
@@ -462,6 +512,47 @@ TOOLS: MathTools = (
                         ],
                     },
                     "assignment": [1, 0],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="csp.solutions.enumerate.compute",
+        title="Enumerate every solution of a finite CSP instance",
+        description=(
+            "Return the complete lexicographically ordered family of satisfying "
+            "assignments on the instance variable axis, retaining the original "
+            "instance and its named constraint occurrences. This is exhaustive: "
+            "the carrier-map space and tuple-replay work are admitted before "
+            "search, and an over-budget request is rejected rather than truncated. "
+            "The assignments agree with homomorphisms from the canonical CSP "
+            "source structure into its template, including repeated-variable "
+            "scopes, duplicate occurrences, nullary relations, and empty axes."
+        ),
+        request_type=FiniteCspInstance,
+        result_type=CspSolutions,
+        run=_csp_solutions,
+        tags=("csp", "solutions", "relational-structures", "exact"),
+        discovery_terms=(
+            "enumerate all CSP solutions",
+            "complete satisfying assignments",
+            "finite constraint satisfaction solution relation",
+            "CSP solutions as homomorphisms",
+        ),
+        examples=(
+            OperationExample(
+                name="two_color_one_edge",
+                description="Enumerate the two assignments satisfying one disequality constraint.",
+                input={
+                    "template": {
+                        "carrier_size": 2,
+                        "signature": [{"symbol_id": "E", "arity": 2}],
+                        "relation_tables": [[[0, 1], [1, 0]]],
+                    },
+                    "variable_count": 2,
+                    "constraints": [
+                        {"constraint_id": "edge", "symbol_id": "E", "scope": [0, 1]}
+                    ],
                 },
             ),
         ),

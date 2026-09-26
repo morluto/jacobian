@@ -350,7 +350,6 @@ def _graver_toric_plan(
     configuration: AffineConfiguration,
 ) -> _ToricIdealPlan:
     entries = configuration.entries[0]
-    columns = len(entries)
 
     divisor = 0
     for weight in entries:
@@ -358,17 +357,10 @@ def _graver_toric_plan(
     reduced = tuple(weight // divisor for weight in entries) if divisor else entries
 
     maximum = max(reduced, default=0)
-    # Match the Graver kernel's exact complete-box and candidate-pair estimate.
-    radius = _graver_search_radius(reduced)
-    box_states = _graver_box_states(columns, radius)
-    if box_states * box_states > MAX_GRAVER_WORK:
-        raise OperationResourceAdmissionError(
-            location=("configuration",),
-            code="affine_semigroup.toric_work",
-            message=(
-                f"complete Graver candidate-pair work exceeds {MAX_GRAVER_WORK} states"
-            ),
-        )
+    # Use the same pivot-aware admitted candidate envelope as Graver
+    # enumeration. The full ambient box contains many vectors that cannot
+    # satisfy the relation and is not a sound estimate of this kernel's work.
+    radius, _candidate_states = _admit_graver_search(reduced)
 
     exponent_bound = 1 if maximum == 0 else 2 * maximum
     if exponent_bound > MAX_POLYNOMIAL_EXPONENT:

@@ -66,6 +66,15 @@ class SheafMorphismResult(StrictModel):
 
 def sections(sheaf: FiniteCellularSheaf) -> SheafSectionsResult:
     cohomology = sheaf_cohomology(sheaf)
+    # The empty complex has no cochain degrees. Its global section space is
+    # therefore the zero vector space, rather than a missing degree-zero group.
+    if not cohomology.groups:
+        return SheafSectionsResult(
+            sheaf=sheaf,
+            dimension=0,
+            basis_coordinates=(),
+            cochain_dimension=0,
+        )
     group = cohomology.groups[0]
     return SheafSectionsResult(
         sheaf=sheaf,

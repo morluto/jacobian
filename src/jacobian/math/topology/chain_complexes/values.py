@@ -123,7 +123,9 @@ class _ChainCoefficientEncoding:
 
         def require_native(value: int | Fraction) -> int | Fraction:
             if type(value) is int:
-                components = (_bounded_integer_digits(value, self.max_digits),)
+                components: tuple[int, ...] = (
+                    _bounded_integer_digits(value, self.max_digits),
+                )
             elif type(value) is Fraction:
                 components = (
                     _bounded_integer_digits(value.numerator, self.max_digits),
@@ -162,11 +164,14 @@ class _ChainCoefficientEncoding:
 
 def _format_chain_coefficient(value: int | Fraction) -> str:
     if type(value) is int:
-        return str(value)
+        return format_canonical_integer(value)
     if type(value) is Fraction:
         if value.denominator == 1:
-            return str(value.numerator)
-        return f"{value.numerator}/{value.denominator}"
+            return format_canonical_integer(value.numerator)
+        return (
+            f"{format_canonical_integer(value.numerator)}/"
+            f"{format_canonical_integer(value.denominator)}"
+        )
     raise TypeError("unsupported chain coefficient")
 
 
@@ -315,7 +320,7 @@ def _require_coefficient_scalar(
     """Check scalar type, coefficient-ring fit, and exact digit bounds."""
     if type(entry) is int:
         digits = _bounded_integer_digits(entry, MAX_CHAIN_COMPLEX_COEFFICIENT_DIGITS)
-        value = entry
+        value: int | Fraction = entry
     elif type(entry) is Fraction:
         if coefficient_ring is not CoefficientRing.RATIONAL:
             raise _validation_error(

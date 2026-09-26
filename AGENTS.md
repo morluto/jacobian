@@ -3,7 +3,9 @@
 Jacobian gives agents atomic, composable tools for higher mathematics.
 `math.find` discovers immutable operation declarations; `math.run` executes one
 bounded typed computation. The caller owns reasoning, composition, and durable
-state. Use “operation” or “math tool,” not “product” or “provider,” for built-ins.
+state. The native mathematical library is independent of discovery and MCP;
+tool declarations publish its capabilities, and delivery adapters expose them.
+Use “operation” or “math tool,” not “product” or “provider,” for built-ins.
 
 ## Product invariants
 
@@ -21,16 +23,20 @@ state. Use “operation” or “math tool,” not “product” or “provider,
 - Built-ins are immutable `MathTool` tuples in owner-local `_tools.py` manifests
   under `jacobian.math`. Manifest presence is publication; catalog construction
   fails closed on malformed declarations and duplicate IDs.
-- Each mathematical value has one domain-owned canonical type. Producers and
-  consumers compose unchanged through serialization, including empty and
-  degenerate values. Exact results retain reconstruction and ambient context;
-  changes of ring, field, parent, or axes require explicit typed maps.
-- Admit mathematical work, intermediate growth, and exact output before backend
-  expansion. Compute semantic admission once after canonicalization. Validators,
-  result construction, worker decoding, and transport must not replay computed
-  mathematics. Caller-supplied claims require their own admitted domain check
-  when a consumer relies on them. Moving checks out of constructors requires
-  migrating every dependent consumer, not deleting the checks.
+- Reuse domain-owned canonical values across producers and consumers, including
+  empty and degenerate cases. Keep mathematical values, operation arguments,
+  wire envelopes, and execution context distinct. Representation variants need
+  explicit semantics; changes of ring, field, parent, or axes need typed maps.
+- Bound parsing, allocation, computation, and delivery at their owning
+  boundaries. Admit work, growth, and exact output before backend expansion;
+  native admission must not inherit a deployment's wire-byte ceiling.
+- Check each relied-upon invariant at its owning trust boundary. Reuse admission
+  facts and avoid repeating expensive solves during construction or decoding;
+  retain structural and admitted candidate/claim checks needed for correctness.
+  Moving checks out of constructors requires migrating every dependent consumer.
+- Compute with native exact scalars and encode them only at wire boundaries.
+  Raw preflight preserves scalar representation for the shared codec. Exact
+  encoding of a numerical approximation does not establish exact mathematics.
 - **Scale first:** probe a motivating rejected request, improve the estimate,
   representation, algorithm, or backend, and retain cheaply executable cases as
   accepted regressions. Measurements do not replace a sound bound. A remaining

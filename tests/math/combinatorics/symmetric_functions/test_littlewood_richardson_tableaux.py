@@ -5,15 +5,15 @@ from __future__ import annotations
 from itertools import permutations
 
 import pytest
-from pydantic import ValidationError
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.symmetric_functions import (
     IntegerPartition,
     littlewood_richardson_coefficient,
     littlewood_richardson_tableaux,
-)
-from jacobian.math.combinatorics.symmetric_functions._models import (
-    LittlewoodRichardsonTableauxRequest,
 )
 from jacobian.math.combinatorics.symmetric_functions._tools import TOOLS
 
@@ -128,6 +128,13 @@ def test_lr_tableau_families_match_exhaustive_small_filling_oracle(size: int) ->
                     assert len(observed) == len(set(observed))
 
 
+def test_native_nonpartition_argument_is_a_domain_error() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        littlewood_richardson_tableaux(
+            None, IntegerPartition(parts=()), IntegerPartition(parts=())
+        )
+
+
 def test_empty_skew_shape_has_one_empty_lr_tableau() -> None:
     empty = IntegerPartition(parts=())
     shape = IntegerPartition(parts=(3, 1))
@@ -143,12 +150,15 @@ def test_impossible_large_shape_returns_empty_without_search_admission() -> None
 
 
 def test_lr_tableau_enumeration_rejects_before_expansion_and_is_catalogued() -> None:
-    with pytest.raises(ValidationError, match="lr_skew_size_exceeded"):
-        LittlewoodRichardsonTableauxRequest(
-            outer=IntegerPartition(parts=(9,)),
-            inner=IntegerPartition(parts=()),
-            content=IntegerPartition(parts=(9,)),
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        littlewood_richardson_tableaux(
+            IntegerPartition(parts=(9,)),
+            IntegerPartition(parts=()),
+            IntegerPartition(parts=(9,)),
         )
+    assert (
+        error.value.errors()[0]["type"] == "symmetric_functions.lr_skew_size_exceeded"
+    )
     tool = next(
         item
         for item in TOOLS

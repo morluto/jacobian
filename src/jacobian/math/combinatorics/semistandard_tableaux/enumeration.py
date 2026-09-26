@@ -4,12 +4,17 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian._execution import request_checkpoint
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.semistandard_tableaux._models import (
     MAX_ENUMERATED_CELLS,
     MAX_ENUMERATION_WORK,
     MAX_RESULT_BYTES,
     MAX_SEMISTANDARD_TABLEAUX,
+    SemistandardTableauEnumerationRequest,
     SemistandardTableauEnumerationResult,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -20,6 +25,27 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 
 def semistandard_tableaux_count(partition: IntegerPartition, max_entry: int) -> int:
     """Compute the exact hook-content count for entries in ``1..max_entry``."""
+    if type(partition) is not IntegerPartition:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="semistandard_tableaux.invalid_partition",
+            message="partition must be a canonical IntegerPartition value",
+        )
+    try:
+        request = SemistandardTableauEnumerationRequest(
+            partition=partition, max_entry=max_entry
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="semistandard_tableaux.invalid_request",
+            message="request must contain a canonical partition and bounded alphabet",
+        ) from exc
+    return _hook_content_count(request.partition, request.max_entry)
+
+
+def _hook_content_count(partition: IntegerPartition, max_entry: int) -> int:
+    """Unchecked hook-content kernel for an already admitted request."""
     parts = partition.parts
     if not parts:
         return 1
@@ -61,6 +87,8 @@ def _horizontal_strip_predecessors(
     def visit(row: int) -> None:
         if row == allowed_rows:
             predecessor = tuple(chosen)
+            while predecessor and predecessor[-1] == 0:
+                predecessor = predecessor[:-1]
             if predecessor != parts:
                 predecessors.append(predecessor)
             return
@@ -84,7 +112,11 @@ def _tableau_rows(
     output: list[tuple[tuple[int, ...], ...]] = []
     for largest_entry in range(len(parts), max_entry + 1):
         for predecessor in _horizontal_strip_predecessors(parts, largest_entry - 1):
-            for smaller in _tableau_rows(predecessor, largest_entry - 1):
+            for smaller_index, smaller in enumerate(
+                _tableau_rows(predecessor, largest_entry - 1)
+            ):
+                if smaller_index % 128 == 0:
+                    request_checkpoint("during semistandard-tableau enumeration")
                 rows = [list(row) for row in smaller]
                 rows.extend([] for _ in range(len(parts) - len(rows)))
                 for row, width in enumerate(parts):
@@ -99,7 +131,26 @@ def enumerate_semistandard_young_tableaux(
     partition: IntegerPartition, max_entry: int
 ) -> SemistandardTableauEnumerationResult:
     """Return the complete lexicographically ordered bounded family."""
-    count = semistandard_tableaux_count(partition, max_entry)
+    if type(partition) is not IntegerPartition:
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="semistandard_tableaux.invalid_partition",
+            message="partition must be a canonical IntegerPartition value",
+        )
+    try:
+        request = SemistandardTableauEnumerationRequest(
+            partition=partition, max_entry=max_entry
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="semistandard_tableaux.invalid_request",
+            message="request must contain a canonical partition and bounded alphabet",
+        ) from exc
+    partition, max_entry = request.partition, request.max_entry
+    request_checkpoint("before semistandard-tableau enumeration admission")
+    count = _hook_content_count(partition, max_entry)
+    request_checkpoint("after semistandard-tableau count admission")
     size = sum(partition.parts)
     if count > MAX_SEMISTANDARD_TABLEAUX:
         raise OperationResourceAdmissionError(
@@ -142,8 +193,18 @@ def enumerate_semistandard_young_tableaux(
             message="the complete family exceeds the admitted result byte bound",
         )
 
-    rows = _tableau_rows(partition.parts, max_entry, sort_result=True) if count else ()
-    tableaux = tuple(SemistandardYoungTableau(rows=value) for value in rows)
+    request_checkpoint("before semistandard-tableau enumeration")
+    rows = _tableau_rows(partition.parts, max_entry, sort_result=False) if count else ()
+    request_checkpoint("before semistandard-tableau sorting")
+    rows = tuple(sorted(rows))
+    request_checkpoint("before semistandard-tableau materialization")
+    tableaux_list = []
+    for index, value in enumerate(rows):
+        if index % 128 == 0:
+            request_checkpoint("during semistandard-tableau materialization")
+        tableaux_list.append(SemistandardYoungTableau(rows=value))
+    tableaux = tuple(tableaux_list)
+    request_checkpoint("after semistandard-tableau result construction")
     if len(tableaux) != count:
         raise AssertionError("enumeration must agree with the hook-content count")
     return SemistandardTableauEnumerationResult(

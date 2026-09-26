@@ -4,10 +4,18 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from pydantic import BaseModel, ValidationError
+
 from jacobian._execution import request_checkpoint
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
+    MAX_LR_SKEW_CELLS,
+    MAX_LR_TABLEAU_OUTPUT_BYTES,
+    MAX_LR_TABLEAUX,
     LittlewoodRichardsonCoefficientRequest,
     LittlewoodRichardsonCoefficientResult,
     LittlewoodRichardsonTableauxRequest,
@@ -15,12 +23,93 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     SchurProductRequest,
     SchurProductResult,
     SchurProductTerm,
+    _lr_complete_word_bound,
     _lr_inner_content_orientation,
+    _lr_prefix_state_bound,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     TableauCandidate,
 )
+
+
+def _admit_native_request[RequestT: BaseModel](
+    model: type[RequestT], values: dict[str, object]
+) -> RequestT:
+    try:
+        if any(type(value) is not IntegerPartition for value in values.values()):
+            raise TypeError("native LR arguments must be IntegerPartition values")
+        native_values = {
+            key: value.model_dump(mode="python") for key, value in values.items()
+        }
+        request = model.model_validate(native_values)
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code="symmetric_functions.littlewood_richardson.invalid_request",
+            message="native LR arguments must be canonical partitions within the operation envelope",
+        ) from exc
+    if isinstance(
+        request,
+        (LittlewoodRichardsonCoefficientRequest, LittlewoodRichardsonTableauxRequest),
+    ):
+        _admit_lr_resources(request)
+    return request
+
+
+def _admit_lr_resources(
+    request: LittlewoodRichardsonCoefficientRequest
+    | LittlewoodRichardsonTableauxRequest,
+) -> None:
+    skew_size = sum(request.outer.parts) - sum(request.inner.parts)
+    content_size = sum(request.content.parts)
+    if isinstance(request, LittlewoodRichardsonTableauxRequest):
+        inner_contained = all(
+            part
+            <= (request.outer.parts[index] if index < len(request.outer.parts) else 0)
+            for index, part in enumerate(request.inner.parts)
+        )
+        if not inner_contained or skew_size != content_size:
+            return
+    if skew_size > MAX_LR_SKEW_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("outer",),
+            code="symmetric_functions.lr_skew_size_exceeded",
+            message=f"LR skew size must not exceed {MAX_LR_SKEW_CELLS}",
+        )
+    if content_size > MAX_LR_SKEW_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("content",),
+            code="symmetric_functions.lr_content_size_exceeded",
+            message=f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
+        )
+    states = _lr_prefix_state_bound(request.content)
+    if states > MAX_LR_SEARCH_STATES:
+        raise OperationResourceAdmissionError(
+            location=("content",),
+            code="symmetric_functions.lr_search_states_exceeded",
+            message=f"LR search prefix bound exceeds {MAX_LR_SEARCH_STATES}",
+        )
+    if isinstance(request, LittlewoodRichardsonTableauxRequest):
+        complete_words = _lr_complete_word_bound(request.content)
+        context_bytes = 1024 + 48 * (
+            len(request.outer.parts)
+            + len(request.inner.parts)
+            + len(request.content.parts)
+        )
+        output_bytes = context_bytes + complete_words * (64 + 16 * MAX_LR_SKEW_CELLS)
+        if output_bytes > MAX_LR_TABLEAU_OUTPUT_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("content",),
+                code="symmetric_functions.lr_tableau_output_exceeded",
+                message="complete LR tableau family exceeds its output byte bound",
+            )
+        if complete_words > MAX_LR_TABLEAUX:
+            raise OperationResourceAdmissionError(
+                location=("content",),
+                code="symmetric_functions.lr_tableau_count_exceeded",
+                message=f"complete LR tableau family exceeds {MAX_LR_TABLEAUX} candidates",
+            )
 
 
 def littlewood_richardson_coefficient(
@@ -36,12 +125,13 @@ def littlewood_richardson_coefficient(
     The search enumerates distinct multiset-word prefixes directly, with a
     complete precomputed upper bound based on the content multinomial.
     """
-    request = LittlewoodRichardsonCoefficientRequest.model_validate(
+    request = _admit_native_request(
+        LittlewoodRichardsonCoefficientRequest,
         {
-            "outer": outer.model_dump(mode="python"),
-            "inner": inner.model_dump(mode="python"),
-            "content": content.model_dump(mode="python"),
-        }
+            "outer": outer,
+            "inner": inner,
+            "content": content,
+        },
     )
     return _compute_validated_lr(request)
 
@@ -180,12 +270,9 @@ def littlewood_richardson_tableaux(
     serialized growth. Every recursive path corresponds to one distinct
     content-prefix, and every complete path to exactly one skew filling.
     """
-    request = LittlewoodRichardsonTableauxRequest.model_validate(
-        {
-            "outer": outer.model_dump(mode="python"),
-            "inner": inner.model_dump(mode="python"),
-            "content": content.model_dump(mode="python"),
-        }
+    request = _admit_native_request(
+        LittlewoodRichardsonTableauxRequest,
+        {"outer": outer, "inner": inner, "content": content},
     )
     return _enumerate_validated_lr(request)
 
@@ -219,11 +306,12 @@ def schur_product(
     left: IntegerPartition, right: IntegerPartition
 ) -> SchurProductResult:
     """Return the complete bounded Schur expansion of ``s_left * s_right``."""
-    request = SchurProductRequest.model_validate(
+    request = _admit_native_request(
+        SchurProductRequest,
         {
-            "left": left.model_dump(mode="python"),
-            "right": right.model_dump(mode="python"),
-        }
+            "left": left,
+            "right": right,
+        },
     )
     return _schur_product_from_request(request)
 

@@ -54,9 +54,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "straight partition shape with a specified sparse entry-to-"
             "multiplicity map. This is a fixed-content Kostka count, distinct "
             "from counting all entries in an alphabet 1..m. Entries are exact "
-            "labels and missing labels have multiplicity zero. Admission bounds "
-            "the complete multiset-prefix search before construction; one-row "
-            "and standard-content cases use direct exact reductions."
+            "labels and missing labels have multiplicity zero."
         ),
         request_type=FixedContentCountRequest,
         result_type=FixedContentCountResult,

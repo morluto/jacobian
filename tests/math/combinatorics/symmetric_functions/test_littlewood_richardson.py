@@ -11,7 +11,7 @@ from math import factorial
 import pytest
 from pydantic import ValidationError
 
-from jacobian.math.combinatorics.symmetric_functions import _models as symmetric_models
+import jacobian.math.combinatorics.symmetric_functions.littlewood_richardson as lr_operations
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     MAX_LR_SKEW_CELLS,
@@ -298,7 +298,7 @@ def test_schur_product_admission_is_invariant_under_operand_order() -> None:
 def test_catalog_lr_invocation_shares_one_admission_pass(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    original = symmetric_models._lr_prefix_state_bound
+    original = lr_operations._lr_prefix_state_bound
     calls = 0
 
     def counting(content: IntegerPartition) -> int:
@@ -306,7 +306,7 @@ def test_catalog_lr_invocation_shares_one_admission_pass(
         calls += 1
         return original(content)
 
-    monkeypatch.setattr(symmetric_models, "_lr_prefix_state_bound", counting)
+    monkeypatch.setattr(lr_operations, "_lr_prefix_state_bound", counting)
     tool = next(
         item
         for item in TOOLS
@@ -314,7 +314,7 @@ def test_catalog_lr_invocation_shares_one_admission_pass(
         == "symmetric_function.littlewood_richardson.coefficient.compute"
     )
     request = tool.request_type.model_validate(tool.examples[0].input)
-    assert calls == 1  # owner admission ran once while parsing the request
+    assert calls == 0  # parsing stays structural; execution owns admission
     result = tool.run(request)
     assert result.coefficient == 2
-    assert calls == 1  # the catalog wrapper must not replay admission
+    assert calls == 1  # the catalog wrapper admits once before the kernel

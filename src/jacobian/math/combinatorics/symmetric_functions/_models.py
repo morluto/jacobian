@@ -240,29 +240,6 @@ class LittlewoodRichardsonCoefficientRequest(StrictModel):
     inner: IntegerPartition
     content: IntegerPartition
 
-    @model_validator(mode="after")
-    def require_bounded_search(self) -> Self:
-        # The tableau search runs only when the inner diagram is contained in
-        # the outer diagram and the sizes agree, so its cell count equals the
-        # admitted skew size, which then equals the content size.
-        skew_size = sum(self.outer.parts) - sum(self.inner.parts)
-        if skew_size > MAX_LR_SKEW_CELLS:
-            raise _validation_error(
-                "lr_skew_size_exceeded",
-                f"LR skew size |outer|-|inner| must not exceed {MAX_LR_SKEW_CELLS}",
-            )
-        if sum(self.content.parts) > MAX_LR_SKEW_CELLS:
-            raise _validation_error(
-                "lr_content_size_exceeded",
-                f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
-            )
-        if _lr_prefix_state_bound(self.content) > MAX_LR_SEARCH_STATES:
-            raise _validation_error(
-                "lr_search_states_exceeded",
-                f"LR search prefix bound must not exceed {MAX_LR_SEARCH_STATES}",
-            )
-        return self
-
 
 class LittlewoodRichardsonCoefficientResult(StrictModel):
     """One exact LR coefficient, bound to its three partition arguments."""
@@ -279,54 +256,6 @@ class LittlewoodRichardsonTableauxRequest(StrictModel):
     outer: IntegerPartition
     inner: IntegerPartition
     content: IntegerPartition
-
-    @model_validator(mode="after")
-    def require_bounded_output(self) -> Self:
-        skew_size = sum(self.outer.parts) - sum(self.inner.parts)
-        content_size = sum(self.content.parts)
-        inner_contained = all(
-            part <= (self.outer.parts[index] if index < len(self.outer.parts) else 0)
-            for index, part in enumerate(self.inner.parts)
-        )
-        # Impossible shape or degree relations have the empty family, so they
-        # need no search or family-output admission regardless of ambient size.
-        if not inner_contained or skew_size != content_size:
-            return self
-        if skew_size > MAX_LR_SKEW_CELLS:
-            raise _validation_error(
-                "lr_skew_size_exceeded",
-                f"LR skew size |outer|-|inner| must not exceed {MAX_LR_SKEW_CELLS}",
-            )
-        if content_size > MAX_LR_SKEW_CELLS:
-            raise _validation_error(
-                "lr_content_size_exceeded",
-                f"LR content size must not exceed {MAX_LR_SKEW_CELLS}",
-            )
-        states = _lr_prefix_state_bound(self.content)
-        if states > MAX_LR_SEARCH_STATES:
-            raise _validation_error(
-                "lr_search_states_exceeded",
-                f"LR search prefix bound must not exceed {MAX_LR_SEARCH_STATES}",
-            )
-        complete_words = _lr_complete_word_bound(self.content)
-        context_bytes = 1024 + 48 * (
-            len(self.outer.parts) + len(self.inner.parts) + len(self.content.parts)
-        )
-        # This intentionally charges every content word as though it produced
-        # a tableau, and charges a generous fixed cost per cell and row. The
-        # bound is computed before the search or tableau expansion.
-        output_bytes = context_bytes + complete_words * (64 + 16 * MAX_LR_SKEW_CELLS)
-        if output_bytes > MAX_LR_TABLEAU_OUTPUT_BYTES:
-            raise _validation_error(
-                "lr_tableau_output_exceeded",
-                "complete LR tableau family exceeds the output byte bound",
-            )
-        if complete_words > MAX_LR_TABLEAUX:
-            raise _validation_error(
-                "lr_tableau_count_exceeded",
-                f"complete LR tableau family may not exceed {MAX_LR_TABLEAUX} candidates",
-            )
-        return self
 
 
 class LittlewoodRichardsonTableauxResult(StrictModel):

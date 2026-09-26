@@ -8,11 +8,7 @@ from typing import Literal, cast
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import (
-    CanonicalLimits,
-    format_canonical_integer,
-    strict_json_object_size,
-)
+from jacobian.canonical import format_canonical_integer, strict_json_object_size
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -34,7 +30,7 @@ from jacobian.math.polynomials.series._models import TruncatedSeries
 
 from .transform_models import SturmBoundResult
 
-MAX_FORMAL_Q_SERIES_OPERATOR_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_FORMAL_Q_SERIES_OPERATOR_ALLOCATION_BYTES = 10 * 1024 * 1024
 MAX_FORMAL_Q_SERIES_OPERATOR_WORK = 8_192
 
 
@@ -222,18 +218,18 @@ def _formal_q_series_operator_admission(
     coefficients_json_size = (
         2 + max(output_precision - 1, 0) + output_precision * coefficient_json_size
     )
-    output_bytes = strict_json_object_size(
+    allocation_bytes = strict_json_object_size(
         (
             ("variable", 3),
             ("truncation_order", len(str(output_precision))),
             ("coefficients", coefficients_json_size),
         )
     )
-    if output_bytes > MAX_FORMAL_Q_SERIES_OPERATOR_OUTPUT_BYTES:
+    if allocation_bytes > MAX_FORMAL_Q_SERIES_OPERATOR_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("output_precision",),
-            code="formal_q_series.output_bytes_bound",
-            message="formal q-series result exceeds the exact JSON output-byte limit",
+            code="formal_q_series.output_bound",
+            message="formal q-series result exceeds its admitted allocation envelope",
         )
     return series, prime, output_precision, tuple(admitted)
 

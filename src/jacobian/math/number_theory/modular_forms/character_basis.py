@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
+from typing import Literal, NoReturn
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -27,7 +29,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
 from jacobian.math.number_theory.modular_forms.character_dimensions import (
     character_space_dimensions,
 )
-from jacobian.math.number_theory.modular_forms.pari_basis import (
+from jacobian.math.number_theory.modular_forms.pari_backend import (
     MAX_PARI_BASIS_PRECISION,
     _pari_character_request,
     pari_character_basis,
@@ -39,11 +41,15 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormSpace,
 )
 
-CHARACTER_BASIS_ID = "gamma0-13-even-order6-character-sturm-v1"
+CHARACTER_BASIS_ID: Literal["gamma0-13-even-order6-character-sturm-v1"] = (
+    "gamma0-13-even-order6-character-sturm-v1"
+)
 _DIMENSION = 1
-_STURM_PRECISION = 3  # floor(2 * [SL2(Z):Gamma0(13)] / 12) + 1 = 3
+_STURM_PRECISION: Literal[3] = 3  # floor(2 * [SL2(Z):Gamma0(13)] / 12) + 1 = 3
 _MAX_WORK = 1_000_000
+_MAX_ALLOCATION_BYTES = 1_000_000
 _MAX_OUTPUT_BYTES = 1_000_000
+_MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
 _MAX_CHARACTER_HECKE_COEFFICIENT_DIGITS = 4
@@ -74,7 +80,7 @@ _CHARACTER_U_PRIME_ENVELOPE = {
 }
 
 
-def _domain(message: str) -> None:
+def _domain(message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=("space",),
         code="modular_form.character_basis_unsupported_space",
@@ -91,7 +97,7 @@ def _require_space(
     level = getattr(space, "level", None)
     weight = getattr(space, "weight", None)
     kind = getattr(space, "kind", None)
-    field = getattr(space, "coefficient_domain", None)
+    raw_field = getattr(space, "coefficient_domain", None)
     character = getattr(space, "character", None)
     if (
         group_name != "GAMMA0"
@@ -100,17 +106,18 @@ def _require_space(
         or type(weight) is not int
         or weight != 2
         or kind != "S"
-        or type(field) is not RationalCyclotomicField
-        or getattr(field, "domain", None) != "QQ_CYCLOTOMIC"
-        or type(getattr(field, "order", None)) is not int
-        or getattr(field, "order", None) != 6
-        or getattr(field, "generator", None) != "CLASS_OF_X"
+        or type(raw_field) is not RationalCyclotomicField
+        or getattr(raw_field, "domain", None) != "QQ_CYCLOTOMIC"
+        or type(getattr(raw_field, "order", None)) is not int
+        or getattr(raw_field, "order", None) != 6
+        or getattr(raw_field, "generator", None) != "CLASS_OF_X"
         or type(character) is not DirichletCharacter
         or getattr(character, "group", None) is None
     ):
         _domain(
             "this character-form operation supports S2(Gamma0(13), chi) over Q(zeta_6)"
         )
+    field = raw_field
     coordinates = getattr(character, "coordinates", None)
     if (
         type(coordinates) is not tuple
@@ -130,22 +137,26 @@ def _require_basis_space(
     """Admit the exact level-13 character and its explicit level inflations."""
     if type(space) is not ModularFormSpace:
         _domain("character basis requires a canonical modular-form space")
-    field = space.coefficient_domain
-    character = space.character
+    group_name = getattr(space, "group", None)
+    level = getattr(space, "level", None)
+    weight = getattr(space, "weight", None)
+    kind = getattr(space, "kind", None)
+    field = getattr(space, "coefficient_domain", None)
+    character = getattr(space, "character", None)
     if (
-        space.group != "GAMMA0"
-        or type(space.level) is not int
-        or space.level not in (13, 26, 39)
-        or type(space.weight) is not int
-        or space.weight != 2
-        or space.kind not in ("M", "S")
+        group_name != "GAMMA0"
+        or type(level) is not int
+        or level not in (13, 26, 39)
+        or type(weight) is not int
+        or weight != 2
+        or kind not in ("M", "S")
         or type(field) is not RationalCyclotomicField
         or field.domain != "QQ_CYCLOTOMIC"
         or type(field.order) is not int
         or field.order != 6
         or field.generator != "CLASS_OF_X"
         or type(character) is not DirichletCharacter
-        or character.group.modulus != space.level
+        or getattr(getattr(character, "group", None), "modulus", None) != level
     ):
         _domain(
             "character basis supports weight-two order-six character spaces at levels 13, 26, and 39 over Q(zeta_6)"
@@ -219,7 +230,8 @@ def _coefficient(
     return RationalCyclotomicElement(
         field=field,
         coefficients_ascending=tuple(
-            {"num": value.numerator, "den": value.denominator} for value in coordinates
+            CanonicalRational(num=value.numerator, den=value.denominator)
+            for value in coordinates
         ),
     )
 
@@ -273,8 +285,8 @@ def _character_basis_from_admission(
             code="modular_form.character_basis_height_admission",
             message="normalized character coefficients exceed the exact height envelope",
         )
-    output_bytes = precision * field.degree * (2 * normalized_digits + 32)
-    if work > _MAX_WORK or output_bytes > _MAX_OUTPUT_BYTES:
+    allocation_bytes = precision * field.degree * (2 * normalized_digits + 32)
+    if work > _MAX_WORK or allocation_bytes > _MAX_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.character_basis_admission",
@@ -406,8 +418,8 @@ def _admit_character_form(
             message="character coordinate height exceeds the exact multiplication envelope",
         )
     work = 3 * field.degree**2 * 3
-    output_bytes = 3 * field.degree * (2 * predicted_digits + 32)
-    if work > _MAX_WORK or output_bytes > _MAX_OUTPUT_BYTES:
+    allocation_bytes = 3 * field.degree * (2 * predicted_digits + 32)
+    if work > _MAX_WORK or allocation_bytes > _MAX_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.character_coordinate_admission",
@@ -429,22 +441,24 @@ def _character_form_prefix(
     space, field, scalar, _ = admitted
     if basis.space != space or basis.basis_id != form.basis_id:
         _domain("character basis must match the exact form space and basis identifier")
+    if form.basis_id != CHARACTER_BASIS_ID:
+        _domain("character basis identifier must match the admitted character basis")
     if not any(value.num for value in scalar.coefficients_ascending):
         zero = RationalCyclotomicElement(
             field=field,
             coefficients_ascending=tuple(
-                {"num": 0, "den": 1} for _ in range(field.degree)
+                CanonicalRational(num=0, den=1) for _ in range(field.degree)
             ),
         )
         return ModularCharacterQExpansion(
             space=space,
-            basis_id=form.basis_id,
+            basis_id=CHARACTER_BASIS_ID,
             coefficients=(zero, zero, zero),
         )
     basis_values = basis.elements[0].expansion.coefficients
     coefficients = tuple(cyclotomic.multiply(scalar, value) for value in basis_values)
     return ModularCharacterQExpansion(
-        space=space, basis_id=form.basis_id, coefficients=coefficients
+        space=space, basis_id=CHARACTER_BASIS_ID, coefficients=coefficients
     )
 
 
@@ -458,12 +472,12 @@ def modular_character_coordinates_q_expansion(
         zero = RationalCyclotomicElement(
             field=field,
             coefficients_ascending=tuple(
-                {"num": 0, "den": 1} for _ in range(field.degree)
+                CanonicalRational(num=0, den=1) for _ in range(field.degree)
             ),
         )
         return ModularCharacterQExpansion(
             space=space,
-            basis_id=form.basis_id,
+            basis_id=CHARACTER_BASIS_ID,
             coefficients=(zero, zero, zero),
         )
     basis = _character_basis_from_admission(*admitted[:2], admitted[3])
@@ -517,6 +531,19 @@ def modular_character_coordinates_product(
     right_admitted = _admit_character_form(right)
     left_space, field, left_scalar, left_request = left_admitted
     right_space, right_field, right_scalar, right_request = right_admitted
+    left_character = left_space.character
+    right_character = right_space.character
+    if not isinstance(left_character, DirichletCharacter) or not isinstance(
+        right_character, DirichletCharacter
+    ):
+        raise OperationDomainValidationError(
+            location=("right", "space"),
+            code="modular_form.character_product_parent",
+            message=(
+                "the supported character product requires the two conjugate "
+                "order-6 spaces S2(Gamma0(13), chi_2) and S2(Gamma0(13), chi_10)"
+            ),
+        )
     if (
         field != right_field
         or left_space.level != right_space.level
@@ -525,7 +552,7 @@ def modular_character_coordinates_product(
         or left_space.level != 13
         or left_space.weight != 2
         or left_space.kind != "S"
-        or (left_space.character.coordinates, right_space.character.coordinates)
+        or (left_character.coordinates, right_character.coordinates)
         not in (((2,), (10,)), ((10,), (2,)))
     ):
         raise OperationDomainValidationError(
@@ -580,14 +607,14 @@ def modular_character_coordinates_product(
         + 2
     )
     work = precision * precision * field.degree**2 * 16
-    output_bytes = (
+    allocation_bytes = (
         2 * precision * field.degree * (2 * coefficient_digits + 32)
         + precision * field.degree * (2 * product_digits + 32)
         + 2_048
     )
     if (
         work > _MAX_WORK
-        or output_bytes > _MAX_OUTPUT_BYTES
+        or allocation_bytes > _MAX_ALLOCATION_BYTES
         or product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
     ):
         raise OperationResourceAdmissionError(
@@ -771,7 +798,7 @@ def modular_character_coordinates_hecke(
         coordinate_digits * (2 * admitted[1].degree + 2) + 2 * len(str(index)) + 8
     )
     work = precision * admitted[1].degree * 64 + index * 16
-    output_bytes = (
+    allocation_bytes = (
         precision * admitted[1].degree * (2 * coordinate_digits + 32)
         + 3 * admitted[1].degree * (2 * hecke_intermediate_digits + 48)
         + admitted[1].degree * (2 * predicted_coordinate_digits + 48)
@@ -783,7 +810,7 @@ def modular_character_coordinates_hecke(
         or hecke_intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or predicted_coordinate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or work > _MAX_WORK
-        or output_bytes > _MAX_OUTPUT_BYTES
+        or allocation_bytes > _MAX_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("index",),
@@ -815,7 +842,12 @@ def modular_character_coordinates_hecke(
         )
 
     character = admitted[0].character
-    assert isinstance(character, DirichletCharacter)
+    if not isinstance(character, DirichletCharacter):
+        raise OperationDomainValidationError(
+            location=("form", "space", "character"),
+            code="modular_form.character_hecke_character",
+            message="character Hecke action requires an exact Dirichlet character",
+        )
     transformed_values = []
     for output_index in range(3):
         request_checkpoint("during character-valued Hecke coefficient reconstruction")
@@ -1120,11 +1152,14 @@ def modular_character_hecke_matrix(
     # exact coefficient height, work, and output before entering the PARI
     # basis worker or reconstructing the Hecke image.
     image = modular_character_coordinates_hecke(normalized, index)
+    image_scalar = image.coordinates[0]
+    if type(image_scalar) is not RationalCyclotomicElement:
+        raise RuntimeError("character Hecke image has a non-cyclotomic coordinate")
     return ModularCharacterHeckeMatrix(
         space=admitted_space,
         basis_id=CHARACTER_BASIS_ID,
         index=index,
-        entries=((image.coordinates[0],),),
+        entries=((image_scalar,),),
     )
 
 

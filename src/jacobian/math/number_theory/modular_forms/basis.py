@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 from math import comb, factorial, gcd, isqrt, lcm
 from typing import Literal
@@ -594,6 +594,10 @@ def _admit_pari_basis(
 
 
 def _materialize_pari_basis(plan: _BasisPlan) -> _BasisPlan:
+    if plan.dimension == 0:
+        # The exact dimension formula already determines the unique empty
+        # basis; no backend computation is needed to establish its labels.
+        return replace(plan, basis_vectors=(), basis_labels=())
     sturm_precision = sturm_bound(plan.space).bound + 1
     vectors = pari_gamma0_rational_basis(
         plan.space,
@@ -2215,17 +2219,8 @@ def modular_form_coordinates_atkin_lehner(
     )
 
 
-def modular_form_hecke_matrix(
-    space: ModularFormSpace, index: int
-) -> ModularFormHeckeMatrix:
-    """Return the exact T_n matrix in the canonical basis of an admitted space.
-
-    Matrix rows are output basis coefficients and columns are input basis
-    vectors. One basis expansion at the required source order supplies every
-    column, and each column is reconstructed and checked through the exact
-    Sturm bound.
-    """
-
+def _admit_hecke_matrix_parent(space: ModularFormSpace, index: int) -> None:
+    """Validate shared Hecke index and parent constraints before any basis job."""
     if type(index) is not int or not 1 <= index <= MAX_Q_TRANSFORM_SOURCE_ORDER:
         raise OperationResourceAdmissionError(
             location=("index",),
@@ -2233,10 +2228,10 @@ def modular_form_hecke_matrix(
             message="Hecke matrix index is outside the exact admitted envelope",
         )
     if not isinstance(space, ModularFormSpace):
-        _admit_basis(space, 1)
+        _admit_basis(space, 1, materialize_pari=False)
         raise RuntimeError("unreachable invalid modular-form space")
     if type(space.weight) is not int or space.weight < 0:
-        _admit_basis(space, 1)
+        _admit_basis(space, 1, materialize_pari=False)
         raise RuntimeError("unreachable invalid modular-form weight")
     chi_minus4 = _is_gamma0_four_chi4(space)
     if space.level > 4:
@@ -2244,7 +2239,7 @@ def modular_form_hecke_matrix(
         # Gamma0 spaces through MAX_PARI_BASIS_LEVEL. Hecke T_n preserves
         # these spaces when (n, N) = 1.
         if space.character != "TRIVIAL" or space.coefficient_domain != "QQ":
-            _admit_basis(space, 1)
+            _admit_basis(space, 1, materialize_pari=False)
         supported = gcd(index, space.level) == 1
     else:
         supported = (
@@ -2260,6 +2255,21 @@ def modular_form_hecke_matrix(
             code="modular_form.hecke_matrix_not_coprime",
             message="Hecke matrices are supported when the index is coprime to the level",
         )
+
+
+def modular_form_hecke_matrix(
+    space: ModularFormSpace, index: int
+) -> ModularFormHeckeMatrix:
+    """Return the exact T_n matrix in the canonical basis of an admitted space.
+
+    Matrix rows are output basis coefficients and columns are input basis
+    vectors. One basis expansion at the required source order supplies every
+    column, and each column is reconstructed and checked through the exact
+    Sturm bound.
+    """
+
+    _admit_hecke_matrix_parent(space, index)
+    chi_minus4 = _is_gamma0_four_chi4(space)
     bound = sturm_bound(space).bound
     precision = bound + 1
     source_order = index * bound + 1
@@ -2410,6 +2420,8 @@ def modular_form_hecke_matrix_in_frame(
             code="modular_form.hecke_matrix_index_bound",
             message="Hecke matrix index is outside the exact admitted envelope",
         )
+    if isinstance(frame, ModularFormChangeOfBasisFrame):
+        _admit_hecke_matrix_parent(frame.space, index)
     if (
         isinstance(frame, ModularFormChangeOfBasisFrame)
         and frame.source_basis_id == PARI_STURM_RREF_BASIS_ID

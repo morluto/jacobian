@@ -53,7 +53,7 @@ def _general_source() -> RationalFunction:
     return rational_function_from_sympy((x * x + y) / (x - y), ("x", "y"))
 
 
-def test_recognition_worker_timeout_uses_remaining_request_deadline(
+def test_gradient_admission_worker_timeout_uses_remaining_request_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     observed: dict[str, Any] = {}
@@ -68,7 +68,7 @@ def test_recognition_worker_timeout_uses_remaining_request_deadline(
         request_execution(started),
         pytest.raises(
             OperationExecutionTimeoutError,
-            match="worker deadline expired",
+            match="gradient deadline expired",
         ),
     ):
         bind_request_deadline(started + 5.0)
@@ -79,7 +79,12 @@ def test_recognition_worker_timeout_uses_remaining_request_deadline(
     assert isinstance(resource_limits, ProcessResourceLimits)
     assert resource_limits.cpu_seconds is not None
     assert resource_limits.address_space_bytes is not None
-    assert str(observed["cwd"]).split("/")[-1].startswith("jacobian-lie-recognition-")
+    assert json.loads(observed["input_bytes"])["task"] == "gradient_admission"
+    assert (
+        str(observed["cwd"])
+        .split("/")[-1]
+        .startswith("jacobian-rational-gradient-gcd-")
+    )
 
 
 def test_general_gradient_keeps_quotient_expansion_out_of_parent(

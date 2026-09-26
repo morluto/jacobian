@@ -14,10 +14,9 @@ from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
     MAX_RSK_WORD_LENGTH,
     MAX_RSK_WORD_PAYLOAD_SCALARS,
-    FinitePermutation,
-    PermutationRSKPair,
     RSKConvention,
     RSKInsertionEvent,
+    RSKReverseInsertionEvent,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -26,6 +25,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
     SemistandardYoungTableau,
+    StandardYoungTableau,
     TableauCandidate,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord, Symbol
@@ -186,7 +186,7 @@ class SemistandardTableauCheckRequest(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    __doc__ = f"""One bounded canonical permutation for ordinary row-insertion RSK.
+    __doc__ = f"""One strict bounded permutation for ordinary row-insertion RSK.
 
     Forward insertion performs at most
     ``N(N-1)/2 <= {
@@ -196,20 +196,61 @@ class RSKPermutationRequest(StrictModel):
     ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
     """
 
-    permutation: FinitePermutation
+    permutation: tuple[StrictInt, ...] = Field(
+        min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
+    )
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
 
-class RSKInversePermutationRequest(StrictModel):
-    __doc__ = f"""Invert one compatible standard-tableau RSK pair with at most
-    {MAX_RSK_PERMUTATION_LENGTH} cells.
+class RSKResult(StrictModel):
+    """Canonical tableaux produced by one admitted permutation-RSK kernel."""
 
-    Reverse insertion performs at most ``N(N-1)/2`` row searches and at most
-    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search.
-    """
-
-    pair: PermutationRSKPair
+    permutation: tuple[StrictInt, ...] = Field(
+        min_length=0,
+        max_length=MAX_RSK_PERMUTATION_LENGTH,
+        description="The exact source permutation of 1 through n.",
+    )
+    p_tableau: StandardYoungTableau
+    q_tableau: StandardYoungTableau
+    shape: IntegerPartition
+    lis_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
+    lds_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_structural_consistency(self) -> Self:
+        if self.p_tableau.shape != self.shape or self.q_tableau.shape != self.shape:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_shape_mismatch",
+                "tableaux and shape must agree",
+            )
+        if sum(self.shape.parts) != len(self.permutation):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_size_mismatch",
+                "tableau shape size must equal permutation length",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RSKPermutationRequest,
+        *,
+        insertion_rows: tuple[tuple[int, ...], ...],
+        recording_rows: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Build one result after the admitted RSK kernel established it."""
+
+        shape = IntegerPartition(parts=tuple(len(row) for row in insertion_rows))
+        return cls.model_construct(
+            permutation=request.permutation,
+            p_tableau=StandardYoungTableau(rows=insertion_rows),
+            q_tableau=StandardYoungTableau(rows=recording_rows),
+            shape=shape,
+            lis_length=shape.parts[0] if shape.parts else 0,
+            lds_length=len(shape.parts),
+            convention=request.convention,
+        )
 
 
 class RSKWordRequest(StrictModel):
@@ -239,9 +280,8 @@ class RSKInverseWordRequest(StrictModel):
     __doc__ = f"""One compatible compact word-RSK pair of at most
     {MAX_RSK_WORD_LENGTH} cells to invert.
 
-    Reverse insertion and its forward replay each perform at most
-    ``N(N-1)/2 <= {MAX_RSK_WORD_LENGTH * (MAX_RSK_WORD_LENGTH - 1) // 2}``
-    binary row searches, with at most
+    Reverse insertion performs at most ``N(A-1)`` binary row searches for
+    ``N`` cells and an alphabet of ``A`` ranks, with at most
     {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search.
     """
 
@@ -375,6 +415,115 @@ class RSKWordTraceResult(StrictModel):
             word=request.word,
             tableau_pair=tableau_pair,
             insertion_events=insertion_events,
+            convention=request.convention,
+        )
+
+
+class RSKWordInverseTraceResult(StrictModel):
+    """The reconstructed source word and the exact reverse-insertion ledger."""
+
+    word: FiniteWord
+    tableau_pair: RSKTableauPair
+    reverse_insertion_events: tuple[RSKReverseInsertionEvent, ...] = Field(
+        max_length=MAX_RSK_WORD_LENGTH
+    )
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_trace_source_alignment(self) -> Self:
+        count = sum(self.tableau_pair.shape.parts)
+        if (
+            self.word.alphabet != self.tableau_pair.alphabet
+            or self.convention != self.tableau_pair.convention
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_source",
+                "the trace word, tableau pair, and convention must agree",
+            )
+        if len(self.word.letters) != count or tuple(
+            event.position for event in self.reverse_insertion_events
+        ) != tuple(range(count, 0, -1)):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_positions",
+                "the reverse trace must contain one descending event per cell",
+            )
+        if any(
+            event.letter != self.word.letters[event.position - 1]
+            for event in self.reverse_insertion_events
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_letters",
+                "each event letter must match its reconstructed word position",
+            )
+        current_shape = self.tableau_pair.shape.parts
+        for event in self.reverse_insertion_events:
+            after_shape = event.row_lengths
+            if event.removed_row == len(after_shape):
+                prior_shape = (*after_shape, 1)
+            elif event.removed_row < len(after_shape):
+                prior = list(after_shape)
+                prior[event.removed_row] += 1
+                prior_shape = tuple(prior)
+                previous_length = (
+                    after_shape[event.removed_row - 1]
+                    if event.removed_row > 0
+                    else None
+                )
+                if (
+                    previous_length is not None
+                    and previous_length <= after_shape[event.removed_row]
+                ):
+                    raise PydanticCustomError(
+                        "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                        "each removed cell must be a corner of the prior partition",
+                    )
+            else:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                    "each removed cell must belong to the prior partition",
+                )
+            if prior_shape != current_shape:
+                raise PydanticCustomError(
+                    "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                    "reverse event shapes must form one removal chain from the tableau pair",
+                )
+            current_shape = after_shape
+        if current_shape:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_shape_chain",
+                "the reverse removal chain must end at the empty partition",
+            )
+        rank_by_letter = {
+            letter: rank
+            for rank, letter in enumerate(self.tableau_pair.alphabet, start=1)
+        }
+        if any(
+            event.removed_entry > len(rank_by_letter)
+            or event.output_entry > len(rank_by_letter)
+            or any(
+                step.displaced_entry > len(rank_by_letter)
+                for step in event.reverse_bump_path
+            )
+            or rank_by_letter.get(event.letter) != event.output_entry
+            for event in self.reverse_insertion_events
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.rsk_reverse_trace_ranks",
+                "event ranks must belong to the retained alphabet and identify the emitted letter",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        request: RSKInverseWordRequest,
+        word: FiniteWord,
+        events: tuple[RSKReverseInsertionEvent, ...],
+    ) -> Self:
+        return cls.model_construct(
+            word=word,
+            tableau_pair=request.pair,
+            reverse_insertion_events=events,
             convention=request.convention,
         )
 
@@ -819,9 +968,10 @@ __all__ = [
     "PartitionDominanceResult",
     "PlacticNormalFormRequest",
     "PlacticNormalFormResult",
-    "RSKInversePermutationRequest",
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
+    "RSKResult",
+    "RSKWordInverseTraceResult",
     "RSKWordRequest",
     "RSKWordTraceRequest",
     "RSKWordTraceResult",

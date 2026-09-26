@@ -14,6 +14,8 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.algebraic._models import (
     MAX_RSK_TRACE_RESULT_BYTES,
     MAX_RSK_TRACE_WORK,
+    RSKInverseWordRequest,
+    RSKWordInverseTraceResult,
     RSKWordTraceRequest,
     RSKWordTraceResult,
 )
@@ -25,6 +27,8 @@ from jacobian.math.combinatorics.algebraic.values import (
     PermutationRSKPair,
     RSKBumpStep,
     RSKInsertionEvent,
+    RSKReverseBumpStep,
+    RSKReverseInsertionEvent,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -34,7 +38,7 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     require_semistandard,
     require_standard,
 )
-from jacobian.math.logic.languages.words.values import FiniteWord
+from jacobian.math.logic.languages.words.values import MAX_SYMBOL_LENGTH, FiniteWord
 
 
 def word_payload_scalars(word: FiniteWord) -> int:
@@ -164,6 +168,129 @@ def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     current entry.
     """
     return _inverse(pair)
+
+
+def _admit_inverse_trace(pair: RSKTableauPair) -> tuple[RSKInverseWordRequest, int]:
+    """Validate the typed pair and admit all reverse-trace work and output."""
+    if type(pair) is not RSKTableauPair:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_inverse_trace_pair",
+            message="expected a canonical RSK tableau pair",
+        )
+    try:
+        pair = RSKTableauPair.model_validate(pair.model_dump(mode="python"))
+        require_semistandard(pair.insertion_tableau)
+        require_standard(pair.recording_tableau)
+        if any(
+            entry > len(pair.alphabet)
+            for row in pair.insertion_tableau.rows
+            for entry in row
+        ):
+            raise ValueError("insertion tableau entry is outside the ordered alphabet")
+    except (ValidationError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_inverse_trace_pair",
+            message="expected a compatible semistandard and standard tableau pair",
+        ) from exc
+
+    cell_count = sum(pair.shape.parts)
+    if cell_count > MAX_RSK_WORD_LENGTH:
+        raise OperationResourceAdmissionError(
+            location=("pair", "shape"),
+            code="algebraic_combinatorics.rsk_inverse_trace_cells",
+            message="the tableau pair exceeds the inverse RSK trace cell bound",
+        )
+    alphabet_scalars = sum(len(symbol) for symbol in pair.alphabet)
+    if alphabet_scalars + cell_count * MAX_SYMBOL_LENGTH > MAX_RSK_WORD_PAYLOAD_SCALARS:
+        raise OperationResourceAdmissionError(
+            location=("pair", "alphabet"),
+            code="algebraic_combinatorics.rsk_inverse_trace_payload",
+            message="the reconstructed word exceeds the admitted text payload",
+        )
+    height = len(pair.alphabet)
+    work = cell_count * max(0, height - 1) * MAX_RSK_ROW_SEARCH_COMPARISONS
+    if work > MAX_RSK_TRACE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_inverse_trace_work",
+            message="the complete reverse-insertion trace exceeds the work bound",
+        )
+    bump_count = cell_count * max(0, height - 1)
+    output_bound = (
+        2048
+        + 6 * (alphabet_scalars + 2 * cell_count * MAX_SYMBOL_LENGTH)
+        + 192 * cell_count
+        + 72 * bump_count
+        + 16 * cell_count * height
+    )
+    if output_bound > MAX_RSK_TRACE_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("pair",),
+            code="algebraic_combinatorics.rsk_inverse_trace_output",
+            message="the complete reverse-insertion ledger exceeds the 8 MB result bound",
+        )
+
+    return RSKInverseWordRequest.model_construct(pair=pair), cell_count
+
+
+def inverse_row_insertion_rsk_trace(
+    pair: RSKTableauPair,
+) -> RSKWordInverseTraceResult:
+    """Reconstruct a word together with every reverse-insertion event."""
+    request, cell_count = _admit_inverse_trace(pair)
+    pair = request.pair
+    insertion = [list(row) for row in pair.insertion_tableau.rows]
+    label_cells: list[tuple[int, int] | None] = [None] * cell_count
+    for row_index, row in enumerate(pair.recording_tableau.rows):
+        for column, label in enumerate(row):
+            label_cells[label - 1] = (row_index, column)
+    events: list[RSKReverseInsertionEvent] = []
+    for position in range(cell_count, 0, -1):
+        if position == cell_count or position % 16 == 0:
+            request_checkpoint("during reverse row-insertion RSK trace")
+        cell = label_cells[position - 1]
+        if cell is None:
+            raise RuntimeError("recording tableau is missing a label")
+        row_index, column = cell
+        if column != len(insertion[row_index]) - 1:
+            raise RuntimeError("recording label is not at an outer corner")
+        removed_entry = insertion[row_index].pop()
+        if not insertion[row_index]:
+            if row_index != len(insertion) - 1:
+                raise RuntimeError("reverse insertion produced a non-partition shape")
+            insertion.pop()
+        current = removed_entry
+        path: list[RSKReverseBumpStep] = []
+        for upper_index in range(row_index - 1, -1, -1):
+            upper_row = insertion[upper_index]
+            target = bisect_left(upper_row, current) - 1
+            if target < 0:
+                raise RuntimeError("semistandard pair failed reverse row insertion")
+            upper_row[target], current = current, upper_row[target]
+            path.append(
+                RSKReverseBumpStep(
+                    row=upper_index, column=target, displaced_entry=current
+                )
+            )
+        events.append(
+            RSKReverseInsertionEvent(
+                position=position,
+                letter=pair.alphabet[current - 1],
+                removed_row=row_index,
+                removed_column=column,
+                removed_entry=removed_entry,
+                output_entry=current,
+                reverse_bump_path=tuple(path),
+                row_lengths=tuple(len(row) for row in insertion),
+            )
+        )
+    letters = [""] * cell_count
+    for event in events:
+        letters[event.position - 1] = event.letter
+    word = FiniteWord(alphabet=pair.alphabet, letters=tuple(letters))
+    return RSKWordInverseTraceResult._from_kernel(request, word, tuple(events))
 
 
 def _trace_output_size_bound(word: FiniteWord, payload_scalars: int) -> int:
@@ -375,6 +502,7 @@ def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
 __all__ = [
     "inverse_permutation_rsk",
     "inverse_row_insertion_rsk",
+    "inverse_row_insertion_rsk_trace",
     "row_insertion_rsk",
     "row_insertion_rsk_trace",
 ]

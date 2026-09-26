@@ -1807,9 +1807,19 @@ def modular_form_coordinates_product(
             code="modular_form.product_target_level_unsupported",
             message="form products currently require a target Gamma0 level at most 4",
         )
+    target_weight = left.space.weight + right.space.weight
+    if target_weight > MAX_MODULAR_FORM_WEIGHT:
+        raise OperationResourceAdmissionError(
+            location=("space", "weight"),
+            code="modular_form.product_target_weight_bound",
+            message=(
+                "product target weight exceeds the admitted modular-form bound "
+                f"{MAX_MODULAR_FORM_WEIGHT}"
+            ),
+        )
     target_space = ModularFormSpace(
         level=target_level,
-        weight=left.space.weight + right.space.weight,
+        weight=target_weight,
         kind="S" if "S" in (left.space.kind, right.space.kind) else "M",
     )
     precision = sturm_bound(target_space).bound + 1
@@ -2460,7 +2470,7 @@ def modular_form_hecke_matrix(
             code="modular_form.hecke_matrix_source_bound",
             message="Hecke matrix requires basis coefficients beyond the admitted source order",
         )
-    plan = _admit_basis(space, source_order)
+    plan = _admit_basis(space, source_order, materialize_pari=False)
     term_count = 2 * isqrt(index) + 1
     work = (
         plan.dimension * precision * index
@@ -2516,6 +2526,8 @@ def modular_form_hecke_matrix(
             message="Hecke matrix exact entries exceed the bounded output envelope",
         )
 
+    if plan.basis_id == PARI_STURM_RREF_BASIS_ID:
+        plan = _materialize_pari_basis(plan)
     basis_vectors = _basis_coefficients(plan)
     columns = []
     for vector in basis_vectors:

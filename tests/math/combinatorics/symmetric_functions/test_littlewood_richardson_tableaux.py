@@ -156,7 +156,9 @@ def test_lr_tableau_enumeration_rejects_before_expansion_and_is_catalogued() -> 
             IntegerPartition(parts=()),
             IntegerPartition(parts=(9,)),
         )
-    assert error.value.errors()[0]["type"] == "symmetric_functions.lr_skew_size_exceeded"
+    assert (
+        error.value.errors()[0]["type"] == "symmetric_functions.lr_skew_size_exceeded"
+    )
     tool = next(
         item
         for item in TOOLS

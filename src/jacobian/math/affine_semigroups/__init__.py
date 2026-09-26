@@ -16,6 +16,11 @@ from jacobian.math.affine_semigroups.group_lattice import (
     AffineGroupLattice,
     compute_group_lattice,
 )
+from jacobian.math.affine_semigroups.holes import (
+    AffineSemigroupHoleProfile,
+    AffineSemigroupHolesRequest,
+    holes_through_degree,
+)
 from jacobian.math.affine_semigroups.operations import (
     integer_configuration_circuits,
     relation_lattice,
@@ -46,6 +51,8 @@ __all__ = [
     "AffineGroupLattice",
     "AffineHilbertBasis",
     "AffineMembershipResult",
+    "AffineSemigroupHoleProfile",
+    "AffineSemigroupHolesRequest",
     "IntegerConfigurationCircuitsResult",
     "IntegerConfigurationGraverBasis",
     "IntegerConfigurationMarkovBasis",
@@ -58,6 +65,7 @@ __all__ = [
     "fiber_graph",
     "graver_basis",
     "hilbert_basis",
+    "holes_through_degree",
     "integer_configuration_circuits",
     "markov_basis",
     "membership",

@@ -21,6 +21,21 @@ from jacobian.math.logic.automata.tree.values import (
 )
 
 
+def test_context_accepts_canonical_frames_and_sibling_values():
+    sibling = RankedTree(symbol=0)
+    frame = TreeContextFrame(symbol=1, hole_child=0, siblings=(sibling,))
+    context = FiniteTreeContext(arity=(0, 2), frames=(frame,))
+    assert context.frames == (frame,)
+    assert context.frames[0].siblings == (sibling,)
+
+
+def test_context_rejects_nested_arity_entries_before_canonicalization():
+    with pytest.raises(
+        ValueError, match="context arities must be in the supported range"
+    ):
+        FiniteTreeContext.model_validate({"arity": [[0] * 10000], "frames": []})
+
+
 def test_context_plugging_preserves_ranked_tree_structure():
     context = FiniteTreeContext.model_validate(
         {

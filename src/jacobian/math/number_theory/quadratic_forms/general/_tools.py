@@ -352,8 +352,8 @@ TOOLS = (
             "Return every integer vector x, in the exact ordered form axis, at "
             "each requested value Q(x)=n. All requested fibers are complete, "
             "including empty fibers. The positive-definite search box, exact "
-            "evaluation work, vector count, and aggregate serialized output bytes "
-            "are admitted before enumeration."
+            "evaluation work, vector count, and coordinate bounds are admitted "
+            "before enumeration."
         ),
         request_type=ThetaRepresentingVectorsRequest,
         result_type=ThetaRepresentingVectorsResult,

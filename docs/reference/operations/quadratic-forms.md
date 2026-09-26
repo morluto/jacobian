@@ -227,8 +227,7 @@ The form must be integral and positive definite. With `C` the integral polar
 matrix, the exact adjugate bound `x_i^2 <= 2*N*(C^-1)_ii`, where `N` is the
 largest requested index, yields a complete search box. The kernel admits the
 box size and term-evaluation work before enumeration. It also uses that box as
-a sound upper bound on the number of vectors that could be returned, and
-admits the worst-case coordinate spellings, retained form, row structure, and
-aggregate output bytes before building vectors. At most 100,000 vectors and
-8 MiB of result bytes are allowed. This is a finite fiber operation; it does
-not decide representability beyond the requested indices.
+a sound upper bound on the number of vectors that could be returned. At most
+100,000 vectors are allowed, with the schema's intrinsic coordinate bounds.
+This is a finite fiber operation; it does not decide representability beyond
+the requested indices.

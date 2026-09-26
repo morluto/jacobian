@@ -224,8 +224,8 @@ def _admit_box_and_output(
         if vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT:
             raise OperationResourceAdmissionError(
                 location=request_location,
-                code="quadratic_form.theta_representation_output_bound",
-                message="representation vectors exceed their admitted output envelope",
+                code="quadratic_form.theta_representation_vector_bound",
+                message="representation vectors exceed their admitted cardinality bound",
             )
     else:
         output_digits = (

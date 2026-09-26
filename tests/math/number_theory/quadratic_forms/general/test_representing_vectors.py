@@ -71,18 +71,26 @@ def test_representing_vectors_match_direct_sum_of_two_squares_oracle() -> None:
     request = ThetaRepresentingVectorsRequest(form=_form(diagonal), indices=indices)
     result = theta_representing_vectors(request)
     actual = tuple(
-        (row.index, tuple(tuple(vector) for vector in row.vectors))
+        (
+            row.index,
+            tuple(
+                tuple(value.num for value in vector.coordinates)
+                for vector in row.vectors
+            ),
+        )
         for row in result.rows
     )
     assert actual == expected
     assert result.rows[3].vectors == ()
-    assert result.rows[2].vectors == (
-        (-1, -1),
-        (-1, 1),
-        (1, -1),
-        (1, 1),
-    )
-    assert result.model_dump(mode="json")["rows"][2]["vectors"][0] == ["-1", "-1"]
+    assert tuple(
+        tuple(value.num for value in vector.coordinates)
+        for vector in result.rows[2].vectors
+    ) == ((-1, -1), (-1, 1), (1, -1), (1, 1))
+    assert result.model_dump(mode="json")["rows"][2]["vectors"][0] == {
+        "domain": "QQ",
+        "axis": ["x0", "x1"],
+        "coordinates": [{"num": "-1", "den": "1"}, {"num": "-1", "den": "1"}],
+    }
     assert (
         ThetaRepresentingVectorsResult.model_validate_json(result.model_dump_json())
         == result
@@ -99,7 +107,13 @@ def test_representing_vectors_preserve_cross_term_signs_and_order() -> None:
     )
     assert (
         tuple(
-            (row.index, tuple(tuple(vector) for vector in row.vectors))
+            (
+                row.index,
+                tuple(
+                    tuple(value.num for value in vector.coordinates)
+                    for vector in row.vectors
+                ),
+            )
             for row in result.rows
         )
         == expected
@@ -110,7 +124,9 @@ def test_zero_dimensional_form_has_one_empty_vector_at_value_zero() -> None:
     result = theta_representing_vectors(
         ThetaRepresentingVectorsRequest(form=_form(()), indices=(0, 1))
     )
-    assert result.rows[0].vectors == ((),)
+    assert len(result.rows[0].vectors) == 1
+    assert result.rows[0].vectors[0].axis == ()
+    assert result.rows[0].vectors[0].coordinates == ()
     assert result.rows[1].vectors == ()
 
 
@@ -149,18 +165,45 @@ def test_representing_vectors_reject_unbounded_proved_search_box() -> None:
 
 def test_representation_result_enforces_axis_shape_order_and_coordinate_bound() -> None:
     form = _form((1,))
-    with pytest.raises(ValidationError, match="length must match form axis"):
+    with pytest.raises(
+        ValidationError, match="coordinates must match the coordinate-vector axis"
+    ):
         ThetaRepresentingVectorsResult(
             form=form,
-            rows=(ThetaRepresentingVectorsRow(index=1, vectors=((1, 0),)),),
+            rows=(
+                ThetaRepresentingVectorsRow(
+                    index=1,
+                    vectors=(
+                        {
+                            "axis": ("x0",),
+                            "coordinates": ({"num": 1, "den": 1}, {"num": 0, "den": 1}),
+                        },
+                    ),
+                ),
+            ),
         )
     with pytest.raises(ValidationError, match="unique and ordered"):
         ThetaRepresentingVectorsResult(
             form=form,
-            rows=(ThetaRepresentingVectorsRow(index=1, vectors=((1,), (1,))),),
+            rows=(
+                ThetaRepresentingVectorsRow(
+                    index=1,
+                    vectors=(
+                        {"axis": ("x0",), "coordinates": ({"num": 1, "den": 1},)},
+                        {"axis": ("x0",), "coordinates": ({"num": 1, "den": 1},)},
+                    ),
+                ),
+            ),
         )
     with pytest.raises(ValidationError, match="coordinate exceeds its bound"):
         ThetaRepresentingVectorsResult(
             form=form,
-            rows=(ThetaRepresentingVectorsRow(index=1, vectors=((50_000,),)),),
+            rows=(
+                ThetaRepresentingVectorsRow(
+                    index=1,
+                    vectors=(
+                        {"axis": ("x0",), "coordinates": ({"num": 50000, "den": 1},)},
+                    ),
+                ),
+            ),
         )

@@ -3,6 +3,10 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.groups.characters._abelian_models import (
+    FiniteAbelianCharacterTableRequest,
+    FiniteAbelianCharacterTableResult,
+)
 from jacobian.math.groups.characters._models import (
     CharacterTableRequest,
     CharacterTableResult,
@@ -23,6 +27,9 @@ from jacobian.math.groups.characters._models import (
     FiniteClassFunction,
     FrobeniusSchurIndicatorRequest,
     FrobeniusSchurIndicatorResult,
+)
+from jacobian.math.groups.characters.abelian_operations import (
+    _run_finite_abelian_character_table,
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
@@ -475,6 +482,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "scalar": _rational_value(-2),
                     "function": _s3_standard_class_function(),
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_abelian_group.character_table.compute",
+        title="Compute a bounded exact character table of a finite Abelian group",
+        description=(
+            "Compute every linear character of an explicit product of cyclic groups "
+            "and its value on every element. Rows and columns use lexicographic "
+            "coordinate order; values are exact cyclotomic power-basis elements. "
+            "This complete table operation admits group order at most 128 and "
+            "exponent at most 60, subject to its exact serialized-output bound."
+        ),
+        request_type=FiniteAbelianCharacterTableRequest,
+        result_type=FiniteAbelianCharacterTableResult,
+        run=_run_finite_abelian_character_table,
+        tags=("finite-abelian-group", "character-table", "cyclotomic", "exact"),
+        discovery_terms=(
+            "finite Abelian character table",
+            "linear characters of product cyclic group",
+            "finite group Fourier table",
+            "exact roots of unity",
+        ),
+        examples=(
+            OperationExample(
+                name="klein_four_character_table",
+                description=(
+                    "Compute all four exact linear characters on C2 x C2 in "
+                    "lexicographic coordinate order."
+                ),
+                input={"group": {"moduli": ["2", "2"]}},
             ),
         ),
     ),

@@ -12,14 +12,23 @@ from tools.command_runner import ToolCommandStatus, run_operator_command
 ROOT = Path(__file__).parents[2]
 
 
+def _operator_executable(name: str) -> str:
+    executable = shutil.which(name)
+    if executable is None:
+        raise RuntimeError(f"{name} is required for Make command tests")
+    return str(Path(executable).resolve(strict=True))
+
+
 def _make_dry_run(*arguments: str) -> str:
     result = run_operator_command(
         "make",
         (
             "--no-print-directory",
             "--dry-run",
-            f"UV_RUN={shutil.which('uv')} run --locked",
-            "VALIDATION_LOCK=echo tools/with_validation_lock.py",
+            f"UV_RUN={_operator_executable('uv')} run --locked",
+            # GNU Make executes recursive recipe lines even during a dry run. Use an
+            # absolute executable because run_operator_command deliberately omits PATH.
+            f"VALIDATION_LOCK={_operator_executable('echo')} tools/with_validation_lock.py",
             *arguments,
         ),
         cwd=ROOT,

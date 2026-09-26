@@ -11,6 +11,7 @@ Additional references document mathematical contracts or external boundaries
 that need more context than an operation card:
 
 - [Combinatorics on words](words/index.md)
+- [Finite simplicial subset prefixes](simplicial-set-subsets.md)
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
 - [Root-system coroots](groups/root-coroots.md)

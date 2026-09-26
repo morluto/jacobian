@@ -721,6 +721,16 @@ def chain_product(request: CubicalChainProductRequest) -> CubicalChainValue:
     This induces the standard product orientation and the graded boundary
     identity without inserting a sign into the generator product itself.
     """
+    try:
+        request = CubicalChainProductRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="cubical_complex.chain_product.invalid_request",
+            message="both factors must be canonical integral cubical chains",
+        ) from exc
     left = request.left
     right = request.right
     ambient_dimension = left.ambient_dimension + right.ambient_dimension

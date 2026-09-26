@@ -3,7 +3,10 @@ from collections import Counter
 import pytest
 
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.cubical_complexes import (
     CubicalChainProductRequest,
     CubicalChainTerm,
@@ -117,8 +120,28 @@ def test_chain_product_result_can_be_reused_with_a_large_exact_coefficient():
         CubicalChainProductRequest(left=product, right=right)
     )
     assert reusable.terms[0].coefficient == coefficient
+    payload = product.model_dump(mode="json")
+    assert payload["terms"][0]["coefficient"] == str(coefficient)
+    assert payload["terms"][0]["cell"]["intervals"] == [["0", "1"], ["5", "5"]]
+    assert CubicalChainValue.model_validate_json(encode_strict_json(payload)) == product
     assert reusable.degree == 1
     assert reusable.ambient_dimension == 3
+
+
+def test_chain_product_readmits_untrusted_nested_chain_values():
+    malformed = CubicalChainValue.model_construct(
+        ambient_dimension=1,
+        degree=0,
+        terms=(
+            CubicalChainTerm.model_construct(
+                cell=CubicalCell.model_construct(intervals=((0, 0), (1, 1))),
+                coefficient=0,
+            ),
+        ),
+    )
+    request = CubicalChainProductRequest.model_construct(left=malformed, right=None)
+    with pytest.raises(OperationDomainValidationError):
+        chain_product(request)
 
 
 def test_chain_product_preflights_term_growth_before_constructing_cells(monkeypatch):

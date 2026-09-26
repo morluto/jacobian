@@ -8,7 +8,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.posets.core._models import (
     MAX_POSET_ELEMENTS,
@@ -73,10 +73,18 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"cubical_complex.{reason}", message)
 
 
+CubicalCoordinate = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_CUBICAL_CHAIN_VALUE_COORDINATE_DIGITS)
+]
+CubicalChainCoefficientValue = Annotated[
+    int, DecimalIntegerEncoding(max_digits=MAX_CUBICAL_CHAIN_VALUE_COEFFICIENT_DIGITS)
+]
+
+
 class CubicalCell(StrictModel):
     """An elementary cube: a tuple of intervals [a_i, b_i] on integer lattice."""
 
-    intervals: tuple[tuple[int, int], ...] = Field(min_length=1, max_length=MAX_DIM)
+    intervals: tuple[tuple[CubicalCoordinate, CubicalCoordinate], ...] = Field(min_length=1, max_length=MAX_DIM)
 
     @model_validator(mode="after")
     def require_valid_intervals(self) -> Self:
@@ -519,7 +527,7 @@ class CubicalChainTerm(StrictModel):
     """One nonzero integer multiple of a canonically oriented cubical cell."""
 
     cell: CubicalCell
-    coefficient: StrictInt
+    coefficient: CubicalChainCoefficientValue
 
 
 class CubicalChainValue(StrictModel):

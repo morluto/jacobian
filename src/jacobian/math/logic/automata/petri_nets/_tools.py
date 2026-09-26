@@ -225,30 +225,6 @@ _PRODUCER_CONSUMER_NET = {
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
-        operation_id="petri_net.matrices.compute",
-        title="Compute Petri-net pre, post, and incidence matrices",
-        description="Return exact Pre, Post, and C = Post - Pre matrices, plus input/output place supports per transition and producer/consumer transition supports per place. The source net retains the exact axes.",
-        request_type=PetriNetMatricesRequest,
-        result_type=PetriNetMatricesResult,
-        run=compute_petri_net_matrices,
-        tags=("petri-net", "matrices", "exact"),
-        discovery_terms=("pre-incidence", "post-incidence", "incidence matrix"),
-        examples=(
-            OperationExample(
-                name="weighted_pre_post_matrices",
-                description="Return all three matrices for a two-place weighted net.",
-                input={
-                    "net": {
-                        "place_count": 2,
-                        "transition_count": 1,
-                        "pre": [[2], [0]],
-                        "post": [[0], [3]],
-                    }
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="petri_net.relabel.compute",
         title="Relabel Petri-net place and transition axes",
         description=(

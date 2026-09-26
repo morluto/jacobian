@@ -474,6 +474,47 @@ class PetriNetMatricesResult(StrictModel):
     consumer_transitions_by_place: tuple[tuple[int, ...], ...]
     producer_transitions_by_place: tuple[tuple[int, ...], ...]
 
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        places = self.net.place_count
+        transitions = self.net.transition_count
+        matrices = (self.pre, self.post, self.incidence)
+        if any(
+            matrix.row_count != places or matrix.column_count != transitions
+            for matrix in matrices
+        ):
+            raise _validation_error(
+                "matrices_axes", "all matrices must match the source net axes"
+            )
+        if (
+            len(self.input_places_by_transition) != transitions
+            or len(self.output_places_by_transition) != transitions
+            or len(self.consumer_transitions_by_place) != places
+            or len(self.producer_transitions_by_place) != places
+        ):
+            raise _validation_error(
+                "support_axes", "support profiles must match the source net axes"
+            )
+        for support in (*self.input_places_by_transition, *self.output_places_by_transition):
+            if tuple(sorted(set(support))) != support or any(
+                index < 0 or index >= places for index in support
+            ):
+                raise _validation_error(
+                    "support_indices", "transition supports must use source place indices"
+                )
+        for support in (
+            *self.consumer_transitions_by_place,
+            *self.producer_transitions_by_place,
+        ):
+            if tuple(sorted(set(support))) != support or any(
+                index < 0 or index >= transitions for index in support
+            ):
+                raise _validation_error(
+                    "support_indices",
+                    "place supports must use source transition indices",
+                )
+        return self
+
 
 class IncidenceMatrixResult(StrictModel):
     """The incidence matrix bound to its net's place/transition axes."""

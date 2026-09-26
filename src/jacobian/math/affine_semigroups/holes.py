@@ -101,6 +101,11 @@ def _preflight_source(
                 f"{MAX_AFFINE_HOLE_SCALAR_DIGITS}-digit hole-profile envelope"
             ),
         )
+    return _preflight_hole_semigroup(value), degree
+
+
+def _preflight_hole_semigroup(value: object) -> PositiveAffineSemigroup:
+    """Validate the shared typed rank-two source before any model copy."""
     if type(value) is not PositiveAffineSemigroup:
         raise OperationDomainValidationError(
             location=("semigroup",),
@@ -187,7 +192,7 @@ def _preflight_source(
                 message="grading components exceed the 64-digit hole-profile envelope",
             ) from exc
     try:
-        return _admit_semigroup(value), degree
+        return _admit_semigroup(value)
     except OperationDomainValidationError:
         raise
     except Exception as exc:

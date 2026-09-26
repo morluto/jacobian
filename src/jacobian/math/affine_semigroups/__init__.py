@@ -8,6 +8,11 @@ from jacobian.math.affine_semigroups.atoms import (
     AffineMinimalGeneratorsRequest,
     minimal_generators,
 )
+from jacobian.math.affine_semigroups.fundamental_holes import (
+    AffineSemigroupFundamentalHoles,
+    AffineSemigroupFundamentalHolesRequest,
+    fundamental_holes,
+)
 from jacobian.math.affine_semigroups.graver import (
     graver_basis,
     markov_basis,
@@ -55,6 +60,8 @@ __all__ = [
     "AffineMembershipResult",
     "AffineMinimalGenerators",
     "AffineMinimalGeneratorsRequest",
+    "AffineSemigroupFundamentalHoles",
+    "AffineSemigroupFundamentalHolesRequest",
     "AffineSemigroupHoleProfile",
     "AffineSemigroupHolesRequest",
     "IntegerConfigurationCircuitsResult",
@@ -66,6 +73,7 @@ __all__ = [
     "construct",
     "fiber",
     "fiber_graph",
+    "fundamental_holes",
     "graver_basis",
     "hilbert_basis",
     "holes_through_degree",

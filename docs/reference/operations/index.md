@@ -24,4 +24,5 @@ that need more context than an operation card:
 - [Affine-semigroup group lattice](affine-semigroup-group-lattice.md)
 - [Affine-semigroup minimal generators](affine-semigroup-minimal-generators.md)
 - [Affine-semigroup holes through degree](affine-semigroup-holes.md)
+- [Affine-semigroup fundamental holes](affine-semigroup-fundamental-holes.md)
 - [Integer-configuration Graver bases](integer-configuration-graver-bases.md)

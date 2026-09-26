@@ -110,6 +110,21 @@ def test_malformed_mapping_request_uses_domain_error() -> None:
         ga_stable_subrepresentation({"action": _translation_action().model_dump()})
 
 
+def test_malformed_typed_request_uses_domain_error() -> None:
+    malformed = PolynomialGaStableSubrepresentationRequest.model_construct(
+        action=_translation_action(), basis=()
+    )
+    with pytest.raises(OperationDomainValidationError):
+        ga_stable_subrepresentation(malformed)
+
+
+def test_oversized_native_basis_rejected_before_copying_entries() -> None:
+    with pytest.raises(OperationDomainValidationError, match="dimension"):
+        ga_stable_subrepresentation(
+            _translation_action(), (_poly("x", 0),) * 33
+        )
+
+
 def test_large_valid_translation_coefficient_preserves_constant_subspace() -> None:
     coefficient = 10**125 + 3
     action = _scaled_translation_action(coefficient)

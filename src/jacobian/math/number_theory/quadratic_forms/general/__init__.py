@@ -30,6 +30,13 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     evaluate_rational_quadratic_form,
     require_coefficient_matrix_budget,
 )
+from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
+    QuadraticFormScaleRequest,
+    QuadraticFormScaleResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.scaling_operations import (
+    scale_rational_quadratic_form,
+)
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
     theta_representing_vectors,
     theta_selected_coefficients,
@@ -47,6 +54,8 @@ __all__ = [
     "QuadraticCrossTerm",
     "QuadraticFormDirectSumResult",
     "QuadraticFormRestrictionResult",
+    "QuadraticFormScaleRequest",
+    "QuadraticFormScaleResult",
     "RationalCoordinateVector",
     "RationalQuadraticForm",
     "ThetaRepresentingVectorsRequest",
@@ -63,6 +72,7 @@ __all__ = [
     "quadratic_form_direct_sum",
     "quadratic_form_restrict_coordinates",
     "require_coefficient_matrix_budget",
+    "scale_rational_quadratic_form",
     "theta_representing_vectors",
     "theta_selected_coefficients",
     "theta_series_prefix",

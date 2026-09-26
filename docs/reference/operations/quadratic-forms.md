@@ -125,6 +125,27 @@ those envelopes the source-retaining result's aggregate output digits are
 bounded before the inclusion matrix or restricted polynomial is built, and
 the result constructor re-establishes the bound for deserialized values.
 
+## Scalar multiplication
+
+`quadratic_form.scale.compute` accepts a rational form `Q` and an exact
+rational scalar `c`, and returns the source form, scalar, and the form `cQ` on
+the identical ordered axis. It multiplies the polynomial coefficients
+directly, so the convention for cross terms stays unchanged. The result
+remains a `RationalQuadraticForm`; an integer-coefficient result therefore
+flows directly into the positive-definite theta-prefix and selected
+representation operations, which independently enforce their stronger
+domain conditions.
+
+Admission limits the axis to 128 coordinates, diagonal and cross-term support
+to 4,096 coefficients, and each scalar component to 256 decimal digits. Before
+forming any coefficient product, the kernel cancels numerator/denominator
+factors and uses integer division to check whether each exact reduced product
+fits the form carrier's 256-digit coefficient limit. It then constructs each
+accepted product once. This bounds the retained result intrinsically by
+cardinality and component digits rather than by transport bytes. A zero factor
+produces zero diagonal coefficients and omits zero cross terms, matching the
+canonical polynomial representation.
+
 ## Proper classes of positive-definite integral binary forms
 
 `number_theory.binary_quadratic_form.reduced_classes.compute` returns each

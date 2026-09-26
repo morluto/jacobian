@@ -918,6 +918,14 @@ def regular_tree_grammar_to_automaton(
             code="tree_automata.invalid_regular_tree_grammar",
             message="conversion requires a canonical bounded regular tree grammar",
         )
+    try:
+        grammar = RegularTreeGrammar.model_validate(grammar.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("grammar",),
+            code="tree_automata.invalid_regular_tree_grammar",
+            message="conversion requires a canonical bounded regular tree grammar",
+        ) from exc
     transition_work = sum(2 + len(rule.children) for rule in grammar.productions)
     production_count = len(grammar.productions)
     sorting_work = (
@@ -964,8 +972,19 @@ def tree_automaton_to_regular_tree_grammar(
     """Return a single-start unit-free grammar for exactly the accepted trees."""
     _preflight_tree_automaton_for_grammar(automaton)
     finals = set(automaton.final_states)
-    has_ground_seed = any(not row.child_states for row in automaton.transitions)
-    if not finals or not has_ground_seed:
+    productive: set[int] = set()
+    changed = True
+    while changed:
+        changed = False
+        for row in automaton.transitions:
+            if (
+                all(state in productive for state in row.child_states)
+                and row.target_state not in productive
+            ):
+                productive.add(row.target_state)
+                changed = True
+    accepting = finals.intersection(productive)
+    if not accepting:
         return RegularTreeGrammar(
             nonterminal_count=1,
             arity=automaton.arity,
@@ -973,21 +992,21 @@ def tree_automaton_to_regular_tree_grammar(
             productions=(),
         )
 
-    synthetic_start = len(finals) > 1
+    synthetic_start = len(accepting) > 1
     nonterminal_count = automaton.state_count + int(synthetic_start)
     if nonterminal_count > MAX_TA_STATES:
         raise OperationResourceAdmissionError(
             location=("automaton", "final_states"),
             code="tree_automata.grammar_nonterminal_bound",
             message=(
-                "a multiple-final-state automaton needs a synthetic grammar start "
-                "nonterminal beyond the grammar carrier bound"
+                "a multiple-productive-final-state automaton needs a synthetic "
+                "grammar start nonterminal beyond the grammar carrier bound"
             ),
         )
     root_rules = {
         (row.symbol, row.child_states)
         for row in automaton.transitions
-        if synthetic_start and row.target_state in finals
+        if synthetic_start and row.target_state in accepting
     }
     production_count = len(automaton.transitions) + len(root_rules)
     if production_count > MAX_TA_TRANSITIONS:
@@ -1030,7 +1049,7 @@ def tree_automaton_to_regular_tree_grammar(
             message="automaton-to-grammar work or output exceeds its admitted envelope",
         )
 
-    start = automaton.state_count if synthetic_start else next(iter(finals))
+    start = automaton.state_count if synthetic_start else next(iter(accepting))
     productions = [
         RegularTreeProduction(
             nonterminal=row.target_state,

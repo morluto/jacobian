@@ -763,9 +763,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Construct a unit-free single-start regular tree grammar whose "
             "generated ground trees equal the input bottom-up automaton's accepted "
-            "language. One final state is used directly; multiple final states get "
-            "a synthetic start whose productions copy final-target rows. The "
-            "empty-language case returns an empty grammar. Work, production count, "
+            "language. One productive final state is used directly; multiple "
+            "productive final states get a synthetic start whose productions copy "
+            "productive-final-target rows. The empty-language case returns an empty "
+            "grammar. Work, production count, "
             "nonterminal count, and output cells are admitted before productions "
             "are constructed; unrepresentable results are refused exactly."
         ),

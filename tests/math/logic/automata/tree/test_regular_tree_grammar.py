@@ -210,6 +210,14 @@ def test_maximum_admitted_rule_and_rank_shape_converts_within_work_bound() -> No
             "start_nonterminal": 0,
             "productions": [{"nonterminal": 0, "symbol": 0, "children": []}],
         },
+        {
+            "nonterminal_count": 2,
+            "arity": [1],
+            "start_nonterminal": 0,
+            "productions": [
+                {"nonterminal": 0, "symbol": 0, "children": [-1]},
+            ],
+        },
     ],
 )
 def test_grammar_rejects_noncanonical_or_invalid_rules(payload: dict[str, Any]) -> None:
@@ -227,3 +235,35 @@ def test_operation_is_published_with_valid_example() -> None:
     )
     assert operation.result_type is RegularTreeGrammarToAutomatonResult
     assert len(operation.examples) == 1
+
+
+def test_conversion_rejects_forged_invalid_grammar_as_domain_error() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = RegularTreeGrammar.model_construct(
+        nonterminal_count=1,
+        arity=(0,),
+        start_nonterminal=0,
+        productions=(
+            RegularTreeProduction.model_construct(nonterminal=0, symbol=4, children=()),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        regular_tree_grammar_to_automaton(forged)
+
+
+def test_conversion_rejects_forged_negative_child_as_domain_error() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = RegularTreeGrammar.model_construct(
+        nonterminal_count=2,
+        arity=(1,),
+        start_nonterminal=0,
+        productions=(
+            RegularTreeProduction.model_construct(
+                nonterminal=0, symbol=0, children=(-1,)
+            ),
+        ),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        regular_tree_grammar_to_automaton(forged)

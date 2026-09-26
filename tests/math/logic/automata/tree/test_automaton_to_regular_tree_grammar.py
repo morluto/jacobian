@@ -17,6 +17,7 @@ from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
     RankedTree,
     RegularTreeGrammar,
+    RegularTreeProduction,
     TreeAutomatonTransition,
 )
 
@@ -155,6 +156,7 @@ def test_unrepresentable_synthetic_start_is_a_typed_refusal() -> None:
         arity=(0,),
         transitions=(
             TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=1),
         ),
         final_states=(0, 1),
     )
@@ -221,3 +223,105 @@ def test_source_bound_result_and_operation_declaration() -> None:
         if tool.operation_id == "tree_automaton.to_regular_tree_grammar.compute"
     )
     assert operation.result_type is TreeAutomatonToRegularTreeGrammarResult
+
+
+def test_unproductive_finals_do_not_require_a_synthetic_start() -> None:
+    automaton = BottomUpTreeAutomaton(
+        state_count=64,
+        arity=(0, 1),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+        ),
+        final_states=(62, 63),
+    )
+
+    grammar = tree_automaton_to_regular_tree_grammar(automaton)
+
+    assert grammar.nonterminal_count == 1
+    assert grammar.productions == ()
+
+
+def test_nonproductive_final_larger_than_productive_one_keeps_state_start() -> None:
+    automaton = BottomUpTreeAutomaton(
+        state_count=64,
+        arity=(0,),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+        ),
+        final_states=(0, 63),
+    )
+
+    grammar = tree_automaton_to_regular_tree_grammar(automaton)
+
+    assert grammar.nonterminal_count == 64
+    assert grammar.start_nonterminal == 0
+    assert grammar.productions == (
+        RegularTreeProduction(nonterminal=0, symbol=0, children=()),
+    )
+    accepted = RankedTree(symbol=0)
+    assert grammar.start_nonterminal in _grammar_states(grammar, accepted)
+
+
+def test_only_productive_finals_contribute_root_rules() -> None:
+    # State 0 accepts a constant, state 1 accepts f(0); state 5 is final but has
+    # no incoming transition. Two productive finals force a synthetic start,
+    # whose copied root rules must come only from the productive finals.
+    automaton = BottomUpTreeAutomaton(
+        state_count=6,
+        arity=(0, 1),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(0,), target_state=1),
+        ),
+        final_states=(0, 1, 5),
+    )
+
+    grammar = tree_automaton_to_regular_tree_grammar(automaton)
+
+    assert grammar.nonterminal_count == 7
+    assert grammar.start_nonterminal == 6
+    assert {
+        (production.nonterminal, production.symbol, production.children)
+        for production in grammar.productions
+    } == {
+        (0, 0, ()),
+        (1, 1, (0,)),
+        (6, 0, ()),
+        (6, 1, (0,)),
+    }
+
+
+def test_mixed_productive_finals_preserve_language_exhaustively() -> None:
+    # States 1 and 2 are productive final states; state 3 is final but has no
+    # incoming transition. Restricting the synthetic start to productive finals
+    # must leave the accepted language unchanged.
+    automaton = BottomUpTreeAutomaton(
+        state_count=4,
+        arity=(0, 0, 2),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=1, child_states=(), target_state=1),
+            TreeAutomatonTransition(symbol=2, child_states=(0, 0), target_state=2),
+            TreeAutomatonTransition(symbol=2, child_states=(1, 1), target_state=1),
+        ),
+        final_states=(1, 2, 3),
+    )
+
+    grammar = tree_automaton_to_regular_tree_grammar(automaton)
+
+    assert grammar.nonterminal_count == 5
+    assert grammar.start_nonterminal == 4
+    generated_automaton = regular_tree_grammar_to_automaton(grammar)
+    for tree in _trees_by_size(5):
+        accepts_from_source = bool(
+            set(run_tree_automaton(automaton, tree)) & set(automaton.final_states)
+        )
+        accepts_from_grammar = grammar.start_nonterminal in _grammar_states(
+            grammar, tree
+        )
+        accepts_from_roundtrip = bool(
+            set(run_tree_automaton(generated_automaton, tree))
+            & set(generated_automaton.final_states)
+        )
+        assert accepts_from_grammar == accepts_from_source
+        assert accepts_from_roundtrip == accepts_from_source

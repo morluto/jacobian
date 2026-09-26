@@ -123,6 +123,4 @@ def test_result_validator_revalidates_the_canonical_datum() -> None:
 
     with pytest.raises(ValueError) as error:
         RootWeightLatticePresentation.model_validate_json(json.dumps(payload))
-    assert error.value.errors()[0]["type"] == (
-        "root_system.lattice_presentation_datum"
-    )
+    assert error.value.errors()[0]["type"] == ("root_system.lattice_presentation_datum")

@@ -88,6 +88,31 @@ def _admit_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:
     return graph
 
 
+def _admit_unlabelled_vertex_deck(deck: UnlabelledVertexDeck) -> UnlabelledVertexDeck:
+    """Reauthenticate a possibly model-constructed deck before field access."""
+    family = getattr(deck, "family", None)
+    classes = getattr(deck, "classes", None)
+    if (
+        type(family) is not VertexDeletionFamily
+        or type(classes) is not tuple
+        or len(classes) > MAX_UNLABELLED_DECK_VERTICES
+        or type(getattr(deck, "card_count", None)) is not int
+    ):
+        raise OperationDomainValidationError(
+            location=("deck",),
+            code="graph_deck.vertex_quotient_carrier",
+            message="deck must contain a bounded source family and class tuple",
+        )
+    try:
+        return UnlabelledVertexDeck.model_validate(deck.model_dump())
+    except (ValidationError, TypeError, ValueError, AttributeError):
+        raise OperationDomainValidationError(
+            location=("deck",),
+            code="graph_deck.vertex_quotient_shape",
+            message="deck must be a canonical unlabelled vertex-deck value",
+        ) from None
+
+
 def _admit_edge_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:
     if type(graph) is not SimpleUndirectedGraph:
         raise OperationDomainValidationError(
@@ -348,6 +373,7 @@ def vertex_deck_induced_subgraph_count(
             code="graph_deck.kelly_deck_carrier",
             message="deck must be an UnlabelledVertexDeck",
         )
+    deck = _admit_unlabelled_vertex_deck(deck)
     if type(pattern) is not SimpleUndirectedGraph:
         raise OperationDomainValidationError(
             location=("pattern",),
@@ -529,6 +555,7 @@ def vertex_deck_subgraph_count(
             code="graph_deck.kelly_subgraph_carrier",
             message="deck and pattern must have their canonical graph carriers",
         )
+    deck = _admit_unlabelled_vertex_deck(deck)
     family = deck.family
     source = _admit_deck_graph(family.source)
     try:
@@ -696,6 +723,7 @@ def vertex_deck_edge_count(
             code="graph_deck.edge_count_carrier",
             message="deck must be an UnlabelledVertexDeck",
         )
+    deck = _admit_unlabelled_vertex_deck(deck)
     family = deck.family
     if type(family) is not VertexDeletionFamily:
         raise OperationDomainValidationError(
@@ -804,6 +832,7 @@ def vertex_deck_degree_multiset(
             code="graph_deck.degree_multiset_carrier",
             message="deck must be an UnlabelledVertexDeck",
         )
+    deck = _admit_unlabelled_vertex_deck(deck)
     if type(deck.family) is not VertexDeletionFamily:
         raise OperationDomainValidationError(
             location=("deck", "family"),

@@ -9,6 +9,7 @@ from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
+    FiniteCellularSheaf,
     SheafField,
     SheafMorphismCokernelRequest,
     SheafMorphismCokernelResult,
@@ -147,6 +148,41 @@ def test_surjective_map_has_zero_quotient_axes_and_roundtrips():
     assert all(restriction.entries == () for restriction in result.cokernel.cover_restrictions)
     assert all(matrix == () for _, matrix in result.projection.components)
     assert SheafMorphismCokernelResult.model_validate_json(result.model_dump_json()) == result
+
+
+def test_malformed_native_morphism_and_parent_axes_fail_at_operation_boundary():
+    parent = _point_sheaf(1)
+    valid = morphism(parent, parent, ((('a',), ((_q(1),),)),))
+
+    malformed_parent = FiniteCellularSheaf.model_construct(
+        complex=parent.complex,
+        coefficient_field=parent.coefficient_field,
+        prime=parent.prime,
+        stalks=(SheafStalk(simplex=("b",), basis=("x0",)),),
+        cover_restrictions=(),
+        derived_restrictions=(),
+        diamonds=(),
+        comparable_pairs=(),
+    )
+    forged_axes = SheafMorphismResult.model_construct(
+        source=malformed_parent,
+        target=parent,
+        components=valid.components,
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        cokernel_of_morphism(forged_axes)
+
+    invalid_carrier = SheafMorphismResult.model_construct(
+        source=object(),
+        target=parent,
+        components=valid.components,
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError, match="parents"):
+        cokernel_of_morphism(invalid_carrier)
 
 
 def test_prime_field_cokernel_uses_the_declared_field():

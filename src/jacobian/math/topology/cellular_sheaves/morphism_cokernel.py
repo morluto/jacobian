@@ -189,7 +189,13 @@ def cokernel_of_morphism(
     value: SheafMorphismResult,
 ) -> SheafMorphismCokernelResult:
     """Compute the pointwise quotient sheaf and its target projection."""
+    if not isinstance(value, SheafMorphismResult):
+        raise _domain("morphism_type", "morphism must be a cellular sheaf morphism")
     source, target = value.source, value.target
+    if not isinstance(source, FiniteCellularSheaf) or not isinstance(
+        target, FiniteCellularSheaf
+    ):
+        raise _domain("parent_type", "morphism parents must be finite cellular sheaves")
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (
@@ -206,10 +212,22 @@ def cokernel_of_morphism(
         for component in value.components
     ):
         raise _domain("component_structure", "components must be simplex-matrix pairs")
+    try:
+        _readmit_parent_sheaf(source, role="source")
+        _readmit_parent_sheaf(target, role="target")
+    except OperationDomainValidationError as exc:
+        raise _domain(
+            "parent_diagram_not_admitted",
+            "parent restrictions must equal the reconstructed functor diagram",
+        ) from exc
+    cells = source.canonical_face_order
+    if tuple(stalk.simplex for stalk in source.stalks) != cells or tuple(
+        stalk.simplex for stalk in target.stalks
+    ) != cells:
+        raise _domain("parent_stalk_axes", "parent stalks must match canonical simplex axes")
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )
-    cells = source.canonical_face_order
     keys = tuple(_resolve_component_key(key, cells) for key, _matrix in value.components)
     if keys != cells:
         raise _domain("component_axis", "one component per simplex in canonical order is required")
@@ -274,14 +292,6 @@ def cokernel_of_morphism(
     ):
         raise _resource("output_bound", "cokernel quotient maps exceed the output envelope")
 
-    try:
-        _readmit_parent_sheaf(source, role="source")
-        _readmit_parent_sheaf(target, role="target")
-    except OperationDomainValidationError as exc:
-        raise _domain(
-            "parent_diagram_not_admitted",
-            "parent restrictions must equal the reconstructed functor diagram",
-        ) from exc
     for item in source.cover_restrictions:
         source_map = tuple(tuple(field.parse(x) for x in row) for row in item.entries)
         target_item = target_cover[(item.source, item.target)]

@@ -1035,15 +1035,9 @@ def _admit_norm_growth(
             admit(term)
         determinant_degree = _trace_add_degree(determinant_degree, term)
         admit(determinant_degree)
-    if determinant_degree != (-1, 0) and max(determinant_degree) > MAX_POLYNOMIAL_X_DEGREE:
-        raise OperationResourceAdmissionError(
-            location=("element", "coordinates"),
-            code="function_field.norm_coefficient_growth_exceeds_envelope",
-            message=(
-                "the exact function-field norm exceeds the "
-                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
-            ),
-        )
+    # This is only a cancellation-blind growth bound. Do not treat it as the
+    # degree of the reduced determinant; the exact carrier limit is checked on
+    # the normalized result once determinant cancellation has been computed.
     return determinant_degree
 
 
@@ -1054,32 +1048,7 @@ def function_field_element_norm(
 
     field, canonical = _preflight_inverse_operand(element)
     _admit_field(field)
-    norm_degree = _admit_norm_growth(field, canonical)
-    numerator_count = norm_degree[0] + 1 if norm_degree[0] >= 0 else 1
-    denominator_count = norm_degree[1] + 1 if norm_degree[0] >= 0 else 1
-    output_template = {
-        "field": field.model_dump(mode="json"),
-        "element": canonical.model_dump(mode="json"),
-        "norm": {
-            "numerator": {
-                "characteristic": field.characteristic,
-                "coefficients": [field.characteristic - 1] * numerator_count,
-            },
-            "denominator": {
-                "characteristic": field.characteristic,
-                "coefficients": [field.characteristic - 1] * denominator_count,
-            },
-        },
-    }
-    if len(encode_strict_json(output_template)) > MAX_ELEMENT_VALUE_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("element", "coordinates"),
-            code="function_field.norm_output_exceeds_envelope",
-            message=(
-                "the exact function-field norm result exceeds the "
-                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
-            ),
-        )
+    _admit_norm_growth(field, canonical)
     prime = field.characteristic
     if field.degree == 1:
         norm = _to_internal_rational_function(canonical.coordinates[0])
@@ -1122,11 +1091,33 @@ def function_field_element_norm(
                 term if inversions % 2 == 0 else rf_sub(ZERO_RF, term, prime),
                 prime,
             )
-    return FunctionFieldNormResult(
-        field=field,
-        element=canonical,
-        norm=_from_internal_rational_function(norm, prime),
-    )
+    norm_value = _from_internal_rational_function(norm, prime)
+    if (
+        norm_value.numerator.degree > MAX_POLYNOMIAL_X_DEGREE
+        or norm_value.denominator.degree > MAX_POLYNOMIAL_X_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
+    result = FunctionFieldNormResult(field=field, element=canonical, norm=norm_value)
+    if (
+        len(encode_strict_json(result.model_dump(mode="json")))
+        > MAX_ELEMENT_VALUE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_output_exceeds_envelope",
+            message=(
+                "the exact function-field norm result exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
+            ),
+        )
+    return result
 
 
 def function_field_element_inverse(

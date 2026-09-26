@@ -31,6 +31,11 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     twist,
     width,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import (
+    DeltaMatroidRelabelRequest,
+    DeltaMatroidRelabelling,
+    relabel,
+)
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
@@ -110,6 +115,14 @@ def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
         raise
     except (TypeError, ValueError, IndexError) as exc:
         raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
+
+
+def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid,
+        request.target_ground,
+        request.target_to_source,
+    )
 
 
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:

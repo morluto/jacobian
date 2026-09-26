@@ -614,7 +614,7 @@ class FiniteFieldFrobeniusResult(StrictModel):
         if (
             self.determinant != q
             or self.trace != q + 1 - self.cardinality
-            or self.characteristic_polynomial.coefficients != (q, -self.trace, 1)
+            or self.characteristic_polynomial.coefficients != (1, -self.trace, q)
             or self.discriminant != self.trace * self.trace - 4 * q
             or self.classification
             != (
@@ -1980,16 +1980,6 @@ def finite_field_frobenius(
                 "sum work envelope"
             ),
         )
-    trace_bound = 2 * (isqrt(q) + 1)
-    if (
-        128 + 8 * (q.bit_length() + trace_bound.bit_length())
-        > CanonicalLimits().max_output_bytes
-    ):
-        raise OperationResourceAdmissionError(
-            location=("curve",),
-            code="elliptic_curve.finite_field.frobenius_output_bound",
-            message="Frobenius data exceed the canonical output-byte envelope",
-        )
     count = _cardinality_from_character_sum(curve, q)
     trace = count.trace
     return FiniteFieldFrobeniusResult(
@@ -1998,7 +1988,7 @@ def finite_field_frobenius(
         trace=trace,
         determinant=q,
         characteristic_polynomial=IntegerPolynomial(
-            coefficients=(q, -trace, 1),
+            coefficients=(1, -trace, q),
         ),
         discriminant=trace * trace - 4 * q,
         classification=(

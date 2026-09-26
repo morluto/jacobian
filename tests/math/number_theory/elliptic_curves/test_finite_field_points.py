@@ -95,7 +95,7 @@ def test_frobenius_data_and_supersingularity_match_direct_f5_oracle() -> None:
         assert result.cardinality == count
         assert result.trace == trace
         assert result.determinant == 5
-        assert result.characteristic_polynomial.coefficients == (5, -trace, 1)
+        assert result.characteristic_polynomial.coefficients == (1, -trace, 5)
         assert result.discriminant == trace * trace - 20
         assert result.classification == (
             "SUPERSINGULAR" if trace % 5 == 0 else "ORDINARY"
@@ -113,7 +113,7 @@ def test_frobenius_accepts_field_5003_with_admitted_character_sum() -> None:
         )
     )
     assert result.cardinality > 0
-    assert result.characteristic_polynomial.coefficients[0] == 5003
+    assert result.characteristic_polynomial.coefficients[-1] == 5003
 
 
 def test_isogeny_class_decision_matches_independent_finite_field_counts() -> None:

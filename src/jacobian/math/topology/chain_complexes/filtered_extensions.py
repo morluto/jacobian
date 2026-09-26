@@ -67,7 +67,7 @@ class SpectralAbutmentResult(StrictModel):
 
 
 def filtered_map(request: FilteredChainMapRequest) -> FilteredChainMapResult:
-    chain_map = request.chain_map
+    chain_map = ChainMapValue.model_validate(request.chain_map.model_dump())
     source, target, matrices = (
         chain_map.source,
         chain_map.target,

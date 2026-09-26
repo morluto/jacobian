@@ -675,6 +675,18 @@ def _coordinates_in_target_homology(
     group: IntegralHomologyGroupValue,
     inverse_right: tuple[tuple[int, ...], ...],
 ) -> IntegralHomologyCoordinates:
+    inverse_digits = max(
+        (len(str(abs(value))) for row in inverse_right for value in row), default=1
+    )
+    cycle_digits = max((len(str(abs(value))) for value in cycle), default=1)
+    rank = len(cycle)
+    growth_bound = inverse_digits + cycle_digits + len(str(max(1, rank)))
+    if growth_bound > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_coordinate_growth_exceeded",
+            message="target coordinate multiplication exceeds its admitted integer height",
+        )
     chain_coordinates = _mat_vec(inverse_right, cycle)
     rank = group.outgoing_boundary_rank
     if any(chain_coordinates[:rank]):
@@ -778,10 +790,7 @@ def induced_normalized_homology_map(
             tuple(
                 tuple(row)
                 for row in inverse_unimodular(
-                    [
-                        list(row)
-                        for row in target_group.outgoing_smith_certificate.right_transformation.entries
-                    ]
+                    [list(row) for row in target_group.outgoing_smith_certificate.right_transformation.entries]
                 )
             )
             if source_group.free_rank or source_group.torsion_generators

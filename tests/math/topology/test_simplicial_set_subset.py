@@ -7,18 +7,19 @@ import json
 import pytest
 
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.simplicial_sets import (
-    SimplicialMapCompositionRequest,
     SimplicialSubsetPrefix,
-    SimplicialSubsetRequest,
-    compose_simplicial_maps,
-    identity_simplicial_map,
     simplicial_subset,
     standard_simplex,
 )
+from jacobian.math.topology.simplicial_sets.maps import (
+    SimplicialMapCompositionRequest,
+    compose_simplicial_maps,
+    identity_simplicial_map,
+)
+from jacobian.math.topology.simplicial_sets.subset_models import SimplicialSubsetRequest
+from jacobian.math.topology.simplicial_sets.subset_tools import TOOLS
 
 
 def _delta_one_prefix():
@@ -45,17 +46,17 @@ def test_constant_vertex_gives_source_bound_closed_subobject() -> None:
         for operator, face_row in enumerate(ambient.face_maps[degree - 1]):
             subset_row = subset.face_maps[degree - 1][operator]
             for simplex, image in enumerate(result.inclusion.maps[degree]):
-                assert result.inclusion.maps[degree - 1][subset_row[simplex]] == (
-                    face_row[image]
+                assert (
+                    result.inclusion.maps[degree - 1][subset_row[simplex]]
+                    == (face_row[image])
                 )
     for degree in range(ambient.max_degree):
-        for operator, degeneracy_row in enumerate(
-            ambient.degeneracy_maps[degree]
-        ):
+        for operator, degeneracy_row in enumerate(ambient.degeneracy_maps[degree]):
             subset_row = subset.degeneracy_maps[degree][operator]
             for simplex, image in enumerate(result.inclusion.maps[degree]):
-                assert result.inclusion.maps[degree + 1][subset_row[simplex]] == (
-                    degeneracy_row[image]
+                assert (
+                    result.inclusion.maps[degree + 1][subset_row[simplex]]
+                    == (degeneracy_row[image])
                 )
 
 
@@ -130,12 +131,13 @@ def test_subset_operation_catalog_example_and_json_request() -> None:
     request = SimplicialSubsetRequest.model_validate(tool.examples[0].input)
     assert tool.run(request).inclusion.source.sets[0] == ("(0)",)
 
-    result = invoke_operation(
-        operation_id,
-        json.loads(request.model_dump_json()),
-        Catalog.open(),
-    ).output
+    tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
+    result = tool.run(
+        tool.request_type.model_validate(json.loads(request.model_dump_json()))
+    )
+    result = result.model_dump(mode="json")
     assert result["inclusion"]["maps"] == [[0], [0], [0]]
-    assert SimplicialSubsetPrefix.model_validate(result).inclusion.source == tool.run(
-        request
-    ).inclusion.source
+    assert (
+        SimplicialSubsetPrefix.model_validate(result).inclusion.source
+        == tool.run(request).inclusion.source
+    )

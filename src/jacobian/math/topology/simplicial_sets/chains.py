@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
@@ -24,8 +22,8 @@ from jacobian.math.topology.simplicial_sets._models import (
 )
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
-MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES = 256_000
-_CHAIN_RESULT_JSON_OVERHEAD_BOUND = 4_096
+MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
+_CHAIN_RESULT_STRUCTURAL_CELLS = 4_096
 
 
 class UnnormalizedChainsRequest(StrictModel):
@@ -36,7 +34,7 @@ class UnnormalizedChainsRequest(StrictModel):
     prime: StrictInt | None = Field(default=None, ge=2, le=1_000_003)
 
     @model_validator(mode="after")
-    def require_ring_and_prime_coupling(self):
+    def require_ring_and_prime_coupling(self) -> UnnormalizedChainsRequest:
         if self.coefficient_ring is CoefficientRing.PRIME_FIELD:
             if self.prime is None:
                 raise ValueError("GF_p coefficients require a prime modulus")
@@ -53,7 +51,7 @@ class UnnormalizedChainsResult(StrictModel):
     chain_complex: ChainComplexValue
 
     @model_validator(mode="after")
-    def require_source_bound_chain_axes(self):
+    def require_source_bound_chain_axes(self) -> UnnormalizedChainsResult:
         if self.simplex_bases != self.simplicial_set.sets:
             raise ValueError("simplex bases must retain the source degree axes")
         value = self.chain_complex
@@ -67,23 +65,13 @@ class UnnormalizedChainsResult(StrictModel):
         return self
 
 
-def _estimate_output_bytes(
+def _estimate_output_cells(
     source: FiniteTruncatedSimplicialSet, sizes: tuple[int, ...]
 ) -> int:
-    """Bound the full JSON result before allocating boundary matrices."""
-    source_bytes = len(source.model_dump_json().encode("utf-8"))
-    # The source appears again as the ordered simplex axes. ASCII escapes make
-    # this an upper bound for any Unicode labels in the canonical value.
-    basis_bytes = len(
-        json.dumps(source.sets, ensure_ascii=True, separators=(",", ":")).encode(
-            "utf-8"
-        )
-    )
+    """Bound retained labels, matrix entries, and structural output cells."""
     cells = sum(sizes[n - 1] * sizes[n] for n in range(1, len(sizes)))
-    # A GF(p) coefficient is at most seven decimal digits under the admitted
-    # prime bound. Quotes, commas, and a per-cell margin are included here;
-    # the fixed overhead covers all matrix row/group delimiters and metadata.
-    return _CHAIN_RESULT_JSON_OVERHEAD_BOUND + source_bytes + basis_bytes + 12 * cells
+    label_chars = sum(len(label) for level in source.sets for label in level)
+    return _CHAIN_RESULT_STRUCTURAL_CELLS + label_chars * 2 + 12 * cells
 
 
 def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
@@ -98,14 +86,14 @@ def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
                 f"the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound"
             ),
         )
-    estimate = _estimate_output_bytes(source, sizes)
-    if estimate > MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES:
+    estimate = _estimate_output_cells(source, sizes)
+    if estimate > MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.unnormalized_chain_output_budget_exceeded",
             message=(
-                f"estimated chain result size {estimate} bytes exceeds the "
-                f"{MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES}-byte output bound"
+                f"estimated chain result size {estimate} cells exceeds the "
+                f"{MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS}-cell output bound"
             ),
         )
     if source.total_simplices > MAX_TOTAL_SIMPLICES:

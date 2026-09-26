@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-
 from pydantic import model_validator
 
 from jacobian._models import StrictModel
@@ -22,29 +20,16 @@ from jacobian.math.topology.chain_complexes.values import (
 from jacobian.math.topology.simplicial_sets._models import FiniteTruncatedSimplicialSet
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
-MAX_NORMALIZED_CHAIN_OUTPUT_BYTES = 256_000
-_NORMALIZED_CHAIN_OUTPUT_OVERHEAD = 4_096
+MAX_NORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
+_NORMALIZED_CHAIN_OUTPUT_STRUCTURE = 4_096
 
 
-def _normalized_output_byte_bound(
+def _normalized_output_cells(
     simplicial_set: FiniteTruncatedSimplicialSet, matrix_cells: int
 ) -> int:
-    """Bound retained source, repeated label axes, and dense integer matrices."""
-    source_bytes = len(simplicial_set.model_dump_json().encode("utf-8"))
-    # ensure_ascii bounds Unicode label expansion in the repeated basis axes.
-    basis_bytes = len(
-        json.dumps(
-            simplicial_set.sets, ensure_ascii=True, separators=(",", ":")
-        ).encode("utf-8")
-    )
-    # Boundary coefficients have magnitude at most N+1, with N<=4. Four
-    # characters per matrix cell cover signed entries and their comma.
-    return (
-        _NORMALIZED_CHAIN_OUTPUT_OVERHEAD
-        + source_bytes
-        + basis_bytes
-        + 4 * matrix_cells
-    )
+    """Bound retained label characters, matrix entries, and structure."""
+    label_chars = sum(len(label) for level in simplicial_set.sets for label in level)
+    return _NORMALIZED_CHAIN_OUTPUT_STRUCTURE + 2 * label_chars + 4 * matrix_cells
 
 
 class SimplicialMapRequest(StrictModel):
@@ -73,7 +58,7 @@ class TruncatedSimplicialMap(StrictModel):
     maps: tuple[tuple[int, ...], ...]
 
     @model_validator(mode="after")
-    def require_degreewise_axes(self):
+    def require_degreewise_axes(self) -> TruncatedSimplicialMap:
         if self.source.max_degree != self.target.max_degree:
             raise ValueError("source and target prefixes must have equal degree")
         if len(self.maps) != self.source.max_degree + 1:
@@ -128,12 +113,31 @@ def _require_naturality(map_value: TruncatedSimplicialMap, *, location: str) -> 
                     )
 
 
+def _require_carrier(
+    value: FiniteTruncatedSimplicialSet, *, location: str
+) -> FiniteTruncatedSimplicialSet:
+    checked = from_tables(
+        value.max_degree, value.sets, value.face_maps, value.degeneracy_maps
+    )
+    if checked.simplicial_set is None:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="simplicial_map.carrier_invalid",
+            message="map carrier fails a visible simplicial identity",
+        )
+    return checked.simplicial_set
+
+
 def compose_simplicial_maps(
     request: SimplicialMapCompositionRequest,
 ) -> TruncatedSimplicialMap:
     """Compose finite-prefix simplicial maps after checking their claims."""
     first, second = request.first, request.second
-    if first.target != second.source:
+    first_source = _require_carrier(first.source, location="first.source")
+    first_target = _require_carrier(first.target, location="first.target")
+    second_source = _require_carrier(second.source, location="second.source")
+    second_target = _require_carrier(second.target, location="second.target")
+    if first_target != second_source:
         raise OperationDomainValidationError(
             location=("second", "source"),
             code="simplicial_map.composition_carrier_mismatch",
@@ -148,7 +152,7 @@ def compose_simplicial_maps(
     # Naturality follows by composition, but replay it at this public boundary
     # so the returned map is independently checked against its bound carriers.
     composite = TruncatedSimplicialMap(
-        source=first.source, target=second.target, maps=maps
+        source=first_source, target=second_target, maps=maps
     )
     _require_naturality(composite, location="composite")
     return composite
@@ -181,7 +185,7 @@ class NormalizedChainsResult(StrictModel):
     chain_complex: ChainComplexValue
 
     @model_validator(mode="after")
-    def require_source_bound_chain_axes(self):
+    def require_source_bound_chain_axes(self) -> NormalizedChainsResult:
         if len(self.nondegenerate_bases) != self.simplicial_set.max_degree + 1:
             raise ValueError("nondegenerate bases must cover every source degree")
         expected_bases = []
@@ -222,7 +226,7 @@ class NormalizedHomologyResult(StrictModel):
     homology_groups: tuple[HomologyGroup, ...]
 
     @model_validator(mode="after")
-    def require_supported_degrees(self):
+    def require_supported_degrees(self) -> NormalizedHomologyResult:
         if len(self.nondegenerate_bases) != self.simplicial_set.max_degree + 1:
             raise ValueError("nondegenerate bases must cover every source degree")
         if tuple(group.degree for group in self.homology_groups) != tuple(
@@ -330,14 +334,14 @@ def normalized_chains(
                 f"exceeding the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound"
             ),
         )
-    output_bound = _normalized_output_byte_bound(simplicial_set, cells)
-    if output_bound > MAX_NORMALIZED_CHAIN_OUTPUT_BYTES:
+    output_bound = _normalized_output_cells(simplicial_set, cells)
+    if output_bound > MAX_NORMALIZED_CHAIN_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.normalized_chain_output_budget_exceeded",
             message=(
-                f"estimated normalized chain result size {output_bound} bytes "
-                f"exceeds the {MAX_NORMALIZED_CHAIN_OUTPUT_BYTES}-byte output bound"
+                f"estimated normalized chain result size {output_bound} cells "
+                f"exceeds the {MAX_NORMALIZED_CHAIN_OUTPUT_CELLS}-cell output bound"
             ),
         )
     checked = from_tables(
@@ -387,8 +391,7 @@ def normalized_chains(
             message="normalized differential does not square to zero",
         )
     bases = tuple(
-        tuple(s.sets[degree][index] for index in row)
-        for degree, row in enumerate(nd)
+        tuple(s.sets[degree][index] for index in row) for degree, row in enumerate(nd)
     )
     chain = ChainComplexValue(
         coefficient_ring=CoefficientRing.INTEGER,

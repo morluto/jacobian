@@ -308,9 +308,18 @@ class ClassFunctionRestrictionResult(StrictModel):
             raise _validation_error(
                 "restriction_parent", "the source class function must retain its group"
             )
-        if self.restricted.axis.group != self.subgroup_partition.source:
+        expected_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in self.subgroup_partition.classes),
+            cyclotomic_order=self.restricted.axis.cyclotomic_order,
+            group=self.subgroup_partition.source,
+            class_representatives=tuple(
+                cls[0] for cls in self.subgroup_partition.classes
+            ),
+        )
+        if self.restricted.axis != expected_axis:
             raise _validation_error(
-                "restriction_axis", "restricted values must use the subgroup axis"
+                "restriction_axis",
+                "restricted values must use the retained subgroup axis",
             )
         if len(self.target_class_to_source_class) != len(
             self.subgroup_partition.classes
@@ -381,7 +390,28 @@ class ClassFunctionInductionResult(StrictModel):
                 "induction_subgroup",
                 "source class function must be bound to the retained subgroup",
             )
-        if self.induced.axis.group != self.parent_partition.source:
+        expected_subgroup_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in self.subgroup_partition.classes),
+            cyclotomic_order=self.source_class_function.axis.cyclotomic_order,
+            group=self.subgroup_partition.source,
+            class_representatives=tuple(
+                cls[0] for cls in self.subgroup_partition.classes
+            ),
+        )
+        expected_parent_axis = ClassAxis._from_kernel(
+            class_sizes=tuple(len(cls) for cls in self.parent_partition.classes),
+            cyclotomic_order=self.induced.axis.cyclotomic_order,
+            group=self.parent_partition.source,
+            class_representatives=tuple(
+                cls[0] for cls in self.parent_partition.classes
+            ),
+        )
+        if self.source_class_function.axis != expected_subgroup_axis:
+            raise _validation_error(
+                "induction_subgroup_axis",
+                "source values must use the retained subgroup axis",
+            )
+        if self.induced.axis != expected_parent_axis:
             raise _validation_error(
                 "induction_parent", "induced values must use the retained parent axis"
             )

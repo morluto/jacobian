@@ -215,3 +215,65 @@ def test_catalog_declaration_and_example_execute() -> None:
     result = tool.run(request)
     assert isinstance(result, FiniteClassFunction)
     assert result.values == STANDARD.values
+
+
+def _forged(
+    values: tuple[CyclotomicValue, ...], sizes: tuple[int, ...] = SIZES, order: int = 1
+) -> FiniteClassFunction:
+    return FiniteClassFunction.model_construct(
+        axis=ClassAxis(
+            class_sizes=sizes, group_order=sum(sizes), cyclotomic_order=order
+        ),
+        values=values,
+    )
+
+
+@pytest.mark.parametrize(
+    "operation", [class_function_add, class_function_pointwise_product]
+)
+def test_native_operations_reject_forged_empty_class_functions(
+    operation,
+) -> None:
+    forged = _forged(())
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(forged, forged)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.invalid_class_function"
+    )
+
+
+@pytest.mark.parametrize(
+    "operation",
+    [
+        class_function_add,
+        class_function_pointwise_product,
+        class_function_inner_product,
+    ],
+)
+def test_native_operations_reject_values_from_another_axis_length(operation) -> None:
+    # One value on a three-class axis: same-length zips would otherwise pass
+    # and the kernel would forge another axis-bound invalid result.
+    forged = _forged((_value(1, (1,)),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        operation(forged, forged)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.invalid_class_function"
+    )
+
+
+def test_pointwise_product_rejects_values_outside_the_axis_field() -> None:
+    forged = _forged((_value(2, (1,)),) * 3)
+    with pytest.raises(OperationDomainValidationError) as error:
+        class_function_pointwise_product(forged, forged)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.invalid_class_function"
+    )
+
+
+def test_addition_rejects_values_outside_the_axis_field() -> None:
+    forged = _forged((_value(2, (1,)),) * 3)
+    with pytest.raises(OperationDomainValidationError) as error:
+        class_function_add(forged, forged)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.invalid_class_function"
+    )

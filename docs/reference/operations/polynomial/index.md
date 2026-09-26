@@ -87,7 +87,12 @@ to another polynomial operation.
 
 ## Focused contracts
 
-- [Cubic resolvent of a monic quartic](quartic-cubic-resolvent.md)
+- [Differential Ore operator addition](ore-differential-addition.md)
+- [Polynomial-coefficient Ore operators](ore-shift-polynomial-algebra.md)
+- [Shift Ore operator powers](ore-shift-operator-powers.md)
+- [Finite prefixes from polynomial recurrences](ore-shift-finite-recurrence.md)
+- [Finite sequence prefixes for shift operators](ore-shift-sequence-prefix.md)
+
 - [Exact cyclotomic polynomials](cyclotomic.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Rational discrete antiderivatives](rational-discrete-antiderivative.md)

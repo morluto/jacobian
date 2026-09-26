@@ -7,7 +7,9 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
+from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.polynomials.values import RationalFunction
 
 MAX_SHIFT_ORDER = 16
@@ -22,12 +24,36 @@ MAX_SHIFT_LEDGER_ROWS = 256
 MAX_DIFFERENTIAL_ORDER = 16
 MAX_DIFFERENTIAL_TERMS = 32
 MAX_DIFFERENTIAL_VARIABLE = "x"
+MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS = 100_000_000
+MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
+MAX_SHIFT_PREFIX_INDEX = 100_000
+MAX_SHIFT_PREFIX_EVALUATION_CELLS = 2_000_000
+MAX_SHIFT_PREFIX_WORK_UNITS = 100_000_000
+MAX_SHIFT_PREFIX_OUTPUT_WEIGHT = 8 * 1024 * 1024
+MAX_SHIFT_ADDITIVE_WORK_CELLS = 4_096
+MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
+MAX_SHIFT_POWER_EXPONENT = 16
+MAX_SHIFT_POWER_WORK_CELLS = 4_096
+MAX_RECURRENCE_PREFIX_STEPS = 512
+MAX_RECURRENCE_PREFIX_INDEX = 100_000
+MAX_RECURRENCE_PREFIX_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_RECURRENCE_PREFIX_WORK_CELLS = 1_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable error owned by Ore-algebra contracts."""
 
     return PydanticCustomError(f"ore_algebra.{reason}", message)
+
+
+def _is_polynomial_coefficient(value: RationalFunction) -> bool:
+    """Return whether a QQ(n) value lies in the polynomial subring QQ[n]."""
+    return (
+        value.variables == ("n",)
+        and len(value.denominator.terms) == 1
+        and value.denominator.terms[0].exponents == (0,)
+        and value.denominator.terms[0].coefficient.as_fraction() == 1
+    )
 
 
 class DifferentialOreTerm(StrictModel):
@@ -73,6 +99,53 @@ class DifferentialOreOperator(StrictModel):
 class DifferentialOperatorMultiplyRequest(StrictModel):
     left: DifferentialOreOperator
     right: DifferentialOreOperator
+
+
+class DifferentialOperatorAddRequest(StrictModel):
+    """Two differential operators in the same QQ(x) algebra."""
+
+    left: DifferentialOreOperator
+    right: DifferentialOreOperator
+
+
+class DifferentialOperatorAddResult(StrictModel):
+    """Exact coefficientwise sum, in canonical sparse order."""
+
+    left: DifferentialOreOperator
+    right: DifferentialOreOperator
+    sum: DifferentialOreOperator
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: DifferentialOreOperator,
+        right: DifferentialOreOperator,
+        result: DifferentialOreOperator,
+    ) -> Self:
+        return cls.model_construct(left=left, right=right, sum=result)
+
+
+class DifferentialOperatorNormalizeRequest(StrictModel):
+    """Extract rational content from polynomial-coefficient differential operators."""
+
+    operator: DifferentialOreOperator
+
+
+class DifferentialOperatorNormalizeResult(StrictModel):
+    operator: DifferentialOreOperator
+    normalized: DifferentialOreOperator
+    scale: RationalFunction
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: DifferentialOreOperator,
+        normalized: DifferentialOreOperator,
+        scale: RationalFunction,
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator, normalized=normalized, scale=scale
+        )
 
 
 class DifferentialOperatorApplyRequest(StrictModel):
@@ -182,6 +255,288 @@ class ShiftOperatorMultiplyRequest(StrictModel):
     right: ShiftOreOperator
 
 
+class ShiftOperatorAddRequest(StrictModel):
+    """Add shift operators in the polynomial-coefficient subalgebra QQ[n]<S>."""
+
+    left: ShiftOreOperator = Field(
+        description="Shift operator whose coefficients are polynomials in QQ[n]."
+    )
+    right: ShiftOreOperator = Field(
+        description="Shift operator whose coefficients are polynomials in QQ[n]."
+    )
+
+    @model_validator(mode="after")
+    def require_polynomial_coefficients(self) -> Self:
+        if any(
+            not _is_polynomial_coefficient(term.coefficient)
+            for operator in (self.left, self.right)
+            for term in operator.terms
+        ):
+            raise _validation_error(
+                "polynomial_operator_coefficients",
+                "shift addition currently accepts polynomial coefficients in QQ[n]",
+            )
+        return self
+
+
+class ShiftOperatorAddResult(StrictModel):
+    left: ShiftOreOperator
+    right: ShiftOreOperator
+    sum: ShiftOreOperator
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        left: ShiftOreOperator,
+        right: ShiftOreOperator,
+        result: ShiftOreOperator,
+    ) -> Self:
+        return cls.model_construct(left=left, right=right, sum=result)
+
+
+class ShiftOperatorScalarMultiplyRequest(StrictModel):
+    """Left-scale a polynomial-coefficient shift operator by one value in QQ."""
+
+    scalar: RationalFunction = Field(
+        description="A canonical rational constant, represented on the QQ(n) axis."
+    )
+    operator: ShiftOreOperator = Field(
+        description="Shift operator whose coefficients are polynomials in QQ[n]."
+    )
+
+    @model_validator(mode="after")
+    def require_polynomial_operator_and_constant(self) -> Self:
+        if (
+            self.scalar.variables != ("n",)
+            or any(term.exponents != (0,) for term in self.scalar.numerator.terms)
+            or not _is_polynomial_coefficient(self.scalar)
+            or any(
+                not _is_polynomial_coefficient(term.coefficient)
+                for term in self.operator.terms
+            )
+        ):
+            raise _validation_error(
+                "rational_constant_scalar",
+                "left scaling requires a rational constant and polynomial QQ[n] operator coefficients",
+            )
+        return self
+
+
+class ShiftOperatorScalarMultiplyResult(StrictModel):
+    scalar: RationalFunction
+    operator: ShiftOreOperator
+    product: ShiftOreOperator
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        scalar: RationalFunction,
+        operator: ShiftOreOperator,
+        result: ShiftOreOperator,
+    ) -> Self:
+        return cls.model_construct(scalar=scalar, operator=operator, product=result)
+
+
+class ShiftOperatorNormalizeRequest(StrictModel):
+    """Normalize rational scalar content in polynomial shift coefficients."""
+
+    operator: ShiftOreOperator = Field(
+        description="Shift operator whose coefficients are polynomials in QQ[n]."
+    )
+
+    @model_validator(mode="after")
+    def require_polynomial_operator(self) -> Self:
+        if any(
+            not _is_polynomial_coefficient(term.coefficient)
+            for term in self.operator.terms
+        ):
+            raise _validation_error(
+                "polynomial_operator_coefficients",
+                "normalization currently accepts polynomial coefficients in QQ[n]",
+            )
+        return self
+
+
+class ShiftOperatorNormalizeResult(StrictModel):
+    operator: ShiftOreOperator
+    normalized: ShiftOreOperator
+    scale: RationalFunction
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: ShiftOreOperator,
+        normalized: ShiftOreOperator,
+        scale: RationalFunction,
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator, normalized=normalized, scale=scale
+        )
+
+
+class ShiftOperatorPrefixRequest(StrictModel):
+    """Evaluate finite residuals on values indexed from an explicit origin."""
+
+    operator: ShiftOreOperator
+    start_index: StrictInt
+    sequence: FiniteRationalSequence
+
+
+class ShiftOperatorPrefixContribution(StrictModel):
+    exponent: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
+    sequence_index: StrictInt
+    coefficient: CanonicalRational
+    sequence_value: CanonicalRational
+    value: CanonicalRational
+
+
+class ShiftOperatorPrefixResidual(StrictModel):
+    index: StrictInt
+    contributions: tuple[ShiftOperatorPrefixContribution, ...] = Field(
+        max_length=MAX_SHIFT_TERMS
+    )
+    residual: CanonicalRational
+
+
+class ShiftOperatorPrefixPoleExclusion(StrictModel):
+    index: StrictInt
+    exponents: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_SHIFT_TERMS)
+
+
+class ShiftOperatorPrefixResult(StrictModel):
+    operator: ShiftOreOperator
+    start_index: StrictInt
+    sequence: FiniteRationalSequence
+    residuals: tuple[ShiftOperatorPrefixResidual, ...] = Field(max_length=100_000)
+    coefficient_poles: tuple[ShiftOperatorPrefixPoleExclusion, ...] = Field(
+        max_length=100_000
+    )
+    right_boundary_indices: tuple[StrictInt, ...] = Field(max_length=100_000)
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: ShiftOreOperator,
+        start_index: int,
+        sequence: FiniteRationalSequence,
+        residuals: tuple[ShiftOperatorPrefixResidual, ...],
+        coefficient_poles: tuple[ShiftOperatorPrefixPoleExclusion, ...],
+        right_boundary_indices: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator,
+            start_index=start_index,
+            sequence=sequence,
+            residuals=residuals,
+            coefficient_poles=coefficient_poles,
+            right_boundary_indices=right_boundary_indices,
+        )
+
+
+class PolynomialRecurrencePrefixRequest(StrictModel):
+    """Solve a polynomial recurrence on one explicitly finite index interval."""
+
+    operator: ShiftOreOperator = Field(
+        description=(
+            "Polynomial-coefficient operator sum p_i(n) S^i. The coefficient "
+            "of its greatest shift exponent must be nonzero at every index "
+            "generated; the recurrence is asserted only on that finite range."
+        )
+    )
+    start_index: StrictInt = Field(
+        ge=-MAX_RECURRENCE_PREFIX_INDEX, le=MAX_RECURRENCE_PREFIX_INDEX
+    )
+    initial_values: FiniteRationalSequence = Field(
+        description="Exactly order(operator) consecutive values starting at start_index."
+    )
+    steps: StrictInt = Field(ge=0, le=MAX_RECURRENCE_PREFIX_STEPS)
+
+    @model_validator(mode="after")
+    def require_recurrence_shape(self) -> Self:
+        if not self.operator.terms:
+            raise _validation_error(
+                "zero_recurrence", "the zero operator does not define a recurrence"
+            )
+        if self.operator.order < 1:
+            raise _validation_error(
+                "positive_order",
+                "finite recurrence generation requires positive shift order",
+            )
+        if any(
+            not _is_polynomial_coefficient(term.coefficient)
+            for term in self.operator.terms
+        ):
+            raise _validation_error(
+                "polynomial_coefficients",
+                "finite recurrence generation requires coefficients in QQ[n]",
+            )
+        order = self.operator.order
+        if len(self.initial_values.values) != order:
+            raise _validation_error(
+                "initial_value_count",
+                "initial_values must contain exactly order(operator) consecutive values",
+            )
+        if abs(self.start_index + self.steps + order - 1) > MAX_RECURRENCE_PREFIX_INDEX:
+            raise _validation_error(
+                "index_range",
+                "the generated recurrence interval exceeds its index envelope",
+            )
+        return self
+
+
+class PolynomialRecurrencePrefix(StrictModel):
+    """Finite sequence whose recurrence equations hold on the declared interval."""
+
+    operator: ShiftOreOperator
+    start_index: StrictInt
+    recurrence_indices: tuple[StrictInt, ...]
+    values: FiniteRationalSequence
+
+    @model_validator(mode="after")
+    def require_prefix_structure(self) -> Self:
+        order = self.operator.order
+        if (
+            not self.operator.terms
+            or order < 1
+            or any(
+                not _is_polynomial_coefficient(term.coefficient)
+                for term in self.operator.terms
+            )
+        ):
+            raise _validation_error(
+                "polynomial_recurrence_shape",
+                "prefix values require a positive-order polynomial recurrence operator",
+            )
+        if self.recurrence_indices != tuple(
+            range(self.start_index, self.start_index + len(self.recurrence_indices))
+        ):
+            raise _validation_error(
+                "recurrence_indices",
+                "recurrence indices must be consecutive from start_index",
+            )
+        if len(self.values.values) != order + len(self.recurrence_indices):
+            raise _validation_error(
+                "prefix_value_count",
+                "prefix values must cover the initial values and recurrence interval",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: ShiftOreOperator,
+        start_index: int,
+        recurrence_indices: tuple[int, ...],
+        values: FiniteRationalSequence,
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator,
+            start_index=start_index,
+            recurrence_indices=recurrence_indices,
+            values=values,
+        )
+
+
 class ShiftMultiplyLedgerRow(StrictModel):
     """One exact (i, j) contribution of the shift product rule."""
 
@@ -249,3 +604,30 @@ class ShiftOperatorMultiplyResult(StrictModel):
             product=product,
             ledger=ledger,
         )
+
+
+class ShiftOperatorPowerRequest(StrictModel):
+    """Power an operator; exponents above one currently require ``ZZ[n]`` coefficients.
+
+    Exponents zero and one are exact projections and accept the full ``QQ(n)``
+    coefficient carrier. Higher powers use a whole-stage growth bound that is
+    currently proved only for integer-polynomial coefficients.
+    """
+
+    operator: ShiftOreOperator
+    exponent: StrictInt = Field(ge=0, le=MAX_SHIFT_POWER_EXPONENT)
+
+
+class ShiftOperatorPowerResult(StrictModel):
+    operator: ShiftOreOperator
+    exponent: StrictInt = Field(ge=0, le=MAX_SHIFT_POWER_EXPONENT)
+    power: ShiftOreOperator
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: ShiftOreOperator,
+        exponent: int,
+        power: ShiftOreOperator,
+    ) -> Self:
+        return cls.model_construct(operator=operator, exponent=exponent, power=power)

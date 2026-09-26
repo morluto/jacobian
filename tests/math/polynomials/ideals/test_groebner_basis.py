@@ -439,6 +439,7 @@ class TestKillableWorkerContract:
         assert "-I" in observed["command"]
         assert result.basis is not None
 
+
 class TestBoundedResultConstruction:
     """Worker result-envelope failures remain operational failures."""
 

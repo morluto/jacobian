@@ -32,8 +32,7 @@ def test_multiply_x_plus_1() -> None:
     # Result should be x^2 + 2x + 1
     terms = result.polynomial.terms
     assert [
-        (term.exponents, term.coefficient.num, term.coefficient.den)
-        for term in terms
+        (term.exponents, term.coefficient.num, term.coefficient.den) for term in terms
     ] == [((2,), 1, 1), ((1,), 2, 1), ((0,), 1, 1)]
 
 

@@ -300,13 +300,9 @@ class TestMultivariateDivision:
         """Division under grlex order should be a valid reconstruction."""
 
         left = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)),))
-        right = _poly(
-            ("x", "y", "z"), (("1/1", (1, 0, 1)), ("1/1", (0, 2, 0)))
-        )
+        right = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)), ("1/1", (0, 2, 0))))
         result = _compute_division(
-            MultivariateDivisionRequest(
-                left=left, right=right, monomial_order="grlex"
-            )
+            MultivariateDivisionRequest(left=left, right=right, monomial_order="grlex")
         )
         assert result.monomial_order == "grlex"
         assert result.quotient == _poly(("x", "y", "z"), (("1/1", (0, 0, 0)),))
@@ -316,9 +312,7 @@ class TestMultivariateDivision:
         """Division under grevlex order should be a valid reconstruction."""
 
         left = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)),))
-        right = _poly(
-            ("x", "y", "z"), (("1/1", (1, 0, 1)), ("1/1", (0, 2, 0)))
-        )
+        right = _poly(("x", "y", "z"), (("1/1", (1, 0, 1)), ("1/1", (0, 2, 0))))
         result = _compute_division(
             MultivariateDivisionRequest(
                 left=left, right=right, monomial_order="grevlex"
@@ -409,9 +403,7 @@ class TestMultivariateResultant:
         assert result.elimination_variable == "x"
         assert result.resultant.kind == "POLYNOMIAL"
         value = result.resultant.value
-        assert value == _poly(
-            ("y", "z"), (("-1/1", (1, 0)), ("1/1", (0, 2)))
-        )
+        assert value == _poly(("y", "z"), (("-1/1", (1, 0)), ("1/1", (0, 2))))
 
     def test_resultant_nonzero_constant_right_input(self) -> None:
         """Atlas elimination case: res_x(x + y^2 - u, y - v) = y - v."""
@@ -568,12 +560,8 @@ class TestMultivariateResultant:
         }
         assert terms == {(6,): Fraction(-1)}
 
-        orientation_left = _poly(
-            ("x", "y"), (("1/1", (1, 0)), ("1/1", (0, 1)))
-        )
-        orientation_right = _poly(
-            ("x", "y"), (("1/1", (3, 0)), ("1/1", (0, 0)))
-        )
+        orientation_left = _poly(("x", "y"), (("1/1", (1, 0)), ("1/1", (0, 1))))
+        orientation_right = _poly(("x", "y"), (("1/1", (3, 0)), ("1/1", (0, 0))))
         result = _compute_resultant(
             MultivariateResultantRequest(
                 left=orientation_left,
@@ -582,9 +570,7 @@ class TestMultivariateResultant:
             )
         )
         assert result.resultant.kind == "POLYNOMIAL"
-        assert result.resultant.value == _poly(
-            ("y",), (("-1/1", (3,)), ("1/1", (0,)))
-        )
+        assert result.resultant.value == _poly(("y",), (("-1/1", (3,)), ("1/1", (0,))))
 
     def test_resultant_matches_sylvester_determinant_oracle(self) -> None:
         """Differential oracle: the sparse value equals the Sylvester determinant."""
@@ -677,6 +663,7 @@ class TestMultivariateResultant:
                     left=left, right=right, elimination_variable="x"
                 )
             )
+
 
 # --------------------------------------------------------------------------- #
 # Multivariate-coefficient subresultant sequences

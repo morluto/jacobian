@@ -529,9 +529,7 @@ class TestSupport:
         assert result.polynomial.variables == VARS
 
         empty_axis_zero = _polynomial((), ())
-        empty_axis_result = compute_support(
-            SupportRequest(polynomial=empty_axis_zero)
-        )
+        empty_axis_result = compute_support(SupportRequest(polynomial=empty_axis_zero))
         assert empty_axis_result.is_zero
         assert empty_axis_result.exponents == ()
         assert empty_axis_result.polynomial is empty_axis_zero

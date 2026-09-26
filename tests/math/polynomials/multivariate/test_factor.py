@@ -100,9 +100,7 @@ class TestMultivariateFactor:
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         x = _poly(("x", "y"), ((1, 1, (1, 0)),))
-        xy_minus_one = _poly(
-            ("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0)))
-        )
+        xy_minus_one = _poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0))))
         assert result.coefficient.as_fraction() == 1
         assert len(result.factors) == 2
         assert sorted(

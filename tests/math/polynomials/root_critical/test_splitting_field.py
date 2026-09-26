@@ -258,6 +258,8 @@ def test_conjugation_is_a_nontrivial_involution() -> None:
     assert {tuple(conjugate_element(root, conjugation, modulus)) for root in roots} == {
         tuple(root) for root in roots
     }
+
+
 def test_root_rectangles_are_pairwise_distinct() -> None:
     field = exact_splitting_field(_poly(-2, 0, 0, 1))
     boxes = [

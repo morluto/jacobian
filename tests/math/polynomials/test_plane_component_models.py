@@ -20,7 +20,6 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
     PlaneComponentProfileRequest,
-    PlaneComponentProfileResult,
     PlaneSemialgebraicComponent,
     PlaneSemialgebraicSet,
     PlaneSign,

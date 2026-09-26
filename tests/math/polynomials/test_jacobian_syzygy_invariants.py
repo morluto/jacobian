@@ -288,9 +288,7 @@ def test_dimension_specific_basis_boundary_rejects_before_backend_execution(
     def backend_must_not_run(_request: GradedJacobianSyzygyRequest) -> None:
         pytest.fail("admission rejection reached the syzygy backend")
 
-    monkeypatch.setattr(
-        syzygy, "_compute_graded_jacobian_syzygy", backend_must_not_run
-    )
+    monkeypatch.setattr(syzygy, "_compute_graded_jacobian_syzygy", backend_must_not_run)
     with pytest.raises(
         OperationDomainValidationError, match="512-monomial or 512-column"
     ):

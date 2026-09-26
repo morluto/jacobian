@@ -121,8 +121,7 @@ def test_many_sparse_rows_and_eight_axis_support() -> None:
             assert len(entry.numerator.terms) == 1
             numerator = entry.numerator.terms[0]
             expected_exponents = tuple(
-                63 if axis == differentiated_axis else 64
-                for axis in range(len(axes))
+                63 if axis == differentiated_axis else 64 for axis in range(len(axes))
             )
             assert numerator.exponents == expected_exponents
             assert numerator.coefficient.as_fraction() == 64

@@ -35,11 +35,11 @@ from jacobian.math.polynomials.real_algebra._plane_component_models import (
     MAX_PLANE_COMPONENT_SAMPLE_COEFFICIENT_DIGITS,
     MAX_PLANE_COMPONENT_SAMPLE_DEGREE,
     MAX_PLANE_COMPONENT_SAMPLES,
+    MAX_PLANE_COMPONENT_SIGN_CONDITIONS,
     MAX_PLANE_COMPONENT_TERMS_PER_POLYNOMIAL,
     MAX_PLANE_COMPONENT_TOTAL_DEGREE,
     MAX_PLANE_COMPONENT_TOTAL_TERMS,
     MAX_PLANE_COMPONENTS,
-    MAX_PLANE_COMPONENT_SIGN_CONDITIONS,
     IsolatedRealPlanePoint,
     PlaneComponentProfileComputed,
     PlaneComponentProfileRequest,
@@ -363,7 +363,9 @@ def test_result_schema_exposes_the_runtime_polynomial_envelope() -> None:
         PlaneComponentProfileResult(
             semialgebraic_set=semialgebraic_set,
             samples=(_sample(0),),
-            outcome=PlaneComponentProfileComputed(components=(), sample_dispositions=()),
+            outcome=PlaneComponentProfileComputed(
+                components=(), sample_dispositions=()
+            ),
         )
 
 

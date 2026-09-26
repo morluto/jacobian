@@ -1,9 +1,7 @@
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -128,13 +126,8 @@ def test_rebuilds_forged_compatibility_and_public_tool_roundtrips():
 
     single = polytopal_complex_closure((_interval(0, 1, "s"),))
     function = _function(single, {single.maximal_cells[0].cell_id: _poly({0: 1})})
-    raw = invoke_operation(
-        "piecewise_polynomial.global_polynomial_profile.compute",
-        {"function": function.model_dump(mode="json")},
-        Catalog.open(),
+    result = piecewise_polynomial_global_profile(
+        GlobalPolynomialProfileRequest(function=function)
     )
-    assert raw.output["status"] == "GLOBAL_POLYNOMIAL"
-    assert raw.output["polynomial"]["polynomial"]["terms"][0]["coefficient"] == {
-        "num": "1",
-        "den": "1",
-    }
+    assert result.status == "GLOBAL_POLYNOMIAL"
+    assert result.polynomial == _poly({0: 1})

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field, model_validator
+from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,10 +17,29 @@ from jacobian.math.quantum._models import (
 class QubitRegisterRelabeling(StrictModel):
     """An explicit bijection between two ordered register axes."""
 
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "source_register": {"qubit_ids": ["q0", "q1"]},
+                    "target_register": {"qubit_ids": ["r0", "r1"]},
+                    "target_ids_in_source_order": ["r1", "r0"],
+                }
+            ]
+        }
+    )
+
     source_register: QubitRegister
     target_register: QubitRegister
     target_ids_in_source_order: tuple[QubitId, ...] = Field(
-        min_length=1, max_length=MAX_QUBITS
+        min_length=1,
+        max_length=MAX_QUBITS,
+        description=(
+            "Target register labels in source-axis order. Entries are unique; "
+            "the tuple length equals both register sizes and its labels equal "
+            "the target register labels (a cross-field constraint)."
+        ),
+        json_schema_extra={"uniqueItems": True},
     )
 
     @model_validator(mode="after")

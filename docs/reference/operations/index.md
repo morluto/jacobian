@@ -24,6 +24,7 @@ that need more context than an operation card:
 - [Positive-root posets](groups/root-posets.md)
 - [Coxeter polynomials](groups/coxeter-polynomials.md)
 - [Integral Weyl weight orbits](groups/weyl-weight-orbits.md)
+- [Standard parabolic weight orbits](groups/weyl-parabolic-weight-orbits.md)
 - [Weyl dimensions](groups/weyl-dimensions.md)
 - [Weyl exponents](groups/weyl-exponents.md)
 - [Weyl-group Poincare polynomials](groups/weyl-poincare-polynomial.md)

@@ -99,6 +99,8 @@ from jacobian.math.groups.root_systems._models import (
     WeylGroupOrderResult,
     WeylLongestElementResult,
     WeylParabolicResult,
+    WeylParabolicWeightOrbitRequest,
+    WeylParabolicWeightOrbitResult,
     WeylPoincarePolynomialResult,
     WeylVectorActionResult,
     WeylWeightOrbitResult,
@@ -1220,6 +1222,18 @@ def _weyl_group_order(matrix: tuple[tuple[int, ...], ...]) -> int:
     return int(PermutationGroup(*generators).order())
 
 
+def _weyl_order_from_exponents(rows: tuple[tuple[int, ...], ...]) -> int:
+    """Return the finite Weyl order from the bounded positive-root profile."""
+    if not rows:
+        return 1
+    _admit_weyl_exponent_work(rows)
+    return prod(
+        exponent + 1
+        for _indices, exponents in _weyl_exponent_data(rows)
+        for exponent in exponents
+    )
+
+
 def simple_reflection(
     matrix: CartanMatrix | tuple[tuple[int, ...], ...],
     vector: tuple[int, ...],
@@ -2210,6 +2224,97 @@ def weyl_weight_orbit(
     return WeylWeightOrbitResult._from_kernel(cartan, weight, orbit)
 
 
+def weyl_parabolic_weight_orbit(
+    request: WeylParabolicWeightOrbitRequest,
+) -> WeylParabolicWeightOrbitResult:
+    """Return the complete orbit of a typed weight under a standard parabolic.
+
+    The subgroup order and the stabilizer order in its induced Cartan datum
+    determine the exact orbit size before the ambient-coordinate BFS begins.
+    """
+    datum, weight = _canonical_lattice_vector(
+        request.weight, WeightLatticeVector, output_bound=False
+    )
+    rows = datum.cartan_matrix.entries
+    indices = request.simple_root_indices
+    if tuple(sorted(set(indices))) != indices or any(
+        index >= len(rows) for index in indices
+    ):
+        raise OperationDomainValidationError(
+            location=("simple_root_indices",),
+            code="root_system.parabolic_simple_indices",
+            message="parabolic simple-root indices must be a strictly increasing subset of the Cartan axis",
+        )
+
+    # The full Weyl norm bounds every parabolic image coordinate and is
+    # admitted before any subgroup or orbit expansion.
+    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
+    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.weight_orbit_coordinate_bound",
+            message="some parabolic weight image coordinate may exceed the interoperable integer bound",
+        )
+
+    subgroup = tuple(tuple(rows[i][j] for j in indices) for i in indices)
+    if subgroup:
+        _admit_cartan_finite_type(subgroup)
+        subgroup_order = _weyl_order_from_exponents(subgroup)
+        restricted_dominant = _dominant_weight(
+            subgroup, tuple(weight[index] for index in indices)
+        )
+        zero_indices = tuple(
+            index for index, value in enumerate(restricted_dominant) if value == 0
+        )
+        stabilizer_matrix = tuple(
+            tuple(subgroup[i][j] for j in zero_indices) for i in zero_indices
+        )
+        stabilizer_order = _weyl_order_from_exponents(stabilizer_matrix)
+    else:
+        subgroup_order = 1
+        stabilizer_order = 1
+    if (
+        not 1 <= subgroup_order <= MAX_WEYL_GROUP_ORDER
+        or subgroup_order % stabilizer_order
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    orbit_size = subgroup_order // stabilizer_order
+    if not 1 <= orbit_size <= MAX_WEIGHT_ORBIT_SIZE:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.weight_orbit_size_bound",
+            message=f"the complete parabolic weight orbit has {orbit_size} values; maximum is {MAX_WEIGHT_ORBIT_SIZE}",
+        )
+    max_output_digits = (orbit_size + 1) * len(rows) * 18
+    if max_output_digits > MAX_WEIGHT_ORBIT_OUTPUT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.weight_orbit_output_bound",
+            message="the complete parabolic weight orbit exceeds the admitted output size",
+        )
+
+    seen = {weight}
+    pending = [weight]
+    for current in pending:
+        for index in indices:
+            image = _weight_reflect(current, index, rows)
+            if any(
+                abs(value) > coordinate_bounds[coordinate]
+                for coordinate, value in enumerate(image)
+            ):
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+            if image not in seen:
+                seen.add(image)
+                if len(seen) > orbit_size:
+                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                pending.append(image)
+    if len(seen) != orbit_size:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return WeylParabolicWeightOrbitResult._from_kernel(
+        datum, indices, weight, tuple(sorted(seen))
+    )
+
+
 def weyl_element_descents(
     matrix: CartanMatrix | tuple[tuple[int, ...], ...],
     word: tuple[int, ...] | list[int],
@@ -2308,13 +2413,7 @@ def weyl_parabolic(
         )
     if parabolic:
         _admit_cartan_finite_type(parabolic)
-        _admit_weyl_exponent_work(parabolic)
-        component_data = _weyl_exponent_data(parabolic)
-        group_order = prod(
-            exponent + 1
-            for _indices, exponents in component_data
-            for exponent in exponents
-        )
+        group_order = _weyl_order_from_exponents(parabolic)
     else:
         group_order = 1
     if not 1 <= group_order <= MAX_WEYL_GROUP_ORDER:

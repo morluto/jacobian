@@ -261,7 +261,15 @@ def unlabelled_vertex_deck(family: VertexDeletionFamily) -> UnlabelledVertexDeck
             code="graph_deck.vertex_family_carrier",
             message="deck must be a VertexDeletionFamily",
         )
-    source = _admit_deck_graph(family.source)
+    try:
+        family = VertexDeletionFamily.model_validate(family.model_dump())
+        source = _admit_deck_graph(family.source)
+    except (ValidationError, OperationDomainValidationError, TypeError, ValueError, AttributeError, KeyError):
+        raise OperationDomainValidationError(
+            location=("deck",),
+            code="graph_deck.vertex_family_invalid",
+            message="deck must be a bounded canonical VertexDeletionFamily",
+        ) from None
     n = len(source.vertices)
     if n > MAX_UNLABELLED_DECK_VERTICES:
         raise OperationResourceAdmissionError(

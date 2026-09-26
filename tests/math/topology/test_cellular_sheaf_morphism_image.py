@@ -134,6 +134,10 @@ def test_image_factorization_reconstructs_non_surjective_map() -> None:
         assert product == original_cochain
     restored = SheafMorphismImageResult.model_validate_json(result.model_dump_json())
     assert restored == result
+    malformed = result.model_dump(mode="python")
+    malformed["morphism"]["components"] = malformed["morphism"]["components"][:-1]
+    with pytest.raises(ValueError, match="morphism components"):
+        SheafMorphismImageResult.model_validate(malformed)
     tool = next(
         item
         for item in BUILTIN_TOOLS

@@ -70,11 +70,22 @@ class SheafMorphismImageResult(StrictModel):
         if self.factor.source != source or self.factor.target != self.image:
             raise ValueError("factor must map the source onto the image sheaf")
         cells = source.canonical_face_order
+        if target.complex != source.complex:
+            raise ValueError("morphism source and target must use the same complex")
         if tuple(stalk.simplex for stalk in self.image.stalks) != cells:
             raise ValueError("image stalks must retain the canonical simplex axes")
         source_ranks = {stalk.simplex: len(stalk.basis) for stalk in source.stalks}
         target_ranks = {stalk.simplex: len(stalk.basis) for stalk in target.stalks}
         image_ranks = {stalk.simplex: len(stalk.basis) for stalk in self.image.stalks}
+        if tuple(key for key, _matrix in self.morphism.components) != cells:
+            raise ValueError("morphism components must retain canonical simplex axes")
+        for cell, matrix in self.morphism.components:
+            if not isinstance(cell, tuple):
+                raise ValueError("morphism components need simplex tuple axes")
+            if len(matrix) != target_ranks[cell] or any(
+                len(row) != source_ranks[cell] for row in matrix
+            ):
+                raise ValueError("morphism matrices must match the stalk axes")
         for map_ in (self.inclusion, self.factor):
             if not map_.natural or map_.obstruction is not None:
                 raise ValueError("image factorization maps must be natural")

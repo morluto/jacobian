@@ -49,6 +49,7 @@ from jacobian.math.logic.automata.tree.state_algebra import (
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
     TreeStateChartEntry,
+    _admit_nondeterministic_run_counts,
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
@@ -85,7 +86,32 @@ def compute_accepted_tree_count(
     )
 
 
-def compute_ranked_tree_positions(
+def compute_nondeterministic_run_counts(
+    request: NondeterministicRunCountsRequest,
+) -> NondeterministicRunCountsResult:
+    admission = _admit_nondeterministic_run_counts(request.automaton, request.max_size)
+    counts = (
+        (0,) * request.max_size
+        if admission.zero
+        else _nondeterministic_run_counts_admitted(
+            request.automaton, request.max_size, admission.reachable
+        )
+    )
+    return NondeterministicRunCountsResult._from_kernel(
+        request,
+        run_counts_by_size=counts,
+        estimated_work_bound=admission.work,
+    )
+
+
+def compute_regular_tree_grammar_to_automaton(
+    request: RegularTreeGrammarToAutomatonRequest,
+) -> RegularTreeGrammarToAutomatonResult:
+    return RegularTreeGrammarToAutomatonResult._from_kernel(
+        grammar=request.grammar,
+        automaton=regular_tree_grammar_to_automaton(request.grammar),
+    )
+ def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
     return ranked_tree_positions(request.tree)

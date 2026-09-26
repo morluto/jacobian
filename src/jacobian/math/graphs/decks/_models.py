@@ -322,6 +322,15 @@ class AnonymousGraphCardMultisetEqualityRequest(StrictModel):
                 continue
             if (
                 type(order) is not int
+                and type(multiset) is dict
+                and "card_order" in multiset
+            ):
+                raise _validation_error(
+                    "anonymous_equality_typed_shape",
+                    "card_order must be a native integer before combined admission",
+                )
+            if (
+                type(order) is not int
                 or not 0 <= order <= MAX_UNLABELLED_DECK_VERTICES
                 or type(classes) not in (list, tuple)
             ):

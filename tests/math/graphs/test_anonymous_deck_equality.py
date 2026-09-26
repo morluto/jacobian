@@ -5,12 +5,6 @@ from itertools import combinations, permutations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationMatchRequest,
-)
-from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs.decks import _models as deck_models
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
@@ -97,27 +91,11 @@ def test_relabeling_row_order_multiplicity_and_card_order_semantics() -> None:
     assert not anonymous_graph_card_multiset_equal(changed_order).equal
 
 
-def test_catalog_discovers_and_runs_anonymous_multiset_equality() -> None:
-    catalog = Catalog.open()
-    match = catalog.match(
-        OperationMatchRequest(need="compare equality of anonymous graph card multisets")
-    )
-    assert match.matches[0].operation_id == "graph.deck.anonymous_multiset.equal.check"
-    operation = catalog.operation(match.matches[0].operation_id)
-    assert operation is not None
-    output = invoke_operation(
-        operation.operation_id,
-        {
-            "left": {"card_order": 1, "classes": []},
-            "right": {"card_order": 1, "classes": []},
-        },
-        catalog,
-    )
-    assert output.output["equal"]
-    example_result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert example_result.output["equal"] is False
+def test_native_equality_accepts_canonical_multiset_values() -> None:
+    value = _multiset((), 1)
+    request = AnonymousGraphCardMultisetEqualityRequest(left=value, right=value)
+
+    assert anonymous_graph_card_multiset_equal(request).equal
 
 
 def test_combined_canonical_validation_work_is_admitted_once_for_both_sides() -> None:
@@ -154,15 +132,14 @@ def test_combined_canonical_validation_work_is_admitted_once_for_both_sides() ->
         AnonymousGraphCardMultisetEqualityRequest.model_validate(
             {"left": five_classes, "right": four_classes.model_dump()}
         )
+    coercible_order = {**five_classes, "card_order": "7"}
+    with pytest.raises(ValidationError, match="native integer"):
+        AnonymousGraphCardMultisetEqualityRequest.model_validate(
+            {"left": coercible_order, "right": four_classes.model_dump()}
+        )
 
 
-def test_native_and_catalog_paths_do_not_replay_canonical_validation(
-    monkeypatch,
-) -> None:
-    from jacobian.math.graphs.decks.operations import (
-        anonymous_graph_card_multiset_equal,
-    )
-
+def test_native_path_does_not_replay_canonical_validation(monkeypatch) -> None:
     raw = {
         "card_order": 1,
         "classes": [
@@ -172,7 +149,6 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
             }
         ],
     }
-    payload = {"left": raw, "right": raw}
     original = deck_models._canonical_card_edges
     canonical_checks = 0
 
@@ -192,13 +168,6 @@ def test_native_and_catalog_paths_do_not_replay_canonical_validation(
     request = AnonymousGraphCardMultisetEqualityRequest.model_validate(native_payload)
     assert canonical_checks == 2
     assert anonymous_graph_card_multiset_equal(request).equal
-    assert canonical_checks == 2
-
-    canonical_checks = 0
-    catalog = Catalog.open()
-    operation = catalog.operation("graph.deck.anonymous_multiset.equal.check")
-    assert operation is not None
-    assert invoke_operation(operation.operation_id, payload, catalog).output["equal"]
     assert canonical_checks == 2
 
 

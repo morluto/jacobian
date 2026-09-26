@@ -24,11 +24,13 @@ admits per-card permutation canonicalization over the full source order.
 of one declared order and stores each exact graph-isomorphism class once with
 its positive multiplicity. Its canonical representatives make card relabeling
 irrelevant while preserving repeated-card counts. The empty multiset retains
-its declared order. `graph.deck.anonymous_multiset.equal.check` compares two
-such values by declared order, canonical classes, and exact multiplicities;
-it returns only whether those supplied anonymous multisets are equal. It does
-not check deck realizability or identify a source graph. Pairwise canonical
-validation is admitted against one combined work bound before nested parsing.
+its declared order. The native
+`anonymous_graph_card_multiset_equal(request)` function compares two such
+values by declared order, canonical classes, and exact multiplicities; it
+returns only whether those supplied anonymous multisets are equal. It does not
+check deck realizability or identify a source graph. Pairwise canonical
+validation is admitted against one combined work bound before nested parsing,
+and `card_order` must be a native integer so coercion cannot bypass that bound.
 
 
 `graph.deck.vertex.induced_subgraph_count.compute` reconstructs the number of

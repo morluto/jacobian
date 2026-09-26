@@ -2337,29 +2337,37 @@ def module_koszul_map(
         + source_validation_work
     )
     input_bytes = len(value.model_dump_json().encode("utf-8"))
-    input_coefficients = (
-        tuple(_algebra_rationals(value.algebra))
-        + tuple(
-            item
-            for row in value.source.action
-            for matrix_row in row
-            for item in matrix_row
-        )
-        + tuple(
-            item
-            for row in value.target.action
-            for matrix_row in row
-            for item in matrix_row
-        )
-        + tuple(item for element in value.sequence for item in element)
-        + tuple(item for row in value.map_matrix for item in row)
+    algebra_action_coefficients = tuple(_algebra_rationals(value.algebra)) + tuple(
+        item
+        for action in (value.source.action, value.target.action)
+        for matrix in action
+        for row in matrix
+        for item in row
     )
-    max_input_digits = max(
-        (canonical_rational_component_digits(item) for item in input_coefficients),
+    algebra_action_digits = max(
+        (
+            canonical_rational_component_digits(item)
+            for item in algebra_action_coefficients
+        ),
+        default=1,
+    )
+    sequence_digits = max(
+        (
+            canonical_rational_component_digits(item)
+            for element in value.sequence
+            for item in element
+        ),
         default=1,
     )
     action_digits = (
-        2 * algebra_dimension * max_input_digits + algebra_dimension.bit_length() + 2
+        2 * algebra_dimension * algebra_action_digits
+        + algebra_dimension.bit_length()
+        + 2
+    )
+    differential_digits = (
+        algebra_dimension * (action_digits + sequence_digits)
+        + algebra_dimension.bit_length()
+        + 2
     )
     map_digits = max(
         (
@@ -2370,22 +2378,26 @@ def module_koszul_map(
         default=1,
     )
     linearity_intermediate_digits = (
-        2 * max(source_dimension, target_dimension) * (map_digits + max_input_digits)
+        2
+        * max(source_dimension, target_dimension)
+        * (map_digits + algebra_action_digits)
         + max(source_dimension, target_dimension).bit_length()
         + 2
     )
     chain_intermediate_digits = (
-        2 * max(source_dimension, target_dimension) * (map_digits + action_digits)
+        2 * max(source_dimension, target_dimension) * (map_digits + differential_digits)
         + max(source_dimension, target_dimension).bit_length()
         + 2
     )
     algebra_intermediate_digits = (
-        2 * algebra_dimension * max_input_digits + algebra_dimension.bit_length() + 2
+        2 * algebra_dimension * algebra_action_digits
+        + algebra_dimension.bit_length()
+        + 2
     )
     module_action_intermediate_digits = (
         2
         * algebra_dimension
-        * (2 * algebra_dimension * max_input_digits + max_input_digits)
+        * (2 * algebra_dimension * algebra_action_digits + algebra_action_digits)
         + 2 * algebra_dimension * algebra_dimension.bit_length()
         + algebra_dimension.bit_length()
         + 2
@@ -2393,7 +2405,7 @@ def module_koszul_map(
     estimated_output_bytes = (
         5 * input_bytes
         + map_cells * (2 * map_digits + 64)
-        + differential_terms * (2 * action_digits + 64)
+        + differential_terms * (2 * differential_digits + 64)
         + 4096
     )
     if (

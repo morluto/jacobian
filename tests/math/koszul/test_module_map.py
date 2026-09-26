@@ -166,6 +166,30 @@ def test_map_to_zero_module_retains_zero_chain_axes() -> None:
     assert all(not matrix.entries for matrix in result.degree_maps)
 
 
+def test_large_map_coefficient_does_not_inflate_module_action_admission() -> None:
+    algebra = FiniteCommutativeAlgebra(
+        basis=("1",), multiplication=(((q(1),),),), unit=(q(1),)
+    )
+    module = BasedFiniteModule(algebra=algebra, basis=("m",), action=(((q(1),),),))
+    chunk = int("7" * 3000)
+    coefficient = CanonicalRational(num=chunk * 10**3000 + chunk, den=1)
+
+    result = module_koszul_map(
+        ModuleKoszulMapRequest(
+            algebra=algebra,
+            source=module,
+            target=module,
+            sequence=(),
+            map_matrix=((coefficient,),),
+        )
+    )
+
+    # In dimension one and exterior degree zero the induced map is precisely
+    # multiplication by the supplied scalar; it remains exactly representable.
+    assert result.degree_maps[0].entries == ((0, 0, coefficient),)
+    assert result.module_map == ((coefficient,),)
+
+
 def test_catalog_declares_module_map_transport() -> None:
     tool = next(
         item

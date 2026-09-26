@@ -1,7 +1,6 @@
 """Finite simplicial topology domain."""
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
-from jacobian.math.polynomials._models import IntegerPolynomial
 from jacobian.math.topology._homology import (
     IntegralSimplicialHomologyRequest,
     IntegralSimplicialHomologyResult,
@@ -30,10 +29,8 @@ from jacobian.math.topology._structural import (
     ConeResult,
     ElementaryCollapseRequest,
     ElementaryCollapseResult,
-    FaceEnumeratorRequest,
     FVectorRequest,
     FVectorResult,
-    GVectorResult,
     InducedSubcomplexRequest,
     InducedSubcomplexResult,
     JoinRequest,
@@ -54,8 +51,6 @@ from jacobian.math.topology._structural import (
     compute_cone,
     compute_elementary_collapse,
     compute_f_vector,
-    compute_face_enumerator,
-    compute_g_vector,
     compute_induced_subcomplex,
     compute_join,
     compute_link,
@@ -338,68 +333,6 @@ _f_vector_tool = MathTool(
                 "complex": {
                     "vertices": ["v0", "v1", "v2"],
                     "facets": [["v0", "v1", "v2"]],
-                }
-            },
-        ),
-    ),
-)
-
-_g_vector_tool = MathTool(
-    operation_id="topology.simplicial_complex.g_vector.compute",
-    title="Compute the g-vector of a simplicial complex",
-    description=(
-        "Compute f- and h-vectors and the conventional initial h-differences "
-        "g_i=h_i-h_(i-1) through the midpoint. This transform makes no "
-        "manifold, sphere, or nonnegativity claim."
-    ),
-    request_type=FVectorRequest,
-    result_type=GVectorResult,
-    run=compute_g_vector,
-    tags=("topology", "simplicial", "exact"),
-    examples=(
-        OperationExample(
-            name="four_cycle_g_vector",
-            description="The boundary of a quadrilateral has g-vector (1, 1).",
-            input={
-                "complex": {
-                    "vertices": ["a", "b", "c", "d"],
-                    "facets": [["a", "b"], ["b", "c"], ["c", "d"], ["a", "d"]],
-                }
-            },
-        ),
-    ),
-)
-
-_face_enumerator_tool = MathTool(
-    operation_id="topology.simplicial_complex.face_enumerator.compute",
-    title="Compute the simplicial face enumerator",
-    description=(
-        "Return the canonical integer polynomial F_K(t)=sum_sigma t^|sigma|, "
-        "where sigma ranges over every face including the empty face. The empty "
-        "face contributes the constant term one; coefficients are in descending "
-        "degree order and the result composes directly with integer-polynomial "
-        "operations."
-    ),
-    request_type=FaceEnumeratorRequest,
-    result_type=IntegerPolynomial,
-    run=compute_face_enumerator,
-    tags=("topology", "simplicial", "face-enumerator", "polynomial", "exact"),
-    discovery_terms=(
-        "simplicial face enumerator",
-        "simplicial f-polynomial",
-        "face-count polynomial",
-    ),
-    examples=(
-        OperationExample(
-            name="filled_triangle_face_enumerator",
-            description=(
-                "Count every face of a filled triangle by cardinality; facets "
-                "must be maximal simplices and the empty face contributes one."
-            ),
-            input={
-                "complex": {
-                    "vertices": ["a", "b", "c"],
-                    "facets": [["a", "b", "c"]],
                 }
             },
         ),
@@ -822,8 +755,6 @@ TOOLS: MathTools = (
     _minimal_nonfaces_tool,
     _stanley_reisner_ideal_tool,
     _f_vector_tool,
-    _g_vector_tool,
-    _face_enumerator_tool,
     _link_tool,
     _star_tool,
     _vertex_deletion_tool,

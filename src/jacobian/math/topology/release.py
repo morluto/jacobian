@@ -22,6 +22,10 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
     is_bounded_prime,
 )
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
+    run_topology_admission,
+)
 from jacobian.math.topology._structural import _maximal_faces
 from jacobian.math.topology.operations import canonicalize, homology
 
@@ -31,7 +35,6 @@ MAX_FACE_POSET_PAIR_CANDIDATES = 1_000_000
 MAX_FACE_POSET_CHAIN_CANDIDATES = 100_000
 MAX_CLIQUE_CANDIDATES = 100_000
 MAX_CLIQUE_FACETS = 16_384
-MAX_GRAPH_CLIQUE_VERTICES = 8
 
 
 class FacePosetRequest(StrictModel):
@@ -246,8 +249,10 @@ def face_poset(request: FacePosetRequest) -> FacePosetResult:
     )
 
 
-def clique_complex(request: CliqueRequest) -> CliqueResult:
-    source = _canonical(request.complex)
+def clique_complex(source: FiniteSimplicialComplex) -> CliqueResult:
+    run_topology_admission(
+        lambda: require_canonical_complex_admission(source), location=("complex",)
+    )
     edges: tuple[tuple[str, str], ...] = (
         tuple((face[0], face[1]) for face in source.faces_by_dimension[1].faces)
         if source.dimension >= 1
@@ -292,34 +297,32 @@ def clique_complex(request: CliqueRequest) -> CliqueResult:
     )
 
 
-def graph_clique_complex(request: GraphCliqueRequest) -> CliqueResult:
-    """Return the flag complex of a bounded indexed graph.
+def graph_clique_complex(graph: IndexedSimpleUndirectedGraph) -> CliqueResult:
+    """Return the flag complex of an indexed graph.
 
-    The graph is encoded as a one-dimensional finite simplicial complex and
-    passed through the same exact clique kernel used by complex completion.
-    Eight vertices is the largest envelope whose entire nonempty powerset
-    stays within the canonical simplicial carrier's dimension-seven limit.
+    Search and output work are admitted by the clique kernel from graph-derived
+    candidates and maximal cliques, rather than ambient vertex count.
     """
-    graph = request.graph
-    if not 1 <= graph.vertex_count <= MAX_GRAPH_CLIQUE_VERTICES:
+    if graph.vertex_count < 1:
         raise OperationResourceAdmissionError(
             location=("graph", "vertex_count"),
             code="topology.graph_clique.vertex_budget",
-            message="graph clique complexes admit between 1 and 8 vertices",
+            message="graph clique complexes require at least one vertex",
         )
     vertices = tuple(f"v{index}" for index in range(graph.vertex_count))
     endpoints = {vertex for edge in graph.edges for vertex in edge}
-    facets = tuple((vertices[left], vertices[right]) for left, right in graph.edges)
-    facets += tuple(
+    facets: tuple[tuple[str, str], ...] = tuple(
+        (vertices[left], vertices[right]) for left, right in graph.edges
+    )
+    singleton_facets = tuple(
         (vertices[index],)
         for index in range(graph.vertex_count)
         if index not in endpoints
     )
-    return clique_complex(
-        CliqueRequest(
-            complex=SimplicialComplexRequest(vertices=vertices, facets=facets)
-        )
-    )
+    all_facets: tuple[Simplex, ...] = facets + singleton_facets
+    facets_for_complex = all_facets
+    source = canonicalize(vertices, facets_for_complex).complex
+    return clique_complex(source)
 
 
 def orientability(request: OrientabilityRequest) -> OrientabilityResult:

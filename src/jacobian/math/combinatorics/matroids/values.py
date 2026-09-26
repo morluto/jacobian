@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field, StrictInt, StrictStr, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_FINITE_BASIS_GROUND_SIZE = 64
 MAX_FINITE_BASIS_COUNT = 4_096
@@ -114,16 +114,17 @@ class FiniteBasisMatroid(StrictModel):
     The ground axis is retained even when all elements are loops. Bases are
     sorted ground-index tuples, sorted lexicographically as a family. The
     empty-ground matroid and every rank-zero matroid are represented by the
-    single basis ``()``. Construction checks the ordinary basis-exchange axiom
-    under the published work limit; it does not claim field representability.
+    single basis ``()``. Construction validates canonical structure only. Call
+    ``require_basis_exchange`` before relying on the matroid claim; it does not
+    claim field representability.
     """
 
     model_config = ConfigDict(
         json_schema_extra={
             "description": (
                 "A finite matroid represented by its complete canonical basis "
-                "family. Basis exchange is checked exhaustively under the "
-                "published ground, family, membership, label, and work limits. "
+                "family. Basis exchange must be checked explicitly under the "
+                "published work limit before relying on the matroid claim. "
                 "This carrier does not assert representability over a field."
             ),
             "admission_limits": {
@@ -166,7 +167,7 @@ class FiniteBasisMatroid(StrictModel):
     @classmethod
     def preflight_raw_envelope(cls, data: object) -> object:
         _preflight_raw_envelope(data)
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_canonical_basis_matroid(self) -> Self:
@@ -221,17 +222,16 @@ class FiniteBasisMatroid(StrictModel):
                 "basis-family memberships exceed the admitted storage bound",
             )
 
-        maximum_difference = min(rank, ground_size - rank)
+        return self
+
+    def require_basis_exchange(self) -> None:
+        maximum_difference = min(self.rank, self.ground_size - self.rank)
         work_bound = len(self.bases) ** 2 * maximum_difference**2
         if work_bound > MAX_FINITE_BASIS_EXCHANGE_CHECKS:
             raise _validation_error(
                 "exchange_work_bound",
                 "worst-case complete basis-exchange work exceeds the admitted bound",
             )
-        self._require_basis_exchange()
-        return self
-
-    def _require_basis_exchange(self) -> None:
         basis_family = set(self.bases)
         basis_sets = tuple(frozenset(basis) for basis in self.bases)
         checks = 0

@@ -43,14 +43,15 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
                     if family_mask >> index & 1
                 )
                 valid = _satisfies_basis_exchange(bases)
+                value = FiniteBasisMatroid(ground=ground, bases=bases)
+                assert value.bases == bases
+                assert value.rank == rank
+                assert value.ground == ground
                 if valid:
-                    value = FiniteBasisMatroid(ground=ground, bases=bases)
-                    assert value.bases == bases
-                    assert value.rank == rank
-                    assert value.ground == ground
+                    value.require_basis_exchange()
                 else:
-                    with pytest.raises(ValidationError, match="basis_exchange"):
-                        FiniteBasisMatroid(ground=ground, bases=bases)
+                    with pytest.raises(Exception, match="basis exchange"):
+                        value.require_basis_exchange()
 
 
 @pytest.mark.parametrize(
@@ -68,8 +69,13 @@ def test_all_small_equal_size_families_match_independent_basis_axiom() -> None:
 def test_rejects_noncanonical_or_nonmatroid_basis_families(
     ground: tuple[str, ...], bases: tuple[tuple[int, ...], ...], error: str
 ) -> None:
-    with pytest.raises(ValidationError, match=error):
-        FiniteBasisMatroid(ground=ground, bases=bases)
+    if error == "basis_exchange":
+        value = FiniteBasisMatroid(ground=ground, bases=bases)
+        with pytest.raises(Exception, match="basis exchange"):
+            value.require_basis_exchange()
+    else:
+        with pytest.raises(ValidationError, match=error):
+            FiniteBasisMatroid(ground=ground, bases=bases)
 
 
 def test_empty_ground_rank_zero_and_full_rank_preserve_the_ground_axis() -> None:
@@ -86,7 +92,7 @@ def test_empty_ground_rank_zero_and_full_rank_preserve_the_ground_axis() -> None
     assert full_rank.rank == 3
 
 
-def test_json_round_trip_replays_complete_basis_exchange() -> None:
+def test_json_round_trip_is_structural_and_exchange_check_is_explicit() -> None:
     value = FiniteBasisMatroid(
         ground=("a", "b", "c", "d"),
         bases=tuple(itertools.combinations(range(4), 2)),
@@ -96,6 +102,7 @@ def test_json_round_trip_replays_complete_basis_exchange() -> None:
 
     assert decoded == value
     assert decoded.rank == 2
+    decoded.require_basis_exchange()
 
 
 def test_schema_and_raw_envelope_publish_and_enforce_exact_limits() -> None:
@@ -134,8 +141,9 @@ def test_schema_and_raw_envelope_publish_and_enforce_exact_limits() -> None:
         )
 
     work_overflow = tuple(itertools.islice(itertools.combinations(range(64), 32), 45))
-    with pytest.raises(ValidationError, match="exchange_work_bound"):
-        FiniteBasisMatroid(ground=max_ground, bases=work_overflow)
+    bounded_claim = FiniteBasisMatroid(ground=max_ground, bases=work_overflow)
+    with pytest.raises(Exception, match="work exceeds the admitted bound"):
+        bounded_claim.require_basis_exchange()
 
 
 def test_raw_json_oversized_nested_family_fails_before_model_construction() -> None:

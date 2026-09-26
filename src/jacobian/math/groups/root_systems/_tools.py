@@ -232,7 +232,7 @@ def _run_weyl_element_weight_action(
 def _run_weyl_element_root_action(
     request: WeylElementRootActionRequest,
 ) -> RootLatticeVector:
-    return weyl_element_act_on_root(request)
+    return weyl_element_act_on_root(request.element, request.vector)
 def _run_weyl_bruhat_interval(
     request: WeylBruhatIntervalRequest,
 ) -> WeylBruhatIntervalResult:

@@ -335,7 +335,7 @@ def _lattice_inclusion[ResultVectorT: _FiniteCartanLatticeVector](
             message="the inclusion requires a vector in its stated source lattice",
         )
     datum, coordinates = _canonical_lattice_vector(
-        vector, expected_type, output_bound=False
+        vector, expected_type, output_bound=True
     )
     rank = len(coordinates)
     matrix = datum.cartan_matrix.entries

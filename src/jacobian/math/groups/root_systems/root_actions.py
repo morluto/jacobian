@@ -17,7 +17,6 @@ from jacobian.math.groups.root_systems._models import (
     FiniteCartanDatum,
     RootLatticeVector,
     WeylElement,
-    WeylElementRootActionRequest,
 )
 from jacobian.math.groups.root_systems.operations import (
     _admit_weyl_element_value,
@@ -35,26 +34,6 @@ MAX_WEYL_ROOT_ACTION_INTERMEDIATE_BITS = (
     MAX_LATTICE_OUTPUT_COORDINATE_BITS
     + (MAX_RANK * MAX_ROOT_COORDINATE - 1).bit_length()
 )
-
-
-def _request_inputs(
-    request: WeylElementRootActionRequest,
-) -> tuple[WeylElement, RootLatticeVector]:
-    if not isinstance(request, WeylElementRootActionRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="root_system.weyl_root_action_request_type",
-            message="request must bind a Weyl element and root-lattice vector",
-        )
-    try:
-        element, vector = request.element, request.vector
-    except AttributeError as error:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="root_system.weyl_root_action_request_shape",
-            message="request must contain both a Weyl element and root vector",
-        ) from error
-    return element, vector
 
 
 def _canonical_element(element: WeylElement) -> WeylElement:
@@ -217,10 +196,10 @@ def _canonical_vector(
 
 
 def weyl_element_act_on_root(
-    request: WeylElementRootActionRequest,
+    element_value: WeylElement,
+    vector_value: RootLatticeVector,
 ) -> RootLatticeVector:
     """Apply one admitted Weyl action in the same ordered root lattice."""
-    element_value, vector_value = _request_inputs(request)
     element = _canonical_element(element_value)
 
     # Membership checking re-closes at most 120 positive roots and performs

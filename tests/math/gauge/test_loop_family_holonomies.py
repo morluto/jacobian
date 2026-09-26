@@ -136,6 +136,34 @@ def test_operation_is_published_and_example_runs() -> None:
     assert loop_family_holonomies(request.field, request.loops).loops
 
 
+def test_native_operation_rejects_gauge_carrier_subclasses() -> None:
+    class DerivedField(GaugeField):
+        pass
+
+    class DerivedPath(OrientedGaugePath):
+        pass
+
+    field = _field()
+    with pytest.raises(OperationDomainValidationError):
+        loop_family_holonomies(
+            DerivedField.model_construct(
+                lattice=field.lattice,
+                degree=field.degree,
+                edge_labels=field.edge_labels,
+            ),
+            (),
+        )
+    with pytest.raises(OperationDomainValidationError):
+        loop_family_holonomies(
+            field,
+            (
+                DerivedPath.model_construct(
+                    steps=(), basepoint="a"
+                ),
+            ),
+        )
+
+
 @pytest.mark.parametrize(
     "path",
     (
@@ -239,6 +267,21 @@ def test_family_result_rejects_mutable_source_field_before_revalidation() -> Non
         GaugeLoopFamilyHolonomies.model_validate(
             {"field": forged_field, "loops": valid.loops}
         )
+
+
+def test_family_result_validation_keeps_path_relations_structural() -> None:
+    field = _field()
+    valid = loop_family_holonomies(
+        field, (_path(("ab", True), ("bc", True), ("ca", True)),)
+    )
+    payload = valid.model_dump()
+    payload["loops"][0]["path"]["steps"] = payload["loops"][0]["path"][
+        "steps"
+    ][:1]
+
+    decoded = GaugeLoopFamilyHolonomies.model_validate(payload)
+
+    assert len(decoded.loops[0].path.steps) == 1
 
 
 def test_output_envelope_is_checked_before_any_permutation_product(

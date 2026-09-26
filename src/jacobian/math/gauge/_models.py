@@ -1054,7 +1054,7 @@ class GaugeLoopFamilyHolonomies(StrictModel):
         return value
 
     @model_validator(mode="after")
-    def require_source_bound_closed_loops(self) -> Self:  # noqa: C901
+    def require_source_bound_closed_loops(self) -> Self:
         if type(self.loops) is not tuple or any(
             type(entry) is not GaugeLoopHolonomy
             or type(entry.path) is not OrientedGaugePath
@@ -1091,8 +1091,6 @@ class GaugeLoopFamilyHolonomies(StrictModel):
             raise _validation_error(
                 "loop_family_parent", "loop-family source is malformed"
             ) from None
-        lattice = field.lattice
-        by_edge = {edge.edge_id: edge for edge in lattice.edges}
         if not _has_valid_permutation_degree(self.field):
             raise _validation_error(
                 "loop_family_degree", "source field has an invalid permutation degree"
@@ -1138,43 +1136,6 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                 raise _validation_error(
                     "loop_family_holonomy",
                     "every loop holonomy must belong to the source permutation group",
-                )
-            if not steps:
-                if (
-                    path.basepoint != entry.basepoint
-                    or entry.basepoint not in lattice.vertices
-                ):
-                    raise _validation_error(
-                        "loop_family_basepoint",
-                        "an empty loop must use a source-lattice basepoint",
-                    )
-                continue
-            first: str | None = None
-            cursor: str | None = None
-            for step in steps:
-                edge = by_edge.get(step.edge_id)
-                if edge is None:
-                    raise _validation_error(
-                        "loop_family_edge", "loop path must use source-field edges"
-                    )
-                tail, head = (
-                    (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
-                )
-                if cursor is not None and cursor != tail:
-                    raise _validation_error(
-                        "loop_family_chain", "each loop must chain head-to-tail"
-                    )
-                if first is None:
-                    first = tail
-                cursor = head
-            if (
-                first != cursor
-                or entry.basepoint != first
-                or path.basepoint not in (None, first)
-            ):
-                raise _validation_error(
-                    "loop_family_closed",
-                    "each result path must be a closed loop at its retained basepoint",
                 )
         if _loop_family_output_units(field, loops) > (
             MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS

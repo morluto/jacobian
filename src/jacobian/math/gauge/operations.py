@@ -171,7 +171,7 @@ def _admit_transform_field(
     carriers cannot turn dictionary lookups or permutation arithmetic into
     incidental ``AttributeError``/``KeyError`` failures.
     """
-    if not isinstance(field, GaugeField):
+    if type(field) is not GaugeField:
         _reject(
             "field",
             "lattice_gauge.transform.field_not_a_gauge_field",
@@ -436,7 +436,7 @@ def _admit_loop_family_size(
         )
     total_steps = 0
     for path in loops:
-        if not isinstance(path, OrientedGaugePath):
+        if type(path) is not OrientedGaugePath:
             _reject(
                 "loops",
                 "lattice_gauge.loop_family.path_shape",

@@ -313,6 +313,31 @@ def test_minor_assignment_profiles_preserve_all_infinite_ties() -> None:
     assert profile.permutations == ((0, 1), (1, 0))
 
 
+def test_minor_assignment_profiles_admit_one_order_eight_minor() -> None:
+    semiring = _semiring()
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=tuple(f"r{i}" for i in range(8)),
+        column_axis=tuple(f"c{i}" for i in range(8)),
+        entries=tuple(
+            tuple(
+                _scalar(CanonicalRational.from_integer_ratio(i + j, 1))
+                for j in range(8)
+            )
+            for i in range(8)
+        ),
+    )
+    (profile,) = tropical_matrix_minor_assignment_profiles(matrix, (8,))
+    assert profile.value.value == CanonicalRational.from_integer_ratio(56, 1)
+    assert len(profile.permutations) == 40_320
+
+
+def test_minor_assignment_profiles_reject_noncanonical_native_axes() -> None:
+    matrix = _matrix().model_copy(update={"row_axis": ("r", "r")})
+    with pytest.raises(OperationDomainValidationError):
+        tropical_matrix_minor_assignment_profiles(matrix, (1,))
+
+
 def test_minor_assignment_profiles_admit_factorial_work_before_enumeration() -> None:
     matrix = TropicalMatrix(
         semiring=_semiring(),

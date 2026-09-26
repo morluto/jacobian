@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from itertools import combinations
 from math import comb
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -590,7 +590,14 @@ class MatrixMinorAssignmentsRequest(StrictModel):
     """Compute every square minor for each selected order."""
 
     matrix: TropicalMatrix
-    sizes: tuple[StrictInt, ...] = Field(min_length=1, max_length=8)
+    sizes: tuple[Annotated[StrictInt, Field(ge=1, le=8)], ...] = Field(
+        min_length=1,
+        max_length=8,
+        description=(
+            "Distinct minor orders that fit both matrix dimensions. The selected "
+            "orders must produce at most 256 minors and 40,320 candidate assignments."
+        ),
+    )
 
     @model_validator(mode="after")
     def require_admissible_sizes(self) -> Self:

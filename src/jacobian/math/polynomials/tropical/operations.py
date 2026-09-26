@@ -127,8 +127,13 @@ def _admit_matrix(matrix: TropicalMatrix) -> None:
             code="tropical.matrix_type",
             message="expected a tropical matrix",
         )
-    if len(matrix.row_axis) != len(matrix.entries) or any(
-        len(row) != len(matrix.column_axis) for row in matrix.entries
+    if (
+        len(matrix.row_axis) != len(matrix.entries)
+        or len(set(matrix.row_axis)) != len(matrix.row_axis)
+        or len(set(matrix.column_axis)) != len(matrix.column_axis)
+        or len(matrix.row_axis) > 128
+        or len(matrix.column_axis) > 128
+        or any(len(row) != len(matrix.column_axis) for row in matrix.entries)
     ):
         raise OperationDomainValidationError(
             location=("matrix",),
@@ -1766,11 +1771,11 @@ def tropical_matrix_minor_assignment_profiles(
     permutation_count = sum(
         comb(rows, size) * comb(columns, size) * factorial(size) for size in sizes
     )
-    if minor_count > 256 or permutation_count > 25_000:
+    if minor_count > 256 or permutation_count > 40_320:
         raise OperationResourceAdmissionError(
             location=("sizes",),
             code="tropical.minor_assignment_work",
-            message="selected minors exceed the 256-minor or 25,000-assignment bound",
+            message="selected minors exceed the 256-minor or 40,320-assignment bound",
         )
 
     # Include the source once, then conservatively charge every minor scalar

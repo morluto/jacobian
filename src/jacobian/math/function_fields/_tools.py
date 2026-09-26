@@ -594,7 +594,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "residue_field": {
                             "characteristic": "5",
                             "modulus_coefficients": ["0", "1"],
-                            "generator": "z",
+                            "generator": "a",
                         },
                     },
                     "element": {

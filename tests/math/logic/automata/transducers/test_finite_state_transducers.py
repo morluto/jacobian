@@ -111,6 +111,14 @@ class TestSubsequentialIdentityOperation:
         )
         assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
 
+        empty = FiniteAlphabet(symbols=())
+        empty_identity = compute_identity(SubseqIdentityRequest(alphabet=empty))
+        assert empty_identity.input_alphabet == empty
+        assert empty_identity.output_alphabet == empty
+        assert empty_identity.transitions == ()
+        assert run_subsequential(empty_identity, ()).output == ()
+        assert identity_transducer(0).state_count == 1
+
         words = [()]
         for length in range(1, 6):
             words.extend(
@@ -138,6 +146,10 @@ class TestSubsequentialIdentityOperation:
         assert error.value.errors()[0]["type"] == (
             "finite_state_transducer.identity_alphabet_bound_exceeded"
         )
+
+    def test_native_identity_rejects_non_scalar_alphabet_id(self) -> None:
+        with pytest.raises(ValueError):
+            identity_transducer(1, alphabet_id="\ud800")
 
 
 class TestWordMorphismTransducerConversion:

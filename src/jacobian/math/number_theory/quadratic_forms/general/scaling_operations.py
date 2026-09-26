@@ -113,13 +113,89 @@ def require_scale_budget(request: QuadraticFormScaleRequest) -> None:
             )
 
 
-def scale_rational_quadratic_form(
-    request: QuadraticFormScaleRequest,
-) -> QuadraticFormScaleResult:
-    """Return ``factor * Q`` on the same ordered coordinate axis."""
-
+def _validate_scale_request_before_dump(request: object) -> QuadraticFormScaleRequest:
+    """Reject forged unbounded containers and scalars before recursive serialization."""
+    if not isinstance(request, QuadraticFormScaleRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.scale_invalid_request",
+            message="quadratic-form scaling requires a canonical request",
+        )
+    form = getattr(request, "form", None)
+    factor = getattr(request, "factor", None)
+    if not isinstance(form, RationalQuadraticForm) or not isinstance(
+        factor, CanonicalRational
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.scale_invalid_request",
+            message="quadratic-form scaling requires a canonical form and rational factor",
+        )
+    axis = getattr(form, "axis", None)
+    diagonal = getattr(form, "diagonal_coefficients", None)
+    crosses = getattr(form, "cross_terms", None)
+    if (
+        type(getattr(form, "domain", None)) is not str
+        or getattr(form, "domain", None) != "QQ"
+        or type(axis) is not tuple
+        or len(axis) > MAX_QUADRATIC_SCALE_AXIS
+        or type(diagonal) is not tuple
+        or len(diagonal) != len(axis)
+        or type(crosses) is not tuple
+        or len(diagonal) + len(crosses) > MAX_QUADRATIC_SCALE_SUPPORT
+        or any(type(label) is not str or not 1 <= len(label) <= 64 for label in axis)
+    ):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.scale_invalid_request",
+            message="quadratic-form scaling request exceeds its bounded shape",
+        )
+    values = [*diagonal]
+    for term in crosses:
+        if not isinstance(term, QuadraticCrossTerm):
+            raise OperationDomainValidationError(
+                location=("form", "cross_terms"),
+                code="quadratic_form.scale_invalid_request",
+                message="quadratic-form cross terms must be typed and bounded",
+            )
+        left, right = getattr(term, "left", None), getattr(term, "right", None)
+        if (
+            type(left) is not int
+            or type(right) is not int
+            or not 0 <= left < right < len(axis)
+        ):
+            raise OperationDomainValidationError(
+                location=("form", "cross_terms"),
+                code="quadratic_form.scale_invalid_request",
+                message="quadratic-form cross-term indices must lie within the axis",
+            )
+        values.append(getattr(term, "coefficient", None))
+    values.append(factor)
+    for value in values:
+        if not isinstance(value, CanonicalRational):
+            raise OperationDomainValidationError(
+                location=("form",),
+                code="quadratic_form.scale_invalid_request",
+                message="quadratic-form coefficients must be typed rational values",
+            )
+        numerator, denominator = (
+            getattr(value, "num", None),
+            getattr(value, "den", None),
+        )
+        if (
+            type(numerator) is not int
+            or type(denominator) is not int
+            or denominator <= 0
+            or max(abs(numerator).bit_length(), denominator.bit_length())
+            > 3 * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+        ):
+            raise OperationDomainValidationError(
+                location=("form",),
+                code="quadratic_form.scale_invalid_request",
+                message="quadratic-form rational components exceed their digit bound",
+            )
     try:
-        request = QuadraticFormScaleRequest.model_validate(
+        return QuadraticFormScaleRequest.model_validate(
             request.model_dump(mode="python"), strict=True
         )
     except (AttributeError, TypeError, ValueError, ValidationError) as error:
@@ -128,6 +204,14 @@ def scale_rational_quadratic_form(
             code="quadratic_form.scale_invalid_request",
             message="quadratic-form scaling requires a canonical bounded request",
         ) from error
+
+
+def scale_rational_quadratic_form(
+    request: QuadraticFormScaleRequest,
+) -> QuadraticFormScaleResult:
+    """Return ``factor * Q`` on the same ordered coordinate axis."""
+
+    request = _validate_scale_request_before_dump(request)
     require_scale_budget(request)
     source = request.form
     factor = request.factor

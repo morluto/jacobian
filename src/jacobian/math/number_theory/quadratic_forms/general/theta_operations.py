@@ -405,17 +405,16 @@ def theta_selected_coefficients(
             message="selected theta indices must be bounded and strictly increasing",
         )
     try:
-        request = ThetaSelectedCoefficientsRequest.model_validate(
-            {"form": raw_form.model_dump(mode="python"), "indices": raw_indices},
-            strict=True,
+        form = RationalQuadraticForm.model_validate(
+            raw_form.model_dump(mode="python"), strict=True
         )
     except (AttributeError, TypeError, ValueError, ValidationError) as error:
         raise OperationDomainValidationError(
-            location=("request",),
-            code="quadratic_form.theta_invalid_request",
-            message="theta request must satisfy its canonical bounded schema",
+            location=("form",),
+            code="quadratic_form.theta_invalid_form",
+            message="selected theta coefficients received a structurally invalid form",
         ) from error
-    form = request.form
+    request = ThetaSelectedCoefficientsRequest(form=form, indices=raw_indices)
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(

@@ -25,6 +25,7 @@ that need more context than an operation card:
 - [Coxeter polynomials](groups/coxeter-polynomials.md)
 - [Integral Weyl weight orbits](groups/weyl-weight-orbits.md)
 - [Weyl action on weight-lattice vectors](groups/weyl-weight-action.md)
+- [Weyl action on root-lattice vectors](groups/weyl-root-action.md)
 - [Weyl dimensions](groups/weyl-dimensions.md)
 - [Weyl exponents](groups/weyl-exponents.md)
 - [Weyl-group Poincare polynomials](groups/weyl-poincare-polynomial.md)

@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.automata.tree import (
     RankedTree,
-    RankedTreePositionsRequest,
     ranked_tree_positions,
 )
 from jacobian.math.logic.automata.tree._tools import TOOLS
@@ -34,7 +33,7 @@ def test_positions_match_independent_preorder_oracle_and_round_trip() -> None:
         ),
     )
 
-    result = ranked_tree_positions(RankedTreePositionsRequest(tree=tree))
+    result = ranked_tree_positions(tree)
 
     assert result.positions == _oracle_positions(tree)
     assert result.positions == ((), (0,), (1,), (1, 0))
@@ -44,12 +43,10 @@ def test_positions_match_independent_preorder_oracle_and_round_trip() -> None:
 
 def test_positions_for_degenerate_leaf_and_wide_node() -> None:
     leaf = RankedTree(symbol=0)
-    assert ranked_tree_positions(RankedTreePositionsRequest(tree=leaf)).positions == (
-        (),
-    )
+    assert ranked_tree_positions(leaf).positions == ((),)
 
     wide = RankedTree(symbol=0, children=tuple(RankedTree(symbol=i) for i in range(16)))
-    result = ranked_tree_positions(RankedTreePositionsRequest(tree=wide))
+    result = ranked_tree_positions(wide)
     assert result.positions == ((), *((index,) for index in range(16)))
 
 
@@ -59,17 +56,15 @@ def test_positions_preflight_rejects_tree_over_depth_bound() -> None:
         tree = RankedTree(symbol=0, children=(tree,))
 
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        ranked_tree_positions(RankedTreePositionsRequest(tree=tree))
+        ranked_tree_positions(tree)
 
     assert exc_info.value.errors()[0]["type"] == "tree_automata.positions.depth_bound"
 
 
 def test_positions_reject_validation_bypassed_tree_shape() -> None:
     tree = RankedTree.model_construct(symbol=True, children=())
-    request = RankedTreePositionsRequest.model_construct(tree=tree)
-
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        ranked_tree_positions(request)
+        ranked_tree_positions(tree)
 
     assert exc_info.value.errors()[0]["type"] == "tree_automata.positions.tree_shape"
 

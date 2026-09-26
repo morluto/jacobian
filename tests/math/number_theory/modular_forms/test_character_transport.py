@@ -28,7 +28,6 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
     CyclotomicCharacterMap,
     CyclotomicIdentityFieldMap,
-    ModularCharacterCoordinates,
     ModularCharacterCoordinatesTransportRequest,
     ModularCharacterEqualityRequest,
     ModularCharacterSpaceInclusion,
@@ -121,6 +120,7 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
     assert transported.inclusion == inclusion
     assert transported.source_form.space == source_space
     assert transported.target_form.space == target_space
+    assert type(transported.target_form) is ModularFormCoordinates
     assert transported.target_form.basis_id == _GENERIC_BASIS
     assert transported.target_form.coordinates == (_element(1), _element(-1, -1))
     assert len(transported.target_q_expansion.coefficients) == 8
@@ -173,7 +173,7 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
 
     # The second target basis row is exactly V_2(f)=f(q^2) in this canonical
     # q-Sturm frame. Add it to f and compare at the full level-26 Sturm bound.
-    f_plus_v2 = ModularCharacterCoordinates(
+    f_plus_v2 = ModularFormCoordinates(
         space=target_space,
         basis_id=_GENERIC_BASIS,
         coordinates=(_element(1), _element(0, -1)),
@@ -197,7 +197,7 @@ def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
     )
     forged = left.model_copy(
         update={
-            "target_form": ModularCharacterCoordinates(
+            "target_form": ModularFormCoordinates(
                 space=target_space,
                 basis_id=_GENERIC_BASIS,
                 coordinates=(_element(2), _element(0)),
@@ -206,6 +206,20 @@ def test_global_equality_rejects_forged_retained_target_coordinates() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="do not match"):
         modular_character_coordinates_equal_in_common_space(left, forged)
+
+
+def test_global_equality_retains_revalidated_nested_target_dictionaries() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    target_space = _space(26, _inflate(source_character, 26))
+    canonical = modular_character_coordinates_transport(
+        _level_13_form(source_space), _inclusion(source_space, target_space)
+    )
+    forged = ModularCharacterTransportedForm.model_construct(
+        **canonical.model_dump(mode="python")
+    )
+
+    assert modular_character_coordinates_equal_in_common_space(forged, canonical).equal
 
 
 def test_transport_rejects_wrong_inflation_and_nonidentity_field_map() -> None:

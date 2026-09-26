@@ -11,7 +11,6 @@ def test_exact_public_api_symbols() -> None:
         "ModularCharacterBasis",
         "ModularCharacterBasisElement",
         "ModularCharacterBasisRequest",
-        "ModularCharacterCoordinates",
         "ModularCharacterCoordinatesProductRequest",
         "ModularCharacterCoordinatesRequest",
         "ModularCharacterCoordinatesTransportRequest",

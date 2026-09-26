@@ -188,34 +188,12 @@ class ModularCharacterSpaceInclusion(StrictModel):
         return self
 
 
-class ModularCharacterCoordinates(StrictModel):
-    """Coordinates in the generalized cyclotomic character Sturm basis."""
-
-    space: ModularFormSpace
-    basis_id: Literal["gamma0-cyclotomic-character-sturm-rref-v1"]
-    coordinates: tuple[RationalCyclotomicElement, ...] = Field(
-        min_length=1, max_length=32
-    )
-
-    @model_validator(mode="after")
-    def require_coordinate_parent(self) -> Self:
-        field = self.space.coefficient_domain
-        if type(field) is not RationalCyclotomicField or any(
-            value.field != field for value in self.coordinates
-        ):
-            raise PydanticCustomError(
-                "modular_forms.character_coordinates_parent",
-                "character coordinates must belong to their declared cyclotomic space",
-            )
-        return self
-
-
 class ModularCharacterTransportedForm(StrictModel):
     """A source form, its explicit inclusion, and exact target representation."""
 
-    source_form: ModularFormCoordinates | ModularCharacterCoordinates
+    source_form: ModularFormCoordinates
     inclusion: ModularCharacterSpaceInclusion
-    target_form: ModularCharacterCoordinates
+    target_form: ModularFormCoordinates
     target_q_expansion: ModularCharacterQExpansion
 
     @model_validator(mode="after")
@@ -235,7 +213,7 @@ class ModularCharacterTransportedForm(StrictModel):
 
 
 class ModularCharacterCoordinatesTransportRequest(StrictModel):
-    form: ModularFormCoordinates | ModularCharacterCoordinates
+    form: ModularFormCoordinates
     inclusion: ModularCharacterSpaceInclusion
 
 
@@ -254,7 +232,6 @@ __all__ = [
     "ModularCharacterBasis",
     "ModularCharacterBasisElement",
     "ModularCharacterBasisRequest",
-    "ModularCharacterCoordinates",
     "ModularCharacterCoordinatesRequest",
     "ModularCharacterCoordinatesTransportRequest",
     "ModularCharacterEqualityRequest",

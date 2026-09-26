@@ -29,7 +29,6 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     _require_basis_space,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
-    ModularCharacterCoordinates,
     ModularCharacterEqualityResult,
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
@@ -49,7 +48,7 @@ _MAX_TRANSPORT_OUTPUT_BYTES = 1_000_000
 
 @dataclass(frozen=True)
 class _AdmittedTransport:
-    form: ModularFormCoordinates | ModularCharacterCoordinates
+    form: ModularFormCoordinates
     inclusion: ModularCharacterSpaceInclusion
     source_dimension: int
     target_dimension: int
@@ -149,11 +148,11 @@ def _require_inflation_map(
 
 
 def _admit_transport(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
+    form: ModularFormCoordinates,
     inclusion: ModularCharacterSpaceInclusion,
 ) -> _AdmittedTransport:
     inclusion = _require_inflation_map(inclusion)
-    if type(form) not in (ModularFormCoordinates, ModularCharacterCoordinates):
+    if type(form) is not ModularFormCoordinates:
         _domain("character transport requires a canonical character coordinate form")
     if form.space != inclusion.source_space:
         _domain("source form parent must equal the explicit inclusion source")
@@ -168,7 +167,7 @@ def _admit_transport(
         inclusion.target_space.character,
         field,
     )
-    if type(form) is ModularFormCoordinates:
+    if form.basis_id == CHARACTER_BASIS_ID:
         if (
             source_space.level != 13
             or source_space.kind != "S"
@@ -183,10 +182,9 @@ def _admit_transport(
             )
         for coordinate in form.coordinates:
             cyclotomic._validate_element(coordinate)
-    else:
+    elif form.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
         if (
-            form.basis_id != "gamma0-cyclotomic-character-sturm-rref-v1"
-            or type(form.coordinates) is not tuple
+            type(form.coordinates) is not tuple
             or len(form.coordinates) != source_cusp
             or source_space.level == 13
         ):
@@ -200,6 +198,8 @@ def _admit_transport(
             ):
                 _domain("every character coordinate must use the exact declared field")
             cyclotomic._validate_element(coordinate)
+    else:
+        _domain("character transport requires an admitted character coordinate basis")
 
     target_precision = _character_sturm_precision(inclusion.target_space)
     source_precision = _character_sturm_precision(source_space)
@@ -279,7 +279,7 @@ def _basis(
 
 
 def _expand_coordinates(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
+    form: ModularFormCoordinates,
     basis,
     field: RationalCyclotomicField,
 ) -> tuple[RationalCyclotomicElement, ...]:
@@ -306,7 +306,7 @@ def _expand_coordinate_tuple(
 
 def _coordinates_from_prefix(
     prefix: tuple[RationalCyclotomicElement, ...], basis
-) -> ModularCharacterCoordinates:
+) -> ModularFormCoordinates:
     if len(prefix) != basis.precision:
         _domain("q-prefix precision must equal the common target Sturm precision")
     pivots = tuple(
@@ -325,7 +325,7 @@ def _coordinates_from_prefix(
             code="modular_form.character_transport_not_in_target",
             message="the source q-expansion is not in the target character space",
         )
-    return ModularCharacterCoordinates(
+    return ModularFormCoordinates(
         space=basis.space,
         basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
         coordinates=coordinates,
@@ -343,7 +343,7 @@ def _transport_from_bases(
     if len(source_prefix) != admitted.precision:
         _domain("source basis must extend through the target Sturm precision")
     if admitted.inclusion.source_space == admitted.inclusion.target_space:
-        if type(admitted.form) is ModularCharacterCoordinates:
+        if admitted.form.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
             target_form = admitted.form
         else:
             _domain("identity transport requires generalized character coordinates")
@@ -364,7 +364,7 @@ def _transport_from_bases(
 
 
 def modular_character_coordinates_transport(
-    form: ModularFormCoordinates | ModularCharacterCoordinates,
+    form: ModularFormCoordinates,
     inclusion: ModularCharacterSpaceInclusion,
 ) -> ModularCharacterTransportedForm:
     """Transport a represented cusp form through explicit character inflation."""
@@ -389,7 +389,9 @@ def modular_character_coordinates_transport(
     return result
 
 
-def _revalidate_transport(value: ModularCharacterTransportedForm) -> _AdmittedTransport:
+def _revalidate_transport(
+    value: ModularCharacterTransportedForm,
+) -> tuple[ModularCharacterTransportedForm, _AdmittedTransport]:
     if type(value) is not ModularCharacterTransportedForm:
         _domain("global character equality requires canonical transported forms")
     try:
@@ -400,7 +402,7 @@ def _revalidate_transport(value: ModularCharacterTransportedForm) -> _AdmittedTr
             code="modular_form.character_transport_value_invalid",
             message="transported character form is malformed",
         ) from error
-    return _admit_transport(value.source_form, value.inclusion)
+    return value, _admit_transport(value.source_form, value.inclusion)
 
 
 def modular_character_coordinates_equal_in_common_space(
@@ -408,8 +410,8 @@ def modular_character_coordinates_equal_in_common_space(
     right: ModularCharacterTransportedForm,
 ) -> ModularCharacterEqualityResult:
     """Decide equality after validating both explicit maps into one target."""
-    left_admitted = _revalidate_transport(left)
-    right_admitted = _revalidate_transport(right)
+    left, left_admitted = _revalidate_transport(left)
+    right, right_admitted = _revalidate_transport(right)
     target = left_admitted.inclusion.target_space
     if right_admitted.inclusion.target_space != target:
         raise OperationDomainValidationError(

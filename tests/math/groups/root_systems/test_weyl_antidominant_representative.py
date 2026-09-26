@@ -6,6 +6,7 @@ from collections import deque
 
 import pytest
 
+from jacobian.math.groups.root_systems._models import MAX_REFLECTION_REPRESENTABLE
 from jacobian.math.groups.root_systems._tools import TOOLS
 from jacobian.math.groups.root_systems.operations import (
     weyl_antidominant_representative,
@@ -140,3 +141,15 @@ def test_antidominant_representative_is_a_published_operation() -> None:
     assert tool.request_type.model_validate(
         {"matrix": ((2, -1), (-1, 2)), "weight": (-1, 1)}
     )
+
+
+def test_large_antidominant_g2_weight_skips_orbit_wide_bound() -> None:
+    weight = (-1_801_439_850_948_198, -1_801_439_850_948_198)
+    matrix = ((2, -3), (-1, 2))
+
+    result = weyl_antidominant_representative(matrix, weight)
+
+    assert all(abs(value) <= MAX_REFLECTION_REPRESENTABLE for value in weight)
+    assert result.antidominant_weight == weight
+    assert result.element.root_action.entries == _identity(2)
+    assert type(result).model_validate_json(result.model_dump_json()) == result

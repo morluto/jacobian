@@ -1826,6 +1826,21 @@ def weyl_antidominant_representative(
             ),
         )
 
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    # Both chambers include their shared walls. Preserve the identity map when
+    # the source is already antidominant, including zero.
+    if all(coordinate <= 0 for coordinate in weight):
+        element = WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank, column_count=rank, entries=identity
+            ),
+        )
+        return WeylAntidominantRepresentativeResult._from_kernel(
+            cartan, weight, weight, element
+        )
+
+
     coordinate_bounds = _weight_coordinate_bounds(rows, weight)
     if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
         raise OperationDomainValidationError(
@@ -1863,19 +1878,6 @@ def weyl_antidominant_representative(
             ),
         )
 
-    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
-    # Both chambers include their shared walls. Preserve the identity map when
-    # the source is already antidominant, including zero.
-    if all(coordinate <= 0 for coordinate in weight):
-        element = WeylElement.model_construct(
-            matrix=cartan,
-            root_action=IntegerMatrix(
-                row_count=rank, column_count=rank, entries=identity
-            ),
-        )
-        return WeylAntidominantRepresentativeResult._from_kernel(
-            cartan, weight, weight, element
-        )
 
     dominant_word: list[int] = []
     dominant = _dominant_weight(

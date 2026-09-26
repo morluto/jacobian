@@ -37,7 +37,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldQuadraticTwistRelation,
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
-    FiniteFieldZetaFunctionResult,
     FiniteFieldZetaPolynomialResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
@@ -54,7 +53,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_points,
     finite_field_quadratic_twist,
     finite_field_quadratic_twist_relation,
-    finite_field_zeta_function,
     finite_field_zeta_polynomial,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
@@ -367,34 +365,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="elliptic_curve.finite_field.zeta.compute",
-        title="Compute the full finite-field elliptic zeta function",
-        description=(
-            "Return the exact rational function Z(E/F_q,T) = "
-            "(1 - a*T + q*T^2)/((1-T)(1-q*T)), with the curve, point count, "
-            "and Frobenius trace retained. The rational-function carrier is "
-            "normalized over QQ[T]."
-        ),
-        request_type=FiniteFieldCurveRequest,
-        result_type=FiniteFieldZetaFunctionResult,
-        run=lambda request: finite_field_zeta_function(request.curve),
-        tags=("elliptic-curve", "finite-field", "zeta", "frobenius", "exact"),
-        discovery_terms=(
-            "elliptic curve zeta function",
-            "full finite-field zeta rational function",
-        ),
-        examples=(
-            OperationExample(
-                name="zeta_function_over_five",
-                description=(
-                    "For y^2 = x^3 + x + 1 over F5, return "
-                    "(1 + 3*T + 5*T^2)/((1-T)(1-5*T))."
-                ),
-                input={"curve": _finite_curve()},
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="elliptic_curve.finite_field.zeta_polynomial.compute",
         title="Compute a finite-field elliptic zeta numerator",
         description=(
@@ -413,7 +383,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="zeta_numerator_over_five",
                 description=(
                     "For y^2 = x^3 + x + 1 over F5, return "
-                    "1 + 3*T + 5*T^2 in descending coefficient order."
+                    "1 + 3*T + 5*T^2 in descending coefficient order; "
+                    "the curve must be nonsingular and the field and "
+                    "character-sum work must fit the admitted envelope."
                 ),
                 input={"curve": _finite_curve()},
             ),

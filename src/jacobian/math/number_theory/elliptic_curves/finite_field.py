@@ -880,7 +880,7 @@ def _admit_extension_count_growth(
         raise OperationResourceAdmissionError(
             location=("curve", "field"),
             code="elliptic_curve.finite_field.enumeration_bound",
-            message="extension counts require exhaustive base-field order at most 4096",
+            message="quadratic-character point counting requires base-field order at most 4096",
         )
     character_sum_work = q * curve.field.degree**2 * (8 + 2 * q.bit_length())
     if character_sum_work > MAX_FROBENIUS_CHARACTER_SUM_WORK:

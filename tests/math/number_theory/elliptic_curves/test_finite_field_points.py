@@ -977,15 +977,6 @@ def test_zeta_polynomial_is_publicly_discoverable_and_exact() -> None:
     assert result.output["numerator"]["coefficients"] == ["5", "3", "1"]
 
 
-def test_full_zeta_function_is_publicly_discoverable() -> None:
-    tool = Catalog.open().operation("elliptic_curve.finite_field.zeta.compute")
-    assert tool is not None
-    result = invoke_operation(tool.operation_id, tool.examples[0].input, Catalog.open())
-    assert result.output["cardinality"] == 9
-    assert result.output["trace"] == -3
-    assert result.output["zeta_function"]["variables"] == ["T"]
-
-
 def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     base = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"
@@ -1161,3 +1152,20 @@ def test_native_point_consumer_rejects_forged_coordinate_axis() -> None:
     assert error.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.point_coordinates"
     )
+
+
+def test_zeta_character_sum_bound_has_accurate_diagnostic() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=4099, modulus_coefficients=(0, 1), generator="a"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(0,)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_zeta_polynomial(curve)
+    diagnostic = error.value.errors()[0]
+    assert diagnostic["type"] == "elliptic_curve.finite_field.enumeration_bound"
+    assert "quadratic-character point counting" in diagnostic["msg"]
+    assert "extension counts" not in diagnostic["msg"]

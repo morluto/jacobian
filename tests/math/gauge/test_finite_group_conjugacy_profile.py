@@ -118,15 +118,15 @@ def test_profile_deserialization_is_structural():
     exact = finite_group_holonomy_conjugacy_profile(
         FiniteGroupConjugacyProfileRequest(field=loop.field, path=loop.path)
     )
-    forged = FiniteGroupConjugacyProfile.model_validate(
-        {
-            **exact.model_dump(),
-            "conjugate_indices": [group.identity],
-            "class_representative_index": group.identity,
-            "class_size": 1,
-        }
-    )
-    assert forged.class_size == 1
+    with pytest.raises(ValueError, match="not canonical"):
+        FiniteGroupConjugacyProfile.model_validate(
+            {
+                **exact.model_dump(),
+                "conjugate_indices": [group.identity],
+                "class_representative_index": 9,
+                "class_size": -1,
+            }
+        )
 
 
 def test_conjugacy_profile_rejects_open_path():
@@ -144,6 +144,13 @@ def test_conjugacy_profile_rejects_open_path():
     with pytest.raises(OperationDomainValidationError, match="closed based loop"):
         finite_group_holonomy_conjugacy_profile(
             FiniteGroupConjugacyProfileRequest(field=field, path=open_path)
+        )
+
+
+def test_forged_request_nested_values_are_domain_rejected():
+    with pytest.raises(OperationDomainValidationError, match="requires a finite-group"):
+        finite_group_holonomy_conjugacy_profile(
+            FiniteGroupConjugacyProfileRequest.model_construct(field=None, path=None)
         )
 
 

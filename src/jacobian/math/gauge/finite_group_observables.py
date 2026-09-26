@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -36,6 +36,25 @@ class FiniteGroupConjugacyProfile(StrictModel):
     class_representative_index: int
     class_size: int
 
+    @model_validator(mode="after")
+    def require_canonical_summary(self) -> FiniteGroupConjugacyProfile:
+        indices = self.conjugate_indices
+        order = len(self.loop.field.group.multiplication)
+        if (
+            type(indices) is not tuple
+            or not indices
+            or any(
+                type(index) is not int or not 0 <= index < order for index in indices
+            )
+            or tuple(sorted(set(indices))) != indices
+            or type(self.class_representative_index) is not int
+            or self.class_representative_index != indices[0]
+            or type(self.class_size) is not int
+            or self.class_size != len(indices)
+        ):
+            raise ValueError("conjugacy profile summary is not canonical for its group")
+        return self
+
 
 def finite_group_holonomy_conjugacy_profile(
     request: FiniteGroupConjugacyProfileRequest,
@@ -46,6 +65,14 @@ def finite_group_holonomy_conjugacy_profile(
             location=("request",),
             code="lattice_gauge.conjugacy.request_type",
             message="expected a typed finite-group holonomy conjugacy request",
+        )
+    if not isinstance(request.field, FiniteGroupGaugeField) or not isinstance(
+        request.path, OrientedGaugePath
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="lattice_gauge.conjugacy.request_values",
+            message="conjugacy request requires a finite-group field and oriented path",
         )
     loop = finite_group_gauge_holonomy(
         FiniteGroupGaugeHolonomyRequest(field=request.field, path=request.path)

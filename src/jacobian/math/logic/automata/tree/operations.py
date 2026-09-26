@@ -24,6 +24,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonTrimResult,
     TreeContextPlugResult,
     TreeContextStateMapResult,
+    TreeContextTransformation,
+    TreeContextTransformationMonoidResult,
     TreeDeterminizeResult,
     TreeRunResult,
 )
@@ -32,8 +34,10 @@ from jacobian.math.logic.automata.tree.contexts import (
     TreeContextFrame,
     _plug_tree_context,
     _tree_context_state_map,
+    _tree_depth,
 )
 from jacobian.math.logic.automata.tree.values import (
+    MAX_REACHABILITY_WITNESS_NODES,
     MAX_RUN_TREE_DEPTH,
     MAX_RUN_TREE_NODES,
     MAX_TA_ARITY,
@@ -49,8 +53,10 @@ from jacobian.math.logic.automata.tree.values import (
     TreeAutomatonTransition,
     TreeStateChartEntry,
     _build_reachable_state_profile,
+    _reachability_work_preflight,
     _reject_tree,
     accepted_tree_count_work_bound,
+    ranked_tree_node_count,
     validate_ranked_tree,
 )
 
@@ -68,6 +74,7 @@ __all__ = [
     "ranked_tree_subtree",
     "reachable_state_profile",
     "run_tree_automaton",
+    "tree_context_transformation_monoid",
     "tree_state_chart",
     "trim_tree_automaton",
     "verify_accepted_tree_count",
@@ -388,6 +395,220 @@ def map_tree_context_states(
         context=context,
         state_map=_tree_context_state_map(automaton, context),
     )
+
+
+def tree_context_transformation_monoid(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+    *,
+    max_elements: int = 128,
+) -> TreeContextTransformationMonoidResult:
+    """Enumerate the exact monoid of maps induced by all one-hole contexts.
+
+    Elementary contexts place the hole under one ranked symbol and fill every
+    other child with a minimum witness for a reachable state.  These generate
+    precisely the context action: every sibling of a context spine is a ground
+    tree, and every state of a ground tree is reachable.
+    """
+    if type(automaton) is not CompleteDeterministicBottomUpTreeAutomaton:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_context.monoid.input_type",
+            message="context transformation monoids require a complete deterministic automaton",
+        )
+    if type(max_elements) is not int or not 1 <= max_elements <= 512:
+        raise OperationDomainValidationError(
+            location=("max_elements",),
+            code="tree_context.monoid.element_limit",
+            message="max_elements must be an integer from 1 through 512",
+        )
+    _preflight_complete_automaton(automaton)
+    # The reachable-state profile is a mandatory phase, so admit its full
+    # preflight charge from the shared work envelope before the saturation
+    # executes; witness and generator bounds are checked afterwards.
+    reachability_work = _reachability_work_preflight(automaton)
+    if reachability_work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_context.monoid.reachability_work_bound",
+            message=(
+                "the mandatory reachable-state profile exceeds the monoid work bound"
+            ),
+        )
+    profile = _build_reachable_state_profile(automaton)
+    witness_trees = {witness.state: witness.tree for witness in profile.witnesses}
+    reachable = profile.reachable_states
+    # Reject a generator family whose construction and closure could exceed
+    # the fixed owner-local work envelope before expanding Cartesian products.
+    states = automaton.state_count
+    generator_work = 0
+    reachable_witness_nodes = sum(
+        ranked_tree_node_count(tree) for tree in witness_trees.values()
+    )
+    for rank in automaton.arity:
+        if rank:
+            rank_generators = rank * (len(reachable) ** (rank - 1))
+            sibling_tree_nodes = (
+                rank
+                * (rank - 1)
+                * (len(reachable) ** (rank - 2))
+                * reachable_witness_nodes
+                if rank >= 2
+                else 0
+            )
+            generator_work += (
+                rank_generators * (len(automaton.transitions) + states * rank)
+                + sibling_tree_nodes
+            )
+    if reachability_work + generator_work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "arity"),
+            code="tree_context.monoid.generator_work_bound",
+            message="elementary context generators exceed the monoid work bound",
+        )
+    generators = _tree_context_generators(automaton, reachable, witness_trees)
+
+    identity = tuple(range(states))
+    identity_context = FiniteTreeContext.model_construct(
+        arity=automaton.arity, frames=()
+    )
+    discovered: dict[tuple[int, ...], FiniteTreeContext] = {identity: identity_context}
+    ordered_generators = tuple(sorted(generators.items()))
+    frontier = [identity]
+    charged_work = reachability_work + generator_work
+    total_context_nodes = 0
+    cursor = 0
+    while cursor < len(frontier):
+        request_checkpoint("during tree context monoid closure")
+        inner_map = frontier[cursor]
+        inner_context = discovered[inner_map]
+        cursor += 1
+        next_work = charged_work + len(ordered_generators) * (2 * states + 1)
+        if next_work > MAX_TREE_AUTOMATON_WORK:
+            raise OperationResourceAdmissionError(
+                location=("automaton",),
+                code="tree_context.monoid.closure_work_bound",
+                message="context transformation closure exceeds its work bound",
+            )
+        charged_work = next_work
+        for generator_map, generator_context in ordered_generators:
+            composed = tuple(generator_map[state] for state in inner_map)
+            if composed in discovered:
+                continue
+            if len(discovered) >= max_elements:
+                raise OperationResourceAdmissionError(
+                    location=("max_elements",),
+                    code="tree_context.monoid.element_bound",
+                    message="the exact context monoid exceeds max_elements",
+                )
+            if (
+                len(generator_context.frames) + len(inner_context.frames)
+                > MAX_RUN_TREE_DEPTH
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("automaton",),
+                    code="tree_context.monoid.witness_depth_bound",
+                    message="a context witness exceeds the admitted depth bound",
+                )
+            frames = generator_context.frames + inner_context.frames
+            context_nodes, context_depth = _tree_context_metrics(frames)
+            if (
+                total_context_nodes + context_nodes > MAX_REACHABILITY_WITNESS_NODES
+                or context_depth > MAX_RUN_TREE_DEPTH
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("automaton",),
+                    code="tree_context.monoid.witness_bound",
+                    message="monoid witness contexts exceed their aggregate node or depth bound",
+                )
+            total_context_nodes += context_nodes
+            discovered[composed] = FiniteTreeContext.model_construct(
+                arity=automaton.arity, frames=frames
+            )
+            frontier.append(composed)
+
+    canonical_maps = tuple(sorted(discovered))
+    map_index = {mapping: index for index, mapping in enumerate(canonical_maps)}
+    table_cells = (
+        len(canonical_maps) ** 2 + len(canonical_maps) * states + total_context_nodes
+    )
+    multiplication_work = len(canonical_maps) ** 2 * states
+    source_cells = (
+        states
+        + len(automaton.arity)
+        + len(automaton.transitions) * (1 + max(automaton.arity, default=0))
+    )
+    if (
+        table_cells + source_cells > MAX_TREE_AUTOMATON_WORK
+        or charged_work + multiplication_work + total_context_nodes
+        > MAX_TREE_AUTOMATON_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("automaton",),
+            code="tree_context.monoid.output_bound",
+            message="the exact monoid maps and multiplication table exceed the output bound",
+        )
+    contexts = tuple(
+        TreeContextTransformation(
+            state_map=mapping,
+            context=discovered[mapping],
+        )
+        for mapping in canonical_maps
+    )
+    multiplication = tuple(
+        _tree_context_multiplication_row(left, canonical_maps, map_index)
+        for left in canonical_maps
+    )
+    return TreeContextTransformationMonoidResult._from_kernel(
+        automaton=automaton,
+        max_elements=max_elements,
+        elements=contexts,
+        multiplication_table=multiplication,
+        identity_index=map_index[identity],
+    )
+
+
+def _tree_context_generators(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+    reachable: tuple[int, ...],
+    witness_trees: dict[int, RankedTree],
+) -> dict[tuple[int, ...], FiniteTreeContext]:
+    generators: dict[tuple[int, ...], FiniteTreeContext] = {}
+    for symbol, rank in enumerate(automaton.arity):
+        for hole_child in range(rank):
+            for sibling_states in product(reachable, repeat=rank - 1):
+                request_checkpoint("during tree context generator construction")
+                frame = TreeContextFrame.model_construct(
+                    symbol=symbol,
+                    hole_child=hole_child,
+                    siblings=tuple(witness_trees[state] for state in sibling_states),
+                )
+                context = FiniteTreeContext.model_construct(
+                    arity=automaton.arity, frames=(frame,)
+                )
+                mapping = _tree_context_state_map(automaton, context)
+                generators.setdefault(mapping, context)
+    return generators
+
+
+def _tree_context_multiplication_row(
+    left: tuple[int, ...],
+    maps: tuple[tuple[int, ...], ...],
+    map_index: dict[tuple[int, ...], int],
+) -> tuple[int, ...]:
+    request_checkpoint("during tree context monoid table construction")
+    return tuple(map_index[tuple(left[state] for state in right)] for right in maps)
+
+
+def _tree_context_metrics(
+    frames: tuple[TreeContextFrame, ...],
+) -> tuple[int, int]:
+    node_count = len(frames)
+    depth = len(frames)
+    for frame_index, frame in enumerate(frames):
+        for sibling in frame.siblings:
+            node_count += ranked_tree_node_count(sibling)
+            depth = max(depth, frame_index + 1 + _tree_depth(sibling))
+    return node_count, depth
 
 
 def _complete_deterministic_rows(

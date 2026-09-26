@@ -229,6 +229,31 @@ def test_smooth_branch_rejects_rational_growth_before_evaluation() -> None:
     assert "intermediate bound" in str(error.value)
 
 
+def test_growth_admission_accepts_root_above_64_digits_when_intermediates_fit() -> None:
+    root = 10**64
+    source = _polynomial(((0, _series(-root, 0)), (1, _series(1, 0))))
+
+    result = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(polynomial=source, initial_root=_rational(root))
+    )
+
+    assert result.series.coefficients == (_rational(root), _rational(0))
+
+
+def test_unused_tail_coefficient_does_not_consume_scalar_budget() -> None:
+    tail = 10**256
+    source = _polynomial(
+        ((0, _series(0, -1, tail, precision=3)), (1, _series(1, 0, 0, precision=3)))
+    )
+
+    result = smooth_branch_first_jet(
+        SmoothBranchFirstJetRequest(polynomial=source, initial_root=_rational(0))
+    )
+
+    assert result.series.valuation_lower == 1
+    assert result.series.coefficients == (_rational(1),)
+
+
 def test_zero_root_nonzero_slope_uses_canonical_laurent_valuation() -> None:
     source = _polynomial(((0, _series(0, -1)), (1, _series(1, 0))))
 

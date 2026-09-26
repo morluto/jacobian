@@ -28,7 +28,6 @@ from jacobian.math.polynomials.local_series.values import (
 MAX_SMOOTH_BRANCH_ROWS = 17
 MAX_SMOOTH_BRANCH_DEGREE = 16
 MAX_SMOOTH_BRANCH_SERIES_SLOTS = 512
-MAX_SMOOTH_BRANCH_SCALAR_DIGITS = 64
 MAX_SMOOTH_BRANCH_INPUT_DIGITS = 256
 MAX_SMOOTH_BRANCH_WORK = 1_000
 
@@ -42,7 +41,8 @@ class SmoothBranchFirstJetRequest(StrictModel):
 
     Admits finite-place polynomials of y-degree at most 16, at most 17 rows
     and 512 series slots, with input precision at least two; coefficient
-    scalars are limited to 256 decimal digits and the supplied root to 64.
+    consumed coefficient scalars are limited to 256 decimal digits. Growth in
+    exact intermediates is admitted against the 4096-digit bound.
     Poles, infinity-place inputs, and intermediates above 4096 digits are rejected.
     """
 
@@ -169,7 +169,10 @@ def _coefficient_inputs(
             series.coefficients, start=series.valuation_lower
         ):
             coefficient = value.as_fraction()
-            if _fraction_digits(coefficient) > MAX_SMOOTH_BRANCH_INPUT_DIGITS:
+            if (
+                exponent <= 1
+                and _fraction_digits(coefficient) > MAX_SMOOTH_BRANCH_INPUT_DIGITS
+            ):
                 raise OperationResourceAdmissionError(
                     location=("polynomial", "coefficients", row.y_degree),
                     code="local_series.smooth_branch.input_scalar_budget",
@@ -209,15 +212,6 @@ def _admit_growth(
     linear_digit_sum: int,
 ) -> None:
     root_digits = _fraction_digits(root)
-    if root_digits > MAX_SMOOTH_BRANCH_SCALAR_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("initial_root",),
-            code="local_series.smooth_branch.scalar_budget",
-            message=(
-                "the initial root exceeds the "
-                f"{MAX_SMOOTH_BRANCH_SCALAR_DIGITS}-digit branch-lift bound"
-            ),
-        )
     count_digits = ceil(log10(rows + 1))
     degree_digits = ceil(log10(max_degree + 1)) if max_degree else 1
     root_power_digits = max_degree * root_digits
@@ -274,15 +268,6 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
         )
     max_degree, rows = _admit_source(source)
     root = request.initial_root.as_fraction()
-    if _fraction_digits(root) > MAX_SMOOTH_BRANCH_SCALAR_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("initial_root",),
-            code="local_series.smooth_branch.scalar_budget",
-            message=(
-                "the initial root exceeds the "
-                f"{MAX_SMOOTH_BRANCH_SCALAR_DIGITS}-digit branch-lift bound"
-            ),
-        )
     constant, linear, constant_digits, linear_digits = _coefficient_inputs(
         source, max_degree
     )
@@ -430,7 +415,6 @@ __all__ = [
     "MAX_SMOOTH_BRANCH_DEGREE",
     "MAX_SMOOTH_BRANCH_INPUT_DIGITS",
     "MAX_SMOOTH_BRANCH_ROWS",
-    "MAX_SMOOTH_BRANCH_SCALAR_DIGITS",
     "MAX_SMOOTH_BRANCH_SERIES_SLOTS",
     "MAX_SMOOTH_BRANCH_WORK",
     "SmoothBranchFirstJetRequest",

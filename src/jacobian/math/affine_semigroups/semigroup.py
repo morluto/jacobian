@@ -800,7 +800,12 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
     Hilbert basis; its generators are then transported back to the retained
     ambient row axis.
     """
-    semigroup = _admit_semigroup(semigroup)
+    return _normalization_admitted(_admit_semigroup(semigroup))
+
+
+def _normalization_admitted(
+    semigroup: PositiveAffineSemigroup,
+) -> AffineSemigroupNormalization:
     configuration = semigroup.configuration
     if configuration.rows != 2 or configuration.columns < 2:
         raise ValueError("normalization currently requires a two-row configuration")
@@ -938,7 +943,6 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
     number of generators. This input-only envelope precedes HNF and Hilbert
     basis construction.
     """
-    semigroup = _admit_semigroup(semigroup)
     configuration = semigroup.configuration
     if configuration.rows != 2 or configuration.columns < 2:
         raise ValueError("normality currently requires a two-row configuration")
@@ -969,17 +973,28 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
     if lattice_index == 0:
         raise ValueError("normality requires a full-rank generated lattice")
     ambient_ray_determinant = abs(lower[0] * upper[1] - lower[1] * upper[0])
-    # The lattice ray vectors are multiples of these primitive ambient rays,
-    # each by at most the quotient-group order (the lattice index). Their
-    # determinant in the generated lattice is therefore at most Δ * index.
+    # Compute the exact order of each primitive ray in Z^2 / L. Appending a
+    # ray to the generator matrix changes the generated lattice index from D
+    # to gcd(D, det(ray, v_1), ..., det(ray, v_m)); the quotient is the least
+    # positive multiplier that places the ray in L.
+    ray_orders = []
+    for ray in (lower, upper):
+        enlarged_index = lattice_index
+        for vector in configuration.columns_vectors:
+            enlarged_index = gcd(
+                enlarged_index,
+                abs(ray[0] * vector[1] - ray[1] * vector[0]),
+            )
+        ray_orders.append(lattice_index // enlarged_index)
+    lower_order, upper_order = ray_orders
     candidate_bound = min(
         MAX_AFFINE_NORMALITY_CANDIDATES,
-        ambient_ray_determinant * lattice_index + 1,
+        ambient_ray_determinant * lower_order * upper_order // lattice_index + 1,
     )
     ray_grades = tuple(
         sum(grading[row] * ray[row] for row in range(2)) for ray in (lower, upper)
     )
-    target_grade_bound = lattice_index * sum(ray_grades)
+    target_grade_bound = lower_order * ray_grades[0] + upper_order * ray_grades[1]
     if target_grade_bound < 0:
         raise ArithmeticError("normalization Hilbert generators lie outside the cone")
 
@@ -1029,8 +1044,31 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     generator is returned as an exact hole.
     """
     semigroup = _admit_semigroup(semigroup)
+    configuration = semigroup.configuration
+    if configuration.rows != 2 or configuration.columns < 2:
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normality_dimension",
+            message="normality requires at least two generators in a two-row configuration",
+        )
+    rank = 0
+    for left in range(configuration.columns):
+        for right in range(left + 1, configuration.columns):
+            rank = gcd(
+                rank,
+                abs(
+                    configuration.entries[0][left] * configuration.entries[1][right]
+                    - configuration.entries[1][left] * configuration.entries[0][right]
+                ),
+            )
+    if rank == 0:
+        raise OperationDomainValidationError(
+            location=("semigroup", "configuration"),
+            code="affine_semigroup.normality_full_rank",
+            message="normality requires a full-rank generated lattice in Z^2",
+        )
     _preflight_normality_work(semigroup)
-    normalized = normalization(semigroup)
+    normalized = _normalization_admitted(semigroup)
     source = normalized.semigroup
     candidates = normalized.generators
     if len(candidates) > MAX_AFFINE_NORMALITY_CANDIDATES:

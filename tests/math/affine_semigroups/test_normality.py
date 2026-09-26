@@ -10,7 +10,10 @@ from typing import cast
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.affine_semigroups import (
     AffineConfiguration,
     AffineSemigroupNormality,
@@ -102,6 +105,35 @@ def test_redundant_even_quadrant_generators_are_normal_in_their_group_lattice() 
     assert result.normal
     assert result.hole is None
     assert result.semigroup.configuration.columns_vectors == vectors
+
+
+def test_scaled_quadrant_admits_ray_orders_in_its_generated_lattice() -> None:
+    result = normality(_semigroup(((20, 0), (0, 20))))
+
+    assert result.normal
+    assert result.hole is None
+
+
+def test_rank_deficient_semigroup_has_structured_native_error() -> None:
+    with pytest.raises(OperationDomainValidationError, match="full-rank"):
+        normality(_semigroup(((1, 0), (2, 0))))
+
+
+def test_normality_admits_the_semigroup_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    import jacobian.math.affine_semigroups.semigroup as semigroup_module
+
+    original = semigroup_module._admit_semigroup
+    calls = 0
+
+    def count_admission(value: object) -> PositiveAffineSemigroup:
+        nonlocal calls
+        calls += 1
+        return original(value)
+
+    monkeypatch.setattr(semigroup_module, "_admit_semigroup", count_admission)
+    normality(_semigroup(((1, 0), (0, 1))))
+
+    assert calls == 1
 
 
 def test_duplicate_generators_are_deduplicated_for_admission_and_membership() -> None:

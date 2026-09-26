@@ -12,6 +12,10 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteGaussSumResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
+from jacobian.math.number_theory.quadratic_forms.general._models import (
+    IntegralContentRequest,
+    IntegralContentResult,
+)
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
@@ -30,6 +34,7 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     bilinear_pairing,
     coefficient_matrix,
     evaluate_rational_quadratic_form,
+    integral_coefficient_content,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -59,6 +64,10 @@ def compute_coefficient_matrix(
     return CoefficientMatrixResult._from_kernel(
         request, matrix=coefficient_matrix(request.form)
     )
+
+
+def compute_integral_content(request: IntegralContentRequest) -> IntegralContentResult:
+    return integral_coefficient_content(request.form)
 
 
 def compute_signature(request: FormRequest) -> SignatureResult:
@@ -325,6 +334,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
 )
 TOOLS = (
     *TOOLS,
+    MathTool(
+        operation_id="quadratic_form.integral_content.compute",
+        title="Compute integral quadratic-form content",
+        description=(
+            "For an integral polynomial quadratic form, return the nonnegative "
+            "gcd of all diagonal and cross-term coefficients and the quotient "
+            "primitive form. The zero polynomial has content zero and remains zero. "
+            "Support is capped at 4096 coefficients."
+        ),
+        request_type=IntegralContentRequest,
+        result_type=IntegralContentResult,
+        run=compute_integral_content,
+        tags=("quadratic-form", "integral", "exact"),
+        examples=(
+            OperationExample(
+                name="content",
+                description="Divide the coefficients of 6*x^2 + 9*x*y by their gcd 3.",
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "6", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "9", "den": "1"},
+                            }
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="quadratic_form.bilinear_pairing.compute",
         title="Compute the polar pairing of a quadratic form",

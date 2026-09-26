@@ -8,7 +8,7 @@ from typing import Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational, require_bounded_rational
+from jacobian._exact import CanonicalRational, ExactInteger, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
@@ -232,6 +232,50 @@ class CoefficientMatrixResult(StrictModel):
         )
 
 
+MAX_INTEGRAL_INVARIANT_SUPPORT = 4_096
+
+
+class IntegralContentRequest(StrictModel):
+    """Request coefficient content for a bounded integral polynomial form."""
+
+    form: RationalQuadraticForm
+
+    @model_validator(mode="after")
+    def require_integral_bounded_support(self) -> Self:
+        support = len(self.form.diagonal_coefficients) + len(self.form.cross_terms)
+        if support > MAX_INTEGRAL_INVARIANT_SUPPORT:
+            raise _validation_error(
+                "invariant_support_bound",
+                f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
+            )
+        coefficients = (
+            *self.form.diagonal_coefficients,
+            *(t.coefficient for t in self.form.cross_terms),
+        )
+        if any(value.den != 1 for value in coefficients):
+            raise _validation_error(
+                "nonintegral_form",
+                "coefficient content requires integer polynomial coefficients",
+            )
+        return self
+
+
+class IntegralContentResult(StrictModel):
+    """Coefficient gcd and the canonical primitive quotient, source-bound."""
+
+    form: RationalQuadraticForm
+    content: ExactInteger = Field(ge=0)
+    primitive_part: RationalQuadraticForm
+
+    @model_validator(mode="after")
+    def require_source_axis_and_shape(self) -> Self:
+        if self.primitive_part.axis != self.form.axis:
+            raise _validation_error(
+                "content_axis", "primitive part must retain the source axis"
+            )
+        return self
+
+
 __all__ = [
     "BilinearPairingRequest",
     "BilinearPairingResult",
@@ -241,6 +285,8 @@ __all__ = [
     "EvaluationRequest",
     "EvaluationResult",
     "FormRequest",
+    "IntegralContentRequest",
+    "IntegralContentResult",
     "ModularProfileRequest",
     "ModularProfileResult",
     "PullbackRequest",

@@ -23,6 +23,17 @@ Evaluation is direct exact rational arithmetic. It supports degenerate and
 indefinite forms because one value at one supplied vector is always finite;
 representation numbers and theta prefixes are not part of this contract.
 
+## Integral coefficient content
+
+`quadratic_form.integral_content.compute` accepts polynomial coefficients that
+are all integers and returns their nonnegative gcd together with the quotient
+form on the same ordered axis. The gcd includes both square and mixed-term
+coefficients. An all-zero form has content zero and, by convention, a zero
+primitive part. Rational nonintegral coefficients are rejected because an
+integral coefficient gcd is not defined for this representation. Input support
+is capped at 4096 stored coefficients; the operation is exact and linear in
+that bounded support.
+
 ## Theta-series prefixes
 
 The native theta-prefix kernel accepts a `RationalQuadraticForm`

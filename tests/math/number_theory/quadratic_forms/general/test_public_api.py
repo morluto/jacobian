@@ -19,6 +19,7 @@ def test_exact_public_api_symbols() -> None:
         "evaluate_rational_quadratic_form",
         "finite_box_value_profile",
         "finite_quadratic_gauss_sum",
+        "integral_coefficient_content",
         "quadratic_form_direct_sum",
         "quadratic_form_restrict_coordinates",
         "require_coefficient_matrix_budget",

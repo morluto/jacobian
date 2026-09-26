@@ -1,9 +1,11 @@
 """Exact rational quadratic-form operations."""
 
 from fractions import Fraction
+from math import gcd
 
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -11,8 +13,11 @@ from jacobian.catalog.models import (
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     MAX_COEFFICIENT_MATRIX_AXIS,
+    MAX_INTEGRAL_INVARIANT_SUPPORT,
+    IntegralContentResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    QuadraticCrossTerm,
     RationalCoordinateVector,
     RationalQuadraticForm,
     require_bilinear_pairing_budget,
@@ -168,10 +173,73 @@ def coefficient_matrix(form: RationalQuadraticForm) -> RationalMatrix:
     return rational_matrix_from_fractions(entries)
 
 
+def integral_coefficient_content(
+    form: RationalQuadraticForm,
+) -> IntegralContentResult:
+    """Return gcd of integral polynomial coefficients and their primitive quotient.
+
+    The zero polynomial has content zero and is returned unchanged as its
+    primitive part by convention.
+    """
+    if not isinstance(form, RationalQuadraticForm):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_type",
+            message="form must be a rational quadratic form value",
+        )
+    if (
+        len(form.diagonal_coefficients) + len(form.cross_terms)
+        > MAX_INTEGRAL_INVARIANT_SUPPORT
+    ):
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="quadratic_form.invariant_support_bound",
+            message=f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
+        )
+    coefficients_q = (
+        *form.diagonal_coefficients,
+        *(term.coefficient for term in form.cross_terms),
+    )
+    if any(value.den != 1 for value in coefficients_q):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.nonintegral_form",
+            message="coefficient content requires integer polynomial coefficients",
+        )
+    coefficients = tuple(value.num for value in coefficients_q)
+    content = 0
+    for coefficient in coefficients:
+        content = gcd(content, abs(coefficient))
+    if content == 0:
+        primitive = form
+    else:
+        primitive = RationalQuadraticForm(
+            axis=form.axis,
+            diagonal_coefficients=tuple(
+                CanonicalRational.from_integer_ratio(value // content, 1)
+                for value in coefficients[: len(form.axis)]
+            ),
+            cross_terms=tuple(
+                QuadraticCrossTerm(
+                    left=term.left,
+                    right=term.right,
+                    coefficient=CanonicalRational.from_integer_ratio(
+                        term.coefficient.as_fraction().numerator // content, 1
+                    ),
+                )
+                for term in form.cross_terms
+            ),
+        )
+    return IntegralContentResult.model_construct(
+        form=form, content=content, primitive_part=primitive
+    )
+
+
 __all__ = [
     "bilinear_pairing",
     "coefficient_matrix",
     "coefficient_matrix_entries",
     "evaluate_rational_quadratic_form",
+    "integral_coefficient_content",
     "require_coefficient_matrix_budget",
 ]

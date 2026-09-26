@@ -141,6 +141,63 @@ def _forced_full_height_columns_count(
     return 1 if not any(counts) else 0
 
 
+def _count_two_row_content(
+    partition: IntegerPartition, content: TableauContent
+) -> int:
+    """Count two-row tableaux by bounded row-content dynamic programming."""
+
+    top_width = partition.parts[0]
+    current = [0] * (top_width + 1)
+    current[0] = 1
+    prefix_content = 0
+    visited_states = 0
+    for term in content.terms:
+        prefix_content += term.multiplicity
+        differences = [0] * (top_width + 2)
+        for top_before, count in enumerate(current):
+            visited_states += 1
+            if visited_states % 256 == 0:
+                request_checkpoint("during two-row Kostka reduction")
+            if count == 0:
+                continue
+            first_top_after = max(top_before, prefix_content - top_before)
+            last_top_after = min(
+                top_width, top_before + term.multiplicity
+            )
+            if first_top_after <= last_top_after:
+                differences[first_top_after] += count
+                differences[last_top_after + 1] -= count
+        running = 0
+        next_counts = []
+        for delta in differences[:-1]:
+            running += delta
+            next_counts.append(running)
+        current = next_counts
+    return current[top_width]
+
+
+def _two_row_count_result(
+    partition: IntegerPartition, content: TableauContent
+) -> FixedContentCountResult | None:
+    if len(partition.parts) != 2:
+        return None
+    work_bound = len(content.terms) * (partition.parts[0] + 1)
+    if work_bound > MAX_KOSTKA_SEARCH_WORK:
+        raise OperationResourceAdmissionError(
+            location=("content",),
+            code="semistandard_tableaux.kostka_search_bound",
+            message=(
+                "two-row fixed-content reduction exceeds its admitted "
+                f"work bound of {MAX_KOSTKA_SEARCH_WORK} units"
+            ),
+        )
+    return FixedContentCountResult(
+        partition=partition,
+        content=content,
+        count=_count_two_row_content(partition, content),
+    )
+
+
 def _zero_result(
     partition: IntegerPartition, content: TableauContent
 ) -> FixedContentCountResult:
@@ -201,12 +258,13 @@ def fixed_content_count(
     size = sum(partition.parts)
     if content.size != size:
         return _zero_result(partition, content)
-    if size == 0:
+    if size == 0 or len(partition.parts) == 1:
+        # The empty tableau is unique; a weakly increasing row has exactly
+        # one filling for every fixed multiset.
         return FixedContentCountResult(partition=partition, content=content, count=1)
-    if len(partition.parts) == 1:
-        # A weakly increasing row has exactly one filling for every fixed
-        # multiset: its labels in increasing order.
-        return FixedContentCountResult(partition=partition, content=content, count=1)
+    two_row_result = _two_row_count_result(partition, content)
+    if two_row_result is not None:
+        return two_row_result
     if (
         len(partition.parts) > 1
         and len(content.terms) == len(partition.parts)

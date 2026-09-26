@@ -145,7 +145,7 @@ def test_multiset_prefix_work_is_rejected_before_search(monkeypatch) -> None:
         pytest.fail("search began before fixed-content work admission")
 
     monkeypatch.setattr(kernel, "_count_by_row_major_search", unexpected_search)
-    request = _request((11, 9), ((1, 8), (2, 7), (3, 5)))
+    request = _request((11, 6, 3), ((1, 6), (2, 5), (3, 5), (4, 4)))
     with pytest.raises(OperationResourceAdmissionError):
         fixed_content_count(request)
 
@@ -188,6 +188,19 @@ def test_equal_lower_rows_reduce_forced_full_height_columns() -> None:
 
 def test_uneven_lower_rows_reduce_successive_forced_column_blocks() -> None:
     request = _request((300, 100, 50), ((1, 200), (2, 50), (3, 200)))
+
+    assert fixed_content_count(request).count == 1
+
+
+def test_two_row_dynamic_count_admits_three_label_fixed_content(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request((250, 250), ((1, 125), (2, 125), (3, 250)))
+
+    def multinomial_expansion_must_not_run(_content):
+        pytest.fail("two-row reduction expanded the multiset word family")
+
+    monkeypatch.setattr(kernel, "_multiset_word_count", multinomial_expansion_must_not_run)
 
     assert fixed_content_count(request).count == 1
 

@@ -9,7 +9,7 @@ from pydantic import ConfigDict, Field, StrictInt, StrictStr, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 
 MAX_FINITE_BASIS_GROUND_SIZE = 64
 MAX_FINITE_BASIS_COUNT = 4_096
@@ -157,7 +157,7 @@ class FiniteBasisMatroid(StrictModel):
     @classmethod
     def preflight_raw_envelope(cls, data: object) -> object:
         _preflight_raw_envelope(data)
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_canonical_basis_matroid(self) -> Self:

@@ -431,6 +431,25 @@ class HomomorphismCheckResult(StrictModel):
             ),
         )
 
+    def to_homomorphism(self) -> RelationalHomomorphism:
+        """Return the canonical composable map for a successful check.
+
+        The kernel already replayed preservation; construction is trusted
+        and replays nothing. The serialized check round-trips through
+        ``model_validate_json`` before this conversion in the covered
+        producer-to-consumer path.
+        """
+
+        if self.status is not HomomorphismStatus.HOMOMORPHISM:
+            raise ValueError(
+                "a NOT_HOMOMORPHISM check retains no composable homomorphism"
+            )
+        return RelationalHomomorphism._from_kernel(
+            source=self.source,
+            target=self.target,
+            mapping=tuple(self.carrier_map),
+        )
+
 
 class InducedRelationProfile(StrictModel):
     symbol_id: RelationSymbolId
@@ -690,6 +709,13 @@ class HomomorphismSearchResult(StrictModel):
             total_candidates=total_candidates,
         )
 
+    def to_homomorphism(self) -> RelationalHomomorphism:
+        """Return the canonical composable map for a FOUND search."""
+
+        if self.status is not HomomorphismSearchStatus.FOUND or self.check is None:
+            raise ValueError("an EXHAUSTED search retains no composable homomorphism")
+        return self.check.to_homomorphism()
+
 
 class HomomorphismSearchRequest(StrictModel):
     """Search two same-signature structures for a homomorphism.
@@ -881,6 +907,18 @@ class HomomorphismEnumerationResult(StrictModel):
             target=target,
             carrier_maps=carrier_maps,
             total_candidates=total_candidates,
+        )
+
+    def to_homomorphisms(self) -> tuple[RelationalHomomorphism, ...]:
+        """Return every enumerated map as a canonical composable value."""
+
+        return tuple(
+            RelationalHomomorphism._from_kernel(
+                source=self.source,
+                target=self.target,
+                mapping=tuple(carrier_map),
+            )
+            for carrier_map in self.carrier_maps
         )
 
 

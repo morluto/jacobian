@@ -34,6 +34,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldPointRequest,
     FiniteFieldPointResult,
     FiniteFieldPointSet,
+    FiniteFieldQuadraticTwistRelation,
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
     FiniteFieldZetaFunctionResult,
@@ -51,7 +52,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_order,
     finite_field_point_scalar,
     finite_field_points,
-    finite_field_quadratic_twist,
+    finite_field_quadratic_twist_relation,
     finite_field_zeta_function,
     finite_field_zeta_polynomial,
 )
@@ -94,12 +95,6 @@ def compute_finite_field_discriminant(
     return finite_field_discriminant(
         request.field, request.coefficient_a, request.coefficient_b
     )
-
-
-def compute_finite_field_quadratic_twist(
-    request: FiniteFieldCurveRequest,
-) -> FiniteFieldShortWeierstrassCurve:
-    return finite_field_quadratic_twist(request.curve)
 
 
 def compute_finite_field_group_structure(
@@ -464,26 +459,28 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="elliptic_curve.finite_field.quadratic_twist.compute",
-        title="Construct the canonical nontrivial quadratic twist",
+        operation_id="elliptic_curve.finite_field.quadratic_twist_relation.compute",
+        title="Construct a source-bound finite-field quadratic-twist relation",
         description=(
-            "Return the canonical nontrivial quadratic twist of a nonsingular "
-            "short-Weierstrass curve over an admitted finite field. The kernel "
-            "chooses the least encoded nonsquare d and returns y^2 = x^3 + "
-            "d^2 A x + d^3 B. Its point count has the opposite Frobenius trace."
+            "Return the canonical nontrivial quadratic-twist model together "
+            "with its exact source curve and nonsquare parameter d, where "
+            "the new coefficients are d^2*A and d^3*B."
         ),
         request_type=FiniteFieldCurveRequest,
-        result_type=FiniteFieldShortWeierstrassCurve,
-        run=compute_finite_field_quadratic_twist,
+        result_type=FiniteFieldQuadraticTwistRelation,
+        run=lambda request: finite_field_quadratic_twist_relation(request.curve),
         tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
         discovery_terms=(
-            "quadratic twist over finite fields",
-            "nontrivial elliptic curve twist",
+            "finite-field quadratic twist parameter and model",
+            "elliptic curve twist relation over finite fields",
         ),
         examples=(
             OperationExample(
-                name="nontrivial_twist_over_five",
-                description="Return the canonical nontrivial twist over F5.",
+                name="twist_relation_over_five",
+                description=(
+                    "Return the source, canonical nonsquare parameter, and "
+                    "twisted model for y^2=x^3+x+1 over F5."
+                ),
                 input={"curve": _finite_curve()},
             ),
         ),

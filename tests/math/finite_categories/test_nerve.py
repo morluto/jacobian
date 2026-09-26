@@ -7,6 +7,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.finite_categories import (
+    CategoryIdentifier,
     FiniteCategory,
     MorphismSpec,
     nerve_prefix,
@@ -174,6 +175,50 @@ def _discrete_category(count: int) -> FiniteCategory:
         identities=tuple((obj, f"id_{obj}") for obj in labels),
         composition=tuple((f"id_{obj}", f"id_{obj}", f"id_{obj}") for obj in labels),
     )
+
+
+def test_nested_category_identifiers_are_counted_by_encoded_leaf_size() -> None:
+    # Nested identifiers are pairs, so len(identifier) is always 2 even though
+    # their wire form contains thousands of leaf characters.
+    def identifier(tag: str) -> CategoryIdentifier:
+        leaves = (tag.ljust(16, "x"),) + ("x" * 16,) * 255
+        while len(leaves) > 1:
+            leaves = tuple((leaves[i], leaves[i + 1]) for i in range(0, len(leaves), 2))
+        return leaves[0]
+
+    objects = tuple(identifier(f"o{i}") for i in range(8))
+    morphisms = tuple(
+        MorphismSpec(
+            morphism_id=identifier(f"g{obj_index}_{power}"), source=obj, target=obj
+        )
+        for obj_index, obj in enumerate(objects)
+        for power in range(8)
+    )
+    by_index = {
+        (obj_index, power): morphisms[obj_index * 8 + power]
+        for obj_index in range(8)
+        for power in range(8)
+    }
+    category = FiniteCategory(
+        objects=objects,
+        morphisms=morphisms,
+        identities=tuple(
+            (obj, by_index[i, 0].morphism_id) for i, obj in enumerate(objects)
+        ),
+        composition=tuple(
+            (
+                by_index[i, a].morphism_id,
+                by_index[i, b].morphism_id,
+                by_index[i, (a + b) % 8].morphism_id,
+            )
+            for i in range(8)
+            for a in range(8)
+            for b in range(8)
+        ),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        nerve_prefix(category, 0)
+    assert error.value.errors()[0]["type"] == "finite_category.nerve_identifier_budget"
 
 
 def test_degree_zero_nerve_admits_the_per_degree_simplex_bound() -> None:

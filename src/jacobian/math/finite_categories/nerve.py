@@ -15,6 +15,7 @@ from jacobian.math.finite_categories.values import (
     FiniteCategory,
     MorphismSpec,
     _check_category_laws,
+    _identifier_character_count,
 )
 from jacobian.math.topology.simplicial_sets._models import (
     MAX_SIMPLICES_PER_DEGREE,
@@ -123,14 +124,26 @@ def _admit(category: FiniteCategory, degree: int) -> None:
     # Bound the echoed category and retained simplex paths together before
     # constructing levels. JSON string escaping can expand a character to six
     # bytes (\\uXXXX); include structural JSON overhead conservatively.
-    identifier_chars = sum(len(value) for value in category.objects)
-    identifier_chars += sum(
-        len(m.morphism_id) + len(m.source) + len(m.target) for m in category.morphisms
+    # CategoryIdentifier may be a recursively nested pair; ``len`` only
+    # counts its outer arity and would under-admit the echoed category.
+    identifier_chars = sum(
+        _identifier_character_count(value) for value in category.objects
     )
     identifier_chars += sum(
-        len(obj) + len(identity) for obj, identity in category.identities
+        _identifier_character_count(identifier)
+        for morphism in category.morphisms
+        for identifier in (morphism.morphism_id, morphism.source, morphism.target)
     )
-    identifier_chars += sum(sum(map(len, row)) for row in category.composition)
+    identifier_chars += sum(
+        _identifier_character_count(identifier)
+        for row in category.identities
+        for identifier in row
+    )
+    identifier_chars += sum(
+        _identifier_character_count(identifier)
+        for row in category.composition
+        for identifier in row
+    )
     identifier_occurrences = sum(sizes) * (2 * degree + 3)
     identifier_chars += identifier_occurrences * MAX_CATEGORY_IDENTIFIER_CHARACTERS
     if (

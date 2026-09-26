@@ -7,6 +7,9 @@
 - [Finite-field elliptic group structures](elliptic-curve-group-structure.md)
 - [Finite-field elliptic quadratic twists](elliptic-curve-finite-field-twists.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
+- [Modular-form spaces, bases, and coordinates](modular-forms-level-one-bases-coordinates.md)
+- [Rational Gamma0 modular-form bases](modular-forms-gamma0-rational-bases.md)
+- [Formal q-series U and V prefix maps](modular-form-formal-q-series-operators.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 

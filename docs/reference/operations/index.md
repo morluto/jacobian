@@ -21,6 +21,7 @@ that need more context than an operation card:
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)
 - [Prime-field homogeneous fixed subspaces](prime-field-homogeneous-fixed-subspaces.md)
 - [Petri-net place-set support profiles](petri-net-place-set-support.md)
+- [Petri-net pre, post, and incidence matrices](petri-net-matrices.md)
 - [Petri-net marking conflict profiles](petri-net-marking-conflict-profile.md)
 - [Petri-net sequential commutation profiles](petri-net-marking-commutation-profile.md)
 - [Petri-net reversal](petri-net-reversal.md)

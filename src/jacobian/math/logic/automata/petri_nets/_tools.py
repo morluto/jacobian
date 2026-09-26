@@ -25,6 +25,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsRequest,
     PetriInvariantsResult,
+    PetriNetMatricesRequest,
+    PetriNetMatricesResult,
     PetriNetRelabelingRequest,
     PetriNetRelabelingResult,
     PlaceSetInitialMarkingProfileRequest,
@@ -56,6 +58,7 @@ from jacobian.math.logic.automata.petri_nets.operations import (
     marking_conflict_profile,
     marking_reachability,
     petri_invariants,
+    petri_net_matrices,
     place_set_initial_marking_profile,
     place_set_support,
     reachability_graph,
@@ -160,6 +163,12 @@ def compute_siphon_trap_family(
 
 def compute_petri_invariants(request: PetriInvariantsRequest) -> PetriInvariantsResult:
     return petri_invariants(request.net)
+
+
+def compute_petri_net_matrices(
+    request: PetriNetMatricesRequest,
+) -> PetriNetMatricesResult:
+    return petri_net_matrices(request.net)
 
 
 def compute_place_set_support(request: PlaceSetSupportRequest) -> PlaceSetSupportResult:

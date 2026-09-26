@@ -2,12 +2,22 @@
 
 from __future__ import annotations
 
+import rfc8785
+from pydantic import model_validator
+from pydantic_core import PydanticCustomError
+
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.affine_semigroups.semigroup import AffineConfiguration
 from jacobian.math.lattices._models import IntegerLattice
 from jacobian.math.lattices.operations import hermite_normal_form
 from jacobian.math.matrices.values import IntegerMatrix
+
+MAX_AFFINE_GROUP_LATTICE_LABEL_CHARS = 4_096
 
 
 class AffineGroupLattice(StrictModel):
@@ -15,6 +25,15 @@ class AffineGroupLattice(StrictModel):
 
     configuration: AffineConfiguration
     lattice: IntegerLattice
+
+    @model_validator(mode="after")
+    def require_source_ambient_dimension(self) -> AffineGroupLattice:
+        if self.lattice.ambient_dimension != self.configuration.rows:
+            raise PydanticCustomError(
+                "affine_semigroup.group_lattice_ambient_dimension",
+                "generated lattice ambient dimension must match configuration rows",
+            )
+        return self
 
 
 def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLattice:
@@ -25,6 +44,54 @@ def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLatt
             location=("configuration",),
             code="affine_semigroup.configuration",
             message="configuration must be a canonical affine configuration",
+        )
+    row_labels = getattr(configuration, "row_labels", None)
+    generator_labels = getattr(configuration, "generator_labels", None)
+    entries = getattr(configuration, "entries", None)
+    if (
+        type(row_labels) is not tuple
+        or not 1 <= len(row_labels) <= 8
+        or type(generator_labels) is not tuple
+        or not 1 <= len(generator_labels) <= 10
+        or type(entries) is not tuple
+        or len(entries) != len(row_labels)
+        or any(
+            type(row) is not tuple or len(row) != len(generator_labels)
+            for row in entries
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="affine_semigroup.configuration_shape",
+            message="configuration axes must fit the bounded lattice envelope",
+        )
+    labels = (*row_labels, *generator_labels)
+    if any(
+        type(label) is not str
+        or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
+        for label in labels
+    ):
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="affine_semigroup.configuration_labels",
+            message="configuration labels must be Unicode scalar strings",
+        )
+    label_characters = sum(len(label) for label in labels)
+    if label_characters > MAX_AFFINE_GROUP_LATTICE_LABEL_CHARS:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="affine_semigroup.group_lattice_label_bound",
+            message="retained configuration labels exceed their output envelope",
+        )
+    if any(
+        type(entry) is not int or abs(entry) >= 10**8
+        for row in entries
+        for entry in row
+    ):
+        raise OperationDomainValidationError(
+            location=("configuration",),
+            code="affine_semigroup.configuration_digits",
+            message="configuration entries must be bounded exact integers",
         )
     try:
         config = AffineConfiguration.model_validate(
@@ -37,6 +104,16 @@ def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLatt
             message="configuration is malformed",
         ) from exc
 
+    compact_configuration = config.model_dump(mode="json")
+    source_bytes = len(rfc8785.dumps(compact_configuration))
+    hnf_digits = len(row_labels) * 8 + 16
+    output_bound = source_bytes + len(row_labels) ** 2 * (hnf_digits + 8)
+    if output_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("configuration",),
+            code="affine_semigroup.group_lattice_output_bound",
+            message="generated lattice result exceeds the canonical output envelope",
+        )
     generators = [
         [config.entries[row][column] for row in range(config.rows)]
         for column in range(config.columns)

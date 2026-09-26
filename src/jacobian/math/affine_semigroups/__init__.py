@@ -8,6 +8,10 @@ from jacobian.math.affine_semigroups.atoms import (
     AffineMinimalGeneratorsRequest,
     minimal_generators,
 )
+from jacobian.math.affine_semigroups.factorization_count import (
+    AffineFactorizationCount,
+    factorization_count,
+)
 from jacobian.math.affine_semigroups.fundamental_holes import (
     AffineSemigroupFundamentalHoles,
     AffineSemigroupFundamentalHolesRequest,
@@ -42,6 +46,7 @@ from jacobian.math.affine_semigroups.semigroup import (
     AffineFiberGraph,
     AffineHilbertBasis,
     AffineMembershipResult,
+    AffineSemigroupNormalization,
     PositiveAffineSemigroup,
     PositiveGradingResult,
     construct,
@@ -50,12 +55,14 @@ from jacobian.math.affine_semigroups.semigroup import (
     fiber_graph,
     hilbert_basis,
     membership,
+    normalization,
     positive_grading,
 )
 
 __all__ = [
     "AffineConfiguration",
     "AffineFactorization",
+    "AffineFactorizationCount",
     "AffineFiber",
     "AffineFiberGraph",
     "AffineGroupLattice",
@@ -67,6 +74,7 @@ __all__ = [
     "AffineSemigroupFundamentalHolesRequest",
     "AffineSemigroupHoleProfile",
     "AffineSemigroupHolesRequest",
+    "AffineSemigroupNormalization",
     "IntegerConfigurationCircuitsResult",
     "IntegerConfigurationGraverBasis",
     "IntegerConfigurationMarkovBasis",
@@ -75,6 +83,7 @@ __all__ = [
     "compute_group_lattice",
     "construct",
     "evaluate_factorization",
+    "factorization_count",
     "fiber",
     "fiber_graph",
     "fundamental_holes",
@@ -85,6 +94,7 @@ __all__ = [
     "markov_basis",
     "membership",
     "minimal_generators",
+    "normalization",
     "positive_grading",
     "relation_lattice",
     "toric_ideal",

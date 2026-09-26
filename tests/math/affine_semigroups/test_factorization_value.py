@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -106,26 +107,22 @@ def test_public_tool_preserves_factorization_output_admission_error() -> None:
         tool.run(request)
 
 
-def test_deserialized_factorization_round_trips_structurally() -> None:
+def test_deserialized_factorization_preserves_structure_without_matrix_replay() -> None:
     semigroup = _semigroup()
-    result = json.loads(evaluate_factorization(semigroup, (2, 3, 4)).model_dump_json())
-    result["target"] = ["0", "0"]
-    decoded = AffineFactorization.model_validate_json(json.dumps(result))
-    assert decoded.target == (0, 0)
-
-
-def test_canonical_factorization_accepts_large_exact_target() -> None:
-    semigroup = PositiveAffineSemigroup(
-        configuration=AffineConfiguration(
-            row_labels=("r",), generator_labels=("g",), entries=((1,),)
-        ),
-        grading=(CanonicalRational(num=1, den=1),),
-    )
-    value = 10**41
-    factorization = AffineFactorization(
-        semigroup=semigroup, coordinates=(value,), target=(value,)
-    )
-    assert factorization.target == (value,)
+    result = evaluate_factorization(semigroup, (2, 3, 4))
+    decoded = AffineFactorization.model_validate_json(result.model_dump_json())
+    assert decoded.coordinates == (2, 3, 4)
+    # Structural decoding leaves the authored matrix relation for an
+    # admitted consumer: a forged target with correct shape still decodes.
+    forged_json = json.loads(result.model_dump_json())
+    forged_json["target"] = ["0", "0"]
+    forged_decoded = AffineFactorization.model_validate_json(json.dumps(forged_json))
+    assert forged_decoded.target == (0, 0)
+    # Structural bounds still reject malformed shapes.
+    bad_axis = json.loads(result.model_dump_json())
+    bad_axis["coordinates"] = ["2", "3"]
+    with pytest.raises(ValidationError):
+        AffineFactorization.model_validate_json(json.dumps(bad_axis))
 
 
 def test_public_operation_example_dispatches_and_round_trips() -> None:

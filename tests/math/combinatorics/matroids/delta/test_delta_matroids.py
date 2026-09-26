@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from pydantic import ValidationError
 
 from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids import delta as delta_matroids
@@ -24,6 +27,18 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     BinarySymmetricMatrix,
 )
 from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
+from jacobian.math.combinatorics.matroids.delta.relabel import (
+    MAX_DELTA_RELABEL_GROUND,
+    MAX_DELTA_RELABEL_OUTPUT_CELLS,
+    MAX_DELTA_RELABEL_TRANSPORT_WORK,
+    MAX_DELTA_RELABEL_WORK,
+    DeltaMatroidRelabelling,
+    DeltaMatroidRelabelRequest,
+    relabel,
+)
+from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
+)
 
 
 def _two_element_delta_matroid(*, scrambled: bool = False) -> FiniteFeasibleSetSystem:
@@ -44,7 +59,153 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.dual.compute",
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",
+        "delta_matroid.relabel.compute",
+        "delta_matroid.distance_interlace_polynomial.compute",
     }
+
+
+def test_relabel_permutation_transports_feasible_sets_and_source_maps() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
+
+    result = relabel(source, ("B", "A"), (1, 0))
+
+    assert result.source == source
+    assert result.relabelled.ground == ("B", "A")
+    assert result.relabelled.feasible == ((), (0, 1), (1,))
+    assert result.target_to_source == (1, 0)
+    assert result.source_to_target == (1, 0)
+    assert (
+        DeltaMatroidRelabelling.model_validate_json(result.model_dump_json()) == result
+    )
+
+
+def test_relabel_composes_to_identity_and_handles_empty_ground() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
+    swapped = relabel(source, ("B", "A"), (1, 0))
+    restored = relabel(swapped.relabelled, ("a", "b"), (1, 0))
+    assert restored.relabelled == source
+    assert restored.source_to_target == (1, 0)
+
+    empty = FiniteDeltaMatroid(ground=(), feasible=((),))
+    assert relabel(empty, (), ()).relabelled == empty
+
+
+def test_relabel_request_map_rejects_boolean_indices_in_python_and_json() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    request = DeltaMatroidRelabelRequest(
+        delta_matroid=source,
+        target_ground=("A", "B"),
+        target_to_source=(0, 1),
+    )
+    python_payload = request.model_dump(mode="python")
+    python_payload["target_to_source"] = (True, False)
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelRequest.model_validate(python_payload)
+
+    json_payload = request.model_dump(mode="json")
+    json_payload["target_to_source"] = [True, False]
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelRequest.model_validate_json(json.dumps(json_payload))
+
+
+@pytest.mark.parametrize("field", ["target_to_source", "source_to_target"])
+def test_relabel_result_maps_reject_boolean_indices_in_python_and_json(
+    field: str,
+) -> None:
+    result = relabel(
+        FiniteDeltaMatroid(ground=("a", "b"), feasible=((),)),
+        ("A", "B"),
+        (0, 1),
+    )
+    python_payload = result.model_dump(mode="python")
+    python_payload[field] = (True, False)
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate(python_payload)
+
+    json_payload = result.model_dump(mode="json")
+    json_payload[field] = [True, False]
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate_json(json.dumps(json_payload))
+
+
+def test_relabel_requires_a_bijection_and_distinct_bounded_labels() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    with pytest.raises(ValueError, match="permutation"):
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("A", "B"),
+            target_to_source=(0, 0),
+        )
+    with pytest.raises(ValueError, match="unique"):
+        DeltaMatroidRelabelRequest(
+            delta_matroid=source,
+            target_ground=("A", "A"),
+            target_to_source=(0, 1),
+        )
+    admitted_labels = ("A" * 2047, "B")
+    accepted = relabel(source, admitted_labels, (0, 1))
+    assert accepted.relabelled.ground == admitted_labels
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    with pytest.raises(OperationResourceAdmissionError, match="UTF-8 byte bound"):
+        relabel(source, ("A" * 2048, "B"), (0, 1))
+
+
+def test_relabel_schema_advertises_runtime_admission_limits() -> None:
+    schema = DeltaMatroidRelabelRequest.model_json_schema()
+    limits = schema["admission_limits"]
+    assert limits["max_ground_elements"] == MAX_DELTA_RELABEL_GROUND
+    assert limits["max_feasible_set_memberships"] == 16_384
+    assert limits["max_transport_work_units"] == MAX_DELTA_RELABEL_TRANSPORT_WORK
+    assert limits["max_total_work_units"] == MAX_DELTA_RELABEL_WORK
+    assert MAX_DELTA_RELABEL_WORK == (
+        MAX_DELTA_RELABEL_TRANSPORT_WORK
+        + 2 * MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
+        + MAX_DELTA_RELABEL_OUTPUT_CELLS
+    )
+    assert limits["max_output_cells"] == MAX_DELTA_RELABEL_OUTPUT_CELLS
+    assert schema["properties"]["target_ground"]["maxItems"] == (
+        MAX_DELTA_RELABEL_GROUND
+    )
+    assert schema["properties"]["target_to_source"]["maxItems"] == (
+        MAX_DELTA_RELABEL_GROUND
+    )
+
+
+def test_relabel_rejects_forged_source_that_violates_exchange() -> None:
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=("a", "b", "c"), feasible=((), (0, 1), (2,))
+    )
+    with pytest.raises(ValueError, match="not a delta-matroid"):
+        relabel(forged, ("A", "B", "C"), (0, 1, 2))
+
+
+def test_relabel_canonicalizes_a_forged_source_before_returning() -> None:
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=["a", "b"], feasible=((), (0,), (0, 1))
+    )
+
+    result = relabel(forged, ("A", "B"), (0, 1))
+
+    assert result.source is not forged
+    assert result.source.ground == ("a", "b")
+    assert isinstance(result.source.ground, tuple)
+    assert isinstance(result.source.feasible, tuple)
+    assert result.source == FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+
+
+def test_relabel_classifies_non_utf8_source_labels_as_domain_errors() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
+    forged = FiniteDeltaMatroid.model_construct(
+        ground=("bad\ud800",),
+        feasible=((),),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        relabel(forged, ("good",), (0,))
+    assert error.value.errors()[0]["type"] == "delta_matroid.labels_not_utf8"
 
 
 def test_twist_request_publishes_admission_limits() -> None:

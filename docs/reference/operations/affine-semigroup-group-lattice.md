@@ -5,9 +5,9 @@ by the labelled columns of a bounded affine configuration
 `A ∈ ZZ^(d×n)`. Its `IntegerLattice` result is the canonical row-Hermite basis
 of those columns, stored in the configuration's ambient coordinates. The
 returned value retains the full source configuration, including redundant and
-zero generators. Two integral coordinate matrices exhibit both inclusions
-between the source generators and the returned basis, so serialized values
-remain bound to exactly the claimed generated subgroup.
+zero generators, alongside an ordinary `IntegerLattice` whose ambient
+dimension matches the configuration row axis. The result does not include
+coordinate-map witnesses between the input generators and the canonical basis.
 
 The subgroup is `ZA = {A u : u ∈ ZZ^n}`. It is distinct from the nonnegative
 affine semigroup `NA`; the operation makes no positivity, cone, or membership

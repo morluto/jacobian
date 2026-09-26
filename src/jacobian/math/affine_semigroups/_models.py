@@ -53,6 +53,14 @@ def _configuration_json_schema() -> JsonSchemaValue:
             minimum=1,
             maximum=MAX_RELATION_LATTICE_DIMENSION,
         )
+    entries = properties["entries"]
+    entries.update(minItems=1, maxItems=MAX_RELATION_LATTICE_DIMENSION)
+    row = entries["items"]
+    row.update(minItems=1, maxItems=MAX_RELATION_LATTICE_DIMENSION)
+    row["items"].update(
+        maxLength=9,
+        pattern=r"^(?:0|-?[1-9][0-9]{0,7})(?![\s\S])",
+    )
     schema["description"] = (
         "One nonempty integer generator configuration A in ZZ^(d x n) with "
         f"1 <= d, n <= {MAX_RELATION_LATTICE_DIMENSION} and at most "

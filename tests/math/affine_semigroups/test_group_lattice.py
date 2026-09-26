@@ -56,6 +56,11 @@ def test_group_lattice_carrier_rejects_wrong_ambient_dimension() -> None:
     result = compute_group_lattice(config)
     payload = result.model_dump(mode="python")
     payload["lattice"]["ambient_dimension"] = 1
+    payload["lattice"]["basis"] = {
+        "row_count": 1,
+        "column_count": 1,
+        "entries": ((1,),),
+    }
     with pytest.raises(ValidationError):
         AffineGroupLattice.model_validate(payload)
 

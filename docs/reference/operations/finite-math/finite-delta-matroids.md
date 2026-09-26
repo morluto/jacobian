@@ -31,12 +31,40 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
-This initial operation deliberately does not construct twists, minors, binary
-matrix presentations, graph conversions, or interlace polynomials. Those are
-separate mathematical postconditions rather than fields of the recognition
-result.
+The catalog also exposes exact twists, widths, duals, deletion/contraction
+minors, and binary principal-minor reconstruction. These are separate
+mathematical postconditions rather than fields of the recognition result.
+Graph conversions, interlace and transition polynomials, lower/upper matroids,
+and graph local-complement profiles remain outside the current contract.
 
+`delta_matroid.twist.compute` returns the canonical twisted
+`FiniteDeltaMatroid`. `delta_matroid.width.compute` returns the exact width
+`max(|F|)-min(|F|)` over the complete feasible family.
+
+`delta_matroid.relabel.compute` renames and reorders the ground axis through a
+bijective `target_to_source` map. Each feasible subset is transported by the
+inverse `source_to_target` map, with its indices sorted in the target axis; the
+result retains both source and target delta-matroids and both maps. The empty
+ground set and the identity permutation are valid. The operation admits at most
+2,049 ground positions, 16,384 source feasible-set memberships, 2,048 UTF-8
+bytes of target labels, 329,784 units of axis-check and row-transport work,
+73,740 materialized result cells (retained labels, rows, memberships, and axis
+maps), and 903,524 total reserved work units, including two 250,000-candidate
+source-exchange passes for admission and recognition. Source exchange checks and
+relabelling work are admitted before target feasible rows are materialized. Relabelling preserves the symmetric-exchange axiom because
+a bijection preserves symmetric difference and membership.
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
 not a catalog operation. It scans every retained feasible-row length of the
 canonical value and has no extra row ceiling.
+`delta_matroid.distance_interlace_polynomial.compute` returns the exact
+distance histogram and the polynomial
+`Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where
+`d_D(X) = min_{F feasible} |X symmetric_difference F|`. Coefficients are
+integers in descending-degree order, using the shared `IntegerPolynomial`
+value. This is the distance specialization in [Brijder and Hoogeboom's
+delta-matroid interlace-polynomial treatment](https://arxiv.org/abs/1010.4678),
+with the variable shift fixed as `y = x - 1`; it does not imply any other
+interlace polynomial convention. Admission validates the complete source,
+then bounds `2^|E| * |F|` subset-feasible comparisons, the number of
+output terms, and coefficient bit lengths before enumerating subsets.

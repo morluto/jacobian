@@ -98,9 +98,31 @@ def _graver_box_states(columns: int, radius: int) -> int:
 def _admit_graver_search(entries: tuple[int, ...]) -> tuple[int, int]:
     columns = len(entries)
     bound = _graver_search_radius(entries)
-    box_states = _graver_box_states(columns, bound)
-    candidate_states = box_states
-    if candidate_states * candidate_states > MAX_GRAVER_WORK:
+    if not any(entries):
+        kernel_states = 1
+        candidate_states = columns
+    else:
+        pivot = max(range(columns), key=lambda index: abs(entries[index]))
+        kernel_states = _graver_box_states(columns - 1, bound)
+        if kernel_states > MAX_GRAVER_WORK:
+            raise OperationResourceAdmissionError(
+                location=("configuration",),
+                code="affine_semigroup.graver_work",
+                message="kernel-aware Graver presolve exceeds its work envelope",
+            )
+        candidate_states = 0
+        free_axes = tuple(index for index in range(columns) if index != pivot)
+        for values in product(range(-bound, bound + 1), repeat=len(free_axes)):
+            residual = -sum(
+                entries[index] * value
+                for index, value in zip(free_axes, values, strict=True)
+            )
+            if (
+                residual % entries[pivot] == 0
+                and abs(residual // entries[pivot]) <= bound
+            ):
+                candidate_states += 1
+    if 2 * kernel_states + candidate_states * candidate_states > MAX_GRAVER_WORK:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="affine_semigroup.graver_work",
@@ -108,7 +130,7 @@ def _admit_graver_search(entries: tuple[int, ...]) -> tuple[int, int]:
                 "complete Graver enumeration exceeds the 100,000,000 candidate-pair work envelope"
             ),
         )
-    vector_bound = (candidate_states - 1) // 2
+    vector_bound = columns if not any(entries) else (candidate_states - 1) // 2
     if vector_bound > MAX_GRAVER_BASIS_VECTORS:
         raise OperationResourceAdmissionError(
             location=("configuration",),
@@ -127,12 +149,32 @@ def _enumerate_graver_vectors(
 ) -> tuple[tuple[int, ...], ...]:
     """Enumerate a previously admitted one-row Graver coordinate box."""
     columns = len(entries)
+    if not any(entries):
+        return tuple(
+            tuple(1 if index == column else 0 for index in range(columns))
+            for column in range(columns)
+        )
+    pivot = max(range(columns), key=lambda index: abs(entries[index]))
+    free_axes = tuple(index for index in range(columns) if index != pivot)
     candidates = []
-    for vector in product(range(-bound, bound + 1), repeat=columns):
+    for values in product(range(-bound, bound + 1), repeat=len(free_axes)):
+        residual = -sum(
+            entries[index] * value
+            for index, value in zip(free_axes, values, strict=True)
+        )
+        if residual % entries[pivot]:
+            continue
+        pivot_value = residual // entries[pivot]
+        if abs(pivot_value) > bound:
+            continue
+        vector_values = [0] * columns
+        vector_values[pivot] = pivot_value
+        for index, value in zip(free_axes, values, strict=True):
+            vector_values[index] = value
+        vector = tuple(vector_values)
         if not any(vector):
             continue
-        if sum(a * z for a, z in zip(entries, vector, strict=True)) == 0:
-            candidates.append(vector)
+        candidates.append(vector)
     candidates.sort(key=lambda vector: (sum(map(abs, vector)), vector))
     minima: list[tuple[int, ...]] = []
     result = []

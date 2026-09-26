@@ -90,6 +90,8 @@ def _admit_deck(
         edges = getattr(graph, "edges", None)
         if (
             type(vertices) is not tuple
+            or len(vertices) != order
+            or any(type(label) is not str or len(label) > 3 for label in vertices)
             or vertices != expected_vertices
             or type(edges) is not tuple
             or len(edges) > pair_count

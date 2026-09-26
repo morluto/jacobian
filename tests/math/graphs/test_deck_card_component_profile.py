@@ -204,6 +204,27 @@ def test_non_graph_representative_is_rejected_without_field_access() -> None:
         card_component_profile(deck)
 
 
+def test_forged_axis_vertices_are_validated_before_comparison() -> None:
+    class HostileVertex:
+        def __eq__(self, other: object) -> bool:
+            raise AssertionError("untrusted vertex comparison was invoked")
+
+    graph = SimpleUndirectedGraph.model_construct(
+        vertices=(HostileVertex(), "v01"), edges=()
+    )
+    deck = AnonymousGraphCardMultiset.model_construct(
+        card_order=2,
+        classes=(
+            AnonymousGraphCardClass.model_construct(
+                representative=graph, multiplicity=1
+            ),
+        ),
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        card_component_profile(deck)
+
+
 def test_long_edge_labels_are_rejected_before_label_comparison() -> None:
     # Direct native callers can bypass Pydantic; reject oversized labels before
     # comparing two attacker-controlled common prefixes.

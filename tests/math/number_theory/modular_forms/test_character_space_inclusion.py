@@ -169,6 +169,26 @@ def test_character_inclusion_rejects_constructed_structurally_invalid_map() -> N
         require_modular_character_space_inclusion(forged)
 
 
+def test_character_inclusion_rejects_nonpositive_authored_levels() -> None:
+    group = character_group(3)
+    character = _character(group, (0,))
+    invalid = ModularFormSpace.model_construct(
+        group="GAMMA0",
+        level=0,
+        weight=2,
+        kind="S",
+        character=character,
+        coefficient_domain="QQ",
+    )
+    forged = ModularCharacterInflationInclusion.model_construct(
+        map_kind="gamma0_character_inflation",
+        source_space=invalid,
+        target_space=invalid,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        require_modular_character_space_inclusion(forged)
+
+
 def test_character_inclusion_rejects_incomplete_authored_group() -> None:
     canonical_group = character_group(3)
     incomplete_group = type(canonical_group).model_construct(

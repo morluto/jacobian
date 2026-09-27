@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 from cypari import pari
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.catalog import Catalog
@@ -28,6 +28,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 )
 from jacobian.math.number_theory.modular_forms.character_degeneracy import (
     modular_character_coordinates_v_degeneracy,
+    require_modular_character_v_degeneracy_image,
 )
 from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
     ModularCharacterVDegeneracyImage,
@@ -167,11 +168,10 @@ def test_v_degeneracy_matches_pari_expanding_operator_and_inflates_target(
     assert restored == result
 
     forged = result.model_dump(mode="json")
-    forged["q_expansion"]["coefficients"][1] = forged["q_expansion"][
-        "coefficients"
-    ][2]
-    with pytest.raises(ValidationError, match="coefficients"):
-        ModularCharacterVDegeneracyImage.model_validate(forged)
+    forged["q_expansion"]["coefficients"][1] = forged["q_expansion"]["coefficients"][2]
+    forged_image = ModularCharacterVDegeneracyImage.model_validate(forged)
+    with pytest.raises(OperationDomainValidationError, match="coefficients"):
+        require_modular_character_v_degeneracy_image(forged_image)
 
 
 def test_v_image_retains_the_substituted_source_and_scales_its_prefix() -> None:

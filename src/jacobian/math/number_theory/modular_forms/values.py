@@ -311,6 +311,8 @@ class ModularCharacterInflationInclusion(StrictModel):
             or not isinstance(target.character, DirichletCharacter)
             or type(source.level) is not int
             or type(target.level) is not int
+            or source.level < 1
+            or target.level < 1
             or source.level > MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
             or target.level > MAX_MODULAR_CHARACTER_INCLUSION_LEVEL
             or target.level % source.level

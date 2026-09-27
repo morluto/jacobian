@@ -68,6 +68,13 @@ def parse_operation_input[ModelT: BaseModel](
 ) -> ModelT:
     """Parse one bounded request once into its owning strict model."""
 
+    # A request may need a cheap raw-shape resource check before Pydantic
+    # expands nested mathematical values. Keeping this at the shared ingress
+    # preserves the resource error type instead of wrapping it as validation.
+    raw_admission = getattr(model, "admit_raw_request", None)
+    if raw_admission is not None:
+        raw_admission(payload)
+
     # Round-trip through strict JSON so Python-only values cannot bypass the
     # public JSON contract. Dispatch is shared by native, stdio, and HTTP
     # callers, so concrete transport byte ceilings belong in their adapters.

@@ -389,6 +389,10 @@ class AnonymousCardDegreeProfileRequest(StrictModel):
         )
     )
 
+    @classmethod
+    def admit_raw_request(cls, value: Any) -> None:
+        _admit_anonymous_profile_wire_resources(value)
+
     @model_validator(mode="before")
     @classmethod
     def admit_combined_resources_before_nested_canonicalization(cls, value: Any) -> Any:
@@ -919,6 +923,10 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
 
     deck: VertexDeletionFamily
 
+    @classmethod
+    def admit_raw_request(cls, value: Any) -> None:
+        _admit_vertex_iso_profile_wire_resources(value)
+
     @model_validator(mode="before")
     @classmethod
     def preflight_raw_source_order(cls, value: Any) -> Any:
@@ -984,19 +992,6 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 )
         source_edges = len(edges) if type(edges) in (list, tuple) else pair_count
         _preflight_vertex_family_ledgers(deck, order, source_edges)
-        _, total_work, output_bytes = _vertex_iso_profile_resource_estimates(
-            order, source_edges, order
-        )
-        if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
-            raise _validation_error(
-                "vertex_iso_profile_work_bound",
-                "vertex-deck isomorphism mapping exceeds the shared work bound",
-            )
-        if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
-            raise _validation_error(
-                "vertex_iso_profile_output_bound",
-                "vertex-deck isomorphism profile exceeds the serialized byte bound",
-            )
         return _normalize_vertex_iso_profile_request(value)
 
 
@@ -1399,10 +1394,48 @@ def _vertex_iso_profile_value_resource_estimates(
     )
 
 
+def _admit_vertex_iso_profile_wire_resources(value: Any) -> None:
+    if type(value) is not dict:
+        return
+    deck = value.get("deck")
+    source = deck.get("source") if type(deck) is dict else None
+    vertices = source.get("vertices") if type(source) is dict else None
+    edges = source.get("edges") if type(source) is dict else None
+    if type(vertices) not in (list, tuple):
+        return
+    order = len(vertices)
+    if order > MAX_UNLABELLED_DECK_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("deck", "source", "vertices"),
+            code="graph_deck.vertex_iso_profile_bound",
+            message="vertex-deck isomorphism profile supports at most 10 source vertices",
+        )
+    source_edges = len(edges) if type(edges) in (list, tuple) else comb(order, 2)
+    _, total_work, output_bytes = _vertex_iso_profile_resource_estimates(
+        order, source_edges, order
+    )
+    if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_work_bound",
+            message="vertex-deck isomorphism mapping exceeds the shared work bound",
+        )
+    if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_output_bound",
+            message="vertex-deck isomorphism profile exceeds the serialized byte bound",
+        )
+
+
 class EdgeDeckIsomorphismProfileRequest(StrictModel):
     """Produce exact card-to-class vertex maps for a complete edge deck."""
 
     deck: EdgeDeletionFamily
+
+    @classmethod
+    def admit_raw_request(cls, value: Any) -> None:
+        _admit_edge_iso_profile_wire_resources(value)
 
     @model_validator(mode="before")
     @classmethod
@@ -1477,19 +1510,6 @@ class EdgeDeckIsomorphismProfileRequest(StrictModel):
                     card_edges,
                     retained_vertices,
                 )
-        _, work, output_bytes = _edge_iso_profile_resource_estimates(
-            order, edge_count, edge_count
-        )
-        if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
-            raise _validation_error(
-                "edge_iso_profile_work_bound",
-                "edge-deck isomorphism mapping exceeds the shared work bound",
-            )
-        if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
-            raise _validation_error(
-                "edge_iso_profile_output_bound",
-                "edge-deck isomorphism profile exceeds the serialized byte bound",
-            )
         normalized = dict(value)
         normalized["deck"] = _normalize_edge_family_json(family)
         return normalized
@@ -1649,6 +1669,40 @@ def _edge_iso_profile_resource_estimates(
         canonical_work + family_check_work + map_check_work,
         output_bytes,
     )
+
+
+def _admit_edge_iso_profile_wire_resources(value: Any) -> None:
+    if type(value) is not dict:
+        return
+    family = value.get("deck")
+    source = family.get("source") if type(family) is dict else None
+    vertices = source.get("vertices") if type(source) is dict else None
+    edges = source.get("edges") if type(source) is dict else None
+    if type(vertices) not in (list, tuple):
+        return
+    order = len(vertices)
+    if order > MAX_UNLABELLED_DECK_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("deck", "source", "vertices"),
+            code="graph_deck.edge_iso_profile_bound",
+            message="edge-deck isomorphism profile supports at most 10 source vertices",
+        )
+    edge_count = len(edges) if type(edges) in (list, tuple) else comb(order, 2)
+    _, work, output_bytes = _edge_iso_profile_resource_estimates(
+        order, edge_count, edge_count
+    )
+    if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.edge_iso_profile_work_bound",
+            message="edge-deck isomorphism mapping exceeds the shared work bound",
+        )
+    if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.edge_iso_profile_output_bound",
+            message="edge-deck isomorphism profile exceeds the serialized byte bound",
+        )
 
 
 def _admit_and_normalize_edge_iso_profile_result(value: Any) -> Any:

@@ -37,7 +37,6 @@ from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardMultisetRequest,
     EdgeDeckIsomorphismClass,
     EdgeDeckIsomorphismProfile,
-    EdgeDeckIsomorphismProfileRequest,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -50,7 +49,6 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckInducedSubgraphCount,
     VertexDeckIsomorphismClass,
     VertexDeckIsomorphismProfile,
-    VertexDeckIsomorphismProfileRequest,
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
@@ -374,7 +372,6 @@ def anonymous_card_degree_profile(
     multiset: AnonymousGraphCardMultiset,
 ) -> AnonymousCardDegreeProfile:
     """Compute degree-multiset frequencies for a canonical card multiset."""
-    _admit_anonymous_profile_input(multiset)
     return _compute_anonymous_card_degree_profile(multiset)
 
 
@@ -757,16 +754,10 @@ def _admit_vertex_iso_profile_family(
 
 
 def vertex_deck_isomorphism_profile(
-    request: VertexDeckIsomorphismProfileRequest,
+    family: VertexDeletionFamily,
 ) -> VertexDeckIsomorphismProfile:
     """Return exact canonical classes and card-to-representative bijections."""
-    if type(request) is not VertexDeckIsomorphismProfileRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.vertex_iso_profile_request_carrier",
-            message="request must be a VertexDeckIsomorphismProfileRequest",
-        )
-    family = _admit_vertex_iso_profile_family(request.deck)
+    family = _admit_vertex_iso_profile_family(family)
     return _vertex_deck_isomorphism_profile_from_admitted(family)
 
 
@@ -937,16 +928,10 @@ def _admit_edge_iso_profile_family(
 
 
 def edge_deck_isomorphism_profile(
-    request: EdgeDeckIsomorphismProfileRequest,
+    family: EdgeDeletionFamily,
 ) -> EdgeDeckIsomorphismProfile:
     """Return exact canonical edge-card classes and card-to-class maps."""
-    if type(request) is not EdgeDeckIsomorphismProfileRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.edge_iso_profile_request_carrier",
-            message="request must be an EdgeDeckIsomorphismProfileRequest",
-        )
-    family = _admit_edge_iso_profile_family(request.deck)
+    family = _admit_edge_iso_profile_family(family)
     return _edge_deck_isomorphism_profile_from_admitted(family)
 
 

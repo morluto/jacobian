@@ -10,7 +10,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
+from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs.decks import (
     AnonymousCardDegreeProfile,
     AnonymousCardDegreeProfileRequest,
@@ -251,7 +251,7 @@ def test_catalog_rejects_combined_bound_before_nested_canonicalization(
 
     monkeypatch.setattr(deck_models, "_canonical_card_edges", counted)
     monkeypatch.setattr(deck_models, "MAX_ANONYMOUS_CARD_PROFILE_WORK", 1)
-    with pytest.raises(OperationRequestValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         invoke_operation(operation.operation_id, payload, Catalog.open())
-    assert "shared work bound" in str(error.value.cause)
+    assert "shared work bound" in str(error.value)
     assert calls == 0

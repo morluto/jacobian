@@ -51,7 +51,7 @@ def _assert_maps_are_isomorphisms(profile: VertexDeckIsomorphismProfile) -> None
 def test_path3_profile_groups_cards_and_returns_exact_vertex_maps() -> None:
     family = vertex_deletion_family(_path3())
     profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=family)
+        family
     )
     assert profile.class_indices == (1, 0, 1)
     assert tuple(item.multiplicity for item in profile.classes) == (1, 2)
@@ -66,10 +66,10 @@ def test_path3_profile_groups_cards_and_returns_exact_vertex_maps() -> None:
 
 def test_card_relabelling_preserves_classes_and_map_relations() -> None:
     first = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3("x")))
+        vertex_deletion_family(_path3("x"))
     )
     second = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3("z")))
+        vertex_deletion_family(_path3("z"))
     )
     assert first.class_indices == second.class_indices
     assert tuple(row.representative for row in first.classes) == tuple(
@@ -86,7 +86,7 @@ def test_card_relabelling_preserves_classes_and_map_relations() -> None:
 def test_zero_order_cards_retain_empty_maps(vertices: tuple[str, ...]) -> None:
     family = vertex_deletion_family(SimpleUndirectedGraph(vertices=vertices, edges=()))
     profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=family)
+        family
     )
     assert len(profile.family.cards) == len(vertices)
     if not vertices:
@@ -101,7 +101,7 @@ def test_zero_order_cards_retain_empty_maps(vertices: tuple[str, ...]) -> None:
 
 def test_profile_round_trip_validates_maps_and_rejects_forged_bijection() -> None:
     profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3()))
+        vertex_deletion_family(_path3())
     )
     assert (
         VertexDeckIsomorphismProfile.model_validate_json(profile.model_dump_json())
@@ -127,7 +127,7 @@ def test_native_operation_admits_and_checks_family_before_canonicalization(
     with pytest.raises(
         OperationDomainValidationError, match="one card per source vertex"
     ):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 @pytest.mark.parametrize("field", ["edge_appearances", "vertex_appearances"])
@@ -138,7 +138,7 @@ def test_native_operation_rejects_boolean_appearance_counts(field: str) -> None:
     forged = family.model_copy(update={field: tuple(counts)})
     request = VertexDeckIsomorphismProfileRequest.model_construct(deck=forged)
     with pytest.raises(OperationDomainValidationError, match="appearance ledgers"):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 @pytest.mark.parametrize("field", ["retained_edge_count", "deleted_edge_count"])
@@ -150,7 +150,7 @@ def test_native_operation_rejects_boolean_card_edge_counts(field: str) -> None:
     with pytest.raises(
         OperationDomainValidationError, match="bound source vertex deletion"
     ):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
@@ -167,12 +167,12 @@ def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
         "MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES",
         exact_output,
     )
-    assert vertex_deck_isomorphism_profile(request).classes
+    assert vertex_deck_isomorphism_profile(request.deck).classes
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work - 1
     )
     with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work
     )
@@ -182,14 +182,14 @@ def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
         exact_output - 1,
     )
     with pytest.raises(OperationResourceAdmissionError, match="serialized byte bound"):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 def test_serialized_profile_admits_representative_validation_before_canonicalizing(
     monkeypatch,
 ) -> None:
     profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3()))
+        vertex_deletion_family(_path3())
     )
     data = json.dumps(profile.model_dump(mode="json"))
     _, exact_work, _ = deck_models._vertex_iso_profile_value_resource_estimates(
@@ -226,9 +226,9 @@ def test_catalog_admission_occurs_before_nested_card_parsing() -> None:
     }
     operation = Catalog.open().operation(tool_id)
     assert operation is not None
-    with pytest.raises(OperationRequestValidationError) as error:
+    with pytest.raises(OperationResourceAdmissionError) as error:
         invoke_operation(tool_id, payload, Catalog.open())
-    assert "supports at most 10 source vertices" in str(error.value.cause)
+    assert "supports at most 10 source vertices" in str(error.value)
 
 
 def test_native_request_tuple_preflight_occurs_before_nested_parsing() -> None:
@@ -272,7 +272,7 @@ def test_catalog_example_executes_and_returns_exact_maps() -> None:
 
 def _valid_profile_payload() -> dict:
     profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3()))
+        vertex_deletion_family(_path3())
     )
     return profile.model_dump(mode="python")
 
@@ -367,7 +367,7 @@ def test_wire_profile_rejects_noncanonical_representative() -> None:
         edges=(("a", "b"), ("b", "c"), ("c", "d")),
     )
     profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(source))
+        vertex_deletion_family(source)
     )
     payload = profile.model_dump(mode="python")
     for row in payload["classes"]:

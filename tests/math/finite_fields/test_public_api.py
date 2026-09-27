@@ -724,6 +724,7 @@ def test_exact_public_api_symbols() -> None:
         "check_jacobian_syzygy",
         "direction_rank_ledger",
         "element",
+        "embed_field_element",
         "evaluate_finite_polynomial",
         "fiber_partition",
         "finite_field",

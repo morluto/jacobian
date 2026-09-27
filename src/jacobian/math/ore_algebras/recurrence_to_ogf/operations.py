@@ -262,7 +262,6 @@ def _admit_transform(
     evaluation_growth_bits = maximum_degree * operator.order.bit_length()
     growth_bits = (
         max(numerator_bits, boundary_numerator_bits, denominator_bits)
-        + 8 * maximum_degree
         + evaluation_growth_bits
     )
     # Only nonzero accumulated boundary coefficients contribute output monomials.

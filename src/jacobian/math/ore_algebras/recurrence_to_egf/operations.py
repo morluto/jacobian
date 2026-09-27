@@ -202,7 +202,7 @@ def _admit_transform(
     coefficient_bounds = _transformed_coefficient_bounds(polynomials)
     numerator_bits = max((bound[0] for bound in coefficient_bounds), default=1)
     denominator_bits = max((bound[1] for bound in coefficient_bounds), default=1)
-    growth_bits = max(numerator_bits, denominator_bits) + 8 * maximum_degree
+    growth_bits = max(numerator_bits, denominator_bits)
     output_digits = _digits_for_bit_bound(growth_bits)
     if output_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
         raise OperationResourceAdmissionError(

@@ -287,6 +287,19 @@ def test_ogf_bounds_rational_monomials_by_their_transformed_slots() -> None:
     assert result.differential_operator.terms
 
 
+def test_ogf_does_not_add_growth_after_exact_slot_accounting() -> None:
+    p = 10**49
+    q = p + 1
+    recurrence = _recurrence((0, [(1, 1), (16, 1)]))
+    for term in recurrence["terms"][0]["coefficient"]["numerator"]["terms"]:
+        denominator = p if term["exponents"] == [1] else q
+        term["coefficient"] = {"num": 1, "den": denominator}
+
+    result = polynomial_recurrence_to_ogf_equation(recurrence, {"values": []})
+
+    assert result.differential_operator.terms
+
+
 def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -> None:
     with pytest.raises(OperationDomainValidationError, match="initial coefficient"):
         polynomial_recurrence_to_ogf_equation(

@@ -186,6 +186,19 @@ def test_egf_bounds_rational_monomials_by_their_transformed_slots() -> None:
     assert result.differential_operator.terms
 
 
+def test_egf_does_not_add_growth_after_exact_slot_accounting() -> None:
+    p = 10**49
+    q = p + 1
+    recurrence = _recurrence((0, [(1, 1), (16, 1)]))
+    for term in recurrence["terms"][0]["coefficient"]["numerator"]["terms"]:
+        denominator = p if term["exponents"] == [1] else q
+        term["coefficient"] = {"num": 1, "den": denominator}
+
+    result = polynomial_recurrence_to_egf_equation(recurrence)
+
+    assert result.differential_operator.terms
+
+
 def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> None:
     rational = _rf([(0, 1)])
     rational["denominator"] = {

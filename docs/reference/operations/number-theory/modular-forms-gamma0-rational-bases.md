@@ -107,3 +107,9 @@ the character-space inclusion itself. It does not transport coordinates or
 assert that a basis, Hecke action, or global equality operation is available for
 those parents. The unit-group levels are bounded by 2,048, and the exact map
 comparison is admitted before its residue scan.
+
+The character-valued `V_d` image retains its source coordinates and a finite
+q-prefix in the inflated target space. Decoding this authored image recomputes
+the admitted source prefix and checks every retained coefficient against
+`f(q^d)`; the output prefix is not trusted from parent and length metadata
+alone.

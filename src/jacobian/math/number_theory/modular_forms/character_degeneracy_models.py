@@ -107,6 +107,33 @@ class ModularCharacterVDegeneracyImage(StrictModel):
                 "modular_forms.character_v_image_binding",
                 "V_d image must retain its source, inflated target, and determined prefix",
             )
+        # This carrier is publicly decodable, so bind its authored expansion to
+        # the retained source form at that boundary. The owner-local admission
+        # bounds the exact basis work before the source prefix is reconstructed.
+        from jacobian.math.number_theory.modular_forms.character_basis import (
+            _admit_character_form,
+            _character_basis_from_admission,
+            _character_form_prefix,
+        )
+        from jacobian.math.number_theory.modular_forms.character_degeneracy import (
+            _zero,
+        )
+
+        admitted = _admit_character_form(source_form)
+        _, field, _, _ = admitted
+        basis = _character_basis_from_admission(source, field, admitted[3])
+        source_expansion = _character_form_prefix(source_form, admitted, basis)
+        expected_coefficients = tuple(
+            source_expansion.coefficients[index // self.d]
+            if index % self.d == 0
+            else _zero(field)
+            for index in range(2 * self.d + 1)
+        )
+        if expansion.coefficients != expected_coefficients:
+            raise PydanticCustomError(
+                "modular_forms.character_v_image_coefficients",
+                "V_d expansion coefficients must equal the source coefficients at divisible indices",
+            )
         return self
 
 

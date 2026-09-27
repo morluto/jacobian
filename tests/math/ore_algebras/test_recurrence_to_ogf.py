@@ -274,6 +274,19 @@ def test_ogf_preserves_a_single_canonical_64_digit_rational() -> None:
     assert coefficient.coefficient.as_fraction() == Fraction(numerator, denominator)
 
 
+def test_ogf_bounds_rational_monomials_by_their_transformed_slots() -> None:
+    p = 10**63
+    q = p - 1
+    recurrence = _recurrence((0, [(0, 1), (16, 1)]))
+    for term in recurrence["terms"][0]["coefficient"]["numerator"]["terms"]:
+        denominator = p if term["exponents"] == [0] else q
+        term["coefficient"] = {"num": 1, "den": denominator}
+
+    result = polynomial_recurrence_to_ogf_equation(recurrence, {"values": []})
+
+    assert result.differential_operator.terms
+
+
 def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -> None:
     with pytest.raises(OperationDomainValidationError, match="initial coefficient"):
         polynomial_recurrence_to_ogf_equation(

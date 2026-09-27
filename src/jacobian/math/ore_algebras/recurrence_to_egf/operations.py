@@ -71,18 +71,42 @@ def _digits_for_bit_bound(bits: int) -> int:
     return (bits * 30_103) // 100_000 + 1
 
 
-def _coefficient_height_bits(values: list[Fraction]) -> tuple[int, int]:
-    """Bound numerator and denominator after combining rational coefficients."""
+def _weighted_coefficient_height_bits(
+    contributions: list[tuple[Fraction, int]],
+) -> tuple[int, int]:
+    """Bound one transformed coefficient after its exact integer weights."""
     denominator = 1
-    for value in values:
+    for value, _weight in contributions:
         factor = value.denominator
         denominator = denominator // gcd(denominator, factor) * factor
     numerator_terms = [
-        abs(value.numerator * (denominator // value.denominator)).bit_length()
-        for value in values
+        abs(value.numerator * weight * (denominator // value.denominator)).bit_length()
+        for value, weight in contributions
     ]
-    numerator_bits = max(numerator_terms, default=1) + max(0, len(values) - 1).bit_length()
+    numerator_bits = max(numerator_terms, default=1) + max(
+        0, len(contributions) - 1
+    ).bit_length()
     return numerator_bits, denominator.bit_length()
+
+
+def _transformed_coefficient_bounds(
+    polynomials: list[tuple[int, _Poly]],
+) -> tuple[tuple[int, int], ...]:
+    maximum_degree = max((max(polynomial, default=0) for _, polynomial in polynomials), default=0)
+    stirling = _stirling_second_kind(maximum_degree)
+    slots: dict[tuple[int, int], list[tuple[Fraction, int]]] = {}
+    for shift, polynomial in polynomials:
+        for power, coefficient in polynomial.items():
+            for degree in range(power + 1):
+                multiplier = stirling[power][degree]
+                if multiplier:
+                    slots.setdefault((shift + degree, degree), []).append(
+                        (coefficient, multiplier)
+                    )
+    return tuple(
+        _weighted_coefficient_height_bits(contributions)
+        for contributions in slots.values()
+    )
 
 
 def _canonical_recurrence(
@@ -175,10 +199,7 @@ def _admit_transform(
     # Different shifts occupy different derivative orders, so their
     # denominators never share an output coefficient. Keep the common-factor
     # bound local to one recurrence polynomial.
-    coefficient_bounds = tuple(
-        _coefficient_height_bits(list(polynomial.values()))
-        for _shift, polynomial in polynomials
-    )
+    coefficient_bounds = _transformed_coefficient_bounds(polynomials)
     numerator_bits = max((bound[0] for bound in coefficient_bounds), default=1)
     denominator_bits = max((bound[1] for bound in coefficient_bounds), default=1)
     growth_bits = max(numerator_bits, denominator_bits) + 8 * maximum_degree

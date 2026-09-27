@@ -91,18 +91,57 @@ def _digits_for_bit_bound(bits: int) -> int:
     return (bits * 30_103) // 100_000 + 1
 
 
-def _coefficient_height_bits(values: list[Fraction]) -> tuple[int, int]:
-    """Bound numerator and denominator after combining rational coefficients."""
+def _weighted_coefficient_height_bits(
+    contributions: list[tuple[Fraction, int]],
+) -> tuple[int, int]:
+    """Bound one transformed coefficient after its exact integer weights."""
     denominator = 1
-    for value in values:
+    for value, _weight in contributions:
         factor = value.denominator
         denominator = denominator // gcd(denominator, factor) * factor
     numerator_terms = [
-        abs(value.numerator * (denominator // value.denominator)).bit_length()
-        for value in values
+        abs(value.numerator * weight * (denominator // value.denominator)).bit_length()
+        for value, weight in contributions
     ]
-    numerator_bits = max(numerator_terms, default=1) + max(0, len(values) - 1).bit_length()
+    numerator_bits = max(numerator_terms, default=1) + max(
+        0, len(contributions) - 1
+    ).bit_length()
     return numerator_bits, denominator.bit_length()
+
+
+def _transformed_coefficient_bounds(
+    polynomials: list[tuple[int, _Poly]], shift_order: int
+) -> tuple[tuple[int, int], ...]:
+    maximum_degree = max((max(polynomial, default=0) for _, polynomial in polynomials), default=0)
+    stirling: list[list[int]] = [[1]]
+    for power in range(1, maximum_degree + 1):
+        previous = stirling[-1]
+        row = [0] * (power + 1)
+        for degree in range(1, power + 1):
+            same_degree = previous[degree] if degree < len(previous) else 0
+            row[degree] = degree * same_degree + previous[degree - 1]
+        stirling.append(row)
+    slots: dict[tuple[int, int], list[tuple[Fraction, int]]] = {}
+    for shift, polynomial in polynomials:
+        for source_degree, coefficient in polynomial.items():
+            for theta_degree in range(source_degree + 1):
+                shift_factor = comb(source_degree, theta_degree) * (-shift) ** (
+                    source_degree - theta_degree
+                )
+                if not shift_factor:
+                    continue
+                for derivative_order in range(theta_degree + 1):
+                    multiplier = shift_factor * stirling[theta_degree][derivative_order]
+                    if multiplier:
+                        slot = (
+                            derivative_order,
+                            shift_order - shift + derivative_order,
+                        )
+                        slots.setdefault(slot, []).append((coefficient, multiplier))
+    return tuple(
+        _weighted_coefficient_height_bits(contributions)
+        for contributions in slots.values()
+    )
 
 
 def _product_numerator_bits(left: Fraction, right: Fraction) -> int:
@@ -208,10 +247,7 @@ def _admit_transform(
     # Operator coefficients from distinct shifts occupy distinct (D-order,
     # x-degree) slots. Boundary terms have already been combined by output
     # degree, so only their retained denominators belong in this bound.
-    coefficient_bounds = tuple(
-        _coefficient_height_bits(list(polynomial.values()))
-        for _shift, polynomial in polynomials
-    )
+    coefficient_bounds = _transformed_coefficient_bounds(polynomials, operator.order)
     numerator_bits = max((bound[0] for bound in coefficient_bounds), default=1)
     denominator_bits = max(
         max((bound[1] for bound in coefficient_bounds), default=1),

@@ -173,6 +173,19 @@ def test_egf_preserves_a_single_canonical_64_digit_rational() -> None:
     }
 
 
+def test_egf_bounds_rational_monomials_by_their_transformed_slots() -> None:
+    p = 10**63
+    q = p - 1
+    recurrence = _recurrence((0, [(0, 1), (16, 1)]))
+    for term in recurrence["terms"][0]["coefficient"]["numerator"]["terms"]:
+        denominator = p if term["exponents"] == [0] else q
+        term["coefficient"] = {"num": 1, "den": denominator}
+
+    result = polynomial_recurrence_to_egf_equation(recurrence)
+
+    assert result.differential_operator.terms
+
+
 def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> None:
     rational = _rf([(0, 1)])
     rational["denominator"] = {

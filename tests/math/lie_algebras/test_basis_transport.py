@@ -107,6 +107,8 @@ def test_rational_basis_transport_matches_matrix_commutators_and_retains_inverse
                 sum((p[k][j] * source_basis[k][r][c] for k in range(3)), Fraction(0))
                 for c in range(2)
             )
+
+
             for r in range(2)
         )
         for j in range(3)
@@ -163,6 +165,20 @@ def test_rational_basis_transport_matches_matrix_commutators_and_retains_inverse
         == result
     )
 
+
+def test_sparse_diagonal_basis_change_admits_large_coordinates_on_abelian_algebra():
+    algebra = FiniteDimensionalLieAlgebra.model_validate(
+        {"basis": [f"x{index}" for index in range(8)], "structure_constants": []}
+    )
+    huge = 10**99
+    diagonal = [[(huge if row == 0 else 1, 1) if row == col else (0, 1)
+                 for col in range(8)] for row in range(8)]
+    result = lie_algebra_change_basis(
+        algebra, tuple(f"y{index}" for index in range(8)), _matrix(diagonal)
+    )
+    assert result.target.structure_constants == ()
+    assert result.source_to_target.entries[0][0].as_fraction() == Fraction(1, huge)
+    assert result.target_to_source.entries[0][0].as_fraction() == Fraction(huge)
 
 def test_identity_basis_change_preserves_source_algebra() -> None:
     result = lie_algebra_change_basis(

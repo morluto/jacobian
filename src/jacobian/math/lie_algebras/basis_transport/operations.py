@@ -123,24 +123,40 @@ def _admit_basis_change(request: LieBasisChangeRequest) -> tuple[int, int]:
                 f"{MAX_BASIS_CHANGE_INPUT_DIGITS} decimal digits"
             ),
         )
-    work = dimension**5 * height**2
-    # Clear the n^2 entry denominators, then use determinant/cofactor bounds
-    # for the rational inverse. The second bound admits transformed bracket
-    # intermediates before the first bracket is expanded.
-    common_denominator_height = dimension**2 * height
-    integer_entry_height = common_denominator_height + height
-    factorial_height = decimal_digit_width(factorial(dimension))
-    inverse_height = (
-        dimension * integer_entry_height + common_denominator_height + factorial_height
+    monomial = all(
+        sum(value != 0 for value in row) == 1 for row in fractions
+    ) and all(
+        sum(fractions[row][column] != 0 for row in range(dimension)) == 1
+        for column in range(dimension)
     )
-    bracket_height = (
-        2 * dimension**2 * height
-        + MAX_STRUCTURE_COEFFICIENT_DIGITS
-        + dimension.bit_length()
-    )
-    output_height = (
-        dimension * (inverse_height + bracket_height) + dimension.bit_length()
-    )
+    if monomial and not request.algebra.structure_constants:
+        # For an abelian algebra a monomial coordinate map has a reciprocal-
+        # permutation inverse and a zero transported bracket. The kernel scans
+        # bounded coordinate axes, so charge that scan and the actual scalar
+        # height instead of a dense elimination proxy.
+        work = dimension**4 * height
+        inverse_height = height
+        output_height = height
+    else:
+        work = dimension**5 * height**2
+        # Clear the n^2 entry denominators, then use determinant/cofactor bounds
+        # for the rational inverse. Admit bracket intermediates as well.
+        common_denominator_height = dimension**2 * height
+        integer_entry_height = common_denominator_height + height
+        factorial_height = decimal_digit_width(factorial(dimension))
+        inverse_height = (
+            dimension * integer_entry_height
+            + common_denominator_height
+            + factorial_height
+        )
+        bracket_height = (
+            2 * dimension**2 * height
+            + MAX_STRUCTURE_COEFFICIENT_DIGITS
+            + dimension.bit_length()
+        )
+        output_height = (
+            dimension * (inverse_height + bracket_height) + dimension.bit_length()
+        )
     if (
         work > MAX_BASIS_CHANGE_WORK
         or inverse_height > MAX_CANONICAL_RATIONAL_DIGITS

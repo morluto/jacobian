@@ -93,6 +93,17 @@ def test_eight_dimensional_result_composes_with_ideal_and_quotient_owners() -> N
     ) == ((0, 1, 2, Fraction(1)), (0, 2, 0, Fraction(-2)), (1, 2, 1, Fraction(2)))
 
 
+def test_common_scaling_does_not_inflate_radical_admission() -> None:
+    scaled = _algebra(
+        SL2_PLUS_ABELIAN_FIVE.basis,
+        ((0, 1, 2, 10**8), (0, 2, 0, -(2 * 10**8)), (1, 2, 1, 2 * 10**8)),
+    )
+    assert _rows(lie_solvable_radical(scaled)) == tuple(
+        tuple(Fraction(int(column == row + 3)) for column in range(8))
+        for row in range(5)
+    )
+
+
 def test_manifest_declares_the_typed_radical_result_and_example() -> None:
     tool = next(
         item

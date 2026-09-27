@@ -516,6 +516,7 @@ def lie_bracket(
 
 def _adjoint_matrices(
     algebra: FiniteDimensionalLieAlgebra,
+    table: dict[tuple[int, int], dict[int, Fraction]] | None = None,
 ) -> list[list[list[Fraction]]]:
     """Return the adjoint matrices with ``ad_i`` acting on column vectors.
 
@@ -524,7 +525,7 @@ def _adjoint_matrices(
     """
 
     dimension = len(algebra.basis)
-    table = _bracket_table(algebra)
+    table = _bracket_table(algebra) if table is None else table
     matrices = []
     for first in range(dimension):
         matrix = [[Fraction(0)] * dimension for _ in range(dimension)]
@@ -599,9 +600,15 @@ def lie_killing_form_radical(
 def _solvable_radical_admission(algebra: FiniteDimensionalLieAlgebra) -> int:
     """Bound the Killing-orthogonal complement computation before expansion."""
     dimension = len(algebra.basis)
-    coefficients = tuple(
+    raw_coefficients = tuple(
         item.coefficient.as_fraction() for item in algebra.structure_constants
     )
+    scale = max((abs(value) for value in raw_coefficients), default=Fraction(0))
+    if scale == 0:
+        scale = Fraction(1)
+    # A uniform nonzero bracket scaling preserves [g,g] and scales the Killing
+    # form by a nonzero square, so its orthogonal complement is unchanged.
+    coefficients = tuple(value / scale for value in raw_coefficients)
     input_digits = max(
         (
             max(
@@ -720,10 +727,25 @@ def lie_solvable_radical(
     algebra_value = _as_algebra(algebra)
     admitted_work = _solvable_radical_admission(algebra_value)
     table = _admit_lie_algebra(algebra_value)
+    scale = max(
+        (
+            abs(item.coefficient.as_fraction())
+            for item in algebra_value.structure_constants
+        ),
+        default=Fraction(0),
+    )
+    if scale == 0:
+        scale = Fraction(1)
+    # Run derived-space and Killing calculations on the scale-normalized
+    # bracket. Its radical is exactly the radical of the source bracket.
+    table = {
+        pair: {target: coefficient / scale for target, coefficient in row.items()}
+        for pair, row in table.items()
+    }
     dimension = len(algebra_value.basis)
     identity = _identity_rows(dimension)
     derived_rows = _subspace_bracket_rows(identity, identity, table, dimension)
-    adjoints = _adjoint_matrices(algebra_value)
+    adjoints = _adjoint_matrices(algebra_value, table)
     killing = tuple(
         tuple(
             sum(

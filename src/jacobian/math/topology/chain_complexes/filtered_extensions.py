@@ -1137,7 +1137,19 @@ def _admit_page_map_request(request: Any) -> FilteredChainMapPageRequest:
             message="the requested spectral page must be an integer",
         )
     admit_spectral_page(request.page)
-    return request
+    try:
+        if not isinstance(request.map, FilteredChainMapResult):
+            raise TypeError("nested map must be a FilteredChainMapResult")
+        authored = FilteredChainMapResult.model_validate(
+            request.map.model_dump(mode="python"), strict=True
+        )
+        return FilteredChainMapPageRequest(map=authored, page=request.page)
+    except (TypeError, ValueError, ValidationError) as exc:
+        raise _fail(
+            ("map",),
+            "filtered_chain_map.page_map_invalid",
+            "the nested page map must be a canonical filtered chain-map result",
+        ) from exc
 
 
 def filtered_chain_map_page(
@@ -1211,9 +1223,40 @@ def filtered_chain_map_page(
     input_scalars.extend(
         value for matrix in authored.maps for row in matrix for value in row
     )
-    max_scalar_chars = max((len(str(value)) for value in input_scalars), default=1)
-    scalar_chars_bound = 96 * max_scalar_chars + 512
-    output_bound = (map_cells + page_cells) * scalar_chars_bound + 4096
+    map_scalar_chars = sum(
+        len(str(value)) for matrix in authored.maps for row in matrix for value in row
+    )
+    page_scalars = [
+        value
+        for complex_value, filtration in (
+            (source, authored.source_filtration),
+            (target, authored.target_filtration),
+        )
+        for matrix in complex_value.differential_matrices
+        for row in matrix
+        for value in row
+    ]
+    page_scalars.extend(
+        value
+        for filtration in (authored.source_filtration, authored.target_filtration)
+        for level in filtration
+        for subspace in level.subspaces
+        for vector in subspace.vectors
+        for value in vector
+    )
+    max_page_scalar_chars = max(
+        (len(str(value)) for value in page_scalars), default=1
+    )
+    page_scalar_chars_bound = 96 * max_page_scalar_chars + 512
+    max_rank = max((*source.basis_sizes, *target.basis_sizes), default=1)
+    map_scalar_chars_bound = map_scalar_chars + page_scalar_chars_bound * max(
+        1, max_rank**2
+    )
+    output_bound = (
+        page_cells * page_scalar_chars_bound
+        + map_cells * map_scalar_chars_bound
+        + 4096
+    )
     if output_bound > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
         raise OperationResourceAdmissionError(
             location=("page",),
@@ -1487,6 +1530,8 @@ def _parse_bounded_map(
                     if isinstance(value, Fraction) and value.denominator != 1
                     else 0
                 )
+                if Fraction(value).numerator < 0:
+                    chars += 1
                 parsed_row.append(_parse_entry(value, prime))
             parsed_matrix.append(parsed_row)
         parsed.append(parsed_matrix)
@@ -1503,19 +1548,24 @@ def _parse_bounded_map(
 def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -> int:
     """Bound decimal numerator and denominator sizes of a rational sum."""
     term_sizes = []
+    may_be_negative = False
     for left, right in terms:
+        left_value, right_value = Fraction(left), Fraction(right)
+        may_be_negative = may_be_negative or (
+            (left_value.numerator < 0) != (right_value.numerator < 0)
+        )
         left_numerator, left_denominator = _coefficient_size(left)
         right_numerator, right_denominator = _coefficient_size(right)
         denominator_is_one = (
-            Fraction(left).denominator == 1 and Fraction(right).denominator == 1
+            left_value.denominator == 1 and right_value.denominator == 1
         )
         term_sizes.append(
             (
                 (
                     right_numerator
-                    if abs(Fraction(left).numerator) == 1 and left_denominator == 1
+                    if abs(left_value.numerator) == 1 and left_denominator == 1
                     else left_numerator
-                    if abs(Fraction(right).numerator) == 1 and right_denominator == 1
+                    if abs(right_value.numerator) == 1 and right_denominator == 1
                     else left_numerator + right_numerator
                 ),
                 1 if denominator_is_one else left_denominator + right_denominator,
@@ -1541,7 +1591,7 @@ def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -
             message="a composed coefficient may exceed the exact chain-map "
             "coefficient digit limit",
         )
-    return numerator_digits + (
+    return numerator_digits + int(may_be_negative) + (
         0 if all(size[2] for size in term_sizes) else denominator_digits + 1
     )
 

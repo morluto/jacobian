@@ -416,3 +416,45 @@ def test_composition_output_admission_counts_only_integer_digits() -> None:
         update={"maps": (tuple(tuple(scalar for _ in range(dimension)) for _ in range(dimension)),)}
     )
     assert filtered_chain_map_compose(identity, dense).maps[0][0][0] == scalar
+
+
+def test_composition_input_admission_counts_negative_signs() -> None:
+    dimension = 4
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(dimension,),
+        differential_matrices=(),
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(
+                    vectors=tuple(
+                        tuple(int(i == j) for i in range(dimension))
+                        for j in range(dimension)
+                    )
+                ),
+            ),
+        ),
+    )
+    scalar = -(10**4095)
+    dense = FilteredChainMapResult(
+        source=complex_value,
+        target=complex_value,
+        source_filtration=filtration,
+        target_filtration=filtration,
+        maps=(tuple(tuple(scalar for _ in range(dimension)) for _ in range(dimension)),),
+        filtration_preserving=True,
+        chain_map=True,
+    )
+    identity = dense.model_copy(
+        update={
+            "maps": (
+                tuple(tuple(int(i == j) for j in range(dimension)) for i in range(dimension)),
+            )
+        }
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="character envelope"):
+        filtered_chain_map_compose(identity, dense)

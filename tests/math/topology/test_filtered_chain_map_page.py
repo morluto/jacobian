@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredSubspace,
@@ -200,3 +200,41 @@ def test_page_map_tool_uses_the_native_operation_contract() -> None:
         Catalog.open(),
     )
     assert result.output["maps"] == [[[["1"]]]]
+
+
+def test_page_map_admits_sparse_large_coefficients_by_entry() -> None:
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(3,),
+        differential_matrices=(),
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=((1, 0, 0), (0, 1, 0), (0, 0, 1))),
+            )
+        ),
+    )
+    large = 10**4095
+    chain_map = filtered_map(
+        FilteredChainMapRequest(
+            source=complex_value,
+            source_filtration=filtration,
+            target=complex_value,
+            target_filtration=filtration,
+            maps=(((large, 0, 0), (0, 1, 0), (0, 0, 1)),),
+        )
+    )
+
+    result = filtered_chain_map_page(FilteredChainMapPageRequest(map=chain_map, page=1))
+
+    assert result.maps == ((((large, 0, 0), (0, 1, 0), (0, 0, 1)),),)
+
+
+@pytest.mark.parametrize("nested_map", [{"source": None}, None])
+def test_page_map_rejects_forged_nested_map_at_native_boundary(nested_map) -> None:
+    request = FilteredChainMapPageRequest.model_construct(map=nested_map, page=1)
+    with pytest.raises(OperationDomainValidationError, match="canonical filtered"):
+        filtered_chain_map_page(request)

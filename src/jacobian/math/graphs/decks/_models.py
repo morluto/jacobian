@@ -401,14 +401,16 @@ class UnlabelledVertexDeckClass(StrictModel):
 
     representative: SimpleUndirectedGraph
     multiplicity: int = Field(ge=1)
-    card_indices: tuple[int, ...]
+    card_indices: tuple[int, ...] = Field(max_length=MAX_UNLABELLED_DECK_VERTICES)
 
 
 class UnlabelledVertexDeck(StrictModel):
     """Exact multiset quotient of a source-bound vertex-deletion family."""
 
     family: VertexDeletionFamily
-    classes: tuple[UnlabelledVertexDeckClass, ...]
+    classes: tuple[UnlabelledVertexDeckClass, ...] = Field(
+        max_length=MAX_UNLABELLED_DECK_VERTICES
+    )
     card_count: int = Field(ge=0)
 
     @model_validator(mode="after")

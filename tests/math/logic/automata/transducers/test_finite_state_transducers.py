@@ -97,6 +97,13 @@ def test_native_boundaries_reject_model_constructed_carriers() -> None:
 
 
 class TestSubsequentialIdentityOperation:
+    def test_identity_on_empty_alphabet_accepts_empty_word_monoid(self) -> None:
+        request = SubseqIdentityRequest(alphabet=FiniteAlphabet(symbols=()))
+        result = compute_identity(request)
+        assert result.input_alphabet_size == result.output_alphabet_size == 0
+        assert result.transitions == ()
+        assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
+
     def test_identity_runs_match_direct_word_oracle_and_keep_parent(self) -> None:
         request = SubseqIdentityRequest(
             alphabet=FiniteAlphabet(symbols=("b", "a")), alphabet_id="two-letters"

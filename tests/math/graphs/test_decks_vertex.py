@@ -12,6 +12,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.decks._models import (
+    UnlabelledVertexDeck,
     UnlabelledVertexDeckClass,
     UnlabelledVertexDeckRequest,
     VertexDeckInducedSubgraphCountRequest,
@@ -259,6 +260,20 @@ def test_vertex_unlabelled_catalog_example_and_serialized_composition() -> None:
     assert [item.multiplicity for item in result.classes] == [2, 1]
     decoded = type(result).model_validate_json(result.model_dump_json())
     assert decoded == result
+
+
+def test_unlabelled_deck_decoding_bounds_nested_class_arrays() -> None:
+    family = vertex_deletion_family(_path_3())
+    valid = unlabelled_vertex_deck(family)
+    payload = valid.model_dump()
+    payload["classes"] = [payload["classes"][0]] * 11
+    with pytest.raises(ValidationError):
+        UnlabelledVertexDeck.model_validate(payload)
+
+    payload = valid.model_dump()
+    payload["classes"][0]["card_indices"] = [0] * 11
+    with pytest.raises(ValidationError):
+        UnlabelledVertexDeck.model_validate(payload)
 
 
 def test_vertex_unlabelled_consumer_rejects_forged_family() -> None:

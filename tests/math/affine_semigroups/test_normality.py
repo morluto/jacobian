@@ -162,6 +162,20 @@ def test_normality_admits_large_sloped_generator_subdivision() -> None:
     assert result.hole is None
 
 
+def test_normality_tool_preserves_structured_domain_error() -> None:
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "affine_semigroup.normality.compute"
+    )
+    request = AffineSemigroupNormalityRequest(semigroup=_semigroup(((1, 0), (2, 0))))
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        tool.run(request)
+
+    assert error.value.errors()[0]["type"] == "affine_semigroup.normality_full_rank"
+
+
 def test_normality_manifest_example_round_trips() -> None:
     tool = next(
         tool

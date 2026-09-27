@@ -19,6 +19,8 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     morphism,
 )
 from jacobian.math.topology.cellular_sheaves.morphism_add import add_morphisms
+from jacobian.math.topology.cellular_sheaves.morphism_identity import identity_morphism
+from jacobian.math.topology.cellular_sheaves.operations import from_cover_maps
 
 
 def _q(numerator: int, denominator: int = 1) -> CanonicalRational:
@@ -142,3 +144,34 @@ def test_growth_above_composable_scalar_envelope_is_typed_refusal() -> None:
 
     with pytest.raises(OperationResourceAdmissionError, match="scalar"):
         add_morphisms(_map(sheaf, large), _map(sheaf, large))
+
+
+def test_addition_admits_bounded_maps_without_global_section_space() -> None:
+    from jacobian.math.topology._models import canonical_complex
+
+    vertices = tuple(f"v{i}" for i in range(40))
+    edges = tuple((vertices[2 * i], vertices[2 * i + 1]) for i in range(20))
+    complex_ = canonical_complex(vertices, edges)
+    cells = tuple(
+        face for dimension in complex_.faces_by_dimension for face in dimension.faces
+    )
+    basis = tuple(f"e{i}" for i in range(8))
+    identity = tuple(tuple(int(i == j) for j in range(8)) for i in range(8))
+    sheaf_result = from_cover_maps(
+        complex_,
+        SheafField.PRIME_FIELD,
+        3,
+        tuple(SheafStalk(simplex=cell, basis=basis) for cell in cells),
+        tuple(
+            CoverRestrictionMatrix(source=(vertex,), target=edge, entries=identity)
+            for edge in edges
+            for vertex in edge
+        ),
+    )
+    assert sheaf_result.sheaf is not None
+    identity_map = identity_morphism(sheaf_result.sheaf)
+
+    result = add_morphisms(identity_map, identity_map)
+
+    assert result.natural
+    assert len(result.components) == 60

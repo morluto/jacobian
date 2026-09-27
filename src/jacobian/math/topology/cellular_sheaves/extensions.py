@@ -774,54 +774,39 @@ def _scan_morphism_scalar_text(
                     "morphism.scalar_invalid", "component matrix rows must be sequences"
                 )
             for value in row:
-                if not isinstance(value, CanonicalRational) and type(value) is not int:
-                    raise _section_domain(
-                        "morphism.scalar_invalid",
-                        "components must contain exact scalars in the declared typed field",
-                    )
-                digits = sheaf_scalar_digits(value)
-                try:
-                    field.parse(value)
-                except ValueError as exc:
-                    raise _section_domain(
-                        "morphism.scalar_invalid",
-                        "components must use the source sheaf's canonical scalar type",
-                    ) from exc
-                if digits > MAX_SHEAF_ENTRY_DIGITS:
-                    raise _section_resource(
-                        "morphism.coefficient_digits_bound",
-                        f"a component coefficient exceeds {MAX_SHEAF_ENTRY_DIGITS} digits",
-                    )
+                digits = _admit_morphism_scalar(value, field, role="component")
                 total_chars += sheaf_scalar_json_bound(1, digits)
                 max_digits = max(max_digits, digits)
     for parent in (source, target):
         for restriction in (*parent.cover_restrictions, *parent.derived_restrictions):
             for row in restriction.entries:
                 for value in row:
-                    if (
-                        not isinstance(value, CanonicalRational)
-                        and type(value) is not int
-                    ):
-                        raise _section_domain(
-                            "morphism.scalar_invalid",
-                            "restriction maps must contain exact scalars in the declared typed field",
-                        )
-                    digits = sheaf_scalar_digits(value)
-                    try:
-                        field.parse(value)
-                    except ValueError as exc:
-                        raise _section_domain(
-                            "morphism.scalar_invalid",
-                            "restriction maps must use the source sheaf's canonical scalar type",
-                        ) from exc
-                    if digits > MAX_SHEAF_ENTRY_DIGITS:
-                        raise _section_resource(
-                            "morphism.coefficient_digits_bound",
-                            f"a restriction coefficient exceeds {MAX_SHEAF_ENTRY_DIGITS} digits",
-                        )
+                    digits = _admit_morphism_scalar(value, field, role="restriction")
                     total_chars += sheaf_scalar_json_bound(1, digits)
                     max_digits = max(max_digits, digits)
     return total_chars, max_digits
+
+
+def _admit_morphism_scalar(value: Any, field: Any, *, role: str) -> int:
+    if not isinstance(value, CanonicalRational) and type(value) is not int:
+        raise _section_domain(
+            "morphism.scalar_invalid",
+            f"{role} values must contain exact scalars in the declared typed field",
+        )
+    digits = sheaf_scalar_digits(value)
+    try:
+        field.parse(value)
+    except ValueError as exc:
+        raise _section_domain(
+            "morphism.scalar_invalid",
+            f"{role} values must use the source sheaf's canonical scalar type",
+        ) from exc
+    if digits > MAX_SHEAF_ENTRY_DIGITS:
+        raise _section_resource(
+            "morphism.coefficient_digits_bound",
+            f"a {role} coefficient exceeds {MAX_SHEAF_ENTRY_DIGITS} digits",
+        )
+    return digits
 
 
 def _admit_morphism_resources(
@@ -864,9 +849,14 @@ def _admit_morphism_resources(
         raise _section_resource(
             "morphism.work_bound", "naturality-square arithmetic exceeds its work bound"
         )
-    scalar_growth = (2 * MAX_SHEAF_STALK_RANK * max_input_digits + 8) * (
-        MAX_SHEAF_STALK_RANK + 1
-    )
+    if source.prime is not None:
+        # Modular products are reduced back into the declared residue field;
+        # their scalar width depends on p, not on rational cross-product growth.
+        scalar_growth = 2 * len(str(source.prime)) + len(str(MAX_SHEAF_STALK_RANK)) + 4
+    else:
+        scalar_growth = (2 * MAX_SHEAF_STALK_RANK * max_input_digits + 8) * (
+            MAX_SHEAF_STALK_RANK + 1
+        )
     if (
         total_input_chars + square_work * scalar_growth
         > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
@@ -973,8 +963,7 @@ def morphism(
             or not isinstance(component[1], (tuple, list))
             or len(component[1]) > MAX_SHEAF_STALK_RANK
             or any(
-                not isinstance(row, (tuple, list))
-                or len(row) > MAX_SHEAF_STALK_RANK
+                not isinstance(row, (tuple, list)) or len(row) > MAX_SHEAF_STALK_RANK
                 for row in component[1]
             )
             for component in components

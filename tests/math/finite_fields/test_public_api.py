@@ -219,6 +219,47 @@ def test_slice_a_keeps_directions_bound_through_orbit_aggregation() -> None:
     assert distribution.ledger is ledger
 
 
+def test_widened_prime_field_one_direction_ledger_composes_into_orbit_distribution() -> (
+    None
+):
+    # F_65537 is admitted as a bounded field presentation. A one-label row axis
+    # has exactly one projective direction, so its ledger stays one row wide
+    # even though the field order exceeds the old 2**16 materialization cap.
+    presentation = finite_field(65_537, (0, 1))
+    rows = Axis(name="rows", labels=("r",))
+    columns = Axis(name="columns", labels=("c",))
+    one = element(presentation, (1,))
+    subspace = FiniteDimensionalSubspace(
+        presentation=presentation,
+        row_axis=rows,
+        column_axis=columns,
+        basis_axis=Axis(name="basis", labels=("B",)),
+        basis=(
+            AxisBoundMatrix(
+                presentation=presentation,
+                row_axis=rows,
+                column_axis=columns,
+                entries=((one,),),
+            ),
+        ),
+    )
+    directions = ProjectiveLine(
+        presentation=presentation,
+        axis=rows,
+        points=(projective_point(presentation, rows, (one,)),),
+    )
+
+    ledger = direction_rank_ledger(subspace, directions)
+    decoded = DirectionRankLedger.model_validate_json(ledger.model_dump_json())
+    distribution = orbit_distribution(decoded)
+
+    assert len(decoded.entries) == 1
+    assert decoded.entries[0].rank == 1
+    assert distribution.counts == ((1, 1), (65_537, 1))
+    verified = type(distribution).model_validate_json(distribution.model_dump_json())
+    assert verify_orbit_distribution(verified)
+
+
 @pytest.mark.parametrize("mutation", ["rank", "matrix", "direction", "target_axis"])
 def test_orbit_consumer_rejects_a_forged_source_bound_ledger(mutation: str) -> None:
     subspace, directions = _slice_a_values()

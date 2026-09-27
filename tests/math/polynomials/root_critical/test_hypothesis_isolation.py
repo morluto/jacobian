@@ -15,7 +15,7 @@ from tests.math.polynomials.root_critical._isolation_invariants import (
     require_axis_rectangles_are_isolating,
 )
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.root_critical.operations import _family
 
 z = sympy.Symbol("z")
@@ -54,9 +54,14 @@ def test_dense_low_degree_supports_are_isolating(coefficients: list[int]) -> Non
         return
     try:
         records, _values = _family(polynomial)
-    except OperationDomainValidationError:
-        # A support whose backend returns ``RootOf`` is outside the admitted
-        # radical carrier; its isolation is not this test's evidence.
+    except OperationResourceAdmissionError as error:
+        # Only the documented unsupported backend root form is outside this
+        # property. Other admission failures must remain visible.
+        if (
+            error.errors()[0]["type"]
+            != "polynomial.root_critical.root_carrier_backend_form"
+        ):
+            raise
         return
     require_axis_rectangles_are_isolating(
         polynomial.sqf_part(), tuple(record.rectangle for record in records)

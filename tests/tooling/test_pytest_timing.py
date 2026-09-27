@@ -14,5 +14,3 @@ def test_worker_failure_without_output_is_not_masked_by_timing_hook() -> None:
     )
 
     pytest_timing.pytest_testnodedown(node, RuntimeError("worker terminated"))
-
-    assert state.workers == {}

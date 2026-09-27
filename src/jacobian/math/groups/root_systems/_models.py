@@ -22,6 +22,11 @@ MAX_COXETER_NUMBER = 30
 MAX_WEYL_WORD_LENGTH = 1024
 # E8 is the largest finite crystallographic Weyl group at the admitted rank.
 MAX_WEYL_GROUP_ORDER = 696_729_600
+# Bruhat intervals materialize an exact finite poset and every ambient Weyl
+# element needed to establish it. Keep this complete-enumeration lane small.
+MAX_BRUHAT_INTERVAL_GROUP_ORDER = 64
+MAX_BRUHAT_INTERVAL_ELEMENTS = 64
+MAX_BRUHAT_INTERVAL_OUTPUT_CELLS = 65_536
 # Lagrange bounds every element order by the largest admitted Weyl-group order.
 MAX_WEYL_ELEMENT_ORDER = MAX_WEYL_GROUP_ORDER
 MAX_WEIGHT_ORBIT_SIZE = 4096
@@ -1126,6 +1131,71 @@ class WeylElementInverseRequest(StrictModel):
     element: WeylElement
 
 
+class WeylElementWeightActionRequest(StrictModel):
+    """Apply one Weyl element to an exact weight-lattice value."""
+
+    element: WeylElement
+    weight: WeightLatticeVector
+
+
+class WeylElementRootActionRequest(StrictModel):
+    """Apply one Weyl element to an exact root-lattice value."""
+
+    element: WeylElement
+    vector: RootLatticeVector
+
+
+class WeylBruhatIntervalRequest(StrictModel):
+    """Two elements of one finite Weyl group defining a closed interval."""
+
+    lower: WeylElement
+    upper: WeylElement
+
+
+class WeylBruhatIntervalResult(StrictModel):
+    """Complete Bruhat interval with a poset-label to Weyl-element binding.
+
+    ``elements[i]`` is the Weyl element named ``poset.elements[i]``. The
+    endpoint values are retained even when the interval is empty.
+    """
+
+    matrix: CartanMatrix
+    lower: WeylElement
+    upper: WeylElement
+    elements: tuple[WeylElement, ...] = Field(
+        default=(), max_length=MAX_BRUHAT_INTERVAL_ELEMENTS
+    )
+    poset: FinitePoset
+
+    @model_validator(mode="after")
+    def require_bound_interval(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            self.lower.matrix != self.matrix
+            or self.upper.matrix != self.matrix
+            or any(element.matrix != self.matrix for element in self.elements)
+            or len(self.elements) != len(self.poset.elements)
+            or len(self.elements) > MAX_BRUHAT_INTERVAL_ELEMENTS
+            or any(
+                element.root_action.row_count != rank
+                or element.root_action.column_count != rank
+                for element in (self.lower, self.upper, *self.elements)
+            )
+        ):
+            raise _validation_error(
+                "bruhat_interval_binding",
+                "interval elements and endpoints must bind to the same Cartan parent and poset carrier",
+            )
+        if self.poset.elements != tuple(
+            f"w{index:03d}" for index in range(len(self.elements))
+        ):
+            raise _validation_error(
+                "bruhat_interval_labels",
+                "poset labels must canonically index the bound Weyl elements",
+            )
+        return self
+
+
 class WeylVectorActionRequest(WeylElementRequest):
     """Apply a bounded Weyl word to a vector in the simple-root basis."""
 
@@ -1223,6 +1293,74 @@ class WeylWeightOrbitResult(StrictModel):
         orbit: tuple[tuple[int, ...], ...],
     ) -> Self:
         return cls.model_construct(matrix=matrix, weight=weight, orbit=orbit)
+
+
+class WeylDominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight in fundamental-weight coordinates."""
+
+    weight: tuple[
+        Annotated[
+            int,
+            Field(ge=-MAX_REFLECTION_REPRESENTABLE, le=MAX_REFLECTION_REPRESENTABLE),
+        ],
+        ...,
+    ] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description=(
+            "Fundamental-weight coordinates; length must equal Cartan rank, "
+            f"and each integer must lie in [-{MAX_REFLECTION_REPRESENTABLE}, "
+            f"{MAX_REFLECTION_REPRESENTABLE}]."
+        ),
+    )
+
+
+class WeylDominantRepresentativeResult(StrictModel):
+    """The dominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: WeightLatticeVector
+    dominant_weight: WeightLatticeVector
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_dominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            self.weight.datum.cartan_matrix != self.matrix
+            or self.dominant_weight.datum.cartan_matrix != self.matrix
+            or len(self.weight.coordinates) != rank
+            or len(self.dominant_weight.coordinates) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (
+                    *self.weight.coordinates,
+                    *self.dominant_weight.coordinates,
+                )
+            )
+            or any(value < 0 for value in self.dominant_weight.coordinates)
+        ):
+            raise _validation_error(
+                "dominant_representative_shape",
+                "the source, dominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: WeightLatticeVector,
+        dominant_weight: WeightLatticeVector,
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            dominant_weight=dominant_weight,
+            element=element,
+        )
 
 
 class WeylDimensionRequest(CartanMatrixRequest):

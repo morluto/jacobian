@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import math
 from fractions import Fraction
 from typing import Any
@@ -13,6 +14,7 @@ from jacobian._exact import CanonicalRational
 from jacobian._execution import (
     OperationExecutionTimeoutError,
     current_request_execution,
+    request_checkpoint,
 )
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
@@ -214,6 +216,54 @@ def _max_absolute_imbalance(
     return max((abs(value) for value in signed_sums), default=0)
 
 
+def _exact_enumeration_work(set_system: FiniteSetSystem) -> int:
+    """Bound coloring scans, set checks, incidences, and result construction."""
+    n = set_system.ground_set_size
+    set_count = len(set_system.sets)
+    incidence_count = sum(len(subset) for subset in set_system.sets)
+    scan_work = (1 << n) * (1 + n + set_count + incidence_count)
+    output_work = 1 + n + set_count + incidence_count
+    return scan_work + output_work
+
+
+def _compute_by_exact_enumeration(
+    set_system: FiniteSetSystem,
+) -> DiscrepancyOptimumResult | None:
+    """Solve tiny systems by a pre-admitted exhaustive exact scan.
+
+    ``None`` means the scan's conservative incidence count exceeds its fixed
+    work cap and the bounded MILP plus exact proof path should run instead.
+    """
+    if (
+        _exact_enumeration_work(set_system)
+        > discrepancy_models.MAX_OPTIMUM_EXACT_ENUMERATION_WORK
+    ):
+        return None
+
+    n = set_system.ground_set_size
+    best_discrepancy = n + 1
+    best_coloring: tuple[int, ...] | None = None
+    for coloring_index, coloring in enumerate(itertools.product((-1, 1), repeat=n)):
+        if coloring_index % 256 == 0:
+            request_checkpoint("during exact discrepancy enumeration")
+        discrepancy = max(
+            (
+                abs(sum(coloring[element] for element in subset))
+                for subset in set_system.sets
+            ),
+            default=0,
+        )
+        if discrepancy < best_discrepancy:
+            best_coloring = coloring
+            best_discrepancy = discrepancy
+            if discrepancy == 0:
+                break
+
+    if best_coloring is None:
+        raise RuntimeError("exact discrepancy enumeration found no coloring")
+    return _proven_optimal_result(set_system, best_coloring, best_discrepancy)
+
+
 def compute_discrepancy(
     set_system: FiniteSetSystem, coloring: tuple[int, ...]
 ) -> DiscrepancyEvalResult:
@@ -250,7 +300,7 @@ def compute_discrepancy(
 def compute_optimal_discrepancy(
     set_system: FiniteSetSystem,
 ) -> DiscrepancyOptimumResult:
-    """Minimize the maximum imbalance via a bounded incumbent search plus proof.
+    """Minimize maximum imbalance by exact enumeration or solver proof.
 
     Binary variables ``b_u in {0, 1}`` encode the coloring ``x_u = 2 b_u -1``
     and one continuous bound ``t`` satisfies, per set ``S`` of size ``k``::
@@ -258,22 +308,28 @@ def compute_optimal_discrepancy(
         2 sum(b[u] for u in S) - t <= k
         -2 sum(b[u] for u in S) - t <= -k
 
-    A time- and node-bounded HiGHS MILP through ``scipy.optimize.milp``
-    produces the incumbent. The returned coloring is integrality-checked,
-    checked against its binary domain before rounding, and its discrepancy is
-    recomputed exactly with Python integers, so floating-point solver
-    internals can never surface as a mathematical value. A positive optimum
-    is returned only after the exact Z3 pseudo-boolean feasibility check proves
-    no coloring attains one less. Solver exhaustion and backend failure remain
-    operational failures rather than mathematical result variants. Zero is
-    definitional. The empty ground set has the single empty coloring with
-    discrepancy zero.
+    A tiny instance whose conservative coloring-incidence count fits a fixed
+    work cap is solved by exhaustive exact enumeration. Larger instances use a
+    time- and node-bounded HiGHS MILP through ``scipy.optimize.milp`` to
+    produce the incumbent. That coloring is integrality-checked, checked
+    against its binary domain before rounding, and recomputed exactly with
+    Python integers. A positive MILP optimum is returned only after the exact
+    Z3 pseudo-boolean feasibility check proves no coloring attains one less.
+    Solver exhaustion and backend failure remain operational failures rather
+    than mathematical result variants. Zero is definitional. The empty ground
+    set has the single empty coloring with discrepancy zero.
     """
     n = set_system.ground_set_size
     sets = set_system.sets
 
     if n == 0:
         return _proven_optimal_result(set_system, (), 0)
+    if not any(set_system.sets):
+        return _proven_optimal_result(set_system, (-1,) * n, 0)
+
+    exact_result = _compute_by_exact_enumeration(set_system)
+    if exact_result is not None:
+        return exact_result
 
     variable_count = n + 1
 

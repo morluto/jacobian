@@ -28,9 +28,6 @@ MAX_TOPOLOGY_FACES = 2048
 MAX_TOPOLOGY_CHAIN_GROUP = 512
 MAX_TOPOLOGY_MATRIX_CELLS = 131_072
 MAX_TOPOLOGY_PRIME = 251
-# Barycentric subdivision admits only the source face counts whose maximal
-# chains fit the canonical facet result bound.
-MAX_BARYCENTRIC_SOURCE_FACES = 31
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -556,7 +553,6 @@ class ChainComplexResult(StrictModel):
 
 
 __all__ = [
-    "MAX_BARYCENTRIC_SOURCE_FACES",
     "MAX_TOPOLOGY_CHAIN_GROUP",
     "MAX_TOPOLOGY_DIMENSION",
     "MAX_TOPOLOGY_FACES",
@@ -590,16 +586,21 @@ class BarycentricSubdivisionRequest(StrictModel):
 
 
 class BarycentricSubdivisionResult(StrictModel):
-    """The barycentric subdivision as a facet list."""
+    """A barycentric subdivision with source-face and source-chain provenance."""
 
-    original_vertices: tuple[str, ...]
-    original_dimension: int
-    subdivision_vertices: tuple[str, ...]
-    subdivision_facets: tuple[tuple[str, ...], ...]
-    num_new_vertices: int
+    original_vertices: tuple[VertexLabel, ...] = Field(max_length=MAX_TOPOLOGY_VERTICES)
+    original_dimension: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    subdivision_vertices: tuple[str, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
+    subdivision_facets: tuple[tuple[str, ...], ...] = Field(
+        max_length=MAX_TOPOLOGY_FACETS
+    )
+    num_new_vertices: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_FACES)
     complex: FiniteSimplicialComplex
     subdivision_complex: FiniteSimplicialComplex | None = None
-    subdivision_vertex_faces: tuple[tuple[str, ...], ...] = Field(default=())
+    subdivision_vertex_faces: tuple[Simplex, ...] = Field(max_length=MAX_TOPOLOGY_FACES)
+    subdivision_facet_face_chains: tuple[tuple[Simplex, ...], ...] = Field(
+        max_length=MAX_TOPOLOGY_FACETS
+    )
 
     @model_validator(mode="after")
     def require_structural_subdivision(self) -> Self:
@@ -608,6 +609,8 @@ class BarycentricSubdivisionResult(StrictModel):
                 "topology.require_subdivision_canonical_1",
                 "num_new_vertices must match subdivision_vertices",
             )
+        self._require_source_face_axis()
+        self._require_facet_chain_provenance()
         if not self.subdivision_facets:
             if self.subdivision_complex is not None:
                 raise _validation_error(
@@ -647,6 +650,66 @@ class BarycentricSubdivisionResult(StrictModel):
                         f"invalid subdivision vertex label: {label}",
                     )
         return self
+
+    def _require_source_face_axis(self) -> None:
+        if self.original_vertices != self.complex.vertices:
+            raise _validation_error(
+                "topology.require_subdivision_canonical_8",
+                "original_vertices must match the source complex vertex axis",
+            )
+        if self.original_dimension != self.complex.dimension:
+            raise _validation_error(
+                "topology.require_subdivision_canonical_9",
+                "original_dimension must match the source complex dimension",
+            )
+        source_faces = tuple(
+            face for item in self.complex.faces_by_dimension for face in item.faces
+        )
+        if self.subdivision_vertex_faces != source_faces:
+            raise _validation_error(
+                "topology.require_subdivision_canonical_10",
+                "subdivision_vertex_faces must be the canonical source face axis",
+            )
+        expected_vertices = tuple(f"bv{index}" for index in range(len(source_faces)))
+        if self.subdivision_vertices != expected_vertices:
+            raise _validation_error(
+                "topology.require_subdivision_canonical_11",
+                "subdivision vertices must index the canonical source face axis",
+            )
+
+    def _require_facet_chain_provenance(self) -> None:
+        source_faces = self.subdivision_vertex_faces
+        face_to_vertex = dict(zip(source_faces, self.subdivision_vertices, strict=True))
+        if len(self.subdivision_facet_face_chains) != len(self.subdivision_facets):
+            raise _validation_error(
+                "topology.require_subdivision_canonical_12",
+                "each subdivision facet must have one source-face chain",
+            )
+        for facet, chain in zip(
+            self.subdivision_facets, self.subdivision_facet_face_chains, strict=True
+        ):
+            if tuple(sorted(chain, key=lambda face: (len(face), face))) != chain:
+                raise _validation_error(
+                    "topology.require_subdivision_canonical_13",
+                    "source-face chains must use increasing dimension and lexical order",
+                )
+            if any(face not in face_to_vertex for face in chain):
+                raise _validation_error(
+                    "topology.require_subdivision_canonical_14",
+                    "source-face chains must use faces of the source complex",
+                )
+            if tuple(sorted(face_to_vertex[face] for face in chain)) != tuple(
+                sorted(facet)
+            ):
+                raise _validation_error(
+                    "topology.require_subdivision_canonical_16",
+                    "subdivision facets must match their source-face chains",
+                )
+            if any(not set(lower) < set(upper) for lower, upper in pairwise(chain)):
+                raise _validation_error(
+                    "topology.require_subdivision_canonical_15",
+                    "subdivision source-face chains must be strictly nested",
+                )
 
     @classmethod
     def _from_kernel(cls, **values: Any) -> Self:

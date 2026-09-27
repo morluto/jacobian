@@ -105,29 +105,19 @@ def _prime_field_chain(
     )
 
 
-def test_gf_p_chain_result_enters_homology_unchanged() -> None:
-    """A small GF(p) producer output passes through the consumer's typed
-    boundary without caller-side reconstruction."""
-    value = simplicial_chain_complex_value(_prime_field_chain(_circle(), 2))
-    assert value.coefficient_ring is CoefficientRing.PRIME_FIELD
-    assert value.prime == 2
-    assert value.basis_sizes == (3, 3)
-
-    result = homology_groups(value)
-    assert [(group.degree, group.betti_number) for group in _field_groups(result)] == [
-        (0, 1),
-        (1, 1),
-    ]
-
-
 def test_producer_result_carries_its_canonical_value() -> None:
     """The public GF(p) producer exposes the canonical chain-complex
     value on the serialized result boundary itself."""
     result = _prime_field_chain(_circle(), 2)
     assert result.canonical_value is not None
     assert result.canonical_value == simplicial_chain_complex_value(result)
+    assert result.canonical_value.basis_sizes == (3, 3)
+    assert result.canonical_value.coefficient_ring is CoefficientRing.PRIME_FIELD
+    assert result.canonical_value.prime == 2
     homology = homology_groups(result.canonical_value)
-    assert [group.betti_number for group in _field_groups(homology)] == [1, 1]
+    assert [
+        (group.degree, group.betti_number) for group in _field_groups(homology)
+    ] == [(0, 1), (1, 1)]
 
 
 def test_producer_canonical_differentials_equal_its_sparse_boundaries() -> None:
@@ -137,7 +127,7 @@ def test_producer_canonical_differentials_equal_its_sparse_boundaries() -> None:
         dense = [[0] * matrix.columns for _ in range(matrix.rows)]
         for entry in matrix.entries:
             dense[entry.row][entry.column] = entry.value
-        expected.append(tuple(tuple(str(value) for value in row) for row in dense))
+        expected.append(tuple(tuple(value for value in row) for row in dense))
 
     assert result.canonical_value.differential_matrices == tuple(expected)
 
@@ -152,6 +142,7 @@ def test_integral_producer_value_enters_homology_unchanged() -> None:
         )
     )
     value = simplicial_chain_complex_value(integral)
+    value = ChainComplexValue.model_validate_json(value.model_dump_json(), strict=True)
     assert value.coefficient_ring is CoefficientRing.INTEGER
     assert value.basis_sizes == (3, 3)
     homology = homology_groups(value)
@@ -199,21 +190,6 @@ def test_point_complex_degenerate_value_keeps_full_context() -> None:
     assert _field_groups(result)[0].betti_number == 1
 
 
-def test_serialized_integral_value_round_trips_into_homology() -> None:
-    integral = _operation("topology.simplicial_complex.chain_complex.compute").run(
-        ChainComplexRequest(
-            complex=_circle(),
-            coefficient_ring=ChainCoefficientRing.INTEGER,
-            convention=HomologyConvention.UNREDUCED,
-        )
-    )
-    payload = simplicial_chain_complex_value(integral).model_dump(mode="json")
-    value = ChainComplexValue.model_validate(payload)
-    result = homology_groups(value)
-    assert result.coefficient_ring is CoefficientRing.INTEGER
-    assert [group.free_rank for group in _integral_groups(result)] == [1, 1]
-
-
 def test_reduced_chains_encode_augmentation_as_degree_minus_one() -> None:
     reduced = _operation("topology.simplicial_complex.chain_complex.compute").run(
         ChainComplexRequest(
@@ -226,7 +202,7 @@ def test_reduced_chains_encode_augmentation_as_degree_minus_one() -> None:
     value = simplicial_chain_complex_value(reduced)
     assert (value.degree_min, value.degree_max) == (-1, 1)
     assert value.basis_sizes == (1, 3, 3)
-    assert value.differential_matrices[0] == (("1", "1", "1"),)
+    assert value.differential_matrices[0] == ((1, 1, 1),)
     result = homology_groups(value)
     assert [group.betti_number for group in _field_groups(result)] == [0, 0, 1]
 
@@ -319,7 +295,7 @@ def test_chain_result_parse_is_structural_and_consumer_admits_field(
     decoded = ChainComplexResult.model_validate_json(result.model_dump_json())
     assert decoded == result
     assert calls == []
-    payload = result.model_dump(mode="json")
+    payload = result.model_dump()
     payload["prime"] = 4
     payload["canonical_value"]["prime"] = 4
     authored = ChainComplexResult.model_validate(payload)

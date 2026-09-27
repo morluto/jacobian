@@ -36,6 +36,12 @@ _GCD_STDOUT_BYTES = 256 * 1024
 _GRADIENT_BATCH_STDOUT_BYTES = 8 * _GCD_STDOUT_BYTES
 _GCD_STDERR_BYTES = 64 * 1024
 _GCD_ADDRESS_SPACE_BYTES = 1024 * 1024 * 1024
+_COMPOSITION_BATCH_STDOUT_BYTES = 16 * _GCD_STDOUT_BYTES + 64 * 1024
+_COMPOSITION_BATCH_INPUT_BYTES = 16 * 1024 * 1024
+
+
+class KernelBatchInputLimitError(ValueError):
+    """A proposed optional batch exceeds its aggregate input envelope."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -168,11 +174,16 @@ def _run_kernel_worker(
     *,
     stage: str,
     stdout_limit: int = _GCD_STDOUT_BYTES,
+    input_limit: int | None = None,
 ) -> dict[str, Any]:
     deadline = _request_deadline(stage=stage)
     request_checkpoint(f"before {stage} encoding")
     encoded = encode_strict_json(payload)
     request_checkpoint(f"after {stage} encoding")
+    if input_limit is not None and len(encoded) > input_limit:
+        raise KernelBatchInputLimitError(
+            f"{stage} input exceeds its {input_limit}-byte aggregate envelope"
+        )
     try:
         with TemporaryDirectory(prefix="jacobian-rational-gradient-gcd-") as worker_dir:
             remaining = deadline - monotonic()
@@ -263,6 +274,64 @@ def forced_denominator_derivative_gcds(
     return tuple(result)
 
 
+def recognize_and_forced_denominator_derivative_gcds(
+    function: RationalFunction,
+    *,
+    axes: tuple[int, ...],
+) -> tuple[bool, tuple[DerivativeGcdFactor, ...]]:
+    """Recognize one source and compute its active denominator GCDs together.
+
+    These exact tasks consume the same source polynomials and share the same
+    killable worker lifetime. The returned coprimality fact is checked before
+    the caller proceeds to derivative construction; factor bounds remain
+    available for the caller's post-GCD output admission.
+    """
+
+    variable_count = len(function.variables)
+    if (
+        variable_count == 0
+        or any(axis < 0 or axis >= variable_count for axis in axes)
+        or len(set(axes)) != len(axes)
+    ):
+        raise RuntimeError(
+            "bounded rational-gradient admission worker received invalid axes"
+        )
+    response = _run_kernel_worker(
+        {
+            "task": "gradient_admission",
+            "variable_count": variable_count,
+            "axes": list(axes),
+            "numerator": _polynomial_payload(function.numerator),
+            "denominator": _polynomial_payload(function.denominator),
+        },
+        stage="gradient source and denominator admission",
+    )
+    if set(response) != {"coprime", "factors"} or type(response["coprime"]) is not bool:
+        raise RuntimeError(
+            "bounded rational-gradient admission worker returned malformed output"
+        )
+    factor_payloads = response["factors"]
+    if not isinstance(factor_payloads, list):
+        raise RuntimeError(
+            "bounded rational-gradient admission worker returned malformed output"
+        )
+    if not response["coprime"]:
+        if factor_payloads:
+            raise RuntimeError(
+                "bounded rational-gradient admission worker returned malformed output"
+            )
+        return False, ()
+    if len(factor_payloads) != len(axes):
+        raise RuntimeError(
+            "bounded rational-gradient admission worker returned malformed output"
+        )
+    unit = DerivativeGcdFactor(bound=_one_polynomial(variable_count), records=())
+    factors = [unit] * variable_count
+    for axis, payload in zip(axes, factor_payloads, strict=True):
+        factors[axis] = _bound_from_payload(payload, variable_count)
+    return True, tuple(factors)
+
+
 def source_is_coprime(function: RationalFunction) -> bool:
     """Recognize coprimality of one non-monomial source under the deadline."""
 
@@ -313,6 +382,58 @@ def normalize_admitted_fraction(
         numerator=_sparse_from_records(response["numerator"], variable_count),
         denominator=_sparse_from_records(response["denominator"], variable_count),
     )
+
+
+def normalize_admitted_fractions(
+    pairs: tuple[tuple[Any, Any], ...],
+    variables: tuple[str, ...],
+) -> tuple[RationalFunction, ...]:
+    """Normalize up to 16 admitted fractions in one isolated worker."""
+
+    if not 1 <= len(pairs) <= 16:
+        raise ValueError("rational normalization batch must contain 1 to 16 rows")
+    variable_count = len(variables)
+    if variable_count == 0:
+        raise RuntimeError("rational-gradient normalization requires a declared axis")
+    response = _run_kernel_worker(
+        {
+            "task": "normalize_batch",
+            "variable_count": variable_count,
+            "fractions": [
+                {
+                    "numerator": _sympy_payload(numerator),
+                    "denominator": _sympy_payload(denominator),
+                }
+                for numerator, denominator in pairs
+            ],
+        },
+        stage="composition fraction normalization batch",
+        stdout_limit=_COMPOSITION_BATCH_STDOUT_BYTES,
+        input_limit=_COMPOSITION_BATCH_INPUT_BYTES,
+    )
+    values = response.get("fractions")
+    if (
+        set(response) != {"fractions"}
+        or not isinstance(values, list)
+        or len(values) != len(pairs)
+    ):
+        raise RuntimeError(
+            "bounded rational-composition normalization worker returned malformed output"
+        )
+    results: list[RationalFunction] = []
+    for value in values:
+        if not isinstance(value, dict) or set(value) != {"numerator", "denominator"}:
+            raise RuntimeError(
+                "bounded rational-composition normalization worker returned malformed output"
+            )
+        results.append(
+            RationalFunction._from_kernel(
+                variables=variables,
+                numerator=_sparse_from_records(value["numerator"], variable_count),
+                denominator=_sparse_from_records(value["denominator"], variable_count),
+            )
+        )
+    return tuple(results)
 
 
 def differentiate_admitted_fractions(
@@ -407,5 +528,7 @@ __all__ = [
     "differentiate_admitted_fractions",
     "forced_denominator_derivative_gcds",
     "normalize_admitted_fraction",
+    "normalize_admitted_fractions",
+    "recognize_and_forced_denominator_derivative_gcds",
     "source_is_coprime",
 ]

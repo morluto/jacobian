@@ -55,7 +55,7 @@ H = ((1, 0), (0, -1))
 
 def test_sl2_matrix_span_constructs_induced_bracket_and_roundtrips() -> None:
     request = _request(E, F, H)
-    result = lie_algebra_from_matrix_span(request)
+    result = lie_algebra_from_matrix_span(request.matrices)
     assert result.algebra.basis == ("M0", "M1", "M2")
     assert [
         (item.i, item.j, item.k, item.coefficient.as_fraction())
@@ -85,7 +85,7 @@ def test_shared_basis_denominator_is_cleared_before_growth_admission() -> None:
         )
         for matrix in (E, F, H)
     )
-    result = lie_algebra_from_matrix_span(LieMatrixSpanRequest(matrices=matrices))
+    result = lie_algebra_from_matrix_span(matrices)
 
     assert [
         item.coefficient.as_fraction() for item in result.algebra.structure_constants
@@ -99,7 +99,7 @@ def test_standard_m2_matrix_units_fit_the_four_dimensional_boundary() -> None:
         ((0, 0), (1, 0)),
         ((0, 0), (0, 1)),
     )
-    result = lie_algebra_from_matrix_span(_request(*units))
+    result = lie_algebra_from_matrix_span(_request(*units).matrices)
     assert result.algebra.basis == ("M0", "M1", "M2", "M3")
     constants = {
         (item.i, item.j, item.k): item.coefficient.as_fraction()
@@ -124,14 +124,14 @@ def test_standard_m2_matrix_units_fit_the_four_dimensional_boundary() -> None:
 
 def test_nonclosed_or_dependent_span_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="not closed"):
-        lie_algebra_from_matrix_span(_request(E, F))
+        lie_algebra_from_matrix_span(_request(E, F).matrices)
     with pytest.raises(OperationDomainValidationError, match="independent"):
-        lie_algebra_from_matrix_span(_request(E, E))
+        lie_algebra_from_matrix_span(_request(E, E).matrices)
 
 
 def test_one_dimensional_scalar_span_has_zero_bracket() -> None:
     identity = ((1, 0), (0, 1))
-    result = lie_algebra_from_matrix_span(_request(identity))
+    result = lie_algebra_from_matrix_span(_request(identity).matrices)
     assert result.algebra.structure_constants == ()
     assert result.matrix_basis == _request(identity).matrices
 
@@ -147,9 +147,7 @@ def test_canonical_rational_input_is_measured_by_its_components() -> None:
     matrix = RationalMatrix(
         entries=((large,),),
     )
-    result = lie_algebra_from_matrix_span(
-        LieMatrixSpanRequest(matrices=(matrix,))
-    )
+    result = lie_algebra_from_matrix_span((matrix,))
     assert result.matrix_basis[0].entries[0][0] == large
 
 
@@ -166,7 +164,7 @@ def test_native_execution_rejects_forged_noncanonical_rationals(
     )
     request = LieMatrixSpanRequest.model_construct(matrices=(matrix,))
     with pytest.raises(OperationDomainValidationError, match="reduced canonical"):
-        lie_algebra_from_matrix_span(request)
+        lie_algebra_from_matrix_span(request.matrices)
 
 
 def test_single_digit_denominators_include_multiplicative_carry() -> None:
@@ -174,7 +172,7 @@ def test_single_digit_denominators_include_multiplicative_carry() -> None:
         RationalMatrix(entries=((CanonicalRational(num=1, den=denominator),),))
         for denominator in (7, 8)
     )
-    _, _, commutator_digits = _admit(LieMatrixSpanRequest(matrices=matrices))
+    _, _, commutator_digits = _admit(matrices)
 
     assert commutator_digits >= 2
 
@@ -189,7 +187,7 @@ def test_native_execution_rejects_forged_non_qq_matrix_domain() -> None:
     request = LieMatrixSpanRequest.model_construct(matrices=(matrix,))
 
     with pytest.raises(OperationDomainValidationError, match="QQ matrix domain"):
-        lie_algebra_from_matrix_span(request)
+        lie_algebra_from_matrix_span(request.matrices)
 
 
 def test_canonical_rational_scalar_ceiling_is_discoverable() -> None:
@@ -203,6 +201,30 @@ def test_canonical_rational_component_width_is_measured_individually() -> None:
     value = CanonicalRational(num=10**54, den=1)
     matrix = RationalMatrix(entries=((value,),))
 
-    result = lie_algebra_from_matrix_span(LieMatrixSpanRequest(matrices=(matrix,)))
+    result = lie_algebra_from_matrix_span((matrix,))
 
     assert result.matrix_basis[0].entries[0][0] == value
+
+
+def test_commuting_rational_span_skips_irrelevant_structure_constant_bound() -> None:
+    first_denominator = 1_000_000_000_039
+    second_denominator = 1_000_000_000_061
+    matrices = (
+        RationalMatrix(
+            entries=(
+                (CanonicalRational(num=1, den=first_denominator), CanonicalRational(num=0, den=1)),
+                (CanonicalRational(num=0, den=1), CanonicalRational(num=0, den=1)),
+            )
+        ),
+        RationalMatrix(
+            entries=(
+                (CanonicalRational(num=0, den=1), CanonicalRational(num=0, den=1)),
+                (CanonicalRational(num=0, den=1), CanonicalRational(num=1, den=second_denominator)),
+            )
+        ),
+    )
+
+    result = lie_algebra_from_matrix_span(matrices)
+
+    assert result.matrix_basis == matrices
+    assert result.algebra.structure_constants == ()

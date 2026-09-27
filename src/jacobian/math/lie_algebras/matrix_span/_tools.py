@@ -13,7 +13,7 @@ from jacobian.math.lie_algebras.matrix_span.operations import (
 
 
 def _run(request: LieMatrixSpanRequest) -> LieMatrixSpanRealization:
-    return lie_algebra_from_matrix_span(request)
+    return lie_algebra_from_matrix_span(request.matrices)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

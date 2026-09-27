@@ -20,7 +20,6 @@ from jacobian.math.lie_algebras.matrix_span._models import (
     MAX_MATRIX_SPAN_OUTPUT_BYTES,
     MAX_MATRIX_SPAN_RESULT_DIGITS,
     LieMatrixSpanRealization,
-    LieMatrixSpanRequest,
 )
 from jacobian.math.matrices.operations import rref_result
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
@@ -70,14 +69,7 @@ def _shared_denominator_growth(
     )
 
 
-def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
-    if not isinstance(request, LieMatrixSpanRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="lie_algebra.matrix_span_request",
-            message="request must be a typed matrix-span value",
-        )
-    matrices = getattr(request, "matrices", None)
+def _admit(matrices: tuple[RationalMatrix, ...]) -> tuple[int, int, int]:
     if type(matrices) is not tuple or not 1 <= len(matrices) <= 8:
         raise OperationDomainValidationError(
             location=("matrices",),
@@ -164,15 +156,24 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_input_height",
             message="input matrix entries are limited to 64 decimal digits",
         )
-    # Clear the common denominator of the basis before bounding determinants.
-    # Using each entry's denominator independently charges the same shared
-    # factor once per product and can reject tiny rational copies of sl2.
-    (
-        common_denominator_digits,
-        input_numerator_growth,
-        only_unit_entries,
-    ) = _shared_denominator_growth(matrices)
-    input_numerator_growth = 0 if only_unit_entries else input_numerator_growth
+    commuting = all(
+        not any(_commutator(matrices[i], matrices[j]))
+        for i, j in combinations(range(dimension), 2)
+    )
+    if commuting:
+        # No structure constants are produced, so no pivot-coordinate height
+        # bound is needed for this span.
+        common_denominator_digits = 1
+        input_numerator_growth = 0
+    else:
+        # Clear the common denominator of the basis before bounding Cramer's
+        # rule. This avoids charging one shared factor per determinant term.
+        (
+            common_denominator_digits,
+            input_numerator_growth,
+            only_unit_entries,
+        ) = _shared_denominator_growth(matrices)
+        input_numerator_growth = 0 if only_unit_entries else input_numerator_growth
     input_denominator_growth = 0
     pairs = dimension * (dimension - 1) // 2
     # Bound rational products and sums before matrix expansion. Each
@@ -190,7 +191,9 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
         + decimal_digit_width(product_count)
     )
     commutator_digits = max(
-        commutator_numerator_digits, commutator_denominator_digits
+        commutator_numerator_digits,
+        commutator_denominator_digits,
+        2 * input_digits + decimal_digit_width(product_count) + 2,
     )
     determinant_terms = factorial(dimension)
     pivot_term_denominator_growth = dimension * input_denominator_growth
@@ -228,7 +231,7 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             replacement_denominator_digits + determinant_numerator_digits,
         )
         + common_denominator_digits
-        if pairs
+        if pairs and not commuting
         else 1
     )
     # Output coefficients are rational coordinates in the pivot basis. Refuse
@@ -312,16 +315,16 @@ def _coordinates(
 
 
 def lie_algebra_from_matrix_span(
-    request: LieMatrixSpanRequest,
+    matrices: tuple[RationalMatrix, ...],
 ) -> LieMatrixSpanRealization:
     """Construct the induced Lie algebra from an independent closed QQ span."""
-    order, _pair_count, _intermediate_digit_bound = _admit(request)
-    dimension = len(request.matrices)
+    order, _pair_count, _intermediate_digit_bound = _admit(matrices)
+    dimension = len(matrices)
     rows = tuple(
         tuple(
             entry.as_fraction() for matrix_row in matrix.entries for entry in matrix_row
         )
-        for matrix in request.matrices
+        for matrix in matrices
     )
     row_matrix = rational_matrix_from_fractions(rows, column_count=order**2)
     reduced = rref_result(row_matrix)
@@ -335,7 +338,7 @@ def lie_algebra_from_matrix_span(
     constants: list[StructureConstant] = []
     labels = tuple(f"M{index}" for index in range(dimension))
     for i, j in combinations(range(dimension), 2):
-        commutator = _commutator(request.matrices[i], request.matrices[j])
+        commutator = _commutator(matrices[i], matrices[j])
         coordinates = _coordinates(rows, pivots, commutator)
         if any(
             sum(
@@ -377,7 +380,7 @@ def lie_algebra_from_matrix_span(
     algebra = FiniteDimensionalLieAlgebra(
         basis=labels, structure_constants=tuple(constants)
     )
-    return LieMatrixSpanRealization(algebra=algebra, matrix_basis=request.matrices)
+    return LieMatrixSpanRealization(algebra=algebra, matrix_basis=matrices)
 
 
 __all__ = ["lie_algebra_from_matrix_span"]

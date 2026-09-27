@@ -420,6 +420,18 @@ def closed_star(
             code="cubical_complex.closed_star_request_type",
             message="closed_star requires canonical cubical cells",
         )
+    try:
+        cell = CubicalCell.model_validate(cell.model_dump(mode="python"))
+        cells = tuple(
+            CubicalCell.model_validate(item.model_dump(mode="python"))
+            for item in cells
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.closed_star_invalid_cell",
+            message="closed-star cells must satisfy the cubical-cell contract",
+        ) from exc
     selected = cell
     if not cells or len(cells) > MAX_CELLS:
         raise OperationDomainValidationError(

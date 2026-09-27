@@ -696,6 +696,16 @@ class FilteredCubicalComplex(StrictModel):
                 "chain_basis_mismatch",
                 "filtered chain groups must retain the cubical cell-basis sizes",
             )
+        expected_groups = tuple(basis.cells for basis in self.cell_bases)
+        if expected_groups != _cubical_cell_groups(self.complex.cells):
+            raise _validation_error(
+                "cell_basis_not_bound",
+                "cell bases must be the canonical degree partition of the source complex",
+            )
+        _require_filtered_cubical_chain_binding(
+            self.filtered_chain_complex, expected_groups, self.cell_births,
+            self.critical_values,
+        )
         if tuple(entry.cell for entry in self.cell_births) != self.complex.cells:
             raise _validation_error(
                 "cell_axis_invalid",
@@ -853,17 +863,129 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
                     "each cell birth and witness set must match its maximal cofaces",
                 )
         basis_sizes = tuple(len(basis.cells) for basis in self.cell_bases)
+        expected_groups = _cubical_cell_groups(self.complex.cells)
+        if tuple(basis.dimension for basis in self.cell_bases) != tuple(
+            range(len(self.cell_bases))
+        ) or tuple(basis.cells for basis in self.cell_bases) != expected_groups:
+            raise _validation_error(
+                "top_cell_basis_not_bound",
+                "cell bases must be the canonical degree partition of the source complex",
+            )
         if self.filtered_chain_complex.complex.basis_sizes != basis_sizes:
             raise _validation_error(
                 "top_cell_chain_basis_mismatch",
                 "filtered chains must retain the cubical degree-basis sizes",
             )
+        _require_filtered_cubical_chain_binding(
+            self.filtered_chain_complex, expected_groups, self.cell_births,
+            self.critical_values,
+        )
         if self.filtered_chain_complex.complex.prime is None:
             raise _validation_error(
                 "top_cell_chain_field_missing",
                 "filtered cubical chains must retain their finite-field modulus",
             )
         return self
+
+
+def _cubical_cell_groups(cells: tuple[CubicalCell, ...]) -> tuple[tuple[CubicalCell, ...], ...]:
+    top = max(cell.dimension for cell in cells)
+    groups: list[list[CubicalCell]] = [[] for _ in range(top + 1)]
+    for cell in cells:
+        groups[cell.dimension].append(cell)
+    return tuple(tuple(group) for group in groups)
+
+
+def _rank_mod_prime(rows: tuple[tuple[int, ...], ...], prime: int) -> int:
+    if not rows:
+        return 0
+    matrix = [[entry % prime for entry in row] for row in rows]
+    pivot_row = 0
+    for column in range(len(matrix[0])):
+        pivot = next(
+            (index for index in range(pivot_row, len(matrix)) if matrix[index][column]),
+            None,
+        )
+        if pivot is None:
+            continue
+        matrix[pivot_row], matrix[pivot] = matrix[pivot], matrix[pivot_row]
+        inverse = pow(matrix[pivot_row][column], -1, prime)
+        matrix[pivot_row] = [(entry * inverse) % prime for entry in matrix[pivot_row]]
+        for index in range(len(matrix)):
+            if index == pivot_row:
+                continue
+            scale = matrix[index][column]
+            if scale:
+                matrix[index] = [
+                    (entry - scale * pivot_entry) % prime
+                    for entry, pivot_entry in zip(
+                        matrix[index], matrix[pivot_row], strict=True
+                    )
+                ]
+        pivot_row += 1
+        if pivot_row == len(matrix):
+            break
+    return pivot_row
+
+
+def _require_filtered_cubical_chain_binding(
+    filtered: FilteredChainComplex,
+    groups: tuple[tuple[CubicalCell, ...], ...],
+    births: tuple[CubicalCellBirth | CubicalTopCellBirth, ...],
+    critical_values: tuple[CanonicalRational, ...],
+) -> None:
+    """Bind a cubical filtration carrier to its source cells and boundaries."""
+    chain = filtered.complex
+    if chain.degree_min != 0 or chain.degree_max != len(groups) - 1:
+        raise _validation_error(
+            "chain_degree_axis_not_bound",
+            "filtered cubical chains must retain the source degree axis",
+        )
+    prime = chain.prime
+    if prime is None:
+        raise _validation_error("chain_field_missing", "filtered cubical chains require a prime field")
+    expected_differentials = []
+    for degree in range(1, len(groups)):
+        row_for = {cell: index for index, cell in enumerate(groups[degree - 1])}
+        matrix = [[0] * len(groups[degree]) for _ in groups[degree - 1]]
+        for column, cell in enumerate(groups[degree]):
+            intervals = cell.intervals
+            axes = [axis for axis, (lower, upper) in enumerate(intervals) if upper > lower]
+            for position, axis in enumerate(axes):
+                lower, upper = intervals[axis]
+                sign = 1 if position % 2 == 0 else -1
+                for coordinate, coefficient in ((upper, sign), (lower, -sign)):
+                    face_intervals = list(intervals)
+                    face_intervals[axis] = (coordinate, coordinate)
+                    face = CubicalCell(intervals=tuple(face_intervals))
+                    matrix[row_for[face]][column] += coefficient
+        expected_differentials.append(
+            tuple(tuple(entry % prime for entry in row) for row in matrix)
+        )
+    if chain.differential_matrices != tuple(expected_differentials):
+        raise _validation_error(
+            "chain_differential_not_bound",
+            "filtered chain differentials must equal the source cubical boundaries",
+        )
+    birth_by_cell = {birth.cell: birth.value.as_fraction() for birth in births}
+    for critical, level in zip(critical_values, filtered.filtration, strict=True):
+        bound = critical.as_fraction()
+        for group, subspace in zip(groups, level.subspaces, strict=True):
+            expected = tuple(
+                tuple(1 if index == basis_index else 0 for index in range(len(group)))
+                for basis_index, cell in enumerate(group)
+                if birth_by_cell[cell] <= bound
+            )
+            combined = (*expected, *subspace.vectors)
+            if (
+                _rank_mod_prime(expected, prime)
+                != _rank_mod_prime(subspace.vectors, prime)
+                or _rank_mod_prime(combined, prime) != len(expected)
+            ):
+                raise _validation_error(
+                    "filtration_not_bound",
+                    "filtration levels must span exactly the cells born by each critical value",
+                )
 
 
 class CubicalSquareLedgerEntry(StrictModel):

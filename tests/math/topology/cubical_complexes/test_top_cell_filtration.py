@@ -142,6 +142,21 @@ def test_top_cell_values_must_cover_exactly_maximal_generators() -> None:
         CubicalTopCellFiltrationRequest(cells=(), top_cell_values=())
 
 
+def test_decoded_top_cell_filtration_must_retain_source_boundary() -> None:
+    interval = _cell((0, 1))
+    result = _from_top_cell_values(
+        CubicalTopCellFiltrationRequest(
+            cells=(interval,), top_cell_values=(_value(interval, Fraction(0)),)
+        )
+    )
+    payload = result.model_dump(mode="python")
+    payload["filtered_chain_complex"]["complex"]["differential_matrices"] = (
+        ((0,), (0,)),
+    )
+    with pytest.raises(ValidationError, match="source cubical boundaries"):
+        FilteredCubicalComplexFromTopCells.model_validate(payload)
+
+
 def test_top_cell_filtration_is_published_with_a_composable_example() -> None:
     tool = next(
         tool

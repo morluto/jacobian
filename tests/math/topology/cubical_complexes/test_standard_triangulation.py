@@ -4,7 +4,10 @@ import json
 
 import pytest
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.cubical_complexes._models import CubicalCell
 from jacobian.math.topology.cubical_complexes.extensions import (
     CubicalTriangulationRequest,
@@ -128,4 +131,13 @@ def test_facet_factorial_is_admitted_before_generating_a_six_cube() -> None:
         triangulate(request)
     assert (
         error.value.errors()[0]["type"] == "cubical_complex.triangulation_output_budget"
+    )
+
+
+def test_native_triangulation_rejects_constructed_empty_request() -> None:
+    request = CubicalTriangulationRequest.model_construct(cells=())
+    with pytest.raises(OperationDomainValidationError) as error:
+        triangulate(request)
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.triangulation_request_invalid"
     )

@@ -581,6 +581,22 @@ def triangulate(request: CubicalTriangulationRequest) -> CubicalTriangulationRes
 def _admit_triangulation_input(
     request: CubicalTriangulationRequest,
 ) -> tuple[tuple[CubicalCell, ...], tuple[CubicalCell, ...]]:
+    if type(request) is not CubicalTriangulationRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="cubical_complex.triangulation_request_type",
+            message="triangulation requires a canonical request",
+        )
+    try:
+        request = CubicalTriangulationRequest.model_validate(
+            request.model_dump(mode="python")
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("cells",),
+            code="cubical_complex.triangulation_request_invalid",
+            message="triangulation requires a nonempty bounded cell family",
+        ) from exc
     if len(request.cells) > MAX_TRIANGULATION_SOURCE_CELLS:
         raise OperationResourceAdmissionError(
             location=("cells",),

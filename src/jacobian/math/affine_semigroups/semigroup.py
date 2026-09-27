@@ -1091,6 +1091,13 @@ def normalization(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormaliz
     ambient row axis.
     """
     semigroup = _admit_semigroup(semigroup)
+    return _normalization_admitted(semigroup)
+
+
+def _normalization_admitted(
+    semigroup: PositiveAffineSemigroup,
+) -> AffineSemigroupNormalization:
+    """Build the normalization after its caller has admitted the semigroup."""
     configuration = semigroup.configuration
     if configuration.rows != 2 or configuration.columns < 2:
         raise OperationDomainValidationError(
@@ -1298,7 +1305,14 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
     ray_grades = tuple(
         sum(grading[row] * ray[row] for row in range(2)) for ray in (lower, upper)
     )
-    target_grade_bound = lower_order * ray_grades[0] + upper_order * ray_grades[1]
+    # A non-ray Hilbert generator lies in the half-open parallelogram spanned
+    # by the two least lattice multiples of the primitive cone rays, so its
+    # positive integral grade is strictly below their grade sum. Boundary
+    # Hilbert generators are those ray multiples and also fit this bound
+    # because the other ray has positive integral grade.
+    target_grade_bound = (
+        lower_order * ray_grades[0] + upper_order * ray_grades[1] - 1
+    )
     if target_grade_bound < 0:
         raise ArithmeticError("normalization Hilbert generators lie outside the cone")
 
@@ -1372,7 +1386,7 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
             message="normality requires a full-rank generated lattice in Z^2",
         )
     _preflight_normality_work(semigroup)
-    normalized = normalization(semigroup)
+    normalized = _normalization_admitted(semigroup)
     source = normalized.semigroup
     candidates = normalized.generators
     if len(candidates) > MAX_AFFINE_NORMALITY_CANDIDATES:

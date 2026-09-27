@@ -147,6 +147,14 @@ def test_duplicate_generators_are_deduplicated_for_admission_and_membership() ->
     assert result.semigroup.configuration.columns_vectors == vectors
 
 
+def test_normality_admits_the_unit_grade_eight_cone_generators() -> None:
+    vectors = tuple((1, height) for height in range(9))
+    result = normality(_semigroup(vectors))
+
+    assert result.normal
+    assert result.hole is None
+
+
 def test_normality_manifest_example_round_trips() -> None:
     tool = next(
         tool
@@ -204,7 +212,7 @@ def test_preflight_prices_full_axis_for_possible_hole_replay(
 
     # Unique-vector fiber searches fit below this budget. Charging the one
     # possible witness replay against all ten source columns pushes it above.
-    monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 200)
+    monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 190)
     monkeypatch.setattr(
         semigroup_module,
         "_hilbert_basis_admitted",

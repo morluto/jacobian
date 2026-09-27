@@ -8,7 +8,6 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonComplementResult,
     TreeAutomatonCompletionResult,
     TreeAutomatonMinimizeResult,
-    TreeAutomatonStateAlgebraRequest,
 )
 from jacobian.math.logic.automata.tree.operations import (
     accepted_tree_count,
@@ -59,7 +58,6 @@ __all__ = [
     "TreeAutomatonComplementResult",
     "TreeAutomatonCompletionResult",
     "TreeAutomatonMinimizeResult",
-    "TreeAutomatonStateAlgebraRequest",
     "TreeAutomatonTransition",
     "accepted_tree_count",
     "boolean_product_tree_automata",

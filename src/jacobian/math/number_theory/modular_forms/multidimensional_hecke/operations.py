@@ -234,7 +234,6 @@ def _canonical_basis(
         raw,
         admission.field,
         admission.source_precision,
-        normalization_precision=admission.target_precision,
     )
     if len(basis) != context.dimension or any(
         len(row) != admission.source_precision for row in basis

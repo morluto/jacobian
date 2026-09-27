@@ -58,7 +58,7 @@ def _space() -> ModularFormSpace:
 
 
 def _element(value: object) -> RationalCyclotomicElement:
-    coordinates = _as_cyclotomic_coordinates(pari, value, 6)
+    coordinates = _as_cyclotomic_coordinates(pari, value, 6, 3)
     return RationalCyclotomicElement(
         field=_FIELD,
         coefficients_ascending=tuple(

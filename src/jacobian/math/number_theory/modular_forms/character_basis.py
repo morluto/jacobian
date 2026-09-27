@@ -854,7 +854,7 @@ def _rref_character_coordinates_hecke(
 
     request_checkpoint("before canonical character Hecke basis expansion")
     basis = _character_basis_from_admission(
-        space, field, character_request, requested_precision=source_precision
+        space, field, character_request, precision=source_precision
     )
     if (
         len(basis.elements) != 1

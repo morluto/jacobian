@@ -43,9 +43,7 @@ def _form() -> RationalQuadraticForm:
 
 def test_restriction_preserves_selected_order_and_exact_inclusion() -> None:
     source = _form()
-    result = quadratic_form_restrict_coordinates(
-        QuadraticFormRestrictionRequest(form=source, selected_axis=("z", "x"))
-    )
+    result = quadratic_form_restrict_coordinates(source, ("z", "x"))
     assert result.source_form == source
     assert result.form.axis == ("z", "x")
     assert result.form.diagonal_coefficients == (_r(7), _r(2))
@@ -78,9 +76,7 @@ def test_restriction_preserves_selected_order_and_exact_inclusion() -> None:
 
 
 def test_restriction_to_empty_subset_is_zero_dimensional_zero_form() -> None:
-    result = quadratic_form_restrict_coordinates(
-        QuadraticFormRestrictionRequest(form=_form(), selected_axis=())
-    )
+    result = quadratic_form_restrict_coordinates(_form(), ())
     assert result.form.axis == ()
     assert result.form.diagonal_coefficients == ()
     assert result.form.cross_terms == ()
@@ -91,9 +87,7 @@ def test_restriction_to_empty_subset_is_zero_dimensional_zero_form() -> None:
 
 def test_empty_form_restricts_to_empty_form() -> None:
     form = RationalQuadraticForm(axis=(), diagonal_coefficients=())
-    result = quadratic_form_restrict_coordinates(
-        QuadraticFormRestrictionRequest(form=form, selected_axis=())
-    )
+    result = quadratic_form_restrict_coordinates(form, ())
     assert result.form == form
     assert result.inclusion.row_count == result.inclusion.column_count == 0
     assert result.inclusion.entries == ()
@@ -115,7 +109,7 @@ def test_restriction_admits_source_axis_at_the_operation_boundary() -> None:
     )
     request = QuadraticFormRestrictionRequest(form=wide, selected_axis=("x0",))
     with pytest.raises(OperationResourceAdmissionError) as error:
-        quadratic_form_restrict_coordinates(request)
+        quadratic_form_restrict_coordinates(request.form, request.selected_axis)
     assert (
         error.value.errors()[0]["type"]
         == "quadratic_form.coordinate_restriction_axis_bound"
@@ -141,7 +135,7 @@ def test_constructed_restriction_request_admits_support_at_the_kernel() -> None:
         form=dense, selected_axis=("x0",)
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        quadratic_form_restrict_coordinates(request)
+        quadratic_form_restrict_coordinates(request.form, request.selected_axis)
     assert (
         error.value.errors()[0]["type"]
         == "quadratic_form.coordinate_restriction_support_bound"
@@ -155,13 +149,11 @@ def test_native_boundary_rejects_invalid_subset_before_indexing() -> None:
             form=source, selected_axis=selected
         )
         with pytest.raises(OperationDomainValidationError):
-            quadratic_form_restrict_coordinates(request)
+            quadratic_form_restrict_coordinates(request.form, request.selected_axis)
 
 
 def test_deserialization_rejects_inclusion_that_does_not_select_declared_axes() -> None:
-    result = quadratic_form_restrict_coordinates(
-        QuadraticFormRestrictionRequest(form=_form(), selected_axis=("z", "x"))
-    )
+    result = quadratic_form_restrict_coordinates(_form(), ("z", "x"))
     payload = result.model_dump(mode="python")
     payload["inclusion"]["entries"] = (
         (_r(1), _r(0)),
@@ -169,4 +161,12 @@ def test_deserialization_rejects_inclusion_that_does_not_select_declared_axes() 
         (_r(0), _r(1)),
     )
     with pytest.raises(ValueError, match="must select the declared source axes"):
+        QuadraticFormRestrictionResult.model_validate(payload)
+
+
+def test_deserialization_rejects_restricted_coefficients_not_retained_from_source() -> None:
+    result = quadratic_form_restrict_coordinates(_form(), ("x",))
+    payload = result.model_dump(mode="python")
+    payload["form"]["diagonal_coefficients"] = (_r(99),)
+    with pytest.raises(ValueError, match="retained from the source form"):
         QuadraticFormRestrictionResult.model_validate(payload)

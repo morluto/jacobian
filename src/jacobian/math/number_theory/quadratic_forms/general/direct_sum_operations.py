@@ -16,9 +16,7 @@ from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models impor
     MAX_DIRECT_SUM_AXIS,
     MAX_DIRECT_SUM_COMPONENTS,
     MAX_DIRECT_SUM_FORM_TERMS,
-    QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
-    QuadraticFormRestrictionRequest,
     QuadraticFormRestrictionResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -79,7 +77,7 @@ def require_direct_sum_budget(
 
 
 def quadratic_form_direct_sum(
-    request: QuadraticFormDirectSumRequest,
+    forms: Sequence[RationalQuadraticForm],
 ) -> QuadraticFormDirectSumResult:
     """Return the orthogonal sum, with inclusion and projection matrices.
 
@@ -88,7 +86,6 @@ def quadratic_form_direct_sum(
     ``source_forms``; map matrices use the same ordered local coordinates.
     """
 
-    forms = request.forms
     require_direct_sum_budget(forms, location=("forms",), code_prefix="direct_sum")
     total = sum(len(form.axis) for form in forms)
     axis: list[str] = []
@@ -140,12 +137,11 @@ def quadratic_form_direct_sum(
 
 
 def quadratic_form_restrict_coordinates(
-    request: QuadraticFormRestrictionRequest,
+    source: RationalQuadraticForm,
+    selected: Sequence[str],
 ) -> QuadraticFormRestrictionResult:
     """Restrict to an ordered coordinate subset of the source axis."""
 
-    source = request.form
-    selected = request.selected_axis
     if (
         not isinstance(selected, (tuple, list))
         or any(not isinstance(label, str) for label in selected)

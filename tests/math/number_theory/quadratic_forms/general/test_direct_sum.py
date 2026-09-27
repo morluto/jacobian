@@ -48,9 +48,7 @@ def _form(
 def test_direct_sum_preserves_factor_order_and_separates_reused_labels() -> None:
     first = _form(("x", "y"), (1, 2), ((0, 1, 3),))
     second = _form(("x",), (5,))
-    result = quadratic_form_direct_sum(
-        QuadraticFormDirectSumRequest(forms=(first, second))
-    )
+    result = quadratic_form_direct_sum((first, second))
 
     assert result.source_forms == (first, second)
     assert result.form.axis == ("qf0_0", "qf0_1", "qf1_0")
@@ -97,7 +95,7 @@ def test_direct_sum_preserves_factor_order_and_separates_reused_labels() -> None
 
 
 def test_empty_sum_is_the_zero_dimensional_form() -> None:
-    result = quadratic_form_direct_sum(QuadraticFormDirectSumRequest(forms=()))
+    result = quadratic_form_direct_sum(())
     assert result.form.axis == ()
     assert result.form.diagonal_coefficients == ()
     assert result.coordinate_inclusions == result.coordinate_projections == ()
@@ -105,9 +103,7 @@ def test_empty_sum_is_the_zero_dimensional_form() -> None:
 
 def test_zero_dimensional_summand_retains_zero_by_nonzero_projection_shape() -> None:
     scalar = _form(("t",), (7,))
-    result = quadratic_form_direct_sum(
-        QuadraticFormDirectSumRequest(forms=(_form((), ()), scalar))
-    )
+    result = quadratic_form_direct_sum((_form((), ()), scalar))
     assert result.coordinate_inclusions[0].row_count == 1
     assert result.coordinate_inclusions[0].column_count == 0
     assert result.coordinate_projections[0].row_count == 0
@@ -129,7 +125,7 @@ def test_direct_sum_admits_aggregate_axis_before_building_maps(
     oversized = _form(tuple(f"x{i}" for i in range(129)), (0,) * 129)
     request = QuadraticFormDirectSumRequest(forms=(oversized,))
     with pytest.raises(OperationResourceAdmissionError) as error:
-        quadratic_form_direct_sum(request)
+        quadratic_form_direct_sum(request.forms)
     assert error.value.errors()[0]["type"] == "quadratic_form.direct_sum_axis_bound"
 
 
@@ -137,7 +133,7 @@ def test_constructed_direct_sum_request_still_admits_axis_at_the_kernel() -> Non
     oversized = _form(tuple(f"x{i}" for i in range(129)), (0,) * 129)
     request = QuadraticFormDirectSumRequest.model_construct(forms=(oversized,))
     with pytest.raises(OperationResourceAdmissionError) as error:
-        quadratic_form_direct_sum(request)
+        quadratic_form_direct_sum(request.forms)
     assert error.value.errors()[0]["type"] == "quadratic_form.direct_sum_axis_bound"
 
 
@@ -150,7 +146,7 @@ def test_direct_sum_admits_aggregate_support_before_building_maps() -> None:
         [(left, right, 1) for left in range(91) for right in range(left + 1, 91)],
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        quadratic_form_direct_sum(QuadraticFormDirectSumRequest(forms=(dense,)))
+        quadratic_form_direct_sum((dense,))
     assert error.value.errors()[0]["type"] == "quadratic_form.direct_sum_support_bound"
 
 
@@ -172,7 +168,7 @@ def test_direct_sum_accepts_the_exact_aggregate_envelope() -> None:
         len(boundary.diagonal_coefficients) + len(boundary.cross_terms)
         == MAX_DIRECT_SUM_FORM_TERMS
     )
-    result = quadratic_form_direct_sum(QuadraticFormDirectSumRequest(forms=(boundary,)))
+    result = quadratic_form_direct_sum((boundary,))
     assert len(result.form.axis) == MAX_DIRECT_SUM_AXIS
     assert len(result.form.cross_terms) == MAX_DIRECT_SUM_FORM_TERMS - len(axis)
     assert type(result).model_validate_json(result.model_dump_json()) == result
@@ -180,7 +176,7 @@ def test_direct_sum_accepts_the_exact_aggregate_envelope() -> None:
 
 def test_inclusion_projection_composition_is_identity_on_each_factor() -> None:
     forms = (_form(("a", "b"), (0, 0)), _form(("c",), (0,)))
-    result = quadratic_form_direct_sum(QuadraticFormDirectSumRequest(forms=forms))
+    result = quadratic_form_direct_sum(forms)
     for inclusion, projection, source in zip(
         result.coordinate_inclusions,
         result.coordinate_projections,
@@ -205,13 +201,19 @@ def test_inclusion_projection_composition_is_identity_on_each_factor() -> None:
 
 
 def test_deserialization_rejects_inconsistent_coordinate_map_shape() -> None:
-    result = quadratic_form_direct_sum(
-        QuadraticFormDirectSumRequest(forms=(_form(("x",), (1,)),))
-    )
+    result = quadratic_form_direct_sum((_form(("x",), (1,)),))
     payload = result.model_dump(mode="python")
     payload["coordinate_inclusions"][0]["column_count"] = 0
     payload["coordinate_inclusions"][0]["entries"] = ((),)
     with pytest.raises(ValueError, match="inclusion has inconsistent dimensions"):
+        QuadraticFormDirectSumResult.model_validate(payload)
+
+
+def test_deserialization_rejects_form_not_equal_to_orthogonal_sum() -> None:
+    result = quadratic_form_direct_sum((_form(("x",), (1,)),))
+    payload = result.model_dump(mode="python")
+    payload["form"]["diagonal_coefficients"] = (_r(2),)
+    with pytest.raises(ValueError, match="orthogonal sum of its factors"):
         QuadraticFormDirectSumResult.model_validate(payload)
 
 
@@ -234,9 +236,7 @@ def test_maximum_admitted_support_and_dense_maps_fit_output_digit_limit() -> Non
 
 def test_deserialization_rejects_maps_beyond_the_output_digit_limit() -> None:
     axis = tuple(f"x{i}" for i in range(16))
-    result = quadratic_form_direct_sum(
-        QuadraticFormDirectSumRequest(forms=(_form(axis, (1,) * 16),))
-    )
+    result = quadratic_form_direct_sum((_form(axis, (1,) * 16),))
     payload = result.model_dump(mode="python")
     payload["coordinate_inclusions"][0]["entries"] = tuple(
         tuple(CanonicalRational.from_integer_ratio(10**9_000, 1) for _ in range(16))

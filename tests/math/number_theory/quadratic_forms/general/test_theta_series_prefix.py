@@ -9,9 +9,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    ThetaSeriesPrefixRequest,
-)
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
     theta_series_prefix,
 )
@@ -58,7 +55,7 @@ def _brute_prefix(
 
 def test_theta_prefix_matches_independent_box_oracle_with_cross_term() -> None:
     form = _form((1, 1), ((0, 1, 1),))
-    result = theta_series_prefix(ThetaSeriesPrefixRequest(form=form, cutoff=12))
+    result = theta_series_prefix(form, 12)
     assert result.coefficients == _brute_prefix(form, 12, 4)
     assert result.coefficients[:5] == (1, 6, 0, 6, 6)
     assert result.form == form
@@ -67,7 +64,7 @@ def test_theta_prefix_matches_independent_box_oracle_with_cross_term() -> None:
 
 def test_theta_prefix_admits_zero_dimensional_positive_definite_form() -> None:
     form = _form(())
-    result = theta_series_prefix(ThetaSeriesPrefixRequest(form=form, cutoff=4))
+    result = theta_series_prefix(form, 4)
     assert result.coefficients == (1, 0, 0, 0, 0)
 
 
@@ -76,22 +73,20 @@ def test_theta_prefix_rejects_nonintegral_and_indefinite_forms() -> None:
         axis=("x",), diagonal_coefficients=({"num": 1, "den": 2},)
     )
     with pytest.raises(OperationDomainValidationError, match="integral"):
-        theta_series_prefix(ThetaSeriesPrefixRequest(form=nonintegral, cutoff=1))
+        theta_series_prefix(nonintegral, 1)
     with pytest.raises(OperationDomainValidationError, match="positive-definite"):
-        theta_series_prefix(ThetaSeriesPrefixRequest(form=_form((1, -1)), cutoff=3))
+        theta_series_prefix(_form((1, -1)), 3)
 
 
 def test_theta_prefix_rejects_nonpositive_definite_singular_form() -> None:
     with pytest.raises(OperationDomainValidationError, match="positive-definite"):
-        theta_series_prefix(
-            ThetaSeriesPrefixRequest(form=_form((1, 1), ((0, 1, 2),)), cutoff=3)
-        )
+        theta_series_prefix(_form((1, 1), ((0, 1, 2),)), 3)
 
 
 def test_theta_prefix_rejects_when_proved_box_exceeds_vector_admission() -> None:
     broad = _form((1, 1, 1, 1, 1, 1, 1))
     with pytest.raises(OperationResourceAdmissionError, match="lattice box"):
-        theta_series_prefix(ThetaSeriesPrefixRequest(form=broad, cutoff=512))
+        theta_series_prefix(broad, 512)
 
 
 def test_theta_prefix_result_requires_complete_prefix_shape() -> None:

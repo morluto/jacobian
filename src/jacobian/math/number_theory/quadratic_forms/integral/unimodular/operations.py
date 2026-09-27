@@ -20,7 +20,6 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral.unimodular._models import (
     MAX_UNIMODULAR_CHANGE_AXIS,
-    UnimodularChangeRequest,
     UnimodularChangeResult,
 )
 
@@ -176,31 +175,35 @@ def _require_canonical_form(form: IntegralQuadraticForm) -> int:
     return n
 
 
-def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
-    if not isinstance(request.form, IntegralQuadraticForm):
+def _preflight(
+    form: IntegralQuadraticForm,
+    matrix_value: IntegerMatrix,
+    target_axis: tuple[str, ...],
+) -> list[list[int]]:
+    if not isinstance(form, IntegralQuadraticForm):
         raise _failure("form_type", "expected a canonical integral quadratic form")
-    if not isinstance(request.matrix, IntegerMatrix):
+    if not isinstance(matrix_value, IntegerMatrix):
         raise _failure("matrix_type", "expected a canonical integer matrix")
-    n = _require_canonical_form(request.form)
+    n = _require_canonical_form(form)
     if (
-        request.matrix.row_count != n
-        or request.matrix.column_count != n
-        or len(request.matrix.entries) != n
-        or len(request.target_axis) != n
-        or any(not isinstance(label, str) for label in request.target_axis)
-        or len(set(request.target_axis)) != n
-        or len(request.form.diagonal_coefficients) != n
+        matrix_value.row_count != n
+        or matrix_value.column_count != n
+        or len(matrix_value.entries) != n
+        or len(target_axis) != n
+        or any(not isinstance(label, str) for label in target_axis)
+        or len(set(target_axis)) != n
+        or len(form.diagonal_coefficients) != n
     ):
         raise _failure("shape", "form, matrix, and axes must share one dimension")
     if any(
         not isinstance(value, int) or isinstance(value, bool)
-        for row in request.matrix.entries
+        for row in matrix_value.entries
         for value in row
-    ) or any(len(row) != n for row in request.matrix.entries):
+    ) or any(len(row) != n for row in matrix_value.entries):
         raise _failure(
             "matrix_entries", "matrix entries must form a square integer matrix"
         )
-    matrix = [[int(value) for value in row] for row in request.matrix.entries]
+    matrix = [[int(value) for value in row] for row in matrix_value.entries]
     if any(
         abs(value) >= 10**MAX_CHANGE_MATRIX_ENTRY_DIGITS
         for row in matrix
@@ -226,8 +229,8 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
         )
 
     coefficient_max = max(
-        [abs(value) for value in request.form.diagonal_coefficients]
-        + [abs(term.coefficient) for term in request.form.cross_terms]
+        [abs(value) for value in form.diagonal_coefficients]
+        + [abs(term.coefficient) for term in form.cross_terms]
         + [0]
     )
     polar_max = max(2 * coefficient_max, coefficient_max)
@@ -250,8 +253,8 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
         )
 
     source_digits = sum(
-        _digits(value) for value in request.form.diagonal_coefficients
-    ) + sum(_digits(term.coefficient) for term in request.form.cross_terms)
+        _digits(value) for value in form.diagonal_coefficients
+    ) + sum(_digits(term.coefficient) for term in form.cross_terms)
     matrix_digits = sum(_digits(value) for row in matrix for value in row)
     target_support = n + n * (n - 1) // 2
     result_digits = (
@@ -265,7 +268,7 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
             "result_growth_bound",
             "source, transport maps, and transformed form exceed the aggregate result bound",
         )
-    estimated_work = 5 * n**3 + n * n + 3 * len(request.form.cross_terms)
+    estimated_work = 5 * n**3 + n * n + 3 * len(form.cross_terms)
     if estimated_work > MAX_CHANGE_WORK:
         raise _resource_failure(
             "work_bound", "unimodular change exceeds the admitted work bound"
@@ -274,13 +277,13 @@ def _preflight(request: UnimodularChangeRequest) -> list[list[int]]:
 
 
 def unimodular_change(
-    request: UnimodularChangeRequest,
+    form: IntegralQuadraticForm,
+    matrix_value: IntegerMatrix,
+    target_axis: tuple[str, ...],
 ) -> UnimodularChangeResult:
     """Return ``Q(M y)`` after proving the supplied integer matrix is unimodular."""
 
-    if not isinstance(request, UnimodularChangeRequest):
-        raise _failure("request_type", "expected a typed unimodular change request")
-    matrix = _preflight(request)
+    matrix = _preflight(form, matrix_value, target_axis)
     determinant = _determinant(matrix)
     if determinant not in (-1, 1):
         raise _failure(
@@ -291,9 +294,9 @@ def unimodular_change(
     inverse = _inverse_unimodular(matrix)
     n = len(matrix)
     polar = [[0] * n for _ in range(n)]
-    for index, coefficient in enumerate(request.form.diagonal_coefficients):
+    for index, coefficient in enumerate(form.diagonal_coefficients):
         polar[index][index] = 2 * coefficient
-    for term in request.form.cross_terms:
+    for term in form.cross_terms:
         polar[term.left][term.right] = term.coefficient
         polar[term.right][term.left] = term.coefficient
 
@@ -328,12 +331,12 @@ def unimodular_change(
         if (value := transformed_polar[left][right]) != 0
     )
     target = IntegralQuadraticForm(
-        axis=request.target_axis,
+        axis=target_axis,
         diagonal_coefficients=tuple(diagonal),
         cross_terms=cross_terms,
     )
     return UnimodularChangeResult(
-        source=request.form,
+        source=form,
         matrix=IntegerMatrix(
             row_count=n,
             column_count=n,

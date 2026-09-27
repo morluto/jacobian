@@ -16,7 +16,6 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
-    ThetaSeriesPrefixRequest,
     ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -155,7 +154,8 @@ def _positive_definite_matrix(
 
 
 def _admit_box_and_output(
-    request: ThetaSeriesPrefixRequest,
+    form: RationalQuadraticForm,
+    cutoff: int,
     support: int,
     determinant_work: int,
     cofactor_work: int,
@@ -163,7 +163,7 @@ def _admit_box_and_output(
     diagonal_cofactors: tuple[int, ...],
 ) -> tuple[int, ...]:
     radii = tuple(
-        isqrt((2 * request.cutoff * cofactor) // determinant)
+        isqrt((2 * cutoff * cofactor) // determinant)
         for cofactor in diagonal_cofactors
     )
     vector_count = 1
@@ -189,7 +189,6 @@ def _admit_box_and_output(
     # The result retains the source form and the coefficient prefix. Bound
     # both by their aggregate decimal digits; per-entry serialization
     # structure scales with the already bounded coefficient count.
-    form = request.form
     source_digits = sum(len(label) for label in form.axis) + 2 * sum(
         canonical_rational_component_digits(value)
         for value in (
@@ -197,7 +196,7 @@ def _admit_box_and_output(
             *(term.coefficient for term in form.cross_terms),
         )
     )
-    output_digits = source_digits + (request.cutoff + 1) * (count_digits + 1)
+    output_digits = source_digits + (cutoff + 1) * (count_digits + 1)
     if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("cutoff",),
@@ -208,7 +207,8 @@ def _admit_box_and_output(
 
 
 def theta_series_prefix(
-    request: ThetaSeriesPrefixRequest,
+    form: RationalQuadraticForm,
+    cutoff: int,
 ) -> ThetaSeriesPrefixResult:
     """Return every coefficient through q^N, with a proved finite search box.
 
@@ -217,11 +217,10 @@ def theta_series_prefix(
     x_i^2 <= (C^-1)_ii * x^T C x <= 2N*(C^-1)_ii for every vector with
     Q(x)<=N. The exact adjugate diagonal therefore yields a complete box.
     """
-    form = request.form
     if (
-        not isinstance(request.cutoff, int)
-        or isinstance(request.cutoff, bool)
-        or not 0 <= request.cutoff <= MAX_THETA_PREFIX_CUTOFF
+        not isinstance(cutoff, int)
+        or isinstance(cutoff, bool)
+        or not 0 <= cutoff <= MAX_THETA_PREFIX_CUTOFF
     ):
         raise OperationDomainValidationError(
             location=("cutoff",),
@@ -231,7 +230,8 @@ def theta_series_prefix(
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
-        request,
+        form,
+        cutoff,
         support,
         determinant_work,
         cofactor_work,
@@ -239,7 +239,7 @@ def theta_series_prefix(
         diagonal_cofactors,
     )
 
-    table = [0] * (request.cutoff + 1)
+    table = [0] * (cutoff + 1)
     diagonal = tuple(value.num for value in form.diagonal_coefficients)
     crosses = tuple(
         (term.left, term.right, term.coefficient.num) for term in form.cross_terms
@@ -254,10 +254,10 @@ def theta_series_prefix(
             coefficient * vector[left] * vector[right]
             for left, right, coefficient in crosses
         )
-        if 0 <= value <= request.cutoff:
+        if 0 <= value <= cutoff:
             table[value] += 1
     return ThetaSeriesPrefixResult(
-        form=form, cutoff=request.cutoff, coefficients=tuple(table)
+        form=form, cutoff=cutoff, coefficients=tuple(table)
     )
 
 

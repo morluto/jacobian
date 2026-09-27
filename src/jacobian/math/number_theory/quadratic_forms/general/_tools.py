@@ -109,25 +109,25 @@ def compute_modular_profile(request: ModularProfileRequest) -> ModularProfileRes
 
 
 def compute_finite_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSumResult:
-    return finite_quadratic_gauss_sum(request)
+    return finite_quadratic_gauss_sum(request.form, request.modulus)
 
 
 def compute_direct_sum(
     request: QuadraticFormDirectSumRequest,
 ) -> QuadraticFormDirectSumResult:
-    return quadratic_form_direct_sum(request)
+    return quadratic_form_direct_sum(request.forms)
 
 
 def compute_coordinate_restriction(
     request: QuadraticFormRestrictionRequest,
 ) -> QuadraticFormRestrictionResult:
-    return quadratic_form_restrict_coordinates(request)
+    return quadratic_form_restrict_coordinates(request.form, request.selected_axis)
 
 
 def compute_finite_box_profile(
     request: FiniteBoxProfileRequest,
 ) -> FiniteBoxProfileResult:
-    return finite_box_value_profile(request)
+    return finite_box_value_profile(request.form, request.radius)
 
 
 def _form_example() -> dict[str, object]:

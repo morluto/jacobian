@@ -15,25 +15,22 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_QUADRATIC_BOX_PROFILE_ROWS,
     MAX_QUADRATIC_BOX_RADIUS,
     MAX_QUADRATIC_BOX_VECTORS,
-    FiniteBoxProfileRequest,
     FiniteBoxProfileResult,
     FiniteBoxProfileRow,
 )
+from jacobian.math.number_theory.quadratic_forms.general.values import (
+    RationalQuadraticForm,
+)
 
 
-def _admit(request: FiniteBoxProfileRequest) -> int:
-    form = request.form
-    if (
-        isinstance(request.radius, bool)
-        or not isinstance(request.radius, int)
-        or request.radius < 0
-    ):
+def _admit(form: RationalQuadraticForm, radius: int) -> int:
+    if isinstance(radius, bool) or not isinstance(radius, int) or radius < 0:
         raise OperationDomainValidationError(
             location=("radius",),
             code="quadratic_form.finite_box_radius",
             message="finite-box radius must be a non-negative integer",
         )
-    if request.radius > MAX_QUADRATIC_BOX_RADIUS:
+    if radius > MAX_QUADRATIC_BOX_RADIUS:
         raise OperationResourceAdmissionError(
             location=("radius",),
             code="quadratic_form.finite_box_radius_bound",
@@ -50,7 +47,7 @@ def _admit(request: FiniteBoxProfileRequest) -> int:
     dimension = len(form.axis)
     support = dimension + len(form.cross_terms)
     vector_count = 1
-    side_length = 2 * request.radius + 1
+    side_length = 2 * radius + 1
     for _ in range(dimension):
         if vector_count > MAX_QUADRATIC_BOX_VECTORS // side_length:
             vector_count = MAX_QUADRATIC_BOX_VECTORS + 1
@@ -78,7 +75,7 @@ def _admit(request: FiniteBoxProfileRequest) -> int:
     coefficient_magnitude = sum(
         abs(value.num) for value in form.diagonal_coefficients
     ) + sum(abs(term.coefficient.num) for term in form.cross_terms)
-    value_digits = len(str(max(1, coefficient_magnitude * request.radius**2)))
+    value_digits = len(str(max(1, coefficient_magnitude * radius**2)))
     count_digits = len(str(vector_count))
     # Admit the worst case of one output row per enumerated vector by
     # aggregate decimal digits: the retained source coefficients and axis
@@ -105,13 +102,12 @@ def _admit(request: FiniteBoxProfileRequest) -> int:
 
 
 def finite_box_value_profile(
-    request: FiniteBoxProfileRequest,
+    form: RationalQuadraticForm,
+    radius: int,
 ) -> FiniteBoxProfileResult:
     """Count every integral vector by its exact form value in ``[-B,B]^n``."""
 
-    vector_count = _admit(request)
-    form = request.form
-    radius = request.radius
+    vector_count = _admit(form, radius)
     diagonal = tuple(value.num for value in form.diagonal_coefficients)
     cross = tuple(
         (term.left, term.right, term.coefficient.num) for term in form.cross_terms

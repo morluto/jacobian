@@ -140,6 +140,57 @@ class UnimodularChangeResult(StrictModel):
             or self.inverse.column_count != dimension
         ):
             raise _error("result_shape", "change maps and forms must share a dimension")
+        if dimension > MAX_UNIMODULAR_CHANGE_AXIS:
+            raise _error("result_shape", "unimodular results are limited to 32 coordinates")
+        matrix = self.matrix.entries
+        inverse = self.inverse.entries
+        for left in range(dimension):
+            for right in range(dimension):
+                product = sum(matrix[left][index] * inverse[index][right] for index in range(dimension))
+                reverse_product = sum(inverse[left][index] * matrix[index][right] for index in range(dimension))
+                expected = int(left == right)
+                if product != expected or reverse_product != expected:
+                    raise _error("result_inverse", "inverse must be two-sided for the change matrix")
+
+        source_cross = {
+            (term.left, term.right): term.coefficient for term in self.source.cross_terms
+        }
+        target_diagonal: list[int] = []
+        target_cross: list[tuple[int, int, int]] = []
+        for left in range(dimension):
+            diagonal = sum(
+                coefficient * matrix[index][left] ** 2
+                for index, coefficient in enumerate(self.source.diagonal_coefficients)
+            )
+            diagonal += sum(
+                coefficient * matrix[first][left] * matrix[second][left]
+                for (first, second), coefficient in source_cross.items()
+            )
+            target_diagonal.append(diagonal)
+            for right in range(left + 1, dimension):
+                cross = sum(
+                    2 * coefficient * matrix[index][left] * matrix[index][right]
+                    for index, coefficient in enumerate(self.source.diagonal_coefficients)
+                )
+                cross += sum(
+                    coefficient
+                    * (
+                        matrix[first][left] * matrix[second][right]
+                        + matrix[first][right] * matrix[second][left]
+                    )
+                    for (first, second), coefficient in source_cross.items()
+                )
+                if cross:
+                    target_cross.append((left, right, cross))
+        if (
+            tuple(target_diagonal) != self.target.diagonal_coefficients
+            or tuple(target_cross)
+            != tuple(
+                (term.left, term.right, term.coefficient)
+                for term in self.target.cross_terms
+            )
+        ):
+            raise _error("result_congruence", "target must equal the exact congruence image Q(M y)")
         return self
 
 

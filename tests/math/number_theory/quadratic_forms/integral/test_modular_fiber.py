@@ -19,7 +19,6 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
     ModularCoordinateVector,
-    ModularEvaluationRequest,
     ModularQuadraticCrossTerm,
 )
 
@@ -48,9 +47,7 @@ def test_mixed_composite_modulus_fibers_match_direct_exhaustive_oracle() -> None
         assert result.polynomial == polynomial and result.target == target
         for vector in result.vectors:
             assert (
-                evaluate_modular_form(
-                    ModularEvaluationRequest(polynomial=polynomial, vector=vector)
-                ).residue
+                evaluate_modular_form(polynomial, vector).residue
                 == target_value
             )
 

@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.matrices.values import IntegerMatrix
@@ -179,14 +179,14 @@ class LatticeVectorCreateRequest(StrictModel):
     """Create one exact vector in a named basis of a finite Cartan datum."""
 
     matrix: CartanMatrix
-    coordinates: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
 
 class _FiniteCartanLatticeVector(StrictModel):
     """Shared structure for vectors in four distinct datum-owned lattices."""
 
     datum: FiniteCartanDatum
-    coordinates: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
     @model_validator(mode="after")
     def require_bounded_datum_axis(self) -> Self:
@@ -1228,7 +1228,7 @@ class WeylWeightOrbitResult(StrictModel):
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 
-    highest_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    highest_weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
     @model_validator(mode="after")
     def require_dominant_weight_axis(self) -> Self:
@@ -1247,8 +1247,8 @@ class WeylDimensionFactor(StrictModel):
 
     positive_root: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
     positive_coroot: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    numerator_pairing: StrictInt = Field(gt=0)
-    denominator_pairing: StrictInt = Field(gt=0)
+    numerator_pairing: ExactInteger = Field(gt=0)
+    denominator_pairing: ExactInteger = Field(gt=0)
 
 
 class WeylDimensionResult(StrictModel):
@@ -1256,8 +1256,8 @@ class WeylDimensionResult(StrictModel):
 
     matrix: CartanMatrix
     weight_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_RANK)
-    highest_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    dimension: StrictInt = Field(ge=1)
+    highest_weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
+    dimension: ExactInteger = Field(ge=1)
     positive_root_factors: tuple[WeylDimensionFactor, ...] = Field(
         min_length=1, max_length=MAX_POSITIVE_ROOTS
     )

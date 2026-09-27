@@ -161,7 +161,7 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
     numerator_digits = 1
     denominator_lcm = 1
     source_digits = 0
-    denominator_work = 0
+    denominators: set[int] = set()
     scaling_work = 0
     for weight in source.weights:
         if (
@@ -204,10 +204,15 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             )
         numerator_digits = max(numerator_digits, num_digits)
         if weight.den != 1:
-            denominator_work += decimal_digit_width(denominator_lcm) * den_digits
-            denominator_lcm = (
-                denominator_lcm // gcd(denominator_lcm, weight.den) * weight.den
-            )
+            denominators.add(weight.den)
+
+    denominator_work = 0
+    for denominator in sorted(denominators):
+        denominator_digits = decimal_digit_width(denominator)
+        denominator_work += decimal_digit_width(denominator_lcm) * denominator_digits
+        denominator_lcm = (
+            denominator_lcm // gcd(denominator_lcm, denominator) * denominator
+        )
 
     # A common denominator is the LCM of distinct input denominators. Repeated
     # equal denominators do not multiply growth; use their product as a safe

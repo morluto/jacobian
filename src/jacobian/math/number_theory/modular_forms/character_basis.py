@@ -273,11 +273,18 @@ def _character_basis_from_admission(
         _domain(
             "character basis precision must reach the space Sturm bound and remain at most 128"
         )
-    work = precision * max(1, dimension) ** 2 * field.degree * 16
-    if field.degree != 2 or precision > MAX_PARI_BASIS_PRECISION or dimension > 32:
-        _domain(
-            "the admitted character basis exceeds its field, precision, or dimension bound"
+    if field.degree != 2 or dimension > 32:
+        _domain("the admitted character basis exceeds its field or dimension bound")
+    if dimension == 0:
+        return ModularCharacterBasis(
+            space=space,
+            basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
+            precision=precision,
+            elements=(),
         )
+    work = precision * max(1, dimension) ** 2 * field.degree * 16
+    if precision > MAX_PARI_BASIS_PRECISION:
+        _domain("the admitted character basis exceeds its precision bound")
     # Reserve the complete value-type coefficient envelope before materializing
     # the backend basis and the cyclotomic RREF output.
     normalized_digits = MAX_CYCLIC_FIELD_ELEMENT_DIGITS

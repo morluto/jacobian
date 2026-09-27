@@ -1,4 +1,4 @@
-# Cyclotomic character coordinates and equality
+# Cyclotomic character-space bases
 
 `ModularFormCoordinates` can represent a vector in the canonical q-Sturm RREF
 basis returned by `modular_form.character_basis.compute` for the bounded
@@ -23,22 +23,11 @@ The basis identifier and first Sturm-determining coefficients are therefore
 stable across requests. These longer exact prefixes support finite operator
 reconstruction while retaining the same space and coefficient-field parent.
 
-The existing `modular_form.equal.check` operation compares two character
-coordinate vectors when they have the identical exact space and canonical
-basis identifier. Equality of vectors is equivalent to equality of the
-represented forms because the q-Sturm RREF basis is linearly independent and
-determining through the Sturm bound. The basis producer checks its dimension
-against the independent formula and verifies the full q-Sturm rank before it
-publishes the basis. Equality revalidates the exact character parent, basis
-identifier, coordinate count, and coefficient field; it does not replay basis
-construction or expand q-series.
-
-This equality slice admits levels at most 39, character unit tables of at most
-24 entries, basis dimension at most 32, field-element coordinates of at most
-256 decimal digits, and exact comparison work at most 1,000,000 units. It
-compares coordinates in the same parent only. Cross-level or cross-character
-transport, nonidentity coefficient-field maps, Hecke actions on these generic
-vectors, and equality of unrelated space presentations remain unsupported.
+The basis producer checks its dimension against the independent formula and
+verifies the full q-Sturm rank before it publishes the basis. Beyond the
+existing character-specific transport and comparison path, these generalized
+bases do not add generic equality, Hecke actions, cross-level transport, or
+nonidentity coefficient-field maps.
 
 [Gamma0 basis construction](modular-forms-gamma0-rational-bases.md) ·
 [Number-theory operations](index.md)

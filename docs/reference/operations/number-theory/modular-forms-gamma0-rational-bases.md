@@ -51,6 +51,8 @@ formula implementation.
 See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
 for the original exact q-prefix and same-space character-coordinate contract.
 Other character spaces and general field-valued Gamma0 bases remain unsupported.
+See [cyclotomic character-space bases](modular-forms-cyclotomic-character-coordinates.md)
+for the order-three dimensions and canonical basis prefixes.
 
 For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
 supports explicit nested-level inclusion from level 13, 26, or 39 into level

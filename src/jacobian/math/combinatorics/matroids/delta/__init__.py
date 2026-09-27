@@ -10,6 +10,7 @@ from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     feasible_size_profile,
     loop_complement,
     minor,
+    twist_polynomial,
     twist_width_profile,
 )
 from jacobian.math.combinatorics.matroids.delta.interlace import (
@@ -46,6 +47,7 @@ __all__ = [
     "minor",
     "relabel",
     "twist",
+    "twist_polynomial",
     "twist_width_profile",
     "upper_matroid",
     "verify_from_feasible_sets",

@@ -23,6 +23,7 @@ def test_public_api_is_small_and_canonical() -> None:
         "minor",
         "relabel",
         "twist",
+        "twist_polynomial",
         "twist_width_profile",
         "upper_matroid",
         "verify_from_feasible_sets",

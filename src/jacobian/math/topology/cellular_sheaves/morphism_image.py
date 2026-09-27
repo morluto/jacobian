@@ -169,6 +169,22 @@ def _require_component_shapes(
             )
 
 
+def _induced_restriction_work(
+    item: SheafRestriction,
+    source_ranks: dict[tuple[str, ...], int],
+    target_ranks: dict[tuple[str, ...], int],
+) -> int:
+    """Bound restriction multiplication and the induced image-coordinate solve."""
+    lower, upper = item.source, item.target
+    lower_target_rank = target_ranks[lower]
+    upper_target_rank = target_ranks[upper]
+    lower_image_rank = min(source_ranks[lower], lower_target_rank)
+    upper_image_rank = min(source_ranks[upper], upper_target_rank)
+    multiply = upper_target_rank * lower_target_rank * lower_image_rank
+    solve = 2 * upper_target_rank**2 * (lower_image_rank + upper_image_rank)
+    return max(1, multiply) + max(1, solve)
+
+
 def _require_component_axes(
     components: tuple[Component, ...],
     cells: tuple[tuple[str, ...], ...],
@@ -275,6 +291,8 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     )
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
+    source_ranks = {cell: len(stalk.basis) for cell, stalk in source_stalks.items()}
+    target_ranks = {cell: len(stalk.basis) for cell, stalk in target_stalks.items()}
     components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}
     canonical_components: list[Component] = []
     for cell, (_key, raw) in zip(cells, value.components, strict=True):
@@ -297,13 +315,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         source_rank = len(source_stalks[cell].basis)
         work += max(1, target_rank**2 * (target_rank + source_rank))
     for item in restrictions.values():
-        left, right = (
-            len(target_stalks[item.source].basis),
-            len(target_stalks[item.target].basis),
-        )
-        induced_rank_bound = min(left, right, MAX_SHEAF_STALK_RANK)
-        work += max(1, right * induced_rank_bound * left)
-        work += max(1, 2 * right**2 * (2 * induced_rank_bound))
+        work += _induced_restriction_work(item, source_ranks, target_ranks)
     reconstruction_work, reconstruction_chars = _parent_reconstruction_bounds(
         (source, target), input_digits=input_digits
     )

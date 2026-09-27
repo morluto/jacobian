@@ -63,6 +63,40 @@ def _sheaf(rank: int = 2, field: SheafField = SheafField.RATIONAL, prime=None):
     return result.sheaf
 
 
+def _varying_rank_sheaf():
+    complex_ = canonical_complex(("a", "b"), (("a", "b"),))
+    faces = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    ranks = {("a",): 8, ("b",): 1, ("a", "b"): 1}
+    covers = tuple(
+        (face, coface)
+        for coface in faces
+        for face in faces
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+    result = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(
+            SheafStalk(simplex=face, basis=tuple(f"x{i}" for i in range(ranks[face])))
+            for face in faces
+        ),
+        tuple(
+            CoverRestrictionMatrix(
+                source=face,
+                target=coface,
+                entries=tuple(
+                    tuple(_q(int(row == column)) for column in range(ranks[face]))
+                    for row in range(ranks[coface])
+                ),
+            )
+            for face, coface in covers
+        ),
+    )
+    assert result.sheaf is not None
+    return result.sheaf
+
+
 def _block_matrix(components, faces, row_rank: int, column_rank: int):
     rows = len(faces) * row_rank
     columns = len(faces) * column_rank
@@ -348,3 +382,34 @@ def test_image_rejects_oversized_component_before_resource_scan(monkeypatch) -> 
     )
     with pytest.raises(OperationDomainValidationError, match="stalk axes"):
         image_of_morphism(malformed)
+
+
+def test_induced_restriction_work_uses_both_image_ranks() -> None:
+    from jacobian.math.topology.cellular_sheaves.morphism_image import (
+        _induced_restriction_work,
+    )
+
+    sheaf = _varying_rank_sheaf()
+    ranks = {stalk.simplex: len(stalk.basis) for stalk in sheaf.stalks}
+    restriction = next(
+        item
+        for item in sheaf.cover_restrictions
+        if item.source == ("a",) and item.target == ("a", "b")
+    )
+    assert _induced_restriction_work(restriction, ranks, ranks) == 82
+    identity = morphism(
+        sheaf,
+        sheaf,
+        tuple(
+            (
+                cell,
+                tuple(
+                    tuple(_q(int(row == column)) for column in range(ranks[cell]))
+                    for row in range(ranks[cell])
+                ),
+            )
+            for cell in sheaf.canonical_face_order
+        ),
+    )
+    image = image_of_morphism(identity).image
+    assert {stalk.simplex: len(stalk.basis) for stalk in image.stalks} == ranks

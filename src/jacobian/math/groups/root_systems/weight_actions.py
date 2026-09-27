@@ -20,7 +20,6 @@ from jacobian.math.groups.root_systems._models import (
     FiniteCartanDatum,
     WeightLatticeVector,
     WeylElement,
-    WeylElementWeightActionRequest,
 )
 from jacobian.math.groups.root_systems.operations import (
     _admit_lattice_coordinates,
@@ -167,26 +166,6 @@ def _weight_action_preflight(rank: int) -> tuple[int, int]:
     return allocation_cells, rational_bits
 
 
-def _request_inputs(
-    request: WeylElementWeightActionRequest,
-) -> tuple[WeylElement, WeightLatticeVector]:
-    if not isinstance(request, WeylElementWeightActionRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="root_system.weyl_weight_action_request_type",
-            message="request must bind a Weyl element and weight-lattice vector",
-        )
-    try:
-        element, weight = request.element, request.weight
-    except AttributeError as error:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="root_system.weyl_weight_action_request_shape",
-            message="request must contain both the Weyl element and weight value",
-        ) from error
-    return element, weight
-
-
 def _weyl_parent(element: WeylElement) -> CartanMatrix:
     if not isinstance(element, WeylElement):
         raise OperationDomainValidationError(
@@ -299,10 +278,10 @@ def _canonical_weight(
 
 
 def weyl_element_act_on_weight(
-    request: WeylElementWeightActionRequest,
+    element: WeylElement,
+    weight: WeightLatticeVector,
 ) -> WeightLatticeVector:
     """Return the exact image in the same ordered fundamental-weight lattice."""
-    element, weight = _request_inputs(request)
     cartan = _weyl_parent(element)
     rows = cartan.entries
     # Re-admission closes at most 120 positive roots, checks each image, then

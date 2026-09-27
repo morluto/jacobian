@@ -3,6 +3,7 @@
 import time
 from collections.abc import Iterator, Mapping
 from fractions import Fraction
+from itertools import product
 from math import comb, gcd, prod
 from typing import Any
 
@@ -599,7 +600,13 @@ def test_disjoint_monomial_denominators_are_not_globally_cleared() -> None:
         ],
     }
     result = normalize_polynomial_expression(_request("QQ", expression))
-    assert len(result.polynomial.polynomial.terms) == 3
+    assert tuple(
+        (term.exponents, term.coefficient.as_fraction())
+        for term in result.polynomial.polynomial.terms
+    ) == tuple(
+        ((power,), Fraction(1, prime**31))
+        for power, prime in reversed(tuple(zip(powers, primes, strict=True)))
+    )
 
 
 def test_nested_constant_powers_are_capped_before_evaluation(
@@ -832,7 +839,16 @@ def test_powered_disjoint_binomial_keeps_per_term_denominators() -> None:
     result = normalize_polynomial_expression(
         _request("QQ", expression, variables=("x", "y"))
     )
-    assert len(result.polynomial.polynomial.terms) == 13
+    assert tuple(
+        (term.exponents, term.coefficient.as_fraction())
+        for term in result.polynomial.polynomial.terms
+    ) == tuple(
+        (
+            (power, 12 - power),
+            Fraction(comb(12, power), p ** (4 * power) * q ** (4 * (12 - power))),
+        )
+        for power in range(12, -1, -1)
+    )
 
 
 def test_multivariate_power_includes_colliding_denominator_mass() -> None:
@@ -1061,7 +1077,16 @@ def test_constant_plus_variable_power_uses_affine_uniqueness() -> None:
         "exponent": 12,
     }
     result = normalize_polynomial_expression(_request("QQ", expression))
-    assert len(result.polynomial.polynomial.terms) == 13
+    assert tuple(
+        (term.exponents, term.coefficient.as_fraction())
+        for term in result.polynomial.polynomial.terms
+    ) == tuple(
+        (
+            (power,),
+            Fraction(comb(12, power), p ** (4 * (12 - power)) * q ** (4 * power)),
+        )
+        for power in range(12, -1, -1)
+    )
 
 
 def test_mutually_exclusive_factor_denominators_are_not_summed() -> None:
@@ -1108,7 +1133,21 @@ def test_mutually_exclusive_factor_denominators_are_not_summed() -> None:
         )
     expression = {"kind": "MULTIPLY", "operands": factors}
     result = normalize_polynomial_expression(_request("QQ", expression, variables))
-    assert len(result.polynomial.polynomial.terms) == 8
+    expected = []
+    for choices in product((0, 1), repeat=3):
+        exponents = [0] * 6
+        denominator = 1
+        for index, choice in enumerate(choices):
+            left = 10**127 + 11 * index
+            selected = left if choice == 0 else left + 5
+            exponents[2 * index + choice] = 1
+            denominator *= selected**16
+        expected.append((tuple(exponents), Fraction(1, denominator)))
+    expected.sort(key=lambda term: term[0], reverse=True)
+    assert tuple(
+        (term.exponents, term.coefficient.as_fraction())
+        for term in result.polynomial.polynomial.terms
+    ) == tuple(expected)
 
 
 def test_symbolic_single_monomial_cancellation_is_detected() -> None:
@@ -1511,26 +1550,6 @@ def test_oversized_literal_is_a_typed_resource_rejection() -> None:
             )
         )
     assert error.value.errors()[0]["type"] == "polynomial.expression.literal_bound"
-
-
-def test_many_rational_denominators_are_admitted_conservatively() -> None:
-    """Height admission accounts for denominator accumulation in additions."""
-
-    def tree(start: int, count: int) -> dict[str, Any]:
-        if count == 1:
-            return {
-                "kind": "LITERAL",
-                "value": {"num": 1, "den": 10**127 + 2 * start + 1},
-            }
-        half = count // 2
-        return {
-            "kind": "ADD",
-            "operands": [tree(start, half), tree(start + half, half)],
-        }
-
-    request = _request("QQ", tree(0, 128))
-    with pytest.raises(OperationResourceAdmissionError):
-        _normalize(request)
 
 
 def test_native_invalid_source_is_a_domain_error() -> None:

@@ -57,6 +57,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylWeightOrbitRequest,
     WeylWeightOrbitResult,
 )
+from jacobian.math.groups.root_systems._weight_character_models import (
+    HighestWeightCharacterRequest,
+    IrreducibleWeightCharacter,
+)
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
     cartan_matrix_from_type,
@@ -93,6 +97,7 @@ from jacobian.math.groups.root_systems.operations import (
 )
 from jacobian.math.groups.root_systems.root_actions import weyl_element_act_on_root
 from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
+from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -226,7 +231,7 @@ def _run_weyl_element_inverse(request: WeylElementInverseRequest) -> WeylElement
 def _run_weyl_element_weight_action(
     request: WeylElementWeightActionRequest,
 ) -> WeightLatticeVector:
-    return weyl_element_act_on_weight(request)
+    return weyl_element_act_on_weight(request.element, request.weight)
 
 
 def _run_weyl_element_root_action(
@@ -267,6 +272,12 @@ def _run_weyl_weight_orbit(
 
 def _run_weyl_dimension(request: WeylDimensionRequest) -> WeylDimensionResult:
     return weyl_dimension(request.matrix, request.highest_weight)
+
+
+def _run_highest_weight_character(
+    request: HighestWeightCharacterRequest,
+) -> IrreducibleWeightCharacter:
+    return highest_weight_character(request.matrix, request.highest_weight)
 
 
 _A2 = {
@@ -1271,6 +1282,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "ordered simple coroots."
                 ),
                 input={**_A2, "weight": [1, 0]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="root_system.highest_weight_character.compute",
+        title="Compute an exact irreducible type-A highest-weight character",
+        description=(
+            "Return the complete weight-multiplicity table for an irreducible "
+            "type-A representation using its dominant integral highest weight."
+        ),
+        request_type=HighestWeightCharacterRequest,
+        result_type=IrreducibleWeightCharacter,
+        run=_run_highest_weight_character,
+        tags=("algebra", "root-system", "representation", "character", "exact"),
+        discovery_terms=(
+            "highest weight character",
+            "weight multiplicities",
+            "Weyl character",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_adjoint_character",
+                description="Compute the eight-dimensional adjoint character of A2.",
+                input={"matrix": _A2["matrix"], "highest_weight": [1, 1]},
             ),
         ),
     ),

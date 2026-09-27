@@ -199,15 +199,12 @@ def _ascending(polynomial: RationalPolynomial) -> list[Fraction]:
 
 
 def test_roots_annihilate_support_in_quotient_field() -> None:
-    _sympy_quotient_check(exact_splitting_field(_poly(-2, 0, 1)))
+    field = exact_splitting_field(_poly(-2, 0, 1))
+    _sympy_quotient_check(field)
     _sympy_quotient_check(exact_splitting_field(_poly(-2, 0, 0, 1)))
     _sympy_quotient_check(exact_splitting_field(_poly(0, 0, 1)))
-
-
-def test_forged_root_fails_quotient_reconstruction() -> None:
     from sympy import Poly, Rational, Symbol
 
-    field = exact_splitting_field(_poly(-2, 0, 1))
     t = Symbol("t")
     modulus = Poly(
         [
@@ -255,24 +252,12 @@ def test_conjugation_is_a_nontrivial_involution() -> None:
     # It is nontrivial: some root moves under conjugation.
     roots = [list(_fractions(root.coefficients_ascending)) for root in field.roots]
     assert any(conjugate_element(root, conjugation, modulus) != root for root in roots)
+    identity_map = [Fraction(0), Fraction(1)] + [Fraction(0)] * (degree - 2)
+    assert all(conjugate_element(root, identity_map, modulus) == root for root in roots)
     # It permutes the retained root family.
     assert {tuple(conjugate_element(root, conjugation, modulus)) for root in roots} == {
         tuple(root) for root in roots
     }
-
-
-def test_forged_identity_conjugation_misses_root_motion() -> None:
-    """The identity map is an automorphism but not complex conjugation here."""
-    field = exact_splitting_field(_poly(-2, 0, 0, 1))
-    modulus = _ascending(field.defining_polynomial)
-    degree = len(modulus) - 1
-    true_conjugation = list(_fractions(field.conjugation_coefficients))
-    identity_map = [Fraction(0), Fraction(1)] + [Fraction(0)] * (degree - 2)
-    roots = [list(_fractions(root.coefficients_ascending)) for root in field.roots]
-    assert any(
-        conjugate_element(root, true_conjugation, modulus) != root for root in roots
-    )
-    assert all(conjugate_element(root, identity_map, modulus) == root for root in roots)
 
 
 def test_root_rectangles_are_pairwise_distinct() -> None:

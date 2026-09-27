@@ -19,6 +19,7 @@ from jacobian.math.topology.chain_complexes.operations import (
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
     HomologyGroup,
     HomologyGroupValue,
@@ -35,6 +36,7 @@ from jacobian.math.topology.chain_complexes.values import (
 __all__ = [
     "AssociatedGradedResult",
     "ChainComplexValue",
+    "ChainMapValue",
     "CoefficientRing",
     "FilteredSubspace",
     "FiltrationLevel",

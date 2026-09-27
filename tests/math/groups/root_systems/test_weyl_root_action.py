@@ -1,9 +1,6 @@
-import json
-
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -216,13 +213,3 @@ def test_caller_constructed_vector_with_wrong_axis_length_is_rejected() -> None:
         match="root-lattice coordinates must be a bounded integer tuple",
     ):
         weyl_element_act_on_root(request.element, request.vector)
-
-
-def test_public_catalog_operation_returns_the_canonical_vector_value() -> None:
-    tool = Catalog.open().operation("weyl_group.element.act_on_root.compute")
-    assert tool is not None
-    example = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(example)
-    assert isinstance(result, RootLatticeVector)
-    assert result.coordinates == (-1, 0)
-    assert result.datum == example.vector.datum

@@ -19,6 +19,7 @@ from typing import Annotated, Any, Literal, Self
 from pydantic import Field, StrictInt, StringConstraints, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._models import StrictModel
 from jacobian.math.topology._models import FiniteSimplicialComplex, Simplex
 
@@ -32,6 +33,21 @@ MAX_SHEAF_DERIVED_RESTRICTIONS = 2048
 MAX_SHEAF_RESTRICTION_CELLS = 65536
 MAX_SHEAF_DIAMONDS = 65536
 MAX_SHEAF_COHOMOLOGY_CELLS = 65536
+MAX_SHEAF_HODGE_MATRIX_CELLS = 65536
+MAX_SHEAF_HODGE_CUBIC_WORK = 4000000
+MAX_SHEAF_HODGE_RESULT_DIGIT_WORK = 8000000
+MAX_SHEAF_SECTION_ROWS = (
+    MAX_SHEAF_SIMPLICES * (MAX_SHEAF_SIMPLICES - 1) // 2 * MAX_SHEAF_STALK_RANK
+)
+MAX_SHEAF_SECTION_MATRIX_CELLS = 65536
+MAX_SHEAF_SECTION_OUTPUT_CELLS = 200000
+MAX_SHEAF_SECTION_WORK = 4000000
+MAX_SHEAF_SECTION_RESULT_DIGIT_WORK = 8000000
+MAX_SHEAF_SECTION_RESTRICTION_DIGIT_WORK = 34000000
+MAX_SHEAF_MORPHISM_COMPONENT_CELLS = 32768
+MAX_SHEAF_MORPHISM_WORK = 4000000
+MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK = 8000000
+MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK = 8000000
 
 BasisLabel = Annotated[
     str,
@@ -40,6 +56,21 @@ BasisLabel = Annotated[
         strict=True,
     ),
 ]
+
+SheafScalar = CanonicalRational | StrictInt
+
+
+def sheaf_scalar_digits(value: SheafScalar) -> int:
+    if isinstance(value, CanonicalRational):
+        return canonical_rational_component_digits(value)
+    if type(value) is int and value.bit_length() <= 215:
+        return len(str(abs(value)))
+    return MAX_SHEAF_ENTRY_DIGITS + 1
+
+
+def sheaf_scalar_digit_work(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
+    """Bound exact scalar component digits across a collection of values."""
+    return count * digits
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -58,6 +89,29 @@ def _require_canonical_simplex(simplex: Simplex, *, label: str) -> None:
         raise _validation_error(
             "simplex_not_canonical", f"{label} must have distinct vertices"
         )
+
+
+def _require_field_scalars(
+    matrices: tuple[tuple[tuple[SheafScalar, ...], ...], ...],
+    coefficient_field: SheafField,
+    prime: int | None,
+    *,
+    label: str,
+) -> None:
+    for matrix in matrices:
+        for row in matrix:
+            for scalar in row:
+                if coefficient_field is SheafField.RATIONAL:
+                    valid = isinstance(scalar, CanonicalRational)
+                else:
+                    valid = type(scalar) is int and (
+                        prime is None or 0 <= scalar < prime
+                    )
+                if not valid:
+                    raise _validation_error(
+                        "scalar_parent_mismatch",
+                        f"{label} scalars must use the declared coefficient field's canonical type",
+                    )
 
 
 class SheafField(StrEnum):
@@ -110,13 +164,13 @@ class CoverRestrictionMatrix(StrictModel):
     ``source`` must be a codimension-one face of ``target``.  ``entries`` is
     a dense row-major matrix whose rows index the target stalk basis and whose
     columns index the source stalk basis, matching ``rho: F(source) ->
-    F(target)``.  Entries are exact scalar strings: integers or ``num/den``
-    rationals over ``QQ`` and integer representatives over ``GF(p)``.
+    F(target)``. Entries are exact field values: ``CanonicalRational`` over
+    ``QQ`` and strict integer representatives over ``GF(p)``.
     """
 
     source: Simplex
     target: Simplex
-    entries: tuple[tuple[str, ...], ...] = Field(default=())
+    entries: tuple[tuple[SheafScalar, ...], ...] = Field(default=())
 
     @model_validator(mode="after")
     def require_rectangular_matrix(self) -> Self:
@@ -140,6 +194,16 @@ class FromCoverMapsRequest(StrictModel):
     stalks: tuple[SheafStalk, ...] = Field(default=())
     cover_maps: tuple[CoverRestrictionMatrix, ...] = Field(default=())
 
+    @model_validator(mode="after")
+    def require_cover_scalar_parent(self) -> Self:
+        _require_field_scalars(
+            tuple(item.entries for item in self.cover_maps),
+            self.coefficient_field,
+            self.prime,
+            label="cover map",
+        )
+        return self
+
 
 class SheafRestriction(StrictModel):
     """One exact restriction ``rho: F(source) -> F(target)``.
@@ -154,7 +218,7 @@ class SheafRestriction(StrictModel):
     target: Simplex
     row_basis: tuple[BasisLabel, ...] = Field(default=())
     column_basis: tuple[BasisLabel, ...] = Field(default=())
-    entries: tuple[tuple[str, ...], ...] = Field(default=())
+    entries: tuple[tuple[SheafScalar, ...], ...] = Field(default=())
     cover_path: tuple[Simplex, ...] = Field(default=())
 
     @model_validator(mode="after")
@@ -234,6 +298,12 @@ class FiniteCellularSheaf(StrictModel):
                     "restriction_basis_unbound",
                     "restriction axes must equal the declared stalk bases",
                 )
+            _require_field_scalars(
+                (restriction.entries,),
+                self.coefficient_field,
+                self.prime,
+                label="restriction",
+            )
             key = (restriction.source, restriction.target)
             if key in seen_pairs:
                 raise _validation_error(
@@ -254,19 +324,38 @@ class FiniteCellularSheaf(StrictModel):
         return cls.model_construct(**values)
 
 
+class SheafSubcomplexRequest(StrictModel):
+    """Restrict a checked cellular sheaf to an included subcomplex."""
+
+    sheaf: FiniteCellularSheaf
+    subcomplex: FiniteSimplicialComplex
+
+
+class SheafSubcomplexResult(StrictModel):
+    """The source sheaf and its restriction to an included subcomplex."""
+
+    source: FiniteCellularSheaf
+    subcomplex: FiniteCellularSheaf
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 class DiamondCounterexample(StrictModel):
     """Two saturated cover paths with unequal composed restriction matrices.
 
     Both paths run from ``source`` to ``target`` through distinct intermediate
-    cells; the matrices are the exact composites in canonical scalar text.
+    cells; the matrices are the exact composites in the declared field's
+    canonical scalar type.
     """
 
     source: Simplex
     target: Simplex
     first_path: tuple[Simplex, ...]
     second_path: tuple[Simplex, ...]
-    first_matrix: tuple[tuple[str, ...], ...]
-    second_matrix: tuple[tuple[str, ...], ...]
+    first_matrix: tuple[tuple[SheafScalar, ...], ...]
+    second_matrix: tuple[tuple[SheafScalar, ...], ...]
 
     @model_validator(mode="after")
     def require_parallel_paths(self) -> Self:
@@ -368,6 +457,256 @@ class SheafCochainCoordinate(StrictModel):
         return self
 
 
+class SheafSectionCompatibilityAxis(StrictModel):
+    """One equation row for a target-stalk coordinate of a face inclusion."""
+
+    source: Simplex
+    target: Simplex
+    target_basis_label: BasisLabel
+
+    @model_validator(mode="after")
+    def require_face_inclusion(self) -> Self:
+        _require_canonical_simplex(self.source, label="compatibility source")
+        _require_canonical_simplex(self.target, label="compatibility target")
+        if not set(self.source) < set(self.target):
+            raise _validation_error(
+                "section_compatibility_axis",
+                "compatibility rows must bind a strict face inclusion",
+            )
+        return self
+
+
+class SheafSectionEvaluation(StrictModel):
+    """Projection from section coordinates into one based stalk."""
+
+    simplex: Simplex
+    stalk_basis: tuple[BasisLabel, ...] = Field(max_length=MAX_SHEAF_STALK_RANK)
+    section_basis: tuple[BasisLabel, ...] = Field(max_length=MAX_SHEAF_TOTAL_STALK_RANK)
+    entries: tuple[tuple[SheafScalar, ...], ...] = Field(
+        max_length=MAX_SHEAF_STALK_RANK
+    )
+
+    @model_validator(mode="after")
+    def require_evaluation_shape(self) -> Self:
+        _require_canonical_simplex(self.simplex, label="evaluation simplex")
+        if len(self.entries) != len(self.stalk_basis) or any(
+            len(row) != len(self.section_basis) for row in self.entries
+        ):
+            raise _validation_error(
+                "section_evaluation_axis",
+                "evaluation entries must map the section basis into the stalk basis",
+            )
+        return self
+
+
+class SheafSectionSpace(StrictModel):
+    """Exact source-bound vector space of compatible stalk assignments.
+
+    The dense compatibility matrix has one row for every target-stalk basis
+    coordinate of every strict comparable face pair. Its columns follow
+    ``ambient_basis``. ``basis_coordinates`` stores nullspace vectors as rows,
+    and each stalk evaluation matrix maps those section-basis coordinates into
+    the declared stalk basis.
+    """
+
+    sheaf: FiniteCellularSheaf
+    dimension: StrictInt = Field(ge=0, le=MAX_SHEAF_TOTAL_STALK_RANK)
+    section_basis: tuple[BasisLabel, ...] = Field(max_length=MAX_SHEAF_TOTAL_STALK_RANK)
+    ambient_basis: tuple[SheafCochainCoordinate, ...] = Field(
+        max_length=MAX_SHEAF_TOTAL_STALK_RANK
+    )
+    compatibility_row_axes: tuple[SheafSectionCompatibilityAxis, ...] = Field(
+        max_length=MAX_SHEAF_SECTION_ROWS
+    )
+    compatibility_matrix: tuple[tuple[SheafScalar, ...], ...] = Field(
+        max_length=MAX_SHEAF_SECTION_ROWS
+    )
+    basis_coordinates: tuple[tuple[SheafScalar, ...], ...] = Field(
+        max_length=MAX_SHEAF_TOTAL_STALK_RANK
+    )
+    evaluations: tuple[SheafSectionEvaluation, ...] = Field(
+        max_length=MAX_SHEAF_SIMPLICES
+    )
+
+    @model_validator(mode="after")
+    def require_section_space_axes(self) -> Self:
+        if len(set(self.section_basis)) != len(self.section_basis):
+            raise _validation_error(
+                "section_basis_not_unique", "section basis labels must be unique"
+            )
+        if self.dimension != len(self.section_basis) or self.dimension != len(
+            self.basis_coordinates
+        ):
+            raise _validation_error(
+                "section_dimension_mismatch",
+                "dimension must match the section basis and coordinate vectors",
+            )
+        expected_ambient = tuple(
+            SheafCochainCoordinate(simplex=stalk.simplex, basis_label=label)
+            for stalk in self.sheaf.stalks
+            for label in stalk.basis
+        )
+        if self.ambient_basis != expected_ambient:
+            raise _validation_error(
+                "section_ambient_axis",
+                "ambient basis must follow the source sheaf's canonical stalk axes",
+            )
+        ambient_dimension = len(self.ambient_basis)
+        if any(len(vector) != ambient_dimension for vector in self.basis_coordinates):
+            raise _validation_error(
+                "section_basis_coordinates_axis",
+                "each section basis vector must use the complete ambient stalk axis",
+            )
+        if len(self.compatibility_matrix) != len(self.compatibility_row_axes) or any(
+            len(row) != ambient_dimension for row in self.compatibility_matrix
+        ):
+            raise _validation_error(
+                "section_compatibility_matrix_axis",
+                "compatibility matrix rows must match their labelled ambient axes",
+            )
+        expected_axes = tuple(
+            (source, target, label)
+            for source in self.sheaf.canonical_face_order
+            for target in self.sheaf.canonical_face_order
+            if set(source) < set(target)
+            for label in next(
+                stalk.basis for stalk in self.sheaf.stalks if stalk.simplex == target
+            )
+        )
+        actual_axes = tuple(
+            (axis.source, axis.target, axis.target_basis_label)
+            for axis in self.compatibility_row_axes
+        )
+        if actual_axes != expected_axes:
+            raise _validation_error(
+                "section_compatibility_row_axes",
+                "compatibility rows must cover every comparable pair in canonical order",
+            )
+        if tuple(item.simplex for item in self.evaluations) != tuple(
+            stalk.simplex for stalk in self.sheaf.stalks
+        ):
+            raise _validation_error(
+                "section_evaluation_coverage",
+                "evaluations must cover every source stalk in canonical order",
+            )
+        for evaluation, stalk in zip(self.evaluations, self.sheaf.stalks, strict=True):
+            if (
+                evaluation.stalk_basis != stalk.basis
+                or evaluation.section_basis != self.section_basis
+            ):
+                raise _validation_error(
+                    "section_evaluation_context",
+                    "each evaluation must retain its source stalk and section bases",
+                )
+            _require_field_scalars(
+                (evaluation.entries,),
+                self.sheaf.coefficient_field,
+                self.sheaf.prime,
+                label="section evaluation",
+            )
+        _require_field_scalars(
+            (self.compatibility_matrix, self.basis_coordinates),
+            self.sheaf.coefficient_field,
+            self.sheaf.prime,
+            label="section space",
+        )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
+class SheafSectionRestriction(StrictModel):
+    """The induced linear map on sections for one included subcomplex."""
+
+    source: SheafSectionSpace
+    target: SheafSectionSpace
+    entries: tuple[tuple[SheafScalar, ...], ...] = Field(
+        max_length=MAX_SHEAF_TOTAL_STALK_RANK
+    )
+
+    @model_validator(mode="after")
+    def require_restriction_axes(self) -> Self:
+        if len(self.entries) != self.target.dimension or any(
+            len(row) != self.source.dimension for row in self.entries
+        ):
+            raise _validation_error(
+                "section_restriction_axis",
+                "section restriction entries must map the source section basis to the target section basis",
+            )
+        if (
+            sheaf_scalar_digit_work(
+                sum(len(row) for row in self.entries),
+                max(
+                    (
+                        sheaf_scalar_digits(value)
+                        for row in self.entries
+                        for value in row
+                    ),
+                    default=1,
+                ),
+            )
+            > MAX_SHEAF_SECTION_RESTRICTION_DIGIT_WORK
+        ):
+            raise _validation_error(
+                "section_restriction_output",
+                "section restriction scalar values exceed their declared digit-work bound",
+            )
+        source_cells = set(self.source.sheaf.canonical_face_order)
+        target_cells = set(self.target.sheaf.canonical_face_order)
+        if not target_cells.issubset(source_cells):
+            raise _validation_error(
+                "section_restriction_parent",
+                "the target section sheaf must be a subcomplex restriction of the source",
+            )
+        if (self.source.sheaf.coefficient_field, self.source.sheaf.prime) != (
+            self.target.sheaf.coefficient_field,
+            self.target.sheaf.prime,
+        ):
+            raise _validation_error(
+                "section_restriction_field", "section restriction fields must agree"
+            )
+        _require_field_scalars(
+            (self.entries,),
+            self.source.sheaf.coefficient_field,
+            self.source.sheaf.prime,
+            label="section restriction",
+        )
+        source_stalks = {stalk.simplex: stalk for stalk in self.source.sheaf.stalks}
+        if any(
+            source_stalks.get(stalk.simplex) != stalk
+            for stalk in self.target.sheaf.stalks
+        ):
+            raise _validation_error(
+                "section_restriction_stalks",
+                "target stalk axes must be retained exactly from the source sheaf",
+            )
+        source_maps = {
+            (item.source, item.target): item
+            for item in (
+                *self.source.sheaf.cover_restrictions,
+                *self.source.sheaf.derived_restrictions,
+            )
+        }
+        target_maps = (
+            *self.target.sheaf.cover_restrictions,
+            *self.target.sheaf.derived_restrictions,
+        )
+        if any(
+            source_maps.get((item.source, item.target)) != item for item in target_maps
+        ):
+            raise _validation_error(
+                "section_restriction_maps",
+                "target restriction maps must be retained exactly from the source sheaf",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 class SheafCohomologyGroup(StrictModel):
     """Cohomology in one degree with representative cocycles.
 
@@ -380,7 +719,7 @@ class SheafCohomologyGroup(StrictModel):
     cocycle_rank: StrictInt = Field(ge=0)
     coboundary_rank: StrictInt = Field(ge=0)
     betti_number: StrictInt = Field(ge=0)
-    cocycle_representatives: tuple[tuple[str, ...], ...] = Field(default=())
+    cocycle_representatives: tuple[tuple[SheafScalar, ...], ...] = Field(default=())
 
 
 class SheafCoboundaryLedgerEntry(StrictModel):
@@ -407,7 +746,9 @@ class SheafCohomologyResult(StrictModel):
     sheaf: FiniteCellularSheaf
     cochain_dimensions: tuple[StrictInt, ...] = Field(min_length=1)
     cochain_bases: tuple[tuple[SheafCochainCoordinate, ...], ...] = Field(min_length=1)
-    coboundary_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(default=())
+    coboundary_matrices: tuple[tuple[tuple[SheafScalar, ...], ...], ...] = Field(
+        default=()
+    )
     groups: tuple[SheafCohomologyGroup, ...] = Field(min_length=1)
     euler_characteristic_stalk: StrictInt
     euler_characteristic_cohomology: StrictInt
@@ -460,6 +801,13 @@ class SheafCohomologyResult(StrictModel):
                     "coboundary_shape_mismatch",
                     f"coboundary {degree} must have shape C^{degree + 1} x C^{degree}",
                 )
+        _require_field_scalars(
+            self.coboundary_matrices
+            + tuple(group.cocycle_representatives for group in self.groups),
+            self.sheaf.coefficient_field,
+            self.sheaf.prime,
+            label="cohomology result",
+        )
         if tuple(group.degree for group in self.groups) != tuple(range(dimension + 1)):
             raise _validation_error(
                 "cohomology_degree_coverage_invalid",
@@ -528,12 +876,122 @@ class SheafCohomologyResult(StrictModel):
         return cls.model_construct(**values)
 
 
+class SheafHodgeRequest(StrictModel):
+    """Request exact Hodge operators for standard rational stalk metrics."""
+
+    sheaf: FiniteCellularSheaf
+
+
+class SheafHodgeResult(StrictModel):
+    """Hodge Laplacians and harmonic bases in source-bound cochain axes.
+
+    The standard positive-definite coordinate metric is recorded on every
+    stalk by its identity Gram matrix. Cochain metrics are their orthogonal
+    direct sums in the retained degreewise cochain bases.
+    """
+
+    sheaf: FiniteCellularSheaf
+    cochain_bases: tuple[tuple[SheafCochainCoordinate, ...], ...]
+    stalk_gram_matrices: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
+    up_laplacians: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
+    down_laplacians: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
+    laplacians: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
+    harmonic_bases: tuple[tuple[tuple[SheafScalar, ...], ...], ...]
+
+    @model_validator(mode="after")
+    def require_hodge_axes(self) -> Self:
+        stalks = self.sheaf.stalks
+        if len(self.stalk_gram_matrices) != len(stalks):
+            raise _validation_error(
+                "hodge_metric_stalk_coverage",
+                "one coordinate Gram matrix is required per source stalk",
+            )
+        for stalk, gram in zip(stalks, self.stalk_gram_matrices, strict=True):
+            rank = len(stalk.basis)
+            if len(gram) != rank or any(len(row) != rank for row in gram):
+                raise _validation_error(
+                    "hodge_metric_axis_mismatch",
+                    "stalk Gram matrix axes must match their source basis",
+                )
+            expected_gram = tuple(
+                tuple(
+                    (
+                        CanonicalRational(num=int(i == j), den=1)
+                        if self.sheaf.coefficient_field is SheafField.RATIONAL
+                        else int(i == j)
+                    )
+                    for j in range(rank)
+                )
+                for i in range(rank)
+            )
+            if gram != expected_gram:
+                raise _validation_error(
+                    "hodge_metric_not_standard",
+                    "this operation supports the standard identity stalk metrics",
+                )
+        dimensions = tuple(len(axis) for axis in self.cochain_bases)
+        if len(dimensions) != self.sheaf.complex.dimension + 1:
+            raise _validation_error(
+                "hodge_degree_coverage",
+                "Hodge axes must cover every source simplex degree",
+            )
+        if any(
+            len(matrices) != len(dimensions)
+            for matrices in (
+                self.up_laplacians,
+                self.down_laplacians,
+                self.laplacians,
+                self.harmonic_bases,
+            )
+        ):
+            raise _validation_error(
+                "hodge_degree_coverage",
+                "one Hodge matrix and harmonic basis are required per degree",
+            )
+        for degree, size in enumerate(dimensions):
+            for family, matrices in (
+                ("up", self.up_laplacians),
+                ("down", self.down_laplacians),
+                ("Hodge", self.laplacians),
+            ):
+                matrix = matrices[degree]
+                if len(matrix) != size or any(len(row) != size for row in matrix):
+                    raise _validation_error(
+                        "hodge_matrix_axis_mismatch",
+                        f"the degree-{degree} {family} Laplacian must be square on its cochain axis",
+                    )
+            basis = self.harmonic_bases[degree]
+            if any(len(vector) != size for vector in basis):
+                raise _validation_error(
+                    "harmonic_basis_axis_mismatch",
+                    f"degree-{degree} harmonic vectors must use its cochain axis",
+                )
+        _require_field_scalars(
+            self.stalk_gram_matrices
+            + self.up_laplacians
+            + self.down_laplacians
+            + self.laplacians
+            + self.harmonic_bases,
+            self.sheaf.coefficient_field,
+            self.sheaf.prime,
+            label="Hodge result",
+        )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 __all__ = [
     "MAX_SHEAF_COHOMOLOGY_CELLS",
     "MAX_SHEAF_COVER_MAPS",
     "MAX_SHEAF_DERIVED_RESTRICTIONS",
     "MAX_SHEAF_DIAMONDS",
     "MAX_SHEAF_ENTRY_DIGITS",
+    "MAX_SHEAF_HODGE_CUBIC_WORK",
+    "MAX_SHEAF_HODGE_MATRIX_CELLS",
+    "MAX_SHEAF_HODGE_RESULT_DIGIT_WORK",
     "MAX_SHEAF_PRIME",
     "MAX_SHEAF_RESTRICTION_CELLS",
     "MAX_SHEAF_SIMPLICES",
@@ -551,6 +1009,8 @@ __all__ = [
     "SheafCohomologyRequest",
     "SheafCohomologyResult",
     "SheafField",
+    "SheafHodgeRequest",
+    "SheafHodgeResult",
     "SheafObstruction",
     "SheafObstructionCode",
     "SheafOutcome",

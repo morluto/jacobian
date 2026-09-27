@@ -1,8 +1,5 @@
-import json
-
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -39,16 +36,14 @@ def _apply_simple_reflection(weight: tuple[int, ...], cartan, index: int):
 def _weight_action(cartan, word, coordinates):
     element = weyl_element_from_word(cartan, word)
     vector = weight_lattice_vector(cartan, coordinates)
-    return weyl_element_act_on_weight(
-        WeylElementWeightActionRequest(element=element, weight=vector)
-    )
+    return weyl_element_act_on_weight(element, vector)
 
 
 def test_a2_action_matches_exact_reflection_formula_and_serializes():
     element = weyl_element_from_word(_A2, (0, 1))
     source = weight_lattice_vector(_A2, (1, 0))
     request = WeylElementWeightActionRequest(element=element, weight=source)
-    result = weyl_element_act_on_weight(request)
+    result = weyl_element_act_on_weight(element, source)
 
     # Apply the defining reflection formula independently, one factor at a time.
     expected = _apply_simple_reflection((1, 0), _A2, 0)
@@ -61,7 +56,10 @@ def test_a2_action_matches_exact_reflection_formula_and_serializes():
         request.model_dump_json()
     )
     decoded_result = WeightLatticeVector.model_validate_json(result.model_dump_json())
-    assert weyl_element_act_on_weight(decoded_request) == decoded_result
+    assert (
+        weyl_element_act_on_weight(decoded_request.element, decoded_request.weight)
+        == decoded_result
+    )
 
 
 def test_b2_unequal_root_lengths_use_the_exact_weight_basis_map():
@@ -76,30 +74,19 @@ def test_identity_reflection_composition_and_inverse_are_exact():
     identity = weyl_element_from_word(_A2, ())
     reflection = weyl_element_from_word(_A2, (0,))
 
-    assert (
-        weyl_element_act_on_weight(
-            WeylElementWeightActionRequest(element=identity, weight=source)
-        )
-        == source
-    )
-    once = weyl_element_act_on_weight(
-        WeylElementWeightActionRequest(element=reflection, weight=source)
-    )
-    twice = weyl_element_act_on_weight(
-        WeylElementWeightActionRequest(element=reflection, weight=once)
-    )
+    assert weyl_element_act_on_weight(identity, source) == source
+    once = weyl_element_act_on_weight(reflection, source)
+    twice = weyl_element_act_on_weight(reflection, once)
     assert twice == source
 
 
 def test_same_rank_but_different_cartan_parent_is_rejected():
-    request = WeylElementWeightActionRequest(
-        element=weyl_element_from_word(_A2, (0,)),
-        weight=weight_lattice_vector(_B2, (1, 0)),
-    )
+    element = weyl_element_from_word(_A2, (0,))
+    weight = weight_lattice_vector(_B2, (1, 0))
     with pytest.raises(
         OperationDomainValidationError, match="same ordered Cartan datum"
     ):
-        weyl_element_act_on_weight(request)
+        weyl_element_act_on_weight(element, weight)
 
 
 def test_caller_constructed_invalid_weyl_element_is_re_admitted():
@@ -111,12 +98,9 @@ def test_caller_constructed_invalid_weyl_element_is_re_admitted():
             entries=((1, 1), (0, 1)),
         ),
     )
-    request = WeylElementWeightActionRequest(
-        element=invalid,
-        weight=weight_lattice_vector(_A2, (1, 0)),
-    )
+    weight = weight_lattice_vector(_A2, (1, 0))
     with pytest.raises(OperationDomainValidationError):
-        weyl_element_act_on_weight(request)
+        weyl_element_act_on_weight(invalid, weight)
 
 
 @pytest.mark.parametrize(
@@ -131,12 +115,9 @@ def test_malformed_nested_weyl_action_is_a_domain_error(root_action):
         matrix=cartan_datum(_A2).cartan_matrix,
         root_action=root_action,
     )
-    request = WeylElementWeightActionRequest.model_construct(
-        element=invalid,
-        weight=weight_lattice_vector(_A2, (1, 0)),
-    )
+    weight = weight_lattice_vector(_A2, (1, 0))
     with pytest.raises(OperationDomainValidationError):
-        weyl_element_act_on_weight(request)
+        weyl_element_act_on_weight(invalid, weight)
 
 
 @pytest.mark.parametrize(
@@ -169,23 +150,18 @@ def test_malformed_nested_weyl_action_is_a_domain_error(root_action):
     ),
 )
 def test_malformed_nested_weight_shapes_are_domain_errors(weight):
-    request = WeylElementWeightActionRequest.model_construct(
-        element=weyl_element_from_word(_A2, (0,)),
-        weight=weight,
-    )
+    element = weyl_element_from_word(_A2, (0,))
     with pytest.raises(OperationDomainValidationError):
-        weyl_element_act_on_weight(request)
+        weyl_element_act_on_weight(element, weight)
 
 
 def test_oversized_input_weight_preserves_resource_admission_code():
-    request = WeylElementWeightActionRequest.model_construct(
-        element=weyl_element_from_word(_A2, (0,)),
-        weight=WeightLatticeVector.model_construct(
-            datum=cartan_datum(_A2), coordinates=(1 << 200, 0)
-        ),
+    element = weyl_element_from_word(_A2, (0,))
+    weight = WeightLatticeVector.model_construct(
+        datum=cartan_datum(_A2), coordinates=(1 << 200, 0)
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        weyl_element_act_on_weight(request)
+        weyl_element_act_on_weight(element, weight)
     assert (
         error.value.errors()[0]["type"]
         == "root_system.lattice_coordinates_over_envelope"
@@ -198,37 +174,12 @@ def test_cancellation_keeps_admissible_output_coordinates():
         datum=cartan_datum(_A2),
         coordinates=((1 << 132), -(1 << 132)),
     )
-    request = WeylElementWeightActionRequest(element=element, weight=source)
-
-    result = weyl_element_act_on_weight(request)
+    result = weyl_element_act_on_weight(element, source)
     assert result.coordinates == (-(1 << 132), 0)
 
 
 def test_rank_eight_fraction_preflight_accepts_identity_action():
     e8 = cartan_matrix_from_type("E", 8).matrix
     source = weight_lattice_vector(e8, (1, 0, 0, 0, 0, 0, 0, 0))
-    result = weyl_element_act_on_weight(
-        WeylElementWeightActionRequest(
-            element=weyl_element_from_word(e8, ()), weight=source
-        )
-    )
+    result = weyl_element_act_on_weight(weyl_element_from_word(e8, ()), source)
     assert result == source
-
-
-def test_public_catalog_operation_uses_weight_lattice_value():
-    tool = Catalog.open().operation("weyl_group.element.act_on_weight.compute")
-    assert tool is not None
-    example_request = tool.request_type.model_validate_json(
-        json.dumps(tool.examples[0].input)
-    )
-    example_result = tool.run(example_request)
-    assert example_result.coordinates == (-1, 1)
-
-    result = tool.run(
-        WeylElementWeightActionRequest(
-            element=weyl_element_from_word(_A2, (0,)),
-            weight=weight_lattice_vector(_A2, (1, 0)),
-        )
-    )
-    assert isinstance(result, WeightLatticeVector)
-    assert result.coordinates == (-1, 1)

@@ -10,7 +10,9 @@ from typing import Literal
 
 from pydantic import ValidationError
 
+from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._execution import request_checkpoint
+from jacobian.canonical import decimal_digit_width, encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -35,6 +37,8 @@ from jacobian.math.logic.automata.tree.values import (
     MAX_TA_SYMBOLS,
     MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_WORK,
+    MAX_TREE_COUNT_HEIGHT,
+    MAX_TREE_COUNT_OUTPUT_BYTES,
     BottomUpTreeAutomaton,
     CompleteDeterministicBottomUpTreeAutomaton,
     DeterministicBottomUpTreeAutomaton,
@@ -53,6 +57,7 @@ from jacobian.math.logic.automata.tree.values import (
 __all__ = [
     "ReachableStateProfile",
     "accepted_tree_count",
+    "accepted_tree_height_profile",
     "boolean_product_tree_automata",
     "complement_tree_automaton",
     "complete_deterministic_tree_automaton",
@@ -1272,6 +1277,136 @@ def _accepted_tree_count_admitted(
         for state_subset, count in counts_by_size[tree_size].items()
         if state_subset & final_mask
     )
+
+
+def _admit_tree_height(max_height: object) -> int:
+    """Admit a native height argument before recurrence work."""
+
+    if type(max_height) is not int:
+        raise OperationDomainValidationError(
+            location=("max_height",),
+            code="tree_automata.height_count_height_type",
+            message="max_height must be an integer",
+        )
+    if not 0 <= max_height <= MAX_TREE_COUNT_HEIGHT:
+        raise OperationResourceAdmissionError(
+            location=("max_height",),
+            code="tree_automata.height_count_height_bound",
+            message=f"max_height must be between 0 and {MAX_TREE_COUNT_HEIGHT}",
+        )
+    return max_height
+
+
+def accepted_tree_height_profile(
+    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+    max_height: int,
+) -> tuple[int, ...]:
+    """Count accepted trees of height at most 0 through ``max_height``.
+
+    Leaves have height zero. Complete determinism assigns each ranked tree one
+    state, so the recurrence counts distinct input trees without counting runs.
+    """
+
+    max_height = _admit_tree_height(max_height)
+    if not isinstance(automaton, CompleteDeterministicBottomUpTreeAutomaton):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.height_count_complete_automaton",
+            message="height-prefix counting requires a complete deterministic automaton",
+        )
+
+    has_ground_trees = any(rank == 0 for rank in automaton.arity)
+    transition_work = sum(len(row.child_states) + 1 for row in automaton.transitions)
+    estimated_work = (
+        (max_height + 1) * (transition_work + automaton.state_count)
+        if automaton.final_states and has_ground_trees
+        else 0
+    )
+    if estimated_work > MAX_TREE_AUTOMATON_WORK:
+        raise OperationResourceAdmissionError(
+            location=("automaton", "transitions"),
+            code="tree_automata.height_count_work_bound",
+            message="height-prefix counting exceeds the admitted transition-work bound",
+        )
+
+    count_cap = 10**MAX_CANONICAL_INTEGER_DIGITS
+    if automaton.final_states:
+        nullary_count = sum(rank == 0 for rank in automaton.arity)
+        total_tree_bound = nullary_count
+        digit_bounds = [
+            decimal_digit_width(total_tree_bound) if total_tree_bound else 1
+        ]
+        for _height in range(1, max_height + 1):
+            next_bound = nullary_count
+            for rank in automaton.arity:
+                if rank:
+                    next_bound = _capped_add(
+                        next_bound,
+                        _capped_power(total_tree_bound, rank, count_cap),
+                        count_cap,
+                    )
+            total_tree_bound = next_bound
+            if total_tree_bound >= count_cap:
+                raise OperationResourceAdmissionError(
+                    location=("max_height",),
+                    code="tree_automata.height_count_integer_bound",
+                    message=(
+                        "the all-trees upper bound exceeds the admitted exact-integer "
+                        f"limit of {MAX_CANONICAL_INTEGER_DIGITS} decimal digits"
+                    ),
+                )
+            digit_bounds.append(
+                decimal_digit_width(total_tree_bound) if total_tree_bound else 1
+            )
+    else:
+        digit_bounds = [1] * (max_height + 1)
+
+    input_bytes = len(encode_strict_json(automaton.model_dump(mode="json")))
+    output_bytes = input_bytes + sum(digit_bounds) + 3 * (max_height + 1) + 128
+    if output_bytes > MAX_TREE_COUNT_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("max_height",),
+            code="tree_automata.height_count_output_bound",
+            message="the source automaton and height count profile exceed the output bound",
+        )
+    if not automaton.final_states or not any(
+        not transition.child_states for transition in automaton.transitions
+    ):
+        return (0,) * (max_height + 1)
+
+    counts = [0] * automaton.state_count
+    accepted = set(automaton.final_states)
+    profile = []
+
+    for height in range(max_height + 1):
+        request_checkpoint("while counting tree heights")
+        next_counts = [0] * automaton.state_count
+        for transition in automaton.transitions:
+            if not transition.child_states:
+                next_counts[transition.target_state] += 1
+            elif height:
+                trees = prod(counts[state] for state in transition.child_states)
+                next_counts[transition.target_state] += trees
+        counts = next_counts
+        profile.append(sum(counts[state] for state in accepted))
+
+    return tuple(profile)
+
+
+def _capped_add(left: int, right: int, cap: int) -> int:
+    return min(cap, left + right)
+
+
+def _capped_power(base: int, exponent: int, cap: int) -> int:
+    result = 1
+    factor = base
+    while exponent:
+        if exponent & 1:
+            result = min(cap, result * factor)
+        exponent >>= 1
+        if exponent:
+            factor = min(cap, factor * factor)
+    return result
 
 
 def _accumulate_symbol_trees(

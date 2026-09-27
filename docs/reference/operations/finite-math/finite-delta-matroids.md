@@ -35,12 +35,35 @@ The catalog also exposes exact twists, widths, duals, deletion/contraction
 minors, binary principal-minor reconstruction, relabelling, and the
 subset-distance interlace polynomial. These are separate mathematical
 postconditions rather than fields of the recognition result. Graph conversions,
-other interlace or transition polynomials, lower/upper matroids, and graph
-local-complement profiles remain outside the current contract.
+other interlace or transition polynomials, and graph local-complement profiles
+remain outside the current contract.
 
-`delta_matroid.twist.compute` returns the canonical twisted
-`FiniteDeltaMatroid`. `delta_matroid.width.compute` returns the exact width
-`max(|F|)-min(|F|)` over the complete feasible family.
+`delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
+The native `lower_matroid` and `upper_matroid` conversions return canonical
+`FiniteBasisMatroid` values directly, whose bases are all minimum-cardinality or
+all maximum-cardinality feasible sets, respectively. These deterministic
+projections remain available through the Python API without catalog
+declarations. The source symmetric-exchange axiom is replayed at each operation
+boundary, and the extremal-bases theorem establishes basis exchange for the
+returned values. Constructing or deserializing a generic `FiniteBasisMatroid`
+checks its canonical structure and cardinalities only; consumers of authored
+carriers must call `require_basis_exchange()` before relying on the matroid
+claim. The lower/upper matroid theorem is stated in Section 6.1 of Dupont, Fink,
+and Moci, [*Universal Tutte characters via combinatorial
+coalgebras*](https://doi.org/10.5802/alco.35).
+
+These conversions retain the 16,384 source-membership, 2,048 UTF-8 source-label,
+and 250,000 source exchange-work limits. The target `FiniteBasisMatroid` admits
+at most 64 ground labels, 4,096 basis rows, 65,536 basis memberships, 1,024
+UTF-8 bytes per label, 16,384 aggregate label bytes, and 2,000,000 worst-case
+basis-exchange candidate checks. Output bounds are checked before materializing
+the selected basis family. A source with more than 64 ground elements remains a
+valid delta-matroid input but is refused for these conversions because the
+canonical basis carrier cannot represent that output size.
+
+`delta_matroid.width.compute` returns the exact width
+`max(|F|)-min(|F|)` over the complete feasible family and has no extra row
+ceiling.
 
 `delta_matroid.relabel.compute` renames and reorders the ground axis through a
 bijective `target_to_source` map. Each feasible subset is transported by the

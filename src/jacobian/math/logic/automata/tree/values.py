@@ -26,6 +26,8 @@ MAX_TA_ARITY = 16
 MAX_RUN_TREE_NODES = 4096
 MAX_RUN_TREE_DEPTH = 128
 MAX_TREE_AUTOMATON_WORK = 2_000_000
+MAX_TREE_COUNT_HEIGHT = 100
+MAX_TREE_COUNT_OUTPUT_BYTES = 4 * 1024 * 1024
 MAX_REACHABILITY_WITNESS_NODES = 4096
 MAX_TREE_AUTOMATON_REACHABILITY_WORK = 30_000_000
 
@@ -99,7 +101,9 @@ class RegularTreeGrammar(StrictModel):
                     "grammar_rank_mismatch",
                     "production child count must match its ranked symbol",
                 )
-            if any(child >= self.nonterminal_count for child in production.children):
+            if any(
+                not 0 <= child < self.nonterminal_count for child in production.children
+            ):
                 raise _validation_error(
                     "grammar_child_out_of_range",
                     "production children must be declared nonterminals",
@@ -717,6 +721,8 @@ __all__ = [
     "MAX_TA_TRANSITIONS",
     "MAX_TREE_AUTOMATON_REACHABILITY_WORK",
     "MAX_TREE_AUTOMATON_WORK",
+    "MAX_TREE_COUNT_HEIGHT",
+    "MAX_TREE_COUNT_OUTPUT_BYTES",
     "BottomUpTreeAutomaton",
     "CompleteDeterministicBottomUpTreeAutomaton",
     "DeterministicBottomUpTreeAutomaton",

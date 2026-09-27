@@ -9,6 +9,8 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.tree._models import (
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
+    AcceptedTreeHeightProfileRequest,
+    AcceptedTreeHeightProfileResult,
     NondeterministicRunCountsRequest,
     NondeterministicRunCountsResult,
     RankedTreePositionsRequest,
@@ -38,6 +40,7 @@ from jacobian.math.logic.automata.tree.operations import (
     _accepted_tree_count_admitted,
     _nondeterministic_run_counts_admitted,
     _tree_state_chart_unchecked,
+    accepted_tree_height_profile,
     boolean_product_tree_automata,
     complement_tree_automaton,
     complete_deterministic_tree_automaton,
@@ -79,6 +82,12 @@ def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
     )
 
 
+def compute_tree_automaton_state_algebra(
+    request: TreeAutomatonStateAlgebraRequest,
+) -> FiniteAlgebra:
+    return deterministic_tree_automaton_state_algebra(request.automaton)
+
+
 def compute_accepted_tree_count(
     request: AcceptedTreeCountRequest,
 ) -> AcceptedTreeCountResult:
@@ -89,6 +98,17 @@ def compute_accepted_tree_count(
         request,
         count=_accepted_tree_count_admitted(request.automaton, request.tree_size),
         estimated_work_bound=estimated_work_bound,
+    )
+
+
+def compute_accepted_tree_height_profile(
+    request: AcceptedTreeHeightProfileRequest,
+) -> AcceptedTreeHeightProfileResult:
+    return AcceptedTreeHeightProfileResult._from_kernel(
+        request,
+        counts_by_height=accepted_tree_height_profile(
+            request.automaton, request.max_height
+        ),
     )
 
 
@@ -117,6 +137,8 @@ def compute_regular_tree_grammar_to_automaton(
         grammar=request.grammar,
         automaton=regular_tree_grammar_to_automaton(request.grammar),
     )
+
+
 def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
@@ -151,14 +173,6 @@ def compute_tree_automaton_trim(
     """Restrict an automaton to its reachable and productive states."""
 
     return trim_tree_automaton(request.automaton)
-
-
-def compute_tree_automaton_state_algebra(
-    request: TreeAutomatonStateAlgebraRequest,
-) -> FiniteAlgebra:
-    """Interpret each ranked symbol as its complete operation table."""
-
-    return deterministic_tree_automaton_state_algebra(request.automaton)
 
 
 def compute_tree_automaton_determinize(
@@ -533,6 +547,72 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="tree_automaton.accepted_tree_height_profile.compute",
+        title="Count accepted trees through each height",
+        description=(
+            "Return the exact number of distinct accepted ranked trees of height "
+            "at most h for every h from zero through max_height. Leaves have "
+            "height zero. The operation requires a complete deterministic "
+            "bottom-up automaton; transition work, exact integer digits, and "
+            "aggregate output bytes are admitted before the recurrence runs."
+        ),
+        request_type=AcceptedTreeHeightProfileRequest,
+        result_type=AcceptedTreeHeightProfileResult,
+        run=compute_accepted_tree_height_profile,
+        tags=("tree-automata", "counting", "height", "exact"),
+        discovery_terms=(
+            "accepted ranked trees by height",
+            "tree language height count",
+        ),
+        examples=(
+            OperationExample(
+                name="count_through_height_one",
+                description="Count accepted trees with zero or one edge below the root.",
+                input={"automaton": _RUN_EXAMPLE["automaton"], "max_height": 1},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.nondeterministic.run_counts.compute",
+        title="Count accepting runs by tree size",
+        description=(
+            "Count accepting runs of a nondeterministic bottom-up tree automaton "
+            "for every node size from 1 through max_size. A run is one state "
+            "assignment over a ranked tree; the same tree contributes multiple "
+            "times when it has multiple accepting assignments. This differs from "
+            "accepted_tree_count, which counts distinct trees once. Transition "
+            "work, exact integer digits, and profile output are bounded before "
+            "dynamic programming."
+        ),
+        request_type=NondeterministicRunCountsRequest,
+        result_type=NondeterministicRunCountsResult,
+        run=compute_nondeterministic_run_counts,
+        tags=("tree-automata", "counting", "exact", "nondeterministic"),
+        examples=(
+            OperationExample(
+                name="nullary_runs",
+                description=(
+                    "The leaf has two possible states; every f-node is final "
+                    "from either child state, so a single tree can have two runs."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0},
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                            {"symbol": 1, "child_states": [0], "target_state": 0},
+                            {"symbol": 1, "child_states": [1], "target_state": 0},
+                        ],
+                        "final_states": [0],
+                    },
+                    "max_size": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="ranked_tree.positions.compute",
         title="List all positions in a ranked tree",
         description=(
@@ -601,46 +681,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="tree_automaton.nondeterministic.run_counts.compute",
-        title="Count accepting runs by tree size",
-        description=(
-            "Count accepting runs of a nondeterministic bottom-up tree automaton "
-            "for every node size from 1 through max_size. A run is one state "
-            "assignment over a ranked tree; the same tree contributes multiple "
-            "times when it has multiple accepting assignments. This differs from "
-            "accepted_tree_count, which counts distinct trees once. Transition "
-            "work, exact integer digits, and profile output are bounded before "
-            "dynamic programming."
-        ),
-        request_type=NondeterministicRunCountsRequest,
-        result_type=NondeterministicRunCountsResult,
-        run=compute_nondeterministic_run_counts,
-        tags=("tree-automata", "counting", "exact", "nondeterministic"),
-        examples=(
-            OperationExample(
-                name="nullary_runs",
-                description=(
-                    "The leaf has two possible states; every f-node is final "
-                    "from either child state, so a single tree can have two runs."
-                ),
-                input={
-                    "automaton": {
-                        "state_count": 2,
-                        "arity": [0, 1],
-                        "transitions": [
-                            {"symbol": 0, "child_states": [], "target_state": 0},
-                            {"symbol": 0, "child_states": [], "target_state": 1},
-                            {"symbol": 1, "child_states": [0], "target_state": 0},
-                            {"symbol": 1, "child_states": [1], "target_state": 0},
-                        ],
-                        "final_states": [0],
-                    },
-                    "max_size": 3,
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="regular_tree_grammar.to_automaton.compute",
         title="Translate a regular tree grammar to a tree automaton",
         description=(
@@ -688,28 +728,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the finite algebra on the complete automaton state set whose "
             "operation tree_symbol_j is the transition function for ranked symbol "
             "j. Carrier positions preserve every state, including unreachable "
-            "states; symbol order and arity are retained in the algebra signature. "
-            "The result represents transition evaluation and does not include the "
-            "automaton's accepting-state subset. Carrier, arity, signature, and "
-            "expanded table-cell bounds are checked before table construction."
+            "states; symbol order and arity are retained. The result excludes the "
+            "accepting-state subset, and table bounds are checked before construction."
         ),
         request_type=TreeAutomatonStateAlgebraRequest,
         result_type=FiniteAlgebra,
         run=compute_tree_automaton_state_algebra,
         tags=("tree-automata", "universal-algebra", "exact"),
-        discovery_terms=(
-            "tree automaton state algebra",
-            "finite algebra of tree transitions",
-            "evaluate ranked tree in transition algebra",
-        ),
+        discovery_terms=("tree automaton state algebra", "finite algebra of tree transitions"),
         examples=(
             OperationExample(
                 name="ranked_symbol_operations",
                 description=(
-                    "For a complete deterministic input automaton—exactly one "
-                    "transition for every ranked symbol and child-state tuple—"
-                    "interpret the nullary and binary ranked symbols as "
-                    "operations on the exact automaton state set."
+                    "The input is complete: it has exactly one transition for each "
+                    "ranked symbol and child-state tuple. Interpret its symbols as "
+                    "operations on the full automaton state set."
                 ),
                 input={
                     "automaton": {

@@ -42,7 +42,7 @@ def _space(weight: int, kind: str = "M") -> ModularFormSpace:
 
 
 def test_global_equality_rejects_incomplete_constructed_coordinate_values() -> None:
-    with pytest.raises(OperationDomainValidationError, match="required fields"):
+    with pytest.raises(OperationDomainValidationError, match="canonical tuple axis"):
         modular_form_coordinates_equal(
             ModularFormCoordinates.model_construct(),
             ModularFormCoordinates.model_construct(),

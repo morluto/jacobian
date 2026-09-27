@@ -199,7 +199,9 @@ def test_csp_template_preflight_guards_missing_nested_template() -> None:
     instance = FiniteCspInstance.model_construct(constraints=())
     with pytest.raises(OperationDomainValidationError) as exc_info:
         relabel_csp_template_carrier(instance, ())
-    assert exc_info.value.errors()[0]["type"] == "relational.relabeling.csp_template_type"
+    assert (
+        exc_info.value.errors()[0]["type"] == "relational.relabeling.csp_template_type"
+    )
 
 
 def test_relabeling_tools_are_searchable_in_relational_namespace() -> None:

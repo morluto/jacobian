@@ -7,7 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.automata.petri_nets import (
     PetriNet,
@@ -15,6 +14,7 @@ from jacobian.math.logic.automata.petri_nets import (
     place_set_support,
 )
 from jacobian.math.logic.automata.petri_nets._models import PlaceSetSupportResult
+from jacobian.math.logic.automata.petri_nets._tools import TOOLS
 
 
 def test_profile_returns_complete_support_and_both_predicates() -> None:
@@ -47,7 +47,7 @@ def test_empty_place_set_has_vacuous_support_predicates() -> None:
 
 def test_profile_rejects_a_place_outside_its_net_axis() -> None:
     net = PetriNet(place_count=1, transition_count=0, pre=((),), post=((),))
-    with pytest.raises(ValueError, match="subset must use the net place axis"):
+    with pytest.raises(OperationDomainValidationError, match="net place axis"):
         place_set_support(net, PetriPlaceSubset(places=(1,)))
 
 
@@ -68,6 +68,14 @@ def test_native_out_of_axis_place_gets_the_stable_domain_error() -> None:
         place_set_support(net, PetriPlaceSubset(places=(2,)))
     assert type(excinfo.value) is OperationDomainValidationError
     assert excinfo.value.errors()[0]["type"] == "petri_net.place_axis"
+
+
+def test_forged_native_place_subset_gets_owner_domain_error() -> None:
+    net = PetriNet(place_count=1, transition_count=0, pre=((),), post=((),))
+    forged = PetriPlaceSubset.model_construct(places=(-1,))
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        place_set_support(net, forged)
+    assert excinfo.value.errors()[0]["type"] == "petri_net.place_subset_shape"
 
 
 def test_support_profiles_match_exhaustive_arc_enumeration() -> None:
@@ -110,7 +118,11 @@ def test_serialized_profile_rejects_negative_transition_indices() -> None:
 
 
 def test_catalog_declares_the_support_profile_operation() -> None:
-    tool = Catalog.open().operation("petri_net.place_set.support_profile.compute")
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.place_set.support_profile.compute"
+    )
     assert tool is not None
     result = tool.run(
         tool.request_type.model_validate(

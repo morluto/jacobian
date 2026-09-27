@@ -37,6 +37,8 @@ MAX_MARKING_CONFLICT_PROFILE_PAIRS = (
 )
 MAX_MARKING_COMMUTATION_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_MARKING_COMMUTATION_PROFILE_WORK = 100_000
+MAX_FIRING_SEQUENCE_REPLAY_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_PUMPING_WITNESS_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_REACHABLE_DEAD_MARKINGS_OUTPUT_BYTES = 10 * 1024 * 1024
 MAX_TERMINAL_SCC_PROFILE_WORK = 1_000_000
 MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES = 10 * 1024 * 1024
@@ -257,6 +259,48 @@ def _marking_commutation_profile_output_bound(net: PetriNet, marking: Marking) -
         + 1024  # keys, statuses, blocked metadata, and JSON punctuation
     )
     return 2 * replay_bound + 1024  # two order replays and outer profile fields
+
+
+def _firing_sequence_replay_output_bound(
+    net: PetriNet, marking: Marking, sequence_length: int
+) -> int:
+    """Bound retained replay values before constructing prefix markings."""
+
+    net_bytes = len(net.model_dump_json().encode("utf-8"))
+    source_marking_bytes = len(marking.model_dump_json().encode("utf-8"))
+    # Each prefix keeps the source marking's parent convention; tokens can
+    # widen from one digit to four, the MAX_PETRI_MARKING decimal width.
+    derived_marking_bytes = source_marking_bytes + 3 * net.place_count
+    prefix_bytes = sequence_length * derived_marking_bytes
+    numeric_bytes = 10 * (
+        1 + sequence_length + net.transition_count + 2 * net.place_count
+    )
+    return (
+        net_bytes
+        + source_marking_bytes
+        + derived_marking_bytes
+        + prefix_bytes
+        + numeric_bytes
+        + 1024
+    )
+
+
+def _pumping_witness_output_bound(
+    net: PetriNet, marking: Marking, sequence_length: int
+) -> int:
+    """Bound an outer pumping result together with its embedded replay."""
+
+    net_bytes = len(net.model_dump_json().encode("utf-8"))
+    source_marking_bytes = len(marking.model_dump_json().encode("utf-8"))
+    ledger_bytes = _firing_sequence_replay_output_bound(net, marking, sequence_length)
+    return (
+        ledger_bytes
+        + net_bytes
+        + source_marking_bytes
+        + 4 * sequence_length
+        + 6 * net.place_count
+        + 1024
+    )
 
 
 def _marking_conflict_profile_output_bound(
@@ -499,11 +543,6 @@ class StateEquationRequest(StrictModel):
             raise _validation_error(
                 "state_equation_count_sign", "transition counts must be nonnegative"
             )
-        if sum(self.transition_counts) > MAX_STATE_EQUATION_OCCURRENCES:
-            raise _validation_error(
-                "state_equation_occurrence_bound",
-                "total transition count exceeds the admitted bound",
-            )
         return self
 
 
@@ -634,7 +673,7 @@ class ReachableDeadMarkingsResult(StrictModel):
     net: PetriNet
     initial_marking: Marking
     max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    dead_markings: tuple[tuple[int, ...], ...] = Field(
+    dead_markings: tuple[Marking, ...] = Field(
         max_length=MAX_REACHABILITY_STATES
     )
     truncated: bool
@@ -642,21 +681,24 @@ class ReachableDeadMarkingsResult(StrictModel):
     @model_validator(mode="after")
     def require_canonical_profile(self) -> Self:
         _require_result_marking(self.net, self.initial_marking)
-        if any(len(marking) != self.net.place_count for marking in self.dead_markings):
-            raise _validation_error(
-                "dead_marking_axis", "dead markings must match the net place axis"
-            )
+        for marking in self.dead_markings:
+            _require_result_marking(self.net, marking, reason="dead_marking_axis")
+            if marking.net != self.net:
+                raise _validation_error(
+                    "dead_marking_parent", "dead markings must retain their source net"
+                )
         if len(self.dead_markings) > self.max_states:
             raise _validation_error(
                 "dead_marking_count", "dead-marking count exceeds explored states"
             )
-        if self.dead_markings != tuple(sorted(set(self.dead_markings))):
+        dead_tokens = tuple(marking.tokens for marking in self.dead_markings)
+        if dead_tokens != tuple(sorted(set(dead_tokens))):
             raise _validation_error(
                 "dead_markings", "dead markings must be sorted and unique"
             )
         if any(
             type(token) is not int or not 0 <= token <= MAX_PETRI_MARKING
-            for marking in self.dead_markings
+            for marking in dead_tokens
             for token in marking
         ):
             raise _validation_error(
@@ -899,7 +941,9 @@ class PlaceSetSupportResult(StrictModel):
         ):
             values = getattr(self, name)
             if values != tuple(sorted(set(values))) or any(
-                transition >= self.net.transition_count for transition in values
+                type(transition) is not int
+                or not 0 <= transition < self.net.transition_count
+                for transition in values
             ):
                 raise _validation_error(
                     "transition_axis",
@@ -1150,7 +1194,6 @@ class PumpingWitnessRequest(StrictModel):
     marking: Marking
     sequence: tuple[int, ...] = Field(
         default=(),
-        max_length=MAX_FIRING_SEQUENCE_LENGTH,
         description="A concrete sequence proposed as a repeatable growth witness.",
     )
 
@@ -1360,6 +1403,101 @@ class PetriInvariantsResult(PetriInvariantsRequest):
         return cls.model_construct(**values)
 
 
+class PetriNetDisjointUnionRequest(StrictModel):
+    """Two nets and, optionally, one marking on each source place axis."""
+
+    left_net: PetriNet
+    right_net: PetriNet
+    left_marking: Marking | None = None
+    right_marking: Marking | None = None
+
+    @model_validator(mode="after")
+    def require_pair_of_markings(self) -> Self:
+        if (self.left_marking is None) != (self.right_marking is None):
+            raise _validation_error(
+                "union_marking_pair", "both source markings must be supplied together"
+            )
+        for net, marking in (
+            (self.left_net, self.left_marking),
+            (self.right_net, self.right_marking),
+        ):
+            if marking is not None:
+                _require_result_marking(net, marking)
+        return self
+
+
+class PetriNetDisjointUnionResult(StrictModel):
+    """A disjoint union retaining its source nets and axis embeddings."""
+
+    left_net: PetriNet
+    right_net: PetriNet
+    net: PetriNet
+    left_place_embedding: tuple[int, ...]
+    right_place_embedding: tuple[int, ...]
+    left_transition_embedding: tuple[int, ...]
+    right_transition_embedding: tuple[int, ...]
+    left_marking: Marking | None = None
+    right_marking: Marking | None = None
+    marking: Marking | None = None
+
+    @model_validator(mode="after")
+    def require_canonical_embeddings(self) -> Self:
+        if (
+            self.net.place_count
+            != self.left_net.place_count + self.right_net.place_count
+        ):
+            raise _validation_error(
+                "union_place_count", "union place count must add its source axes"
+            )
+        if (
+            self.net.transition_count
+            != self.left_net.transition_count + self.right_net.transition_count
+        ):
+            raise _validation_error(
+                "union_transition_count",
+                "union transition count must add its source axes",
+            )
+        if self.left_place_embedding != tuple(range(self.left_net.place_count)):
+            raise _validation_error(
+                "union_left_place_axis", "left place embedding is not canonical"
+            )
+        if self.right_place_embedding != tuple(
+            range(self.left_net.place_count, self.net.place_count)
+        ):
+            raise _validation_error(
+                "union_right_place_axis", "right place embedding is not canonical"
+            )
+        if self.left_transition_embedding != tuple(
+            range(self.left_net.transition_count)
+        ):
+            raise _validation_error(
+                "union_left_transition_axis",
+                "left transition embedding is not canonical",
+            )
+        if self.right_transition_embedding != tuple(
+            range(self.left_net.transition_count, self.net.transition_count)
+        ):
+            raise _validation_error(
+                "union_right_transition_axis",
+                "right transition embedding is not canonical",
+            )
+        if (self.left_marking is None) != (self.right_marking is None) or (
+            self.left_marking is None
+        ) != (self.marking is None):
+            raise _validation_error(
+                "union_marking_pair",
+                "source markings and union marking must appear together",
+            )
+        for source, marking in (
+            (self.left_net, self.left_marking),
+            (self.right_net, self.right_marking),
+            (self.net, self.marking),
+        ):
+            if marking is not None:
+                _require_result_marking(source, marking)
+        return self
+
+
 __all__ = [
     "MAX_CONCURRENT_STEP_OCCURRENCES",
     "MAX_FIRING_SEQUENCE_LENGTH",
@@ -1387,6 +1525,8 @@ __all__ = [
     "PetriInvariantsRequest",
     "PetriInvariantsResult",
     "PetriMarkingState",
+    "PetriNetDisjointUnionRequest",
+    "PetriNetDisjointUnionResult",
     "PetriPlaceSubset",
     "PetriReachabilityEdge",
     "PlaceSetInitialMarkingProfileRequest",

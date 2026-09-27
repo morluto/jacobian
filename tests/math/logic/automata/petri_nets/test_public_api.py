@@ -14,6 +14,7 @@ def test_exact_public_api_symbols() -> None:
         "check_pumping_witness",
         "compute_incidence_matrix",
         "concurrent_step",
+        "disjoint_union",
         "enabled_transitions",
         "find_minimal_siphons",
         "find_minimal_traps",

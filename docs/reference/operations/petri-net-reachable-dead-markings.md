@@ -3,8 +3,9 @@
 [Documentation home](../../index.md) · [Operation references](index.md)
 
 `petri_net.reachable_dead_markings.compute` explores the bounded reachable
-state space and returns the discovered markings at which no transition is
-enabled. Deadness is checked against the net's input arcs at each marking;
+state space and returns parent-bound `Marking` values at which no transition
+is enabled. Each value can be passed directly to another operation on the same
+net. Deadness is checked against the net's input arcs at each marking;
 the operation does not infer deadness from a missing edge in a truncated
 reachability graph.
 

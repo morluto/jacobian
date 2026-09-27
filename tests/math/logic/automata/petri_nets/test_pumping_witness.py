@@ -2,10 +2,12 @@
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.math.logic.automata.petri_nets._models import PumpingWitnessRequest
-from jacobian.math.logic.automata.petri_nets.operations import check_pumping_witness
+from jacobian.math.logic.automata.petri_nets._tools import TOOLS
+from jacobian.math.logic.automata.petri_nets.operations import (
+    check_pumping_witness,
+    replay_firing_sequence,
+)
 from jacobian.math.logic.automata.petri_nets.values import Marking, PetriNet
 
 
@@ -88,6 +90,8 @@ def test_pumping_replay_ledger_is_admitted_before_prefixes_exist() -> None:
     # Every retained prefix serializes the parent-bound source marking,
     # repeating the whole named net up to the 1024-entry admitted length.
     with pytest.raises(OperationResourceAdmissionError, match="output bound"):
+        replay_firing_sequence(net, source, (0,) * 1024)
+    with pytest.raises(OperationResourceAdmissionError, match="output bound"):
         check_pumping_witness(net, source, (0,) * 1024)
     # A small ledger of the same named net stays exact.
     small = check_pumping_witness(net, source, (0,) * 10)
@@ -100,17 +104,23 @@ def test_pumping_replay_ledger_is_admitted_before_prefixes_exist() -> None:
 
 
 def test_catalog_contract_and_source_parent_are_preserved() -> None:
-    tool = Catalog.open().operation("petri_net.firing_sequence.pumping_witness.check")
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.firing_sequence.pumping_witness.check"
+    )
     result = tool.run(
-        PumpingWitnessRequest(
-            net=PetriNet(
-                place_count=1,
-                transition_count=1,
-                pre=((0,),),
-                post=((1,),),
-            ),
-            marking=Marking(tokens=(0,)),
-            sequence=(0,),
+        tool.request_type.model_validate(
+            {
+                "net": {
+                    "place_count": 1,
+                    "transition_count": 1,
+                    "pre": [[0]],
+                    "post": [[1]],
+                },
+                "marking": {"tokens": [0]},
+                "sequence": [0],
+            }
         )
     )
 

@@ -226,7 +226,11 @@ def su2_gauge_transform(
             _reject("transform_vertices", "gauge frames are malformed")
         vertex = getattr(entry, "vertex", None)
         value = getattr(entry, "value", None)
-        if not _valid_label(vertex) or not isinstance(value, RationalUnitQuaternion):
+        if (
+            type(vertex) is not str
+            or not _valid_label(vertex)
+            or not isinstance(value, RationalUnitQuaternion)
+        ):
             _reject("transform_vertices", "gauge frames are malformed")
         frames[vertex] = value
     vertices = field.lattice.vertices

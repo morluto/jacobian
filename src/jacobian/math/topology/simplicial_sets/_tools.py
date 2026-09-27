@@ -16,7 +16,13 @@ from jacobian.math.topology.simplicial_sets.coproduct_tools import (
 from jacobian.math.topology.simplicial_sets.degeneracy_tools import (
     TOOLS as DEGENERACY_TOOLS,
 )
+from jacobian.math.topology.simplicial_sets.degenerate_submodule_tools import (
+    TOOLS as DEGENERATE_SUBMODULE_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.image_tools import TOOLS as IMAGE_TOOLS
+from jacobian.math.topology.simplicial_sets.map_preimage_tools import (
+    TOOLS as MAP_PREIMAGE_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialHomologyMapValue,
     TruncatedSimplicialMap,
@@ -28,6 +34,9 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product_tools import TOOLS as PRODUCT_TOOLS
 from jacobian.math.topology.simplicial_sets.quotient_tools import (
     TOOLS as QUOTIENT_TOOLS,
+)
+from jacobian.math.topology.simplicial_sets.skeleton_tools import (
+    TOOLS as SKELETON_TOOLS,
 )
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 from jacobian.math.topology.simplicial_sets.standard_tools import (
@@ -74,12 +83,15 @@ _IDENTITY_DELTA_ONE_MAP = {
 
 TOOLS = (
     *STANDARD_TOOLS,
+    *SKELETON_TOOLS,
     *CHAIN_TOOLS,
     *COMPLEX_CONVERSION_TOOLS,
     *PRODUCT_TOOLS,
     *COPRODUCT_TOOLS,
     *DEGENERACY_TOOLS,
+    *DEGENERATE_SUBMODULE_TOOLS,
     *IMAGE_TOOLS,
+    *MAP_PREIMAGE_TOOLS,
     *MAP_TOOLS,
     *TRUNCATE_TOOLS,
     *QUOTIENT_TOOLS,

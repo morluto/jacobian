@@ -114,6 +114,22 @@ def test_group_value_round_trips_through_json() -> None:
     assert DirichletCharacterGroup.model_validate_json(group.model_dump_json()) == group
 
 
+def test_group_checker_rejects_noncanonical_native_coordinate_rows() -> None:
+    group = character_group(3)
+    forged = DirichletCharacterGroup.model_construct(
+        **{
+            **group.model_dump(),
+            "unit_coordinates": ((0,), (3,)),
+        }
+    )
+
+    with pytest.raises(OperationDomainValidationError) as excinfo:
+        require_complete_character_group(forged)
+    assert excinfo.value.errors()[0]["type"] == (
+        "dirichlet_character.group.coordinate_range"
+    )
+
+
 def test_group_checker_rejects_a_forged_coordinate_claim() -> None:
     group = character_group(12)
     payload = group.model_dump(mode="json")
@@ -159,6 +175,29 @@ def test_group_model_rejects_structurally_invalid_shapes() -> None:
     with pytest.raises(ValidationError) as error:
         DirichletCharacterGroup.model_validate_json(json.dumps(payload))
     assert error.value.errors()[0]["type"] == "dirichlet_character.coordinate_range"
+
+
+@pytest.mark.parametrize(
+    "operation_id",
+    (
+        "dirichlet_character.restrict_modulus.compute",
+        "dirichlet_character.conductor.compute",
+    ),
+)
+def test_character_requests_reject_zero_invariant_factor(operation_id: str) -> None:
+    tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
+    payload = json.loads(json.dumps(tool.examples[0].input))
+    payload["character"]["group"]["invariant_factors"][0] = 0
+
+    with pytest.raises(ValidationError) as error:
+        tool.request_type.model_validate_json(json.dumps(payload))
+
+    assert error.value.errors()[0]["loc"] == (
+        "character",
+        "group",
+        "invariant_factors",
+        0,
+    )
 
 
 def test_modulus_boundary_is_complete_and_next_value_is_rejected() -> None:

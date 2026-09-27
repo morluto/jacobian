@@ -24,6 +24,7 @@ from jacobian.math.number_theory.modular_forms.basis import (
     _admit_coordinates,
     _basis_coefficients,
     _materialize_pari_basis,
+    _require_canonical_coordinate_space,
 )
 from jacobian.math.number_theory.modular_forms.pari_backend import (
     PARI_STURM_RREF_BASIS_ID,
@@ -225,7 +226,60 @@ def modular_form_field_coordinates_q_expansion(
     )
 
 
+def modular_form_field_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Compare validated cyclotomic coordinates in the same exact space."""
+    if (
+        type(left) is not ModularFormCoordinates
+        or type(right) is not ModularFormCoordinates
+    ):
+        raise OperationDomainValidationError(
+            location=(),
+            code="modular_form.field_coordinates_type",
+            message="field equality requires exact modular-form coordinate values",
+        )
+    for side, form in (("left", left), ("right", right)):
+        _require_canonical_coordinate_space(form, side)
+        try:
+            ModularFormCoordinates.model_validate(form.model_dump())
+        except (AttributeError, TypeError, ValueError) as error:
+            raise OperationDomainValidationError(
+                location=(side,),
+                code="modular_form.field_coordinates_carrier",
+                message="field coordinates must have a canonical complete representation",
+            ) from error
+        if form.space.coefficient_domain != _FIELD:
+            _unsupported("field-coordinate equality requires Q(zeta_6) coordinates")
+        rational_space = _rational_space(form.space)
+        precision = (
+            sturm_bound(rational_space).bound + 1 if rational_space.level > 4 else 1
+        )
+        plan = _admit_basis(rational_space, precision, materialize_pari=False)
+        if (
+            form.space != left.space
+            or form.basis_id != plan.basis_id
+            or type(form.coordinates) is not tuple
+            or len(form.coordinates) != plan.dimension
+        ):
+            raise OperationDomainValidationError(
+                location=(side,),
+                code="modular_form.field_coordinates_basis_parent",
+                message="field coordinates must use the exact basis and parent",
+            )
+        for value in form.coordinates:
+            if type(value) is not RationalCyclotomicElement or value.field != _FIELD:
+                raise OperationDomainValidationError(
+                    location=(side, "coordinates"),
+                    code="modular_form.field_coordinates_scalar_parent",
+                    message="every coordinate must use the exact cyclotomic field parent",
+                )
+            cyclotomic._validate_element(value)
+    return left.coordinates == right.coordinates
+
+
 __all__ = [
     "modular_form_coordinates_extend_field",
+    "modular_form_field_coordinates_equal",
     "modular_form_field_coordinates_q_expansion",
 ]

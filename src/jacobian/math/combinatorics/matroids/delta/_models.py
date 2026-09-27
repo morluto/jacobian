@@ -8,9 +8,11 @@ from typing import Literal, Self
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS,
+    MAX_DELTA_DISTANCE_PROFILE_STATES,
     MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
     MAX_DELTA_LABEL_BYTES,
     MAX_DELTA_MEMBERSHIPS,
@@ -86,9 +88,23 @@ class DeltaMatroidTwistRequest(StrictModel):
 
 
 class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
-    """The exact feasible family obtained by symmetric-difference twist."""
+    """The source, twist subset, and exact target feasible family."""
 
     twisted: FiniteDeltaMatroid
+
+    @model_validator(mode="after")
+    def require_same_ground_axis(self) -> Self:
+        if self.twisted.ground != self.delta_matroid.ground:
+            raise _validation_error(
+                "twist_ground_axis",
+                "twisted delta-matroid must preserve the source ground axis",
+            )
+        if len(self.twisted.feasible) != len(self.delta_matroid.feasible):
+            raise _validation_error(
+                "twist_family_cardinality",
+                "twisting must preserve the number of feasible sets",
+            )
+        return self
 
     @classmethod
     def _from_kernel(
@@ -116,6 +132,102 @@ class DeltaMatroidWidthResult(DeltaMatroidWidthRequest):
     @classmethod
     def _from_kernel(cls, delta_matroid: FiniteDeltaMatroid, width: int) -> Self:
         return cls.model_construct(delta_matroid=delta_matroid, width=width)
+
+
+class DeltaMatroidDistanceProfileRequest(StrictModel):
+    """Compute distance to feasibility for every subset of the ground set."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Compute the Hamming distance from every ground subset to the "
+                "complete feasible family, plus nearest-set counts and a "
+                "distance histogram. Ground subsets are ordered by their "
+                "integer bit mask, where bit i denotes ground index i. The "
+                "profile admits at most "
+                f"{MAX_DELTA_DISTANCE_PROFILE_STATES} subset states and "
+                f"{MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS} subset/feasible-row "
+                "distance evaluations."
+            ),
+            "admission_limits": {
+                "max_subset_states": MAX_DELTA_DISTANCE_PROFILE_STATES,
+                "max_subset_feasible_row_evaluations": (
+                    MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS
+                ),
+                "max_feasible_set_memberships": MAX_DELTA_MEMBERSHIPS,
+                "max_ground_label_utf8_bytes": MAX_DELTA_LABEL_BYTES,
+                "max_symmetric_exchange_candidate_checks_per_replay": (
+                    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS
+                ),
+            },
+        }
+    )
+
+    delta_matroid: FiniteDeltaMatroid = Field(
+        description=(
+            "Complete canonical finite delta-matroid. The source axiom replay "
+            f"is bounded by {MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS} candidate "
+            "checks; profile computation separately admits subset states and "
+            "subset/feasible-row evaluations."
+        )
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_ground_axis(cls, data: object) -> object:
+        if isinstance(data, Mapping):
+            source = data.get("delta_matroid")
+            if isinstance(source, Mapping):
+                ground = source.get("ground")
+                if (
+                    isinstance(ground, (list, tuple))
+                    and len(ground) > MAX_DELTA_DISTANCE_PROFILE_STATES.bit_length() - 1
+                ):
+                    raise _validation_error(
+                        "distance_profile_states_exceeded",
+                        "the complete ground-subset profile exceeds the subset-state envelope",
+                    )
+                feasible = source.get("feasible")
+                if isinstance(feasible, (list, tuple)):
+                    if len(feasible) > MAX_DELTA_MEMBERSHIPS:
+                        raise _validation_error(
+                            "source_memberships_exceeded",
+                            "source feasible family exceeds the membership envelope",
+                        )
+                    memberships = 0
+                    for row in feasible:
+                        if isinstance(row, (list, tuple)):
+                            memberships += len(row)
+                            if memberships > MAX_DELTA_MEMBERSHIPS:
+                                raise _validation_error(
+                                    "source_memberships_exceeded",
+                                    "source feasible family exceeds the membership envelope",
+                                )
+        return data
+class DeltaMatroidDistanceRequest(StrictModel):
+    """Distance from one ground subset to the complete feasible family."""
+    delta_matroid: FiniteDeltaMatroid
+    subset: tuple[int, ...] = Field(description="Sorted distinct ground indices")
+    @model_validator(mode="after")
+    def canonical_subset(self) -> Self:
+        require_twist_subset(self.delta_matroid, self.subset)
+        return self
+class DeltaMatroidDistanceResult(DeltaMatroidDistanceRequest):
+    """Exact Hamming distance and a deterministic nearest feasible set."""
+    distance: int = Field(ge=0)
+    nearest_feasible: tuple[int, ...]
+    def _from_kernel(
+        cls,
+        delta_matroid: FiniteDeltaMatroid,
+        subset: tuple[int, ...],
+        distance: int,
+        nearest_feasible: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            delta_matroid=delta_matroid,
+            subset=subset,
+            distance=distance,
+            nearest_feasible=nearest_feasible,
 
 
 def _preflight_extremal_input(data: object) -> object:
@@ -195,7 +307,7 @@ class _DeltaMatroidExtremalRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_source(cls, data: object) -> object:
-        return _preflight_extremal_input(data)
+        return canonicalize_json_containers(_preflight_extremal_input(data))
 
 
 class DeltaMatroidLowerMatroidRequest(_DeltaMatroidExtremalRequest):
@@ -290,6 +402,9 @@ class DeltaMatroidRecognitionResult(StrictModel):
 
 
 __all__ = [
+    "DeltaMatroidDistanceProfileRequest",
+    "DeltaMatroidDistanceRequest",
+    "DeltaMatroidDistanceResult",
     "DeltaMatroidFromFeasibleSetsRequest",
     "DeltaMatroidLowerMatroidRequest",
     "DeltaMatroidRecognitionResult",

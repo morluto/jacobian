@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, WithJsonSchema, model_validator
@@ -11,8 +12,10 @@ from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS, ExactInteger
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKConvention,
     RSKTableauPair,
 )
@@ -21,10 +24,10 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
     IntegerPartition,
-    StandardYoungTableau,
+    SemistandardYoungTableau,
     TableauCandidate,
 )
-from jacobian.math.logic.languages.words.values import FiniteWord
+from jacobian.math.logic.languages.words.values import FiniteWord, Symbol
 
 # A permutation of length N inserts N ranks through the same _row_insert
 # kernel and produces two N-cell tableaux, so the canonical tableau cell
@@ -180,7 +183,7 @@ class SemistandardTableauCheckRequest(StrictModel):
 
 
 class RSKPermutationRequest(StrictModel):
-    __doc__ = f"""One strict bounded permutation for ordinary row-insertion RSK.
+    __doc__ = f"""One bounded canonical permutation for ordinary row-insertion RSK.
 
     Forward insertion performs at most
     ``N(N-1)/2 <= {
@@ -190,61 +193,20 @@ class RSKPermutationRequest(StrictModel):
     ``N <= {MAX_RSK_PERMUTATION_LENGTH}``.
     """
 
-    permutation: tuple[StrictInt, ...] = Field(
-        min_length=0, max_length=MAX_RSK_PERMUTATION_LENGTH
-    )
+    permutation: FinitePermutation
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
 
 
-class RSKResult(StrictModel):
-    """Canonical tableaux produced by one admitted permutation-RSK kernel."""
+class RSKInversePermutationRequest(StrictModel):
+    __doc__ = f"""Invert one compatible standard-tableau RSK pair with at most
+    {MAX_RSK_PERMUTATION_LENGTH} cells.
 
-    permutation: tuple[StrictInt, ...] = Field(
-        min_length=0,
-        max_length=MAX_RSK_PERMUTATION_LENGTH,
-        description="The exact source permutation of 1 through n.",
-    )
-    p_tableau: StandardYoungTableau
-    q_tableau: StandardYoungTableau
-    shape: IntegerPartition
-    lis_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
-    lds_length: StrictInt = Field(ge=0, le=MAX_RSK_PERMUTATION_LENGTH)
+    Reverse insertion performs at most ``N(N-1)/2`` row searches and at most
+    {MAX_RSK_ROW_SEARCH_COMPARISONS} integer comparisons per search.
+    """
+
+    pair: PermutationRSKPair
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
-
-    @model_validator(mode="after")
-    def require_structural_consistency(self) -> Self:
-        if self.p_tableau.shape != self.shape or self.q_tableau.shape != self.shape:
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_shape_mismatch",
-                "tableaux and shape must agree",
-            )
-        if sum(self.shape.parts) != len(self.permutation):
-            raise PydanticCustomError(
-                "algebraic_combinatorics.rsk_size_mismatch",
-                "tableau shape size must equal permutation length",
-            )
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls,
-        request: RSKPermutationRequest,
-        *,
-        insertion_rows: tuple[tuple[int, ...], ...],
-        recording_rows: tuple[tuple[int, ...], ...],
-    ) -> Self:
-        """Build one result after the admitted RSK kernel established it."""
-
-        shape = IntegerPartition(parts=tuple(len(row) for row in insertion_rows))
-        return cls.model_construct(
-            permutation=request.permutation,
-            p_tableau=StandardYoungTableau(rows=insertion_rows),
-            q_tableau=StandardYoungTableau(rows=recording_rows),
-            shape=shape,
-            lis_length=shape.parts[0] if shape.parts else 0,
-            lds_length=len(shape.parts),
-            convention=request.convention,
-        )
 
 
 class RSKWordRequest(StrictModel):
@@ -264,7 +226,7 @@ class RSKWordRequest(StrictModel):
             "every positioned letter must be one of those exact symbols. The "
             f"word has at most {MAX_RSK_WORD_LENGTH} letters and the alphabet "
             "plus positioned letters carry at most "
-            f"{MAX_RSK_WORD_BYTES} UTF-8 bytes."
+            f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values."
         )
     )
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
@@ -282,6 +244,130 @@ class RSKInverseWordRequest(StrictModel):
 
     pair: RSKTableauPair
     convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
+MAX_LIS_WORD_LENGTH = MAX_RSK_WORD_LENGTH
+MAX_LIS_WORD_PAYLOAD_SCALARS = MAX_RSK_WORD_PAYLOAD_SCALARS
+MAX_LIS_DP_WORK = MAX_LIS_WORD_LENGTH * (MAX_LIS_WORD_LENGTH - 1) // 2
+# The exact result retains the source word payload and copies at most n of
+# its own letters as the witness values, so the emitted letter payload is
+# bounded by the second copy of the source envelope; the n witness positions
+# and the one length are integers not exceeding the word length and therefore
+# carry at most MAX_LIS_INDEX_DIGITS decimal digits each.
+MAX_LIS_INDEX_DIGITS = len(str(MAX_LIS_WORD_LENGTH))
+MAX_LIS_OUTPUT_SCALARS = (
+    2 * MAX_LIS_WORD_PAYLOAD_SCALARS + (MAX_LIS_WORD_LENGTH + 1) * MAX_LIS_INDEX_DIGITS
+)
+
+
+class LongestIncreasingSubsequenceRequest(StrictModel):
+    """Compute a strict longest increasing subsequence under the word order."""
+
+    word: FiniteWord = Field(
+        description=(
+            "A finite ordered-alphabet word. The strict convention requires "
+            "each selected letter to be strictly greater than its predecessor. "
+            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and its "
+            "alphabet plus positioned letters carry at most "
+            f"{MAX_LIS_WORD_PAYLOAD_SCALARS} Unicode scalar values; the exact "
+            "result is bounded by the same retained-word cardinality plus "
+            f"{MAX_LIS_INDEX_DIGITS}-digit indices."
+        )
+    )
+
+
+class LongestIncreasingSubsequenceResult(StrictModel):
+    """Exact length and a deterministic source-index witness for strict LIS."""
+
+    source_word: FiniteWord
+    length: StrictInt = Field(ge=0, le=MAX_LIS_WORD_LENGTH)
+    indices: tuple[StrictInt, ...] = Field(max_length=MAX_LIS_WORD_LENGTH)
+    values: tuple[Symbol, ...] = Field(max_length=MAX_LIS_WORD_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid_witness(self) -> Self:
+        if len(self.indices) != self.length or len(self.values) != self.length:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lis_witness_length",
+                "LIS witness length must equal the reported length",
+            )
+        if any(
+            index < 0
+            or index >= len(self.source_word.letters)
+            or self.source_word.letters[index] != value
+            for index, value in zip(self.indices, self.values, strict=True)
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lis_witness_source",
+                "LIS witness positions and values must replay in the source word",
+            )
+        if any(left >= right for left, right in pairwise(self.indices)):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lis_witness_indices",
+                "LIS witness positions must be strictly increasing",
+            )
+        ranks = {letter: rank for rank, letter in enumerate(self.source_word.alphabet)}
+        if any(ranks[left] >= ranks[right] for left, right in pairwise(self.values)):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lis_witness_order",
+                "LIS witness values must be strictly increasing in the word alphabet",
+            )
+        return self
+
+
+class LongestDecreasingSubsequenceRequest(StrictModel):
+    """Compute a strict longest decreasing subsequence under the word order."""
+
+    word: FiniteWord = Field(
+        description=(
+            "A finite ordered-alphabet word. Strict decrease requires each "
+            "selected letter to be strictly smaller than its predecessor. "
+            f"The word has at most {MAX_LIS_WORD_LENGTH} letters and its "
+            "alphabet plus positioned letters carry at most "
+            f"{MAX_LIS_WORD_PAYLOAD_SCALARS} Unicode scalar values; the exact "
+            "result is bounded by the same retained-word cardinality plus "
+            f"{MAX_LIS_INDEX_DIGITS}-digit indices."
+        )
+    )
+
+
+class LongestDecreasingSubsequenceResult(StrictModel):
+    """Exact length and deterministic source-index witness for strict LDS."""
+
+    source_word: FiniteWord
+    length: StrictInt = Field(ge=0, le=MAX_LIS_WORD_LENGTH)
+    indices: tuple[StrictInt, ...] = Field(max_length=MAX_LIS_WORD_LENGTH)
+    values: tuple[Symbol, ...] = Field(max_length=MAX_LIS_WORD_LENGTH)
+
+    @model_validator(mode="after")
+    def require_valid_witness(self) -> Self:
+        if len(self.indices) != self.length or len(self.values) != self.length:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lds_witness_length",
+                "LDS witness length must equal the reported length",
+            )
+        if any(
+            index < 0
+            or index >= len(self.source_word.letters)
+            or self.source_word.letters[index] != value
+            for index, value in zip(self.indices, self.values, strict=True)
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lds_witness_source",
+                "LDS witness positions and values must replay in the source word",
+            )
+        if any(left >= right for left, right in pairwise(self.indices)):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lds_witness_indices",
+                "LDS witness positions must be strictly increasing",
+            )
+        ranks = {letter: rank for rank, letter in enumerate(self.source_word.alphabet)}
+        if any(ranks[left] <= ranks[right] for left, right in pairwise(self.values)):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.lds_witness_order",
+                "LDS witness values must be strictly decreasing in the word alphabet",
+            )
+        return self
 
 
 KnuthRelation = Literal["K1", "K2"]
@@ -373,6 +459,103 @@ class KnuthMovesResult(StrictModel):
             neighbor_count=len(neighbors),
             convention=request.convention,
         )
+
+
+class PlacticNormalFormRequest(StrictModel):
+    """Compute the row-reading representative of one word's plactic class."""
+
+    word: FiniteWord
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+
+class PlacticNormalFormResult(StrictModel):
+    """Source-bound insertion tableau and canonical row-reading word.
+
+    The canonical representative reads each tableau row left-to-right, from
+    the bottom row to the top row. Tableau entries are one-based ranks in the
+    exact alphabet retained by ``normal_form``.
+    """
+
+    source_word: FiniteWord
+    insertion_tableau: SemistandardYoungTableau
+    normal_form: FiniteWord
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_row_reading_word(self) -> Self:
+        if self.source_word.alphabet != self.normal_form.alphabet:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_alphabet_mismatch",
+                "source and normal-form words must use the same ordered alphabet",
+            )
+        if len(self.source_word.letters) != sum(
+            len(row) for row in self.insertion_tableau.rows
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_source_size_mismatch",
+                "source word length must equal the insertion-tableau cell count",
+            )
+        expected = tuple(
+            self.normal_form.alphabet[entry - 1]
+            for row in reversed(self.insertion_tableau.rows)
+            for entry in row
+        )
+        if self.normal_form.letters != expected:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_row_reading_mismatch",
+                "normal_form must be the bottom-to-top, left-to-right row reading",
+            )
+        return self
+
+
+class PlacticEquivalenceRequest(StrictModel):
+    """Compare two words in one explicitly ordered plactic alphabet."""
+
+    left: FiniteWord
+    right: FiniteWord
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_shared_alphabet(self) -> Self:
+        if self.left.alphabet != self.right.alphabet:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_alphabet_mismatch",
+                "plactic equivalence requires the same ordered alphabet",
+            )
+        return self
+
+
+class PlacticEquivalenceResult(StrictModel):
+    """Both source-bound canonical forms and their exact plactic relation."""
+
+    left: PlacticNormalFormResult
+    right: PlacticNormalFormResult
+    equivalent: bool
+    convention: RSKConvention = "ROW_INSERTION_RSK_V1"
+
+    @model_validator(mode="after")
+    def require_shared_alphabet_and_relation(self) -> Self:
+        if self.left.source_word.alphabet != self.right.source_word.alphabet:
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_alphabet_mismatch",
+                "plactic equivalence requires the same ordered alphabet",
+            )
+        if self.equivalent != (
+            self.left.insertion_tableau == self.right.insertion_tableau
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_relation_mismatch",
+                "equivalent must agree with equality of insertion tableaux",
+            )
+        if (
+            self.left.convention != self.convention
+            or self.right.convention != self.convention
+        ):
+            raise PydanticCustomError(
+                "algebraic_combinatorics.plactic_convention_mismatch",
+                "both normal forms must use the declared RSK convention",
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -501,9 +684,11 @@ __all__ = [
     "KnuthRelation",
     "PartitionDominanceRequest",
     "PartitionDominanceResult",
+    "PlacticNormalFormRequest",
+    "PlacticNormalFormResult",
+    "RSKInversePermutationRequest",
     "RSKInverseWordRequest",
     "RSKPermutationRequest",
-    "RSKResult",
     "RSKWordRequest",
     "SemistandardTableauCheckRequest",
     "SemistandardTableauCheckResult",

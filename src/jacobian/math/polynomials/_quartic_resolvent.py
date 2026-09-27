@@ -104,8 +104,8 @@ class QuarticCubicResolventResult(StrictModel):
         )
         if self.resolvent != expected:
             raise PydanticCustomError(
-                "polynomial.quartic_resolvent.result_binding",
-                "the cubic resolvent coefficients must follow the pair-product relation",
+                "polynomial.quartic_resolvent.coefficient_relation",
+                "resolvent coefficients must be derived from the retained quartic source",
             )
         return self
 

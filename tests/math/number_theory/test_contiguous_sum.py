@@ -1,6 +1,7 @@
 """Tests for contiguous-sum representation profiles."""
 
 from math import isqrt
+from time import monotonic
 
 import pytest
 from pydantic import ValidationError
@@ -165,10 +166,11 @@ def test_complete_profile_rejects_legacy_worker_diagnostics() -> None:
 
 
 def test_expired_direct_profile_is_an_operational_timeout() -> None:
+    expired_start = monotonic() - 61.0
     admission = require_contiguous_sum_profile_admission(
         1_000_000_000_001,
         1_000_000_000_001,
-        started_at=0.0,
+        started_at=expired_start,
     )
 
     with pytest.raises(OperationExecutionTimeoutError):

@@ -7,26 +7,64 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
+    DeltaMatroidDistanceProfileRequest,
+    DeltaMatroidDistanceRequest,
+    DeltaMatroidDistanceResult,
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
     DeltaMatroidWidthResult,
 )
 from jacobian.math.combinatorics.matroids.delta.extra import (
+    MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS,
+    MAX_TWIST_POLYNOMIAL_GROUND,
+    MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES,
+    MAX_TWIST_POLYNOMIAL_STATES,
+    MAX_TWIST_POLYNOMIAL_WORK,
+    BinaryLoopComplementRequest,
+    BinaryLoopComplementResult,
     BinaryMatrixRequest,
     BinaryMatrixResult,
+    BinaryMatrixTwistRequest,
+    DeltaMatroidDirectSumRequest,
+    DeltaMatroidDirectSumResult,
     DeltaMatroidDualRequest,
+    DeltaMatroidFeasibleSizeProfile,
+    DeltaMatroidFeasibleSizeProfileRequest,
     DeltaMatroidMinorRequest,
+    DeltaMatroidTwistPolynomialRequest,
+    DeltaMatroidTwistPolynomialResult,
+    DeltaMatroidTwistWidthProfileRequest,
+    DeltaMatroidTwistWidthProfileResult,
 )
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary, dual, minor
+from jacobian.math.combinatorics.matroids.delta.extra_ops import (
+    binary,
+    dual,
+    feasible_size_profile,
+    loop_complement,
+    minor,
+    twist_polynomial,
+    twist_width_profile,
+)
+from jacobian.math.combinatorics.matroids.delta.extra_ops import (
+    binary,
+    binary_matrix_twist,
+    dual,
+    minor,
+)
 from jacobian.math.combinatorics.matroids.delta.interlace import (
     DistanceInterlaceRequest,
     DistanceInterlaceResult,
     distance_interlace_polynomial,
 )
 from jacobian.math.combinatorics.matroids.delta.operations import (
+    distance_profile,
+    direct_sum,
+    distance,
     from_feasible_sets,
     twist,
     width,
@@ -38,7 +76,9 @@ from jacobian.math.combinatorics.matroids.delta.relabel import (
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     DeltaMatroidAdmissionError,
+    DeltaMatroidDistanceProfile,
     FiniteDeltaMatroid,
+    canonical_feasible_rows,
 )
 
 
@@ -57,9 +97,24 @@ def _from_feasible_sets(
         ) from exc
 
 
-def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
+def _twist(request: DeltaMatroidTwistRequest) -> DeltaMatroidTwistResult:
     try:
-        return twist(request.delta_matroid, request.subset)
+        # The source envelope bounds retained labels and memberships; twisting
+        # preserves row count and is admitted by its projected membership count.
+        # No transport-size serialization pass is needed before construction.
+        twisted = twist(request.delta_matroid, request.subset)
+        source = FiniteDeltaMatroid.model_construct(
+            ground=request.delta_matroid.ground,
+            feasible=canonical_feasible_rows(
+                FiniteFeasibleSetSystem(
+                    ground=request.delta_matroid.ground,
+                    feasible=request.delta_matroid.feasible,
+                )
+            ),
+        )
+        return DeltaMatroidTwistResult._from_kernel(source, request.subset, twisted)
+    except OperationResourceAdmissionError:
+        raise
     except DeltaMatroidAdmissionError as exc:
         raise OperationResourceAdmissionError(
             location=("delta_matroid",),
@@ -72,6 +127,12 @@ def _twist(request: DeltaMatroidTwistRequest) -> FiniteDeltaMatroid:
             code="delta_matroid.source_not_valid",
             message=str(exc),
         ) from exc
+
+
+def _relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid, request.target_ground, request.target_to_source
+    )
 
 
 def _extra_domain(
@@ -117,6 +178,34 @@ def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
         raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
 
 
+def _run_binary_twist(request: BinaryMatrixTwistRequest) -> BinaryMatrixResult:
+    try:
+        return binary_matrix_twist(request.matrix, request.subset)
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError) as exc:
+        raise _extra_domain(
+            ("matrix",), "delta_matroid.binary_twist_invalid", exc
+        ) from exc
+def _run_loop_complement(
+    request: BinaryLoopComplementRequest,
+) -> BinaryLoopComplementResult:
+    return loop_complement(request.matrix, request.subset)
+
+def _run_direct_sum(
+    request: DeltaMatroidDirectSumRequest,
+) -> DeltaMatroidDirectSumResult:
+    return direct_sum(request.left, request.right)
+def _run_twist_width_profile(
+    request: DeltaMatroidTwistWidthProfileRequest,
+) -> DeltaMatroidTwistWidthProfileResult:
+    return twist_width_profile(request.delta_matroid)
+def _run_feasible_size_profile(
+    request: DeltaMatroidFeasibleSizeProfileRequest,
+) -> DeltaMatroidFeasibleSizeProfile:
+    return feasible_size_profile(request.delta_matroid)
 def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
     return relabel(
         request.delta_matroid,
@@ -144,13 +233,82 @@ def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
         ) from exc
 
 
+def _distance_profile(
+    request: DeltaMatroidDistanceProfileRequest,
+) -> DeltaMatroidDistanceProfile:
+    try:
+        return distance_profile(request.delta_matroid)
+def _distance(request: DeltaMatroidDistanceRequest) -> DeltaMatroidDistanceResult:
+        return distance(request.delta_matroid, request.subset)
+    except DeltaMatroidAdmissionError as exc:
+        raise OperationResourceAdmissionError(
+            location=("delta_matroid",),
+            code=f"delta_matroid.{exc.reason}",
+            message=str(exc),
+        ) from exc
+    except ValueError as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message=str(exc),
+        ) from exc
+
+
 def _distance_interlace(
     request: DistanceInterlaceRequest,
 ) -> DistanceInterlaceResult:
+def _distance_interlace(request: DistanceInterlaceRequest) -> DistanceInterlaceResult:
     return distance_interlace_polynomial(request.delta_matroid)
 
 
 TOOLS: MathTools = (  # noqa: RUF005
+    MathTool(
+        operation_id="delta_matroid.direct_sum.compute",
+        title="Take the direct sum of finite delta-matroids",
+        description=(
+            "Combine delta-matroids on disjoint labelled ground sets. Feasible "
+            "sets are all pairwise unions, on the concatenated ground axis; the "
+            "result includes both source index injections. Ground, pair-work, "
+            "and membership cardinality bounds are checked first; symmetric "
+            "exchange of the product follows from the direct-sum theorem."
+        ),
+        request_type=DeltaMatroidDirectSumRequest,
+        result_type=DeltaMatroidDirectSumResult,
+        run=_run_direct_sum,
+        tags=("delta-matroid", "direct-sum", "exact"),
+        examples=(
+            OperationExample(
+                name="direct_sum_singletons",
+                description="Combine singleton feasible families on disjoint labelled elements.",
+                input={
+                    "left": {"ground": ["a"], "feasible": [[], [0]]},
+                    "right": {"ground": ["b"], "feasible": [[], [0]]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.distance.compute",
+        title="Compute distance from a subset to delta-matroid feasibility",
+        description=(
+            "Return min |X symmetric_difference F| over the complete feasible "
+            "family and the lexicographically first nearest feasible set."
+        ),
+        request_type=DeltaMatroidDistanceRequest,
+        result_type=DeltaMatroidDistanceResult,
+        run=_distance,
+        tags=("delta-matroid", "distance", "feasibility", "exact"),
+        examples=(
+            OperationExample(
+                name="distance_to_feasible",
+                description="The empty set is distance one from the family {{a}}.",
+                input={
+                    "delta_matroid": {"ground": ["a"], "feasible": [[0]]},
+                    "subset": [],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="delta_matroid.from_feasible_sets.compute",
         title="Recognize a finite delta-matroid from a complete feasible family",
@@ -204,6 +362,75 @@ TOOLS: MathTools = (  # noqa: RUF005
         ),
     ),
     MathTool(
+        operation_id="delta_matroid.distance_profile.compute",
+        title="Compute distance to feasibility for every ground subset",
+        description=(
+            "Return the exact Hamming distance from every subset of the "
+            "ground set to its nearest feasible set, the number of nearest "
+            "feasible sets, and the distance histogram. Subsets are ordered "
+            "by integer mask with bit i denoting ground index i. Admission "
+            "limits the complete profile to 4,096 masks and 262,144 "
+            "subset/feasible-set evaluations, and replays source symmetric "
+            "exchange under the existing 250,000-candidate bound."
+        ),
+        request_type=DeltaMatroidDistanceProfileRequest,
+        result_type=DeltaMatroidDistanceProfile,
+        run=_distance_profile,
+        tags=("delta-matroid", "distance", "feasible-set-profile", "exact"),
+        discovery_terms=("delta-matroid distance profile", "nearest feasible set"),
+        examples=(
+            OperationExample(
+                name="distance_profile_of_two_element_cube",
+                description=(
+                    "The four feasible subsets give distance zero at each of "
+                    "the four ground-subset masks."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.binary.from_matrix_twist.compute",
+        title="Construct a binary delta-matroid from a twisted matrix presentation",
+        description=(
+            "Return D(A)*T for a symmetric matrix A over GF(2) and a sorted "
+            "ground-index subset T. It enumerates all nonsingular principal "
+            "submatrices under the existing eight-element and 250,000-work "
+            "bounds, then applies the exact symmetric-difference bijection. "
+            "The source matrix, twist, and complete feasible family are retained; "
+            "output has at most 256 rows and 1,024 memberships."
+        ),
+        request_type=BinaryMatrixTwistRequest,
+        result_type=BinaryMatrixResult,
+        run=_run_binary_twist,
+        tags=("delta-matroid", "binary", "matrix-twist", "exact"),
+        discovery_terms=(
+            "binary delta-matroid twist",
+            "twisted principal-minor family",
+        ),
+        examples=(
+            OperationExample(
+                name="twist_zero_matrix_by_both_elements",
+                description=(
+                    "The zero matrix has only the empty feasible set; twisting "
+                    "by both axes gives the full two-element set."
+                ),
+                input={
+                    "matrix": {
+                        "ground": ["a", "b"],
+                        "entries": [[0, 0], [0, 0]],
+                    },
+                    "subset": [0, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="delta_matroid.twist.compute",
         title="Twist a finite delta-matroid",
         description=(
@@ -211,10 +438,11 @@ TOOLS: MathTools = (  # noqa: RUF005
             "difference X for each source feasible set F; the subset uses sorted "
             "ground indices. Source and output families are admitted at 16,384 "
             "memberships, 2,048 UTF-8 label bytes, and 250,000 symmetric-exchange "
-            "candidate checks."
+            "candidate checks. Return the source, canonical subset, and twisted "
+            "target together; output cardinality follows the admitted source family."
         ),
         request_type=DeltaMatroidTwistRequest,
-        result_type=FiniteDeltaMatroid,
+        result_type=DeltaMatroidTwistResult,
         run=_twist,
         tags=("delta-matroid", "twist", "exact"),
         examples=(
@@ -235,6 +463,60 @@ TOOLS: MathTools = (  # noqa: RUF005
         ),
     ),
 ) + (
+    MathTool(
+        operation_id="delta_matroid.twist_width_profile.compute",
+        title="Compute the complete twist-width profile of a finite delta-matroid",
+        description=(
+            "Return the width after twisting by every ground subset, indexed by "
+            "the subset's integer bit mask (bit i selects ground element i). "
+            "Preflight admits at most 4,096 masks and 262,144 mask-feasible-set "
+            "evaluations."
+        ),
+        request_type=DeltaMatroidTwistWidthProfileRequest,
+        result_type=DeltaMatroidTwistWidthProfileResult,
+        run=_run_twist_width_profile,
+        tags=("delta-matroid", "twist", "width", "profile", "exact"),
+        examples=(
+            OperationExample(
+                name="two_element_twist_widths",
+                description="Return all four twist widths in mask order 0, 1, 2, 3.",
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.feasible_size_profile.compute",
+        title="Compute the feasible-set size profile of a finite delta-matroid",
+        description=(
+            "Return the exact ascending-size histogram (count at size 0, size 1, "
+            "..., through the ground-set size), retaining the labelled ground "
+            "axis. Profile output is admitted before source exchange validation."
+        ),
+        request_type=DeltaMatroidFeasibleSizeProfileRequest,
+        result_type=DeltaMatroidFeasibleSizeProfile,
+        run=_run_feasible_size_profile,
+        tags=("delta-matroid", "feasible-sets", "size", "profile", "exact"),
+        examples=(
+            OperationExample(
+                name="two_element_feasible_sizes",
+                description=(
+                    "The feasible family has one set of size zero, two of size "
+                    "one, and one of size two."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="delta_matroid.dual.compute",
         title="Compute the dual of a finite delta-matroid",
@@ -297,6 +579,61 @@ TOOLS: MathTools = (  # noqa: RUF005
         ),
     ),
     MathTool(
+        operation_id="delta_matroid.twist_polynomial.compute",
+        title="Compute the width-generating polynomial of all delta-matroid twists",
+        description=(
+            "Return Tw_D(z) = sum over every A subset E of z^width(D*A), with "
+            "the complete width histogram and canonical integer polynomial. "
+            f"Admission allows at most {MAX_TWIST_POLYNOMIAL_GROUND} ground "
+            f"elements, {MAX_TWIST_POLYNOMIAL_STATES} twist masks, and "
+            f"{MAX_TWIST_POLYNOMIAL_WORK} mask-feasible-set evaluations. The "
+            f"result has at most {MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES} "
+            f"histogram entries and {MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS}-digit "
+            "coefficients; labels do not affect the mask sweep, so the "
+            "recognition operation's label cap does not apply."
+        ),
+        request_type=DeltaMatroidTwistPolynomialRequest,
+        result_type=DeltaMatroidTwistPolynomialResult,
+        run=lambda request: twist_polynomial(request.delta_matroid),
+        tags=("delta-matroid", "twist", "width", "polynomial", "exact"),
+        examples=(
+            OperationExample(
+                name="two_element_twist_width_polynomial",
+                description=(
+                    "Count widths across all four twists; the feasible family "
+                    "must satisfy symmetric exchange."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1], [1]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.binary_loop_complement.compute",
+        title="Loop complement a binary delta-matroid",
+        description=(
+            "Toggle the diagonal of a labelled symmetric GF(2) matrix on a sorted subset of its ground axis, then return the complete principal-minor feasible family of the resulting presentation."
+        ),
+        request_type=BinaryLoopComplementRequest,
+        result_type=BinaryLoopComplementResult,
+        run=_run_loop_complement,
+        tags=("delta-matroid", "binary", "loop-complement", "exact"),
+        examples=(
+            OperationExample(
+                name="loop_complement_zero_matrix",
+                description="Toggle both diagonal entries of the zero matrix.",
+                input={
+                    "matrix": {"ground": ["a", "b"], "entries": [[0, 0], [0, 0]]},
+                    "subset": [0, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="delta_matroid.relabel.compute",
         title="Relabel and reorder a finite delta-matroid ground set",
         description=(
@@ -332,11 +669,7 @@ TOOLS: MathTools = (  # noqa: RUF005
         operation_id="delta_matroid.distance_interlace_polynomial.compute",
         title="Compute the subset-distance interlace polynomial",
         description=(
-            "Return the distance histogram and exact polynomial "
-            "sum over X subset E of (x - 1)^d_D(X), where d_D(X) is the "
-            "minimum symmetric-difference distance from X to a feasible set. "
-            "Admission bounds every subset-to-feasible-set comparison and the "
-            "serialized result before subset enumeration."
+            "Return the distance histogram and exact polynomial sum over X subset E of (x - 1)^d_D(X), where d_D(X) is the minimum symmetric-difference distance from X to a feasible set."
         ),
         request_type=DistanceInterlaceRequest,
         result_type=DistanceInterlaceResult,
@@ -345,15 +678,44 @@ TOOLS: MathTools = (  # noqa: RUF005
         examples=(
             OperationExample(
                 name="two_element_uniform_distance_interlace",
-                description=(
-                    "For all four subsets feasible, every distance is zero, "
-                    "so the polynomial is 4."
-                ),
+                description="For all four subsets feasible, every distance is zero, so the polynomial is 4.",
                 input={
                     "delta_matroid": {
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [0, 1], [1]],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.relabel.compute",
+        title="Relabel and reorder a finite delta-matroid ground set",
+        description=(
+            "Apply a bijection from the target ground axis to the source axis, "
+            "transport every feasible subset to the target indices, and retain "
+            "both inverse axis maps. The complete source family is checked "
+            "before transport; memberships, ground labels, work, and result "
+            "allocations are bounded."
+        ),
+        request_type=DeltaMatroidRelabelRequest,
+        result_type=DeltaMatroidRelabelling,
+        run=_run_relabel,
+        tags=("delta-matroid", "relabel", "isomorphism", "exact"),
+        examples=(
+            OperationExample(
+                name="swap_ground_axis",
+                description=(
+                    "Swap the source axes while renaming them; feasible subsets "
+                    "and the inverse coordinate maps are transported exactly."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1]],
+                    },
+                    "target_ground": ["B", "A"],
+                    "target_to_source": [1, 0],
                 },
             ),
         ),

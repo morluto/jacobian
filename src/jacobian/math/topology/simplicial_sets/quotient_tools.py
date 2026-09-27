@@ -8,6 +8,11 @@ from jacobian.math.topology.simplicial_sets.quotient_models import (
 )
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
+
+def _run_quotient(request: SimplicialSetQuotientRequest) -> SimplicialSetQuotientResult:
+    return simplicial_set_quotient(request.simplicial_set, request.degree_class_ids)
+
+
 _DELTA_ONE = standard_simplex(1, 2).model_dump(mode="json")
 _POINT_QUOTIENT_CLASSES = [[0, 0], [0, 0, 0], [0, 0, 0, 0]]
 
@@ -24,7 +29,7 @@ TOOLS = (
         ),
         request_type=SimplicialSetQuotientRequest,
         result_type=SimplicialSetQuotientResult,
-        run=simplicial_set_quotient,
+        run=_run_quotient,
         tags=("topology", "simplicial-set", "quotient", "exact"),
         discovery_terms=(
             "simplicial set quotient",

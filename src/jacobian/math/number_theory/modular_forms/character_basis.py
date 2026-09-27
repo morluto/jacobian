@@ -79,6 +79,20 @@ _CHARACTER_U_PRIME_ENVELOPE = {
 }
 
 
+def _character_order(space: ModularFormSpace) -> int:
+    """Return the exact order of an admitted character from its dual axes."""
+    character = cast(DirichletCharacter, space.character)
+    order = 1
+    for coordinate, axis_order in zip(
+        character.coordinates,
+        character.group.generator_orders,
+        strict=True,
+    ):
+        component_order = axis_order // gcd(coordinate, axis_order)
+        order = order * component_order // gcd(order, component_order)
+    return order
+
+
 def _domain(message: str) -> NoReturn:
     raise OperationDomainValidationError(
         location=("space",),
@@ -306,7 +320,7 @@ def _character_basis_from_admission(
 
     transport_envelope = (
         _TRANSPORT_STURM_BASIS_ENVELOPE.get((space.level, precision))
-        if space.kind == "S"
+        if space.kind == "S" and _character_order(space) == 6
         else None
     )
     if transport_envelope is not None:
@@ -351,6 +365,7 @@ def _character_basis_from_admission(
     # linear combinations before requesting either basis from PARI.
     if (
         space.kind == "S"
+        and _character_order(space) == 6
         and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
         and any(
             canonical_rational_component_digits(value)
@@ -921,6 +936,12 @@ def modular_character_coordinates_u_prime(
     form, space, field, character_request, dimensions, input_digits = admitted
     input_coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
     dimension = dimensions[0]
+    if _character_order(space) != 6:
+        raise OperationDomainValidationError(
+            location=("form", "space", "character"),
+            code="modular_form.character_u_prime_parent",
+            message="the bounded U_p coefficient envelope is established only for order-six conductor-13 characters",
+        )
     if (
         type(prime) is not int
         or (space.level, prime) not in _CHARACTER_U_PRIME_ENVELOPE

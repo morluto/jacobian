@@ -187,6 +187,19 @@ def test_u_prime_rejects_a_prime_outside_the_exact_level_action() -> None:
         modular_character_coordinates_u_prime(_coordinates(space, 0), 3)
 
 
+def test_u_prime_rejects_order_three_character_before_using_order_six_envelope() -> (
+    None
+):
+    space = _space(4, 26)
+    form = _coordinates(space, 0)
+
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="coefficient envelope is established only for order-six",
+    ):
+        modular_character_coordinates_u_prime(form, 2)
+
+
 def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> None:
     space = _space(2, 26)
     form = _coordinates(space, 0)

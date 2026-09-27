@@ -101,7 +101,7 @@ def test_pari_standard_vector_agrees_on_every_unit_without_ordering_assumption()
     payload = _pari_character_request(_space())
     fake_pari = _FakePari()
 
-    group, character_vector = _character_vector(
+    group, character_vector, character_order = _character_vector(
         fake_pari,
         payload["character"],
         payload["coefficient_field_order"],
@@ -109,6 +109,7 @@ def test_pari_standard_vector_agrees_on_every_unit_without_ordering_assumption()
 
     assert group is fake_pari.group
     assert character_vector == (10,)
+    assert character_order == 6
     for residue, jacobian_row in zip(
         payload["character"]["unit_residues"],
         payload["character"]["unit_coordinates"],
@@ -123,7 +124,7 @@ def test_live_cypari_standard_vector_and_every_unit_agreement() -> None:
     cypari = pytest.importorskip("cypari")
     payload = _pari_character_request(_space())
 
-    group, character_vector = _character_vector(
+    group, character_vector, character_order = _character_vector(
         cypari.pari,
         payload["character"],
         payload["coefficient_field_order"],
@@ -131,6 +132,7 @@ def test_live_cypari_standard_vector_and_every_unit_agreement() -> None:
 
     assert tuple(int(value) for value in group[1][1]) == (12,)
     assert tuple(int(value) for value in character_vector) == (2,)
+    assert character_order == 6
     unit_rows = dict(
         zip(
             payload["character"]["unit_residues"],

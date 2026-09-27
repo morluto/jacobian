@@ -1,5 +1,6 @@
 """Exact degree-multiset reconstruction from complete vertex decks."""
 
+from collections.abc import Iterator
 from itertools import combinations
 
 import pytest
@@ -12,14 +13,14 @@ from jacobian.math.graphs.decks import (
     UnlabelledVertexDeck,
     VertexDeletionFamily,
     unlabelled_vertex_deck,
+    vertex_deck_degree_multiset,
     vertex_deletion_family,
 )
-from jacobian.math.graphs.decks.operations import vertex_deck_degree_multiset
 from jacobian.math.graphs.realization._models import DegreeSequence
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
-def _all_graphs(order: int):
+def _all_graphs(order: int) -> Iterator[SimpleUndirectedGraph]:
     vertices = tuple(f"v{index}" for index in range(order))
     possible_edges = tuple(combinations(vertices, 2))
     for mask in range(1 << len(possible_edges)):

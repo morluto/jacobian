@@ -174,6 +174,22 @@ def test_transport_retains_inflation_and_exact_target_sturm_prefix() -> None:
     )
 
 
+def test_transport_rejects_order_three_generalized_coordinates() -> None:
+    source_character = dirichlet_character(character_group(13), (4,))
+    source_character = _inflate(source_character, 26)
+    source_space = _space(26, source_character)
+    source_form = ModularFormCoordinates(
+        space=source_space,
+        basis_id=_GENERIC_BASIS,
+        coordinates=(_element(1),),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="order-six"):
+        modular_character_coordinates_transport(
+            source_form, _inclusion(source_space, source_space)
+        )
+
+
 def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     source_character = dirichlet_character(character_group(13), (2,))
     target_character = _inflate(source_character, 26)

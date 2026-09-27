@@ -30,6 +30,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_coordinates_hecke,
     modular_character_coordinates_product,
     modular_character_coordinates_q_expansion,
+    modular_character_coordinates_u_prime,
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
@@ -43,6 +44,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
     ModularCharacterTransportedForm,
+    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
     modular_character_coordinates_equal_in_common_space,
@@ -96,6 +98,7 @@ __all__ = [
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
     "ModularCharacterTransportedForm",
+    "ModularCharacterUPrimeRequest",
     "ModularFormAtkinLehnerTarget",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
@@ -119,6 +122,7 @@ __all__ = [
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
     "modular_character_coordinates_transport",
+    "modular_character_coordinates_u_prime",
     "modular_character_hecke_matrix",
     "modular_form_atkin_lehner_target",
     "modular_form_basis_frame",

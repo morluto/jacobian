@@ -158,6 +158,21 @@ def test_shared_factors_between_distinct_denominators_use_the_true_lcm() -> None
     assert result.differential_operator.terms
 
 
+def test_egf_preserves_a_single_canonical_64_digit_rational() -> None:
+    numerator = 10**63
+    denominator = numerator - 1
+    recurrence = _recurrence((0, [(0, 1)]))
+    recurrence["terms"][0]["coefficient"]["numerator"]["terms"][0][
+        "coefficient"
+    ] = {"num": numerator, "den": denominator}
+
+    result = polynomial_recurrence_to_egf_equation(recurrence)
+
+    assert _polynomial(result.differential_operator.terms[0].coefficient) == {
+        0: Fraction(numerator, denominator)
+    }
+
+
 def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> None:
     rational = _rf([(0, 1)])
     rational["denominator"] = {

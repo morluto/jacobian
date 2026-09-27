@@ -260,6 +260,20 @@ def test_shared_coefficient_denominator_is_counted_once() -> None:
     assert result.forcing.numerator.terms == ()
 
 
+def test_ogf_preserves_a_single_canonical_64_digit_rational() -> None:
+    numerator = 10**63
+    denominator = numerator - 1
+    recurrence = _recurrence((0, [(0, 1)]))
+    recurrence["terms"][0]["coefficient"]["numerator"]["terms"][0][
+        "coefficient"
+    ] = {"num": numerator, "den": denominator}
+
+    result = polynomial_recurrence_to_ogf_equation(recurrence, {"values": []})
+
+    coefficient = result.differential_operator.terms[0].coefficient.numerator.terms[0]
+    assert coefficient.coefficient.as_fraction() == Fraction(numerator, denominator)
+
+
 def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -> None:
     with pytest.raises(OperationDomainValidationError, match="initial coefficient"):
         polynomial_recurrence_to_ogf_equation(

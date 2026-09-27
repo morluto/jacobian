@@ -91,13 +91,18 @@ def _digits_for_bit_bound(bits: int) -> int:
     return (bits * 30_103) // 100_000 + 1
 
 
-def _denominator_factor_bits(values: list[Fraction]) -> int:
-    """Return the bit length of the exact common denominator."""
+def _coefficient_height_bits(values: list[Fraction]) -> tuple[int, int]:
+    """Bound numerator and denominator after combining rational coefficients."""
     denominator = 1
     for value in values:
         factor = value.denominator
         denominator = denominator // gcd(denominator, factor) * factor
-    return denominator.bit_length()
+    numerator_terms = [
+        abs(value.numerator * (denominator // value.denominator)).bit_length()
+        for value in values
+    ]
+    numerator_bits = max(numerator_terms, default=1) + max(0, len(values) - 1).bit_length()
+    return numerator_bits, denominator.bit_length()
 
 
 def _product_numerator_bits(left: Fraction, right: Fraction) -> int:
@@ -153,7 +158,6 @@ def _admit_transform(
     polynomials: list[tuple[int, _Poly]] = []
     maximum_degree = 0
     maximum_output_degree = 0
-    input_scalars: list[Fraction] = []
     work = (operator.order + 1) * (len(operator.terms) + 1)
     for term in operator.terms:
         coefficient = term.coefficient
@@ -170,7 +174,6 @@ def _admit_transform(
         maximum_output_degree = max(
             maximum_output_degree, operator.order - term.exponent + degree
         )
-        input_scalars.extend(numerator.values())
         polynomials.append((term.exponent, numerator))
         work += len(numerator) * (degree + 1) ** 2
     work += sum(shift * len(polynomial) for shift, polynomial in polynomials)
@@ -187,9 +190,6 @@ def _admit_transform(
             message="recurrence to OGF conversion exceeds its admitted exact-arithmetic work",
         )
     values = [value.as_fraction() for value in request.initial_coefficients.values]
-    numerator_bits = max(
-        (abs(value.numerator).bit_length() for value in input_scalars), default=1
-    )
     # Only nonzero boundary products are materialized. A large initial value
     # annihilated by q_i(-i), or canceled by its rational denominator, contributes
     # no output coefficient and must not consume the carrier's numerator budget.
@@ -208,14 +208,13 @@ def _admit_transform(
     # Operator coefficients from distinct shifts occupy distinct (D-order,
     # x-degree) slots. Boundary terms have already been combined by output
     # degree, so only their retained denominators belong in this bound.
+    coefficient_bounds = tuple(
+        _coefficient_height_bits(list(polynomial.values()))
+        for _shift, polynomial in polynomials
+    )
+    numerator_bits = max((bound[0] for bound in coefficient_bounds), default=1)
     denominator_bits = max(
-        max(
-            (
-                _denominator_factor_bits(list(polynomial.values()))
-                for _shift, polynomial in polynomials
-            ),
-            default=1,
-        ),
+        max((bound[1] for bound in coefficient_bounds), default=1),
         max(
             (value.denominator.bit_length() for value in forcing.values()),
             default=1,
@@ -226,9 +225,7 @@ def _admit_transform(
     # coefficient growth (e.g. a_(n+r)=0 has unit coefficients throughout).
     evaluation_growth_bits = maximum_degree * operator.order.bit_length()
     growth_bits = (
-        max(numerator_bits, boundary_numerator_bits)
-        + denominator_bits
-        + 32
+        max(numerator_bits, boundary_numerator_bits, denominator_bits)
         + 8 * maximum_degree
         + evaluation_growth_bits
     )

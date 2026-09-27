@@ -21,4 +21,3 @@ there is no graph artifact carrier or invariant-batch registry.
 - [Chromatic bipartition feasibility](graph-chromatic-bipartition.md)
 - [Induced edge-deletion profiles](induced-edge-deletion-profile.md)
 - [Exact graph deletion decks](graph-decks.md)
-- [Anonymous vertex-deck degree multiset](anonymous-vertex-degree-multiset.md)

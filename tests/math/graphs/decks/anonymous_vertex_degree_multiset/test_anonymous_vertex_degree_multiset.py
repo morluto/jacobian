@@ -11,11 +11,10 @@ from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardMultisetRequest,
 )
 from jacobian.math.graphs.decks.anonymous_vertex_degree_multiset import (
-    AnonymousVertexDeckDegreeMultiset,
     anonymous_vertex_deck_degree_multiset,
 )
-from jacobian.math.graphs.decks.anonymous_vertex_degree_multiset._tools import TOOLS
 from jacobian.math.graphs.decks.operations import anonymous_graph_card_multiset
+from jacobian.math.graphs.realization._models import DegreeSequence
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -47,10 +46,10 @@ def _source_degrees(graph: SimpleUndirectedGraph) -> tuple[int, ...]:
     return tuple(sorted(degrees.values(), reverse=True))
 
 
-def test_exhaustive_small_graphs_recover_direct_source_degree_multiset() -> None:
+def test_exhaustive_small_graphs_recover_canonical_degree_sequences() -> None:
     empty_graph = SimpleUndirectedGraph(vertices=(), edges=())
-    assert (
-        anonymous_vertex_deck_degree_multiset(_vertex_deck(empty_graph)).degrees == ()
+    assert anonymous_vertex_deck_degree_multiset(_vertex_deck(empty_graph)) == DegreeSequence(
+        degrees=()
     )
     for order in range(1, 5):
         for edge_mask in range(1 << (order * (order - 1) // 2)):
@@ -61,7 +60,7 @@ def test_exhaustive_small_graphs_recover_direct_source_degree_multiset() -> None
                 continue
             result = anonymous_vertex_deck_degree_multiset(_vertex_deck(source))
             assert result.degrees == _source_degrees(source)
-            assert sum(result.degrees) == 2 * result.edge_count.source_edge_count
+            assert sum(result.degrees) == 2 * len(source.edges)
 
 
 def test_divisible_but_nongraphical_degree_profile_is_rejected() -> None:
@@ -73,33 +72,14 @@ def test_divisible_but_nongraphical_degree_profile_is_rejected() -> None:
         anonymous_vertex_deck_degree_multiset(deck)
 
 
-def test_result_round_trip_preserves_composed_edge_count_and_degrees() -> None:
-    result = anonymous_vertex_deck_degree_multiset(_vertex_deck(_graph(4, 0b101101)))
-    restored = AnonymousVertexDeckDegreeMultiset.model_validate_json(
-        result.model_dump_json()
-    )
-    assert restored == result
-    assert restored.edge_count.deck == _vertex_deck(_graph(4, 0b101101))
+def test_result_is_the_canonical_reusable_degree_sequence() -> None:
+    deck = _vertex_deck(_graph(4, 0b101101))
+    result = anonymous_vertex_deck_degree_multiset(deck)
+    assert type(result) is DegreeSequence
+    assert DegreeSequence.model_validate_json(result.model_dump_json()) == result
 
 
-def test_operation_manifest_uses_the_existing_anonymous_deck_carrier() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "graph.deck.anonymous_vertex.degree_multiset.compute"
-    )
-    assert tool.request_type is AnonymousGraphCardMultiset
-    result = tool.run(_vertex_deck(_graph(3, 0b011)))
-    assert result.degrees == (2, 1, 1)
-
-
-def test_decoded_degree_values_remain_bounded() -> None:
-    result = anonymous_vertex_deck_degree_multiset(_vertex_deck(_graph(3, 0b011)))
-    for degrees in ((99, 1, 1), (1, 2), (1, 2, 0), ()):
+def test_canonical_degree_sequence_retains_global_scalar_bounds() -> None:
+    for degrees in ((99, 1, 1),):
         with pytest.raises(ValidationError):
-            AnonymousVertexDeckDegreeMultiset.model_validate(
-                {
-                    "edge_count": result.edge_count.model_dump(mode="python"),
-                    "degrees": degrees,
-                }
-            )
+            DegreeSequence.model_validate({"degrees": degrees})

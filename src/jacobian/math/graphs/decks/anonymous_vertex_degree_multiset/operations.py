@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import AnonymousGraphCardMultiset
-from jacobian.math.graphs.decks.anonymous_vertex_degree_multiset._models import (
-    AnonymousVertexDeckDegreeMultiset,
-)
 from jacobian.math.graphs.decks.anonymous_vertex_edge_count.operations import (
     anonymous_vertex_deck_edge_count,
 )
@@ -16,7 +13,7 @@ from jacobian.math.graphs.realization.operations import degree_sequence_profile
 
 def anonymous_vertex_deck_degree_multiset(
     deck: AnonymousGraphCardMultiset,
-) -> AnonymousVertexDeckDegreeMultiset:
+) -> DegreeSequence:
     """Recover the source degree multiset through the anonymous edge count.
 
     For each deleted-vertex card ``G-v``, ``deg_G(v)=|E(G)|-|E(G-v)|``.
@@ -62,7 +59,4 @@ def anonymous_vertex_deck_degree_multiset(
             code="graph_deck.anonymous_degree_nongraphical",
             message="card edge counts imply a nongraphical source degree multiset",
         )
-    return AnonymousVertexDeckDegreeMultiset.model_construct(
-        edge_count=edge_count,
-        degrees=degrees,
-    )
+    return DegreeSequence(degrees=degrees)

@@ -51,6 +51,10 @@ Native Python callers can use domain functions without a catalog or server.
   exact factorial-ratio carriers and their support semantics.
 - [Schemas and value interoperability](reference/value-interoperability.md) —
   canonical ownership, explicit conversions, and serialized trust boundaries.
+- [Graph deck values](reference/graph-decks.md) — source-bound deletion families
+  versus anonymous graph-card multisets and their canonical form.
+- [Finite basis matroids](reference/finite-basis-matroids.md) — the bounded
+  complete-basis carrier and exact basis-exchange contract.
 - [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
   polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and

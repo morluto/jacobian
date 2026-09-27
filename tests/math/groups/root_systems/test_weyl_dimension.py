@@ -64,6 +64,16 @@ def test_reducible_cartan_matrix_multiplies_component_dimensions() -> None:
     assert len(result.positive_root_factors) == 2
 
 
+def test_large_exact_dimension_and_pairings_roundtrip_as_json_strings() -> None:
+    result = weyl_dimension(A1, (1 << 53,))
+    assert result.dimension == (1 << 53) + 1
+    encoded = result.model_dump_json()
+    assert '"highest_weight":["9007199254740992"]' in encoded
+    assert '"dimension":"9007199254740993"' in encoded
+    assert '"numerator_pairing":"9007199254740993"' in encoded
+    assert type(result).model_validate_json(encoded) == result
+
+
 @pytest.mark.parametrize("weight", ((-1, 0), (1,), (1, 0, 0)))
 def test_rejects_non_dominant_or_wrong_axis_native_weights(
     weight: tuple[int, ...],

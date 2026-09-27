@@ -21,10 +21,10 @@ not only a finite q-prefix.
 
 The basis and coordinate expansion operations return exact finite q-prefixes,
 while `modular_form.space.sturm_bound.compute` returns the exact Sturm integer.
-Callers can compose these values and compare the required coefficients
-themselves; Jacobian publishes no general global equality checker. For the
-narrow order-6 `S_2` family at levels 13, 26, and 39, explicit character
-inflation and common-target comparison are available through
+`modular_form.equal.check` decides global equality for the represented rational
+families and same-space cyclotomic forms; its result retains both operands.
+For the narrow order-6 `S_2` family at levels 13, 26, and 39, explicit
+character inflation and common-target comparison are available through
 `modular_form.character_coordinates.transport.compute` and
 `modular_form.character.equal.check`, as described in [Rational Gamma0
 modular-form bases](modular-forms-gamma0-rational-bases.md). For a Sturm bound

@@ -1,9 +1,13 @@
 """Supported exact values and operations for bounded modular-form spaces."""
 
+from jacobian.math.number_theory.modular_forms._models import (
+    ModularFormEqualityResult,
+)
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,
     modular_form_coordinates_atkin_lehner,
+    modular_form_coordinates_equal,
     modular_form_coordinates_from_frame,
     modular_form_coordinates_hecke,
     modular_form_coordinates_product,
@@ -19,12 +23,14 @@ from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_hecke_matrix_in_frame,
     modular_form_operator_image,
     modular_form_operator_image_q_expansion,
+    modular_form_space_inclusion,
 )
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_basis_q_expansions,
     modular_character_coordinates_hecke,
     modular_character_coordinates_product,
     modular_character_coordinates_q_expansion,
+    modular_character_coordinates_u_prime,
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
@@ -38,6 +44,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
     ModularCharacterTransportedForm,
+    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
     modular_character_coordinates_equal_in_common_space,
@@ -53,6 +60,7 @@ from jacobian.math.number_theory.modular_forms.field_coordinates import (
 )
 from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
+    modular_form_atkin_lehner_target,
     named_q_expansion,
     space_dimension,
     sturm_bound,
@@ -63,6 +71,7 @@ from jacobian.math.number_theory.modular_forms.transforms import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularFormAtkinLehnerTarget,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -73,6 +82,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormOperatorImage,
     ModularFormOperatorImagePrefix,
     ModularFormSpace,
+    ModularFormSpaceInclusion,
     ModularQExpansion,
 )
 
@@ -88,9 +98,12 @@ __all__ = [
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
     "ModularCharacterTransportedForm",
+    "ModularCharacterUPrimeRequest",
+    "ModularFormAtkinLehnerTarget",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
+    "ModularFormEqualityResult",
     "ModularFormFieldQExpansion",
     "ModularFormFramedCoordinates",
     "ModularFormFramedHeckeMatrix",
@@ -98,6 +111,7 @@ __all__ = [
     "ModularFormOperatorImage",
     "ModularFormOperatorImagePrefix",
     "ModularFormSpace",
+    "ModularFormSpaceInclusion",
     "ModularQExpansion",
     "formal_q_series_u_operator",
     "formal_q_series_v_operator",
@@ -108,11 +122,14 @@ __all__ = [
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
     "modular_character_coordinates_transport",
+    "modular_character_coordinates_u_prime",
     "modular_character_hecke_matrix",
+    "modular_form_atkin_lehner_target",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
     "modular_form_coordinates_add",
     "modular_form_coordinates_atkin_lehner",
+    "modular_form_coordinates_equal",
     "modular_form_coordinates_extend_field",
     "modular_form_coordinates_from_frame",
     "modular_form_coordinates_hecke",
@@ -131,6 +148,7 @@ __all__ = [
     "modular_form_hecke_matrix_in_frame",
     "modular_form_operator_image",
     "modular_form_operator_image_q_expansion",
+    "modular_form_space_inclusion",
     "named_q_expansion",
     "space_dimension",
     "sturm_bound",

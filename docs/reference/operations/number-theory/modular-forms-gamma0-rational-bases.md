@@ -51,6 +51,8 @@ formula implementation.
 See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
 for the original exact q-prefix and same-space character-coordinate contract.
 Other character spaces and general field-valued Gamma0 bases remain unsupported.
+See [cyclotomic character-space bases](modular-forms-cyclotomic-character-coordinates.md)
+for the order-three dimensions and canonical basis prefixes.
 
 For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
 supports explicit nested-level inclusion from level 13, 26, or 39 into level
@@ -109,6 +111,24 @@ action through the Sturm-determining prefix. It makes no claim about Hecke
 matrices on other character spaces.
 [PARI modular-forms reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_forms.html)
 
+The character-coordinate slice also supports the modular `U_p` action at bad
+primes for order-six characters when `(N,p) = (26,2), (26,13), (39,3), (39,13)`.
+The operation accepts only order-six cusp coordinates in the exact weight-two
+spaces already represented above, and returns coordinates in that same space. It computes
+the complete source prefix through `p * (B - 1)`, where `B` is the target
+Sturm precision, selects `a_(p n)` for each target coefficient, and solves
+against the canonical target basis through all `B` coefficients. Exact closure
+is checked before returning; finite coefficient envelopes are established for
+both conjugate conductor-13 order-six characters at each admitted pair.
+
+PARI's modular-symbol reference distinguishes `T_p` from `U_p` by level: its
+`mshecke` operation returns `U_p` when `p` divides `N` ([PARI modular-symbols
+reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_symbols.html)).
+The q-coefficient action used here is the exact coefficient projection
+`a_n(U_p f) = a_(p n)(f)`. The operation does not infer modularity from a
+formal-series `U_p` transform: modularity follows from the represented source
+space and the exact same-space Sturm reconstruction.
+
 Before backend work, Jacobian admits level, weight, dimension, Sturm
 precision, aggregate work, rational elimination growth, and serialized output.
 The PARI call runs in a request-scoped resource-limited worker so it can be
@@ -127,11 +147,17 @@ representations and are not implied by these bases.
 
 ## Nested-space coordinate transport
 
+`modular_form.space.inclusion.compute` constructs a reusable
+`ModularFormSpaceInclusion` for the natural map from a trivial-character QQ
+space on `Gamma0(M)` into one on `Gamma0(N)`, when `M` divides `N` and the
+weights agree. It records both spaces. `Gamma0(N)` is a subgroup of `Gamma0(M)`
+under this divisibility condition. The map preserves cusp forms; the full space
+maps to the full space, and the cusp space also embeds in the full space.
+
 `modular_form.coordinates.transport.compute` expresses an exact coordinate-defined
 form in a target space when both are over `QQ`, have trivial character and the
-same weight, and the source level divides the target level. The full space maps
-to the full space; a cuspidal form maps to either the cusp space or full space.
-It computes the source expansion through the target Sturm-determining precision,
+same weight, and the supplied inclusion's source equals the form's space. It
+computes the source expansion through the target Sturm-determining precision,
 then solves uniquely in the target's canonical basis. The returned
 `ModularFormCoordinates` is bound to the exact target space and basis.
 

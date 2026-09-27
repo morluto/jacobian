@@ -240,6 +240,7 @@ def test_inflated_character_basis_has_independent_dimension_and_sturm_rank(
     ],
 )
 def test_conductor_thirteen_order_three_character_basis(
+    monkeypatch: pytest.MonkeyPatch,
     level: int,
     coordinate: int,
     kind: str,
@@ -255,6 +256,13 @@ def test_conductor_thirteen_order_three_character_basis(
         character=character,
         coefficient_domain=RationalCyclotomicField(order=6),
     )
+    if dimension == 0:
+
+        def backend_must_not_run(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("a zero-dimensional basis needs no PARI worker")
+        monkeypatch.setattr(
+            character_basis_module, "pari_character_basis", backend_must_not_run
+        )
     basis = modular_character_basis_q_expansions(space)
 
     # Cohen--Oesterle dimensions independently distinguish this order-three
@@ -263,6 +271,13 @@ def test_conductor_thirteen_order_three_character_basis(
     assert len(basis.elements) == dimension
     assert basis.precision == precision
     assert basis.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1"
+    if dimension == 0:
+        zero = ModularFormCoordinates(
+            space=space,
+            basis_id=basis.basis_id,
+            coordinates=(),
+        )
+        assert zero.coordinates == ()
     restored = TypeAdapter(ModularCharacterBasis).validate_json(basis.model_dump_json())
     assert restored == basis
     vectors = tuple(

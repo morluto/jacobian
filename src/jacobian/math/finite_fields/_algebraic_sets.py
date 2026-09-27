@@ -21,6 +21,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.finite_fields._admission import require_field
 from jacobian.math.finite_fields.values import (
     MAX_FINITE_FIELD_PRESENTATION_ORDER,
     Axis,
@@ -557,6 +558,39 @@ def _embed_element(
     )
 
 
+def embed_field_element(
+    element: FiniteFieldElement, embedding: FieldEmbedding
+) -> FiniteFieldElement:
+    """Map one element along an admitted explicit finite-field embedding.
+
+    The source parent and source-generator root relation are checked here;
+    callers never infer an inclusion from presentation names or moduli.
+    """
+    try:
+        element = FiniteFieldElement.model_validate(element.model_dump())
+        embedding = FieldEmbedding.model_validate(embedding.model_dump())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element", "embedding"),
+            code="finite_field.embedding_value_invalid",
+            message="element and embedding must be canonical finite-field values",
+        ) from exc
+    require_field(embedding.source)
+    require_field(embedding.target)
+    if element.presentation != embedding.source:
+        raise OperationDomainValidationError(
+            location=("element", "embedding"),
+            code="finite_field.embedding_source_mismatch",
+            message="element presentation must equal the embedding source",
+        )
+    _check_embedding_root(embedding)
+    from jacobian.math.finite_fields import _flint as flint
+
+    return _embed_element(
+        element, embedding, target_context=flint.context(embedding.target)
+    )
+
+
 def base_change_system(
     system: PolynomialSystem, embedding: FieldEmbedding
 ) -> PolynomialSystem:
@@ -633,6 +667,7 @@ __all__ = [
     "affine_zero_count",
     "affine_zero_set",
     "base_change_system",
+    "embed_field_element",
     "projective_zero_count",
     "projective_zero_set",
     "verify_affine_zero_set",

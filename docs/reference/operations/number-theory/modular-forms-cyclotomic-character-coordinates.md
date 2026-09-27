@@ -1,4 +1,5 @@
 # Cyclotomic character coordinates and equality
+# Cyclotomic character-space bases
 
 `ModularFormCoordinates` can represent a vector in the canonical q-Sturm RREF
 basis returned by `modular_form.character_basis.compute` for the bounded
@@ -53,6 +54,11 @@ compares coordinates in the same parent only. Cross-level or cross-character
 transport, nonidentity coefficient-field maps, Hecke actions on these generic
 vectors outside the one-dimensional slice above, and equality of unrelated
 space presentations remain unsupported.
+The basis producer checks its dimension against the independent formula and
+verifies the full q-Sturm rank before it publishes the basis. Beyond the
+existing character-specific transport and comparison path, these generalized
+bases do not add generic equality, Hecke actions, cross-level transport, or
+nonidentity coefficient-field maps.
 
 [Gamma0 basis construction](modular-forms-gamma0-rational-bases.md) ·
 [Number-theory operations](index.md)

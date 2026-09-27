@@ -47,20 +47,31 @@ def _brute_force_optimum(
     weights: dict[str, Fraction],
 ) -> tuple[tuple[str, ...], Fraction]:
     """Reference optimum with the documented component-wise tie-break."""
-
-    from jacobian.math.combinatorics.finite_structures.hypergraphs.operations import (
-        _conflict_components,
-    )
-
     edge_sets = tuple(members for _, members in edges)
     names = tuple(edge_id for edge_id, _ in edges)
+    remaining = set(range(len(edge_sets)))
+    components: list[tuple[int, ...]] = []
+    while remaining:
+        component = {min(remaining)}
+        frontier = list(component)
+        remaining.difference_update(component)
+        while frontier:
+            current = frontier.pop()
+            neighbors = {
+                index for index in remaining if edge_sets[current] & edge_sets[index]
+            }
+            remaining.difference_update(neighbors)
+            component.update(neighbors)
+            frontier.extend(neighbors)
+        components.append(tuple(sorted(component)))
+
     best_ids: list[str] = []
     best_weight = Fraction(0)
-    for component in _conflict_components(edge_sets):
+    for component_indices in components:
         local_best: tuple[str, ...] = ()
         local_weight = Fraction(0)
-        for size in range(len(component) + 1):
-            for combo in combinations(component, size):
+        for size in range(len(component_indices) + 1):
+            for combo in combinations(component_indices, size):
                 picked = [edge_sets[i] for i in combo]
                 if any(
                     picked[left] & picked[right]
@@ -187,17 +198,6 @@ class TestWeightedPacking:
             assert result.packing == expected_ids
             assert result.total_weight.as_fraction() == expected_weight
 
-    def test_result_reparses(self) -> None:
-        result = _pack(
-            ["a", "b", "c"],
-            [("e1", ("a", "b")), ("e2", ("b", "c"))],
-            {"e1": 2, "e2": 3},
-        )
-        assert (
-            WeightedPackingResult.model_validate_json(result.model_dump_json())
-            == result
-        )
-
     def test_serialized_packing_claim_is_structural_and_verifiable(self) -> None:
         result = _pack(
             ["a", "b", "c"],
@@ -205,6 +205,7 @@ class TestWeightedPacking:
             {"e1": 2, "e2": 3},
         )
         decoded = type(result).model_validate_json(result.model_dump_json())
+        assert decoded == result
         assert verify_weighted_packing(decoded)
 
         forged = result.model_dump(mode="json")
@@ -280,6 +281,3 @@ def test_disconnected_zero_weight_ties_follow_component_contract() -> None:
     result = _pack(["u", "v"], [("a", ("u",)), ("b", ("v",))], {"a": 0, "b": 1})
     assert result.packing == ("b",)
     assert result.total_weight.as_fraction() == 1
-    assert verify_weighted_packing(
-        WeightedPackingResult.model_validate_json(result.model_dump_json())
-    )

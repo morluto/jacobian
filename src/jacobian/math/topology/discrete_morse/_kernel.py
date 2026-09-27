@@ -21,6 +21,10 @@ from jacobian.math.topology._models import (
     FiniteSimplicialComplex,
     Simplex,
 )
+from jacobian.math.topology.chain_complexes.values import (
+    ChainComplexValue,
+    CoefficientRing,
+)
 from jacobian.math.topology.discrete_morse._models import (
     MAX_MORSE_BOUNDARY_ENTRIES,
     MAX_MORSE_CELLS,
@@ -37,7 +41,9 @@ from jacobian.math.topology.discrete_morse._models import (
     GradientPathCount,
     GradientPathsResult,
     GradientPathStep,
+    IntegerMorseComplexResult,
     MatchingPair,
+    MinimumMorseMatchingResult,
     MorseBoundaryEntry,
     MorseComplexResult,
     MorseGradientStepKind,
@@ -48,6 +54,8 @@ from jacobian.math.topology.discrete_morse._models import (
 _WHITE, _GRAY, _BLACK = 0, 1, 2
 _DOWN = MorseGradientStepKind.DOWN
 _UP = MorseGradientStepKind.UP
+MAX_MINIMUM_MORSE_WORK = 20_000_000
+MAX_MINIMUM_MORSE_OUTPUT_CELLS = 8_000_000
 
 
 def _resource(
@@ -292,14 +300,7 @@ def construct_matching(
         for face in group:
             index_of[face] = len(flat)
             flat.append(face)
-    adjacency: list[list[int]] = [[] for _ in flat]
-    for face, coface in covers:
-        if matched.get(face) == coface:
-            adjacency[index_of[face]].append(index_of[coface])
-        else:
-            adjacency[index_of[coface]].append(index_of[face])
-
-    traversal = _iterative_cycle_or_order(cell_count, tuple(adjacency))
+    traversal = _matching_cycle_or_order(cell_count, covers, matched, index_of)
     if isinstance(traversal, _DirectedCycle):
         return DiscreteMorseMatchingResult._from_kernel(
             outcome=MorseMatchingOutcome.CYCLIC_MATCHING,
@@ -324,6 +325,163 @@ def construct_matching(
         fault=None,
         fault_message=None,
         fault_pair_index=None,
+    )
+
+
+def _matching_cycle_or_order(
+    cell_count: int,
+    covers: list[tuple[Simplex, Simplex]],
+    matched: dict[Simplex, Simplex],
+    index_of: dict[Simplex, int],
+) -> _DirectedTraversal:
+    """Classify one matching using the directed-Hasse convention above."""
+
+    adjacency: list[list[int]] = [[] for _ in range(cell_count)]
+    for face, coface in covers:
+        if matched.get(face) == coface:
+            adjacency[index_of[face]].append(index_of[coface])
+        else:
+            adjacency[index_of[coface]].append(index_of[face])
+    return _iterative_cycle_or_order(cell_count, tuple(adjacency))
+
+
+def _minimum_matching_node_bound(
+    covers: list[tuple[Simplex, Simplex]], node_ceiling: int
+) -> int | None:
+    """Count the nodes of the disjointness-pruned minimum-matching search.
+
+    The search includes a cover only when both of its cells are still
+    unmatched, so the reachable states are the partial matchings of the cover
+    relation rather than all ``2**E`` subsets.  This returns the exact node
+    count when it is at most ``node_ceiling`` and ``None`` when the pruned
+    decision tree has more nodes.  The caller proves the cover count is small
+    enough that this recursion stays shallow before calling it.
+    """
+
+    nodes = 0
+    limit = node_ceiling + 1
+
+    def visit(position: int, used: set[Simplex]) -> None:
+        nonlocal nodes
+        if nodes >= limit:
+            return
+        nodes += 1
+        if nodes >= limit or position == len(covers):
+            return
+        face, coface = covers[position]
+        if face not in used and coface not in used:
+            used.add(face)
+            used.add(coface)
+            visit(position + 1, used)
+            used.discard(face)
+            used.discard(coface)
+        if nodes >= limit:
+            return
+        visit(position + 1, used)
+
+    visit(0, set())
+    return nodes if nodes <= node_ceiling else None
+
+
+def compute_minimum_matching(
+    complex_: FiniteSimplicialComplex,
+) -> MinimumMorseMatchingResult:
+    """Exhaustively maximize matched pairs under a pre-admitted work bound."""
+
+    cells = _closure_cells(complex_)
+    covers = _cover_relations(cells)
+    cell_count = _admit_envelope(cells, (), covers)
+    # A matching is a set of disjoint cover pairs, so the search tree branches
+    # only on covers disjoint from the cells already matched.  Every node and
+    # leaf takes at most linear work in the source cells and cover edges, and
+    # the all-skip path plus each single-cover include path gives the sound
+    # lower bound (E + 1)(E + 2) / 2 on the node count.  Rejecting on that
+    # cheap bound first keeps the exact count below shallow recursion for every
+    # admitted complex.  The exact count below is a conservative bound: the
+    # include-first search with an incumbent adds pruning, never more nodes.
+    per_node = cell_count + len(covers) + 1
+    cover_count = len(covers)
+    node_lower_bound = (cover_count + 1) * (cover_count + 2) // 2
+    if node_lower_bound * per_node > MAX_MINIMUM_MORSE_WORK:
+        raise _resource(
+            "minimum_matching.admission.search_work",
+            "complete disjointness-pruned minimum-matching search exceeds the "
+            f"{MAX_MINIMUM_MORSE_WORK}-unit work envelope",
+            ("complex",),
+        )
+    node_bound = _minimum_matching_node_bound(
+        covers, MAX_MINIMUM_MORSE_WORK // per_node
+    )
+    if node_bound is None:
+        raise _resource(
+            "minimum_matching.admission.search_work",
+            "complete disjointness-pruned minimum-matching search exceeds the "
+            f"{MAX_MINIMUM_MORSE_WORK}-unit work envelope",
+            ("complex",),
+        )
+    output_bytes_bound = (
+        4096
+        + 5 * cell_count * (complex_.dimension + 1) * 40
+        + 5 * cell_count * 64
+        + len(complex_.vertices) * 40
+    )
+    if output_bytes_bound > MAX_MINIMUM_MORSE_OUTPUT_CELLS:
+        raise _resource(
+            "minimum_matching.admission.output_bytes",
+            f"minimum-matching result has a conservative output bound of "
+            f"{output_bytes_bound} bytes, above the "
+            f"{MAX_MINIMUM_MORSE_OUTPUT_CELLS}-unit output envelope",
+            ("complex",),
+        )
+
+    flat = tuple(face for group in cells for face in group)
+    index_of = {face: position for position, face in enumerate(flat)}
+    best_pairs: tuple[MatchingPair, ...] = ()
+    best_order = _matching_cycle_or_order(cell_count, covers, {}, index_of)
+    if not isinstance(best_order, _TopologicalOrder):
+        raise RuntimeError("the empty matching must be acyclic")
+    selected: list[MatchingPair] = []
+    used: set[Simplex] = set()
+
+    def search(position: int) -> None:
+        nonlocal best_pairs, best_order
+        if len(selected) + len(covers) - position <= len(best_pairs):
+            return
+        if position == len(covers):
+            matched = {pair.face: pair.coface for pair in selected}
+            traversal = _matching_cycle_or_order(cell_count, covers, matched, index_of)
+            if isinstance(traversal, _TopologicalOrder):
+                best_pairs = tuple(selected)
+                best_order = traversal
+            return
+
+        face, coface = covers[position]
+        if face not in used and coface not in used:
+            selected.append(MatchingPair(face=face, coface=coface))
+            used.update((face, coface))
+            search(position + 1)
+            used.remove(face)
+            used.remove(coface)
+            selected.pop()
+        search(position + 1)
+
+    search(0)
+    best_used = {cell for pair in best_pairs for cell in (pair.face, pair.coface)}
+    matching = DiscreteMorseMatchingResult._from_kernel(
+        outcome=MorseMatchingOutcome.ACYCLIC_MATCHING,
+        complex=complex_,
+        pairs=best_pairs,
+        critical_profile=_critical_profile(complex_, cells, best_used),
+        topological_order=tuple(flat[node] for node in best_order.nodes),
+        hasse_edges=len(covers),
+        closed_v_path=(),
+        fault=None,
+        fault_message=None,
+        fault_pair_index=None,
+    )
+    return MinimumMorseMatchingResult._from_kernel(
+        matching=matching,
+        minimum_critical_cell_count=cell_count - 2 * len(best_pairs),
     )
 
 
@@ -665,4 +823,133 @@ def compute_morse_complex(
     )
 
 
-__all__ = ["compute_gradient_paths", "compute_morse_complex", "construct_matching"]
+def _simplicial_incidence(coface: Simplex, face: Simplex) -> int:
+    """Return the oriented boundary incidence for lexicographic simplex bases."""
+
+    for position in range(len(coface)):
+        if coface[:position] + coface[position + 1 :] == face:
+            return -1 if position % 2 else 1
+    raise RuntimeError("gradient step is not a codimension-one simplex incidence")
+
+
+def _signed_gradient_path_coefficient(
+    steps: tuple[tuple[MorseGradientStepKind, Simplex, Simplex], ...],
+) -> int:
+    """Compute the Forman orientation transport and initial boundary sign.
+
+    The simplex orientations use sorted vertex order. Across a matched upper
+    cell u, Forman transports the orientation from lower face a to the next
+    lower face b by requiring (du,a)(du,b)=-1. Relative to fixed orientations
+    this contributes ``-(u:a)(u:b)``; the initial critical-cell boundary
+    incidence is then multiplied by each matched-step transport sign.
+    """
+
+    source = steps[0][1]
+    first_face = steps[0][2]
+    coefficient = _simplicial_incidence(source, first_face)
+    for index, (kind, lower, upper) in enumerate(steps):
+        if kind is not _UP:
+            continue
+        if index + 1 >= len(steps) or steps[index + 1][0] is not _DOWN:
+            raise RuntimeError("matched gradient step has no following down incidence")
+        next_face = steps[index + 1][2]
+        coefficient *= -_simplicial_incidence(upper, lower) * _simplicial_incidence(
+            upper, next_face
+        )
+    return coefficient
+
+
+def compute_integer_morse_complex(
+    complex_: FiniteSimplicialComplex,
+    pairs: tuple[MatchingPair, ...],
+) -> IntegerMorseComplexResult:
+    """Compute the bounded integral Morse differential from signed paths."""
+
+    admitted = _admit_acyclic_matching(complex_, pairs)
+    matching = admitted.result
+    profile = admitted.critical_profile
+    cells = _closure_cells(complex_)
+    basis_by_dimension = tuple(
+        CriticalCellBasis(
+            dimension=dimension,
+            cells=tuple(
+                cell for cell in profile.critical_cells if len(cell) - 1 == dimension
+            ),
+        )
+        for dimension in range(complex_.dimension + 1)
+    )
+    if any(len(basis.cells) > 64 for basis in basis_by_dimension):
+        raise _resource(
+            "admission.integer_chain_rank",
+            "each integral Morse chain group is limited to 64 critical cells",
+            ("pairs",),
+        )
+    matrix_cells = sum(
+        len(basis_by_dimension[dimension - 1].cells)
+        * len(basis_by_dimension[dimension].cells)
+        for dimension in range(1, len(basis_by_dimension))
+    )
+    if matrix_cells > 4096:
+        raise _resource(
+            "admission.integer_matrix_cells",
+            "integral Morse differentials exceed the 4096-cell output envelope",
+            ("pairs",),
+        )
+
+    critical = set(profile.critical_cells)
+    matched, upper = _matching_maps(matching.pairs)
+    faces_of = _faces_by_coface(cells)
+    row_indices = tuple(
+        {cell: index for index, cell in enumerate(basis.cells)}
+        for basis in basis_by_dimension
+    )
+    differential_matrices: list[tuple[tuple[int, ...], ...]] = []
+    total_paths = 0
+    total_states = 0
+    for dimension in range(1, len(basis_by_dimension)):
+        lower_basis = basis_by_dimension[dimension - 1].cells
+        upper_basis = basis_by_dimension[dimension].cells
+        matrix = [[0] * len(upper_basis) for _ in lower_basis]
+        for column, cell in enumerate(upper_basis):
+            raw_paths, states = _enumerate_gradient_paths(
+                faces_of,
+                matched,
+                upper,
+                critical,
+                cell,
+                None,
+                max_paths=MAX_MORSE_GRADIENT_PATHS - total_paths,
+                max_states=MAX_MORSE_GRADIENT_STATES - total_states,
+                max_steps=MAX_MORSE_PATH_STEPS,
+            )
+            total_paths += len(raw_paths)
+            total_states += states
+            for steps in raw_paths:
+                coefficient = _signed_gradient_path_coefficient(steps)
+                target_index = row_indices[dimension - 1][steps[-1][2]]
+                matrix[target_index][column] += coefficient
+        differential_matrices.append(tuple(tuple(row) for row in matrix))
+
+    value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.INTEGER,
+        degree_min=0,
+        degree_max=complex_.dimension,
+        basis_sizes=tuple(len(basis.cells) for basis in basis_by_dimension),
+        differential_matrices=tuple(differential_matrices),
+    )
+    return IntegerMorseComplexResult._from_kernel(
+        complex=complex_,
+        pairs=matching.pairs,
+        critical_profile=profile,
+        critical_cells_by_dimension=basis_by_dimension,
+        chain_complex=value,
+        gradient_path_total=total_paths,
+    )
+
+
+__all__ = [
+    "compute_gradient_paths",
+    "compute_integer_morse_complex",
+    "compute_morse_complex",
+    "construct_matching",
+]

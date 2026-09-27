@@ -44,6 +44,8 @@ from jacobian.math.groups.root_systems._models import (
     WeylElementLengthResult,
     WeylElementOrderResult,
     WeylElementRequest,
+    WeylElementRootActionRequest,
+    WeylElementWeightActionRequest,
     WeylExponentsResult,
     WeylGroupOrderResult,
     WeylLongestElementResult,
@@ -54,6 +56,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylVectorActionResult,
     WeylWeightOrbitRequest,
     WeylWeightOrbitResult,
+)
+from jacobian.math.groups.root_systems._weight_character_models import (
+    HighestWeightCharacterRequest,
+    IrreducibleWeightCharacter,
 )
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
@@ -89,6 +95,9 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.root_actions import weyl_element_act_on_root
+from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
+from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -219,6 +228,18 @@ def _run_weyl_element_inverse(request: WeylElementInverseRequest) -> WeylElement
     return weyl_element_inverse(request.element)
 
 
+def _run_weyl_element_weight_action(
+    request: WeylElementWeightActionRequest,
+) -> WeightLatticeVector:
+    return weyl_element_act_on_weight(request.element, request.weight)
+
+
+def _run_weyl_element_root_action(
+    request: WeylElementRootActionRequest,
+) -> RootLatticeVector:
+    return weyl_element_act_on_root(request.element, request.vector)
+
+
 def _run_weyl_bruhat_interval(
     request: WeylBruhatIntervalRequest,
 ) -> WeylBruhatIntervalResult:
@@ -251,6 +272,12 @@ def _run_weyl_weight_orbit(
 
 def _run_weyl_dimension(request: WeylDimensionRequest) -> WeylDimensionResult:
     return weyl_dimension(request.matrix, request.highest_weight)
+
+
+def _run_highest_weight_character(
+    request: HighestWeightCharacterRequest,
+) -> IrreducibleWeightCharacter:
+    return highest_weight_character(request.matrix, request.highest_weight)
 
 
 _A2 = {
@@ -1087,6 +1114,117 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="weyl_group.element.act_on_weight.compute",
+        title="Apply a Weyl element to an exact weight vector",
+        description=(
+            "Apply a parent-bound finite Weyl element to a weight-lattice "
+            "vector in the same ordered Cartan datum. The result is the "
+            "canonical weight-lattice value in fundamental-weight coordinates; "
+            "the action is induced from the element's exact root-lattice matrix."
+        ),
+        request_type=WeylElementWeightActionRequest,
+        result_type=WeightLatticeVector,
+        run=_run_weyl_element_weight_action,
+        tags=("algebra", "root-system", "weyl-group", "weight", "action", "exact"),
+        discovery_terms=(
+            "Weyl element act on weight vector",
+            "Weyl group action on fundamental weight coordinates",
+            "apply Weyl transformation to weight lattice value",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_simple_reflection_on_fundamental_weight",
+                description=(
+                    "Apply s0 to the first fundamental weight of A2. Since "
+                    "alpha0=(2,-1) in fundamental-weight coordinates, the "
+                    "image is (-1,1)."
+                ),
+                input={
+                    "element": {
+                        "matrix": _A2["matrix"],
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                    "weight": {
+                        "datum": {
+                            "cartan_matrix": _A2["matrix"],
+                            "symmetrizer": [
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "root_to_weight": {
+                                "domain": "ZZ",
+                                "row_count": 2,
+                                "column_count": 2,
+                                "entries": [["2", "-1"], ["-1", "2"]],
+                            },
+                            "coroot_to_coweight": {
+                                "domain": "ZZ",
+                                "row_count": 2,
+                                "column_count": 2,
+                                "entries": [["2", "-1"], ["-1", "2"]],
+                            },
+                        },
+                        "coordinates": [1, 0],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.element.act_on_root.compute",
+        title="Apply a Weyl element to a root-lattice vector",
+        description=(
+            "Apply a canonical finite Weyl element to a root-lattice vector in "
+            "the same ordered Cartan datum. The result is the exact vector in "
+            "simple-root coordinates; the input need not itself be a root."
+        ),
+        request_type=WeylElementRootActionRequest,
+        result_type=RootLatticeVector,
+        run=_run_weyl_element_root_action,
+        tags=(
+            "algebra",
+            "root-system",
+            "weyl-group",
+            "root-lattice",
+            "action",
+            "exact",
+        ),
+        discovery_terms=(
+            "Weyl element act on root vector",
+            "Weyl group action on simple-root coordinates",
+            "apply Weyl transformation to root-lattice value",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_simple_reflection_on_root_vector",
+                description=(
+                    "Apply s0 to the first simple root of A2. The vector remains "
+                    "in the same root lattice and becomes (-1, 0)."
+                ),
+                input={
+                    "element": {
+                        "matrix": _A2["matrix"],
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                    "vector": {
+                        "datum": _A2_LATTICE_DATUM,
+                        "coordinates": [1, 0],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="weyl_group.word.act_on_root_vector.compute",
         title="Apply a Weyl word to a root-lattice vector",
         description=(
@@ -1144,6 +1282,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "ordered simple coroots."
                 ),
                 input={**_A2, "weight": [1, 0]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="root_system.highest_weight_character.compute",
+        title="Compute an exact irreducible type-A highest-weight character",
+        description=(
+            "Return the complete weight-multiplicity table for an irreducible "
+            "type-A representation using its dominant integral highest weight."
+        ),
+        request_type=HighestWeightCharacterRequest,
+        result_type=IrreducibleWeightCharacter,
+        run=_run_highest_weight_character,
+        tags=("algebra", "root-system", "representation", "character", "exact"),
+        discovery_terms=(
+            "highest weight character",
+            "weight multiplicities",
+            "Weyl character",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_adjoint_character",
+                description="Compute the eight-dimensional adjoint character of A2.",
+                input={"matrix": _A2["matrix"], "highest_weight": [1, 1]},
             ),
         ),
     ),

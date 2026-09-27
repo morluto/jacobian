@@ -373,10 +373,10 @@ class ModularFormCoordinates(StrictModel):
     def require_coefficient_parent(self) -> Self:
         field = self.space.coefficient_domain
         if self.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1":
-            if not 1 <= len(self.coordinates) <= 32:
+            if not 0 <= len(self.coordinates) <= 32:
                 raise _validation_error(
                     "character_coordinate_dimension",
-                    "general character coordinates must contain 1 through 32 entries",
+                    "general character coordinates must contain at most 32 entries",
                 )
             if type(field) is not RationalCyclotomicField or any(
                 type(value) is not RationalCyclotomicElement or value.field != field

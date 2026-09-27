@@ -52,19 +52,20 @@ _MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
 _MAX_CHARACTER_HECKE_COEFFICIENT_DIGITS = 4
-# (dimension, coefficient digits) for the finite S2 transport Sturm prefixes.
-# Cell counts are derived as dimension * precision * field degree. Independent
-# exact fixtures cover both conjugate characters at every entry.
+# (dimension, coefficient digits) for the order-six S2 transport Sturm
+# prefixes, keyed by character order, level, and precision. Cell counts are
+# derived as dimension * precision * field degree; independent exact fixtures
+# cover both conjugate characters at every entry.
 _TRANSPORT_STURM_BASIS_ENVELOPE = {
-    (13, 3): (1, 1),
-    (13, 8): (1, 1),
-    (13, 10): (1, 1),
-    (13, 29): (1, 1),
-    (26, 8): (2, 1),
-    (26, 10): (2, 1),
-    (26, 29): (2, 1),
-    (39, 10): (3, 1),
-    (39, 29): (3, 1),
+    (6, 13, 3): (1, 1),
+    (6, 13, 8): (1, 1),
+    (6, 13, 10): (1, 1),
+    (6, 13, 29): (1, 1),
+    (6, 26, 8): (2, 1),
+    (6, 26, 10): (2, 1),
+    (6, 26, 29): (2, 1),
+    (6, 39, 10): (3, 1),
+    (6, 39, 29): (3, 1),
 }
 # Exact finite envelope for the generalized-character U_p slice. The entries
 # are (Sturm precision, source precision, dimension, basis coefficient digits,
@@ -72,11 +73,25 @@ _TRANSPORT_STURM_BASIS_ENVELOPE = {
 # supported level/prime pair. The two conductor-13 order-six characters are
 # conjugates; focused fixtures check both conjugates at every pair.
 _CHARACTER_U_PRIME_ENVELOPE = {
-    (26, 2): (8, 15, 2, 1, 2, 2),
-    (26, 13): (8, 92, 2, 2, 2, 4),
-    (39, 3): (10, 28, 3, 1, 2, 4),
-    (39, 13): (10, 118, 3, 2, 2, 7),
+    (6, 26, 2): (8, 15, 2, 1, 2, 2),
+    (6, 26, 13): (8, 92, 2, 2, 2, 4),
+    (6, 39, 3): (10, 28, 3, 1, 2, 4),
+    (6, 39, 13): (10, 118, 3, 2, 2, 7),
 }
+
+
+def _character_order(space: ModularFormSpace) -> int:
+    """Return the exact order of an admitted character from its dual axes."""
+    character = cast(DirichletCharacter, space.character)
+    order = 1
+    for coordinate, axis_order in zip(
+        character.coordinates,
+        character.group.generator_orders,
+        strict=True,
+    ):
+        component_order = axis_order // gcd(coordinate, axis_order)
+        order = order * component_order // gcd(order, component_order)
+    return order
 
 
 def _domain(message: str) -> NoReturn:
@@ -158,7 +173,7 @@ def _require_basis_space(
         or getattr(getattr(character, "group", None), "modulus", None) != level
     ):
         _domain(
-            "character basis supports weight-two order-six character spaces at levels 13, 26, and 39 over Q(zeta_6)"
+            "character basis supports weight-two conductor-13 characters at levels 13, 26, and 39 over Q(zeta_6)"
         )
     request = _pari_character_request(space)
     return space, field, request
@@ -273,11 +288,18 @@ def _character_basis_from_admission(
         _domain(
             "character basis precision must reach the space Sturm bound and remain at most 128"
         )
-    work = precision * max(1, dimension) ** 2 * field.degree * 16
-    if field.degree != 2 or precision > MAX_PARI_BASIS_PRECISION or dimension > 32:
-        _domain(
-            "the admitted character basis exceeds its field, precision, or dimension bound"
+    if field.degree != 2 or dimension > 32:
+        _domain("the admitted character basis exceeds its field or dimension bound")
+    if dimension == 0:
+        return ModularCharacterBasis(
+            space=space,
+            basis_id="gamma0-cyclotomic-character-sturm-rref-v1",
+            precision=precision,
+            elements=(),
         )
+    work = precision * max(1, dimension) ** 2 * field.degree * 16
+    if precision > MAX_PARI_BASIS_PRECISION:
+        _domain("the admitted character basis exceeds its precision bound")
     # Reserve the complete value-type coefficient envelope before materializing
     # the backend basis and the cyclotomic RREF output.
     normalized_digits = MAX_CYCLIC_FIELD_ELEMENT_DIGITS
@@ -287,7 +309,9 @@ def _character_basis_from_admission(
             code="modular_form.character_basis_height_admission",
             message="normalized character coefficients exceed the exact height envelope",
         )
-    allocation_bytes = precision * field.degree * (2 * normalized_digits + 32)
+    allocation_bytes = (
+        max(1, dimension) * precision * field.degree * (2 * normalized_digits + 32)
+    )
     if work > _MAX_WORK or allocation_bytes > _MAX_ALLOCATION_BYTES:
         raise OperationResourceAdmissionError(
             location=("space",),
@@ -295,8 +319,9 @@ def _character_basis_from_admission(
             message="character-valued basis work or output exceeds its exact envelope",
         )
 
+    character_order = _character_order(space)
     transport_envelope = (
-        _TRANSPORT_STURM_BASIS_ENVELOPE.get((space.level, precision))
+        _TRANSPORT_STURM_BASIS_ENVELOPE.get((character_order, space.level, precision))
         if space.kind == "S"
         else None
     )
@@ -342,10 +367,12 @@ def _character_basis_from_admission(
     # linear combinations before requesting either basis from PARI.
     if (
         space.kind == "S"
-        and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
+        and (character_order, space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
         and any(
             canonical_rational_component_digits(value)
-            > _TRANSPORT_STURM_BASIS_ENVELOPE[(space.level, precision)][1]
+            > _TRANSPORT_STURM_BASIS_ENVELOPE[
+                (character_order, space.level, precision)
+            ][1]
             for vector in normalized
             for coefficient in vector
             for value in coefficient.coefficients_ascending
@@ -358,7 +385,12 @@ def _character_basis_from_admission(
         )
     basis_id = (
         CHARACTER_BASIS_ID
-        if space.level == 13 and space.kind == "S"
+        if (
+            space.level == 13
+            and space.kind == "S"
+            and type(space.character) is DirichletCharacter
+            and space.character.coordinates in ((2,), (10,))
+        )
         else "gamma0-cyclotomic-character-sturm-rref-v1"
     )
     elements = tuple(
@@ -907,9 +939,16 @@ def modular_character_coordinates_u_prime(
     form, space, field, character_request, dimensions, input_digits = admitted
     input_coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
     dimension = dimensions[0]
+    character_order = _character_order(space)
+    if character_order != 6:
+        raise OperationDomainValidationError(
+            location=("form", "space", "character"),
+            code="modular_form.character_u_prime_parent",
+            message="the bounded U_p coefficient envelope is established only for order-six conductor-13 characters",
+        )
     if (
         type(prime) is not int
-        or (space.level, prime) not in _CHARACTER_U_PRIME_ENVELOPE
+        or (character_order, space.level, prime) not in _CHARACTER_U_PRIME_ENVELOPE
     ):
         raise OperationDomainValidationError(
             location=("prime",),
@@ -923,7 +962,7 @@ def modular_character_coordinates_u_prime(
         basis_digits,
         matrix_digits,
         matrix_coefficient_bound,
-    ) = _CHARACTER_U_PRIME_ENVELOPE[(space.level, prime)]
+    ) = _CHARACTER_U_PRIME_ENVELOPE[(character_order, space.level, prime)]
     if (
         dimension != expected_dimension
         or _character_sturm_precision(space) != sturm_precision

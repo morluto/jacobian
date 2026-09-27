@@ -189,7 +189,7 @@ class ModularCharacterSpaceInclusion(StrictModel):
 
 
 class ModularCharacterUPrimeRequest(StrictModel):
-    """Apply the modular U_p operator at a prime dividing the level."""
+    """Apply the bounded modular U_p operator to an order-six character form."""
 
     form: ModularFormCoordinates
     prime: StrictInt = Field(ge=2, le=13)

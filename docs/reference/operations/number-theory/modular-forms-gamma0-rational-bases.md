@@ -20,18 +20,20 @@ PARI's reference documents `mfinit` for full `M_k(Gamma0(N), chi)` spaces and
 cuspidal `S_k` spaces, `mfbasis` for the space basis, and `mfcoefs` for the
 matrix of basis q-expansions. This general Gamma0 adapter remains restricted
 to trivial character and rational coefficients. Separately, Jacobian has a
-bounded cyclotomic character-space basis slice for the even order-6 characters
-of conductor 13, represented at levels 13, 26, and 39 over `Q(zeta_6)`. It
+bounded cyclotomic character-space basis slice for even characters of
+conductor 13 and order dividing six, represented at levels 13, 26, and 39
+over `Q(zeta_6)`. It
 covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases through
 precisions 3, 8, and 10, respectively. Its dimension implementation admits
-only this parity, conductor, level, and field range. It computes the
+even characters of order dividing six, including order-three characters with
+multidimensional bases. It computes the
 Cohen--Oesterle character sums and cusp term in exact rational/cyclotomic
 arithmetic, compares that dimension with PARI, and checks that the returned
 prefix has the full expected rank before publishing a basis. The
 `S_2(Gamma0(13), chi)` one-dimensional basis retains its established
 identifier, which existing character-coordinate operations consume; the
-generalized bases do not imply coordinate or operator support outside the
-documented parents. The formula follows Quer, “Dimensions
+generalized bases do not imply Hecke-operator or transport support outside
+their documented parents. The formula follows Quer, “Dimensions
 of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
 ([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
 For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension
@@ -41,13 +43,16 @@ is
 over unit roots of `x^2+1` and `x^2+x+1` modulo `N`, and
 `nu_infinity = sum_{d|N, gcd(d,N/d)|(N/13)} phi(gcd(d,N/d))`.
 The full dimension is `dim M = dim S + nu_infinity`. This gives cusp/full
-dimensions `1/3`, `2/6`, and `3/7` at levels 13, 26, and 39. The inputs must
-have even order-six character, exact conductor 13, and values in the declared
+dimensions `1/3`, `2/6`, and `3/7` for order-six characters at levels 13, 26,
+and 39. For order-three characters the dimensions are `0/2`, `1/5`, and `3/7`.
+Inputs must have even parity, exact conductor 13, and values in the declared
 `Q(zeta_6)` field; no other character weights, levels, or conductors use this
 formula implementation.
 See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
 for the original exact q-prefix and same-space character-coordinate contract.
 Other character spaces and general field-valued Gamma0 bases remain unsupported.
+See [cyclotomic character-space bases](modular-forms-cyclotomic-character-coordinates.md)
+for the order-three dimensions and canonical basis prefixes.
 
 For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
 supports explicit nested-level inclusion from level 13, 26, or 39 into level
@@ -107,9 +112,9 @@ matrices on other character spaces.
 [PARI modular-forms reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_forms.html)
 
 The character-coordinate slice also supports the modular `U_p` action at bad
-primes for `(N,p) = (26,2), (26,13), (39,3), (39,13)`. The operation accepts
-only the generalized cusp coordinates for the exact weight-two spaces already
-represented above, and returns coordinates in that same space. It computes
+primes for order-six characters when `(N,p) = (26,2), (26,13), (39,3), (39,13)`.
+The operation accepts only order-six cusp coordinates in the exact weight-two
+spaces already represented above, and returns coordinates in that same space. It computes
 the complete source prefix through `p * (B - 1)`, where `B` is the target
 Sturm precision, selects `a_(p n)` for each target coefficient, and solves
 against the canonical target basis through all `B` coefficients. Exact closure

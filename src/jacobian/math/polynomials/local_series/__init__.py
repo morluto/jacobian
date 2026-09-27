@@ -13,7 +13,6 @@ from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
     LocalPolynomialNewtonPolygonResult,
-    NewtonEdgeCharacteristicRequest,
     NewtonEdgeCharacteristicResult,
     NewtonEdgeCharacteristicRoot,
     NewtonEdgeCharacteristicRootsResult,

@@ -149,6 +149,26 @@ def test_edge_characteristic_polynomial_transports_exact_leading_coefficients() 
     assert result.source == polynomial
 
 
+def test_edge_characteristic_returns_normalized_native_source() -> None:
+    canonical = _polynomial(
+        [(0, _series(1, (-1, 1))), (1, _series(0, (1, 1)))]
+    )
+    forged = LocalPolynomialInSeries.model_construct(
+        variable=canonical.variable,
+        place=canonical.place,
+        center=canonical.center,
+        coefficients=[row.model_dump() for row in canonical.coefficients],
+    )
+
+    result = newton_edge_characteristic_polynomial(
+        NewtonEdgeCharacteristicRequest.model_construct(polynomial=forged, edge_index=0)
+    )
+
+    assert isinstance(result.source.coefficients, tuple)
+    assert result.source == canonical
+    assert isinstance(result.source.coefficients[0], LocalPolynomialCoefficient)
+
+
 def test_edge_characteristic_rejects_nonexistent_edge() -> None:
     from jacobian.math.polynomials.local_series.newton_polygon import (
         NewtonEdgeCharacteristicRequest,

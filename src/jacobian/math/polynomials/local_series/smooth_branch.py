@@ -253,6 +253,16 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
             message="initial_root must be an exact rational value",
         )
     try:
+        initial_root = CanonicalRational.model_validate(
+            request.initial_root.model_dump()
+        )
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("initial_root",),
+            code="local_series.smooth_branch.root_shape",
+            message="initial_root must be a canonical exact rational value",
+        ) from error
+    try:
         source = LocalPolynomialInSeries.model_validate(source.model_dump())
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
@@ -261,7 +271,7 @@ def _admit_request(request: SmoothBranchFirstJetRequest) -> _SmoothBranchPlan:
             message="polynomial rows and nested series must have canonical shapes",
         ) from error
     max_degree, rows = _admit_source(source)
-    root = request.initial_root.as_fraction()
+    root = initial_root.as_fraction()
     constant, linear, constant_digits, linear_digits = _coefficient_inputs(
         source, max_degree
     )

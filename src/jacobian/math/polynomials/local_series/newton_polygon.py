@@ -236,7 +236,7 @@ def newton_edge_characteristic_polynomial(
         ),
     )
     return NewtonEdgeCharacteristicResult.model_construct(
-        source=request.polynomial,
+        source=source,
         edge_index=request.edge_index,
         edge=edge,
         terms=tuple(transported),

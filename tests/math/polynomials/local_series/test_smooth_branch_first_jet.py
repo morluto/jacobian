@@ -71,6 +71,20 @@ def test_smooth_branch_returns_validated_canonical_source_for_native_input() -> 
     assert result.source.coefficients[0].series.coefficients == (_rational(-2), _rational(-17))
 
 
+def test_smooth_branch_revalidates_native_root_before_arithmetic() -> None:
+    source = _polynomial(((0, _series(-1, 0)), (1, _series(1, 0))))
+    forged_root = CanonicalRational.model_construct(num=1, den=0)
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        smooth_branch_first_jet(
+            SmoothBranchFirstJetRequest.model_construct(
+                polynomial=source, initial_root=forged_root
+            )
+        )
+
+    assert error.value.errors()[0]["type"] == "local_series.smooth_branch.root_shape"
+
+
 def test_smooth_branch_first_jet_matches_independent_factorized_oracle() -> None:
     # Modulo t^2 this is (y - (2 + 3t)) (y + 1 + 7t).
     source = _polynomial(

@@ -1,0 +1,163 @@
+# Rational Gamma0 modular-form bases
+
+`modular_form.space.basis_q_expansions.compute` also returns exact
+q-expansion bases for bounded rational, trivial-character spaces
+`M_k(Gamma0(N))` and `S_k(Gamma0(N))` beyond the formula-based levels already
+documented in [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md).
+The initial backend-backed slice admits `N <= 10,000`, `k <= 120`, dimension at
+most 32, and at most 128 q-coefficients. A request must include the full
+Sturm-determining prefix; shorter prefixes cannot establish basis completeness.
+
+The implementation uses PARI's exact modular-form-space routines behind a
+typed adapter. It checks PARI's dimension against Jacobian's independent exact
+Gamma0 dimension formula, then removes backend ordering and scaling by
+canonical exact row reduction through the Sturm prefix. The result uses a
+stable Jacobian basis identifier and the existing modular-form basis and
+coordinate carriers. Coordinates can therefore be expanded in the same
+declared space through the existing coordinate q-expansion operation.
+
+PARI's reference documents `mfinit` for full `M_k(Gamma0(N), chi)` spaces and
+cuspidal `S_k` spaces, `mfbasis` for the space basis, and `mfcoefs` for the
+matrix of basis q-expansions. This general Gamma0 adapter remains restricted
+to trivial character and rational coefficients. Separately, Jacobian has a
+bounded cyclotomic character-space basis slice for even characters of
+conductor 13 and order dividing six, represented at levels 13, 26, and 39
+over `Q(zeta_6)`. It
+covers weight 2, both `M` and `S`, and returns q-Sturm RREF bases through
+precisions 3, 8, and 10, respectively. Its dimension implementation admits
+even characters of order dividing six, including order-three characters with
+multidimensional bases. It computes the
+Cohen--Oesterle character sums and cusp term in exact rational/cyclotomic
+arithmetic, compares that dimension with PARI, and checks that the returned
+prefix has the full expected rank before publishing a basis. The
+`S_2(Gamma0(13), chi)` one-dimensional basis retains its established
+identifier, which existing character-coordinate operations consume; the
+generalized bases do not imply Hecke-operator or transport support outside
+their documented parents. The formula follows Quer, “Dimensions
+of spaces of modular forms,” Theorem 2.3 and the definitions preceding it
+([paper](https://www.impan.pl/shop/publication/transaction/download/product/82407)).
+For this admitted family, with `k=2` and conductor `c=13`, the cusp dimension
+is
+`dim S = nu_0/12 - nu_infinity/2 - nu_2/4 - nu_3/3`, where
+`nu_0 = N * product_{p|N}(1+1/p)`, `nu_2` and `nu_3` are the sums of `chi(x)`
+over unit roots of `x^2+1` and `x^2+x+1` modulo `N`, and
+`nu_infinity = sum_{d|N, gcd(d,N/d)|(N/13)} phi(gcd(d,N/d))`.
+The full dimension is `dim M = dim S + nu_infinity`. This gives cusp/full
+dimensions `1/3`, `2/6`, and `3/7` for order-six characters at levels 13, 26,
+and 39. For order-three characters the dimensions are `0/2`, `1/5`, and `3/7`.
+Inputs must have even parity, exact conductor 13, and values in the declared
+`Q(zeta_6)` field; no other character weights, levels, or conductors use this
+formula implementation.
+See [level-one bases and coordinates](modular-forms-level-one-bases-coordinates.md)
+for the original exact q-prefix and same-space character-coordinate contract.
+Other character spaces and general field-valued Gamma0 bases remain unsupported.
+See [cyclotomic character-space bases](modular-forms-cyclotomic-character-coordinates.md)
+for the order-three dimensions and canonical basis prefixes.
+
+For the order-6 `S_2` slice, `modular_form.character_coordinates.transport.compute`
+supports explicit nested-level inclusion from level 13, 26, or 39 into level
+26 or 39 when the source level divides the target, and identity inclusion at
+level 13. It also supports a common level-78 target for the nonnested 26-vs-39
+case. The request preserves both
+exact space parents and carries the character pullback and identity map of
+`Q(zeta_6)` parents. It checks the character map on every target unit and
+requires each character's explicit modulus to equal its space level. The
+operation returns target coordinates and the exact q-prefix through the target
+Sturm precision for levels 26 and 39, extending the source basis while
+retaining its canonical q-Sturm RREF normalization when needed. At targets 13
+and 78, it retains the explicit source inclusion and returns a typed Sturm
+prefix rather than target basis coordinates. The common q-expansion principle
+gives the same equality postcondition in either case: the explicit character
+map establishes membership in the target, identity pullback preserves the
+source q-expansion, and equality compares every coefficient through the
+target Sturm bound (3 coefficients at level 13, 29 at level 78). Level 13
+uses the same prefix representation to keep one equality postcondition and
+avoid relabeling the legacy level-13 coordinate value as a level-26/39-family
+coordinate type. At level 78, the current basis adapter failed exact
+reconstruction of an admitted included form, so target coordinates lack a
+sound canonical basis contract. Before either source basis is materialized,
+it bounds exact cyclotomic expansion and target-solve coefficient growth
+against the canonical 256-digit field-element limit. This bound is based on
+the represented source dimension, target dimension, and submitted coordinate
+height; values whose full expansion or reconstruction could exceed the limit
+are rejected before PARI work.
+
+The coefficient-growth estimate relies on a finite canonical-basis contract:
+at the transport precisions `(13,3)`, `(13,8)`, `(13,10)`, `(13,29)`,
+`(26,8)`, `(26,10)`, `(26,29)`, `(39,10)`, and `(39,29)`, the S2 basis
+dimensions are respectively `1, 1, 1, 1, 2, 2, 2, 3, 3`, and each cyclotomic
+rational coordinate is an integer of absolute value below 10. The basis
+producer admits the resulting cell/output
+envelope before PARI and checks the coefficient bound before publishing the
+basis. Regression fixtures cover both conjugate characters at each pair.
+
+`modular_form.character.equal.check` compares two transported forms only when
+they land in the identical target space and coefficient field. It recomputes
+each inclusion from the retained source form, checks the submitted target
+coordinates and q-prefix, and compares all coefficients through the target
+Sturm bound. This is a narrow global-equality decision for these represented
+spaces, including the exact 26-vs-39 comparison at common level 78; it does
+not add arbitrary-character transport, implicit character inflation,
+coefficient-field embeddings, or Hecke support. The dimension
+formula and PARI cross-check boundaries above remain unchanged.
+
+For this represented character slice,
+`modular_form.character_hecke_matrix.compute` returns the exact 1-by-1 matrix
+of `T_n` in the canonical character basis for `1 <= n <= 32` with `gcd(n,
+13) = 1`. Its entry is bound to the exact source space, basis identifier, and
+`Q(zeta_6)` coefficient field. The operation admits the required finite source
+prefix and coefficient heights before invoking PARI, then checks the matrix
+action through the Sturm-determining prefix. It makes no claim about Hecke
+matrices on other character spaces.
+[PARI modular-forms reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_forms.html)
+
+The character-coordinate slice also supports the modular `U_p` action at bad
+primes for order-six characters when `(N,p) = (26,2), (26,13), (39,3), (39,13)`.
+The operation accepts only order-six cusp coordinates in the exact weight-two
+spaces already represented above, and returns coordinates in that same space. It computes
+the complete source prefix through `p * (B - 1)`, where `B` is the target
+Sturm precision, selects `a_(p n)` for each target coefficient, and solves
+against the canonical target basis through all `B` coefficients. Exact closure
+is checked before returning; finite coefficient envelopes are established for
+both conjugate conductor-13 order-six characters at each admitted pair.
+
+PARI's modular-symbol reference distinguishes `T_p` from `U_p` by level: its
+`mshecke` operation returns `U_p` when `p` divides `N` ([PARI modular-symbols
+reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_symbols.html)).
+The q-coefficient action used here is the exact coefficient projection
+`a_n(U_p f) = a_(p n)(f)`. The operation does not infer modularity from a
+formal-series `U_p` transform: modularity follows from the represented source
+space and the exact same-space Sturm reconstruction.
+
+Before backend work, Jacobian admits level, weight, dimension, Sturm
+precision, aggregate work, rational elimination growth, and serialized output.
+The PARI call runs in a request-scoped resource-limited worker so it can be
+terminated under the request deadline. Backend objects never cross the
+adapter; only bounded exact rational coefficients return to the canonical
+Jacobian representation.
+
+The accepted rational envelope is an execution bound, not a claim that every
+Gamma0(N) space in that range will fit. Requests exceeding the dimension,
+Sturm precision, work, coefficient-growth, or output limits are rejected
+before basis construction. Wider character support, field-valued coefficients,
+and operators on arbitrary Gamma0(N) spaces require additional parent-bound
+representations and are not implied by these bases.
+
+[Number-theory operations](index.md) · [Modular-form basis operations](modular-forms-level-one-bases-coordinates.md)
+
+## Nested-space coordinate transport
+
+`modular_form.coordinates.transport.compute` expresses an exact coordinate-defined
+form in a target space when both are over `QQ`, have trivial character and the
+same weight, and the source level divides the target level. The full space maps
+to the full space; a cuspidal form maps to either the cusp space or full space.
+It computes the source expansion through the target Sturm-determining precision,
+then solves uniquely in the target's canonical basis. The returned
+`ModularFormCoordinates` is bound to the exact target space and basis.
+
+Both basis plans, their combined work, coordinate growth and result size are
+admitted before basis materialization, including before PARI worker calls.
+Current limits remain those of the bases: level at most 10,000, weight at most
+120, dimension at most 32 and Sturm precision at most 128. Cyclotomic basis
+transport and nontrivial-character transport are unsupported; a representable
+space value does not imply its basis or coordinate carrier supports that field.

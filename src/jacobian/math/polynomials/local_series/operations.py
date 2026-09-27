@@ -149,7 +149,10 @@ def _check_expansion_precision(precision: int) -> None:
 def _check_expansion_function(function: RationalFunction) -> None:
     if (
         not isinstance(function, RationalFunction)
-        or any(not hasattr(function, field) for field in ("variables", "numerator", "denominator"))
+        or any(
+            not hasattr(function, field)
+            for field in ("variables", "numerator", "denominator")
+        )
         or not isinstance(function.variables, tuple)
         or len(function.variables) != 1
     ):

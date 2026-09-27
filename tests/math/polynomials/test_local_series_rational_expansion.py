@@ -159,9 +159,7 @@ def test_expansion_bounds_the_reduced_common_denominator() -> None:
     denominator = x**32 + sum(x**degree for degree in range(32)) / q_value
     function = rational_function_from_sympy(1 / denominator, ("x",))
 
-    result = rational_function_at_point(
-        function, CanonicalRational(num=0, den=1), 1
-    )
+    result = rational_function_at_point(function, CanonicalRational(num=0, den=1), 1)
 
     assert result.series.coefficients[0].as_fraction() == q_value
 

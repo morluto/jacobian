@@ -262,7 +262,10 @@ def _admit_sum_growth(contributions: list[Fraction]) -> None:
     # exact reduced result is cheap to form after both inputs were admitted and
     # avoids charging denominator width that cancels in the sum.
     total = sum(contributions, Fraction())
-    if max(abs(total.numerator).bit_length(), total.denominator.bit_length()) > _MAX_SCALAR_BITS:
+    if (
+        max(abs(total.numerator).bit_length(), total.denominator.bit_length())
+        > _MAX_SCALAR_BITS
+    ):
         _resource(
             "puiseux_coefficient_growth",
             "worst-case exact coefficient growth exceeds the scalar digit bound",
@@ -279,7 +282,10 @@ def _admit_product_sum_growth(
     if len(contributions) == 1:
         left, right = contributions[0]
         product = left * right
-        if max(abs(product.numerator).bit_length(), product.denominator.bit_length()) > _MAX_SCALAR_BITS:
+        if (
+            max(abs(product.numerator).bit_length(), product.denominator.bit_length())
+            > _MAX_SCALAR_BITS
+        ):
             _resource(
                 "puiseux_coefficient_growth",
                 "single exact product coefficient growth exceeds the scalar digit bound",

@@ -1425,6 +1425,7 @@ def verify_weighted_intersection_rank_certificate(
     except (
         OperationDomainValidationError,
         OperationResourceAdmissionError,
+        AttributeError,
         TypeError,
         ValueError,
     ):

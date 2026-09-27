@@ -20,6 +20,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     DeltaMatroidTwistWidthProfileResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_MEMBERSHIPS,
     DeltaMatroidAdmissionError,
     FiniteDeltaMatroid,
     first_symmetric_exchange_obstruction,
@@ -310,8 +311,6 @@ def feasible_size_profile(d: FiniteDeltaMatroid) -> DeltaMatroidFeasibleSizeProf
 
     # Bound family scanning before reconstruction/counting; memberships is the
     # canonical row-work envelope.
-    from jacobian.math.combinatorics.matroids.delta.values import MAX_DELTA_MEMBERSHIPS
-
     if type(d) is not FiniteDeltaMatroid:
         raise OperationDomainValidationError(
             location=("delta_matroid",),
@@ -322,12 +321,34 @@ def feasible_size_profile(d: FiniteDeltaMatroid) -> DeltaMatroidFeasibleSizeProf
     # carrier. Reject oversized profiles before model_dump/model_validate copies
     # the entire feasible family.
     raw_feasible = getattr(d, "feasible", None)
-    if isinstance(raw_feasible, tuple) and len(raw_feasible) > MAX_DELTA_MEMBERSHIPS:
+    if type(raw_feasible) is not tuple:
+        raise OperationDomainValidationError(
+            location=("delta_matroid", "feasible"),
+            code="delta_matroid.carrier",
+            message="feasible rows must be a canonical tuple",
+        )
+    if len(raw_feasible) > MAX_DELTA_MEMBERSHIPS:
         raise OperationResourceAdmissionError(
             location=("delta_matroid", "feasible"),
             code="delta_matroid.feasible_size_profile_work",
             message="feasible family exceeds profile work envelope",
         )
+    memberships = 0
+    for row in raw_feasible:
+        if type(row) is not tuple:
+            raise OperationDomainValidationError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.carrier",
+                message="feasible rows must be canonical integer tuples",
+            )
+        row_size = len(row)
+        if row_size > MAX_DELTA_MEMBERSHIPS - memberships:
+            raise OperationResourceAdmissionError(
+                location=("delta_matroid", "feasible"),
+                code="delta_matroid.feasible_size_profile_work",
+                message="feasible family exceeds profile work envelope",
+            )
+        memberships += row_size
     d = _admit_delta(d)
     if len(d.feasible) > MAX_DELTA_MEMBERSHIPS:
         raise OperationResourceAdmissionError(

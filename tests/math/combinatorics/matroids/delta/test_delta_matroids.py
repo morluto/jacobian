@@ -741,6 +741,32 @@ def test_feasible_size_profile_preflights_output_before_exchange(
         feasible_size_profile(source)
 
 
+def test_feasible_size_profile_preflights_memberships_before_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics.matroids.delta import (
+        extra_ops,
+        feasible_size_profile,
+    )
+
+    ground = tuple(f"e{index}" for index in range(14))
+    feasible = tuple(
+        sorted(
+            tuple(element for element in range(14) if mask & (1 << element))
+            for mask in range(1 << 14)
+        )
+    )
+    source = FiniteDeltaMatroid(ground=ground, feasible=feasible)
+
+    def fail_if_revalidated(_value: object) -> FiniteDeltaMatroid:
+        raise AssertionError("profile copied the oversized family before admission")
+
+    monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_revalidated)
+    with pytest.raises(OperationResourceAdmissionError, match="work envelope"):
+        feasible_size_profile(source)
+
+
 def test_feasible_size_profile_does_not_replay_delta_exchange(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

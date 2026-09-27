@@ -252,9 +252,9 @@ def _preflight(
             "transformed integral coefficients exceed the 256-digit coefficient bound",
         )
 
-    source_digits = sum(
-        _digits(value) for value in form.diagonal_coefficients
-    ) + sum(_digits(term.coefficient) for term in form.cross_terms)
+    source_digits = sum(_digits(value) for value in form.diagonal_coefficients) + sum(
+        _digits(term.coefficient) for term in form.cross_terms
+    )
     matrix_digits = sum(_digits(value) for row in matrix for value in row)
     target_support = n + n * (n - 1) // 2
     result_digits = (

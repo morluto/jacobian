@@ -128,8 +128,8 @@ def test_three_dimensional_row_swap_and_shear() -> None:
 
     # The leading principal pivot at column 1 vanishes, so Bareiss must swap
     # rows a second time after its first elimination step.
-    second_pivot_swap = unimodular_change(*
-        _request(source, ((1, 1, 0), (1, 1, 1), (0, 1, 2)), ("p", "q", "r"))
+    second_pivot_swap = unimodular_change(
+        *_request(source, ((1, 1, 0), (1, 1, 1), (0, 1, 2)), ("p", "q", "r"))
     )
     for vector in itertools.product(range(-2, 3), repeat=3):
         assert _polynomial_value(second_pivot_swap.target, vector) == _polynomial_value(

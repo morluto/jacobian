@@ -49,10 +49,7 @@ def test_zero_ring_and_zero_mixed_residue_are_canonical() -> None:
     assert reduced.target.diagonal_residues == (0, 0)
     assert reduced.target.cross_terms == ()
     vector = ModularCoordinateVector(modulus=1, axis=("x", "y"), coordinates=(0, 0))
-    assert (
-        evaluate_modular_form(reduced.target, vector).residue
-        == 0
-    )
+    assert evaluate_modular_form(reduced.target, vector).residue == 0
 
 
 def test_forged_mixed_term_indices_are_rejected_before_indexing() -> None:
@@ -147,7 +144,4 @@ def test_zero_form_at_maximum_axis_is_admitted() -> None:
     vector = ModularCoordinateVector(
         modulus=97, axis=axis, coordinates=(0,) * len(axis)
     )
-    assert (
-        evaluate_modular_form(reduced.target, vector).residue
-        == 0
-    )
+    assert evaluate_modular_form(reduced.target, vector).residue == 0

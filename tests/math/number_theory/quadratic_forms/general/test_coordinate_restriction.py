@@ -164,7 +164,9 @@ def test_deserialization_rejects_inclusion_that_does_not_select_declared_axes() 
         QuadraticFormRestrictionResult.model_validate(payload)
 
 
-def test_deserialization_rejects_restricted_coefficients_not_retained_from_source() -> None:
+def test_deserialization_rejects_restricted_coefficients_not_retained_from_source() -> (
+    None
+):
     result = quadratic_form_restrict_coordinates(_form(), ("x",))
     payload = result.model_dump(mode="python")
     payload["form"]["diagonal_coefficients"] = (_r(99),)

@@ -127,7 +127,9 @@ class IntegralQuadraticFormInclusion(StrictModel):
             or self.target.diagonal_coefficients != expected_diagonal
             or self.target.cross_terms != expected_cross_terms
         ):
-            raise ValueError("rational target must be the coefficient-wise image of the integral source")
+            raise ValueError(
+                "rational target must be the coefficient-wise image of the integral source"
+            )
         return self
 
 

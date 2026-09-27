@@ -264,7 +264,9 @@ class FiniteGaussSumResult(StrictModel):
             for coordinate in self.value.coefficients_ascending
         )
         if value_coordinates != reduced_histogram:
-            raise ValueError("finite Gauss value must be the reduction of its histogram")
+            raise ValueError(
+                "finite Gauss value must be the reduction of its histogram"
+            )
         if any(
             max(len(str(abs(coordinate.num))), len(str(abs(coordinate.den))))
             > MAX_CYCLIC_FIELD_ELEMENT_DIGITS

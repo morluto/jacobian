@@ -163,8 +163,7 @@ def _admit_box_and_output(
     diagonal_cofactors: tuple[int, ...],
 ) -> tuple[int, ...]:
     radii = tuple(
-        isqrt((2 * cutoff * cofactor) // determinant)
-        for cofactor in diagonal_cofactors
+        isqrt((2 * cutoff * cofactor) // determinant) for cofactor in diagonal_cofactors
     )
     vector_count = 1
     for radius in radii:
@@ -256,9 +255,7 @@ def theta_series_prefix(
         )
         if 0 <= value <= cutoff:
             table[value] += 1
-    return ThetaSeriesPrefixResult(
-        form=form, cutoff=cutoff, coefficients=tuple(table)
-    )
+    return ThetaSeriesPrefixResult(form=form, cutoff=cutoff, coefficients=tuple(table))
 
 
 __all__ = ["theta_series_prefix"]

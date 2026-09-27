@@ -104,21 +104,26 @@ class QuadraticFormRestrictionResult(StrictModel):
         source_positions = {
             label: index for index, label in enumerate(self.source_form.axis)
         }
-        selected_positions = tuple(source_positions[label] for label in self.selected_axis)
+        selected_positions = tuple(
+            source_positions[label] for label in self.selected_axis
+        )
         expected_diagonal = tuple(
             self.source_form.diagonal_coefficients[index]
             for index in selected_positions
         )
         restricted_index = {
-            source_index: index
-            for index, source_index in enumerate(selected_positions)
+            source_index: index for index, source_index in enumerate(selected_positions)
         }
         expected_cross_terms = tuple(
             sorted(
                 (
                     QuadraticCrossTerm(
-                        left=min(restricted_index[term.left], restricted_index[term.right]),
-                        right=max(restricted_index[term.left], restricted_index[term.right]),
+                        left=min(
+                            restricted_index[term.left], restricted_index[term.right]
+                        ),
+                        right=max(
+                            restricted_index[term.left], restricted_index[term.right]
+                        ),
                         coefficient=term.coefficient,
                     )
                     for term in self.source_form.cross_terms
@@ -131,7 +136,9 @@ class QuadraticFormRestrictionResult(StrictModel):
             self.form.diagonal_coefficients != expected_diagonal
             or self.form.cross_terms != expected_cross_terms
         ):
-            raise ValueError("restricted coefficients must be retained from the source form")
+            raise ValueError(
+                "restricted coefficients must be retained from the source form"
+            )
         if (self.inclusion.row_count, self.inclusion.column_count) != (
             len(self.source_form.axis),
             len(self.selected_axis),
@@ -249,7 +256,9 @@ class QuadraticFormDirectSumResult(StrictModel):
             or self.form.diagonal_coefficients != tuple(expected_diagonal)
             or self.form.cross_terms != tuple(expected_cross_terms)
         ):
-            raise ValueError("direct-sum form coefficients must be the orthogonal sum of its factors")
+            raise ValueError(
+                "direct-sum form coefficients must be the orthogonal sum of its factors"
+            )
         map_component_digits = max(
             (
                 canonical_rational_component_digits(value)

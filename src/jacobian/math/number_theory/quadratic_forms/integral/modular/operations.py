@@ -257,7 +257,7 @@ def _check_modular_polynomial(
     if (
         len(polynomial.cross_terms) + n > MAX_MODULAR_QUADRATIC_FORM_TERMS
         or positions != tuple(sorted(set(positions)))
-            or any(
+        or any(
             not isinstance(term.left, int)
             or isinstance(term.left, bool)
             or not isinstance(term.right, int)

@@ -7,12 +7,19 @@ from fractions import Fraction
 from math import comb, factorial, gcd, isqrt, lcm
 from typing import Literal
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
 from jacobian.canonical import encode_strict_json, format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
+)
+from jacobian.math.matrices.cyclic_linear._models import (
+    MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
 )
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms._models import (
@@ -40,6 +47,9 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_COEFFICIENT_FIELD_DEGREE,
+    MAX_MODULAR_FORM_COEFFICIENT_FIELD_ORDER,
+    MAX_MODULAR_FORM_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
@@ -1380,12 +1390,124 @@ def _require_canonical_coordinate_space(
     form: ModularFormCoordinates,
     side: str,
 ) -> None:
-    if not isinstance(form.space, ModularFormSpace):
+    space = getattr(form, "space", None)
+    if type(space) is not ModularFormSpace:
         raise OperationDomainValidationError(
             location=(side, "space"),
             code="modular_form.coordinates_space_type",
             message="both coordinate values must carry a canonical modular-form space",
         )
+    try:
+        canonical_space = ModularFormSpace.model_validate(space.model_dump())
+    except (AttributeError, TypeError, ValidationError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(side, "space"),
+            code="modular_form.coordinates_space_invalid",
+            message="coordinate spaces must contain all canonical required fields",
+        ) from error
+    if canonical_space != space:
+        raise OperationDomainValidationError(
+            location=(side, "space"),
+            code="modular_form.coordinates_space_invalid",
+            message="coordinate spaces must have canonical exact values",
+        )
+
+
+def _revalidate_equality_operand(
+    form: ModularFormCoordinates, side: str
+) -> ModularFormCoordinates:
+    if type(form) is not ModularFormCoordinates:
+        raise OperationDomainValidationError(
+            location=(side,),
+            code="modular_form.coordinates_carrier_invalid",
+            message="coordinate values must contain all canonical required fields",
+        )
+    try:
+        checked = ModularFormCoordinates.model_validate(form.model_dump())
+    except (AttributeError, TypeError, ValidationError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(side,),
+            code="modular_form.coordinates_carrier_invalid",
+            message="coordinate values must contain all canonical required fields",
+        ) from error
+    _require_canonical_coordinate_space(checked, side)
+    return checked
+
+
+def _preflight_equality_coordinate_shape(
+    form: ModularFormCoordinates, side: str
+) -> None:
+    coordinates = getattr(form, "coordinates", None)
+    if type(coordinates) is not tuple:
+        raise OperationDomainValidationError(
+            location=(side, "coordinates"),
+            code="modular_form.coordinates_shape",
+            message="coordinate values must use a canonical tuple axis",
+        )
+    if len(coordinates) > MAX_LEVEL_ONE_BASIS_COORDINATES:
+        raise OperationResourceAdmissionError(
+            location=(side, "coordinates"),
+            code="modular_form.equality_coordinate_count_bound",
+            message="coordinate count exceeds the equality operand envelope",
+        )
+    for coordinate in coordinates:
+        if type(coordinate) is CanonicalRational:
+            scalars = (coordinate,)
+            digit_limit = MAX_LEVEL_ONE_BASIS_COEFFICIENT_DIGITS
+        elif type(coordinate) is RationalCyclotomicElement:
+            field = getattr(coordinate, "field", None)
+            field_order = getattr(field, "order", None)
+            if (
+                type(field) is not RationalCyclotomicField
+                or type(field_order) is not int
+                or field_order < 1
+                or field_order > MAX_MODULAR_FORM_COEFFICIENT_FIELD_ORDER
+            ):
+                raise OperationDomainValidationError(
+                    location=(side, "coordinates"),
+                    code="modular_form.coordinate_field_shape",
+                    message="cyclotomic coordinates must have a bounded field parent",
+                )
+            coefficients = getattr(coordinate, "coefficients_ascending", None)
+            if type(coefficients) is not tuple:
+                raise OperationDomainValidationError(
+                    location=(side, "coordinates"),
+                    code="modular_form.coordinate_shape",
+                    message="cyclotomic coordinate coefficients must use a tuple axis",
+                )
+            if len(coefficients) > MAX_MODULAR_FORM_COEFFICIENT_FIELD_DEGREE:
+                raise OperationResourceAdmissionError(
+                    location=(side, "coordinates"),
+                    code="modular_form.equality_coordinate_field_degree_bound",
+                    message="cyclotomic coordinate degree exceeds the equality envelope",
+                )
+            scalars = coefficients
+            digit_limit = MAX_CYCLIC_FIELD_ELEMENT_DIGITS
+        else:
+            raise OperationDomainValidationError(
+                location=(side, "coordinates"),
+                code="modular_form.coordinate_type",
+                message="coordinates must be exact rational or cyclotomic values",
+            )
+        maximum_bits = digit_limit * 3_322 // 1_000 + 2
+        for scalar in scalars:
+            numerator = getattr(scalar, "num", None)
+            denominator = getattr(scalar, "den", None)
+            if type(numerator) is not int or type(denominator) is not int:
+                raise OperationDomainValidationError(
+                    location=(side, "coordinates"),
+                    code="modular_form.coordinate_value",
+                    message="coordinate scalars must contain exact integer fields",
+                )
+            if (
+                max(abs(numerator).bit_length(), denominator.bit_length())
+                > maximum_bits
+            ):
+                raise OperationResourceAdmissionError(
+                    location=(side, "coordinates"),
+                    code="modular_form.equality_coordinate_scalar_bound",
+                    message="coordinate scalar exceeds the equality operand digit envelope",
+                )
 
 
 def modular_form_coordinates_equal(
@@ -1393,24 +1515,27 @@ def modular_form_coordinates_equal(
 ) -> bool:
     """Decide exact equality in a shared supported modular-form ambient space."""
 
-    if not isinstance(left, ModularFormCoordinates) or not isinstance(
-        right, ModularFormCoordinates
+    if (
+        type(left) is not ModularFormCoordinates
+        or type(right) is not ModularFormCoordinates
     ):
         raise OperationDomainValidationError(
             location=(),
             code="modular_form.coordinates_type",
             message="both operands must be exact modular-form coordinate values",
         )
-    for side, form in (("left", left), ("right", right)):
-        _require_canonical_coordinate_space(form, side)
+    _preflight_equality_coordinate_shape(left, "left")
+    _preflight_equality_coordinate_shape(right, "right")
+    left = _revalidate_equality_operand(left, "left")
+    right = _revalidate_equality_operand(right, "right")
     if left.space == right.space:
         if left.space.coefficient_domain != "QQ":
             if left.space.character != "TRIVIAL":
                 from jacobian.math.number_theory.modular_forms.character_basis import (
-                    modular_character_coordinates_equal,
+                    _modular_character_coordinates_equal,
                 )
 
-                return modular_character_coordinates_equal(left, right)
+                return _modular_character_coordinates_equal(left, right)
             from jacobian.math.number_theory.modular_forms.field_coordinates import (
                 modular_form_field_coordinates_equal,
             )
@@ -1465,6 +1590,12 @@ def modular_form_coordinates_equal(
     common_level = (
         left_space.level * right_space.level // gcd(left_space.level, right_space.level)
     )
+    if common_level > MAX_MODULAR_FORM_LEVEL:
+        raise OperationResourceAdmissionError(
+            location=("right", "space", "level"),
+            code="modular_form.equality_common_level_bound",
+            message="the common Gamma0 level exceeds the modular-form carrier limit",
+        )
     common_space = ModularFormSpace(
         level=common_level, weight=left_space.weight, kind="M"
     )

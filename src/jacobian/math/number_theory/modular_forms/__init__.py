@@ -1,5 +1,8 @@
 """Supported exact values and operations for bounded modular-form spaces."""
 
+from jacobian.math.number_theory.modular_forms._models import (
+    ModularFormEqualityResult,
+)
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,
@@ -62,6 +65,7 @@ from jacobian.math.number_theory.modular_forms.field_coordinates import (
 )
 from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
+    modular_form_atkin_lehner_target,
     modular_form_character_space_inclusion,
     named_q_expansion,
     space_dimension,
@@ -73,6 +77,7 @@ from jacobian.math.number_theory.modular_forms.transforms import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularFormAtkinLehnerTarget,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -101,6 +106,7 @@ __all__ = [
     "ModularCharacterTransportedForm",
     "ModularCharacterVDegeneracyImage",
     "ModularCharacterVDegeneracyRequest",
+    "ModularFormAtkinLehnerTarget",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
@@ -125,6 +131,7 @@ __all__ = [
     "modular_character_coordinates_transport",
     "modular_character_coordinates_v_degeneracy",
     "modular_character_hecke_matrix",
+    "modular_form_atkin_lehner_target",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
     "modular_form_character_space_inclusion",

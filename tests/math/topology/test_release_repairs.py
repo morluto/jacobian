@@ -347,7 +347,9 @@ def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
 def test_sheaf_morphism_rejects_incomplete_forged_diagram() -> None:
     sheaf = _rank_one_interval_sheaf()
     components = (("a", ((_q(1),),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
-    with pytest.raises(OperationDomainValidationError, match="every canonical"):
+    with pytest.raises(
+        OperationDomainValidationError, match="does not define a cellular sheaf"
+    ):
         morphism(sheaf, sheaf, components)
 
 

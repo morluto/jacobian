@@ -24,15 +24,12 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_TOTAL_STALK_RANK,
     BasisLabel,
     FiniteCellularSheaf,
+    SheafField,
     SheafRestriction,
     SheafStalk,
 )
-from jacobian.math.topology.cellular_sheaves.constants._models import (
-    ConstantSheafRequest,
-)
 
 MAX_CONSTANT_SHEAF_WORK = 1_000_000
-MAX_CONSTANT_SHEAF_OUTPUT_BYTES = 8_000_000
 _BASIS_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,31}$")
 type Pair = tuple[Simplex, Simplex]
 
@@ -67,55 +64,23 @@ def _canonical_path(source: Simplex, target: Simplex) -> tuple[Simplex, ...]:
     return tuple(path)
 
 
-def _simplex_json_width(simplex: Simplex) -> int:
-    # Vertex labels are restricted to ASCII alphanumerics and _ . : -.
-    return 2 + sum(len(vertex) + 2 for vertex in simplex) + max(0, len(simplex) - 1)
-
-
-def _basis_json_width(basis: tuple[BasisLabel, ...]) -> int:
-    return 2 + sum(len(label) + 2 for label in basis) + max(0, len(basis) - 1)
-
-
-def _estimate_result_bytes(
-    complex_: FiniteSimplicialComplex,
-    cells: tuple[Simplex, ...],
-    comparable: tuple[Pair, ...],
-    basis: tuple[BasisLabel, ...],
-) -> int:
-    complex_bytes = len(complex_.model_dump_json().encode("utf-8"))
-    basis_bytes = _basis_json_width(basis)
-    stalk_bytes = sum(192 + _simplex_json_width(cell) + basis_bytes for cell in cells)
-    scalar_width = 64
-    restriction_bytes = sum(
-        384
-        + _simplex_json_width(source)
-        + _simplex_json_width(target)
-        + 2 * basis_bytes
-        + len(basis) ** 2 * scalar_width
-        + sum(_simplex_json_width(face) for face in _canonical_path(source, target))
-        for source, target in comparable
-    )
-    return complex_bytes + stalk_bytes + restriction_bytes + 1024
-
-
 def _admit(
-    request: ConstantSheafRequest,
+    complex_: FiniteSimplicialComplex,
+    basis: tuple[BasisLabel, ...],
+    coefficient_field: SheafField,
+    prime: int | None,
 ) -> tuple[_ExactField, tuple[Simplex, ...], tuple[Pair, ...], tuple[Pair, ...], int]:
-    if not isinstance(request, ConstantSheafRequest):
-        _domain("request_type", "request must be a constant-sheaf request", ())
-    if "complex" not in request.model_fields_set:
-        _domain("request_invalid", "request must include a complex", ("complex",))
-    if not isinstance(request.complex, FiniteSimplicialComplex):
+    if type(complex_) is not FiniteSimplicialComplex:
         _domain(
             "complex_type",
             "complex must be a canonical finite simplicial complex",
             ("complex",),
         )
-    if not isinstance(request.basis, tuple):
+    if not isinstance(basis, tuple):
         _domain(
             "basis_invalid", "basis identifiers must be an ordered tuple", ("basis",)
         )
-    if len(request.basis) > MAX_SHEAF_STALK_RANK:
+    if len(basis) > MAX_SHEAF_STALK_RANK:
         _resource(
             "basis_rank_bound",
             f"the common stalk basis exceeds the {MAX_SHEAF_STALK_RANK}-dimension limit",
@@ -123,16 +88,16 @@ def _admit(
         )
     if any(
         not isinstance(label, str) or _BASIS_LABEL.fullmatch(label) is None
-        for label in request.basis
-    ) or len(set(request.basis)) != len(request.basis):
+        for label in basis
+    ) or len(set(basis)) != len(basis):
         _domain(
             "basis_invalid",
             "basis identifiers must be distinct canonical labels",
             ("basis",),
         )
-    field = _admit_field(request.coefficient_field, request.prime)
+    field = _admit_field(coefficient_field, prime)
     try:
-        require_canonical_complex_admission(request.complex)
+        require_canonical_complex_admission(complex_)
     except ValueError as exc:
         raise OperationDomainValidationError(
             location=("complex",),
@@ -140,9 +105,9 @@ def _admit(
             message=str(exc),
         ) from exc
 
-    cells = _cells(request.complex)
+    cells = _cells(complex_)
     cell_count = len(cells)
-    rank = len(request.basis)
+    rank = len(basis)
     if cell_count > MAX_SHEAF_SIMPLICES:
         _resource(
             "simplex_bound",
@@ -157,7 +122,7 @@ def _admit(
         )
 
     comparable, covers, derived = _relation_pairs(cells)
-    diamonds = _admit_diagram(request, cells, comparable, covers, derived)
+    diamonds = _admit_diagram(basis, cells, comparable, covers, derived)
     return field, cells, covers, derived, diamonds
 
 
@@ -196,14 +161,14 @@ def _count_diamonds(cells: tuple[Simplex, ...], comparable: tuple[Pair, ...]) ->
 
 
 def _admit_diagram(
-    request: ConstantSheafRequest,
+    basis: tuple[BasisLabel, ...],
     cells: tuple[Simplex, ...],
     comparable: tuple[Pair, ...],
     covers: tuple[Pair, ...],
     derived: tuple[Pair, ...],
 ) -> int:
     cell_count = len(cells)
-    rank = len(request.basis)
+    rank = len(basis)
     if len(covers) > MAX_SHEAF_COVER_MAPS:
         _resource(
             "cover_bound",
@@ -243,19 +208,15 @@ def _admit_diagram(
             f"constant-sheaf construction requires {work} bounded units, above {MAX_CONSTANT_SHEAF_WORK}",
             ("complex",),
         )
-    result_bytes = _estimate_result_bytes(
-        request.complex, cells, comparable, request.basis
-    )
-    if result_bytes > MAX_CONSTANT_SHEAF_OUTPUT_BYTES:
-        _resource(
-            "result_size_bound",
-            f"the estimated exact sheaf value is {result_bytes} bytes, above the {MAX_CONSTANT_SHEAF_OUTPUT_BYTES}-byte limit",
-            ("complex",),
-        )
     return diamonds
 
 
-def constant_sheaf(request: ConstantSheafRequest) -> FiniteCellularSheaf:
+def constant_sheaf(
+    complex_: FiniteSimplicialComplex,
+    basis: tuple[BasisLabel, ...] = ("e0",),
+    coefficient_field: SheafField = SheafField.RATIONAL,
+    prime: int | None = None,
+) -> FiniteCellularSheaf:
     """Copy one based exact vector space to every nonempty simplex.
 
     Every face-to-coface restriction is the identity under the copied basis
@@ -263,8 +224,9 @@ def constant_sheaf(request: ConstantSheafRequest) -> FiniteCellularSheaf:
     and composes directly with section and cohomology operations.
     """
 
-    field, cells, covers, derived, diamonds = _admit(request)
-    basis = request.basis
+    field, cells, covers, derived, diamonds = _admit(
+        complex_, basis, coefficient_field, prime
+    )
     identity = field.render(field.identity(len(basis)))
     stalks = tuple(SheafStalk(simplex=cell, basis=basis) for cell in cells)
     cover_restrictions = tuple(
@@ -290,9 +252,9 @@ def constant_sheaf(request: ConstantSheafRequest) -> FiniteCellularSheaf:
         for source, target in derived
     )
     return FiniteCellularSheaf(
-        complex=request.complex,
-        coefficient_field=request.coefficient_field,
-        prime=request.prime,
+        complex=complex_,
+        coefficient_field=coefficient_field,
+        prime=prime,
         stalks=stalks,
         cover_restrictions=cover_restrictions,
         derived_restrictions=derived_restrictions,

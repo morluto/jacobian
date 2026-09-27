@@ -75,7 +75,7 @@ def _rank_over_qq(matrix: tuple[tuple[SheafScalar, ...], ...]) -> int:
 
 
 def test_constant_interval_preserves_copied_axes_and_composes() -> None:
-    sheaf = constant_sheaf(ConstantSheafRequest(complex=_INTERVAL, basis=("u", "v")))
+    sheaf = constant_sheaf(_INTERVAL, basis=("u", "v"))
 
     assert tuple(stalk.simplex for stalk in sheaf.stalks) == (
         ("a",),
@@ -114,12 +114,10 @@ def test_rank_one_prime_field_constant_sheaf_matches_simplicial_cohomology(
 ) -> None:
     prime = 5
     sheaf = constant_sheaf(
-        ConstantSheafRequest(
-            complex=complex_,
-            coefficient_field=SheafField.PRIME_FIELD,
-            prime=prime,
-            basis=("x",),
-        )
+        complex_,
+        coefficient_field=SheafField.PRIME_FIELD,
+        prime=prime,
+        basis=("x",),
     )
 
     assert _bettis(sheaf_cohomology(sheaf)) == expected
@@ -137,7 +135,7 @@ def test_rank_one_prime_field_constant_sheaf_matches_simplicial_cohomology(
 def test_zero_vector_space_has_empty_stalks_and_zero_cohomology(
     complex_: FiniteSimplicialComplex,
 ) -> None:
-    sheaf = constant_sheaf(ConstantSheafRequest(complex=complex_, basis=()))
+    sheaf = constant_sheaf(complex_, basis=())
 
     assert all(stalk.basis == () for stalk in sheaf.stalks)
     assert all(restriction.entries == () for restriction in sheaf.cover_restrictions)
@@ -153,7 +151,7 @@ def test_rank_over_stalk_bound_is_admitted_before_restriction_materialization() 
     )
 
     with pytest.raises(OperationResourceAdmissionError) as error:
-        constant_sheaf(ConstantSheafRequest(complex=six_simplex))
+        constant_sheaf(six_simplex)
 
     assert error.value.errors()[0]["type"] == (
         "topology.cellular_sheaf.constant.simplex_bound"
@@ -166,9 +164,7 @@ def test_constant_sheaf_accepts_large_bounded_face_poset() -> None:
         (tuple(f"v{index}" for index in range(6)),),
     )
 
-    sheaf = constant_sheaf(
-        ConstantSheafRequest(complex=five_simplex, basis=("a", "b", "c", "d", "e"))
-    )
+    sheaf = constant_sheaf(five_simplex, basis=("a", "b", "c", "d", "e"))
 
     assert len(sheaf.stalks) == 63
     assert sheaf.comparable_pairs == 602
@@ -196,22 +192,17 @@ def test_constant_sheaf_revalidates_untrusted_native_complex_updates() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
     malformed = _POINT.model_copy(update={"dimension": 1})
-    request = ConstantSheafRequest.model_construct(complex=malformed, basis=("e",))
     with pytest.raises(OperationDomainValidationError):
-        constant_sheaf(request)
+        constant_sheaf(malformed, basis=("e",))
 
 
-def test_constant_sheaf_rejects_missing_untrusted_complex_as_domain_error() -> None:
-    from jacobian.catalog.models import OperationDomainValidationError
-
-    request = ConstantSheafRequest.model_construct(basis=("e",))
-    with pytest.raises(OperationDomainValidationError):
-        constant_sheaf(request)
+def test_constant_sheaf_request_requires_complex() -> None:
+    with pytest.raises(ValidationError):
+        ConstantSheafRequest.model_validate({"basis": ["e"]})
 
 
 def test_constant_sheaf_classifies_untrusted_non_tuple_basis_as_domain_error() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
 
-    request = ConstantSheafRequest.model_construct(complex=_POINT, basis=["e"])
     with pytest.raises(OperationDomainValidationError):
-        constant_sheaf(request)
+        constant_sheaf(_POINT, basis=["e"])

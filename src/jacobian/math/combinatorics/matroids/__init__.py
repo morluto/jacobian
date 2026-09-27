@@ -1,13 +1,9 @@
 """Native APIs for linear matroid operations."""
 
 from jacobian.math.combinatorics.matroids._models import (
-    GraphicMatroidRequest,
     LinearMatroid,
     MatroidRankMultiplier,
-    MatroidWeightedIntersectionCertificateRequest,
-    MatroidWeightedIntersectionOptimizationRequest,
     MatroidWeightedIntersectionOptimizationResult,
-    MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
@@ -36,14 +32,10 @@ from jacobian.math.combinatorics.matroids.values import FiniteBasisMatroid
 
 __all__ = [
     "FiniteBasisMatroid",
-    "GraphicMatroidRequest",
     "LinearMatroid",
     "MatroidRankMultiplier",
     "MatroidWeightFunction",
-    "MatroidWeightedIntersectionCertificateRequest",
-    "MatroidWeightedIntersectionOptimizationRequest",
     "MatroidWeightedIntersectionOptimizationResult",
-    "MatroidWeightedIntersectionRankCertificateRequest",
     "MatroidWeightedIntersectionRankCertificateResult",
     "MatroidWeightedIntersectionResult",
     "graphic_matroid",

@@ -1,7 +1,6 @@
 """Exact finite bottom-up tree automata."""
 
 from jacobian.math.logic.automata.tree._models import (
-    AcceptedTreeHeightProfileRequest,
     AcceptedTreeHeightProfileResult,
     NondeterministicRunCountsResult,
     RankedTreePositionsResult,
@@ -47,7 +46,6 @@ from jacobian.math.logic.automata.tree.values import (
 )
 
 __all__ = [
-    "AcceptedTreeHeightProfileRequest",
     "AcceptedTreeHeightProfileResult",
     "BottomUpTreeAutomaton",
     "CompleteDeterministicBottomUpTreeAutomaton",

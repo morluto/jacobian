@@ -6,12 +6,10 @@ from itertools import combinations, product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids._models import (
     MAX_SPLIT_WEIGHT_DIGITS,
     LinearMatroid,
@@ -121,23 +119,6 @@ def _request(
         second,
         MatroidWeightFunction(ground_axis=first.ground_axis, values=weights),
     )
-
-
-def test_catalog_optimizer_example_returns_replayable_checker_result() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("matroid.intersection.maximum_weight.compute")
-    assert operation is not None
-    example = operation.examples[0]
-
-    result = invoke_operation(operation.operation_id, example.input, catalog)
-    decoded = operation.result_type.model_validate_json(json.dumps(result.output))
-
-    assert decoded.common_independent == (0,)
-    assert (
-        decoded.first_maximizer.total_weight + decoded.second_maximizer.total_weight
-        == 5
-    )
-    assert verify_weighted_intersection_result(decoded)
 
 
 def test_optimizer_wide_split_round_trips_and_verifies() -> None:

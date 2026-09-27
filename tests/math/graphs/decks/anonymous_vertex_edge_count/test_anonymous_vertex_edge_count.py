@@ -3,10 +3,10 @@ from __future__ import annotations
 from itertools import combinations
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import (
+    AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
 )
@@ -83,13 +83,15 @@ def test_result_round_trip_preserves_typed_input_deck_and_quotient() -> None:
         result.model_dump_json()
     )
     assert restored == result
-    with pytest.raises(ValidationError, match="Kelly edge quotient"):
-        AnonymousVertexDeckEdgeCount.model_validate(
-            {
-                **result.model_dump(mode="python"),
-                "source_edge_count": result.source_edge_count + 1,
-            }
-        )
+    # Transport decoding checks canonical structure, not the producer's
+    # mathematical quotient; the operation itself owns that computation.
+    forged = AnonymousVertexDeckEdgeCount.model_validate(
+        {
+            **result.model_dump(mode="python"),
+            "source_edge_count": result.source_edge_count + 1,
+        }
+    )
+    assert forged.source_edge_count == result.source_edge_count + 1
 
 
 def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() -> None:
@@ -101,3 +103,63 @@ def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() ->
     assert tool.request_type.__name__ == "AnonymousGraphCardMultiset"
     result = tool.run(_vertex_deck(_graph(3, 0b011)))
     assert result.source_edge_count == 2
+
+
+def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None:
+    deck = AnonymousGraphCardMultiset(
+        card_order=8,
+        classes=(
+            {
+                "representative": {
+                    "vertices": [f"v{i:02d}" for i in range(8)],
+                    "edges": [],
+                },
+                "multiplicity": 9,
+            },
+        ),
+    )
+    result = anonymous_vertex_deck_edge_count(deck)
+    assert result.source_order == 9
+    assert result.source_edge_count == 0
+
+
+def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
+    graph = SimpleUndirectedGraph(
+        vertices=tuple(f"v{index:02d}" for index in range(10)), edges=()
+    )
+    deck = AnonymousGraphCardMultiset(
+        card_order=10,
+        classes=(AnonymousGraphCardClass(representative=graph, multiplicity=11),),
+    )
+
+    result = anonymous_vertex_deck_edge_count(deck)
+
+    assert result.source_order == 11
+    assert result.card_edge_total == 0
+    assert result.source_edge_count == 0
+
+
+@pytest.mark.parametrize("missing", ["vertices", "edges"])
+def test_native_admission_rejects_missing_constructed_graph_fields(
+    missing: str,
+) -> None:
+    fields = {"vertices": ("v00", "v01"), "edges": ()}
+    fields.pop(missing)
+    graph = SimpleUndirectedGraph.model_construct(**fields)
+    item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
+    deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
+
+    with pytest.raises(
+        OperationDomainValidationError, match="bounded graph representatives"
+    ):
+        anonymous_vertex_deck_edge_count(deck)
+
+
+def test_native_admission_rejects_oversized_edge_tuple_before_edge_scan() -> None:
+    graph = SimpleUndirectedGraph.model_construct(
+        vertices=("v00", "v01"), edges=(("v00", "v01"),) * 100_000
+    )
+    item = AnonymousGraphCardClass.model_construct(representative=graph, multiplicity=3)
+    deck = AnonymousGraphCardMultiset.model_construct(card_order=2, classes=(item,))
+    with pytest.raises(OperationDomainValidationError, match="more edges"):
+        anonymous_vertex_deck_edge_count(deck)

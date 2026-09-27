@@ -36,13 +36,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="path_three_vertex_deck",
-                description="Recover the source edge count of a three-vertex path.",
+                name="path_p3_edge_count",
+                description=(
+                    "The anonymous vertex deck of P3 has card edge total two; "
+                    "dividing by n-2 recovers its two source edges."
+                ),
                 input={
                     "card_order": 2,
                     "classes": [
                         {
-                            "representative": {"vertices": ["v00", "v01"], "edges": []},
+                            "representative": {
+                                "vertices": ["v00", "v01"],
+                                "edges": [],
+                            },
                             "multiplicity": "1",
                         },
                         {

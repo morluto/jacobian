@@ -2,17 +2,16 @@
 
 from __future__ import annotations
 
-from math import comb, factorial
+from math import comb
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.decks._models import (
-    MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
+    MAX_ANONYMOUS_CARD_CLASSES,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    _canonical_card_edges,
 )
 from jacobian.math.graphs.decks.anonymous_vertex_edge_count._models import (
     MAX_ANONYMOUS_VERTEX_DECK_ORDER,
@@ -36,13 +35,15 @@ def _admit_card_class(
         )
     multiplicity = getattr(item, "multiplicity", None)
     graph = getattr(item, "representative", None)
+    vertices = getattr(graph, "vertices", None)
+    edges = getattr(graph, "edges", None)
     if (
         type(multiplicity) is not int
         or multiplicity < 1
         or multiplicity >= 10**12
         or type(graph) is not SimpleUndirectedGraph
-        or type(graph.vertices) is not tuple
-        or type(graph.edges) is not tuple
+        or type(vertices) is not tuple
+        or type(edges) is not tuple
     ):
         raise OperationDomainValidationError(
             location=("deck", "classes", index),
@@ -50,6 +51,12 @@ def _admit_card_class(
             message="deck classes must contain bounded graph representatives and positive multiplicities",
         )
     expected_vertices = tuple(f"v{i:02d}" for i in range(card_order))
+    if len(edges) > pair_count:
+        raise OperationDomainValidationError(
+            location=("deck", "classes", index),
+            code="graph_deck.anonymous_edge_count_representative",
+            message="deck representatives cannot contain more edges than vertex pairs",
+        )
     invalid_edges = any(
         type(edge) is not tuple
         or len(edge) != 2
@@ -58,14 +65,14 @@ def _admit_card_class(
         or edge[0] >= edge[1]
         or edge[0] not in expected_vertices
         or edge[1] not in expected_vertices
-        for edge in graph.edges
+        for edge in edges
     )
     if (
-        graph.vertices != expected_vertices
-        or len(graph.edges) > pair_count
+        vertices != expected_vertices
+        or len(edges) > pair_count
         or invalid_edges
-        or len(set(graph.edges)) != len(graph.edges)
-        or tuple(sorted(graph.edges)) != graph.edges
+        or len(set(edges)) != len(edges)
+        or tuple(sorted(edges)) != edges
     ):
         raise OperationDomainValidationError(
             location=("deck", "classes", index),
@@ -93,7 +100,10 @@ def _admit_deck_structure(
         raise OperationResourceAdmissionError(
             location=("deck", "card_order"),
             code="graph_deck.anonymous_edge_count_order_bound",
-            message="exact anonymous vertex-deck edge count supports card orders zero through seven",
+            message=(
+                "exact anonymous vertex-deck edge count supports card orders "
+                f"zero through {MAX_ANONYMOUS_VERTEX_DECK_ORDER - 1}"
+            ),
         )
     if type(classes) is not tuple:
         raise OperationDomainValidationError(
@@ -103,20 +113,15 @@ def _admit_deck_structure(
         )
 
     pair_count = comb(card_order, 2)
-    if len(classes) > 8 or len(classes) * (64 + 16 * pair_count) > 1_000_000:
+    if (
+        len(classes) > MAX_ANONYMOUS_CARD_CLASSES
+        or len(classes) * (64 + 16 * pair_count) > 1_000_000
+    ):
         raise OperationResourceAdmissionError(
             location=("deck", "classes"),
             code="graph_deck.anonymous_edge_count_result_bound",
             message="anonymous deck classes exceed the admitted result bound",
         )
-    work = len(classes) * factorial(card_order) * (card_order + 2 * max(1, pair_count))
-    if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
-        raise OperationResourceAdmissionError(
-            location=("deck", "classes"),
-            code="graph_deck.anonymous_edge_count_canonicalization_bound",
-            message="canonical card validation exceeds the admitted work bound",
-        )
-
     card_count = 0
     card_edge_total = 0
     previous_key: tuple[tuple[str, str], ...] | None = None
@@ -165,19 +170,6 @@ def _admit_deck_structure(
     return source_order, classes, card_edge_total
 
 
-def _require_canonical_classes(
-    classes: tuple[AnonymousGraphCardClass, ...],
-) -> None:
-    for index, item in enumerate(classes):
-        graph = item.representative
-        if _canonical_card_edges(graph.vertices, graph.edges) != graph.edges:
-            raise OperationDomainValidationError(
-                location=("deck", "classes", index),
-                code="graph_deck.anonymous_edge_count_canonicality",
-                message="each deck representative must be the least fixed-axis isomorphism encoding",
-            )
-
-
 def anonymous_vertex_deck_edge_count(
     deck: AnonymousGraphCardMultiset,
 ) -> AnonymousVertexDeckEdgeCount:
@@ -189,10 +181,9 @@ def anonymous_vertex_deck_edge_count(
     then applies this necessary identity; divisibility alone does not prove
     that arbitrary cards form a realizable deck.
     """
-    # Source-order, multiplicity, shape and work bounds pass before factorial
-    # canonical-form validation.
-    source_order, classes, card_edge_total = _admit_deck_structure(deck)
-    _require_canonical_classes(classes)
+    # Edge counts are invariant under relabeling; admission is linear in classes
+    # and their bounded edge tuples, without factorial canonicalization.
+    source_order, _classes, card_edge_total = _admit_deck_structure(deck)
     if source_order < 3:
         return AnonymousVertexDeckEdgeCount._from_kernel(
             deck=deck,

@@ -76,6 +76,16 @@ EDGE: ComplexWire = {"vertices": ["a", "b"], "facets": [["a", "b"]]}
 
 
 class TestStar:
+    def test_empty_face_star_result_is_bound_to_the_source(self) -> None:
+        source = _complex(EDGE)
+        result = compute_star(StarRequest(complex=source, simplex=()))
+        forged = result.model_dump()
+        forged["star_facets"] = ()
+        forged["star_is_empty"] = True
+        forged["star_complex"] = canonical_complex((), ())
+        with pytest.raises(ValidationError, match="source facets containing"):
+            StarResult.model_validate(forged)
+
     def test_star_of_vertex_in_triangle(self) -> None:
         result = compute_star(StarRequest(complex=_complex(TRIANGLE), simplex=("v0",)))
         assert not result.star_is_empty

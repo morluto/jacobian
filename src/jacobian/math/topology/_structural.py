@@ -459,6 +459,35 @@ class StarResult(StrictModel):
                 "topology.require_star_binding_6",
                 "star_complex vertices must match star_facets",
             )
+        try:
+            require_complex_admission(self.complex)
+            _require_simplex_in_complex(self.complex, self.simplex)
+        except (
+            OperationDomainValidationError,
+            OperationResourceAdmissionError,
+            ValueError,
+        ) as error:
+            raise _validation_error(
+                "topology.require_star_source",
+                "the retained star face must be valid in its source complex",
+            ) from error
+        face = frozenset(self.simplex)
+        expected_facets = tuple(
+            tuple(sorted(facet))
+            for facet in sorted(
+                (
+                    frozenset(facet)
+                    for facet in self.complex.facets
+                    if face.issubset(facet)
+                ),
+                key=lambda value: (-len(value), sorted(value)),
+            )
+        )
+        if self.star_facets != expected_facets:
+            raise _validation_error(
+                "topology.require_star_source_facets",
+                "star_facets must be exactly the source facets containing the selected face",
+            )
         return self
 
     @classmethod

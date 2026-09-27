@@ -12,7 +12,6 @@ from pydantic import ValidationError
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     MAX_WEIGHTED_MONOTONE_ARITHMETIC_WORK,
@@ -231,11 +230,12 @@ def test_exact_arithmetic_work_boundary_is_admitted_before_dp() -> None:
     assert result.weight.as_fraction() == Fraction(99_999 * n)
     assert len(result.indices) == n
 
-    too_wide = _word(("a",), ("a",) * n, (999_999,) * n)
-    above_boundary_work = pair_count * 2 * 9**2 + n * 12 * 9**2
-    assert above_boundary_work > MAX_WEIGHTED_MONOTONE_ARITHMETIC_WORK
-    with pytest.raises(OperationResourceAdmissionError, match="rational work"):
-        maximum_weight_nondecreasing_subsequence(too_wide)
+    cheap_integer_weights = _word(("a",), ("a",) * n, (999_999,) * n)
+    linear_integer_work = pair_count * 2 * 15 + n * 12 * 15
+    assert linear_integer_work < MAX_WEIGHTED_MONOTONE_ARITHMETIC_WORK
+    result = maximum_weight_nondecreasing_subsequence(cheap_integer_weights)
+    assert result.weight.as_fraction() == Fraction(999_999 * n)
+    assert len(result.indices) == n
 
 
 def test_raw_rational_digits_are_rejected_before_exact_integer_decoding() -> None:
@@ -288,6 +288,31 @@ def test_shared_factor_denominators_use_lcm_growth_bound() -> None:
     assert result.weight.as_fraction() == sum(
         (Fraction(1, k * q) for k in (1, 2, 3, 5)), Fraction()
     )
+
+
+def test_native_maximum_admits_large_common_denominator_family() -> None:
+    q = 10**255 + 7
+    source = _word(("a",), ("a",) * 3, (Fraction(1, q),) * 3)
+    result = maximum_weight_nondecreasing_subsequence(source)
+    assert result.weight.as_fraction() == Fraction(3, q)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        WeightedOrderedWord.model_construct(word=None, weights=()),
+        WeightedOrderedWord.model_construct(
+            word=FiniteWord.model_construct(alphabet=None, letters=()), weights=()
+        ),
+        WeightedOrderedWord.model_construct(
+            word=FiniteWord.model_construct(alphabet=("a",), letters=("a",)),
+            weights=(CanonicalRational.model_construct(num="1", den=1),),
+        ),
+    ],
+)
+def test_native_maximum_rejects_bypass_constructed_malformed_values(source) -> None:
+    with pytest.raises(OperationDomainValidationError):
+        maximum_weight_nondecreasing_subsequence(source)
 
 
 def test_result_deserialization_rejects_impossible_witness_shape() -> None:

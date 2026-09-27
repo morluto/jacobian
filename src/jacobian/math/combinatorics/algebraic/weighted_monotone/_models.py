@@ -153,7 +153,7 @@ class WeightedMaximumResult(StrictModel):
             )
         if any(
             i < 0 or i >= len(self.source.word.letters) for i in self.indices
-        ) or any(a >= b for a, b in zip(self.indices, self.indices[1:], strict=True)):
+        ) or any(a >= b for a, b in zip(self.indices, self.indices[1:], strict=False)):
             raise PydanticCustomError(
                 "weighted_maximum.witness_indices",
                 "witness indices must be strictly increasing source positions",

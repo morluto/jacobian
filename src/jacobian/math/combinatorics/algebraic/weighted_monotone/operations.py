@@ -27,7 +27,11 @@ from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
     WeightedMonotonicity,
     WeightedOrderedWord,
 )
-from jacobian.math.logic.languages.words.values import FiniteWord
+from jacobian.math.logic.languages.words.values import (
+    MAX_ALPHABET_SIZE,
+    MAX_SYMBOL_LENGTH,
+    FiniteWord,
+)
 
 __all__ = ["compute_endpoint_profile"]
 
@@ -112,7 +116,7 @@ def compute_endpoint_profile(
 
 
 def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
-    """Admit both DP work and a conservative exact-rational growth bound."""
+    """Admit native values, exact growth, and common-denominator integer work."""
     if not isinstance(source, WeightedOrderedWord):
         raise OperationDomainValidationError(
             location=("source",),
@@ -120,11 +124,24 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             message="source must be a WeightedOrderedWord value",
         )
     word = source.word
-    if not isinstance(word, FiniteWord):
+    if (
+        not isinstance(word, FiniteWord)
+        or not isinstance(word.alphabet, tuple)
+        or not isinstance(word.letters, tuple)
+        or len(word.alphabet) > MAX_ALPHABET_SIZE
+        or len(word.letters) > 500
+        or any(not isinstance(symbol, str) for symbol in word.alphabet)
+        or any(
+            not symbol or len(symbol) > MAX_SYMBOL_LENGTH for symbol in word.alphabet
+        )
+        or any(not isinstance(letter, str) for letter in word.letters)
+        or not isinstance(source.weights, tuple)
+        or len(source.weights) > 500
+    ):
         raise OperationDomainValidationError(
             location=("source", "word"),
             code="weighted_word.invalid_source",
-            message="source word must be a FiniteWord value",
+            message="source must contain a canonical finite word and weight tuple",
         )
     n = len(word.letters)
     if n > 500 or len(source.weights) != n:
@@ -144,11 +161,18 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
     numerator_digits = 1
     denominator_lcm = 1
     source_digits = 0
+    denominator_work = 0
+    scaling_work = 0
     for weight in source.weights:
         if (
             not isinstance(weight, CanonicalRational)
+            or isinstance(getattr(weight, "num", None), bool)
+            or not isinstance(getattr(weight, "num", None), int)
+            or isinstance(getattr(weight, "den", None), bool)
+            or not isinstance(getattr(weight, "den", None), int)
             or weight.den <= 0
             or weight.num < 0
+            or gcd(weight.num, weight.den) != 1
         ):
             raise OperationDomainValidationError(
                 location=("source", "weights"),
@@ -180,6 +204,7 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
             )
         numerator_digits = max(numerator_digits, num_digits)
         if weight.den != 1:
+            denominator_work += decimal_digit_width(denominator_lcm) * den_digits
             denominator_lcm = (
                 denominator_lcm // gcd(denominator_lcm, weight.den) * weight.den
             )
@@ -191,8 +216,9 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
         decimal_digit_width(denominator_lcm) if denominator_lcm != 1 else 0
     )
     # Every witness sum is at most n times the largest input numerator over
-    # the product of distinct nonunit input denominators. This bounds both Fraction
-    # operands before any dynamic-programming state is materialized.
+    # the denominator LCM. All DP states use that common denominator, so the
+    # quadratic kernel performs integer comparisons and additions rather than
+    # repeated cross-multiplication of Fraction values.
     carry_digits = decimal_digit_width(max(n, 1))
     growth_digits = numerator_digits + denominator_lcm_digits + carry_digits
     if growth_digits > MAX_WEIGHTED_MONOTONE_RESULT_COMPONENT_DIGITS:
@@ -204,12 +230,18 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
                 f"{MAX_WEIGHTED_MONOTONE_RESULT_COMPONENT_DIGITS}-digit result bound"
             ),
         )
+    for weight in source.weights:
+        scale = denominator_lcm // weight.den
+        scaling_work += decimal_digit_width(weight.num) * decimal_digit_width(scale)
     comparisons = n * max(n - 1, 0) // 2
-    rational_cost = growth_digits * growth_digits
-    # Each pair may compare two rationals; each vertex adds one weight and
-    # canonicalizes the final exact sum. The factors cover schoolbook bigint
-    # multiplication/division and Euclidean gcd work in Fraction arithmetic.
-    arithmetic_work = comparisons * 2 * rational_cost + n * 12 * rational_cost
+    # Integer comparisons/additions are linear in operand width. Charge the
+    # one-time rational scaling and LCM construction separately.
+    arithmetic_work = (
+        comparisons * 2 * growth_digits
+        + n * 12 * growth_digits
+        + scaling_work
+        + denominator_work
+    )
     if arithmetic_work > MAX_WEIGHTED_MONOTONE_ARITHMETIC_WORK:
         raise OperationResourceAdmissionError(
             location=("source", "weights"),
@@ -219,24 +251,26 @@ def _admit_weighted_maximum(source: WeightedOrderedWord) -> int:
                 f"{MAX_WEIGHTED_MONOTONE_ARITHMETIC_WORK}-unit bound"
             ),
         )
-    return growth_digits
+    return denominator_lcm
 
 
 def _maximum_weight_monotone_subsequence(
     source: WeightedOrderedWord,
     monotonicity: WeightedMonotonicity,
 ) -> WeightedMaximumResult:
-    _admit_weighted_maximum(source)
+    common_denominator = _admit_weighted_maximum(source)
     word = source.word
     n = len(word.letters)
     ranks = {symbol: rank for rank, symbol in enumerate(word.alphabet)}
-    weights = [weight.as_fraction() for weight in source.weights]
-    values: list[Fraction] = []
+    weights = [
+        weight.num * (common_denominator // weight.den) for weight in source.weights
+    ]
+    values: list[int] = []
     predecessor = [-1] * n
 
     for end in range(n):
         request_checkpoint("during weighted monotone-subsequence dynamic programming")
-        best_prefix = Fraction(0)
+        best_prefix = 0
         best_predecessor = -1
         end_rank = ranks[word.letters[end]]
         for previous in range(end):
@@ -271,7 +305,7 @@ def _maximum_weight_monotone_subsequence(
     return WeightedMaximumResult._from_kernel(
         source,
         monotonicity,
-        CanonicalRational.from_fraction(total),
+        CanonicalRational.from_fraction(Fraction(total, common_denominator)),
         indices,
         tuple(word.letters[position] for position in indices),
     )

@@ -1966,8 +1966,8 @@ def differential_series_construct(
     if output_weight > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("operator",),
-            code="ore_algebra.dfinite_series_output_bytes",
-            message="the D-finite formal-series value exceeds its serialized byte budget",
+            code="ore_algebra.dfinite_series_output_weight",
+            message="the D-finite formal-series value exceeds its serialized-output weight budget",
         )
     try:
         _require_ordinary_series_operator(admitted_operator)

@@ -31,6 +31,16 @@ def test_public_catalog_is_sorted_and_unique() -> None:
     assert all(catalog.operation(tool.operation_id) is tool for tool in BUILTIN_TOOLS)
 
 
+def test_hypergraph_coloring_has_one_bounded_decision_operation() -> None:
+    catalog = Catalog.open()
+
+    assert (
+        catalog.operation("hypergraph.nonmonochromatic_vertex_coloring.q_decide")
+        is not None
+    )
+    assert catalog.operation("hypergraph.coloring.non_monochromatic.decide") is None
+
+
 def test_friable_count_manifest_has_one_executable_example() -> None:
     operation = next(
         tool

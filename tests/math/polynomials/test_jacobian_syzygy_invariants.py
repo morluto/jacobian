@@ -7,6 +7,7 @@ from typing import cast
 import pytest
 from tests.math.polynomials._support import polynomial_validation_error
 
+import jacobian.math.polynomials._jacobian_syzygy as syzygy
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.projective.values import RationalProjectiveLine
@@ -281,8 +282,16 @@ def test_result_rejects_negative_rank_minor_indices() -> None:
         GradedJacobianSyzygyResult.model_validate_json(json.dumps(payload))
 
 
-def test_dimension_specific_basis_boundary_rejects_before_backend_execution() -> None:
-    with pytest.raises(OperationDomainValidationError):
+def test_dimension_specific_basis_boundary_rejects_before_backend_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def backend_must_not_run(_request: GradedJacobianSyzygyRequest) -> None:
+        pytest.fail("admission rejection reached the syzygy backend")
+
+    monkeypatch.setattr(syzygy, "_compute_graded_jacobian_syzygy", backend_must_not_run)
+    with pytest.raises(
+        OperationDomainValidationError, match="512-monomial or 512-column"
+    ):
         compute_graded_jacobian_syzygy(
             GradedJacobianSyzygyRequest(
                 polynomial=_sparse_polynomial(
@@ -298,7 +307,10 @@ def test_dimension_specific_basis_boundary_rejects_before_backend_execution() ->
             )
         )
 
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="15000000-update",
+    ):
         compute_graded_jacobian_syzygy(
             GradedJacobianSyzygyRequest(
                 polynomial=_sparse_polynomial(

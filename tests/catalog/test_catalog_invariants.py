@@ -71,12 +71,14 @@ def test_prime_field_matrix_computations_have_one_operation_family() -> None:
     """Rank, RREF, and nullspace over GF(p) are owned by ``prime_field.matrix``.
 
     A second family exposing the same kernels under different IDs made
-    agents discover six competing operations for three computations.
+    agents discover six competing operations for three computations. Other
+    prime-field values, such as source-bound quotient spaces, are separate
+    mathematical capabilities and do not belong to this matrix-kernel family.
     """
     matrix_ids = sorted(
         tool.operation_id
         for tool in BUILTIN_TOOLS
-        if tool.operation_id.startswith("prime_field")
+        if tool.operation_id.startswith("prime_field.matrix.")
     )
     assert matrix_ids == [
         "prime_field.matrix.nullspace.compute",

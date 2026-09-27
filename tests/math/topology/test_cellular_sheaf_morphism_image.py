@@ -411,6 +411,20 @@ def test_image_rejects_excess_component_count_before_resolving_axes(monkeypatch)
         image_of_morphism(malformed)
 
 
+def test_image_output_admission_ignores_discarded_obstruction_text() -> None:
+    source, target = _sheaf(rank=1), _sheaf(rank=1)
+    original = morphism(
+        source,
+        target,
+        tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order),
+    )
+    stale_claim = original.model_copy(update={"obstruction": "x" * 2_000_000})
+
+    result = image_of_morphism(stale_claim)
+
+    assert result.morphism.obstruction is None
+
+
 def test_image_rejects_oversized_component_before_resource_scan(monkeypatch) -> None:
     from jacobian.math.topology.cellular_sheaves import morphism_image
 

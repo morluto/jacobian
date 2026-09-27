@@ -379,7 +379,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     else:
         output_digits = max(input_digits, len(str(source.prime)))
     if (
-        4 * len(value.model_dump_json())
+        4 * len(value.model_dump_json(exclude={"obstruction"}))
         + reconstruction_chars
         + sheaf_scalar_json_bound(output_cells, output_digits)
         > MAX_SHEAF_MORPHISM_OUTPUT_CHARS

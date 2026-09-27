@@ -534,8 +534,15 @@ class FiniteFieldPointOrderResult(StrictModel):
             )
         field_order = self.curve.field.order
         hasse_radius = isqrt(4 * field_order)
-        if not field_order + 1 - hasse_radius <= self.group_cardinality <= field_order + 1 + hasse_radius:
-            raise _validation_error("point_order_cardinality_bound", "group cardinality must lie in the curve's Hasse interval")
+        if (
+            not field_order + 1 - hasse_radius
+            <= self.group_cardinality
+            <= field_order + 1 + hasse_radius
+        ):
+            raise _validation_error(
+                "point_order_cardinality_bound",
+                "group cardinality must lie in the curve's Hasse interval",
+            )
         if self.order > self.group_cardinality or self.group_cardinality % self.order:
             raise _validation_error(
                 "point_order_group_divisibility",

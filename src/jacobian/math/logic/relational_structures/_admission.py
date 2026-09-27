@@ -568,10 +568,13 @@ def admit_relational_product(
             code="relational.product.table_rows_bound",
             message=f"a product relation exceeds {MAX_RELATIONAL_TABLE_ROWS} rows",
         )
-    work = sum(
-        rows * (symbol.arity + 1)
-        for rows, symbol in zip(row_counts, left.signature, strict=True)
-    ) + 2 * carrier_size
+    work = (
+        sum(
+            rows * (symbol.arity + 1)
+            for rows, symbol in zip(row_counts, left.signature, strict=True)
+        )
+        + 2 * carrier_size
+    )
     if work > MAX_RELATIONAL_PRODUCT_WORK:
         raise OperationResourceAdmissionError(
             location=("product",),

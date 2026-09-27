@@ -190,9 +190,13 @@ class RelationalReductResult(StrictModel):
                 "reduct.signature_transport",
                 "the map must identify each reduct symbol with its source symbol",
             )
-        if tuple(
-            self.source.relation_tables[index] for index in self.source_symbol_indices
-        ) != self.reduct.relation_tables:
+        if (
+            tuple(
+                self.source.relation_tables[index]
+                for index in self.source_symbol_indices
+            )
+            != self.reduct.relation_tables
+        ):
             raise _validation_error(
                 "reduct.table_transport",
                 "each reduct table must equal its mapped source table",
@@ -258,7 +262,7 @@ class RelationalProductResult(StrictModel):
                 "product_projections",
                 "projections must follow canonical lexicographic pair labels",
             )
-        for left_table, right_table, product_table, symbol in zip(
+        for left_table, right_table, product_table, _symbol in zip(
             self.left.relation_tables,
             self.right.relation_tables,
             self.product.relation_tables,

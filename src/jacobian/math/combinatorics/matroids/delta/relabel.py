@@ -180,9 +180,17 @@ class DeltaMatroidRelabelling(StrictModel):
             for target in range(n)
         ):
             raise _error("result_inverse", "result axis maps must be inverses")
-        expected_feasible = tuple(sorted(tuple(sorted(self.source_to_target[index] for index in row)) for row in self.source.feasible))
+        expected_feasible = tuple(
+            sorted(
+                tuple(sorted(self.source_to_target[index] for index in row))
+                for row in self.source.feasible
+            )
+        )
         if self.relabelled.feasible != expected_feasible:
-            raise _error("result_feasible_binding", "relabelled feasible sets must be transported through the axis map")
+            raise _error(
+                "result_feasible_binding",
+                "relabelled feasible sets must be transported through the axis map",
+            )
         return self
 
 

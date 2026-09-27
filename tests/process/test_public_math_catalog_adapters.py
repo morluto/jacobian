@@ -15,8 +15,8 @@ from jacobian.dispatch import invoke_operation
         "matroid.intersection.maximum_weight.compute",
         "weyl_group.element.act_on_root.compute",
         "weyl_group.element.act_on_weight.compute",
-        "topology.simplicial_set.quotient.compute",
         "topology.simplicial_set.map.induced_chain_map.compute",
+        "topology.simplicial_set.quotient_by_congruence.compute",
     ),
 )
 def test_published_math_operation_example_executes_through_catalog(

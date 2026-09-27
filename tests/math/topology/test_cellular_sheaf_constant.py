@@ -18,12 +18,14 @@ from jacobian.math.topology.cellular_sheaves import (
     sections,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
-    ConstantSheafRequest,
     SheafCohomologyResult,
     SheafScalar,
 )
 from jacobian.math.topology.cellular_sheaves.constants import (
     constant_sheaf,
+)
+from jacobian.math.topology.cellular_sheaves.constants._models import (
+    ConstantSheafRequest,
 )
 from jacobian.math.topology.cellular_sheaves.constants._tools import TOOLS
 from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology

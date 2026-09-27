@@ -566,25 +566,6 @@ def pari_character_basis(
                 coordinates.append(coefficient)
             terms.append(tuple(coordinates))
         vectors.append(tuple(terms))
-    character = space.character
-    if type(character) is DirichletCharacter:
-        character_order = lcm(
-            *(
-                order // gcd(coordinate, order)
-                for coordinate, order in zip(
-                    character.coordinates, character.group.generator_orders, strict=True
-                )
-            )
-        )
-        if character_order == 3:
-            # PARI uses t^2+t+1; the declared field uses x^2-x+1, with t=x-1.
-            vectors = [
-                tuple(
-                    (coefficient[0] - coefficient[1], coefficient[1])
-                    for coefficient in vector
-                )
-                for vector in vectors
-            ]
     return tuple(vectors)
 
 

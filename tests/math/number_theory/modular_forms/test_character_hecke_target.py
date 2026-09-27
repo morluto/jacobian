@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+
 import pytest
 from cypari import pari
 from pydantic import TypeAdapter
@@ -34,6 +36,7 @@ from jacobian.math.number_theory.modular_forms.character_coordinates import (
 )
 from jacobian.math.number_theory.modular_forms.pari_backend import (
     _pari_character_request,
+    pari_character_basis,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -79,6 +82,27 @@ def _form() -> ModularFormCoordinates:
             ),
         ),
     )
+
+
+def test_pari_character_basis_does_not_convert_the_order_three_basis_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.number_theory.modular_forms.pari_backend as backend
+
+    monkeypatch.setattr(
+        backend,
+        "_run_basis_worker",
+        lambda *_args, **_kwargs: {
+            "kind": "character_complete",
+            "backend_dimension": 1,
+            "coefficient_field_order": 6,
+            "vectors": [[[["1", "1"], ["1", "1"]]]],
+        },
+    )
+
+    (vector,) = pari_character_basis(_space(), 1, 1)
+
+    assert vector == ((Fraction(1), Fraction(1)),)
 
 
 def test_character_hecke_action_preserves_rref_target_and_matches_pari() -> None:

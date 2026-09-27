@@ -70,6 +70,11 @@ def _digits_for_bit_bound(bits: int) -> int:
     return (bits * 30_103) // 100_000 + 1
 
 
+def _denominator_factor_bits(values: list[Fraction]) -> int:
+    """Bound a common denominator by multiplying distinct factors once."""
+    return sum(denominator.bit_length() for denominator in {v.denominator for v in values})
+
+
 def _canonical_recurrence(
     recurrence: ShiftOreOperator | Mapping[str, Any],
 ) -> ShiftOreOperator:
@@ -159,7 +164,7 @@ def _admit_transform(
             code="ore_algebra.recurrence_egf_work",
             message="recurrence to EGF conversion exceeds its admitted exact-arithmetic work",
         )
-    denominator_bits = sum(value.denominator.bit_length() for value in input_scalars)
+    denominator_bits = _denominator_factor_bits(input_scalars)
     numerator_bits = max(
         (abs(value.numerator).bit_length() for value in input_scalars), default=1
     )

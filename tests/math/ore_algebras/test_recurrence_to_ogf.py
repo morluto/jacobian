@@ -238,6 +238,19 @@ def test_ogf_request_schema_documents_polynomial_coefficient_domain() -> None:
     )
 
 
+def test_shared_coefficient_denominator_is_counted_once() -> None:
+    denominator = 10**63
+    recurrence = _recurrence((0, [(degree, 1) for degree in range(17)]))
+    for term in recurrence["terms"]:
+        for monomial in term["coefficient"]["numerator"]["terms"]:
+            monomial["coefficient"]["den"] = denominator
+
+    result = polynomial_recurrence_to_ogf_equation(recurrence, {"values": []})
+
+    assert result.differential_operator.terms
+    assert result.forcing.numerator.terms == ()
+
+
 def test_ogf_transform_rejects_wrong_initial_width_and_rational_coefficients() -> None:
     with pytest.raises(OperationDomainValidationError, match="initial coefficient"):
         polynomial_recurrence_to_ogf_equation(

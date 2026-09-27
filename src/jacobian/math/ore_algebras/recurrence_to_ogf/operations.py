@@ -92,6 +92,19 @@ def _digits_for_bit_bound(bits: int) -> int:
     return (bits * 30_103) // 100_000 + 1
 
 
+def _denominator_factor_bits(values: list[Fraction]) -> int:
+    """Bound the common denominator by multiplying distinct factors once."""
+    return sum(denominator.bit_length() for denominator in {v.denominator for v in values})
+
+
+def _product_numerator_bits(left: Fraction, right: Fraction) -> int:
+    if abs(left.numerator) == 1:
+        return abs(right.numerator).bit_length()
+    if abs(right.numerator) == 1:
+        return abs(left.numerator).bit_length()
+    return abs(left.numerator).bit_length() + abs(right.numerator).bit_length()
+
+
 def _canonical_request(
     recurrence: ShiftOreOperator | Mapping[str, Any],
     initial_coefficients: FiniteRationalSequence | Mapping[str, Any],
@@ -177,7 +190,7 @@ def _admit_transform(
             message="recurrence to OGF conversion exceeds its admitted exact-arithmetic work",
         )
     values = [value.as_fraction() for value in request.initial_coefficients.values]
-    denominator_bits = sum(value.denominator.bit_length() for value in input_scalars)
+    active_initial_denominators: set[int] = set()
     numerator_bits = max(
         (abs(value.numerator).bit_length() for value in input_scalars), default=1
     )
@@ -192,12 +205,16 @@ def _admit_transform(
         for index in range(shift):
             evaluation = _evaluate_polynomial(polynomial, index - shift)
             boundary_evaluations[(shift, index)] = evaluation
-            if evaluation:
-                product = values[index] * evaluation
-                if product:
-                    boundary_degree = max(boundary_degree, operator.order - shift + index)
-                    boundary_product_bits = max(boundary_product_bits, abs(product.numerator).bit_length())
-                    denominator_bits += product.denominator.bit_length()
+            if evaluation and values[index]:
+                boundary_degree = max(boundary_degree, operator.order - shift + index)
+                boundary_product_bits = max(
+                    boundary_product_bits,
+                    _product_numerator_bits(values[index], evaluation),
+                )
+                active_initial_denominators.add(values[index].denominator)
+    denominator_bits = _denominator_factor_bits(input_scalars) + sum(
+        denominator.bit_length() for denominator in active_initial_denominators
+    )
     # Evaluating a degree-d polynomial at integer points of magnitude at most r
     # adds at most d*ceil(log2(r+1)) bits. The shift order alone does not imply
     # coefficient growth (e.g. a_(n+r)=0 has unit coefficients throughout).

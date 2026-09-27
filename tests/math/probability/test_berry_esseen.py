@@ -34,7 +34,6 @@ from jacobian.math.probability._berry_esseen import (
 )
 from jacobian.math.probability._berry_esseen_tools import BERRY_ESSEEN_OPERATION
 from jacobian.math.probability._models import (
-    MAX_INPUT_RATIONAL_DIGITS,
     MAX_RESULT_RATIONAL_DIGITS,
 )
 
@@ -299,11 +298,12 @@ def test_input_rational_height_boundary_is_enforced() -> None:
 
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound",
-    ):
+    ) as exc_info:
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
         )
+
+    assert exc_info.value.errors()[0]["type"] == "probability.berry_esseen.input_height"
 
 
 def test_input_height_is_checked_before_normalization(
@@ -315,11 +315,12 @@ def test_input_height_is_checked_before_normalization(
     monkeypatch.setattr(berry_module, "require_input_distribution", fail)
     with pytest.raises(
         OperationResourceAdmissionError,
-        match=f"{MAX_INPUT_RATIONAL_DIGITS}-digit bound",
-    ):
+    ) as exc_info:
         berry_esseen_bound(
             _request(_distribution((0, Fraction(1, 2)), (10**128, Fraction(1, 2))))
         )
+
+    assert exc_info.value.errors()[0]["type"] == "probability.berry_esseen.input_height"
 
 
 def test_native_sample_count_rejects_non_integers() -> None:
@@ -340,14 +341,18 @@ def test_native_sample_count_rejects_over_digit_cap() -> None:
     request = _request(_distribution((0, Fraction(1, 2)), (1, Fraction(1, 2))))
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_RESULT_RATIONAL_DIGITS} decimal digits",
-    ):
+    ) as exc_info:
         berry_esseen_bound(
             BerryEsseenRequest.model_construct(
                 distribution=request.distribution,
                 sample_count=10**512,
             )
         )
+
+    assert (
+        exc_info.value.errors()[0]["type"]
+        == "probability.berry_esseen.sample_count_digits"
+    )
 
 
 def test_native_distribution_must_be_a_finite_rational_law() -> None:

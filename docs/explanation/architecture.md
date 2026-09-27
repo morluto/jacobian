@@ -1,8 +1,67 @@
 # Architecture
 
 The [product blueprint](product-blueprint.md) owns Jacobian's product model.
-This page describes the package boundaries and ordinary execution path that
-implement it.
+This page owns the library's responsibility boundaries, package organization,
+and execution model. The [Python API](../reference/python-api.md),
+[value contract](../reference/value-interoperability.md),
+[operation library](../reference/domain-operation-library.md), and
+[tool reference](../reference/tools.md) specify their respective interfaces.
+
+## Library, publication, and delivery
+
+The mathematical library is the foundation; MCP is one delivery interface.
+Native callers do not need a catalog, operation ID, JSON envelope, or server to
+use a domain function. Publishing that function as a tool adds a discoverable
+contract, not another implementation of its mathematics.
+
+| Responsibility | Owner | Does not own |
+| --- | --- | --- |
+| Mathematical values and functions | `jacobian.math.<domain>` | MCP requests, authentication, durable jobs |
+| Backend conversion and algorithm choice | Private modules of the mathematical owner | Public semantics independent of that owner |
+| Tool publication | Owner-local `_tools.py` manifest | A second kernel or admission policy |
+| Discovery and immutable declarations | `jacobian.catalog` | Runtime mathematical planning |
+| Resolve, decode, invoke, project | `jacobian.dispatch` | Domain algorithms or deployment byte ceilings |
+| Request-scoped execution support | Library execution and process machinery | Mathematical interpretation or durable task state |
+| Protocol and delivery | MCP SDK, `jacobian.mcp`, CLI | Mathematical truth or canonical value ownership |
+
+These are responsibilities, not mandatory layers of wrapper classes. A small
+native function can validate its arguments, call its kernel, and return a value.
+Extract an adapter or execution plan only when it owns real conversion, failure
+policy, or reusable facts.
+
+### Values, arguments, and execution context
+
+A **mathematical value** is reusable data with its interpreting context: a
+polynomial and its ring, or a matrix and its axes. **Operation arguments** select
+a computation on such values. A **wire request** encodes those arguments for a
+delivery interface. **Execution context** carries a deadline, cancellation, and
+optional progress; it is not part of the mathematical value.
+
+A native function takes domain arguments, not its tool's request envelope.
+Request models may contain shared values without redefining them. A value's
+JSON codec does not make it a transport envelope or require separate native and
+wire value classes. Supported storage variants, such as dense and sparse
+matrices, need explicit semantics and conversions; one canonical owner does
+not mean one storage strategy for all mathematics.
+
+### Representation, claims, and trust
+
+| Distinction | Example | Owner of the check |
+| --- | --- | --- |
+| Representation invariant | Row widths agree with declared matrix dimensions | Value construction and structural decoding |
+| Mathematical precondition | A matrix is invertible | Admitted operation that requires it |
+| Computed claim | `B` is the inverse of `A` | Producing computation; an admitted consumer if it relies on an authored claim |
+| Provenance | A caller says `B` was produced by an earlier call | Not established by a class name, digest, or serialization |
+
+Check each relied-upon invariant at its owning trust boundary. Reuse facts
+within an admitted execution; do not infer trusted provenance after
+serialization. Structural validation, candidate checking, and rerunning a solve
+are different activities. Checking a backend candidate can be necessary and
+cheaper than finding it; it belongs in the producing computation, not hidden
+inside serialization. The [value contract](../reference/value-interoperability.md#put-each-check-at-its-owning-boundary)
+defines the detailed check ownership.
+
+## Ordinary execution path
 
 The serving process compiles one immutable catalog directly from explicit
 `MathTool` entries and exposes `math.find` and `math.run` through the MCP Python
@@ -42,6 +101,30 @@ operation ID + JSON
   -> canonical typed result construction
   -> MCP/JSON transport projection
 ```
+
+### Worked path: polynomial expression normalization
+
+`polynomial.expression.normalize` illustrates these boundaries without a new
+framework:
+
+1. A native caller supplies the reusable `PolynomialExpressionSource` to
+   `normalize_polynomial_expression`. Its typed AST has a coefficient domain
+   and ordered variables; it is not executable source text.
+2. The native function admits expansion and result growth, performs the
+   normalization, and constructs the declared result containing the polynomial.
+3. The published declaration supplies the operation ID, request/result types,
+   discovery metadata, examples, and a thin adapter. It is included by the
+   polynomial owner's `_tools.py` manifest.
+4. `math.run` resolves that declaration and decodes its wire request. The
+   adapter projects the request into `PolynomialExpressionSource` and invokes
+   the same native function; it does not implement a second normalizer.
+5. The value codec encodes exact scalar leaves for JSON. The MCP adapter and SDK
+   deliver the result or a tool error; neither establishes a new mathematical
+   claim about the polynomial.
+
+Native tests own algebraic correctness; focused codec and tool tests own
+serialized composition and delivery. A useful native helper need not become a
+published operation merely because this one is published.
 
 ## Library execution and delivery boundaries
 
@@ -113,10 +196,12 @@ preferred shape. "One semantic admission decision" means one consistent check
 and any reusable derived facts; it does not require a plan class, planner
 abstraction, or extra module for every operation.
 
-Request and ordinary result models must not perform semantic admission, call a
-backend, enumerate candidates, or check a defining relation. A wrapper or
+Request and ordinary result models enforce representation invariants, not
+semantic admission, backend calls, or search. Checks of stronger mathematical
+claims belong to the admitted computation that relies on them. A wrapper or
 kernel must not recompute an admission quantity already established by
-admission or held by a plan.
+admission or held by a plan. This does not remove structural checks at a new
+trust boundary or checks needed to establish a backend candidate's validity.
 
 ## Design and review principles
 
@@ -127,7 +212,9 @@ instantiate.
 - **Design by contract.** State the request representation, mathematical
   postcondition, result states, defining invariant, and resource envelope
   before choosing an implementation. A generated schema is part of the
-  contract: it must not advertise requests that runtime admission rejects.
+  contract: its expressible structural constraints must agree with decoding.
+  Document derived mathematical and cross-field admission conditions that JSON
+  Schema cannot express; structural validity alone does not promise admission.
 - **One owner and one source of truth.** Put each mathematical policy and
   derived bound with the owner that can enforce it. A shared canonical value
   should describe mathematical meaning, not one operation's incidental work
@@ -160,11 +247,13 @@ instantiate.
   when its framing, version, bounds, source binding, and failure semantics are
   explicit; it must not become an accidental public result format.
 
-Ordinary execution does not replay its own computation. Defining-invariant
-checks normally belong in the owning tests. When checking caller-supplied data
-is itself useful mathematics, model that check as a normal domain operation
-with a specific postcondition and admission rule—not as a companion lifecycle
-or generic verification service for computed results.
+Do not rerun an expensive solve or search merely to construct or serialize its
+result. Retain bounded structural checks and mathematical candidate checks
+needed for correctness. Independent tests establish implementation evidence;
+they do not replace a required runtime check of caller-authored data or a
+backend candidate. When checking a claim is independently useful mathematics,
+model it as a normal domain operation with a specific postcondition and
+admission rule—not as a mandatory companion to every producer.
 
 The domain function may compose a maintained backend such as SymPy, FLINT,
 NetworkX, or Z3 where that algorithm is relevant. Those backends remain private
@@ -174,9 +263,11 @@ computational engines behind Jacobian's public mathematical contracts.
 
 The MCP Python SDK owns the transport boundary: registration of `math.find` and
 `math.run`, their outer argument and output schemas, protocol validation, and
-structured JSON delivery. Jacobian does not duplicate those
-checks. The SDK's Streamable HTTP request-body ceiling is an input constraint;
-it does not define a tool-result byte ceiling. No MCP response-size limit is
+structured JSON delivery. Reuse those SDK mechanisms rather than implement a
+parallel protocol validator. They do not validate the operation-specific
+mathematics inside `math.run`'s payload; that remains the selected owner's
+responsibility. The SDK's Streamable HTTP request-body ceiling is an input
+constraint; it does not define a tool-result byte ceiling. No MCP response-size limit is
 therefore inferred from the canonical codec's defaults.
 
 The SDK does not own mathematical execution. The transport adapter binds SDK
@@ -185,14 +276,39 @@ typed result or exception onto the protocol. Durable task records, protocol
 progress tokens, and tool-error envelopes remain delivery concerns; operation
 requests and results do not acquire those fields.
 
-Mathematical values enforce canonical representation and intrinsic
-representation bounds, never JSON response bytes. Operation owners bound work,
-intermediate growth, and unavoidable result cardinality. Native functions
-return their exact typed values without inheriting an MCP or JSON byte budget.
-If a deployment adds a real delivery ceiling, the MCP adapter owns and applies
-that ceiling explicitly. Canonical encoding is deterministic measurement by
+### Domain, admission, capacity, and delivery
+
+Keep the mathematical domain separate from the implementation's supported
+scope, its admitted execution envelope, and a deployment's available capacity.
+A valid mathematical input can be unsupported or exceed admission; an admitted
+request can still exhaust a runtime budget or fail during delivery. None of
+these failures is a negative mathematical answer.
+
+| Limit | Owner | Appropriate measures |
+| --- | --- | --- |
+| Representation and parsing | Value codec and request boundary | Nesting, dimensions, collection cardinality, scalar digits |
+| Computation and intermediate allocation | Mathematical owner and execution machinery | Algorithm-derived work, metered steps, scalar bit lengths, allocation bytes |
+| Runtime containment | Host or process supervisor | Memory, deadlines, cancellation and killability |
+| Input/output delivery and worker channels | Concrete transport or process boundary | Actual encoded bytes and framing |
+
+Bytes are not intrinsically a transport policy: an allocation estimate is a
+legitimate computational measure. Conversely, renaming an encoded-byte count
+as cells does not change what it measures. Cell counts must account for scalar
+widths and other variable-size data when used to bound storage. A final byte
+check after encoding does not itself bound the memory needed to build that
+encoding.
+
+Native mathematical values and admission must not inherit an MCP response
+ceiling. If a deployment adds a real delivery ceiling, its adapter owns and
+applies it explicitly. Canonical encoding is deterministic measurement by
 default and enforces output bytes only when its caller supplies limits for a
-concrete boundary.
+concrete boundary. Operation owners still bound mathematical work, growth, and
+unavoidable output before expansion; execution counters and containment enforce
+an admitted budget rather than promise that every accepted search completes.
+See [boundedness](../reference/domain-operation-library.md#boundedness-proof)
+for the operation-level evidence.
+
+### Dispatch and error projection
 
 `math.run` still needs a small dispatch boundary because
 its `payload` has an operation-specific schema that is known only after its
@@ -216,20 +332,23 @@ Rejections retain the phase that owns them:
 
 | Phase | Python boundary | MCP projection |
 | --- | --- | --- |
-| JSON canonicalization or structural Pydantic parsing | `OperationRequestValidationError` | `INVALID_PARAMS` |
-| Native mathematical admission | `OperationDomainValidationError` | `INVALID_PARAMS` |
-| Timeout or cancellation | Typed execution exception | Tool error (`is_error=true`) |
-| Worker, host, transport, or backend failure | Operational exception | Tool error (`is_error=true`) |
+| JSON canonicalization or structural Pydantic parsing of an operation payload | `OperationRequestValidationError` | `ToolError` with a bounded validation diagnostic |
+| Native mathematical admission | `OperationDomainValidationError` | `ToolError` with a bounded admission diagnostic |
+| Timeout or cancellation | Typed execution exception | Tool error |
+| Worker, host, or backend failure | Operational exception | Tool error when the channel remains available |
 
-Dispatch does not turn native admission into structural request validation.
-MCP deliberately projects both validation classes through
-`INVALID_PARAMS` because both mean that the selected operation cannot accept
-the supplied payload. Capacity is different from validity: an admitted request
-may still fail on a particular worker, host, or delivery boundary. MCP returns
-that non-completion as an agent-visible tool error. Timeout, cancellation,
-resource exhaustion, and unexpected execution failure establish no
-mathematical conclusion; Jacobian does not need a universal capacity exception
-hierarchy to state that rule.
+Dispatch preserves the distinction between structural parsing and native
+admission. The MCP adapter presents both as model-visible tool execution errors,
+not JSON-RPC `INVALID_PARAMS`. The SDK encodes `ToolError` as a result with wire
+field `isError: true` (Python attribute `is_error`). Protocol-level failures,
+such as malformed JSON-RPC messages, belong to the SDK's protocol error path.
+A disconnected or failed delivery channel may prevent any result from reaching
+the caller. See the [tool error contract](../reference/tools.md#execution-non-completion-and-recovery).
+
+Timeout, cancellation, resource exhaustion, and unexpected execution failure
+establish no mathematical conclusion. Preserve the owning phase and useful
+bounded diagnostics without reclassifying non-completion as mathematical
+invalidity.
 
 Jacobian is a typed, bounded tool layer over maintained mathematical libraries.
 The runtime ownership rule above keeps repeated mathematical work out of
@@ -281,10 +400,10 @@ Catalog publication is not runtime planning. The
 mathematical owner decides request admission, builds a request-scoped execution
 plan when one is useful, owns the backend adapter, and constructs the canonical
 result.
-Defining-invariant evidence belongs in the operation's tests; a full replay is
-not part of ordinary execution. An adapter may reject malformed backend data
-while converting it, but that is integration safety rather than a separate
-mathematical result stage.
+The producing computation establishes the postcondition, including necessary
+candidate checks; independent tests provide correctness evidence. Conversion
+checks backend representation without rerunning a completed solve. Neither
+requires a universal result-verification stage.
 After owner admission succeeds, dispatch and MCP project the typed result for
 delivery. A configured delivery limit may still fail operationally, but it
 does not retroactively make the mathematical request invalid.
@@ -297,10 +416,12 @@ envelope: it admits the request, retains its canonical source, starts the
 worker, and constructs the final result. The worker receives one strict payload
 and returns only a bounded derived projection. The parent binds that projection
 to its admitted source before trusted result construction; a worker does not
-echo or replace retained canonical values. The parent never passes worker output
-through the complete public result model's validation path: it decodes only the
-projection's bounded structure, constructs trusted nested values, and calls the
-owner's private factory without replaying the worker's mathematics.
+echo or replace retained canonical values. The parent decodes the bounded
+projection and establishes any additional candidate relation the result relies
+on. It uses the owner's private factory only after the skipped invariants have
+been established. Do not invoke a nested public validator that reruns the
+worker's solve; do not remove protocol, structural, or required candidate checks
+to avoid that replay.
 
 The owner charges parsing, launch, backend work, projection, validation, and
 cleanup against one local execution plan and deadline. Worker capture limits

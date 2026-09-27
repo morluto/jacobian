@@ -454,21 +454,23 @@ def test_dimension_and_component_term_boundaries_are_rejected() -> None:
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_ROOT_BOX_COMPONENT_TERMS}-term budget",
-    ):
+    ) as exc_info:
         certify_real_root_box(overfull, _box(("x",), ((-1, 1),)))
+
+    assert exc_info.value.errors()[0]["type"] == "polynomial.root_box_admission"
 
 
 def test_endpoint_digit_budget_is_owned_by_operation_admission() -> None:
     endpoint = Fraction(10**MAX_ROOT_BOX_ENDPOINT_DIGITS, 1)
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_ROOT_BOX_ENDPOINT_DIGITS}-digit bound",
-    ):
+    ) as exc_info:
         certify_real_root_box(
             _map(("x",), ({(1,): 1},)),
             _box(("x",), ((endpoint, endpoint + 1),)),
         )
+
+    assert exc_info.value.errors()[0]["type"] == "polynomial.root_box_admission"
 
 
 def test_produced_result_round_trips_and_schema_discriminates_every_branch() -> None:

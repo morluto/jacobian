@@ -40,9 +40,6 @@ def test_catalog_accepts_serialized_integer_sequence_source() -> None:
 
 def test_autocorrelation_catalog_schema_registers_canonical_rational_defs() -> None:
     catalog = Catalog.open()
-    descriptor = next(
-        operation
-        for operation in catalog.snapshot().operations
-        if operation.operation_id == "sequence.autocorrelation.aperiodic.compute"
-    )
+    descriptor = catalog.inspect("sequence.autocorrelation.aperiodic.compute")
+    assert descriptor is not None
     assert "CanonicalRational" in json.dumps(descriptor.input_schema)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from fractions import Fraction
-from math import factorial
+from math import factorial, lcm
 from typing import Any
 
 from pydantic import ValidationError
@@ -28,6 +28,8 @@ from jacobian.math.lie_algebras._models import (
     MAX_ELEMENT_COEFFICIENT_DIGITS,
     MAX_GENERATED_MATRIX_DECIMAL_DIGITS,
     MAX_LIE_DIMENSION,
+    MAX_LIE_JACOBI_INTERMEDIATE_DIGITS,
+    MAX_LIE_JACOBI_WORK,
     MAX_STRUCTURE_COEFFICIENT_DIGITS,
     MAX_STRUCTURE_NONZEROS,
     MAX_SUBALGEBRA_CHECK_WORK,
@@ -83,19 +85,59 @@ class _BracketPlan:
     work: int
 
 
+MAX_SOLVABLE_RADICAL_WORK = 20_000_000
+MAX_SOLVABLE_RADICAL_OUTPUT_BYTES = 4 * 1024 * 1024
+
+
+def _solvable_radical_scale(coefficients: tuple[Fraction, ...]) -> Fraction:
+    """Use a common scale only when it reduces the largest coefficient height."""
+    scale = max((abs(value) for value in coefficients), default=Fraction(0))
+    if scale == 0:
+        return Fraction(1)
+
+    def height(values: tuple[Fraction, ...]) -> int:
+        return max(
+            (
+                max(
+                    decimal_digit_width(abs(value.numerator)),
+                    decimal_digit_width(value.denominator),
+                )
+                for value in values
+            ),
+            default=1,
+        )
+
+    raw_height = height(coefficients)
+    normalized = tuple(value / scale for value in coefficients)
+    return scale if height(normalized) <= raw_height else Fraction(1)
+
+
 def _as_algebra(
     value: FiniteDimensionalLieAlgebra | Mapping[str, Any],
 ) -> FiniteDimensionalLieAlgebra:
+    native_value = False
     if isinstance(value, FiniteDimensionalLieAlgebra):
-        return value
+        native_value = True
+        # Pydantic's frozen models still expose mutable __dict__ storage.
+        # Preflight native fields, then reparse so direct field replacement
+        # cannot bypass structural validation.
+        _admit_lie_algebra_limits(value)
+        payload: Mapping[str, Any] = value.model_dump(mode="python")
+    else:
+        payload = value
     try:
-        return FiniteDimensionalLieAlgebra.model_validate(value)
+        algebra = FiniteDimensionalLieAlgebra.model_validate(payload)
     except ValidationError as exc:
+        error = exc.errors()[0]
         raise OperationDomainValidationError(
-            location=(),
-            code="lie_algebra.input",
-            message="algebra must be a valid finite-dimensional Lie algebra",
+            location=("algebra", *error["loc"]),
+            code=str(error["type"]),
+            message=str(error["msg"]),
         ) from exc
+    if not native_value:
+        _admit_lie_algebra_limits(algebra)
+    _require_lie_algebra_jacobi(algebra)
+    return algebra
 
 
 def _as_element(value: LieAlgebraElement | Mapping[str, Any]) -> LieAlgebraElement:
@@ -135,10 +177,63 @@ def _bracket_table(
     return table
 
 
-def _admit_lie_algebra(
-    algebra: FiniteDimensionalLieAlgebra,
-) -> dict[tuple[int, int], dict[int, Fraction]]:
-    """Establish antisymmetry and every basis-triple Jacobi identity."""
+def _require_lie_algebra_jacobi(algebra: FiniteDimensionalLieAlgebra) -> None:
+    """Admit the Jacobi identity once at a public operation boundary."""
+    dimension = len(algebra.basis)
+    table = _bracket_table(algebra)
+    triples = tuple(
+        (first, second, third)
+        for first in range(dimension)
+        for second in range(first + 1, dimension)
+        for third in range(second + 1, dimension)
+    )
+    work = 0
+    for first, second, third in triples:
+        for outer_first, outer_second, inner in (
+            (first, second, third),
+            (second, third, first),
+            (third, first, second),
+        ):
+            work += sum(
+                len(table.get((middle, inner), {}))
+                for middle in table.get((outer_first, outer_second), {})
+            )
+    if work > MAX_LIE_JACOBI_WORK:
+        raise OperationResourceAdmissionError(
+            location=("algebra", "structure_constants"),
+            code="lie_algebra.jacobi_work_bound",
+            message="Jacobi validation exceeds its fixed work bound",
+        )
+    if MAX_LIE_JACOBI_INTERMEDIATE_DIGITS > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("algebra", "structure_constants"),
+            code="lie_algebra.jacobi_height_bound",
+            message="Jacobi validation exceeds its exact intermediate-height bound",
+        )
+    for first, second, third in triples:
+        accumulator: dict[int, Fraction] = {}
+        for outer_first, outer_second, inner in (
+            (first, second, third),
+            (second, third, first),
+            (third, first, second),
+        ):
+            for middle, outer_value in table.get(
+                (outer_first, outer_second), {}
+            ).items():
+                for target, inner_value in table.get((middle, inner), {}).items():
+                    accumulator[target] = (
+                        accumulator.get(target, 0) + outer_value * inner_value
+                    )
+        if any(value != 0 for value in accumulator.values()):
+            raise OperationDomainValidationError(
+                location=("algebra", "structure_constants"),
+                code="lie_algebra.jacobi_identity",
+                message="structure constants must satisfy the Jacobi identity",
+            )
+
+
+def _admit_lie_algebra_limits(algebra: FiniteDimensionalLieAlgebra) -> None:
+    """Admit operation-owned dimension, sparsity, and coefficient limits."""
     if len(algebra.basis) > MAX_LIE_DIMENSION:
         raise OperationResourceAdmissionError(
             location=("algebra", "basis"),
@@ -158,6 +253,10 @@ def _admit_lie_algebra(
             ),
         )
     for index, constant in enumerate(algebra.structure_constants):
+        if not isinstance(constant, StructureConstant):
+            continue
+        if not isinstance(constant.coefficient, CanonicalRational):
+            continue
         _run_admission(
             lambda constant=constant: require_bounded_rational(
                 constant.coefficient,
@@ -166,35 +265,13 @@ def _admit_lie_algebra(
             ),
             location=("algebra", "structure_constants", index),
         )
-    dimension = len(algebra.basis)
+
+
+def _admit_lie_algebra(
+    algebra: FiniteDimensionalLieAlgebra,
+) -> dict[tuple[int, int], dict[int, Fraction]]:
+    """Expand a value already structurally and semantically admitted."""
     table = _bracket_table(algebra)
-
-    def _pair(first: int, second: int) -> dict[int, Fraction]:
-        if first == second:
-            return {}
-        return table.get((first, second), {})
-
-    for first in range(dimension):
-        for second in range(dimension):
-            for third in range(dimension):
-                accumulator: dict[int, Fraction] = {}
-                for outer_first, outer_second, inner in (
-                    (first, second, third),
-                    (second, third, first),
-                    (third, first, second),
-                ):
-                    for middle, outer_value in _pair(outer_first, outer_second).items():
-                        for target, inner_value in _pair(middle, inner).items():
-                            accumulator[target] = (
-                                accumulator.get(target, Fraction(0))
-                                + outer_value * inner_value
-                            )
-                if any(value != 0 for value in accumulator.values()):
-                    raise OperationDomainValidationError(
-                        location=("algebra", "structure_constants"),
-                        code="lie_algebra.jacobi_identity",
-                        message="structure constants must satisfy the Jacobi identity",
-                    )
     return table
 
 
@@ -462,6 +539,7 @@ def lie_bracket(
 
 def _adjoint_matrices(
     algebra: FiniteDimensionalLieAlgebra,
+    table: dict[tuple[int, int], dict[int, Fraction]] | None = None,
 ) -> list[list[list[Fraction]]]:
     """Return the adjoint matrices with ``ad_i`` acting on column vectors.
 
@@ -470,7 +548,7 @@ def _adjoint_matrices(
     """
 
     dimension = len(algebra.basis)
-    table = _bracket_table(algebra)
+    table = _bracket_table(algebra) if table is None else table
     matrices = []
     for first in range(dimension):
         matrix = [[Fraction(0)] * dimension for _ in range(dimension)]
@@ -486,10 +564,9 @@ def lie_killing_form(
 ) -> LieKillingResult:
     """Compute the exact Killing-form Gram matrix ``tr(ad_i ad_j)``.
 
-    Operation admission establishes every Jacobi identity first, so the
-    trace form is the Killing form of a Lie algebra, not of an arbitrary
-    bilinear bracket table. At dimension at most 8 the quartic trace
-    work is a small constant.
+    This operation admits every Jacobi identity, so the trace form is the
+    Killing form of a Lie algebra, not of an arbitrary
+    bilinear bracket table. Operation admission bounds the quartic trace work.
     """
 
     algebra_value = _as_algebra(algebra)
@@ -543,6 +620,234 @@ def lie_killing_form_radical(
     return LieKillingRadicalResult._from_kernel(killing, radical)
 
 
+def _solvable_radical_admission(algebra: FiniteDimensionalLieAlgebra) -> int:
+    """Bound the Killing-orthogonal complement computation before expansion."""
+    dimension = len(algebra.basis)
+    raw_coefficients = tuple(
+        item.coefficient.as_fraction() for item in algebra.structure_constants
+    )
+    scale = _solvable_radical_scale(raw_coefficients)
+    # A uniform nonzero bracket scaling preserves [g,g] and scales the Killing
+    # form by a nonzero square, so its orthogonal complement is unchanged.
+    coefficients = tuple(value / scale for value in raw_coefficients)
+    input_digits = max(
+        (
+            max(
+                decimal_digit_width(abs(value.numerator)),
+                decimal_digit_width(value.denominator),
+            )
+            for value in coefficients
+        ),
+        default=1,
+    )
+    if input_digits > MAX_STRUCTURE_COEFFICIENT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("algebra", "structure_constants"),
+            code="lie_algebra.solvable_radical_input_coefficient_bound",
+            message=(
+                "solvable-radical inputs require structure coefficients with at "
+                f"most {MAX_STRUCTURE_COEFFICIENT_DIGITS} digits"
+            ),
+        )
+    common_denominator = lcm(*(value.denominator for value in coefficients))
+    scaled_digits = max(
+        (
+            decimal_digit_width(
+                abs(value.numerator) * (common_denominator // value.denominator)
+            )
+            for value in coefficients
+        ),
+        default=1,
+    )
+    denominator_digits = decimal_digit_width(common_denominator)
+    factorial_digits = decimal_digit_width(factorial(dimension))
+    derived_digits = dimension * scaled_digits + factorial_digits + 1
+    killing_numerator_digits = 2 * scaled_digits + decimal_digit_width(dimension**2) + 1
+    killing_denominator_digits = 2 * denominator_digits
+    constraint_digits = max(
+        dimension * derived_digits
+        + killing_numerator_digits
+        + decimal_digit_width(dimension),
+        dimension * derived_digits + killing_denominator_digits,
+    )
+    result_digits = dimension**2 * constraint_digits + factorial_digits + 1
+    result_bytes = (
+        len(algebra.model_dump_json().encode("utf-8"))
+        + dimension**2 * (2 * result_digits + 64)
+        + 2_048
+    )
+    work = dimension**5 + dimension**4 * (
+        input_digits + scaled_digits + killing_numerator_digits + constraint_digits
+    )
+    if (
+        derived_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or killing_numerator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or killing_denominator_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or constraint_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or result_digits > MAX_CANONICAL_RATIONAL_DIGITS
+        or result_bytes > MAX_SOLVABLE_RADICAL_OUTPUT_BYTES
+        or work > MAX_SOLVABLE_RADICAL_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("algebra",),
+            code="lie_algebra.solvable_radical_bound",
+            message=(
+                "solvable-radical input growth, exact linear algebra, or output "
+                "exceeds its admitted coefficient, work, or byte bound"
+            ),
+        )
+    return work
+
+
+def _rref_growth_bound(
+    rows: tuple[tuple[Fraction, ...], ...], dimension: int
+) -> tuple[int, int, int]:
+    """Bound RREF height, backend work, and serialized cells for exact rows."""
+    if not rows:
+        return 1, 0, 0
+    row_digits = []
+    for row in rows:
+        denominator = lcm(*(value.denominator for value in row))
+        row_digits.append(
+            max(
+                decimal_digit_width(
+                    abs(value.numerator) * (denominator // value.denominator)
+                )
+                for value in row
+            )
+        )
+    rank_bound = min(len(rows), dimension)
+    factorial_digits = decimal_digit_width(factorial(rank_bound))
+    result_digits = (
+        sum(sorted(row_digits, reverse=True)[:rank_bound]) + factorial_digits + 1
+    )
+    input_digits = max(
+        max(
+            decimal_digit_width(abs(value.numerator)),
+            decimal_digit_width(value.denominator),
+        )
+        for row in rows
+        for value in row
+    )
+    work = len(rows) * dimension * rank_bound * input_digits
+    cells = min(len(rows), dimension) * dimension
+    return result_digits, work, cells
+
+
+def lie_solvable_radical(
+    algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
+) -> LieIdeal:
+    """Return the exact solvable radical over ``QQ`` as a source-bound ideal.
+
+    In characteristic zero, ``rad(g) = [g, g]^perp`` for the Killing form.
+    The implementation computes that orthogonal complement as an exact right
+    nullspace and returns the existing canonical ``LieIdeal`` value.
+    """
+    from jacobian.math.matrices._flint import rational_rref
+
+    algebra_value = _as_algebra(algebra)
+    admitted_work = _solvable_radical_admission(algebra_value)
+    table = _admit_lie_algebra(algebra_value)
+    scale = _solvable_radical_scale(
+        tuple(
+            item.coefficient.as_fraction()
+            for item in algebra_value.structure_constants
+        )
+    )
+    # Run derived-space and Killing calculations on the scale-normalized
+    # bracket. Its radical is exactly the radical of the source bracket.
+    table = {
+        pair: {target: coefficient / scale for target, coefficient in row.items()}
+        for pair, row in table.items()
+    }
+    dimension = len(algebra_value.basis)
+    identity = _identity_rows(dimension)
+    derived_rows = _subspace_bracket_rows(identity, identity, table, dimension)
+    adjoints = _adjoint_matrices(algebra_value, table)
+    killing = tuple(
+        tuple(
+            sum(
+                (
+                    adjoints[first][row][column] * adjoints[second][column][row]
+                    for row in range(dimension)
+                    for column in range(dimension)
+                ),
+                start=Fraction(0),
+            )
+            for second in range(dimension)
+        )
+        for first in range(dimension)
+    )
+    constraints = tuple(
+        tuple(
+            sum(
+                (row[index] * killing[index][column] for index in range(dimension)),
+                start=Fraction(0),
+            )
+            for column in range(dimension)
+        )
+        for row in derived_rows
+    )
+    if constraints:
+        reduced, rank = rational_rref(constraints)
+    else:
+        reduced, rank = (), 0
+    pivots = tuple(
+        next(column for column, value in enumerate(row) if value)
+        for row in reduced[:rank]
+    )
+    free_columns = tuple(column for column in range(dimension) if column not in pivots)
+    nullspace_rows = []
+    for free_column in free_columns:
+        vector = [Fraction(0)] * dimension
+        vector[free_column] = Fraction(1)
+        for pivot_row, pivot_column in enumerate(pivots):
+            vector[pivot_column] = -reduced[pivot_row][free_column]
+        nullspace_rows.append(tuple(vector))
+    if nullspace_rows:
+        candidate_rows = tuple(nullspace_rows)
+        nullspace_height, nullspace_work, nullspace_cells = _rref_growth_bound(
+            candidate_rows, dimension
+        )
+        input_bytes = len(algebra_value.model_dump_json().encode("utf-8"))
+        result_bytes = (
+            input_bytes + nullspace_cells * (2 * nullspace_height + 64) + 2_048
+        )
+        if (
+            nullspace_height > MAX_CANONICAL_RATIONAL_DIGITS
+            or result_bytes > MAX_SOLVABLE_RADICAL_OUTPUT_BYTES
+            or admitted_work + nullspace_work > MAX_SOLVABLE_RADICAL_WORK
+        ):
+            raise OperationResourceAdmissionError(
+                location=("result", "generators"),
+                code="lie_algebra.solvable_radical_result_bound",
+                message=(
+                    "the exact canonical solvable-radical basis exceeds its "
+                    "coefficient, work, or byte bound"
+                ),
+            )
+        nullspace_rref, _ = rational_rref(candidate_rows)
+        radical_rows = nullspace_rref[: len(nullspace_rows)]
+    else:
+        radical_rows = ()
+    generators = rational_matrix_from_fractions(radical_rows, column_count=dimension)
+    radical = LieIdeal.model_construct(
+        algebra=algebra_value,
+        basis=algebra_value.basis,
+        generators=generators,
+    )
+    if (
+        len(radical.model_dump_json().encode("utf-8"))
+        > MAX_SOLVABLE_RADICAL_OUTPUT_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="lie_algebra.solvable_radical_output_bytes",
+            message="the solvable-radical ideal exceeds its admitted output-byte bound",
+        )
+    return radical
+
+
 def lie_algebra_is_semisimple(
     algebra: FiniteDimensionalLieAlgebra | Mapping[str, Any],
 ) -> LieSemisimplicityResult:
@@ -554,10 +859,9 @@ def lie_algebra_is_semisimple(
     computes the exact nullspace; only the resulting decision is returned.
     """
 
-    canonical_algebra = _as_algebra(algebra)
-    killing_radical = lie_killing_form_radical(canonical_algebra)
+    killing_radical = lie_killing_form_radical(algebra)
     return LieSemisimplicityResult(
-        algebra=canonical_algebra,
+        algebra=killing_radical.killing_result.algebra,
         is_semisimple=killing_radical.radical.generators.row_count == 0,
     )
 
@@ -569,8 +873,8 @@ def lie_center(
 
     Centrality ``[x, b_j] = 0`` for every basis element is one exact
     rational linear system in the coordinates of ``x``; its solution
-    space is the center. Operation admission establishes every Jacobi
-    identity first. At dimension at most 8 the nullspace and RREF work
+    space is the center. This operation admits every Jacobi identity. At
+    dimension at most 8 the nullspace and RREF work
     through maintained exact kernels is a small constant.
     """
 
@@ -777,12 +1081,8 @@ def lie_generated_subalgebra(
         + dimension**4
         + dimension**3
     )
-    jacobi_work = 3 * dimension**5
     generator_rref_work = len(generators_value) * dimension**2 + dimension**3
-    if (
-        closure_work + generator_rref_work + jacobi_work
-        > MAX_SUBALGEBRA_CHECK_WORK * 20
-    ):
+    if closure_work + generator_rref_work > MAX_SUBALGEBRA_CHECK_WORK * 20:
         raise OperationResourceAdmissionError(
             location=("generators",),
             code="lie_algebra.generated_subalgebra_work_bound",
@@ -859,42 +1159,13 @@ def lie_generated_subalgebra(
     # output checks, so its canonical rank is known before closure. Each
     # closure round either strictly increases the rank or terminates, so at
     # most dimension - rank + 1 rounds of worst-case growth can occur.
-    # A one-round closure probe distinguishes an already-closed proper span
-    # from the worst-case rank-growth envelope. Admit each actual round before
-    # expanding it; retain the conservative bound only after observed growth.
-    if len(rows) > 1:
-        first_brackets = _subspace_bracket_vectors(rows, rows, table, dimension)
-        first_reduced = None
-        if first_brackets:
-            first_reduced = rref_result(
-                rational_matrix_from_fractions(
-                    rows + first_brackets, column_count=dimension
-                )
-            )
-            first_rows = tuple(
-                tuple(v.as_fraction() for v in row)
-                for row in first_reduced.reduced_matrix.entries[: first_reduced.rank]
-            )
-        else:
-            first_rows = rows
-        if first_rows == rows:
-            _admit_generated_closure_height(
-                dimension=dimension,
-                rank_lower_bound=dimension,
-                initial_height=initial_rref_height,
-                term_count=0,
-                structure_digits=structure_digits,
-            )
-            rows = first_rows
-        else:
-            _admit_generated_closure_height(
-                dimension=dimension,
-                rank_lower_bound=len(rows),
-                initial_height=initial_rref_height,
-                term_count=term_count,
-                structure_digits=structure_digits,
-            )
-            rows = first_rows
+    _admit_generated_closure_height(
+        dimension=dimension,
+        rank_lower_bound=len(rows),
+        initial_height=initial_rref_height,
+        term_count=term_count,
+        structure_digits=structure_digits,
+    )
 
     while len(rows) > 1:
         brackets = _subspace_bracket_vectors(rows, rows, table, dimension)
@@ -965,7 +1236,6 @@ def lie_generated_ideal(
     work = (
         len(generators_value) * dimension**2
         + dimension**3
-        + 3 * dimension**5
         + (dimension + 1)
         * (
             dimension**2 * len(algebra_value.structure_constants)
@@ -1174,8 +1444,8 @@ def lie_derived_series(
     """Compute the derived series with its solvability decision.
 
     ``terms[k+1] = [terms[k], terms[k]]`` from the whole algebra,
-    stopping at zero or the first fixed term. Operation admission
-    establishes every Jacobi identity first, so each bracket family
+    stopping at zero or the first fixed term. This operation admits every
+    Jacobi identity, so each bracket family
     spans an ideal and the series descends.
     """
 
@@ -1225,8 +1495,8 @@ def lie_lower_central_series(
     """Compute the lower central series with its nilpotency decision.
 
     ``terms[k+1] = [algebra, terms[k]]`` from the whole algebra,
-    stopping at zero or the first fixed term. Operation admission
-    establishes every Jacobi identity first, so each bracket family
+    stopping at zero or the first fixed term. This operation admits every
+    Jacobi identity, so each bracket family
     spans an ideal and the series descends.
     """
 
@@ -1432,8 +1702,7 @@ def check_ideal(
 
     For every basis element and generator row the bracket is reduced
     against the candidate rows; the first nonzero remainder witnesses
-    non-ideal status in deterministic order. Operation admission
-    establishes every Jacobi identity first.
+    non-ideal status in deterministic order.
     """
 
     algebra_value = _as_algebra(algebra)
@@ -1445,6 +1714,14 @@ def check_ideal(
         code="lie_algebra.candidate_source",
         label="candidate",
     )
+    return _check_ideal_for_admitted(algebra_value, candidate_value)
+
+
+def _check_ideal_for_admitted(
+    algebra_value: FiniteDimensionalLieAlgebra,
+    candidate_value: LieSubspace,
+) -> LieIdealCheckResult:
+    """Check ideal absorption after the caller has admitted its algebra."""
     _admit_lie_algebra(algebra_value)
     if candidate_value.basis != algebra_value.basis:
         raise OperationDomainValidationError(
@@ -1594,7 +1871,7 @@ def _induced_subalgebra_constants(
             message="subalgebra construction exceeds its admitted exact work envelope",
         )
     pivots = _rref_pivots(rows)
-    raw_constants: list[tuple[int, int, int, Fraction]] = []
+    constants: list[StructureConstant] = []
     for left_index, left in enumerate(rows):
         for right_index in range(left_index + 1, len(rows)):
             right = rows[right_index]
@@ -1619,34 +1896,22 @@ def _induced_subalgebra_constants(
                     code="lie_algebra.not_a_subalgebra",
                     message="candidate bracket escapes its span",
                 )
-            raw_constants.extend(
-                (left_index, right_index, output_index, bracket[pivot])
+            constants.extend(
+                _induced_structure_constant(
+                    left_index, right_index, output_index, bracket[pivot]
+                )
                 for output_index, pivot in enumerate(pivots)
                 if bracket[pivot]
             )
-    # Admit the complete exact output envelope before materializing any of its
-    # canonical value objects.
-    for left_index, right_index, output_index, coefficient in raw_constants:
-        _require_induced_structure_coefficient_bound(
-            left_index, right_index, output_index, coefficient
-        )
-    return tuple(
-        StructureConstant.model_construct(
-            i=left_index,
-            j=right_index,
-            k=output_index,
-            coefficient=CanonicalRational.from_fraction(coefficient),
-        )
-        for left_index, right_index, output_index, coefficient in raw_constants
-    )
+    return tuple(constants)
 
 
-def _require_induced_structure_coefficient_bound(
+def _induced_structure_constant(
     left_index: int,
     right_index: int,
     output_index: int,
     coefficient: Fraction,
-) -> None:
+) -> StructureConstant:
     """Admit the narrower algebra coefficient ceiling before canonicalization."""
 
     if (
@@ -1668,6 +1933,12 @@ def _require_induced_structure_coefficient_bound(
                 f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
             ),
         )
+    return StructureConstant.model_construct(
+        i=left_index,
+        j=right_index,
+        k=output_index,
+        coefficient=CanonicalRational.from_fraction(coefficient),
+    )
 
 
 def lie_subalgebra(
@@ -1706,16 +1977,14 @@ def lie_subalgebra(
             message="the candidate must use the source algebra's ordered basis",
         )
     rows = _subspace_rows(candidate_value)
-    if not isinstance(subalgebra_basis, (tuple, list)) or any(
-        not isinstance(label, str) for label in subalgebra_basis
+    labels = (
+        tuple(subalgebra_basis) if isinstance(subalgebra_basis, (tuple, list)) else ()
+    )
+    if (
+        any(not isinstance(label, str) for label in labels)
+        or len(labels) != len(rows)
+        or len(set(labels)) != len(labels)
     ):
-        raise OperationDomainValidationError(
-            location=("subalgebra_basis",),
-            code="lie_algebra.subalgebra_labels",
-            message="provide one unique basis label per candidate row",
-        )
-    labels = tuple(subalgebra_basis)
-    if len(labels) != len(rows) or len(set(labels)) != len(labels):
         raise OperationDomainValidationError(
             location=("subalgebra_basis",),
             code="lie_algebra.subalgebra_labels",
@@ -1752,7 +2021,7 @@ def lie_subalgebra(
     induced_constants = _induced_subalgebra_constants(
         rows, table, len(algebra_value.basis)
     )
-    induced = FiniteDimensionalLieAlgebra.model_construct(
+    induced = FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels,
         structure_constants=tuple(
             sorted(
@@ -1780,7 +2049,7 @@ def _require_ideal(
 ) -> None:
     """Reject a non-ideal subspace before quotient construction."""
 
-    decision = check_ideal(algebra, candidate)
+    decision = _check_ideal_for_admitted(algebra, candidate)
     if not decision.is_ideal:
         raise OperationDomainValidationError(
             location=("ideal",),
@@ -1798,9 +2067,8 @@ def lie_quotient(
 
     Quotient basis labels attach in increasing free-column order of the
     ideal RREF; bracket constants are the ideal-reduced brackets of the
-    corresponding basis vectors. Operation admission establishes every
-    Jacobi identity and verifies ideal absorption first, so the coset
-    bracket is well defined.
+    corresponding basis vectors. This operation checks Jacobi and verifies
+    ideal absorption, so the coset bracket is well defined.
     """
 
     algebra_value = _as_algebra(algebra)
@@ -1857,6 +2125,26 @@ def lie_quotient(
             for target in free:
                 value = reduced[target]
                 if value != 0:
+                    if (
+                        decimal_digit_width(value.numerator)
+                        > MAX_STRUCTURE_COEFFICIENT_DIGITS
+                        or decimal_digit_width(value.denominator)
+                        > MAX_STRUCTURE_COEFFICIENT_DIGITS
+                    ):
+                        raise OperationResourceAdmissionError(
+                            location=(
+                                "quotient",
+                                "structure_constants",
+                                left,
+                                right,
+                                rank[target],
+                            ),
+                            code="lie_algebra.quotient_result_height_bound",
+                            message=(
+                                "a quotient structure coefficient exceeds the "
+                                f"{MAX_STRUCTURE_COEFFICIENT_DIGITS}-digit algebra bound"
+                            ),
+                        )
                     constants.append(
                         StructureConstant.model_construct(
                             i=left,
@@ -1865,7 +2153,7 @@ def lie_quotient(
                             coefficient=CanonicalRational.from_fraction(value),
                         )
                     )
-    quotient = FiniteDimensionalLieAlgebra(
+    quotient = FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels,
         structure_constants=tuple(
             sorted(constants, key=lambda constant: (constant.i, constant.j, constant.k))
@@ -1882,7 +2170,7 @@ def lie_direct_sum(
     """Assemble the direct sum on concatenated bases (native-only).
 
     The left block keeps its indices and the right block shifts past
-    the left dimension; brackets     across blocks vanish. Both summands
+    the left dimension; brackets across blocks vanish. Both summands
     pass Jacobi admission, so the sum is a Lie algebra.
     """
 
@@ -1919,7 +2207,7 @@ def lie_direct_sum(
         )
         for constant in right_value.structure_constants
     )
-    return FiniteDimensionalLieAlgebra(
+    return FiniteDimensionalLieAlgebra._from_jacobi_proved_kernel(
         basis=labels,
         structure_constants=tuple(
             sorted(constants, key=lambda constant: (constant.i, constant.j, constant.k))
@@ -1933,12 +2221,18 @@ def lie_adjoint_matrices(
     """Return the adjoint matrices ``ad_{b_i}`` on column vectors.
 
     Native-only projection of the structure constants: column ``j`` of
-    ``ad_i`` holds the coordinates of ``[b_i, b_j]``. Operation
-    admission establishes every Jacobi identity first, so the matrices
-    represent a Lie algebra adjoint action.
+    ``ad_i`` holds the coordinates of ``[b_i, b_j]``. This operation checks
+    every Jacobi identity, so the matrices represent a
+    Lie algebra adjoint action.
     """
 
     algebra_value = _as_algebra(algebra)
+    return _adjoint_matrices_for_admitted(algebra_value)
+
+
+def _adjoint_matrices_for_admitted(
+    algebra_value: FiniteDimensionalLieAlgebra,
+) -> tuple[RationalMatrix, ...]:
     _admit_lie_algebra(algebra_value)
     dimension = len(algebra_value.basis)
     return tuple(
@@ -1960,7 +2254,7 @@ def lie_adjoint_representation(
     """Return exact adjoint matrices together with their ordered source axis."""
 
     algebra_value = _as_algebra(algebra)
-    matrices = lie_adjoint_matrices(algebra_value)
+    matrices = _adjoint_matrices_for_admitted(algebra_value)
     return LieAdjointRepresentationResult._from_kernel(algebra_value, matrices)
 
 

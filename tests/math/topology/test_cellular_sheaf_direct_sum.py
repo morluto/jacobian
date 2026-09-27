@@ -100,6 +100,36 @@ def test_direct_sum_preserves_rational_exact_maps_and_serialization() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_direct_sum_admits_derived_coefficients_by_output_digit_work() -> None:
+    complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
+    cells = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    covers = tuple(
+        CoverRestrictionMatrix(
+            source=face,
+            target=coface,
+            entries=((_q(10**40),),),
+        )
+        for coface in cells
+        for face in cells
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+    source = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(SheafStalk(simplex=cell, basis=("x",)) for cell in cells),
+        covers,
+    ).sheaf
+    assert source is not None
+    result = direct_sum(source, source).direct_sum
+    assert max(
+        len(str(value.num))
+        for restriction in result.derived_restrictions
+        for row in restriction.entries
+        for value in row
+    ) > 64
+
+
 def test_direct_sum_rejects_different_field_or_complex() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="same exact coefficient field"

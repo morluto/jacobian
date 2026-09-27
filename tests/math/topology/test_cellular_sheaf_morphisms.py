@@ -34,7 +34,11 @@ def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _triangle_sheaf(edge_scalar: CanonicalRational | None = None, rank: int = 1):
+def _triangle_sheaf(
+    edge_scalar: CanonicalRational | None = None,
+    rank: int = 1,
+    all_cover_scalar: bool = False,
+):
     if edge_scalar is None:
         edge_scalar = _q(1)
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
@@ -59,7 +63,9 @@ def _triangle_sheaf(edge_scalar: CanonicalRational | None = None, rank: int = 1)
                 target=coface,
                 entries=(
                     tuple(
-                        edge_scalar if len(coface) == 2 else _q("1")
+                        edge_scalar
+                        if all_cover_scalar or len(coface) == 2
+                        else _q("1")
                         for _ in range(rank)
                     ),
                 )
@@ -127,6 +133,13 @@ def test_morphism_revalidates_authored_parent_diamonds() -> None:
         OperationDomainValidationError, match="does not define a cellular sheaf"
     ):
         morphism(forged, forged, identity)
+
+
+def test_morphism_bounds_only_cover_coefficients_not_derived_composites() -> None:
+    sheaf = _triangle_sheaf(_q(10**40), all_cover_scalar=True)
+    identity = tuple((cell, ((_q(1),),)) for cell in sheaf.canonical_face_order)
+    result = morphism(sheaf, sheaf, identity)
+    assert result.natural
 
 
 def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> None:

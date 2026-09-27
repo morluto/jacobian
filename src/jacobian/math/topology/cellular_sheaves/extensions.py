@@ -609,7 +609,10 @@ def _scan_morphism_scalar_text(
                 total_input_digits += digits
                 max_digits = max(max_digits, digits)
     for parent in (source, target):
-        for restriction in (*parent.cover_restrictions, *parent.derived_restrictions):
+        # Naturality uses cover squares only. Derived restrictions have already
+        # been checked against their cover composites by canonical admission;
+        # they must not inherit the cover-square coefficient bound.
+        for restriction in parent.cover_restrictions:
             for row in restriction.entries:
                 for value in row:
                     if (

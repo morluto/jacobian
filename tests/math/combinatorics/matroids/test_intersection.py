@@ -190,8 +190,8 @@ def test_catalog_keeps_the_existing_maximum_intersection_operation_id() -> None:
     )
     operation_ids = {tool.operation_id for tool in intersection_tools}
 
-    assert "matroid.intersection.compute" in operation_ids
-    assert "matroid.intersection.maximum.compute" not in operation_ids
+    assert "matroid.intersection.maximum.compute" in operation_ids
+    assert "matroid.intersection.compute" not in operation_ids
     assert "matroid.intersection.common_basis.compute" in operation_ids
 
 

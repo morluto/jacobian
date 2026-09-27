@@ -188,6 +188,7 @@ def _admit_work(
     second: LinearMatroid,
     *,
     source_rank_calls: int = 0,
+    skip_exchange: bool = False,
 ) -> None:
     n = first.ground_size
     rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
@@ -199,7 +200,7 @@ def _admit_work(
     # probe at the larger operand's rank cost, even though the oracle cache
     # usually makes the actual count much smaller.
     rank_cost = rows * n * min(rows, n)
-    exchange_rank_work = (n + 1) ** 3 * rank_cost
+    exchange_rank_work = 0 if skip_exchange else (n + 1) ** 3 * rank_cost
     # Four ranks produce the min-max witness and check both common-set
     # feasibility claims. Common-basis requests add both full-source ranks.
     final_rank_work = (4 + source_rank_calls) * rank_cost
@@ -217,6 +218,32 @@ def _admit_work(
                 f"{MAX_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
             ),
         )
+
+
+def _rank_zero_intersection_result(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    first_rank: int,
+    second_rank: int,
+) -> MatroidIntersectionResult:
+    """Construct the empty optimum from a zero-rank source and its partition."""
+    n = first.ground_size
+    witness_subset = tuple(range(n)) if first_rank == 0 else ()
+    witness = MatroidIntersectionWitness(
+        subset=witness_subset,
+        rank_first=0,
+        rank_second_complement=0,
+        equality=0,
+    )
+    return MatroidIntersectionResult._from_kernel(
+        first=first,
+        second=second,
+        common_independent=(),
+        cardinality=0,
+        rank_first_common=0,
+        rank_second_common=0,
+        witness=witness,
+    )
 
 
 def _intersection_output_bound_bytes(
@@ -309,7 +336,30 @@ def replay_intersection_result(result: MatroidIntersectionResult) -> None:
         or first.ground_size != second.ground_size
     ):
         raise ValueError("intersection sources must share one ground and field")
-    _admit_work(first, second)
+    try:
+        _admit_work(first, second)
+    except OperationResourceAdmissionError as admission_error:
+        n = first.ground_size
+        rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
+        rank_cost = rows * n * min(rows, n)
+        if (
+            6 * rank_cost > MAX_INTERSECTION_WORK
+            or _intersection_output_bound_bytes(first, second)
+            > MAX_INTERSECTION_OUTPUT_BYTES
+        ):
+            raise admission_error
+        first_rank = pf_rank(first.matrix)
+        second_rank = pf_rank(second.matrix)
+        if first_rank != 0 and second_rank != 0:
+            raise admission_error
+        _admit_work(first, second, source_rank_calls=2, skip_exchange=True)
+        if result != _rank_zero_intersection_result(
+            first, second, first_rank, second_rank
+        ):
+            raise ValueError(
+                "rank-zero intersection claims do not match their sources"
+            ) from None
+        return
     common = result.common_independent
     if (
         _rank(first, common) != result.rank_first_common
@@ -454,7 +504,25 @@ def matroid_intersection(
 ) -> MatroidIntersectionResult:
     """Compute one maximum common independent set and Edmonds witness."""
     first, second = _admit_pair(first, second)
-    _admit_work(first, second)
+    try:
+        _admit_work(first, second)
+    except OperationResourceAdmissionError as admission_error:
+        n = first.ground_size
+        rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
+        rank_cost = rows * n * min(rows, n)
+        rank_zero_work = 6 * rank_cost
+        if (
+            rank_zero_work > MAX_INTERSECTION_WORK
+            or _intersection_output_bound_bytes(first, second)
+            > MAX_INTERSECTION_OUTPUT_BYTES
+        ):
+            raise admission_error
+        first_rank = pf_rank(first.matrix)
+        second_rank = pf_rank(second.matrix)
+        if first_rank != 0 and second_rank != 0:
+            raise admission_error
+        _admit_work(first, second, source_rank_calls=2, skip_exchange=True)
+        return _rank_zero_intersection_result(first, second, first_rank, second_rank)
     return _matroid_intersection_admitted(first, second)
 
 
@@ -981,14 +1049,16 @@ def weighted_intersection_certificate(
             ),
         )
     objective, _ = _canonical_weight_function(first, request.weight_function)
-    first_split, first_split_function = _canonical_weight_function(
+    first_split_values, first_split_function = _canonical_weight_function(
         first, request.first_split, max_digits=MAX_SPLIT_WEIGHT_DIGITS
     )
-    second_split, second_split_function = _canonical_weight_function(
+    second_split_values, second_split_function = _canonical_weight_function(
         second, request.second_split, max_digits=MAX_SPLIT_WEIGHT_DIGITS
     )
     if (
-        tuple(a + b for a, b in zip(first_split, second_split, strict=True))
+        tuple(
+            a + b for a, b in zip(first_split_values, second_split_values, strict=True)
+        )
         != objective
     ):
         raise OperationDomainValidationError(
@@ -1017,8 +1087,8 @@ def weighted_intersection_certificate(
         first,
         second,
         objective,
-        first_split,
-        second_split,
+        first_split_values,
+        second_split_values,
         candidate_size,
     )
     if (

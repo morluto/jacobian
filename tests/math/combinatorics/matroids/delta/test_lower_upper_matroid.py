@@ -207,3 +207,17 @@ def test_output_exposes_complete_bounds() -> None:
     assert limits["max_output_ground_label_utf8_bytes_total"] == 16_384
     assert limits["max_output_basis_rows"] == 4_096
     assert limits["max_source_feasible_set_memberships"] == 16_384
+
+
+def test_extremal_requests_accept_json_array_wire_containers() -> None:
+    from jacobian.math.combinatorics.matroids.delta._models import (
+        DeltaMatroidLowerMatroidRequest,
+        DeltaMatroidUpperMatroidRequest,
+    )
+
+    raw = {"delta_matroid": {"ground": ["a", "b"], "feasible": [[], [0], [1]]}}
+    lower = DeltaMatroidLowerMatroidRequest.model_validate(raw)
+    upper = DeltaMatroidUpperMatroidRequest.model_validate(raw)
+
+    assert lower.delta_matroid.ground == ("a", "b")
+    assert upper.delta_matroid.feasible == ((), (0,), (1,))

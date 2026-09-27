@@ -30,3 +30,34 @@ def test_invalid_utf8_target_remains_a_domain_error() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         relabel(_source(), ("\ud800", "b"), (0, 1))
     assert error.value.errors()[0]["type"] == "delta_matroid.relabel_request"
+
+
+def test_result_binding_rejects_wrong_ground_or_feasible_transport() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.combinatorics.matroids.delta.relabel import (
+        DeltaMatroidRelabelling,
+    )
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,)))
+    valid = relabel(source, ("B", "A"), (1, 0))
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate(
+            {
+                **valid.model_dump(),
+                "relabelled": {
+                    **valid.relabelled.model_dump(),
+                    "ground": ["A", "B"],
+                },
+            }
+        )
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate(
+            {
+                **valid.model_dump(),
+                "relabelled": {
+                    **valid.relabelled.model_dump(),
+                    "feasible": [[], [0]],
+                },
+            }
+        )

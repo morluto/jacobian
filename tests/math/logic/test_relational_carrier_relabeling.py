@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.catalog.search import matches_namespace
 from jacobian.math.logic.relational_structures._models import (
     FiniteCspConstraint,
     FiniteCspInstance,
@@ -185,6 +186,24 @@ def test_rejects_non_bijections(mapping: tuple[object, ...], error_type: str) ->
     with pytest.raises(OperationDomainValidationError) as exc_info:
         relabel_structure_carrier(source, mapping)  # type: ignore[arg-type]
     assert exc_info.value.errors()[0]["type"] == error_type
+
+
+def test_rejects_oversized_permutation_before_copying() -> None:
+    source = _structure(2, (), ())
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        relabel_structure_carrier(source, range(1_000_000_000))
+    assert exc_info.value.errors()[0]["type"] == "relational.relabeling.map_axis"
+
+
+def test_csp_template_preflight_guards_missing_nested_template() -> None:
+    instance = FiniteCspInstance.model_construct(constraints=())
+    with pytest.raises(OperationDomainValidationError) as exc_info:
+        relabel_csp_template_carrier(instance, ())
+    assert exc_info.value.errors()[0]["type"] == "relational.relabeling.csp_template_type"
+
+
+def test_relabeling_tools_are_searchable_in_relational_namespace() -> None:
+    assert all(matches_namespace(tool, "relational") for tool in TOOLS)
 
 
 def test_preflights_aggregate_tuple_transport_before_expansion() -> None:

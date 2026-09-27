@@ -55,7 +55,7 @@ CSP_EXAMPLE = {
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
-        operation_id="relational_structure.relabel_carrier.compute",
+        operation_id="relational.structure.relabel_carrier.compute",
         title="Relabel a finite relational structure carrier",
         description=(
             "Apply a bijection to every relation-tuple coordinate, preserving "
@@ -81,7 +81,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
-        operation_id="csp.instance.relabel_template_carrier.compute",
+        operation_id="relational.csp.relabel_template_carrier.compute",
         title="Relabel a finite CSP template carrier",
         description=(
             "Apply a bijection to every relation tuple in a CSP template. "

@@ -1,6 +1,6 @@
 # Relational carrier relabeling
 
-The `relational_structure.relabel_carrier.compute` operation applies an
+The `relational.structure.relabel_carrier.compute` operation applies an
 explicit bijection to the finite carrier of a relational structure. Its map is
 listed by source label: `old_to_new[i]` is the new label of old element `i`.
 Every coordinate in every relation tuple is transported through that map;
@@ -8,7 +8,7 @@ the ranked relation signature, carrier cardinality, nullary truth values, and
 complete tuple-set semantics are preserved. The result includes the inverse
 map and the relabeled structure.
 
-`csp.instance.relabel_template_carrier.compute` applies the same transport to
+`relational.csp.relabel_template_carrier.compute` applies the same transport to
 the target structure of a finite CSP instance. Variable labels, relation IDs,
 constraint IDs, occurrence order, and ordered scopes remain unchanged. A
 solution assignment is transported coordinatewise through `old_to_new`; this

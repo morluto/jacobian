@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import islice
 
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
@@ -187,7 +188,23 @@ def _admit_permutation(value: object, carrier_size: int) -> tuple[int, ...]:
             code="relational.relabeling.map_shape",
             message="old_to_new must be a finite integer sequence",
         )
-    mapping = tuple(value)
+    try:
+        input_size = len(value)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("old_to_new",),
+            code="relational.relabeling.map_shape",
+            message="old_to_new must have a bounded finite length",
+        ) from exc
+    if input_size != carrier_size:
+        raise OperationDomainValidationError(
+            location=("old_to_new",),
+            code="relational.relabeling.map_axis",
+            message="old_to_new must contain one image per source carrier element",
+        )
+    # A native Sequence may report an incorrect length or yield more items than
+    # advertised; consume at most one beyond the bounded carrier to detect that.
+    mapping = tuple(islice(value, carrier_size + 1))
     if len(mapping) != carrier_size:
         raise OperationDomainValidationError(
             location=("old_to_new",),
@@ -271,12 +288,18 @@ def relabel_csp_template_carrier(
             message="instance must be a finite CSP instance",
         )
     scope_entries = _preflight_csp_constraints(instance)
-    if isinstance(instance.template, FiniteRelationalStructure):
-        _preflight_raw_structure(
-            instance.template,
-            ("instance", "template"),
-            scope_entries=scope_entries,
+    template = getattr(instance, "template", None)
+    if not isinstance(template, FiniteRelationalStructure):
+        raise OperationDomainValidationError(
+            location=("instance", "template"),
+            code="relational.relabeling.csp_template_type",
+            message="instance must carry a finite relational template",
         )
+    _preflight_raw_structure(
+        template,
+        ("instance", "template"),
+        scope_entries=scope_entries,
+    )
     try:
         instance = FiniteCspInstance.model_validate(instance.model_dump(), strict=True)
     except Exception as exc:

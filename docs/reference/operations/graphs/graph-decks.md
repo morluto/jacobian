@@ -94,3 +94,15 @@ its isomorphism class. It admits aggregate work across both inputs before any
 permutation search, with a 2,000,000-unit limit. The result concerns only
 multiset equality; it makes no claim that either multiset is realizable as a
 graph deck, and equal decks do not imply source-graph isomorphism.
+
+## Card component profiles
+
+The native function `card_component_profile` in
+`jacobian.math.graphs.decks.card_component_profile` returns a histogram of
+connected-component size tuples for the representatives in an
+`AnonymousGraphCardMultiset`, weighted by each class's multiplicity. Component
+sizes are invariant under relabelling, so duplicate isomorphic rows merge
+without permutation canonicalization. The function validates each
+representative's fixed vertex axis and canonical edges before traversal, then
+admits connectivity work and output size. It is a native projection and is not
+published as a catalog operation.

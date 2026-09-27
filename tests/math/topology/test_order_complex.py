@@ -53,6 +53,22 @@ def _poset(elements: tuple[str, ...], covers: tuple[tuple[str, str], ...]):
     )
 
 
+def test_order_complex_rejects_non_request_native_arguments() -> None:
+    for invalid in ({"poset": _poset(("a",), ())}, _poset(("a",), ())):
+        with pytest.raises(OperationDomainValidationError, match="OrderComplexRequest"):
+            order_complex(invalid)  # type: ignore[arg-type]
+
+
+def test_order_complex_revalidates_forged_request_before_dereferencing() -> None:
+    for invalid in (
+        OrderComplexRequest.model_construct(),
+        OrderComplexRequest.model_construct(poset=None),
+    ):
+        with pytest.raises(OperationDomainValidationError) as error:
+            order_complex(invalid)
+        assert error.value.errors()[0]["type"] == "topology.order_complex.invalid_request"
+
+
 def test_order_complex_matches_all_pairwise_comparable_subsets() -> None:
     poset = _poset(
         ("a", "b", "c", "d"),

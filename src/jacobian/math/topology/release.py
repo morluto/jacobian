@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from itertools import combinations
 from math import comb
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -311,7 +311,7 @@ class OneSkeletonResult(StrictModel):
         facets = self.source.maximal_simplices
         if (
             not isinstance(facets, tuple)
-            or len(facets) > MAX_TOPOLOGY_FACES
+            or len(facets) > MAX_TOPOLOGY_FACETS
             or any(
                 not isinstance(facet, tuple)
                 or not 1 <= len(facet) <= MAX_TOPOLOGY_DIMENSION + 1
@@ -376,8 +376,21 @@ def _canonical(request: SimplicialComplexRequest) -> FiniteSimplicialComplex:
     return canonicalize(request.vertices, request.facets).complex
 
 
-def one_skeleton(request: OneSkeletonRequest) -> OneSkeletonResult:
-    """Return the graph on the canonical vertex axis and map edges to faces."""
+def one_skeleton(
+    request: OneSkeletonRequest | FiniteSimplicialComplex,
+) -> OneSkeletonResult:
+    """Return the graph on a canonical complex's vertex axis and map edges to faces.
+
+    Native callers may pass the public canonical value directly. Catalog callers
+    continue to use the bounded request model.
+    """
+    if isinstance(request, FiniteSimplicialComplex):
+        request = OneSkeletonRequest(
+            complex=SimplicialComplexRequest(
+                vertices=request.vertices,
+                facets=request.maximal_simplices,
+            )
+        )
     if not isinstance(request, OneSkeletonRequest):
         raise OperationDomainValidationError(
             location=(),
@@ -390,7 +403,17 @@ def one_skeleton(request: OneSkeletonRequest) -> OneSkeletonResult:
             code="topology.one_skeleton.complex_type",
             message="complex must be a SimplicialComplexRequest",
         )
-    source = _canonical(request.complex)
+    try:
+        complex_request = SimplicialComplexRequest.model_validate(
+            request.complex.model_dump()
+        )
+    except (ValidationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.one_skeleton.invalid_complex",
+            message="complex request fields are invalid",
+        ) from error
+    source = _canonical(complex_request)
     faces = source.faces_by_dimension[1].faces if source.dimension >= 1 else ()
     vertex_index = {label: index for index, label in enumerate(source.vertices)}
     edges = tuple(
@@ -420,7 +443,15 @@ def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
             code="topology.order_complex.invalid_request",
             message="order-complex input must be an OrderComplexRequest",
         )
-    poset = request.poset
+    try:
+        validated_request = OrderComplexRequest.model_validate(request.model_dump())
+    except (ValidationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.order_complex.invalid_request",
+            message="order-complex request fields are invalid",
+        ) from error
+    poset = validated_request.poset
     if not verify_finite_poset(poset):
         raise OperationDomainValidationError(
             location=("poset",),

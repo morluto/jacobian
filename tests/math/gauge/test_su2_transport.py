@@ -359,8 +359,7 @@ def test_path_admission_reduces_nested_inverse_factor_pairs() -> None:
     lattice = GaugeLattice(
         vertices=("v",),
         edges=tuple(
-            GaugeEdge(edge_id=edge_id, tail="v", head="v")
-            for edge_id in edge_ids
+            GaugeEdge(edge_id=edge_id, tail="v", head="v") for edge_id in edge_ids
         ),
     )
     field = SU2GaugeField(
@@ -368,7 +367,8 @@ def test_path_admission_reduces_nested_inverse_factor_pairs() -> None:
         edge_values=tuple(
             SU2GaugeEdgeValue(edge_id=edge_id, value=label)
             for edge_id, label in zip(
-                edge_ids, (value, imaginary_unit, inverse_imaginary_unit, inverse),
+                edge_ids,
+                (value, imaginary_unit, inverse_imaginary_unit, inverse),
                 strict=True,
             )
         ),

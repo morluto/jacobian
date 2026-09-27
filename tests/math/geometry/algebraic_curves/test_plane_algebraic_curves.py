@@ -225,6 +225,18 @@ def test_plane_curve_blowup_chart_operates_on_canonical_values() -> None:
         )
 
 
+def test_blowup_boundary_revalidates_authored_center_carrier() -> None:
+    source = _polynomial(("x", "y"), (-1, (3, 0)), (1, (0, 2)))
+    forged_center = VariablePoint.model_construct(
+        variables=("x", "y"), values=(_rational(0),)
+    )
+    with pytest.raises(OperationDomainValidationError) as caught:
+        operations.plane_curve_blowup_chart(source, forged_center, "u", "t")
+    assert caught.value.errors()[0]["type"] == (
+        "plane_algebraic_curve.blowup_center_invalid"
+    )
+
+
 _ACCUMULATED_DENOMINATOR_PRIMES = (
     10000000000000000000000000000000000000000000000000000000000000000000000000000049,
     10000000000000000000000000000000000000000000000000000000000000000000000000000247,

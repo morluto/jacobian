@@ -28,6 +28,7 @@ ROOT_MATH_DOMAINS = (
     "finite_fields",
     "finite_semigroups",
     "gauge",
+    "function_fields",
     "geometry",
     "graphs",
     "groups",

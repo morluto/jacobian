@@ -735,7 +735,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         result_type=FiniteAlgebra,
         run=compute_tree_automaton_state_algebra,
         tags=("tree-automata", "universal-algebra", "exact"),
-        discovery_terms=("tree automaton state algebra", "finite algebra of tree transitions"),
+        discovery_terms=(
+            "tree automaton state algebra",
+            "finite algebra of tree transitions",
+        ),
         examples=(
             OperationExample(
                 name="ranked_symbol_operations",

@@ -140,7 +140,7 @@ def decide_coordinate_equality(
     return ModularFormEqualityResult(
         left=request.left,
         right=request.right,
-        equal=modular_form_coordinates_equal(request.left, request.right)
+        equal=modular_form_coordinates_equal(request.left, request.right),
     )
 
 

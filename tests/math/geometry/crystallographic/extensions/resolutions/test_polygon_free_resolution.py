@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
     BieberbachFaceOrbitComplex,
     FiniteLatticeExtension,
@@ -21,7 +20,7 @@ from jacobian.math.geometry.crystallographic.extensions.operations import (
     pair_crystallographic_polytope_facets,
 )
 from jacobian.math.geometry.crystallographic.extensions.resolutions._models import (
-    BieberbachPolygonFreeResolutionRequest,
+    BieberbachPolygonFreeResolution,
 )
 from jacobian.math.geometry.crystallographic.extensions.resolutions.operations import (
     polygon_free_resolution,
@@ -150,21 +149,20 @@ def test_free_resolution_augments_to_the_known_quotient_chains(klein: bool) -> N
         assert homology[1].torsion_invariant_factors == ()
 
 
-def test_free_resolution_operation_is_discoverable_and_checks_the_source() -> None:
+def test_free_resolution_remains_a_native_projection_not_a_catalog_operation() -> None:
     from jacobian.catalog.builtins import BUILTIN_TOOLS
 
     source = _face_orbits(klein=False)
-    tool = next(
-        item
+    assert all(
+        item.operation_id
+        != "crystallographic.bieberbach.polygon_free_resolution.compute"
         for item in BUILTIN_TOOLS
-        if item.operation_id
-        == "crystallographic.bieberbach.polygon_free_resolution.compute"
     )
-    parsed = parse_operation_input(
-        tool.request_type,
-        BieberbachPolygonFreeResolutionRequest(source=source).model_dump(mode="json"),
-    )
-    assert tool.run(parsed) == polygon_free_resolution(source)
+    assert polygon_free_resolution(source).source == source
+    schema = BieberbachPolygonFreeResolution.model_json_schema()
+    assert "left of the target basis cell" in schema["properties"][
+        "boundary_1_to_0"
+    ]["description"]
 
     forged = source.model_copy(update={"boundary_2_to_1": source.boundary_2_to_1[:-1]})
     with pytest.raises(ValidationError):

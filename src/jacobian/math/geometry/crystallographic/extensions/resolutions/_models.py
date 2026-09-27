@@ -25,22 +25,16 @@ class BieberbachResolutionAugmentationEntry(StrictModel):
     coefficient: StrictInt = Field(ge=1, le=1)
 
 
-class BieberbachPolygonFreeResolutionRequest(StrictModel):
-    """A source-bound quotient cell structure to lift to the group cover."""
-
-    source: BieberbachFaceOrbitComplex
-
-
 class BieberbachPolygonFreeResolution(StrictModel):
     """The cellular free ZGamma resolution from a checked flat polygon.
 
-    ``boundary_1_to_0`` and ``boundary_2_to_1`` are sparse matrices over the
-    integral group ring. Each incidence coefficient multiplies the group
-    element encoded by ``(lattice_translation, holonomy_element)``. The
-    universal cover is the contractible Euclidean plane, so these cellular
-    modules, followed by the displayed augmentation, form a free resolution.
-    ``augmented_chain_complex`` is the result after tensoring with the trivial
-    ZGamma-module Z.
+    The chain groups are free left ``ZGamma``-modules. An incidence entry with
+    coefficient ``c`` and deck element ``g`` means ``c * (g · e_target)`` in
+    the boundary of ``e_source``; ``g`` acts on the left of the target basis
+    cell. The universal cover is the contractible Euclidean plane, so these
+    cellular modules, followed by the displayed augmentation, form a free
+    resolution. ``augmented_chain_complex`` is the result after tensoring with
+    the trivial ``ZGamma``-module ``Z``.
     """
 
     source: BieberbachFaceOrbitComplex
@@ -51,10 +45,20 @@ class BieberbachPolygonFreeResolution(StrictModel):
         min_length=1, max_length=32
     )
     boundary_1_to_0: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
-        min_length=1, max_length=256
+        min_length=1,
+        max_length=256,
+        description=(
+            "Left ZGamma-module boundary entries: c and g encode "
+            "c * (g acting on the left of the target basis cell)."
+        ),
     )
     boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
-        min_length=1, max_length=128
+        min_length=1,
+        max_length=128,
+        description=(
+            "Left ZGamma-module boundary entries: c and g encode "
+            "c * (g acting on the left of the target basis cell)."
+        ),
     )
     augmented_chain_complex: ChainComplexValue
 
@@ -83,6 +87,5 @@ class BieberbachPolygonFreeResolution(StrictModel):
 
 __all__ = [
     "BieberbachPolygonFreeResolution",
-    "BieberbachPolygonFreeResolutionRequest",
     "BieberbachResolutionAugmentationEntry",
 ]

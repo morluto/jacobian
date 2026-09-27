@@ -2,7 +2,6 @@
 
 from jacobian.math.geometry.crystallographic.extensions.resolutions._models import (
     BieberbachPolygonFreeResolution,
-    BieberbachPolygonFreeResolutionRequest,
 )
 from jacobian.math.geometry.crystallographic.extensions.resolutions.operations import (
     polygon_free_resolution,
@@ -10,6 +9,5 @@ from jacobian.math.geometry.crystallographic.extensions.resolutions.operations i
 
 __all__ = [
     "BieberbachPolygonFreeResolution",
-    "BieberbachPolygonFreeResolutionRequest",
     "polygon_free_resolution",
 ]

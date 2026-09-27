@@ -1281,7 +1281,10 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     # each actual candidate grade below, before any fiber search.
     normalized = _normalization_admitted(semigroup)
     source = normalized.semigroup
-    candidates = normalized.generators
+    source_vectors = set(source.configuration.columns_vectors)
+    candidates = tuple(
+        target for target in normalized.generators if target not in source_vectors
+    )
     if len(candidates) > MAX_AFFINE_NORMALITY_CANDIDATES:
         raise OperationResourceAdmissionError(
             location=("semigroup",),

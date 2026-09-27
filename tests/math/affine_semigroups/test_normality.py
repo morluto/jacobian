@@ -180,6 +180,35 @@ def test_normality_prices_actual_large_sloped_hilbert_candidates() -> None:
     assert result.hole is None
 
 
+def test_normality_skips_hilbert_generators_already_in_source() -> None:
+    vectors = (
+        (-50, -49),
+        (-32, -47),
+        (-15, -22),
+        (-13, -19),
+        (-11, -16),
+        (-9, -13),
+        (-7, -10),
+        (-5, -7),
+        (-3, -4),
+        (-1, -1),
+    )
+    configuration = AffineConfiguration(
+        row_labels=("x", "y"),
+        generator_labels=tuple(f"g{index}" for index in range(len(vectors))),
+        entries=tuple(tuple(vector[row] for vector in vectors) for row in range(2)),
+    )
+    semigroup = PositiveAffineSemigroup(
+        configuration=configuration,
+        grading=(CanonicalRational(num=2, den=1), CanonicalRational(num=-18, den=1)),
+    )
+
+    result = normality(semigroup)
+
+    assert result.normal
+    assert result.hole is None
+
+
 def test_normality_tool_preserves_structured_domain_error() -> None:
     tool = next(
         tool

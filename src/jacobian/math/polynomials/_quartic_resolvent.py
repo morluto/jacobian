@@ -96,7 +96,10 @@ class QuarticCubicResolventResult(StrictModel):
             -b,
             Fraction(1),
         )
-        if tuple(value.as_fraction() for value in self.resolvent.coefficients) != expected:
+        if (
+            tuple(value.as_fraction() for value in self.resolvent.coefficients)
+            != expected
+        ):
             raise PydanticCustomError(
                 "polynomial.quartic_resolvent.coefficient_relation",
                 "resolvent coefficients must be derived from the retained quartic source",

@@ -666,9 +666,7 @@ class FiniteFieldExtensionCountsResult(StrictModel):
         if self.counts:
             power_sums.append(self.base_trace)
         for _ in range(2, len(self.counts) + 1):
-            power_sums.append(
-                self.base_trace * power_sums[-1] - q * power_sums[-2]
-            )
+            power_sums.append(self.base_trace * power_sums[-1] - q * power_sums[-2])
         if any(
             entry.frobenius_power_sum != power_sums[entry.degree]
             or entry.cardinality != q**entry.degree + 1 - power_sums[entry.degree]

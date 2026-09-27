@@ -167,9 +167,9 @@ def test_result_rejects_resolvent_not_derived_from_source() -> None:
     source = _monic(tuple(map(Fraction, (24, -50, 35, -10, 1))))
     result = compute_quartic_cubic_resolvent(source)
     forged = result.model_dump(mode="python")
-    forged["resolvent"] = _monic(
-        tuple(map(Fraction, (1, 0, 0, 1)))
-    ).model_dump(mode="python")
+    forged["resolvent"] = _monic(tuple(map(Fraction, (1, 0, 0, 1)))).model_dump(
+        mode="python"
+    )
     with pytest.raises(ValidationError, match="derived from the retained quartic"):
         QuarticCubicResolventResult.model_validate(forged)
 

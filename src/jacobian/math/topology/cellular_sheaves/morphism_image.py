@@ -130,13 +130,16 @@ def _require_image_diagram_axes(
 ) -> None:
     for kind in ("cover_restrictions", "derived_restrictions"):
         image_axes = tuple(
-            (item.source, item.target) for item in getattr(image, kind)
+            (item.source, item.target, item.cover_path)
+            for item in getattr(image, kind)
         )
         source_axes = tuple(
-            (item.source, item.target) for item in getattr(source, kind)
+            (item.source, item.target, item.cover_path)
+            for item in getattr(source, kind)
         )
         target_axes = tuple(
-            (item.source, item.target) for item in getattr(target, kind)
+            (item.source, item.target, item.cover_path)
+            for item in getattr(target, kind)
         )
         if image_axes != source_axes or image_axes != target_axes:
             raise ValueError(f"image {kind} must retain the parent diagram axes")

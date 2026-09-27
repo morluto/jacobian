@@ -302,6 +302,24 @@ def test_image_decoder_retains_parent_diagram_accounting() -> None:
         SheafMorphismImageResult.model_validate(payload)
 
 
+def test_image_decoder_binds_cover_paths_across_the_factorization() -> None:
+    source, target = _sheaf(rank=1), _sheaf(rank=1)
+    original = morphism(
+        source,
+        target,
+        tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order),
+    )
+    payload = image_of_morphism(original).model_dump(mode="python")
+    for sheaf in (
+        payload["image"],
+        payload["inclusion"]["source"],
+        payload["factor"]["target"],
+    ):
+        sheaf["cover_restrictions"][0]["cover_path"] = ()
+    with pytest.raises(ValueError, match=r"cover_restrictions.*axes"):
+        SheafMorphismImageResult.model_validate(payload)
+
+
 def test_image_rejects_oversized_component_before_resource_scan(monkeypatch) -> None:
     from jacobian.math.topology.cellular_sheaves import morphism_image
 

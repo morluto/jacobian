@@ -61,6 +61,9 @@ def _canonical_element(element: WeylElement) -> WeylElement:
             or not 1 <= rank <= MAX_RANK
             or type(cartan_matrix.column_count) is not int
             or cartan_matrix.column_count != rank
+            or type(matrix.simple_root_axis) is not tuple
+            or len(matrix.simple_root_axis) != rank
+            or any(type(value) is not int for value in matrix.simple_root_axis)
             or matrix.simple_root_axis != tuple(range(rank))
             or type(cartan_entries) is not tuple
             or len(cartan_entries) != rank
@@ -167,6 +170,9 @@ def _canonical_vector(
             )
             or any(type(value) is not CanonicalRational for value in symmetrizer)
             or type(datum_cartan) is not CartanMatrix
+            or type(datum_cartan.simple_root_axis) is not tuple
+            or len(datum_cartan.simple_root_axis) != datum_rank
+            or any(type(value) is not int for value in datum_cartan.simple_root_axis)
             or datum_cartan.simple_root_axis != tuple(range(datum_rank))
             or type(datum_cartan.matrix) is not IntegerMatrix
             or datum_cartan.matrix.domain != "ZZ"

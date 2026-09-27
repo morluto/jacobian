@@ -335,21 +335,10 @@ def _lattice_inclusion[ResultVectorT: _FiniteCartanLatticeVector](
             message="the inclusion requires a vector in its stated source lattice",
         )
     datum, coordinates = _canonical_lattice_vector(
-        vector, expected_type, output_bound=False
+        vector, expected_type, output_bound=True
     )
     rank = len(coordinates)
     matrix = datum.cartan_matrix.entries
-    coefficient_bound = max(abs(value) for row in matrix for value in row)
-    predicted_bits = (
-        max((abs(value).bit_length() for value in coordinates), default=0)
-        + (rank * coefficient_bound - 1).bit_length()
-    )
-    if predicted_bits > MAX_LATTICE_OUTPUT_COORDINATE_BITS:
-        raise OperationResourceAdmissionError(
-            location=("vector", "coordinates"),
-            code="root_system.lattice_map_over_envelope",
-            message="the exact basis-map image exceeds the admitted coordinate bound",
-        )
     if rank * rank > MAX_RANK**2:
         raise OperationResourceAdmissionError(
             location=("vector", "datum"),

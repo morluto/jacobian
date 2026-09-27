@@ -43,6 +43,12 @@ class TreeRunRequest(StrictModel):
     tree: RankedTree
 
 
+class TreeAutomatonStateAlgebraRequest(StrictModel):
+    """Wire envelope for converting a complete automaton to a finite algebra."""
+
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+
+
 class TreeRunResult(TreeRunRequest):
     """Result of a tree automaton run."""
 

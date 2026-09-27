@@ -20,7 +20,6 @@ from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
 from jacobian.math.topology.simplicial_sets.operations import admit_tables, from_tables
 from jacobian.math.topology.simplicial_sets.quotient_models import (
     MAX_CLASS_ID,
-    SimplicialSetQuotientRequest,
     SimplicialSetQuotientResult,
 )
 
@@ -60,17 +59,9 @@ def _map_cell_count(max_degree: int, sizes: tuple[int, ...]) -> int:
 
 
 def _preflight(
-    request: SimplicialSetQuotientRequest,
+    source: object,
+    class_id_rows: object,
 ) -> FiniteTruncatedSimplicialSet:
-    if type(request) is not SimplicialSetQuotientRequest:
-        _invalid(
-            "request_type", "request must be a typed simplicial-set quotient request"
-        )
-    try:
-        source = request.simplicial_set
-        class_id_rows = request.degree_class_ids
-    except (AttributeError, TypeError) as exc:
-        _invalid("request_invalid", f"request fields are malformed: {exc}")
     if type(source) is not FiniteTruncatedSimplicialSet:
         _invalid("source_type", "source must be a finite truncated simplicial set")
     try:
@@ -152,11 +143,12 @@ def _preflight(
 
 
 def simplicial_set_quotient(
-    request: SimplicialSetQuotientRequest,
+    source: FiniteTruncatedSimplicialSet,
+    degree_class_ids: tuple[tuple[int, ...], ...],
 ) -> SimplicialSetQuotientResult:
     """Form the exact degreewise quotient when the proposed relation is a congruence."""
-    source = _preflight(request)
-    class_id_rows = request.degree_class_ids
+    source = _preflight(source, degree_class_ids)
+    class_id_rows = degree_class_ids
     request_checkpoint("before simplicial quotient source identity replay")
     source_check = from_tables(
         source.max_degree,

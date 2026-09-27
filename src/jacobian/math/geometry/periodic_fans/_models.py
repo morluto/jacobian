@@ -25,6 +25,7 @@ MAX_PERIODIC_COORDINATE_DIGITS = 8
 MAX_PERIODIC_INDEX_DIGITS = 12
 MAX_PERIODIC_OVERLAP_CANDIDATES = 256
 MAX_PERIODIC_QUOTIENT_CELLS = 512
+MAX_PERIODIC_POLYGON_VERTICES = 12
 
 _ENVELOPE_DESCRIPTION = (
     f"lattice rank at most {MAX_PERIODIC_LATTICE_RANK}, at most "
@@ -60,11 +61,14 @@ class PeriodicOverlapCandidate(StrictModel):
 class PeriodicFanPresentation(StrictModel):
     """A finite presentation of a rational fan invariant under a period lattice.
 
-    Version 1 represents the finite slice as bounded simplicial maximal cells
-    whose vertices are integer points in the closed fundamental parallelotope of
-    the period lattice.  A cell is one full-dimensional simplex; its faces are
-    the convex hulls of vertex subsets.  Mathematical recognition (full-rank and
-    integral period lattice, nondegenerate cells, complete and face-to-face
+    Maximal cells are full-dimensional simplices, with one additional bounded
+    case: strictly convex rank-two polygons with at most
+    ``MAX_PERIODIC_POLYGON_VERTICES`` vertices. Their listed vertex order
+    is counterclockwise around the boundary and begins at the smallest vertex
+    index. Polygon faces are its boundary edges, vertices, and whole polygon.
+    Vertices are integer points in the
+    closed fundamental parallelotope of the period lattice. Mathematical
+    recognition (full-rank and integral period lattice, nondegenerate cells, complete and face-to-face
     overlaps, coverage, and Smith-normal-form unimodularity) belongs to the
     owner's exact kernel, never to this structural model.
     """
@@ -93,9 +97,9 @@ class PeriodicFanPresentation(StrictModel):
     cells: tuple[tuple[StrictInt, ...], ...] = Field(
         max_length=MAX_PERIODIC_CELLS,
         description=(
-            "Maximal cells as strictly increasing vertex-index tuples, each of "
-            "length lattice_rank + 1. Cells are sorted lexicographically and "
-            "must be distinct."
+            "Maximal cells as vertex-index tuples, each a simplex of length "
+            "lattice_rank + 1, or a bounded rank-two polygon listed counterclockwise "
+            "from its smallest index. Cells are sorted lexicographically and distinct."
         ),
     )
     unimodular_cells: tuple[StrictInt, ...] = Field(
@@ -148,21 +152,34 @@ class PeriodicFanPresentation(StrictModel):
         if len(set(self.vertices)) != len(self.vertices):
             raise _validation_error("duplicate_vertex", "vertices must be distinct")
         previous: tuple[int, ...] | None = None
+        max_cell_vertices = MAX_PERIODIC_POLYGON_VERTICES if rank == 2 else rank + 1
         for cell in self.cells:
-            if len(cell) != rank + 1:
+            if len(cell) < rank + 1 or len(cell) > max_cell_vertices:
                 raise _validation_error(
                     "cell_dimension_matches_lattice_rank",
-                    "every maximal cell must have exactly lattice_rank + 1 vertices",
+                    "maximal cells must be simplices, except for bounded rank-two polygons",
                 )
             if any(index < 0 or index >= len(self.vertices) for index in cell):
                 raise _validation_error(
                     "cell_vertex_index_out_of_range",
                     "cell vertex indices must address declared vertices",
                 )
-            if any(first >= second for first, second in pairwise(cell)):
+            if len(set(cell)) != len(cell):
+                raise _validation_error(
+                    "cell_vertex_indices_distinct",
+                    "cell vertex indices must be distinct",
+                )
+            if len(cell) == rank + 1 and any(
+                first >= second for first, second in pairwise(cell)
+            ):
                 raise _validation_error(
                     "cell_vertex_indices_strictly_increasing",
-                    "cell vertex indices must be strictly increasing",
+                    "simplex vertex indices must be strictly increasing",
+                )
+            if len(cell) > rank + 1 and rank == 2 and cell[0] != min(cell):
+                raise _validation_error(
+                    "polygon_vertex_order",
+                    "polygon order must begin at its smallest vertex index",
                 )
             if previous is not None and cell <= previous:
                 raise _validation_error(
@@ -181,6 +198,11 @@ class PeriodicFanPresentation(StrictModel):
             raise _validation_error(
                 "unimodular_cell_index_out_of_range",
                 "unimodular cell indices must address declared cells",
+            )
+        if any(len(self.cells[index]) != rank + 1 for index in self.unimodular_cells):
+            raise _validation_error(
+                "unimodular_cell_not_simplex",
+                "unimodularity claims are defined only for simplex cells",
             )
         candidate_keys = tuple(
             (candidate.first_cell, candidate.second_cell, candidate.translation)
@@ -230,7 +252,7 @@ class PeriodicQuotientCell(StrictModel):
     dimension: StrictInt = Field(ge=0)
     representative_cell: StrictInt = Field(ge=0)
     representative_vertices: tuple[StrictInt, ...] = Field(
-        min_length=1, max_length=MAX_PERIODIC_LATTICE_RANK + 1
+        min_length=1, max_length=MAX_PERIODIC_POLYGON_VERTICES
     )
     member_count: StrictInt = Field(ge=1)
     stabilizer_rank: StrictInt = Field(ge=0)
@@ -267,10 +289,14 @@ class PeriodicQuotientCell(StrictModel):
                 "stabilizer_index_positive",
                 "a finite stabilizer index must be strictly positive",
             )
-        if len(self.representative_vertices) != self.dimension + 1:
+        expected_vertices = self.dimension + 1
+        if len(self.representative_vertices) != expected_vertices and not (
+            self.dimension == 2
+            and len(self.representative_vertices) > expected_vertices
+        ):
             raise _validation_error(
                 "quotient_cell_representative_dimension",
-                "a simplicial representative must have dimension + 1 vertices",
+                "only a two-dimensional polygon may have more than dimension + 1 vertices",
             )
         return self
 

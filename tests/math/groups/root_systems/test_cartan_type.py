@@ -21,6 +21,14 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_group_order,
 )
 
+
+def test_canonical_cartan_values_are_publicly_exported() -> None:
+    from jacobian.math.groups.root_systems import CartanMatrix, FiniteCartanDatum
+
+    assert CartanMatrix.__name__ == "CartanMatrix"
+    assert FiniteCartanDatum.__name__ == "FiniteCartanDatum"
+
+
 Matrix = tuple[tuple[int, ...], ...]
 
 A1: Matrix = ((2,),)

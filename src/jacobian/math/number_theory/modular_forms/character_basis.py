@@ -962,9 +962,9 @@ def modular_character_coordinates_u_prime(
         + sturm_precision * dimension * dimension * field.degree * 16
         + dimension * dimension * field.degree * 8
     )
-    basis_bytes = source_precision * dimension * field.degree * (2 * basis_digits + 32)
-    matrix_bytes = dimension * dimension * field.degree * (2 * matrix_digits + 32)
-    result_bytes = dimension * field.degree * (2 * linear_digits + 32)
+    basis_cells = source_precision * dimension * field.degree
+    matrix_cells = dimension * dimension * field.degree
+    result_cells = dimension * field.degree
     # Every product below passes through cyclotomic._admit before its exact
     # reduction; include that kernel's conservative product-height envelope so
     # admission cannot defer a predictable refusal until after PARI expansion.
@@ -1002,7 +1002,7 @@ def modular_character_coordinates_u_prime(
         or intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or closure_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or work > _MAX_WORK
-        or basis_bytes + matrix_bytes + result_bytes > _MAX_ALLOCATION_BYTES
+        or basis_cells + matrix_cells + result_cells > _MAX_WORK
     ):
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -1023,11 +1023,7 @@ def modular_character_coordinates_u_prime(
     for element in basis.elements:
         for coefficient in element.expansion.coefficients:
             if any(
-                max(
-                    len(str(abs(int(value.num)))),
-                    len(str(int(value.den))),
-                )
-                > basis_digits
+                canonical_rational_component_digits(value) > basis_digits
                 for value in coefficient.coefficients_ascending
             ):
                 raise OperationResourceAdmissionError(
@@ -1051,10 +1047,9 @@ def modular_character_coordinates_u_prime(
         image = tuple(vector[prime * index] for index in range(sturm_precision))
         coordinates = tuple(image[pivot] for pivot in pivots)
         if any(
-            int(value.den) != 1
-            or abs(int(value.num)) > matrix_coefficient_bound
-            or max(len(str(abs(int(value.num)))), len(str(int(value.den))))
-            > matrix_digits
+            value.den != 1
+            or abs(value.num) > matrix_coefficient_bound
+            or canonical_rational_component_digits(value) > matrix_digits
             for coordinate in coordinates
             for value in coordinate.coefficients_ascending
         ):
@@ -1086,11 +1081,7 @@ def modular_character_coordinates_u_prime(
         for row in range(dimension)
     )
     if any(
-        max(
-            len(str(abs(int(value.num)))),
-            len(str(int(value.den))),
-        )
-        > linear_digits
+        canonical_rational_component_digits(value) > addition_digits
         for coordinate in result_coordinates
         for value in coordinate.coefficients_ascending
     ):

@@ -1,18 +1,40 @@
 """Finite class-function operations."""
 
+from jacobian.math.groups.characters._abelian_models import (
+    FiniteAbelianCharacterRow,
+    FiniteAbelianCharacterTableRequest,
+    FiniteAbelianCharacterTableResult,
+)
 from jacobian.math.groups.characters._models import (
     CharacterRow,
     CharacterTableResult,
     ClassAxis,
     ClassContribution,
+    ClassFunctionInductionResult,
     ClassFunctionInnerProductResult,
+    ClassFunctionRestrictionResult,
+    ClassPowerMapResult,
     ConjugacyClassPartition,
+    CyclicCharacterRestrictionResult,
     CyclotomicValue,
     FiniteClassFunction,
+    FrobeniusSchurIndicatorResult,
+)
+from jacobian.math.groups.characters.abelian_operations import (
+    finite_abelian_character_table,
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
+    class_function_add,
+    class_function_conjugate,
+    class_function_induce_from_subgroup,
     class_function_inner_product,
+    class_function_pointwise_product,
+    class_function_restrict_to_subgroup,
+    class_function_scale,
+    class_power_map,
+    frobenius_schur_indicator,
+    restrict_cyclic_character,
 )
 
 __all__ = [
@@ -20,10 +42,28 @@ __all__ = [
     "CharacterTableResult",
     "ClassAxis",
     "ClassContribution",
+    "ClassFunctionInductionResult",
     "ClassFunctionInnerProductResult",
+    "ClassFunctionRestrictionResult",
+    "ClassPowerMapResult",
     "ConjugacyClassPartition",
+    "CyclicCharacterRestrictionResult",
     "CyclotomicValue",
+    "FiniteAbelianCharacterRow",
+    "FiniteAbelianCharacterTableRequest",
+    "FiniteAbelianCharacterTableResult",
     "FiniteClassFunction",
+    "FrobeniusSchurIndicatorResult",
     "character_table",
+    "class_function_add",
+    "class_function_conjugate",
+    "class_function_induce_from_subgroup",
     "class_function_inner_product",
+    "class_function_pointwise_product",
+    "class_function_restrict_to_subgroup",
+    "class_function_scale",
+    "class_power_map",
+    "finite_abelian_character_table",
+    "frobenius_schur_indicator",
+    "restrict_cyclic_character",
 ]

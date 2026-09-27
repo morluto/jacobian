@@ -8,7 +8,12 @@ import pytest
 import sympy
 from sympy import symbols
 
-from jacobian._execution import OperationExecutionTimeoutError, request_execution
+from jacobian._execution import (
+    OperationExecutionTimeoutError,
+    bind_request_deadline,
+    request_execution,
+)
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._conversions import rational_function_from_sympy
 from jacobian.math.polynomials.rational_functions import _bounds as rational_bounds
@@ -16,10 +21,18 @@ from jacobian.math.polynomials.rational_functions.composition import (
     RationalFunctionMapComposition,
     compose_maps,
 )
+from jacobian.math.polynomials.rational_functions.composition import (
+    operations as composition_ops,
+)
 from jacobian.math.polynomials.rational_functions.composition._models import (
     RationalMapCompositionRequest,
 )
 from jacobian.math.polynomials.rational_functions.composition._tools import TOOLS
+from jacobian.math.polynomials.rational_functions.gradient import _gcd_process
+from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
+    KernelBatchInputLimitError,
+    normalize_admitted_fractions,
+)
 from jacobian.math.polynomials.rational_functions.values import RationalFunctionMap
 from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
@@ -418,6 +431,133 @@ def test_general_rational_scalar_equivalence_vanishes() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="vanishes identically"):
         compose_maps(outer, inner)
+
+
+def test_catalog_composition_batches_source_recognition_and_normalization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "rational_function_map.compose.compute"
+    )
+    example = tool.examples[0]
+    request = RationalMapCompositionRequest.model_validate_json(
+        encode_strict_json(example.input), strict=True
+    )
+    recognition_calls: list[int] = []
+    normalization_calls: list[int] = []
+    recognize = composition_ops.recognize_canonical_rational_functions
+    normalize = normalize_admitted_fractions
+
+    def record_recognition(
+        candidates: tuple[object, ...], *, deadline: float
+    ) -> object:
+        recognition_calls.append(len(candidates))
+        return recognize(candidates, deadline=deadline)  # type: ignore[arg-type]
+
+    def record_normalization(
+        pairs: tuple[tuple[object, object], ...], variables: tuple[str, ...]
+    ) -> object:
+        normalization_calls.append(len(pairs))
+        return normalize(pairs, variables)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        composition_ops,
+        "recognize_canonical_rational_functions",
+        record_recognition,
+    )
+    monkeypatch.setattr(
+        composition_ops, "normalize_admitted_fractions", record_normalization
+    )
+
+    result = compose_maps(request.outer, request.inner)
+
+    assert recognition_calls == [3]
+    assert normalization_calls == [4]
+    x = symbols("x")
+    assert result.composite.components == (
+        _rf((2 * x**2 - 2 * x - 1) / (x**2 - 3 * x + 2), (x,)),
+        _rf((x**2 - 2 * x) / (3 * x - 3), (x,)),
+    )
+    assert len(result.construction_locus_guard) == 2
+
+
+def test_composition_normalization_batches_respect_row_limit_and_output_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    x, y = symbols("x y")
+    inner = _map(("x",), ("y",), (_rf(x / (x - 1), (x,)),))
+    outer = _map(
+        ("y",),
+        tuple(f"z{i}" for i in range(9)),
+        tuple(_rf((y + i) / (y + 1), (y,)) for i in range(9)),
+    )
+    batch_sizes: list[int] = []
+    normalize = normalize_admitted_fractions
+
+    def record_normalization(
+        pairs: tuple[tuple[object, object], ...], variables: tuple[str, ...]
+    ) -> object:
+        batch_sizes.append(len(pairs))
+        return normalize(pairs, variables)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(
+        composition_ops, "normalize_admitted_fractions", record_normalization
+    )
+
+    result = compose_maps(outer, inner)
+
+    assert batch_sizes == [16, 2]
+    assert result.composite.components == tuple(
+        _rf(((index + 1) * x - index) / (2 * x - 1), (x,)) for index in range(9)
+    )
+    assert len(result.construction_locus_guard) == 2
+
+
+def test_batch_fraction_normalization_matches_separate_exact_worker_results() -> None:
+    from sympy import Poly
+
+    x = symbols("x")
+    pairs = (
+        (Poly(x**2 - 1, x, domain="QQ"), Poly(x**2 - 2 * x + 1, x, domain="QQ")),
+        (Poly(0, x, domain="QQ"), Poly(x + 1, x, domain="QQ")),
+    )
+    with request_execution(monotonic()):
+        bind_request_deadline(monotonic() + 60)
+        batch = normalize_admitted_fractions(pairs, ("x",))
+        separate = tuple(
+            _gcd_process.normalize_admitted_fraction(numerator, denominator, ("x",))
+            for numerator, denominator in pairs
+        )
+    assert batch == separate
+
+
+def test_oversize_normalization_batch_falls_back_without_changing_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    x = symbols("x")
+    inner = _map(("x",), ("y",), (_rf(x / (x - 1), (x,)),))
+    y = symbols("y")
+    outer = _map(("y",), ("z",), (_rf(y + 1, (y,)),))
+    fallback_calls = 0
+    original = composition_ops._normalize_fraction
+
+    def reject_batch(*_args: object, **_kwargs: object) -> object:
+        raise KernelBatchInputLimitError("test aggregate payload threshold")
+
+    def count_fallback(*args: object, **kwargs: object) -> object:
+        nonlocal fallback_calls
+        fallback_calls += 1
+        return original(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(composition_ops, "normalize_admitted_fractions", reject_batch)
+    monkeypatch.setattr(composition_ops, "_normalize_fraction", count_fallback)
+
+    result = compose_maps(outer, inner)
+
+    assert fallback_calls == 2
+    assert result.composite.components == (_rf((2 * x - 1) / (x - 1), (x,)),)
 
 
 def test_same_shape_non_canceling_scale_composes() -> None:

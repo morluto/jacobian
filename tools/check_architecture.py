@@ -175,12 +175,12 @@ def _is_nested_worker_dialogue_owner(relative: PurePosixPath) -> bool:
 
 
 def _process_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     if relative == _PROCESS_OWNER:
         return ()
     violations: list[Violation] = []
-    for node in _walk(tree):
+    for node in nodes:
         if (
             isinstance(node, ast.Import)
             and any(alias.name == "subprocess" for alias in node.names)
@@ -225,30 +225,32 @@ def _process_violations(
 
 
 def _bounded_process_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     violations: list[Violation] = []
-    gateways = (
-        (
-            "run_bounded_process",
-            _is_external_operation_owner,
-            "run_bounded_process requires a concrete external-tool owner",
-        ),
-        (
-            "run_bounded_worker_dialogue",
-            _is_nested_worker_dialogue_owner,
-            ("run_bounded_worker_dialogue requires an already supervised worker owner"),
-        ),
-        (
-            "run_checked_worker_process",
-            _is_external_operation_owner,
-            "run_checked_worker_process requires a concrete external-tool owner",
-        ),
+    gateways = tuple(
+        (gateway, message)
+        for gateway, owner_predicate, message in (
+            (
+                "run_bounded_process",
+                _is_external_operation_owner,
+                "run_bounded_process requires a concrete external-tool owner",
+            ),
+            (
+                "run_bounded_worker_dialogue",
+                _is_nested_worker_dialogue_owner,
+                "run_bounded_worker_dialogue requires an already supervised worker owner",
+            ),
+            (
+                "run_checked_worker_process",
+                _is_external_operation_owner,
+                "run_checked_worker_process requires a concrete external-tool owner",
+            ),
+        )
+        if not owner_predicate(relative)
     )
-    for node in _walk(tree):
-        for gateway, owner_predicate, message in gateways:
-            if owner_predicate(relative):
-                continue
+    for node in nodes:
+        for gateway, message in gateways:
             if (
                 isinstance(node, ast.ImportFrom)
                 and node.module == "jacobian.process"
@@ -275,7 +277,7 @@ def _bounded_process_violations(
 
 
 def _resolver_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     if _is_external_operation_owner(relative):
         return ()
@@ -286,7 +288,7 @@ def _resolver_violations(
             "shutil-which-resolver",
             "external executable discovery requires a concrete tool owner",
         )
-        for node in _walk(tree)
+        for node in nodes
         if isinstance(node, ast.Attribute)
         and isinstance(node.value, ast.Name)
         and node.value.id == "shutil"
@@ -329,7 +331,7 @@ def _spreads_environ(node: ast.AST) -> bool:
 
 
 def _environment_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     return tuple(
         _violation(
@@ -338,13 +340,13 @@ def _environment_violations(
             "environ-spreading",
             "copy only explicitly allowed environment variables",
         )
-        for node in _walk(tree)
+        for node in nodes
         if _spreads_environ(node)
     )
 
 
 def _unsafe_wire_conversion_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     return tuple(
         _violation(
@@ -353,7 +355,7 @@ def _unsafe_wire_conversion_violations(
             "unsafe-canonical-conversion",
             "use the canonical conversion API for rational wire components",
         )
-        for node in _walk(tree)
+        for node in nodes
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Name)
         and node.func.id in {"int", "str"}
@@ -363,12 +365,14 @@ def _unsafe_wire_conversion_violations(
     )
 
 
-def _evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
-    direct_names, builtin_modules = _imported_evaluator_aliases(tree)
+def _evaluator_aliases(
+    nodes: tuple[ast.AST, ...],
+) -> tuple[set[str], set[str]]:
+    direct_names, builtin_modules = _imported_evaluator_aliases(nodes)
     changed = True
     while changed:
         changed = False
-        for node in _walk(tree):
+        for node in nodes:
             for target, value in _simple_assignments(node):
                 if (
                     target not in direct_names
@@ -380,10 +384,12 @@ def _evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
     return direct_names, builtin_modules
 
 
-def _imported_evaluator_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
+def _imported_evaluator_aliases(
+    nodes: tuple[ast.AST, ...],
+) -> tuple[set[str], set[str]]:
     direct_names = set(_EVALUATOR_CAPABLE_FUNCTIONS)
     builtin_modules = {"builtins"}
-    for node in _walk(tree):
+    for node in nodes:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == "builtins":
@@ -435,15 +441,15 @@ def _evaluator_reference_name(
 
 
 def _evaluator_parser_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     """Keep evaluator-capable parsers out of the mathematical operation tree."""
 
     if not relative.is_relative_to(PurePosixPath("src/jacobian/math")):
         return ()
-    direct_names, builtin_modules = _evaluator_aliases(tree)
+    direct_names, builtin_modules = _evaluator_aliases(nodes)
     violations: list[Violation] = []
-    for node in _walk(tree):
+    for node in nodes:
         if not isinstance(node, ast.Call):
             continue
         name = _evaluator_reference_name(node.func, direct_names, builtin_modules)
@@ -497,12 +503,12 @@ def _resolve_import_from_module(
     return ".".join(base_parts)
 
 
-def _dynamic_import_aliases(tree: ast.AST) -> tuple[set[str], set[str]]:
+def _dynamic_import_aliases(nodes: tuple[ast.AST, ...]) -> tuple[set[str], set[str]]:
     """Return direct ``import_module`` names and imported ``importlib`` names."""
 
     functions = {"import_module"}
     modules = {"importlib"}
-    for node in _walk(tree):
+    for node in nodes:
         if isinstance(node, ast.Import):
             for alias in node.names:
                 if alias.name == "importlib":
@@ -526,16 +532,16 @@ def _is_dynamic_import_call(
 
 
 def _owner_operation_reentry_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     """Reject static and literal dynamic re-entry into an owner's kernel."""
 
     owner = _owner_operation_module(relative)
     if owner is None:
         return ()
-    dynamic_functions, dynamic_modules = _dynamic_import_aliases(tree)
+    dynamic_functions, dynamic_modules = _dynamic_import_aliases(nodes)
     violations: list[Violation] = []
-    for node in _walk(tree):
+    for node in nodes:
         if isinstance(node, ast.ImportFrom):
             module = _resolve_import_from_module(node, relative)
             if (module is not None and _is_owner_operation_module(module, owner)) or (
@@ -651,7 +657,9 @@ def _result_validator_replay_violations(
 
 
 def _validator_backend_import_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath,
+    tree: ast.AST,
+    nodes: tuple[ast.AST, ...],
 ) -> tuple[Violation, ...]:
     """Keep backend and process imports out of Pydantic validator bodies."""
 
@@ -660,7 +668,7 @@ def _validator_backend_import_violations(
     violations: list[Violation] = []
     for function in (
         node
-        for node in ast.walk(tree)
+        for node in nodes
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         and _is_model_validator(node)
     ):
@@ -1015,7 +1023,10 @@ def _native_public_boundary_violations(root: Path) -> tuple[Violation, ...]:
 
 
 def _trusted_wire_construction_violations(
-    root: Path, relative: PurePosixPath, tree: ast.AST
+    root: Path,
+    relative: PurePosixPath,
+    tree: ast.AST,
+    nodes: tuple[ast.AST, ...],
 ) -> tuple[Violation, ...]:
     """Never bypass validation when constructing caller-facing wire inputs."""
 
@@ -1030,7 +1041,7 @@ def _trusted_wire_construction_violations(
             "trusted-wire-construction",
             "Request/Input wire models must be validated, not constructed as trusted values",
         )
-        for node in _walk(tree)
+        for node in nodes
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr == "model_construct"
@@ -1039,7 +1050,10 @@ def _trusted_wire_construction_violations(
 
 
 def _native_operations_wire_violations(
-    root: Path, relative: PurePosixPath, tree: ast.AST
+    root: Path,
+    relative: PurePosixPath,
+    tree: ast.AST,
+    nodes: tuple[ast.AST, ...],
 ) -> tuple[Violation, ...]:
     """Keep transport Request/Input models out of canonical native modules."""
 
@@ -1052,7 +1066,7 @@ def _native_operations_wire_violations(
         return ()
     wire_names = _wire_model_names(root, tree, module)
     violations: list[Violation] = []
-    for node in _walk(tree):
+    for node in nodes:
         if isinstance(node, ast.arg) and node.annotation is not None:
             if _annotation_contains_wire_model(node.annotation, wire_names):
                 violations.append(
@@ -1135,10 +1149,10 @@ def _unsafe_render_nodes(
 
 
 def _rational_output_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     unsafe: dict[int, ast.AST] = {}
-    for node in _walk(tree):
+    for node in nodes:
         if isinstance(node, (ast.Assign, ast.AnnAssign, ast.Return)):
             value = node.value
             if value is not None:
@@ -1207,7 +1221,7 @@ def _generic_operation_shadow_violations(
 
 
 def _mathematical_transport_limit_violations(
-    relative: PurePosixPath, tree: ast.Module
+    relative: PurePosixPath, tree: ast.Module, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     """Keep transport byte policy out of mathematical contracts and admission."""
 
@@ -1234,7 +1248,8 @@ def _mathematical_transport_limit_violations(
 
     allowed_channel_attributes = {
         id(descendant)
-        for node in ast.walk(tree)
+        for node in nodes
+        if isinstance(node, (ast.Assign, ast.AnnAssign))
         if is_channel_assignment(node)
         for descendant in ast.walk(node)
         if isinstance(descendant, ast.Attribute)
@@ -1263,6 +1278,20 @@ def _mathematical_transport_limit_violations(
             for target in assignment_targets(node)
         )
 
+    policy_nodes = (
+        node
+        for node in nodes
+        if isinstance(
+            node,
+            (
+                ast.Attribute,
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.Assign,
+                ast.AnnAssign,
+            ),
+        )
+    )
     return tuple(
         _violation(
             relative,
@@ -1270,13 +1299,13 @@ def _mathematical_transport_limit_violations(
             "mathematical-transport-limit",
             "mathematical contracts and admission must use cardinality, digit, or allocation bounds, not transport bytes",
         )
-        for node in ast.walk(tree)
+        for node in policy_nodes
         if owns_transport_policy(node)
     )
 
 
 def _production_assert_violations(
-    relative: PurePosixPath, tree: ast.AST
+    relative: PurePosixPath, nodes: tuple[ast.AST, ...]
 ) -> tuple[Violation, ...]:
     """Keep executable assertions out of production mathematical code.
 
@@ -1293,7 +1322,7 @@ def _production_assert_violations(
             "semantic-production-assert",
             "production code must use an explicit stable failure, not assert",
         )
-        for node in _walk(tree)
+        for node in nodes
         if isinstance(node, ast.Assert)
     )
 
@@ -1304,22 +1333,23 @@ def _check_file(root: Path, path: Path) -> tuple[Violation, ...]:
         tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(relative))
     except (OSError, SyntaxError) as exc:
         return (Violation(str(relative), "parse-error", f"cannot parse file: {exc}"),)
+    nodes = _walk(tree)
     return (
         *_generic_operation_shadow_violations(relative),
-        *_production_assert_violations(relative, tree),
-        *_mathematical_transport_limit_violations(relative, tree),
-        *_process_violations(relative, tree),
-        *_bounded_process_violations(relative, tree),
-        *_resolver_violations(relative, tree),
-        *_environment_violations(relative, tree),
-        *_evaluator_parser_violations(relative, tree),
-        *_owner_operation_reentry_violations(relative, tree),
-        *_validator_backend_import_violations(relative, tree),
+        *_production_assert_violations(relative, nodes),
+        *_mathematical_transport_limit_violations(relative, tree, nodes),
+        *_process_violations(relative, nodes),
+        *_bounded_process_violations(relative, nodes),
+        *_resolver_violations(relative, nodes),
+        *_environment_violations(relative, nodes),
+        *_evaluator_parser_violations(relative, nodes),
+        *_owner_operation_reentry_violations(relative, nodes),
+        *_validator_backend_import_violations(relative, tree, nodes),
         *_result_validator_replay_violations(relative, tree),
-        *_trusted_wire_construction_violations(root, relative, tree),
-        *_native_operations_wire_violations(root, relative, tree),
-        *_unsafe_wire_conversion_violations(relative, tree),
-        *_rational_output_violations(relative, tree),
+        *_trusted_wire_construction_violations(root, relative, tree, nodes),
+        *_native_operations_wire_violations(root, relative, tree, nodes),
+        *_unsafe_wire_conversion_violations(relative, nodes),
+        *_rational_output_violations(relative, nodes),
     )
 
 

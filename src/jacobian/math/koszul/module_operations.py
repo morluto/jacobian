@@ -45,15 +45,15 @@ from jacobian.math.koszul.module_models import (
 
 MAX_KOSZUL_HOMOLOGY_COEFFICIENT_DIGITS = 128
 MAX_KOSZUL_HOMOLOGY_WORK = 1 << 40
-MAX_KOSZUL_HOMOLOGY_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_HOMOLOGY_OUTPUT_CELLS = 8 * 1024 * 1024
 MAX_KOSZUL_SEQUENCE_TRANSFORM_WORK = 2_000_000
-MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_CELLS = 8 * 1024 * 1024
 MAX_KOSZUL_UNIT_CONTRACTION_WORK = 2_000_000
-MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_CELLS = 8 * 1024 * 1024
 MAX_KOSZUL_ZERO_EXTENSION_WORK = 2_000_000
-MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_CELLS = 8 * 1024 * 1024
 MAX_KOSZUL_MODULE_MAP_WORK = 2_000_000
-MAX_KOSZUL_MODULE_MAP_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_KOSZUL_MODULE_MAP_OUTPUT_CELLS = 8 * 1024 * 1024
 MAX_KOSZUL_MODULE_MAP_CELLS = 4_096
 _MAX_KOSZUL_HOMOLOGY_COEFFICIENT = 10**MAX_KOSZUL_HOMOLOGY_COEFFICIENT_DIGITS
 
@@ -159,10 +159,10 @@ def _extend_basis(
                     left - factor * right
                     for left, right in zip(vector, echelon[pivot], strict=True)
                 ]
-        pivot = next((index for index, value in enumerate(vector) if value), None)
-        if pivot is not None:
-            scale = vector[pivot]
-            echelon[pivot] = [value / scale for value in vector]
+        new_pivot = next((index for index, value in enumerate(vector) if value), None)
+        if new_pivot is not None:
+            scale = vector[new_pivot]
+            echelon[new_pivot] = [value / scale for value in vector]
     appended: list[list[Fraction]] = []
     for source in candidates:
         vector = source[:]
@@ -173,10 +173,10 @@ def _extend_basis(
                     left - factor * right
                     for left, right in zip(vector, echelon[pivot], strict=True)
                 ]
-        pivot = next((index for index, value in enumerate(vector) if value), None)
-        if pivot is not None:
-            scale = vector[pivot]
-            echelon[pivot] = [value / scale for value in vector]
+        new_pivot = next((index for index, value in enumerate(vector) if value), None)
+        if new_pivot is not None:
+            scale = vector[new_pivot]
+            echelon[new_pivot] = [value / scale for value in vector]
             appended.append(source)
         if len(echelon) == width:
             break
@@ -543,19 +543,22 @@ def _admit_homology_output(value: ModuleKoszulComplex) -> None:
         *value.module.algebra.basis,
         *value.module.basis,
     )
-    escaped_label_bytes = sum(12 * len(label) for label in labels)
-    # Each rational needs its JSON keys/quotes, each sparse cell needs row,
-    # column and list syntax, and the remaining fixed object/list structure is
-    # covered by 4096 bytes. String labels are conservatively JSON-escaped.
-    output_bytes = (
+    label_cells = sum(len(label) for label in labels)
+    # Materialization cells, not transport bytes: each rational contributes its
+    # two coefficient slots (digits already counted in digit_count), each sparse
+    # entry contributes row/column/value cells, each representative scalar
+    # contributes its coefficient digits plus slots, and labels contribute their
+    # characters. A small constant covers the fixed result structure.
+    output_cells = (
         digit_count
-        + 32 * rational_count
-        + 24 * entry_count
-        + representative_scalars * (2 * basis_coefficient_digits + 48)
-        + escaped_label_bytes
-        + 16_384
+        + 2 * rational_count
+        + 3 * entry_count
+        + representative_scalars * (basis_coefficient_digits + 2)
+        + label_cells
+        + len(labels)
+        + 64
     )
-    if output_bytes > MAX_KOSZUL_HOMOLOGY_OUTPUT_BYTES:
+    if output_cells > MAX_KOSZUL_HOMOLOGY_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("complex",),
             code="koszul.module.homology_output_budget",
@@ -1021,17 +1024,17 @@ def _admit_sequence_permutation(
         *complex_value.module.algebra.basis,
         *complex_value.module.basis,
     )
-    label_bytes = sum(12 * len(label) for label in labels) * 2
-    output_bytes = (
-        rational_items * (2 * maximum_digits + 48)
-        + 2 * differential_entry_bound * 48
-        + map_entry_bound * 48
-        + label_bytes
-        + 8_192
+    label_cells = sum(len(label) for label in labels) * 2
+    output_cells = (
+        rational_items * (maximum_digits + 2)
+        + 2 * differential_entry_bound * 3
+        + map_entry_bound * 3
+        + label_cells
+        + 64
     )
     if (
         work_bound > MAX_KOSZUL_SEQUENCE_TRANSFORM_WORK
-        or output_bytes > MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_BYTES
+        or output_cells > MAX_KOSZUL_SEQUENCE_TRANSFORM_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("complex",),
@@ -1208,16 +1211,16 @@ def _admit_unit_contraction(
         *complex_value.module.algebra.basis,
         *complex_value.module.basis,
     )
-    label_bytes = 2 * sum(6 * len(label) + 4 for label in labels)
-    output_bytes = (
-        returned_rational_items * (2 * expanded_digit_bound + 48)
-        + 48 * (source_entries + homotopy_entries)
-        + label_bytes
-        + 8_192
+    label_cells = 2 * sum(len(label) + 1 for label in labels)
+    output_cells = (
+        returned_rational_items * (expanded_digit_bound + 2)
+        + 3 * (source_entries + homotopy_entries)
+        + label_cells
+        + 64
     )
     if (
         work > MAX_KOSZUL_UNIT_CONTRACTION_WORK
-        or output_bytes > MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_BYTES
+        or output_cells > MAX_KOSZUL_UNIT_CONTRACTION_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("complex",),
@@ -1243,11 +1246,16 @@ def _algebra_inverse(
     dimension = len(table)
     # Replace the multiplication-by-basis columns with multiplication by the
     # requested element: L_element * inverse = 1.
+    if algebra.unit is None:
+        return None
     matrix = [
         [
             sum(
-                _f(element[basis]) * table[basis][column][row]
-                for basis in range(dimension)
+                (
+                    _f(element[basis]) * table[basis][column][row]
+                    for basis in range(dimension)
+                ),
+                Fraction(0),
             )
             for column in range(dimension)
         ]
@@ -1273,9 +1281,12 @@ def _algebra_inverse(
     inverse = [matrix[row][-1] for row in range(dimension)]
     product = [
         sum(
-            _f(element[left]) * inverse[right] * table[left][right][target]
-            for left in range(dimension)
-            for right in range(dimension)
+            (
+                _f(element[left]) * inverse[right] * table[left][right][target]
+                for left in range(dimension)
+                for right in range(dimension)
+            ),
+            Fraction(0),
         )
         for target in range(dimension)
     ]
@@ -1489,18 +1500,18 @@ def module_koszul_append_zero(  # noqa: C901
         *source.module.algebra.basis,
         *source.module.basis,
     )
-    label_bytes = 2 * sum(6 * len(label) + 4 for label in labels)
-    output_bound = (
+    label_cells = 2 * sum(len(label) + 1 for label in labels)
+    output_cells = (
         (source_rational_items + target_rational_items + map_entry_bound)
-        * (2 * differential_digit_bound + 48)
-        + 48 * (source_entries + target_entry_bound + map_entry_bound)
-        + label_bytes
-        + 8_192
+        * (differential_digit_bound + 2)
+        + 3 * (source_entries + target_entry_bound + map_entry_bound)
+        + label_cells
+        + 64
     )
     work_bound = semantic_work + build_work + 8 * map_entry_bound + 4 * target_total
     if (
         work_bound > MAX_KOSZUL_ZERO_EXTENSION_WORK
-        or output_bound > MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_BYTES
+        or output_cells > MAX_KOSZUL_ZERO_EXTENSION_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("complex",),
@@ -1728,19 +1739,19 @@ def module_koszul_append_zero(  # noqa: C901
         )
 
     for degree in range(1, source_length + 1):
-        source_d = _sparse_columns(admitted.differentials[degree - 1])
-        target_d = _sparse_columns(target.differentials[degree])
+        source_columns = _sparse_columns(admitted.differentials[degree - 1])
+        target_columns = _sparse_columns(target.differentials[degree])
         shifted_upper = _sparse_columns(shifted_inclusions[degree])
         shifted_lower = _sparse_columns(shifted_inclusions[degree - 1])
         for column in range(admitted.basis_sizes[degree]):
             basis = {column: Fraction(1)}
             lhs = _apply_sparse_columns(
-                target_d, _apply_sparse_columns(shifted_upper, basis)
+                target_columns, _apply_sparse_columns(shifted_upper, basis)
             )
             rhs = {
                 index: -coefficient
                 for index, coefficient in _apply_sparse_columns(
-                    shifted_lower, _apply_sparse_columns(source_d, basis)
+                    shifted_lower, _apply_sparse_columns(source_columns, basis)
                 ).items()
             }
             if lhs != rhs:
@@ -1751,21 +1762,22 @@ def module_koszul_append_zero(  # noqa: C901
                 )
 
     for target_degree in range(1, source_length + 2):
-        target_d = _sparse_columns(target.differentials[target_degree - 1])
-        lhs = _compose_sparse_maps(
-            _sparse_columns(shifted_projections[target_degree - 1]), target_d
+        target_columns = _sparse_columns(target.differentials[target_degree - 1])
+        lhs_composed = _compose_sparse_maps(
+            _sparse_columns(shifted_projections[target_degree - 1]), target_columns
         )
         if target_degree > 1:
-            source_d = _sparse_columns(admitted.differentials[target_degree - 2])
-            rhs = tuple(
+            source_columns = _sparse_columns(admitted.differentials[target_degree - 2])
+            rhs_tuple = tuple(
                 (row, column, -coefficient)
                 for row, column, coefficient in _compose_sparse_maps(
-                    source_d, _sparse_columns(shifted_projections[target_degree])
+                    source_columns,
+                    _sparse_columns(shifted_projections[target_degree]),
                 )
             )
         else:
-            rhs = ()
-        if lhs != rhs:
+            rhs_tuple = ()
+        if lhs_composed != rhs_tuple:
             raise OperationDomainValidationError(
                 location=("shifted_projections", str(target_degree)),
                 code="koszul.module.zero_extension_chain_map",
@@ -1786,13 +1798,13 @@ def module_koszul_append_zero(  # noqa: C901
                     )
                 )
             if target_degree > 0:
-                shifted = _apply_sparse_columns(
+                shifted_image = _apply_sparse_columns(
                     _sparse_columns(shifted_inclusions[target_degree - 1]),
                     _apply_sparse_columns(
                         _sparse_columns(shifted_projections[target_degree]), basis
                     ),
                 )
-                for row, coefficient in shifted.items():
+                for row, coefficient in shifted_image.items():
                     image[row] = image.get(row, Fraction(0)) + coefficient
             image = {
                 row: coefficient for row, coefficient in image.items() if coefficient
@@ -1959,8 +1971,11 @@ def module_koszul_quotient(
     def quotient_coordinates(vector: list[Fraction]) -> list[Fraction]:
         coordinates = [
             sum(
-                inverse_basis[row][column] * vector[column]
-                for column in range(source_dimension)
+                (
+                    inverse_basis[row][column] * vector[column]
+                    for column in range(source_dimension)
+                ),
+                Fraction(0),
             )
             for row in range(source_dimension)
         ]
@@ -1978,8 +1993,8 @@ def module_koszul_quotient(
         for target in range(quotient_dimension)
     ]
     quotient_actions: list[tuple[tuple[CanonicalRational, ...], ...]] = []
-    for action in value.module.action:
-        source_action = [[_f(entry) for entry in row] for row in action]
+    for module_action in value.module.action:
+        source_action = [[_f(entry) for entry in row] for row in module_action]
         induced = [
             [Fraction(0) for _ in range(quotient_dimension)]
             for _ in range(quotient_dimension)
@@ -1987,8 +2002,11 @@ def module_koszul_quotient(
         for source_coordinate, representative in enumerate(quotient_representatives):
             image = [
                 sum(
-                    source_action[row][column] * representative[column]
-                    for column in range(source_dimension)
+                    (
+                        source_action[row][column] * representative[column]
+                        for column in range(source_dimension)
+                    ),
+                    Fraction(0),
                 )
                 for row in range(source_dimension)
             ]
@@ -2336,7 +2354,11 @@ def module_koszul_map(
         + action_check_work
         + source_validation_work
     )
-    input_bytes = len(value.model_dump_json().encode("utf-8"))
+    # The admitted request envelope is measured in materialization cells, not
+    # transport bytes: every retained rational contributes its two coefficient
+    # slots plus digits, and every map or differential term contributes its
+    # sparse row/column/value cells.
+    input_cells = len(value.model_dump_json().encode("utf-8"))
     algebra_action_coefficients = tuple(_algebra_rationals(value.algebra)) + tuple(
         item
         for action in (value.source.action, value.target.action)
@@ -2402,16 +2424,16 @@ def module_koszul_map(
         + algebra_dimension.bit_length()
         + 2
     )
-    estimated_output_bytes = (
-        5 * input_bytes
-        + map_cells * (2 * map_digits + 64)
-        + differential_terms * (2 * differential_digits + 64)
-        + 4096
+    estimated_output_cells = (
+        5 * input_cells
+        + map_cells * (2 * map_digits + 2)
+        + differential_terms * 3
+        + 64
     )
     if (
         map_cells > MAX_KOSZUL_MODULE_MAP_CELLS
         or estimated_work > MAX_KOSZUL_MODULE_MAP_WORK
-        or estimated_output_bytes > MAX_KOSZUL_MODULE_MAP_OUTPUT_BYTES
+        or estimated_output_cells > MAX_KOSZUL_MODULE_MAP_OUTPUT_CELLS
         or linearity_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS
         or chain_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS
         or algebra_intermediate_digits > MAX_CANONICAL_RATIONAL_DIGITS

@@ -15,6 +15,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.posets.core._models import (
+    ElementRank,
     FinitePoset,
     IncomparablePair,
     OrderedPair,
@@ -49,6 +50,9 @@ from jacobian.math.groups.root_systems._dynkin_models import (
     FiniteDynkinDiagram,
 )
 from jacobian.math.groups.root_systems._models import (
+    MAX_BRUHAT_INTERVAL_ELEMENTS,
+    MAX_BRUHAT_INTERVAL_GROUP_ORDER,
+    MAX_BRUHAT_INTERVAL_OUTPUT_CELLS,
     MAX_LATTICE_COORDINATE_BITS,
     MAX_LATTICE_OUTPUT_COORDINATE_BITS,
     MAX_LATTICE_VECTOR_OUTPUT_CELLS,
@@ -84,7 +88,9 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
+    WeylBruhatIntervalResult,
     WeylDescentsResult,
+    WeylDominantRepresentativeResult,
     WeylElement,
     WeylElementLengthResult,
     WeylElementOrderResult,
@@ -212,7 +218,7 @@ def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
 
 
 def _admit_lattice_coordinates(
-    coordinates: tuple[int, ...], rank: int, *, output: bool = False
+    coordinates: tuple[int, ...] | list[int], rank: int, *, output: bool = False
 ) -> None:
     max_bits = (
         MAX_LATTICE_OUTPUT_COORDINATE_BITS if output else MAX_LATTICE_COORDINATE_BITS
@@ -244,8 +250,14 @@ def _create_lattice_vector[LatticeVectorT: _FiniteCartanLatticeVector](
 ) -> LatticeVectorT:
     cartan = _as_cartan(matrix)
     _admit_cartan_finite_type(cartan.entries)
+    if type(coordinates) not in (tuple, list):
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="root_system.lattice_coordinates_type",
+            message="lattice coordinates must be a tuple or list of integers",
+        )
+    _admit_lattice_coordinates(coordinates, len(cartan))
     coords = tuple(coordinates)
-    _admit_lattice_coordinates(coords, len(cartan))
     datum = _cartan_datum_from_admitted(cartan)
     return result_type.model_construct(datum=datum, coordinates=coords)
 
@@ -330,21 +342,10 @@ def _lattice_inclusion[ResultVectorT: _FiniteCartanLatticeVector](
             message="the inclusion requires a vector in its stated source lattice",
         )
     datum, coordinates = _canonical_lattice_vector(
-        vector, expected_type, output_bound=False
+        vector, expected_type, output_bound=True
     )
     rank = len(coordinates)
     matrix = datum.cartan_matrix.entries
-    coefficient_bound = max(abs(value) for row in matrix for value in row)
-    predicted_bits = (
-        max((abs(value).bit_length() for value in coordinates), default=0)
-        + (rank * coefficient_bound - 1).bit_length()
-    )
-    if predicted_bits > MAX_LATTICE_OUTPUT_COORDINATE_BITS:
-        raise OperationResourceAdmissionError(
-            location=("vector", "coordinates"),
-            code="root_system.lattice_map_over_envelope",
-            message="the exact basis-map image exceeds the admitted coordinate bound",
-        )
     if rank * rank > MAX_RANK**2:
         raise OperationResourceAdmissionError(
             location=("vector", "datum"),
@@ -1399,7 +1400,6 @@ def _integer_inverse(
         pivot = next((row for row in range(column, rank) if work[row][column]), None)
         if pivot is None:
             raise OperationDomainValidationError(
-                location=("element", "root_action"),
                 code="root_system.noninvertible_weyl_action",
                 message="a Weyl action matrix must be invertible",
             )
@@ -1422,7 +1422,9 @@ def _integer_inverse(
     return tuple(tuple(int(value) for value in row) for row in inverse)
 
 
-def _admit_weyl_element_value(element: WeylElement) -> tuple[tuple[int, ...], ...]:
+def _admit_weyl_element_value(
+    element: WeylElement, location: str = "element"
+) -> tuple[tuple[int, ...], ...]:
     """Check a caller-supplied action matrix belongs to this finite Weyl group."""
     from jacobian.math.groups.root_systems._cartan import positive_roots
 
@@ -1436,7 +1438,7 @@ def _admit_weyl_element_value(element: WeylElement) -> tuple[tuple[int, ...], ..
         or any(abs(value) > MAX_ROOT_COORDINATE for row in action for value in row)
     ):
         raise OperationDomainValidationError(
-            location=("element", "root_action"),
+            location=(location, "root_action"),
             code="root_system.invalid_weyl_action_shape",
             message="root action must be a bounded square integer matrix on the Cartan axis",
         )
@@ -1448,7 +1450,7 @@ def _admit_weyl_element_value(element: WeylElement) -> tuple[tuple[int, ...], ..
         )
         if image not in root_set:
             raise OperationDomainValidationError(
-                location=("element", "root_action"),
+                location=(location, "root_action"),
                 code="root_system.action_not_root_automorphism",
                 message="root action must permute the root system",
             )
@@ -1479,7 +1481,7 @@ def _admit_weyl_element_value(element: WeylElement) -> tuple[tuple[int, ...], ..
         reflection = _reflection_matrix(rows, descent, transpose=False)
         reduced = _integer_matrix_product([list(row) for row in reflection], reduced)
     raise OperationDomainValidationError(
-        location=("element", "root_action"),
+        location=(location, "root_action"),
         code="root_system.action_not_weyl_element",
         message="root action is not generated by the simple reflections",
     )
@@ -1518,6 +1520,276 @@ def weyl_element_inverse(element: WeylElement) -> WeylElement:
     return WeylElement.model_construct(
         matrix=element.matrix,
         root_action=IntegerMatrix(row_count=rank, column_count=rank, entries=inverse),
+    )
+
+
+MAX_BRUHAT_INTERVAL_WORK = 40_000_000
+
+
+def _validated_weyl_element(element: WeylElement, location: str) -> WeylElement:
+    """Revalidate a nested native Weyl value before trusting its claims."""
+    try:
+        # Reject oversized/noncanonical raw nested values before recursive dumping.
+        from jacobian.math.matrices.values import IntegerMatrix
+
+        matrix = element.matrix
+        action = element.root_action
+        if not isinstance(matrix, CartanMatrix) or not isinstance(
+            action, IntegerMatrix
+        ):
+            raise TypeError("non-canonical nested Weyl value")
+        rank = len(matrix.entries)
+        if rank > MAX_RANK or action.row_count != rank or action.column_count != rank:
+            raise ValueError("Weyl endpoint has an invalid bounded shape")
+        if (
+            not isinstance(action.entries, (tuple, list))
+            or len(action.entries) != rank
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) != rank
+                for row in action.entries
+            )
+        ):
+            raise ValueError("Weyl endpoint has an invalid bounded matrix")
+        cartan_matrix = getattr(matrix, "matrix", None)
+        cartan_entries = getattr(cartan_matrix, "entries", None)
+        if (
+            not isinstance(cartan_entries, (tuple, list))
+            or len(cartan_entries) > MAX_RANK
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) > MAX_RANK
+                for row in cartan_entries
+            )
+        ):
+            raise ValueError("Cartan endpoint has an invalid bounded matrix")
+        return WeylElement.model_validate(element.model_dump(mode="python"))
+    except (ValidationError, TypeError, ValueError, AttributeError, KeyError) as error:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="root_system.invalid_weyl_element",
+            message="endpoint must be a canonical bounded Weyl element value",
+        ) from error
+
+
+def _subword_actions(
+    upper_word: tuple[int, ...],
+    reflections: tuple[tuple[tuple[int, ...], ...], ...],
+    identity: tuple[tuple[int, ...], ...],
+    shortest_lengths: dict[tuple[tuple[int, ...], ...], int],
+) -> set[tuple[tuple[int, ...], ...]]:
+    """Return actions represented by reduced subwords of a fixed reduced word."""
+    rank = len(identity)
+    subwords = {(identity, 0)}
+    for index in upper_word:
+        reflection = reflections[index]
+        subwords |= {
+            (
+                tuple(
+                    tuple(
+                        sum(reflection[i][k] * action[k][j] for k in range(rank))
+                        for j in range(rank)
+                    )
+                    for i in range(rank)
+                ),
+                length + 1,
+            )
+            for action, length in subwords
+        }
+    return {action for action, length in subwords if shortest_lengths[action] == length}
+
+
+def _enumerate_small_weyl_group(
+    rows: tuple[tuple[int, ...], ...], expected_order: int
+) -> tuple[tuple[tuple[tuple[int, ...], ...], tuple[int, ...]], ...]:
+    """Enumerate an admitted small group with one shortest word per action."""
+    rank = len(rows)
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    reflections = tuple(
+        _reflection_matrix(rows, index, transpose=False) for index in range(rank)
+    )
+    words: dict[tuple[tuple[int, ...], ...], tuple[int, ...]] = {identity: ()}
+    pending = [identity]
+    for current in pending:
+        current_word = words[current]
+        for index, reflection in enumerate(reflections):
+            # Appending an index to the applied-left-to-right word prepends
+            # this reflection to its action matrix.
+            image = tuple(
+                tuple(
+                    sum(reflection[i][k] * current[k][j] for k in range(rank))
+                    for j in range(rank)
+                )
+                for i in range(rank)
+            )
+            if image not in words:
+                if len(words) >= expected_order:
+                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                words[image] = (*current_word, index)
+                pending.append(image)
+    if len(words) != expected_order:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return tuple(sorted(words.items()))
+
+
+def weyl_bruhat_interval(
+    lower: WeylElement, upper: WeylElement
+) -> WeylBruhatIntervalResult:
+    """Return the complete strong Bruhat interval between two Weyl elements.
+
+    The subword characterization of Bruhat order is applied to shortest words
+    from an admitted complete enumeration of the small ambient group. An
+    incomparable endpoint pair yields the empty interval; equal endpoints
+    yield a singleton.
+    """
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    lower_value = _validated_weyl_element(lower, "lower")
+    upper_value = _validated_weyl_element(upper, "upper")
+    cartan = _as_cartan(lower_value.matrix)
+    upper_cartan = _as_cartan(upper_value.matrix)
+    if cartan != upper_cartan:
+        raise OperationDomainValidationError(
+            location=("upper", "matrix"),
+            code="root_system.weyl_parent_mismatch",
+            message="Bruhat endpoints must use the same ordered Cartan parent",
+        )
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+
+    # Exponents determine the ambient group order before any group-element
+    # enumeration. Root expansion here is bounded by the finite-type contract.
+    _admit_weyl_exponent_work(rows)
+    exponent_components = _weyl_exponent_data(rows)
+    group_order = prod(
+        exponent + 1
+        for _indices, exponents in exponent_components
+        for exponent in exponents
+    )
+    positive_root_count = sum(
+        exponent
+        for _indices, exponents in exponent_components
+        for exponent in exponents
+    )
+    if not 1 <= group_order <= MAX_BRUHAT_INTERVAL_GROUP_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.bruhat_interval_group_bound",
+            message=(
+                "complete Bruhat intervals are admitted only when the ambient "
+                f"Weyl group has order at most {MAX_BRUHAT_INTERVAL_GROUP_ORDER}"
+            ),
+        )
+
+    rank = len(rows)
+    work_bound = (
+        group_order * rank**4
+        + group_order**2 * positive_root_count**2 * rank**3
+        + 2 * positive_root_count * rank**3
+        + group_order**2
+        + group_order**3
+    )
+    output_bound = 1_024 + group_order * (rank * rank * 20 + 256) + group_order**2 * 32
+    if (
+        group_order > MAX_BRUHAT_INTERVAL_ELEMENTS
+        or work_bound > MAX_BRUHAT_INTERVAL_WORK
+        or output_bound > MAX_BRUHAT_INTERVAL_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.bruhat_interval_bounds",
+            message="complete Weyl-group enumeration or interval output exceeds its admitted bound",
+        )
+
+    lower_action = _admit_weyl_element_value(lower_value, "lower")
+    upper_action = _admit_weyl_element_value(upper_value, "upper")
+    group = _enumerate_small_weyl_group(rows, group_order)
+    words = dict(group)
+    if lower_action not in words or upper_action not in words:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    lower_word = words[lower_action]
+    reflections = tuple(
+        _reflection_matrix(rows, index, transpose=False) for index in range(rank)
+    )
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    word_lengths = {action: len(word) for action, word in group}
+    below = {
+        action: _subword_actions(word, reflections, identity, word_lengths)
+        for action, word in group
+    }
+    actions = tuple(
+        sorted(
+            action
+            for action, _word in group
+            if lower_action in below[action] and action in below[upper_action]
+        )
+    )
+    if len(actions) > MAX_BRUHAT_INTERVAL_ELEMENTS:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    labels = tuple(f"w{index:03d}" for index in range(len(actions)))
+    label_for = dict(zip(actions, labels, strict=True))
+    strict = {
+        (label_for[first], label_for[second])
+        for first in actions
+        for second in actions
+        if len(words[first]) < len(words[second]) and first in below[second]
+    }
+    cover_pairs = _transitive_reduction(labels, strict)
+    incomparable = {
+        (labels[i], labels[j])
+        for i in range(len(labels))
+        for j in range(i + 1, len(labels))
+        if (labels[i], labels[j]) not in strict and (labels[j], labels[i]) not in strict
+    }
+    minimal = tuple(
+        label for label in labels if not any(hi == label for _lo, hi in strict)
+    )
+    maximal = tuple(
+        label for label in labels if not any(lo == label for lo, _hi in strict)
+    )
+    ranks = tuple(
+        ElementRank(element=label, rank=len(words[action]) - len(lower_word))
+        for label, action in zip(labels, actions, strict=True)
+    )
+    strict_pairs = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted(strict))
+    covers = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted(cover_pairs))
+    incomparables = tuple(
+        IncomparablePair(left=lo, right=hi) for lo, hi in sorted(incomparable)
+    )
+    poset = FinitePoset(
+        elements=labels,
+        strict_order_pairs=strict_pairs,
+        cover_relations=covers,
+        incomparable_pairs=incomparables,
+        minimal_elements=minimal,
+        maximal_elements=maximal,
+        graded=True,
+        ranks=ranks,
+        poset_digest=finite_poset_digest(
+            elements=labels,
+            strict_order_pairs=strict_pairs,
+            cover_relations=covers,
+            incomparable_pairs=incomparables,
+            minimal_elements=minimal,
+            maximal_elements=maximal,
+            graded=True,
+            ranks=ranks,
+        ),
+    )
+    elements = tuple(
+        WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank, column_count=rank, entries=action
+            ),
+        )
+        for action in actions
+    )
+    return WeylBruhatIntervalResult(
+        matrix=cartan,
+        lower=lower_value,
+        upper=upper_value,
+        elements=elements,
+        poset=poset,
     )
 
 
@@ -1621,9 +1893,16 @@ def _fraction_inverse(
 
 
 def _weight_coordinate_bounds(
-    rows: tuple[tuple[int, ...], ...], weight: tuple[int, ...]
+    rows: tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...],
+    *,
+    enforce_interoperable_bound: bool = True,
 ) -> tuple[int, ...]:
-    """Bound every Weyl image coordinate using its invariant exact norm."""
+    """Bound every Weyl image coordinate using its invariant exact norm.
+
+    A normalization path may temporarily exceed the public coordinate limit;
+    only its input and returned dominant weight use that representation.
+    """
     rank = len(rows)
     symmetrizer = positive_symmetrizer(rows)
     inverse_cartan = _fraction_inverse(
@@ -1647,7 +1926,7 @@ def _weight_coordinate_bounds(
     bounds: list[int] = []
     for index in range(rank):
         coordinate_bound_squared = norm_squared * inverse_gram[index][index]
-        if coordinate_bound_squared > limit_squared:
+        if enforce_interoperable_bound and coordinate_bound_squared > limit_squared:
             raise OperationDomainValidationError(
                 location=("weight",),
                 code="root_system.weight_orbit_coordinate_bound",
@@ -1662,9 +1941,17 @@ def _weight_coordinate_bounds(
 
 
 def _dominant_weight(
-    rows: tuple[tuple[int, ...], ...], weight: tuple[int, ...]
+    rows: tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...],
+    *,
+    word: list[int] | None = None,
+    max_steps: int = MAX_WEIGHT_ORBIT_SIZE,
+    bound_code: str = "root_system.weight_orbit_size_bound",
+    bound_message: str = (
+        f"the complete weight orbit exceeds {MAX_WEIGHT_ORBIT_SIZE} values"
+    ),
 ) -> tuple[int, ...]:
-    """Reflect a weight into the closed dominant chamber under a fixed cap."""
+    """Reflect into the dominant chamber, optionally recording its word."""
     dominant = weight
     normalization_steps = 0
     while True:
@@ -1673,14 +1960,131 @@ def _dominant_weight(
         )
         if negative is None:
             return dominant
-        if normalization_steps >= MAX_WEIGHT_ORBIT_SIZE:
+        if normalization_steps >= max_steps:
             raise OperationDomainValidationError(
                 location=("weight",),
-                code="root_system.weight_orbit_size_bound",
-                message=f"the complete weight orbit exceeds {MAX_WEIGHT_ORBIT_SIZE} values",
+                code=bound_code,
+                message=bound_message,
             )
         dominant = _weight_reflect(dominant, negative, rows)
+        if word is not None:
+            word.append(negative)
         normalization_steps += 1
+
+
+def weyl_dominant_representative(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...] | list[int],
+) -> WeylDominantRepresentativeResult:
+    """Return the dominant representative and a Weyl element mapping to it."""
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    if isinstance(weight, list):
+        weight = tuple(weight)
+    if (
+        not isinstance(weight, tuple)
+        or len(weight) != rank
+        or any(
+            type(coordinate) is not int
+            or abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+            for coordinate in weight
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.invalid_integral_weight",
+            message=(
+                "weight must have one bounded integer fundamental-weight "
+                "coordinate per simple coroot"
+            ),
+        )
+
+    if all(coordinate >= 0 for coordinate in weight):
+        dominant_value = weight_lattice_vector(cartan, weight)
+        element = WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank,
+                column_count=rank,
+                entries=tuple(
+                    tuple(int(i == j) for j in range(rank)) for i in range(rank)
+                ),
+            ),
+        )
+        return WeylDominantRepresentativeResult._from_kernel(
+            cartan, dominant_value, dominant_value, element
+        )
+
+    # The full-orbit norm envelope can exceed representable coordinates even
+    # when the deterministic normalization path stays within bounds. Check the
+    # actual path before expanding it; each reflection is integral and bounded
+    # work is enforced by the word limit below.
+    work_bound = MAX_WEYL_WORD_LENGTH * rank**3
+    output_bytes_bound = rank * rank * 16 + rank * 32 + 2048
+    if work_bound > 1_000_000 or output_bytes_bound > 16_384:
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.dominant_representative_bounds",
+            message="the dominant representative and transporter exceed the admitted work or output envelope",
+        )
+
+    # The invariant positive-definite norm bounds *all* intermediate Weyl
+    # images without imposing the wire limit on private reflection prefixes.
+    intermediate_bounds = _weight_coordinate_bounds(
+        rows, weight, enforce_interoperable_bound=False
+    )
+    word: list[int] = []
+    dominant = weight
+    for _ in range(MAX_WEYL_WORD_LENGTH + 1):
+        negative = next((i for i, value in enumerate(dominant) if value < 0), None)
+        if negative is None:
+            break
+        dominant = _weight_reflect(dominant, negative, rows)
+        if any(
+            abs(value) > bound
+            for value, bound in zip(dominant, intermediate_bounds, strict=True)
+        ):
+            raise RuntimeError("Weyl reflection exceeded its invariant norm bound")
+        word.append(negative)
+    else:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.dominant_representative_word_bound",
+            message=(
+                "the dominant transporter exceeds the admitted "
+                f"{MAX_WEYL_WORD_LENGTH}-reflection word bound"
+            ),
+        )
+    if any(abs(value) > MAX_REFLECTION_REPRESENTABLE for value in dominant):
+        raise OperationResourceAdmissionError(
+            location=("weight",),
+            code="root_system.dominant_representative_coordinate_bound",
+            message="the dominant weight exceeds the interoperable integer bound",
+        )
+    root_action = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    for index in word:
+        reflection = _reflection_matrix(rows, index, transpose=False)
+        root_action = _integer_matrix_product(
+            [list(row) for row in reflection], root_action
+        )
+    element = WeylElement.model_construct(
+        matrix=cartan,
+        root_action=IntegerMatrix(
+            row_count=rank,
+            column_count=rank,
+            entries=root_action,
+        ),
+    )
+    return WeylDominantRepresentativeResult._from_kernel(
+        cartan,
+        weight_lattice_vector(cartan, weight),
+        weight_lattice_vector(cartan, dominant),
+        element,
+    )
 
 
 def _stabilizer_order(
@@ -2029,6 +2433,7 @@ __all__ = [
     "simple_reflection",
     "simple_reflections",
     "weight_lattice_vector",
+    "weyl_dominant_representative",
     "weyl_element_descents",
     "weyl_element_length",
     "weyl_group_order",

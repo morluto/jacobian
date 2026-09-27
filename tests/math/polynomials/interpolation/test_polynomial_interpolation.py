@@ -80,29 +80,23 @@ def test_newton_form_is_directly_evaluable() -> None:
         is False
     )
 
-
-def test_interpolation_reconstructs_every_sample() -> None:
-    samples = _samples(
-        nodes=(_q(0), _q(1, 2), _q(1), _q(3, 2)),
-        values=(_q(1), _q(3, 2), _q(2), _q(11, 4)),
-    )
-    form = newton_form(NewtonFormRequest(samples=samples).samples)
-    for node, expected in zip(samples.nodes, samples.values, strict=True):
-        request = NewtonEvaluateRequest(newton_form=form, evaluation_point=node)
-        result = evaluate_newton(request.newton_form, request.evaluation_point)
-        assert result.result == expected
-
-
-def test_rational_interpolation_has_exact_coefficients_and_evaluation() -> None:
-    samples = _samples(
+    rational_samples = _samples(
         nodes=(_q(0), _q(1, 2), _q(1)),
         values=(_q(1), _q(3, 2), _q(2)),
     )
-    form = newton_form(NewtonFormRequest(samples=samples).samples)
-    assert form.coefficients == (_q(1), _q(1), _q(0))
-    request = NewtonEvaluateRequest(newton_form=form, evaluation_point=_q(3, 4))
-    result = evaluate_newton(request.newton_form, request.evaluation_point)
-    assert result.result == _q(7, 4)
+    rational_form = newton_form(NewtonFormRequest(samples=rational_samples).samples)
+    assert rational_form.coefficients == (_q(1), _q(1), _q(0))
+    rational_result = evaluate_newton(rational_form, _q(3, 4))
+    assert rational_result.result == _q(7, 4)
+
+    sample_table = _samples(
+        nodes=(_q(0), _q(1, 2), _q(1), _q(3, 2)),
+        values=(_q(1), _q(3, 2), _q(2), _q(11, 4)),
+    )
+    sample_form = newton_form(NewtonFormRequest(samples=sample_table).samples)
+    for node, expected in zip(sample_table.nodes, sample_table.values, strict=True):
+        sample_result = evaluate_newton(sample_form, node)
+        assert sample_result.result == expected
 
 
 def test_newton_coefficients_may_grow_beyond_input_digit_bound() -> None:

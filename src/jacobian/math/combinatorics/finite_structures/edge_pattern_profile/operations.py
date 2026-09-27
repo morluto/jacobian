@@ -95,8 +95,7 @@ def _admit_edge_pattern_profile(
             code="edge_pattern.invalid_color_map",
             message="vertex_colors must be a string-to-string mapping",
         )
-    # Thread 3: Use a cheap aggregate raw UTF-8 bound instead of a fixed
-    # per-label ceiling, followed by result-sensitive output admission.
+    # Reject unencodable color values before Unicode normalization.
     try:
         for value in vertex_colors.values():
             value.encode("utf-8")

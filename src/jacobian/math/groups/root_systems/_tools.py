@@ -9,6 +9,7 @@ from jacobian.math.groups.root_systems._highest_coroot_models import (
 )
 from jacobian.math.groups.root_systems._highest_coroot_operations import highest_coroots
 from jacobian.math.groups.root_systems._models import (
+    MAX_BRUHAT_INTERVAL_GROUP_ORDER,
     MAX_RANK,
     CartanDatumRequest,
     CartanMatrixRequest,
@@ -32,15 +33,21 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
+    WeylBruhatIntervalRequest,
+    WeylBruhatIntervalResult,
     WeylDescentsResult,
     WeylDimensionRequest,
     WeylDimensionResult,
+    WeylDominantRepresentativeRequest,
+    WeylDominantRepresentativeResult,
     WeylElement,
     WeylElementComposeRequest,
     WeylElementInverseRequest,
     WeylElementLengthResult,
     WeylElementOrderResult,
     WeylElementRequest,
+    WeylElementRootActionRequest,
+    WeylElementWeightActionRequest,
     WeylExponentsResult,
     WeylGroupOrderResult,
     WeylLongestElementResult,
@@ -51,6 +58,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylVectorActionResult,
     WeylWeightOrbitRequest,
     WeylWeightOrbitResult,
+)
+from jacobian.math.groups.root_systems._weight_character_models import (
+    HighestWeightCharacterRequest,
+    IrreducibleWeightCharacter,
 )
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
@@ -71,6 +82,8 @@ from jacobian.math.groups.root_systems.operations import (
     simple_reflection,
     simple_reflections,
     weight_lattice_vector,
+    weyl_bruhat_interval,
+    weyl_dominant_representative,
     weyl_element_compose,
     weyl_element_descents,
     weyl_element_from_word,
@@ -85,6 +98,9 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.root_actions import weyl_element_act_on_root
+from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
+from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -215,6 +231,24 @@ def _run_weyl_element_inverse(request: WeylElementInverseRequest) -> WeylElement
     return weyl_element_inverse(request.element)
 
 
+def _run_weyl_element_weight_action(
+    request: WeylElementWeightActionRequest,
+) -> WeightLatticeVector:
+    return weyl_element_act_on_weight(request.element, request.weight)
+
+
+def _run_weyl_element_root_action(
+    request: WeylElementRootActionRequest,
+) -> RootLatticeVector:
+    return weyl_element_act_on_root(request.element, request.vector)
+
+
+def _run_weyl_bruhat_interval(
+    request: WeylBruhatIntervalRequest,
+) -> WeylBruhatIntervalResult:
+    return weyl_bruhat_interval(request.lower, request.upper)
+
+
 def _run_weyl_element_descents(
     request: WeylElementRequest,
 ) -> WeylDescentsResult:
@@ -239,8 +273,20 @@ def _run_weyl_weight_orbit(
     return weyl_weight_orbit(request.matrix, request.weight)
 
 
+def _run_weyl_dominant_representative(
+    request: WeylDominantRepresentativeRequest,
+) -> WeylDominantRepresentativeResult:
+    return weyl_dominant_representative(request.matrix, request.weight)
+
+
 def _run_weyl_dimension(request: WeylDimensionRequest) -> WeylDimensionResult:
     return weyl_dimension(request.matrix, request.highest_weight)
+
+
+def _run_highest_weight_character(
+    request: HighestWeightCharacterRequest,
+) -> IrreducibleWeightCharacter:
+    return highest_weight_character(request.matrix, request.highest_weight)
 
 
 _A2 = {
@@ -1077,6 +1123,117 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="weyl_group.element.act_on_weight.compute",
+        title="Apply a Weyl element to an exact weight vector",
+        description=(
+            "Apply a parent-bound finite Weyl element to a weight-lattice "
+            "vector in the same ordered Cartan datum. The result is the "
+            "canonical weight-lattice value in fundamental-weight coordinates; "
+            "the action is induced from the element's exact root-lattice matrix."
+        ),
+        request_type=WeylElementWeightActionRequest,
+        result_type=WeightLatticeVector,
+        run=_run_weyl_element_weight_action,
+        tags=("algebra", "root-system", "weyl-group", "weight", "action", "exact"),
+        discovery_terms=(
+            "Weyl element act on weight vector",
+            "Weyl group action on fundamental weight coordinates",
+            "apply Weyl transformation to weight lattice value",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_simple_reflection_on_fundamental_weight",
+                description=(
+                    "Apply s0 to the first fundamental weight of A2. Since "
+                    "alpha0=(2,-1) in fundamental-weight coordinates, the "
+                    "image is (-1,1)."
+                ),
+                input={
+                    "element": {
+                        "matrix": _A2["matrix"],
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                    "weight": {
+                        "datum": {
+                            "cartan_matrix": _A2["matrix"],
+                            "symmetrizer": [
+                                {"num": "1", "den": "1"},
+                                {"num": "1", "den": "1"},
+                            ],
+                            "root_to_weight": {
+                                "domain": "ZZ",
+                                "row_count": 2,
+                                "column_count": 2,
+                                "entries": [["2", "-1"], ["-1", "2"]],
+                            },
+                            "coroot_to_coweight": {
+                                "domain": "ZZ",
+                                "row_count": 2,
+                                "column_count": 2,
+                                "entries": [["2", "-1"], ["-1", "2"]],
+                            },
+                        },
+                        "coordinates": [1, 0],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.element.act_on_root.compute",
+        title="Apply a Weyl element to a root-lattice vector",
+        description=(
+            "Apply a canonical finite Weyl element to a root-lattice vector in "
+            "the same ordered Cartan datum. The result is the exact vector in "
+            "simple-root coordinates; the input need not itself be a root."
+        ),
+        request_type=WeylElementRootActionRequest,
+        result_type=RootLatticeVector,
+        run=_run_weyl_element_root_action,
+        tags=(
+            "algebra",
+            "root-system",
+            "weyl-group",
+            "root-lattice",
+            "action",
+            "exact",
+        ),
+        discovery_terms=(
+            "Weyl element act on root vector",
+            "Weyl group action on simple-root coordinates",
+            "apply Weyl transformation to root-lattice value",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_simple_reflection_on_root_vector",
+                description=(
+                    "Apply s0 to the first simple root of A2. The vector remains "
+                    "in the same root lattice and becomes (-1, 0)."
+                ),
+                input={
+                    "element": {
+                        "matrix": _A2["matrix"],
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                    "vector": {
+                        "datum": _A2_LATTICE_DATUM,
+                        "coordinates": [1, 0],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="weyl_group.word.act_on_root_vector.compute",
         title="Apply a Weyl word to a root-lattice vector",
         description=(
@@ -1134,6 +1291,59 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "ordered simple coroots."
                 ),
                 input={**_A2, "weight": [1, 0]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.dominant_representative.compute",
+        title="Compute the dominant representative of a Weyl weight orbit",
+        description=(
+            "Return the unique dominant integral weight in the orbit of the "
+            "supplied weight, together with the exact Weyl element mapping "
+            "the source to that representative. The finite Cartan datum and "
+            "all transporter reflections are bounded before execution."
+        ),
+        request_type=WeylDominantRepresentativeRequest,
+        result_type=WeylDominantRepresentativeResult,
+        run=_run_weyl_dominant_representative,
+        tags=("algebra", "root-system", "weyl-group", "weight", "normal-form", "exact"),
+        discovery_terms=(
+            "dominant representative of a Weyl orbit",
+            "move weight to dominant chamber",
+            "Weyl orbit dominant weight",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_dominant_representative",
+                description=(
+                    "Map the A2 weight (-1, 1) to its dominant orbit "
+                    "representative (1, 0)."
+                ),
+                input={**_A2, "weight": [-1, 1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="root_system.highest_weight_character.compute",
+        title="Compute an exact irreducible type-A highest-weight character",
+        description=(
+            "Return the complete weight-multiplicity table for an irreducible "
+            "type-A representation using its dominant integral highest weight."
+        ),
+        request_type=HighestWeightCharacterRequest,
+        result_type=IrreducibleWeightCharacter,
+        run=_run_highest_weight_character,
+        tags=("algebra", "root-system", "representation", "character", "exact"),
+        discovery_terms=(
+            "highest weight character",
+            "weight multiplicities",
+            "Weyl character",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_adjoint_character",
+                description="Compute the eight-dimensional adjoint character of A2.",
+                input={"matrix": _A2["matrix"], "highest_weight": [1, 1]},
             ),
         ),
     ),
@@ -1225,6 +1435,53 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "in A2; each word index must be below the Cartan rank and "
                 "the word within the length budget.",
                 input={"matrix": _A2["matrix"], "word": [0, 1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.bruhat_interval.compute",
+        title="Compute a complete finite Weyl Bruhat interval",
+        description=(
+            "Return every Weyl element x with lower <= x <= upper in the "
+            "strong Bruhat order, together with exact length ranks and the "
+            "finite-poset covers. The endpoints must share an ordered finite "
+            "Cartan parent whose Weyl group has order at most "
+            f"{MAX_BRUHAT_INTERVAL_GROUP_ORDER}. Incomparable endpoints give "
+            "the empty interval; equal endpoints give a singleton."
+        ),
+        request_type=WeylBruhatIntervalRequest,
+        result_type=WeylBruhatIntervalResult,
+        run=_run_weyl_bruhat_interval,
+        tags=("algebra", "root-system", "weyl-group", "poset", "exact"),
+        discovery_terms=(
+            "Bruhat order interval",
+            "Weyl group Bruhat interval poset",
+            "strong Bruhat interval",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_identity_to_reflection_interval",
+                description="Return [e,s0] in A2, a two-element chain.",
+                input={
+                    "lower": {
+                        **_A2,
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["1", "0"], ["0", "1"]],
+                        },
+                    },
+                    "upper": {
+                        **_A2,
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                },
             ),
         ),
     ),

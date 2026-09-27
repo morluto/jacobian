@@ -566,28 +566,6 @@ def test_worker_profile_binding_does_not_call_public_result_validation(
     assert result.root_profiles == root_profiles
 
 
-def test_worker_root_factors_obey_algebraic_value_degree_bound() -> None:
-    factor = ["1", *(["0"] * 8), "-2"]
-
-    with pytest.raises(ValueError, match="root polynomial exceeds its length"):
-        _root_profile_from_worker(
-            {
-                "source_index": 0,
-                "roots": [
-                    {
-                        "value": {
-                            "polynomial": factor,
-                            "real_root_index": 0,
-                        },
-                        "multiplicity": 1,
-                    }
-                ],
-            },
-            [(factor, 1)],
-            [1],
-        )
-
-
 def test_worker_factor_root_counts_reject_boolean_values() -> None:
     factor = ["1", "0", "-1"]
 

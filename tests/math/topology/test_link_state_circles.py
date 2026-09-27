@@ -195,6 +195,21 @@ def test_crossing_free_unlink_and_complete_state_shape() -> None:
         LinkDiagramSmoothingState(diagram=_curl(), choices=())
 
 
+def test_mixed_projection_retains_crossing_free_loops() -> None:
+    curl = _curl()
+    diagram = OrientedLinkDiagram(
+        crossings=curl.crossings, arcs=curl.arcs, free_loops=2
+    )
+    result = link_state_circles(
+        LinkDiagramSmoothingState(diagram=diagram, choices=("A",))
+    )
+
+    assert result.circle_count == 3
+    assert sum(not circle.darts for circle in result.circles) == 2
+    assert sum(bool(circle.darts) for circle in result.circles) == 1
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
 def test_state_circles_result_round_trip_and_catalog_publication() -> None:
     state = LinkDiagramSmoothingState(diagram=_curl(), choices=("B",))
     result = link_state_circles(state)

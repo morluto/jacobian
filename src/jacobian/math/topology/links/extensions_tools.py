@@ -5,6 +5,7 @@ from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
     BlackboardGraphRequest,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidPermutationResult,
     BraidProductRequest,
@@ -31,6 +32,7 @@ from jacobian.math.topology.links._extensions_models import (
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links.extensions import (
+    braid_artin_action,
     braid_closure,
     braid_inverse,
     braid_multiply,
@@ -51,6 +53,10 @@ from jacobian.math.topology.links.extensions import (
 
 def _braid_permutation(request: BraidWordRequest) -> BraidPermutationResult:
     return braid_permutation(request.word)
+
+
+def _braid_artin_action(request: BraidWordRequest) -> BraidArtinActionResult:
+    return braid_artin_action(request.word)
 
 
 def _braid_closure(request: BraidWordRequest) -> BraidClosureResult:
@@ -179,6 +185,37 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="braid.word.artin_action.compute",
+        title="Apply a braid word to its strand free group",
+        description=(
+            "Return the exact Artin automorphism of the free group on the braid "
+            "strands. The declared convention sends sigma_i to x_i -> "
+            "x_i*x_(i+1)*x_i^-1 and x_(i+1) -> x_i; negative letters use its "
+            "inverse, and letters act successively from left to right. Images are "
+            "freely reduced. The admitted output is limited to 128 letters per "
+            "image and 100000 cumulative substitution letters."
+        ),
+        request_type=BraidWordRequest,
+        result_type=BraidArtinActionResult,
+        run=_braid_artin_action,
+        tags=("braid", "Artin-action", "free-group", "exact"),
+        discovery_terms=(
+            "braid action on free group",
+            "Artin representation of braid group",
+            "automorphism induced by braid word",
+        ),
+        examples=(
+            OperationExample(
+                name="trefoil_braid_artin_action",
+                description=(
+                    "Apply sigma_1 cubed to the rank-two free group; the positive "
+                    "generator convention and its threefold iterate are explicit."
+                ),
+                input={"word": _SIGMA_ONE_CUBED},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="link_diagram.state_circles.compute",
         title="Compute the circles of a complete smoothing state",
         description=(
@@ -301,10 +338,11 @@ TOOLS: MathTools = (
         title="Compute a knot diagram's Conway polynomial",
         description=(
             "Return the exact knot Conway polynomial in z, normalized by Delta(1)=1, "
-            "from the source-bound Alexander polynomial using Delta(t)=nabla("
-            "t^(1/2)-t^(-1/2)). Alexander symmetry and integral coefficients are "
-            "required before the recurrence; this knot-only contract accepts at "
-            "most eight crossings."
+            "from the source-bound Alexander polynomial. The result retains the "
+            "sign and Laurent power applied to that shifted polynomial, so callers "
+            "can reconstruct the exact substitution relation. Alexander symmetry "
+            "and integral coefficients are required before the recurrence; this "
+            "knot-only contract accepts at most eight crossings."
         ),
         request_type=ConwayPolynomialRequest,
         result_type=ConwayPolynomialResult,
@@ -416,49 +454,59 @@ TOOLS: MathTools = (
                     "connected."
                 ),
                 input={
-                    "diagram": {
-                        "crossings": [
+                    "blackboard_graph": {
+                        "diagram": _POSITIVE_HOPF_DIAGRAM,
+                        "regions": [
+                            {
+                                "region_id": "region_000",
+                                "boundary_darts": [
+                                    "crossing_000:dart_0",
+                                    "crossing_001:dart_2",
+                                ],
+                                "shaded": True,
+                            },
+                            {
+                                "region_id": "region_001",
+                                "boundary_darts": [
+                                    "crossing_000:dart_1",
+                                    "crossing_001:dart_1",
+                                ],
+                                "shaded": False,
+                            },
+                            {
+                                "region_id": "region_002",
+                                "boundary_darts": [
+                                    "crossing_000:dart_2",
+                                    "crossing_001:dart_0",
+                                ],
+                                "shaded": True,
+                            },
+                            {
+                                "region_id": "region_003",
+                                "boundary_darts": [
+                                    "crossing_000:dart_3",
+                                    "crossing_001:dart_3",
+                                ],
+                                "shaded": False,
+                            },
+                        ],
+                        "shaded_region_ids": ["region_000", "region_002"],
+                        "edges": [
                             {
                                 "crossing_id": "crossing_000",
-                                "half_edges": [
-                                    "crossing_000:dart_0",
-                                    "crossing_000:dart_3",
-                                    "crossing_000:dart_2",
-                                    "crossing_000:dart_1",
-                                ],
-                                "over_pair": [0, 2],
-                                "under_pair": [1, 3],
-                                "sign": 1,
+                                "first_region_id": "region_000",
+                                "second_region_id": "region_002",
+                                "first_corner_index": 0,
+                                "second_corner_index": 2,
+                                "tait_sign": 1,
                             },
                             {
                                 "crossing_id": "crossing_001",
-                                "half_edges": [
-                                    "crossing_001:dart_0",
-                                    "crossing_001:dart_3",
-                                    "crossing_001:dart_2",
-                                    "crossing_001:dart_1",
-                                ],
-                                "over_pair": [0, 2],
-                                "under_pair": [1, 3],
-                                "sign": 1,
-                            },
-                        ],
-                        "arcs": [
-                            {
-                                "tail": "crossing_001:dart_3",
-                                "head": "crossing_000:dart_0",
-                            },
-                            {
-                                "tail": "crossing_001:dart_2",
-                                "head": "crossing_000:dart_1",
-                            },
-                            {
-                                "tail": "crossing_000:dart_2",
-                                "head": "crossing_001:dart_1",
-                            },
-                            {
-                                "tail": "crossing_000:dart_3",
-                                "head": "crossing_001:dart_0",
+                                "first_region_id": "region_002",
+                                "second_region_id": "region_000",
+                                "first_corner_index": 0,
+                                "second_corner_index": 2,
+                                "tait_sign": 1,
                             },
                         ],
                     }

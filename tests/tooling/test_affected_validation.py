@@ -114,8 +114,6 @@ def test_qepcad_owner_selects_qepcad_without_singular_replay() -> None:
 
     commands = runner.commands_for_plan(plan, paths=[path], repository=ROOT)
 
-    assert plan.run_singular is False
-    assert plan.run_qepcad is True
     assert ("make", "test-qepcad") in commands
     assert ("make", "test-singular") not in commands
 

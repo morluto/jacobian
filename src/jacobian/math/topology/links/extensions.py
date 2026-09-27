@@ -37,6 +37,7 @@ from jacobian.math.topology.links._extensions_models import (
     MAX_STATE_CIRCLE_OUTPUT_BYTES,
     MAX_WIRTINGER_GENERATORS,
     AlexanderPolynomialResult,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidLetter,
     BraidPermutationResult,
@@ -261,6 +262,88 @@ def braid_permutation(word: BraidWord) -> BraidPermutationResult:
         cycles=cycles,
         closure_component_count=len(cycles),
         exponent_sum=sum(letter.exponent for letter in admitted.letters),
+    )
+
+
+def _reduce_free_word(letters: Iterable[WordLetter]) -> tuple[WordLetter, ...]:
+    reduced: list[WordLetter] = []
+    for letter in letters:
+        if (
+            reduced
+            and reduced[-1].generator == letter.generator
+            and reduced[-1].exponent == -letter.exponent
+        ):
+            reduced.pop()
+        else:
+            reduced.append(letter)
+    return tuple(reduced)
+
+
+def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
+    """Apply the standard Artin action to the free group on braid strands.
+
+    A braid letter acts on the current images from left to right. Its positive
+    generator sends ``x_i`` to ``x_i*x_(i+1)*x_i^-1`` and ``x_(i+1)`` to
+    ``x_i``; the negative generator uses the inverse automorphism. The output
+    is an exact free-group automorphism presentation, not a braid-equivalence
+    or word-problem decision procedure.
+    """
+
+    admitted = _admit_braid(word)
+    images: list[tuple[WordLetter, ...]] = [
+        (WordLetter(generator=index, exponent=1),)
+        for index in range(admitted.strand_count)
+    ]
+    # Adjacent inverse braid generators induce mutually inverse substitutions.
+    # Reduce them before expansion: transient images of cancelling prefixes do
+    # not describe the work or output required by the represented automorphism.
+    reduced_braid: list[BraidLetter] = []
+    for letter in admitted.letters:
+        if (
+            reduced_braid
+            and reduced_braid[-1].generator == letter.generator
+            and reduced_braid[-1].exponent == -letter.exponent
+        ):
+            reduced_braid.pop()
+        else:
+            reduced_braid.append(letter)
+
+    total_work = admitted.strand_count
+    for letter in reduced_braid:
+        i = letter.generator - 1
+        first, second = images[i], images[i + 1]
+        if letter.exponent == 1:
+            inverse_first = tuple(
+                WordLetter(generator=item.generator, exponent=-item.exponent)
+                for item in reversed(first)
+            )
+            candidate = _reduce_free_word(first + second + inverse_first)
+            replacement = first
+            target = i
+        else:
+            inverse_second = tuple(
+                WordLetter(generator=item.generator, exponent=-item.exponent)
+                for item in reversed(second)
+            )
+            candidate = _reduce_free_word(inverse_second + first + second)
+            replacement = second
+            target = i + 1
+        total_work += len(first) + len(second) + len(candidate) + len(replacement)
+        if len(candidate) > 128 or total_work > 100_000:
+            raise OperationResourceAdmissionError(
+                location=("word", "letters"),
+                code="link_diagram.artin_action_expansion_bound",
+                message=(
+                    "the reduced braid action exceeds the 128-letter per-image "
+                    "or 100000-letter cumulative substitution envelope"
+                ),
+            )
+        images[target] = candidate
+        images[i + 1 if target == i else i] = replacement
+
+    return BraidArtinActionResult(
+        word=admitted,
+        generator_images=tuple(FiniteGroupWord(letters=image) for image in images),
     )
 
 
@@ -635,6 +718,13 @@ def link_goeritz_data(graph: LinkBlackboardGraph) -> GoeritzDataResult:
             location=("diagram",),
             code="link_diagram.goeritz_matrix_bound",
             message="Goeritz matrices are admitted for at most 32 crossings",
+        )
+    expected_graph = _construct_blackboard_graph(_admit_diagram(graph.diagram))
+    if graph != expected_graph:
+        _domain_error(
+            ("blackboard_graph",),
+            "goeritz_graph_source_claims",
+            "face boundaries, checkerboard colors, and Tait signs must match the retained diagram",
         )
     shaded_indices = graph.shaded_region_ids
     shaded_positions = {
@@ -1111,7 +1201,9 @@ def _conway_from_alexander(
     ``t^k + t^-k`` is converted by an exact integer recurrence. The normalization
     ``Delta(1)=1`` fixes the sign and gives ``nabla(0)=1``.
     """
-    centered_terms, degree = _center_normalized_alexander(alexander)
+    centered_terms, degree, unit_power, unit_sign = _center_normalized_alexander(
+        alexander
+    )
     _admit_conway_expansion(alexander, centered_terms, degree)
     conway_terms = _expand_conway_coefficients(centered_terms, degree)
     polynomial = RationalLaurentPolynomial(
@@ -1124,12 +1216,17 @@ def _conway_from_alexander(
             for exponent, coefficient in sorted(conway_terms.items(), reverse=True)
         ),
     )
-    return ConwayPolynomialResult(alexander=alexander, polynomial=polynomial)
+    return ConwayPolynomialResult(
+        alexander=alexander,
+        polynomial=polynomial,
+        alexander_unit_sign=unit_sign,
+        alexander_unit_power=unit_power,
+    )
 
 
 def _center_normalized_alexander(
     alexander: AlexanderPolynomialResult,
-) -> tuple[dict[int, int], int]:
+) -> tuple[dict[int, int], int, int, Literal[-1, 1]]:
     source_terms: dict[int, int] = {}
     for term in alexander.polynomial.terms:
         coefficient = term.coefficient.as_fraction()
@@ -1165,11 +1262,13 @@ def _center_normalized_alexander(
         raise RuntimeError(
             "knot Alexander polynomial must evaluate to plus or minus one at 1"
         )
+    unit_sign: Literal[-1, 1] = 1
     if augmentation == -1:
+        unit_sign = -1
         centered_terms = {
             exponent: -coefficient for exponent, coefficient in centered_terms.items()
         }
-    return centered_terms, degree
+    return centered_terms, degree, -center, unit_sign
 
 
 def _admit_conway_expansion(
@@ -1396,7 +1495,15 @@ def link_state_circles(
             cycle = min(candidates)
             circle_rows.append(cycle)
             unseen.difference_update(cycle)
-        circles = tuple(LinkSmoothedCircle(darts=row) for row in sorted(circle_rows))
+        circles = tuple(
+            sorted(
+                (
+                    *[LinkSmoothedCircle(darts=row) for row in circle_rows],
+                    *(LinkSmoothedCircle(darts=()) for _ in range(diagram.free_loops)),
+                ),
+                key=lambda circle: circle.darts,
+            )
+        )
     return LinkStateCirclesResult(
         state=admitted,
         circles=circles,

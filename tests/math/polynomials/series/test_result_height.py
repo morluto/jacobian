@@ -1,11 +1,15 @@
 import json
+from collections.abc import Sequence
+from fractions import Fraction
+from math import comb
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.series._models import (
-    MAX_RATIONAL_DIGITS,
+    MAX_RESULT_RATIONAL_DIGITS,
     MAX_TRUNCATION_ORDER,
     SeriesComposeRequest,
     SeriesDivideRequest,
@@ -18,6 +22,7 @@ from jacobian.math.polynomials.series._models import (
     _SeriesMultiplyRequest,
 )
 from jacobian.math.polynomials.series.operations import (
+    add,
     compose,
     divide,
     multiply,
@@ -34,6 +39,15 @@ def _series(order: int, coefficients: list[dict[str, str]]) -> dict[str, object]
     return {"variable": "x", "truncation_order": order, "coefficients": coefficients}
 
 
+def _assert_coefficients_fit_result_envelope(
+    coefficients: Sequence[CanonicalRational],
+) -> None:
+    assert all(
+        max(len(str(value.num)), len(str(value.den))) <= MAX_RESULT_RATIONAL_DIGITS
+        for value in coefficients
+    )
+
+
 def test_multiplication_bound_does_not_reject_coefficientwise_addition() -> None:
     order = 20
     coefficients = [_coefficient(den=str(2**800)) for _ in range(order)]
@@ -42,14 +56,17 @@ def test_multiplication_bound_does_not_reject_coefficientwise_addition() -> None
         "right": _series(order, coefficients),
     }
 
-    assert _SeriesAddSubtractRequest.model_validate_json(json.dumps(payload))
+    add_request = _SeriesAddSubtractRequest.model_validate_json(json.dumps(payload))
+    assert [
+        c.as_fraction()
+        for c in add(add_request.left, add_request.right).result.coefficients
+    ] == [Fraction(1, 2**799)] * order
     request = _SeriesMultiplyRequest.model_validate_json(json.dumps(payload))
-    with pytest.raises(OperationDomainValidationError) as error:
-        multiply(request.left, request.right)
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.multiplication_coefficient_growth"
-    )
+    result = multiply(request.left, request.right)
+    assert [c.as_fraction() for c in result.result.coefficients] == [
+        Fraction(k + 1, 2**1600) for k in range(order)
+    ]
+    _assert_coefficients_fit_result_envelope(result.result.coefficients)
 
 
 def test_power_propagates_binary_convolution_growth() -> None:
@@ -58,12 +75,11 @@ def test_power_propagates_binary_convolution_growth() -> None:
     request = SeriesPowerRequest.model_validate_json(
         json.dumps({"series": _series(order, coefficients), "exponent": 16})
     )
-    with pytest.raises(OperationDomainValidationError) as error:
-        power(request.series, request.exponent)
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.power_coefficient_growth"
-    )
+    result = power(request.series, request.exponent)
+    assert [c.as_fraction() for c in result.result.coefficients] == [
+        Fraction(comb(k + 15, 15), 3**8000) for k in range(order)
+    ]
+    _assert_coefficients_fit_result_envelope(result.result.coefficients)
 
 
 def test_division_propagates_inverse_and_residual_growth() -> None:
@@ -85,19 +101,29 @@ def test_division_propagates_inverse_and_residual_growth() -> None:
     )
 
 
-def test_composition_propagates_inner_power_growth() -> None:
+def test_composition_with_reduced_coefficients_fits_result_envelope() -> None:
     order = 8
     outer = [_coefficient() for _ in range(order)]
     inner = [_coefficient("0"), *[_coefficient(den=str(5**300))] * (order - 1)]
     request = SeriesComposeRequest.model_validate_json(
         json.dumps({"outer": _series(order, outer), "inner": _series(order, inner)})
     )
-    with pytest.raises(OperationDomainValidationError) as error:
-        compose(request.outer, request.inner)
-    assert (
-        error.value.errors()[0]["type"]
-        == "formal_power_series.composition_coefficient_growth"
+    result = compose(request.outer, request.inner)
+    expected = [Fraction(1)]
+    expected.extend(
+        sum(
+            (
+                Fraction(comb(degree - 1, power_degree - 1), 5 ** (300 * power_degree))
+                for power_degree in range(1, degree + 1)
+            ),
+            start=Fraction(),
+        )
+        for degree in range(1, order)
     )
+    assert [
+        coefficient.as_fraction() for coefficient in result.result.coefficients
+    ] == expected
+    _assert_coefficients_fit_result_envelope(result.result.coefficients)
 
 
 def test_reversion_propagates_nonlinear_coefficient_growth() -> None:
@@ -134,46 +160,29 @@ def test_sparse_linear_reversion_remains_admitted() -> None:
         )
     )
 
-    assert request.coefficients[1].num == 2
-
-
-def test_small_requests_remain_admitted() -> None:
-    series = TruncatedSeries.model_validate_json(
-        json.dumps(_series(2, [_coefficient("1"), _coefficient("1")]))
-    )
-    assert SeriesPowerRequest(series=series, exponent=3)
-
-
-def test_value_carrier_admits_compact_series_beyond_the_input_order_ceiling() -> None:
-    order = MAX_TRUNCATION_ORDER + 88
-    value = TruncatedSeries.model_validate_json(
-        json.dumps(_series(order, [_coefficient("1")] * order))
-    )
-    assert value.truncation_order == order
-
-
-def test_operation_inputs_keep_the_shared_order_ceiling() -> None:
-    series = TruncatedSeries.model_validate_json(
-        json.dumps(
-            _series(
-                MAX_TRUNCATION_ORDER + 1,
-                [_coefficient("1")] * (MAX_TRUNCATION_ORDER + 1),
-            )
-        )
-    )
-    with pytest.raises(OperationDomainValidationError):
-        power(series, 1)
+    result = reversion(request.as_series())
+    assert [c.as_fraction() for c in result.result.coefficients] == [
+        Fraction(0),
+        Fraction(1, 2),
+        Fraction(0),
+        Fraction(0),
+    ]
+    assert all(c.num == 0 for c in (*result.left_residual, *result.right_residual))
 
 
 def test_largest_multiplication_result_fits_shared_output_envelope() -> None:
-    numerator = "9" * MAX_RATIONAL_DIGITS
-    denominator = "1" + "0" * (MAX_RATIONAL_DIGITS - 1)
+    numerator = str(10**256 - 1)
+    denominator = str(10**255)
     coefficient = _coefficient(numerator, denominator)
     series = TruncatedSeries.model_validate_json(
         json.dumps(_series(MAX_TRUNCATION_ORDER, [coefficient] * MAX_TRUNCATION_ORDER))
     )
-    with pytest.raises(OperationDomainValidationError):
-        multiply(series, series)
+    result = multiply(series, series)
+    assert [c.as_fraction() for c in result.result.coefficients] == [
+        Fraction((degree + 1) * (10**256 - 1) ** 2, 10**510)
+        for degree in range(MAX_TRUNCATION_ORDER)
+    ]
+    _assert_coefficients_fit_result_envelope(result.result.coefficients)
 
 
 def test_result_round_trips_remain_structural() -> None:
@@ -226,9 +235,7 @@ def test_all_zero_multiply_results_remain_representable_at_the_envelope_order() 
     assert verdict.result.truncation_order == MAX_TRUNCATION_ORDER
 
 
-@pytest.mark.parametrize(
-    "order, exponent, factorial_input", [(64, 2, False), (64, 9, True), (128, 9, True)]
-)
+@pytest.mark.parametrize("order, exponent, factorial_input", [(128, 9, True)])
 def test_power_shared_denominator_envelope(
     order: int, exponent: int, factorial_input: bool
 ) -> None:

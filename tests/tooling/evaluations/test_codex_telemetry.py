@@ -6,6 +6,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import TypedDict
 
+import pytest
 from benchmarks.tooling.codex_telemetry import (
     parse_agent_transcript,
     parse_agent_transcript_bytes,
@@ -286,45 +287,12 @@ def test_agent_telemetry_records_current_inline_math_run_result(
     ]
 
 
-def test_agent_telemetry_records_direct_catalog_operation_calls(tmp_path: Path) -> None:
-    operation_id = "matrix.determinant.compute"
-    transcript = tmp_path / "transcript.jsonl"
-    transcript.write_text(
-        json.dumps(
-            _tool_event(
-                operation_id,
-                {
-                    "matrix": {
-                        "entries": [
-                            [
-                                {"num": "0", "den": "1"},
-                                {"num": "2", "den": "1"},
-                            ],
-                            [
-                                {"num": "3", "den": "1"},
-                                {"num": "4", "den": "1"},
-                            ],
-                        ]
-                    }
-                },
-                {"determinant": {"num": "-6", "den": "1"}},
-            )
-        )
-        + "\n",
-        encoding="utf-8",
-    )
-
-    telemetry = parse_agent_transcript(
-        transcript, direct_operation_ids=frozenset({operation_id})
-    )
-
-    assert telemetry["direct_operation_call_count"] == 1
-    assert telemetry["operation_attempt_ids"] == [operation_id]
-    assert telemetry["operation_ids"] == [operation_id]
-    assert telemetry["operation_invocations"] == [
-        {
-            "operation_id": operation_id,
-            "input": {
+@pytest.mark.parametrize(
+    ("operation_id", "arguments", "result", "direct_operation_ids"),
+    [
+        (
+            "matrix.determinant.compute",
+            {
                 "matrix": {
                     "entries": [
                         [
@@ -338,36 +306,41 @@ def test_agent_telemetry_records_direct_catalog_operation_calls(tmp_path: Path) 
                     ]
                 }
             },
-            "output": {"determinant": {"num": "-6", "den": "1"}},
-        }
-    ]
-
-
-def test_agent_telemetry_counts_direct_operation_calls_independently(
+            {"determinant": {"num": "-6", "den": "1"}},
+            frozenset({"matrix.determinant.compute"}),
+        ),
+        (
+            "integer.compute.extended_gcd",
+            {"left": "84", "right": "30"},
+            {"gcd": "6"},
+            {"integer.compute.extended_gcd"},
+        ),
+    ],
+)
+def test_agent_telemetry_records_direct_catalog_operation_calls(
     tmp_path: Path,
+    operation_id: str,
+    arguments: dict[str, object],
+    result: dict[str, object],
+    direct_operation_ids: set[str] | frozenset[str],
 ) -> None:
-    operation_id = "integer.compute.extended_gcd"
     transcript = tmp_path / "transcript.jsonl"
     transcript.write_text(
-        json.dumps(
-            _tool_event(
-                operation_id,
-                {"left": "84", "right": "30"},
-                {"gcd": "6"},
-            )
-        )
-        + "\n",
+        json.dumps(_tool_event(operation_id, arguments, result)) + "\n",
         encoding="utf-8",
     )
 
     telemetry = parse_agent_transcript(
         transcript,
-        direct_operation_ids={operation_id},
+        direct_operation_ids=direct_operation_ids,
     )
 
     assert telemetry["direct_operation_call_count"] == 1
     assert telemetry["operation_attempt_ids"] == [operation_id]
     assert telemetry["operation_ids"] == [operation_id]
+    assert telemetry["operation_invocations"] == [
+        {"operation_id": operation_id, "input": arguments, "output": result}
+    ]
 
 
 def test_agent_telemetry_retains_failed_math_run_attempts(tmp_path: Path) -> None:

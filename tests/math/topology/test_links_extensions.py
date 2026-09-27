@@ -324,8 +324,9 @@ class TestGoeritzData:
 
         forged = graph.model_dump(mode="json")
         forged["edges"][0]["tait_sign"] = -1
-        with pytest.raises(ValidationError, match="Tait sign"):
-            LinkBlackboardGraph.model_validate(forged)
+        forged_graph = LinkBlackboardGraph.model_validate(forged)
+        with pytest.raises(OperationDomainValidationError, match="Tait signs"):
+            link_goeritz_data(forged_graph)
 
         # The signed Tait graph Laplacian gives the Hopf Goeritz matrix [[2,-2],[-2,2]].
         laplacian = [[0, 0], [0, 0]]
@@ -339,7 +340,7 @@ class TestGoeritzData:
             laplacian[left][right] -= edge.tait_sign
             laplacian[right][left] -= edge.tait_sign
         assert laplacian == [[2, -2], [-2, 2]]
-        goeritz = link_goeritz_data(diagram)
+        goeritz = link_goeritz_data(link_blackboard_graph(diagram))
         assert goeritz.blackboard_graph == graph
         assert goeritz.reduced_matrix.entries == ((2,),)
 
@@ -354,7 +355,7 @@ class TestGoeritzData:
         assert len(graph.edges) == 33
         assert len(graph.regions) == 35
         with pytest.raises(OperationResourceAdmissionError, match="32 crossings"):
-            link_goeritz_data(diagram)
+            link_goeritz_data(link_blackboard_graph(diagram))
 
         boundary_diagram = braid_closure(_two_braid(*(1,) * 64)).diagram
         boundary_graph = link_blackboard_graph(boundary_diagram)
@@ -415,8 +416,11 @@ class TestGoeritzData:
         boundary = malformed_face["regions"][face_index]["boundary_darts"]
         assert len(boundary) > 2
         boundary.reverse()
-        with pytest.raises(ValidationError, match="canonical face cycle"):
-            LinkBlackboardGraph.model_validate_json(json.dumps(malformed_face))
+        malformed_graph = LinkBlackboardGraph.model_validate_json(
+            json.dumps(malformed_face)
+        )
+        with pytest.raises(OperationDomainValidationError, match="face boundaries"):
+            link_goeritz_data(malformed_graph)
 
         # Complement every color and consistently rebuild the edge incidence
         # data. This describes the other mathematical checkerboard graph, but
@@ -445,12 +449,13 @@ class TestGoeritzData:
             edge["first_region_id"] = region_of_dart[crossing.half_edges[corners[0]]]
             edge["second_region_id"] = region_of_dart[crossing.half_edges[corners[1]]]
             edge["tait_sign"] = 1 if set(corners) == set(crossing.over_pair) else -1
-        with pytest.raises(ValidationError, match="deterministic shaded color"):
-            LinkBlackboardGraph.model_validate_json(json.dumps(swapped))
+        swapped_graph = LinkBlackboardGraph.model_validate_json(json.dumps(swapped))
+        with pytest.raises(OperationDomainValidationError, match="checkerboard colors"):
+            link_goeritz_data(swapped_graph)
 
     def test_trefoil_goeritz_matrix_cross_checks_alexander_determinant(self) -> None:
         diagram = braid_closure(_two_braid(1, 1, 1)).diagram
-        result = link_goeritz_data(diagram)
+        result = link_goeritz_data(link_blackboard_graph(diagram))
 
         assert result.reduced_matrix.entries == ((2, -1), (-1, 2))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 3
@@ -458,8 +463,12 @@ class TestGoeritzData:
         assert GoeritzDataResult.model_validate_json(result.model_dump_json()) == result
 
     def test_mirror_negates_matrix_and_preserves_absolute_determinant(self) -> None:
-        right = link_goeritz_data(braid_closure(_two_braid(1, 1, 1)).diagram)
-        left = link_goeritz_data(braid_closure(_two_braid(-1, -1, -1)).diagram)
+        right = link_goeritz_data(
+            link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        )
+        left = link_goeritz_data(
+            link_blackboard_graph(braid_closure(_two_braid(-1, -1, -1)).diagram)
+        )
 
         assert left.reduced_matrix.entries == ((-2, 1), (1, -2))
         assert left.absolute_determinant == right.absolute_determinant
@@ -477,18 +486,18 @@ class TestGoeritzData:
             ),
         )
         diagram = braid_closure(word).diagram
-        result = link_goeritz_data(diagram)
+        result = link_goeritz_data(link_blackboard_graph(diagram))
 
         assert result.reduced_matrix.entries == ((3, -2), (-2, 3))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 5
 
     def test_goeritz_slice_rejects_crossing_free_and_over_bound_diagrams(self) -> None:
         with pytest.raises(OperationDomainValidationError, match="nonempty"):
-            link_goeritz_data(OrientedLinkDiagram(free_loops=1))
+            link_goeritz_data(link_blackboard_graph(OrientedLinkDiagram(free_loops=1)))
 
         over_bound = braid_closure(_two_braid(*(1,) * 33)).diagram
         with pytest.raises(OperationResourceAdmissionError, match="32 crossings"):
-            link_goeritz_data(over_bound)
+            link_goeritz_data(link_blackboard_graph(over_bound))
 
 
 class TestSeifertCircles:
@@ -574,7 +583,7 @@ class TestAlexanderPolynomial:
         for diagram, expected in ((trefoil, 3), (figure_eight, 5)):
             determinant = link_determinant(diagram)
             # Independent diagram route: the absolute reduced Goeritz determinant.
-            goeritz = link_goeritz_data(diagram)
+            goeritz = link_goeritz_data(link_blackboard_graph(diagram))
             assert determinant.determinant == expected
             assert determinant.determinant == goeritz.absolute_determinant
             assert determinant.alexander.diagram == diagram
@@ -658,7 +667,13 @@ class TestLinkExtensionTools:
         catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
         assert (
             catalog["link_diagram.goeritz_matrix.compute"]
-            .run(GoeritzDataRequest(diagram=braid_closure(_two_braid(1, 1)).diagram))
+            .run(
+                GoeritzDataRequest(
+                    blackboard_graph=link_blackboard_graph(
+                        braid_closure(_two_braid(1, 1)).diagram
+                    )
+                )
+            )
             .absolute_determinant
             == 2
         )
@@ -689,6 +704,40 @@ class TestLinkExtensionTools:
             )
             == 2
         )
+        inverse = catalog["braid.word.inverse.compute"].run(
+            BraidWordRequest(word=_two_braid(1, -1))
+        )
+        assert tuple(letter.exponent for letter in inverse.letters) == (1, -1)
+        product = catalog["braid.word.multiply.compute"].run(
+            BraidProductRequest(left=_two_braid(1, -1), right=_two_braid(-1, 1))
+        )
+        assert tuple(letter.exponent for letter in product.letters) == (1, -1, -1, 1)
+        assert product.strand_count == 2
         assert catalog["link_diagram.wirtinger_presentation.compute"].run(
             WirtingerPresentationRequest(diagram=OrientedLinkDiagram(free_loops=1))
         ).presentation.generators == ("meridian_000",)
+
+    def test_braid_product_public_bounds_are_exact(self) -> None:
+        catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
+        multiply = catalog["braid.word.multiply.compute"]
+        with pytest.raises(OperationDomainValidationError, match="same strand count"):
+            multiply.run(
+                BraidProductRequest(left=_two_braid(1), right=BraidWord(strand_count=3))
+            )
+        with pytest.raises(OperationResourceAdmissionError, match="64-letter"):
+            multiply.run(
+                BraidProductRequest(
+                    left=BraidWord(
+                        strand_count=2,
+                        letters=tuple(
+                            BraidLetter(generator=1, exponent=1) for _ in range(32)
+                        ),
+                    ),
+                    right=BraidWord(
+                        strand_count=2,
+                        letters=tuple(
+                            BraidLetter(generator=1, exponent=1) for _ in range(33)
+                        ),
+                    ),
+                )
+            )

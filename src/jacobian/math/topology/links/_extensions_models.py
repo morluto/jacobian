@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from itertools import pairwise
 from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -69,13 +70,15 @@ class ConwayPolynomialRequest(StrictModel):
 
 
 class ConwayPolynomialResult(StrictModel):
-    """Knot Conway polynomial bound to its exact Alexander and diagram source."""
+    """Conway polynomial with the Laurent unit relating it to its Alexander value."""
 
     alexander: AlexanderPolynomialResult
     polynomial: RationalLaurentPolynomial
-    normalization: Literal["Delta(t)=nabla(t^(1/2)-t^(-1/2)); Delta(1)=1"] = (
-        "Delta(t)=nabla(t^(1/2)-t^(-1/2)); Delta(1)=1"
-    )
+    alexander_unit_sign: Literal[-1, 1]
+    alexander_unit_power: StrictInt
+    normalization: Literal[
+        "sign*t^power*Alexander(t)=Conway(t^(1/2)-t^(-1/2)); Alexander(1)=1"
+    ] = "sign*t^power*Alexander(t)=Conway(t^(1/2)-t^(-1/2)); Alexander(1)=1"
 
     @model_validator(mode="after")
     def require_conway_polynomial_context(self) -> Self:
@@ -83,6 +86,11 @@ class ConwayPolynomialResult(StrictModel):
             raise _validation_error(
                 "conway_polynomial_variable",
                 "Conway polynomial must use the canonical variable z",
+            )
+        if abs(self.alexander_unit_power) > MAX_CONWAY_CENTERED_DEGREE:
+            raise _validation_error(
+                "conway_alexander_unit_power",
+                "Alexander centering power exceeds the admitted Conway degree",
             )
         coefficients: dict[int, int] = {}
         for term in self.polynomial.terms:
@@ -428,7 +436,7 @@ class LinkStateCirclesResult(StrictModel):
 
     state: LinkDiagramSmoothingState
     circles: tuple[LinkSmoothedCircle, ...]
-    circle_count: StrictInt = Field(ge=1, le=2 * MAX_LINK_CROSSINGS)
+    circle_count: StrictInt = Field(ge=1, le=3 * MAX_LINK_CROSSINGS)
 
     @model_validator(mode="after")
     def require_complete_cyclic_partition(self) -> Self:
@@ -447,10 +455,10 @@ class LinkStateCirclesResult(StrictModel):
                 "state_circle_partition",
                 "smoothed circles must partition every source dart exactly once",
             )
-        if diagram.crossings and any(not circle.darts for circle in self.circles):
+        if sum(not circle.darts for circle in self.circles) != diagram.free_loops:
             raise _validation_error(
-                "state_circle_empty",
-                "a crossing-bearing state circle must contain darts",
+                "state_circle_free_loop_count",
+                "the empty-dart circle axis must retain every source free loop",
             )
         if not diagram.crossings and any(circle.darts for circle in self.circles):
             raise _validation_error(
@@ -464,7 +472,9 @@ class LinkStateCirclesResult(StrictModel):
                 "state_circle_rotation",
                 "each cyclic dart sequence must start at its least dart",
             )
-        expected_count = len(self.circles) if diagram.crossings else diagram.free_loops
+        expected_count = (
+            sum(bool(circle.darts) for circle in self.circles) + diagram.free_loops
+        )
         if self.circle_count != expected_count or len(self.circles) != expected_count:
             raise _validation_error(
                 "state_circle_count", "circle count must equal the retained circle axis"
@@ -560,11 +570,6 @@ class LinkBlackboardGraph(StrictModel):
         expected_shaded = tuple(
             region.region_id for region in self.regions if region.shaded
         )
-        if not self.regions[0].shaded:
-            raise _validation_error(
-                "blackboard_color_seed",
-                "the least canonical face must use the deterministic shaded color",
-            )
         if self.shaded_region_ids != expected_shaded:
             raise _validation_error(
                 "blackboard_shaded_axis", "shaded vertices must retain region order"
@@ -808,6 +813,40 @@ class BraidProductRequest(StrictModel):
 
     left: BraidWord
     right: BraidWord
+
+
+class BraidArtinActionResult(StrictModel):
+    """Exact free-group images of the Artin automorphism of a braid."""
+
+    word: BraidWord
+    generator_images: tuple[FiniteGroupWord, ...] = Field(
+        min_length=1, max_length=MAX_BRAID_STRANDS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_free_group_endomorphism(self) -> Self:
+        if len(self.generator_images) != self.word.strand_count:
+            raise _validation_error(
+                "artin_action_generator_axis",
+                "the action must provide one image for each braid strand generator",
+            )
+        for image in self.generator_images:
+            if any(
+                letter.generator >= self.word.strand_count for letter in image.letters
+            ):
+                raise _validation_error(
+                    "artin_action_generator_index",
+                    "every image letter must name a generator on the retained axis",
+                )
+            if any(
+                left.generator == right.generator and left.exponent == -right.exponent
+                for left, right in pairwise(image.letters)
+            ):
+                raise _validation_error(
+                    "artin_action_not_reduced",
+                    "each free-group image must be freely reduced",
+                )
+        return self
 
 
 class BraidPermutationResult(StrictModel):

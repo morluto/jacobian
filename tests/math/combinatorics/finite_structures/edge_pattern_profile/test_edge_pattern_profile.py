@@ -9,6 +9,9 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._models import (
     EdgePatternProfileRequest,
 )
+from jacobian.math.combinatorics.finite_structures.edge_pattern_profile._tools import (
+    TOOLS,
+)
 from jacobian.math.combinatorics.finite_structures.edge_pattern_profile.operations import (
     compute_edge_pattern_profile,
     verify_edge_pattern_profile,
@@ -130,13 +133,27 @@ def test_rejects_incomplete_colors() -> None:
         )
 
 
-def test_native_rejects_oversized_color_before_normalization() -> None:
-    # Thread 3: The fixed per-label cap was replaced by an aggregate UTF-8 bound.
-    # A 65-character label on a one-vertex hypergraph is now admitted.
+def test_native_admits_65_character_color_for_small_source() -> None:
+    """Color values are distinct from the 64-character hypergraph label cap."""
     hg = _hg(["a"], [])
     result = compute_edge_pattern_profile(hg, {"a": "x" * 65})
     assert len(result.vertex_coloring.assignments) == 1
     assert result.vertex_coloring.assignments[0].vertex == "a"
+    assert result.vertex_coloring.assignments[0].color == "x" * 65
+
+
+def test_declaration_accepts_65_character_color_for_small_source() -> None:
+    """The request model and published operation accept this finite color value."""
+    tool = TOOLS[0]
+    request = tool.request_type.model_validate(
+        {
+            "hypergraph": {"vertices": ["a"], "edges": []},
+            "vertex_colors": {"a": "x" * 65},
+        }
+    )
+
+    result = tool.run(request)
+
     assert result.vertex_coloring.assignments[0].color == "x" * 65
 
 

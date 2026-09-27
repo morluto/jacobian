@@ -83,8 +83,12 @@ and storage estimates as well as fixed input caps. Complete this review:
    kernel or backend, owner-side postprocessing and result construction, and
    serialization. Use quantities such as operand digits, coefficient height,
    degree, terms, matrix dimensions, candidate count, witness count, or
-   predicted serialized size rather than a convenient coarse input field. A
-   backend complexity claim does not bound owner-side scans or result assembly;
+   intrinsic result size rather than a convenient coarse input field. Include
+   scalar widths and allocation costs, not just cell counts. Encoded-byte
+   estimates belong to a concrete delivery or worker-channel budget, not an
+   inherited transport ceiling in native admission; see the
+   [limit ownership table](../explanation/architecture.md#domain-admission-capacity-and-delivery).
+   A backend complexity claim does not bound owner-side scans or result assembly;
    a linear kernel followed by a quadratic assembly pass is a quadratic
    operation.
 2. Compare exact algorithm and representation regimes. Consider sparse,

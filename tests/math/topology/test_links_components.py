@@ -348,6 +348,9 @@ class TestBoundary:
         result = link_components(diagram)
         assert result.component_count == 1
         assert result.components[0].visits == ()
+        assert (
+            LinkComponentsResult.model_validate_json(result.model_dump_json()) == result
+        )
 
     def test_two_free_loops_unlink(self) -> None:
         diagram = OrientedLinkDiagram(free_loops=2)

@@ -835,13 +835,18 @@ def _maximum_weight_matroid_intersection_from_values(
     try:
         _weighted_intersection_optimization_admission(first, second, weights)
     except OperationResourceAdmissionError as admission_error:
-        presolved = _rank_zero_intersection_presolve(first, second)
-        if presolved is None:
+        # A rejected optimizer request cannot trigger rank-kernel work just to
+        # look for a cheaper case. The all-zero matrix is the one rank-zero
+        # case we can certify directly from the canonical representation.
+        first_is_zero = all(value == 0 for row in first.matrix.entries for value in row)
+        second_is_zero = all(
+            value == 0 for row in second.matrix.entries for value in row
+        )
+        if not first_is_zero and not second_is_zero:
             raise admission_error
-        first_rank, second_rank, _ = presolved
         zero_weights = (0,) * first.ground_size
-        first_split_values = weights if first_rank == 0 else zero_weights
-        second_split_values = weights if second_rank == 0 else zero_weights
+        first_split_values = weights if first_is_zero else zero_weights
+        second_split_values = weights if second_is_zero else zero_weights
         first_split = MatroidWeightFunction(
             ground_axis=first.ground_axis, values=first_split_values
         )

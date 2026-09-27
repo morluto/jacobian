@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     )
     from jacobian.math.number_theory.number_fields._field_embedding import (
         SimpleNumberFieldEmbedding,
+        SimpleNumberFieldEmbeddingRequest,
         SimpleNumberFieldEmbeddingResult,
         apply_simple_number_field_embedding,
     )
@@ -56,6 +57,7 @@ __all__ = [
     "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldEmbedding",
+    "SimpleNumberFieldEmbeddingRequest",
     "SimpleNumberFieldEmbeddingResult",
     "SimpleNumberFieldPresentation",
     "SimpleNumberFieldRealEmbeddingBinding",
@@ -84,6 +86,7 @@ _OWNER_MODULES = {
     "NumberFieldRingOfIntegersResult": "_ring_of_integers",
     "NumberFieldRelativeTraceNormResult": "_relative_trace_norm",
     "SimpleNumberFieldEmbedding": "_field_embedding",
+    "SimpleNumberFieldEmbeddingRequest": "_field_embedding",
     "SimpleNumberFieldEmbeddingResult": "_field_embedding",
     "RealNumberFieldEmbedding": "values",
     "SimpleNumberFieldElement": "values",

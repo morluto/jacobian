@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import unicodedata
 from itertools import combinations, permutations
 from math import comb, factorial
 
@@ -13,6 +14,8 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.decks._models import (
+    MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK,
+    MAX_ANONYMOUS_CARD_RESULT_UNITS,
     MAX_DECK_CARD_EDGES,
     MAX_DECK_ECHO_ALLOCATION,
     MAX_DECK_VERTICES,
@@ -21,6 +24,8 @@ from jacobian.math.graphs.decks._models import (
     MAX_KELLY_DECK_TOTAL_WORK,
     MAX_UNLABELLED_DECK_ISOMORPHISM_WORK,
     MAX_UNLABELLED_DECK_VERTICES,
+    AnonymousGraphCardClass,
+    AnonymousGraphCardMultiset,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -34,26 +39,279 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
+    _anonymous_canonicalization_work,
+    _canonical_card_edges,
+)
+from jacobian.math.graphs.decks.anonymous_equality.operations import (
+    MAX_ANONYMOUS_DECK_EQUALITY_WORK,
 )
 from jacobian.math.graphs.patterns._models import _require_bounded_request
 from jacobian.math.graphs.patterns.operations import (
     induced_vertex_subset_pattern_count,
 )
 from jacobian.math.graphs.realization._models import DegreeSequence
-from jacobian.math.graphs.values import SimpleUndirectedGraph
+from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedGraph
 
 __all__ = [
+    "anonymous_graph_card_multiset",
     "edge_deletion_family",
     "unlabelled_deck",
     "unlabelled_vertex_deck",
     "verify_edge_deletion_family",
     "verify_vertex_deletion_family",
+    "vertex_deck_anonymous_multiset",
     "vertex_deck_degree_multiset",
     "vertex_deck_edge_count",
     "vertex_deck_induced_subgraph_count",
     "vertex_deck_subgraph_count",
     "vertex_deletion_family",
 ]
+
+
+def _admit_anonymous_card_request(
+    card_order: object,
+    cards: object,
+) -> tuple[int, tuple[SimpleUndirectedGraph, ...]]:
+    n = card_order
+    if cards is None:
+        raise OperationDomainValidationError(
+            location=("cards",),
+            code="graph_deck.anonymous_cards_missing",
+            message="cards field is required",
+        )
+    if type(n) is not int or n < 0:
+        raise OperationDomainValidationError(
+            location=("card_order",),
+            code="graph_deck.anonymous_order_invalid",
+            message="card_order must be a nonnegative exact integer",
+        )
+    if n > MAX_UNLABELLED_DECK_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("card_order",),
+            code="graph_deck.anonymous_order_bound",
+            message="anonymous cards support orders through the isomorphism bound",
+        )
+    if type(cards) is not tuple:
+        raise OperationDomainValidationError(
+            location=("cards",),
+            code="graph_deck.anonymous_cards_tuple",
+            message="cards must be an immutable tuple",
+        )
+    pair_count = comb(n, 2)
+    work = _anonymous_canonicalization_work(n, len(cards))
+    if work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("cards",),
+            code="graph_deck.anonymous_canonicalization_bound",
+            message="exact permutation canonicalization exceeds the admitted work bound",
+        )
+    output_units = len(cards) * (64 + 16 * pair_count)
+    if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("cards",),
+            code="graph_deck.anonymous_result_bound",
+            message="canonical anonymous card output exceeds the admitted allocation bound",
+        )
+    for index, graph in enumerate(cards):
+        _admit_anonymous_card(graph, n, pair_count, index)
+    return n, cards
+
+
+def _admit_anonymous_card(
+    graph: SimpleUndirectedGraph, order: int, pair_count: int, index: int
+) -> None:
+    if type(graph) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("cards", index),
+            code="graph_deck.anonymous_card_carrier",
+            message="each card must be an exact SimpleUndirectedGraph value",
+        )
+    vertices, edges = graph.vertices, graph.edges
+    if (
+        type(vertices) is not tuple
+        or len(vertices) != order
+        or type(edges) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("cards", index),
+            code="graph_deck.anonymous_card_shape",
+            message="card vertices must be unique NFC labels on the declared order",
+        )
+    for vertex in vertices:
+        _admit_anonymous_graph_label(vertex, index, "vertices")
+    if len(set(vertices)) != order:
+        raise OperationDomainValidationError(
+            location=("cards", index),
+            code="graph_deck.anonymous_card_shape",
+            message="card vertex labels must be unique",
+        )
+    if len(edges) > pair_count:
+        raise OperationDomainValidationError(
+            location=("cards", index, "edges"),
+            code="graph_deck.anonymous_card_edges",
+            message="card has more edge entries than a simple graph of this order",
+        )
+    if any(
+        type(edge) is not tuple
+        or len(edge) != 2
+        or any(type(endpoint) is not str for endpoint in edge)
+        for edge in edges
+    ):
+        raise OperationDomainValidationError(
+            location=("cards", index),
+            code="graph_deck.anonymous_card_edges",
+            message="card edges must be pairs of string labels",
+        )
+    for edge in edges:
+        for endpoint in edge:
+            _admit_anonymous_graph_label(endpoint, index, "edges")
+    vertex_set = set(vertices)
+    if len(set(edges)) != len(edges) or any(
+        a >= b or a not in vertex_set or b not in vertex_set for a, b in edges
+    ):
+        raise OperationDomainValidationError(
+            location=("cards", index),
+            code="graph_deck.anonymous_card_edges",
+            message="card edges must be unique canonical pairs of declared vertices",
+        )
+
+
+def _admit_anonymous_graph_label(label: str, card_index: int, field: str) -> None:
+    location = ("cards", card_index, field)
+    if type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES:
+        raise OperationDomainValidationError(
+            location=location,
+            code="graph_deck.anonymous_card_labels",
+            message="card and edge labels must be nonempty strings within the graph label bound",
+        )
+    try:
+        encoded = label.encode("utf-8")
+    except UnicodeEncodeError as error:
+        raise OperationDomainValidationError(
+            location=location,
+            code="graph_deck.anonymous_card_labels",
+            message="card and edge labels must contain only Unicode scalar values",
+        ) from error
+    if len(encoded) > MAX_GRAPH_LABEL_BYTES or not unicodedata.is_normalized(
+        "NFC", label
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="graph_deck.anonymous_card_labels",
+            message="card and edge labels must use NFC and fit the graph UTF-8 byte bound",
+        )
+
+
+def _canonical_anonymous_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:
+    n = len(graph.vertices)
+    labels = tuple(f"v{i:02d}" for i in range(n))
+    canonical_edges = _canonical_card_edges(graph.vertices, graph.edges)
+    return SimpleUndirectedGraph(vertices=labels, edges=canonical_edges)
+
+
+def anonymous_graph_card_multiset(
+    card_order: object,
+    cards: object,
+) -> AnonymousGraphCardMultiset:
+    """Canonicalize anonymous graph cards without asserting deck realizability."""
+    card_order, cards = _admit_anonymous_card_request(card_order, cards)
+    counts: dict[tuple[tuple[str, str], ...], int] = {}
+    representatives: dict[tuple[tuple[str, str], ...], SimpleUndirectedGraph] = {}
+    for graph in cards:
+        canonical = _canonical_anonymous_graph(graph)
+        key = canonical.edges
+        counts[key] = counts.get(key, 0) + 1
+        representatives[key] = canonical
+    classes = tuple(
+        AnonymousGraphCardClass.model_construct(
+            representative=representatives[key], multiplicity=counts[key]
+        )
+        for key in sorted(counts)
+    )
+    return AnonymousGraphCardMultiset._from_kernel(card_order, classes)
+
+
+def vertex_deck_anonymous_multiset(
+    family: VertexDeletionFamily,
+) -> AnonymousGraphCardMultiset:
+    """Forget source labels and quotient a complete vertex family anonymously.
+
+    This is the typed bridge from a source-bound deletion result to the
+    source-free multiset consumed by anonymous deck operations such as exact
+    deck equality. The source-family relation and each card's graph-isomorphism
+    class are established at this trust boundary.
+    """
+    if type(family) is not VertexDeletionFamily:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code="graph_deck.anonymous_source_family",
+            message="family must be a VertexDeletionFamily",
+        )
+    source = getattr(family, "source", None)
+    if (
+        type(source) is not SimpleUndirectedGraph
+        or type(getattr(source, "vertices", None)) is not tuple
+        or type(getattr(source, "edges", None)) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("family", "source"),
+            code="graph_deck.anonymous_source_graph",
+            message="family source must be a bounded SimpleUndirectedGraph",
+        )
+    source_order = len(source.vertices)
+    if source_order > MAX_UNLABELLED_DECK_VERTICES + 1:
+        raise OperationResourceAdmissionError(
+            location=("family", "source", "vertices"),
+            code="graph_deck.anonymous_source_order_bound",
+            message="anonymous vertex decks require card order at most ten",
+        )
+    card_order = max(source_order - 1, 0)
+    card_count = source_order
+    work = _anonymous_canonicalization_work(card_order, card_count)
+    # Equality canonicalizes both operands, so ensure even self-comparison is
+    # admitted for every producer result, including the maximal class count.
+    equality_work = 2 * _anonymous_canonicalization_work(card_order, card_count)
+    output_units = card_count * (64 + 16 * comb(card_order, 2))
+    if (
+        work > MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK
+        or equality_work > MAX_ANONYMOUS_DECK_EQUALITY_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("family",),
+            code="graph_deck.anonymous_source_work_bound",
+            message="anonymous vertex-deck result cannot be compared within the exact work bound",
+        )
+    if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("family",),
+            code="graph_deck.anonymous_source_output_bound",
+            message="anonymous vertex-deck result exceeds its output bound",
+        )
+
+    _admit_anonymous_card(source, source_order, comb(source_order, 2), 0)
+    _admit_deck_graph(source)
+    if vertex_deletion_family(source) != family:
+        raise OperationDomainValidationError(
+            location=("family",),
+            code="graph_deck.anonymous_source_relation",
+            message="family must contain every exact source vertex-deleted card",
+        )
+
+    counts: dict[tuple[tuple[str, str], ...], int] = {}
+    representatives: dict[tuple[tuple[str, str], ...], SimpleUndirectedGraph] = {}
+    for card in family.cards:
+        key = _canonical_card_edges(card.card.vertices, card.card.edges)
+        counts[key] = counts.get(key, 0) + 1
+        representatives[key] = SimpleUndirectedGraph(
+            vertices=tuple(f"v{i:02d}" for i in range(card_order)), edges=key
+        )
+    classes = tuple(
+        AnonymousGraphCardClass.model_construct(
+            representative=representatives[key], multiplicity=counts[key]
+        )
+        for key in sorted(counts)
+    )
+    return AnonymousGraphCardMultiset._from_kernel(card_order, classes)
 
 
 def _admit_deck_graph(graph: SimpleUndirectedGraph) -> SimpleUndirectedGraph:
@@ -354,14 +612,6 @@ def vertex_deck_induced_subgraph_count(
             code="graph_deck.kelly_pattern_carrier",
             message="pattern must be a SimpleUndirectedGraph",
         )
-    try:
-        pattern = SimpleUndirectedGraph.model_validate(pattern.model_dump())
-    except (ValidationError, TypeError, ValueError):
-        raise OperationDomainValidationError(
-            location=("pattern",),
-            code="graph_deck.kelly_pattern_graph_value",
-            message="pattern must be a canonical simple graph value",
-        ) from None
     family = deck.family
     source = _admit_deck_graph(family.source)
     source_order = len(source.vertices)

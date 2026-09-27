@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
 from jacobian.math.finite_fields.values import FiniteFieldPresentation
 from jacobian.math.function_fields._models import (
     FiniteFunctionField,
+    FiniteFunctionFieldElement,
     FunctionFieldDivisor,
     FunctionFieldDivisorTerm,
     FunctionFieldPlace,
@@ -23,6 +24,7 @@ from jacobian.math.function_fields._models import (
 from jacobian.math.function_fields.operations import (
     function_field_genus,
     function_field_hyperelliptic_infinity_valuation,
+    function_field_riemann_roch_membership,
     function_field_riemann_roch_space,
 )
 
@@ -107,6 +109,19 @@ def test_genus_one_basis_has_expected_valuations_and_rr_dimensions() -> None:
             assert valuation_result.valuation.kind == "FINITE"
             assert valuation_result.valuation.value + multiplicity >= 0
         assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_membership_rejects_extension_elements_before_zero_shortcut() -> None:
+    field = _hyperelliptic_field(5, (0, 4, 0, 1))
+    generator_y = FiniteFunctionFieldElement(
+        field=field,
+        coordinates=(_rf(5, (0,)), _rf(5, (1,))),
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="currently supported only for the rational function field",
+    ):
+        function_field_riemann_roch_membership(generator_y, _divisor(field, 0))
 
 
 def test_genus_two_special_and_large_degree_spaces_match_closed_form() -> None:

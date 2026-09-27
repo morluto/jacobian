@@ -36,7 +36,8 @@ TOOLS = (
                 name="one_skeleton_of_delta_two",
                 description=(
                     "Construct the 1-skeleton of Delta[2] through degree 2; "
-                    "degree 2 contains exactly the degeneracies of vertices "
+                    "the request requires k <= simplicial_set.max_degree. "
+                    "Degree 2 contains exactly the degeneracies of vertices "
                     "and edges."
                 ),
                 input={"simplicial_set": _DELTA_TWO, "k": 1},

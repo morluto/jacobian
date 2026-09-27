@@ -21,6 +21,7 @@ from jacobian.math.topology.simplicial_sets.operations import (
     _from_admitted_tables,
     admit_tables,
 )
+from jacobian.math.topology.simplicial_sets.subset_models import SimplicialSubsetPrefix
 
 MAX_SKELETON_WORK = 100_000
 MAX_SKELETON_OUTPUT_CELLS = 10_000
@@ -30,7 +31,14 @@ class SimplicialSetSkeletonRequest(StrictModel):
     """The k-skeleton of a source prefix through its existing maximum degree."""
 
     simplicial_set: FiniteTruncatedSimplicialSet
-    k: StrictInt = Field(ge=0, le=MAX_SIMPLICIAL_SET_DEGREE)
+    k: StrictInt = Field(
+        ge=0,
+        le=MAX_SIMPLICIAL_SET_DEGREE,
+        description=(
+            "Skeleton degree; it must also satisfy k <= "
+            "simplicial_set.max_degree for the supplied prefix."
+        ),
+    )
 
 
 class SimplicialSetSkeletonResult(StrictModel):
@@ -46,6 +54,12 @@ class SimplicialSetSkeletonResult(StrictModel):
             raise ValueError("the inclusion source must be the returned skeleton")
         if self.k > self.inclusion.target.max_degree:
             raise ValueError("k must be visible in the source prefix")
+        try:
+            SimplicialSubsetPrefix(inclusion=self.inclusion)
+        except (ValueError, IndexError) as error:
+            raise ValueError(
+                "the inclusion must retain ordered injective ambient simplex axes"
+            ) from error
         return self
 
 

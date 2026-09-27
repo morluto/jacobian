@@ -189,6 +189,34 @@ def test_u_prime_rejects_a_prime_outside_the_exact_level_action() -> None:
         modular_character_coordinates_u_prime(_coordinates(space, 0), 3)
 
 
+def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> None:
+    space = _space(2, 26)
+    form = _coordinates(space, 0)
+    large_scalar = RationalCyclotomicElement(
+        field=_FIELD,
+        coefficients_ascending=(
+            {"num": 9_999_999, "den": 1},
+            {"num": 0, "den": 1},
+        ),
+    )
+    form = form.model_copy(
+        update={"coordinates": (large_scalar, _zero(_FIELD))}
+    )
+
+    result = modular_character_coordinates_u_prime(form, 2)
+
+    assert result.coordinates == (
+        _zero(_FIELD),
+        RationalCyclotomicElement(
+            field=_FIELD,
+            coefficients_ascending=(
+                {"num": 0, "den": 1},
+                {"num": -19_999_998, "den": 1},
+            ),
+        ),
+    )
+
+
 @pytest.mark.parametrize("digits", [42, 43, 255])
 def test_u_prime_output_bound_is_admitted_before_backend_expansion(
     monkeypatch, digits: int

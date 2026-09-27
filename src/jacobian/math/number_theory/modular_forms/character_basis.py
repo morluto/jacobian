@@ -67,14 +67,14 @@ _TRANSPORT_STURM_BASIS_ENVELOPE = {
 }
 # Exact finite envelope for the generalized-character U_p slice. The entries
 # are (Sturm precision, source precision, dimension, basis coefficient digits,
-# induced coordinate digits) for every supported level/prime pair. The two
-# conductor-13 order-six characters are conjugates; focused fixtures check
-# both conjugates at every pair.
+# induced coordinate digits, matrix integer coefficient bound) for every
+# supported level/prime pair. The two conductor-13 order-six characters are
+# conjugates; focused fixtures check both conjugates at every pair.
 _CHARACTER_U_PRIME_ENVELOPE = {
-    (26, 2): (8, 15, 2, 1, 2),
-    (26, 13): (8, 92, 2, 2, 2),
-    (39, 3): (10, 28, 3, 1, 2),
-    (39, 13): (10, 118, 3, 2, 2),
+    (26, 2): (8, 15, 2, 1, 2, 2),
+    (26, 13): (8, 92, 2, 2, 2, 4),
+    (39, 3): (10, 28, 3, 1, 2, 4),
+    (39, 13): (10, 118, 3, 2, 2, 7),
 }
 
 
@@ -919,6 +919,7 @@ def modular_character_coordinates_u_prime(
         expected_dimension,
         basis_digits,
         matrix_digits,
+        matrix_coefficient_bound,
     ) = _CHARACTER_U_PRIME_ENVELOPE[(space.level, prime)]
     if (
         dimension != expected_dimension
@@ -959,10 +960,28 @@ def modular_character_coordinates_u_prime(
     product_digits = (
         product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
     )
-    # Each product is accumulated with cyclotomic.add, which applies the same
-    # height admission to the larger of the product and partial sum. Admit that
-    # second kernel boundary too, before the backend basis expansion.
-    addition_digits = product_digits * (2 * degree + 2) + len(str(degree)) + 2
+    # The finite U_p matrices have integer power-basis coordinates. For
+    # Phi_6(x)=x^2-x+1, multiplication by (b0,b1) has coefficient bounds
+    # [[|b0|, |b1|], [|b1|, |b0|+|b1|]], so each input scalar contributes at
+    # most 2*matrix_coefficient_bound times itself to an output coordinate.
+    # A common denominator across the nonzero input scalars is bounded by
+    # multiplying their denominators. This estimates the actual product and
+    # partial-sum height that cyclotomic.add sees, without compounding the
+    # multiplication kernel's larger internal admission bound.
+    input_scalar_count = sum(
+        coefficient.num != 0
+        for coordinate in form.coordinates
+        for coefficient in coordinate.coefficients_ascending
+    )
+    accumulated_digits = (
+        input_scalar_count * input_digits
+        + len(str(2 * matrix_coefficient_bound * input_scalar_count))
+        if input_scalar_count
+        else 1
+    )
+    addition_digits = (
+        accumulated_digits * (2 * degree + 2) + len(str(degree)) + 2
+    )
     if (
         product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or addition_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
@@ -970,7 +989,7 @@ def modular_character_coordinates_u_prime(
         or intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or closure_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or work > _MAX_WORK
-        or basis_bytes + matrix_bytes + result_bytes > _MAX_OUTPUT_BYTES
+        or basis_bytes + matrix_bytes + result_bytes > _MAX_ALLOCATION_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("form",),
@@ -1019,10 +1038,9 @@ def modular_character_coordinates_u_prime(
         image = tuple(vector[prime * index] for index in range(sturm_precision))
         coordinates = tuple(image[pivot] for pivot in pivots)
         if any(
-            max(
-                len(str(abs(int(value.num)))),
-                len(str(int(value.den))),
-            )
+            int(value.den) != 1
+            or abs(int(value.num)) > matrix_coefficient_bound
+            or max(len(str(abs(int(value.num)))), len(str(int(value.den))))
             > matrix_digits
             for coordinate in coordinates
             for value in coordinate.coefficients_ascending

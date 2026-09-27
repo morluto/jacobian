@@ -45,6 +45,7 @@ that need more context than an operation card:
 - [Deterministic tree-automaton state algebra](tree-automaton-state-algebra.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
+- [Finite module Koszul complexes and homology](koszul-finite-module-homology.md)
 - [Certified Dickman rho enclosures](dickman-rho.md)
 - [Homogeneous monomial systems on algebraic tori](algebraic-torus-monomial-systems.md)
 - [Exact trigonometric-rational normalization](trigonometric-rational.md)

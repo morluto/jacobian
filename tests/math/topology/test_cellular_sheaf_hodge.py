@@ -66,10 +66,10 @@ def test_interval_hodge_matrices_and_harmonics_are_exact() -> None:
         ("a",),
         ("b",),
     )
-    assert _matrix(result.up_laplacians[0]) == ((0, 0), (0, 0))
-    assert _matrix(result.down_laplacians[0]) == ((1, -1), (-1, 1))
-    assert _matrix(result.up_laplacians[1]) == ((2,),)
-    assert _matrix(result.down_laplacians[1]) == ((0,),)
+    assert _matrix(result.up_laplacians[0]) == ((1, -1), (-1, 1))
+    assert _matrix(result.down_laplacians[0]) == ((0, 0), (0, 0))
+    assert _matrix(result.up_laplacians[1]) == ((0,),)
+    assert _matrix(result.down_laplacians[1]) == ((2,),)
     assert _matrix(result.laplacians[0]) == ((1, -1), (-1, 1))
     assert _matrix(result.laplacians[1]) == ((2,),)
     assert len(result.harmonic_bases[0]) == 1
@@ -127,3 +127,31 @@ def test_hodge_work_is_admitted_before_cohomology_expansion(monkeypatch) -> None
     monkeypatch.setattr(hodge_module, "sheaf_cohomology", forbidden)
     with pytest.raises(OperationResourceAdmissionError):
         hodge_laplacians(sheaf)
+
+
+def test_hodge_admission_ignores_unused_derived_composites() -> None:
+    complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
+    cells = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    covers = tuple(
+        (face, coface)
+        for coface in cells
+        for face in cells
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+    large = _q(10**40)
+    source = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(SheafStalk(simplex=cell, basis=("e",)) for cell in cells),
+        tuple(
+            CoverRestrictionMatrix(source=face, target=coface, entries=((large,),))
+            for face, coface in covers
+        ),
+    ).sheaf
+    assert source is not None
+    assert max(
+        len(str(item.entries[0][0].num)) for item in source.derived_restrictions
+    ) > 64
+    result = hodge_laplacians(source)
+    assert result.laplacians

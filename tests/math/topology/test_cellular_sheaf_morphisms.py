@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafField,
@@ -106,6 +111,23 @@ def test_triangle_morphism_naturality_matches_independent_incidence_oracle() -> 
     bad = morphism(source, target, corrupted)
     assert not bad.natural
     assert not _independent_square_oracle(source, target, bad.components)
+
+
+def test_morphism_revalidates_authored_parent_diamonds() -> None:
+    valid = _triangle_sheaf()
+    covers = tuple(
+        restriction.model_copy(update={"entries": ((_q("2"),),)})
+        if restriction.source == ("a",)
+        and restriction.target == ("a", "b")
+        else restriction
+        for restriction in valid.cover_restrictions
+    )
+    forged = valid.model_copy(update={"cover_restrictions": covers})
+    identity = tuple(
+        (cell, ((_q("1"),),)) for cell in forged.canonical_face_order
+    )
+    with pytest.raises(OperationDomainValidationError, match="does not define a cellular sheaf"):
+        morphism(forged, forged, identity)
 
 
 def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> None:

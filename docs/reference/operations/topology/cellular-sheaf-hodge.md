@@ -10,8 +10,8 @@ For the cochain coboundary `delta_k : C^k -> C^(k+1)`, the operation returns
 the up and down Laplacians and their Hodge sum:
 
 ```text
-L_k^up   = delta_(k-1) delta_(k-1)^T
-L_k^down = delta_k^T delta_k
+L_k^up   = delta_k^T delta_k
+L_k^down = delta_(k-1) delta_(k-1)^T
 L_k      = L_k^up + L_k^down
 ```
 

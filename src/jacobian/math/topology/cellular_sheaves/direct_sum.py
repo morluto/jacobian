@@ -228,8 +228,10 @@ def direct_sum(  # noqa: C901
         raise _resource(
             "total_rank_bound", "the direct sum exceeds the total stalk rank bound"
         )
-    cover_count = len(left.cover_restrictions) + len(right.cover_restrictions)
-    derived_count = len(left.derived_restrictions) + len(right.derived_restrictions)
+    # Both parents use the same complex, so their direct sum has one map for
+    # each comparable-cell pair, regardless of how many parent maps there are.
+    cover_count = len(left.cover_restrictions)
+    derived_count = len(left.derived_restrictions)
     if (
         cover_count > MAX_SHEAF_COVER_MAPS
         or derived_count > MAX_SHEAF_DERIVED_RESTRICTIONS

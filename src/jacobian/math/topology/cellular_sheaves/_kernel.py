@@ -15,6 +15,8 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.catalog.models import (
@@ -1025,4 +1027,67 @@ def from_cover_maps(
     )
 
 
-__all__ = ["from_cover_maps"]
+def require_canonical_sheaf_admission(
+    sheaf: FiniteCellularSheaf,
+) -> FiniteCellularSheaf:
+    """Rebuild an authored sheaf from covers and bind every derived map."""
+    if type(sheaf) is not FiniteCellularSheaf:
+        raise _domain(
+            "authored_sheaf_invalid", "a canonical finite cellular sheaf is required", ("sheaf",)
+        )
+    try:
+        admitted = FiniteCellularSheaf.model_validate(
+            sheaf.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise _domain(
+            "authored_sheaf_invalid", "the authored sheaf violates its structural contract", ("sheaf",)
+        ) from exc
+    rebuilt = from_cover_maps(
+        admitted.complex,
+        admitted.coefficient_field,
+        admitted.prime,
+        admitted.stalks,
+        tuple(
+            CoverRestrictionMatrix(
+                source=item.source, target=item.target, entries=item.entries
+            )
+            for item in admitted.cover_restrictions
+        ),
+    )
+    if rebuilt.sheaf is None:
+        raise _domain(
+            "authored_sheaf_not_functorial",
+            "the authored cover diagram does not define a cellular sheaf",
+            ("sheaf",),
+        )
+    canonical = rebuilt.sheaf
+
+    def restrictions_by_pair(
+        restrictions: tuple[SheafRestriction, ...],
+    ) -> dict[CoverKey, tuple[object, ...]]:
+        return {
+            (item.source, item.target): (
+                item.row_basis,
+                item.column_basis,
+                item.entries,
+                item.cover_path,
+            )
+            for item in restrictions
+        }
+
+    if (
+        restrictions_by_pair(admitted.cover_restrictions)
+        != restrictions_by_pair(canonical.cover_restrictions)
+        or restrictions_by_pair(admitted.derived_restrictions)
+        != restrictions_by_pair(canonical.derived_restrictions)
+    ):
+        raise _domain(
+            "authored_sheaf_derived_map_mismatch",
+            "every authored derived restriction must equal its cover-map composite",
+            ("sheaf", "derived_restrictions"),
+        )
+    return canonical
+
+
+__all__ = ["from_cover_maps", "require_canonical_sheaf_admission"]

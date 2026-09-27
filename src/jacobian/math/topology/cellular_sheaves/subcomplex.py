@@ -2,17 +2,27 @@
 
 from __future__ import annotations
 
+from pydantic import ValidationError
+
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import FiniteSimplicialComplex
-from jacobian.math.topology.cellular_sheaves._kernel import _admit_field
+from jacobian.math.topology._request_admission import (
+    require_canonical_complex_admission,
+)
+from jacobian.math.topology.cellular_sheaves._kernel import (
+    _admit_field,
+    require_canonical_sheaf_admission,
+)
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_RESTRICTION_CELLS,
     MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK,
     MAX_SHEAF_SIMPLICES,
+    MAX_SHEAF_STALK_RANK,
+    MAX_SHEAF_TOTAL_STALK_RANK,
     FiniteCellularSheaf,
     SheafSubcomplexResult,
     sheaf_scalar_digit_work,
@@ -36,10 +46,30 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
     )
 
 
+def _admit_sources(
+    sheaf: FiniteCellularSheaf, subcomplex: FiniteSimplicialComplex
+) -> tuple[FiniteCellularSheaf, FiniteSimplicialComplex]:
+    if type(sheaf) is not FiniteCellularSheaf or type(subcomplex) is not FiniteSimplicialComplex:
+        raise _domain(
+            "request_type", "restriction requires a sheaf and canonical simplicial complex"
+        )
+    try:
+        admitted_sheaf = require_canonical_sheaf_admission(sheaf)
+        require_canonical_complex_admission(subcomplex)
+    except OperationDomainValidationError:
+        raise
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise _domain(
+            "complex_not_canonical", "source and requested complexes must be canonical"
+        ) from exc
+    return admitted_sheaf, subcomplex
+
+
 def restrict_to_subcomplex(
     sheaf: FiniteCellularSheaf, subcomplex: FiniteSimplicialComplex
 ) -> SheafSubcomplexResult:
     """Return the exact sheaf diagram induced on an included subcomplex."""
+    sheaf, subcomplex = _admit_sources(sheaf, subcomplex)
     source_cells = sheaf.canonical_face_order
     selected_cells = tuple(
         face for group in subcomplex.faces_by_dimension for face in group.faces
@@ -72,6 +102,14 @@ def restrict_to_subcomplex(
     filtered_stalks = tuple(
         stalk for stalk in sheaf.stalks if stalk.simplex in selected
     )
+    if any(len(stalk.basis) > MAX_SHEAF_STALK_RANK for stalk in filtered_stalks):
+        raise _resource(
+            "stalk_rank_bound", "a retained stalk exceeds the rank bound"
+        )
+    if sum(len(stalk.basis) for stalk in filtered_stalks) > MAX_SHEAF_TOTAL_STALK_RANK:
+        raise _resource(
+            "total_stalk_rank_bound", "retained stalks exceed the total rank bound"
+        )
     filtered_cover = tuple(
         item
         for item in sheaf.cover_restrictions

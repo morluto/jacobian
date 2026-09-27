@@ -64,7 +64,7 @@ def _admit_hodge_scalars_and_output(
     matrix_cells: int,
 ) -> None:
     max_scalar_digits = 1
-    for restriction in (*sheaf.cover_restrictions, *sheaf.derived_restrictions):
+    for restriction in sheaf.cover_restrictions:
         for row in restriction.entries:
             for entry in row:
                 if not isinstance(entry, CanonicalRational):
@@ -121,12 +121,12 @@ def _laplacian_parts(
         for column in zip(*differentials[degree - 1], strict=False):
             for i, left in enumerate(column):
                 for j, right in enumerate(column):
-                    up[i][j] += left * right
+                    down[i][j] += left * right
     if degree < len(differentials):
         for row in differentials[degree]:
             for i, left in enumerate(row):
                 for j, right in enumerate(row):
-                    down[i][j] += left * right
+                    up[i][j] += left * right
     return up, down
 
 

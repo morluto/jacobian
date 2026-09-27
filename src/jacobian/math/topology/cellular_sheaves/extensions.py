@@ -21,6 +21,7 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _cochain_nullspace,
     _cochain_rref,
     _ExactField,
+    require_canonical_sheaf_admission,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COVER_MAPS,
@@ -760,6 +761,8 @@ def morphism(
     # that its declared GF(p) modulus is prime.  Establish both fields before
     # inspecting carrier internals or performing arithmetic so malformed
     # caller-authored carriers cannot leak raw attribute/type errors.
+    source = require_canonical_sheaf_admission(source)
+    target = require_canonical_sheaf_admission(target)
     source_field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (

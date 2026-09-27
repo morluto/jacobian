@@ -227,12 +227,19 @@ def apply_cyclotomic_field_inclusion(
         )
     try:
         inclusion = CyclotomicFieldInclusion.model_validate(inclusion.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="matrix.cyclic.element_map_invalid",
+            message="inclusion must satisfy its canonical contract",
+        ) from error
+    try:
         element = RationalCyclotomicElement.model_validate(element.model_dump())
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
-            location=("element", "field"),
+            location=("element",),
             code="matrix.cyclic.element_map_invalid",
-            message="inclusion and element must satisfy their canonical contracts",
+            message="element must satisfy its canonical contract",
         ) from error
     if element.field != inclusion.source:
         raise OperationDomainValidationError(

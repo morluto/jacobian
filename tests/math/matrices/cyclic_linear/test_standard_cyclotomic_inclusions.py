@@ -290,6 +290,22 @@ def test_composition_and_element_parent_errors_point_to_real_fields() -> None:
     assert element_error.value.errors()[0]["loc"] == ("element", "field")
 
 
+def test_invalid_map_operands_report_their_own_paths() -> None:
+    inclusion = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    element = _element(3, (1, 1))
+    forged_inclusion = inclusion.model_copy(update={"generator_image": ()})
+    with pytest.raises(OperationDomainValidationError) as inclusion_error:
+        apply_cyclotomic_field_inclusion(forged_inclusion, element)
+    assert inclusion_error.value.errors()[0]["loc"] == ("inclusion",)
+
+    forged_element = element.model_copy(update={"coefficients_ascending": ()})
+    with pytest.raises(OperationDomainValidationError) as element_error:
+        apply_cyclotomic_field_inclusion(inclusion, forged_element)
+    assert element_error.value.errors()[0]["loc"] == ("element",)
+
+
 def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:
     source = RationalCyclotomicField(order=3)
     target = RationalCyclotomicField(order=6)

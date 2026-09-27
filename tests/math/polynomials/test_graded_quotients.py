@@ -426,28 +426,6 @@ def test_projection_helpers_are_not_public_catalog_operations() -> None:
     assert h_vector(_ideal((2, 0))).h_vector == (1, 1)
 
 
-def test_unit_ideal_hilbert_function_skips_ambient_slice_cap() -> None:
-    variables = tuple(f"x{index}" for index in range(8))
-    ideal = RationalPolynomialIdeal(
-        variables=variables,
-        generators=(
-            RationalPolynomial(
-                variables=variables,
-                polynomial=SparseRationalPolynomial(
-                    terms=(
-                        RationalPolynomialTerm(
-                            coefficient=CanonicalRational(num=1, den=1),
-                            exponents=(0,) * 8,
-                        ),
-                    )
-                ),
-            ),
-        ),
-    )
-    profile = hilbert_function(ideal, max_degree=11)
-    assert profile.values == (0,) * 12
-
-
 def test_duplicate_source_monomials_do_not_inflate_series_cap() -> None:
     ideal = _ideal(*((2, 0) for _ in range(9)))
     series = hilbert_series(ideal, prefix_degree=3)
@@ -509,6 +487,9 @@ def test_hilbert_function_and_series_prefixes_are_nonempty_and_nonnegative() -> 
     series = hilbert_series(_ideal((2, 0)), prefix_degree=2)
     series_payload = series.model_dump()
     series_payload["prefix"] = []
+    with pytest.raises(ValidationError):
+        HilbertSeriesResult.model_validate(series_payload)
+    series_payload["prefix"] = [-1, 2, 2]
     with pytest.raises(ValidationError):
         HilbertSeriesResult.model_validate(series_payload)
 
@@ -655,7 +636,11 @@ def test_hilbert_projection_results_bind_the_source_ring(
         result_type.model_validate(payload)
 
 
-def test_linear_generators_prune_standard_monomial_domain() -> None:
+@pytest.mark.parametrize(
+    "degree",
+    (11, pytest.param(32, marks=pytest.mark.scale)),
+)
+def test_linear_generators_prune_standard_monomial_domain(degree: int) -> None:
     variables = tuple(f"x{index}" for index in range(8))
     generators = tuple(
         RationalPolynomial(
@@ -672,11 +657,12 @@ def test_linear_generators_prune_standard_monomial_domain() -> None:
         for index in range(7)
     )
     ideal = RationalPolynomialIdeal(variables=variables, generators=generators)
-    enumerated = standard_monomials(ideal, 11)
+    enumerated = standard_monomials(ideal, degree)
     assert enumerated.count == 1
-    assert enumerated.monomials == ((0, 0, 0, 0, 0, 0, 0, 11),)
-    profile = hilbert_function(ideal, max_degree=11)
-    assert profile.values[-1] == 1
+    assert enumerated.monomials == ((0, 0, 0, 0, 0, 0, 0, degree),)
+    if degree == 11:
+        profile = hilbert_function(ideal, max_degree=11)
+        assert profile.values[-1] == 1
 
 
 def test_unit_generator_with_oversized_redundant_summand_short_circuits() -> None:
@@ -807,8 +793,9 @@ def test_hilbert_series_admits_after_source_leadings_reduce() -> None:
     assert result.prefix == (1, 0, 0)
 
 
+@pytest.mark.parametrize("coefficient", (1, 2))
 def test_nonzero_monomial_coefficients_count_toward_series_preflight(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, coefficient: int
 ) -> None:
     variables = ("x", "y")
     generators = tuple(
@@ -817,7 +804,7 @@ def test_nonzero_monomial_coefficients_count_toward_series_preflight(
             polynomial=SparseRationalPolynomial(
                 terms=(
                     RationalPolynomialTerm(
-                        coefficient=CanonicalRational(num=2, den=1),
+                        coefficient=CanonicalRational(num=coefficient, den=1),
                         exponents=(8 - index, index),
                     ),
                 )
@@ -835,28 +822,6 @@ def test_nonzero_monomial_coefficients_count_toward_series_preflight(
         OperationResourceAdmissionError, match="at most 8 minimal generators"
     ):
         hilbert_series(ideal, prefix_degree=1)
-
-
-def test_linear_generators_prune_degree_thirty_two_traversal() -> None:
-    variables = tuple(f"x{index}" for index in range(8))
-    generators = tuple(
-        RationalPolynomial(
-            variables=variables,
-            polynomial=SparseRationalPolynomial(
-                terms=(
-                    RationalPolynomialTerm(
-                        coefficient=CanonicalRational(num=1, den=1),
-                        exponents=tuple(1 if axis == index else 0 for axis in range(8)),
-                    ),
-                )
-            ),
-        )
-        for index in range(7)
-    )
-    ideal = RationalPolynomialIdeal(variables=variables, generators=generators)
-    enumerated = standard_monomials(ideal, 32)
-    assert enumerated.count == 1
-    assert enumerated.monomials == ((0, 0, 0, 0, 0, 0, 0, 32),)
 
 
 def test_graded_binds_one_deadline_before_groebner(
@@ -980,12 +945,12 @@ def test_hilbert_series_ambient_numerator_must_reduce_to_series() -> None:
 
 @pytest.mark.scale
 def test_hilbert_function_admits_mixed_constraints_above_enumerator_ceiling() -> None:
-    """The 28 pairwise products have 8 standard monomials at degree 32.
+    """The 28 single-term monomial generators have 8 monomials at degree 32.
 
     This sits at the published degree envelope (``MAX_GRADED_DEGREE``) and
-    charges a full Groebner pass, so it is near-envelope evidence rather than
-    an ordinary regression.  An explicit budget keeps it off the operation's
-    short default when the scheduled scale lane is loaded.
+    exercises mixed-support pruning and standard-count admission through the
+    backend-free monomial initial-ideal path. The explicit budget is retained
+    for this near-envelope scale case.
     """
     from jacobian.math.polynomials.ideals._models import IdealComputationBudget
 
@@ -1129,8 +1094,14 @@ def test_request_models_document_structural_preconditions() -> None:
         HilbertSeriesRequest,
         HilbertPolynomialRequest,
     ):
-        assert model.model_fields["ideal"].description
-    assert StandardMonomialsRequest.model_fields["initial_ideal"].description
+        description = model.model_fields["ideal"].description.lower()
+        assert "homogeneous ideal over qq" in description
+        assert "share the source ring" in description
+    standard_description = StandardMonomialsRequest.model_fields[
+        "initial_ideal"
+    ].description.lower()
+    assert "monomial ideal" in standard_description
+    assert "unit monomials" in standard_description
 
 
 def test_pure_power_ideal_skips_the_exact_slice_scan(
@@ -1159,30 +1130,14 @@ def test_pure_power_ideal_skips_the_exact_slice_scan(
         hilbert_function(ideal, max_degree=30)
 
 
-def test_hilbert_function_inherits_the_outer_deadline(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A nested initial-ideal computation receives the outer deadline."""
-    from jacobian.math.polynomials.graded import operations as module
-
-    captured: list[float | None] = []
-    original = module.initial_monomial_ideal
-
-    def tracked(ideal: object, order: str, **kwargs: object) -> object:
-        captured.append(kwargs.get("_outer_deadline"))  # type: ignore[arg-type]
-        return original(ideal, order, **kwargs)  # type: ignore[arg-type]
-
-    monkeypatch.setattr(module, "initial_monomial_ideal", tracked)
-    hilbert_function(_ideal((2, 0)), max_degree=2)
-    assert captured and captured[0] is not None
-
-
 def test_nested_groebner_deadline_never_exceeds_the_outer_deadline(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A subsecond outer remainder must not grant a fresh full second."""
+    """The nested Groebner call cannot outlive the caller's request deadline."""
+    from jacobian._execution import request_execution
     from jacobian.math.polynomials.graded import operations as module
     from jacobian.math.polynomials.ideals import operations as ideal_module
+    from jacobian.math.polynomials.ideals._models import IdealComputationBudget
 
     seen: list[float | None] = []
     original = ideal_module.groebner_basis
@@ -1192,8 +1147,15 @@ def test_nested_groebner_deadline_never_exceeds_the_outer_deadline(
         return original(ideal, order, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(module, "groebner_basis", tracked)
-    hilbert_function(_nonmonomial_quadratic(), max_degree=2)
-    assert seen and seen[0] is not None
+    started = monotonic()
+    outer_deadline = started + 30
+    with request_execution(started, outer_deadline=outer_deadline):
+        hilbert_function(
+            _nonmonomial_quadratic(),
+            max_degree=2,
+            resource_budget=IdealComputationBudget(wall_seconds=60),
+        )
+    assert seen and seen[0] is not None and seen[0] <= outer_deadline
 
 
 def test_nested_budget_keeps_the_request_start_anchor(

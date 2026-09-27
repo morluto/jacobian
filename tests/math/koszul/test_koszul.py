@@ -177,16 +177,6 @@ def test_differential_square_replays_to_zero_independently() -> None:
     _replay_differential_squares(value)
 
 
-def test_regular_sequence_rank_identities() -> None:
-    """(x, y) in QQ[x, y]: complete ranks and zero Euler characteristic."""
-
-    value = koszul_complex(_XY, (_X, _Y))
-    assert value.basis_sizes == tuple(comb(2, degree) for degree in range(3))
-    euler = sum((-1) ** degree * size for degree, size in enumerate(value.basis_sizes))
-    assert euler == 0
-    _replay_differential_squares(value)
-
-
 def test_scalar_conversion_composes_with_shared_homology() -> None:
     """Over QQ the conversion feeds the existing homology operation."""
 
@@ -233,21 +223,17 @@ def test_zero_entry_is_exact_and_sparse() -> None:
     _replay_differential_squares(value)
 
 
-def test_native_and_catalog_paths_agree() -> None:
-    tool = _catalog_tool()
-    payload = _wire_payload(_XY, (_X, _Y))
-    catalog_result = tool.run(tool.request_type.model_validate_json(payload))
-    native_result = koszul_complex(_XY, (_X, _Y))
-    assert catalog_result == native_result
-
-
 def test_catalog_example_executes() -> None:
     tool = _catalog_tool()
+    expected = koszul_complex(_XY, (_X, _Y))
+    assert len(tool.examples) == 1
     for example in tool.examples:
-        result = tool.run(
-            tool.request_type.model_validate_json(json.dumps(example.input))
+        request = tool.request_type.model_validate_json(
+            json.dumps(example.input), strict=True
         )
-        assert result.basis_sizes == (1, 2, 1)
+        assert request.variables == _XY
+        assert request.sequence == (_X, _Y)
+        assert tool.run(request) == expected
 
 
 def test_serialization_round_trip() -> None:

@@ -1,8 +1,9 @@
 # Jacobian documentation
 
-Jacobian is a stateless mathematical tool layer for agents: `math.find` matches
-typed operations or reads one exact contract, `math.run` executes it, and the
-caller composes the returned mathematical values.
+Jacobian provides a native mathematical library and a catalog of published
+operations. Through MCP, `math.find` matches operations or reads one exact
+contract, `math.run` executes it, and the caller composes the returned values.
+Native Python callers can use domain functions without a catalog or server.
 
 ## Choose a path
 
@@ -24,8 +25,9 @@ caller composes the returned mathematical values.
   why operations are semantically atomic and how vocabulary gaps are discovered.
 - [Product model](explanation/product-blueprint.md) — caller/server ownership and
   public contract boundaries.
-- [Architecture](explanation/architecture.md) — package structure and execution
-  boundaries.
+- [Architecture](explanation/architecture.md) — the responsibility map for
+  library, publication, and delivery; values versus requests; trust and limit
+  ownership; package organization; and a worked operation path.
 
 ### Deploy or contribute
 
@@ -45,10 +47,12 @@ caller composes the returned mathematical values.
   defects that adapters compensate for, with guard tests.
 - [Operation references](reference/operations/index.md) — external-boundary
   notes that are not captured by the live schema.
+- [Proper hypergeometric terms](reference/proper-hypergeometric-terms.md) —
+  exact factorial-ratio carriers and their support semantics.
 - [Schemas and value interoperability](reference/value-interoperability.md) —
   canonical ownership, explicit conversions, and serialized trust boundaries.
-- [Graph deck values](reference/graph-decks.md) — source-bound deletion families
-  versus anonymous graph-card multisets and their canonical form.
+- [Finite basis matroids](reference/finite-basis-matroids.md) — the bounded
+  complete-basis carrier and exact basis-exchange contract.
 - [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
   polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and

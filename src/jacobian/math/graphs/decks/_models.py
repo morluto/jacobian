@@ -24,10 +24,10 @@ MAX_DECK_CARD_EDGES = 130_000
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
-MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
+MAX_UNLABELLED_EDGE_RESULT_UNITS = 1_000_000
 MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
-MAX_ANONYMOUS_CARD_RESULT_BYTES = 1_000_000
-MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
+MAX_ANONYMOUS_CARD_RESULT_UNITS = 1_000_000
+MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_UNITS // 64
 """Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
@@ -75,7 +75,8 @@ def _canonical_card_edges(
         )
         if best is None or bits < best:
             best = bits
-    assert best is not None
+    if best is None:
+        raise ValueError("permutation orbit must contain at least one ordering")
     labels = tuple(f"v{i:02d}" for i in range(n))
     return tuple(
         (labels[i], labels[j]) for bit, (i, j) in zip(best, pairs, strict=True) if bit
@@ -109,7 +110,12 @@ class AnonymousGraphCardClass(StrictModel):
 
     representative: SimpleUndirectedGraph
     multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(
-        ge=1, json_schema_extra={"pattern": "^[1-9][0-9]*$"}
+        ge=1,
+        json_schema_extra={
+            "pattern": "^[1-9][0-9]{0,11}(?![\\s\\S])",
+            "maxLength": 12,
+            "maximum": 999_999_999_999,
+        },
     )
 
 
@@ -136,11 +142,11 @@ class AnonymousGraphCardMultiset(StrictModel):
                 "anonymous_card_classes", "classes exceed the carrier bound"
             )
         pair_count = comb(n, 2)
-        output_bytes = len(self.classes) * (64 + 16 * pair_count)
-        if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
+        output_units = len(self.classes) * (64 + 16 * pair_count)
+        if output_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
             raise _validation_error(
                 "anonymous_card_output_bound",
-                "canonical classes exceed the result byte bound",
+                "canonical classes exceed the admitted result allocation bound",
             )
         previous_key: tuple[tuple[str, str], ...] | None = None
         expected_vertices = tuple(f"v{i:02d}" for i in range(n))
@@ -390,6 +396,44 @@ class VertexDeletionFamily(StrictModel):
         )
 
 
+class VertexDeckAnonymousMultisetRequest(StrictModel):
+    """Forget source identities from one complete vertex-deletion family."""
+
+    family: VertexDeletionFamily = Field(
+        description=(
+            "A complete exact source-bound vertex-deletion family, including "
+            "all cards and aligned receipts. The operation forgets source labels "
+            "after authenticating the family and returns its anonymous graph-card "
+            "multiset; source order is limited by the exact permutation work "
+            "envelope, including self-comparison closure: 2*n*(n-1)!* "
+            "((n-1) + 2*binom(n-1, 2)) <= 2,000,000 (n <= 7)."
+        ),
+    )
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_raw_family(cls, value: Any) -> Any:
+        """Apply the cheap source-order cap before nested card parsing."""
+        if not isinstance(value, dict):
+            return value
+        raw_family = value.get("family")
+        if not isinstance(raw_family, dict):
+            return value
+        raw_source = raw_family.get("source")
+        if not isinstance(raw_source, dict):
+            return value
+        vertices = raw_source.get("vertices")
+        if not isinstance(vertices, (tuple, list)):
+            return value
+        source_order = len(vertices)
+        if source_order > MAX_UNLABELLED_DECK_VERTICES + 1:
+            raise _validation_error(
+                "anonymous_source_order",
+                "source order exceeds the cheap structural envelope of 11 vertices",
+            )
+        return value
+
+
 class EdgeDeckRequest(StrictModel):
     """Compute one card for each source edge deletion."""
 
@@ -552,8 +596,9 @@ class UnlabelledVertexDeckRequest(StrictModel):
 
     deck: VertexDeletionFamily = Field(
         description=(
-            "A complete vertex-deletion family with at most 10 source vertices; "
-            "exact permutation canonicalization is bounded by 2000000 work units."
+            "A complete vertex-deletion family admitted through source order 8 "
+            "under n*(n-1)!*(1+(n-1)+binom(n-1, 2)) <= 2000000 exact "
+            "permutation-canonicalization work units."
         )
     )
 

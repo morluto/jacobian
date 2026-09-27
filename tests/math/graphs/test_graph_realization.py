@@ -125,9 +125,12 @@ class TestIsGraphical:
                 {"sequence": {"degrees": [-1, 2, 2, 1]}}
             )
 
-    def test_contract_rejects_empty_sequence(self) -> None:
-        with pytest.raises(ValidationError):
-            DegreeSequenceRequest.model_validate({"sequence": {"degrees": []}})
+    def test_empty_sequence_is_the_canonical_null_graph_degree_sequence(self) -> None:
+        sequence = DegreeSequenceRequest.model_validate({"sequence": {"degrees": []}}).sequence
+        assert degree_sequence_profile(sequence).is_graphical
+        result = graph_realization(sequence)
+        assert result.is_graphical
+        assert result.graph.vertex_count == 0
 
     def test_contract_rejects_degree_exceeding_bound(self) -> None:
         with pytest.raises(ValidationError):

@@ -8,7 +8,7 @@ from typing import NoReturn
 
 from pydantic import ValidationError
 
-from jacobian.canonical import decimal_digit_width, format_canonical_integer
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -23,11 +23,12 @@ from jacobian.math.topology.chain_complexes.operations import mapping_cone
 from jacobian.math.topology.chain_complexes.values import (
     MAX_MATRIX_ENTRY_CHARS,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
 )
 
 _IntegerRows = tuple[tuple[int, ...], ...]
-_StringMatrix = tuple[tuple[str, ...], ...]
+_IntegerMatrix = tuple[tuple[int, ...], ...]
 
 
 def _domain_error(
@@ -237,14 +238,14 @@ def _exterior_power(matrix: _IntegerRows, degree: int) -> _IntegerRows:
     )
 
 
-def _mapping_components(matrix: _IntegerRows) -> tuple[_StringMatrix, ...]:
-    components: list[_StringMatrix] = []
+def _mapping_components(matrix: _IntegerRows) -> tuple[_IntegerMatrix, ...]:
+    components: list[_IntegerMatrix] = []
     for degree in range(len(matrix) + 1):
         exterior = _exterior_power(matrix, degree)
         components.append(
             tuple(
                 tuple(
-                    format_canonical_integer(entry - (1 if row == column else 0))
+                    entry - (1 if row == column else 0)
                     for column, entry in enumerate(entries)
                 )
                 for row, entries in enumerate(exterior)
@@ -257,7 +258,7 @@ def _torus_complex(rank: int) -> ChainComplexValue:
     basis_sizes = tuple(comb(rank, degree) for degree in range(rank + 1))
     differentials = tuple(
         tuple(
-            tuple("0" for _ in range(basis_sizes[degree + 1]))
+            tuple(0 for _ in range(basis_sizes[degree + 1]))
             for _ in range(basis_sizes[degree])
         )
         for degree in range(rank)
@@ -293,7 +294,13 @@ def mapping_torus_chain_complex(
             "finite_order_exponent does not satisfy linear_part^m = I",
         )
     torus = _torus_complex(admitted.row_count)
-    return mapping_cone(torus, torus, _mapping_components(rows)).value
+    return mapping_cone(
+        ChainMapValue(
+            source=torus,
+            target=torus,
+            map_matrices=_mapping_components(rows),
+        )
+    ).value
 
 
 __all__ = ["mapping_torus_chain_complex"]

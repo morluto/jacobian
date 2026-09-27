@@ -11,13 +11,12 @@ The result is `AnonymousGraphCardMultiset`: an ordered tuple of distinct
 isomorphism classes with fixed-width labels `v00`, `v01`, and so on. Its
 canonical form is the lexicographically least zero/one adjacency vector over
 all vertex permutations, using pair order `(0,1), (0,2), ..., (n-2,n-1)`.
-This makes relabelings serialize to the same value. Deserialization checks the
-same permutation-minimality condition and rejects repeated isomorphism
-classes. That check admits work before canonicalization, charging every
-permutation for adjacency-vector generation and a worst-case full-vector
-comparison (which is reached when candidates tie, such as for empty or complete
-graphs), along with per-order setup. Operation construction uses a trusted
-kernel path after its own request admission to avoid repeating the computation.
+This makes relabelings serialize to the same value. Deserialization enforces
+the structural representation (fixed labels, valid ordered edges, and strictly
+ordered distinct edge-tuples), but deliberately does not recompute permutation
+minimality: doing so would repeat factorial mathematical work outside the
+operation's admission and deadline. Canonicality is guaranteed by the
+constructing operation, not by decoding an untrusted value.
 
 This anonymous value stores neither a source graph nor deletion identifiers.
 It does not assert that the card multiset is realizable as a vertex or edge

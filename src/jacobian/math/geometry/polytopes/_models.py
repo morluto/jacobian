@@ -2231,10 +2231,21 @@ class PrismResult(StrictModel):
             "bottom vertices carry last coordinate 0 and top vertices carry 1."
         )
     )
-    height_axis: CoordinateAxis
-    source_space: RationalCoordinateSpace
+    height_axis: CoordinateAxis = Field(
+        description=(
+            "Named vertical axis in the returned prism space; it is the final "
+            "axis and carries bottom height 0 and top height 1."
+        )
+    )
+    source_space: RationalCoordinateSpace = Field(
+        description="Axis context of the prism base, retained for reconstruction."
+    )
     source_axis_map: tuple[PolytopeAxisTransport, ...] = Field(
-        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION
+        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION,
+        description=(
+            "Ordered injection of the source axes into the prism coordinates; "
+            "together with a bottom vertex map it reconstructs the source V-value."
+        ),
     )
     bottom_vertex_map: tuple[PrismVertexMap, ...] = Field(
         min_length=1,
@@ -2262,9 +2273,9 @@ class PrismResult(StrictModel):
             )
         if (
             tuple(row.source_axis for row in self.source_axis_map)
-            != self.source_space.axes
+            != (self.source_space.axes)
             or tuple(row.target_axis for row in self.source_axis_map)
-            != self.prism.space.axes[:-1]
+            != (self.prism.space.axes[:-1])
         ):
             raise _validation_error(
                 "prism_axis_transport",
@@ -2411,14 +2422,25 @@ class JoinResult(StrictModel):
             "carry left-block 0 and height 1."
         )
     )
-    height_axis: CoordinateAxis
-    left_space: RationalCoordinateSpace
-    right_space: RationalCoordinateSpace
+    height_axis: CoordinateAxis = Field(
+        description=(
+            "Named vertical axis in the returned join space; it is the final "
+            "axis and carries left height 0 and right height 1."
+        )
+    )
+    left_space: RationalCoordinateSpace = Field(
+        description="Axis context of the left factor, retained for reconstruction."
+    )
+    right_space: RationalCoordinateSpace = Field(
+        description="Axis context of the right factor, retained for reconstruction."
+    )
     left_axis_map: tuple[PolytopeAxisTransport, ...] = Field(
-        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION
+        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION,
+        description="Ordered injection of left-factor axes into join coordinates.",
     )
     right_axis_map: tuple[PolytopeAxisTransport, ...] = Field(
-        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION
+        max_length=MAX_RATIONAL_POLYTOPE_DIMENSION,
+        description="Ordered injection of right-factor axes into join coordinates.",
     )
     left_vertex_map: tuple[JoinVertexMap, ...] = Field(
         min_length=1,
@@ -2444,8 +2466,7 @@ class JoinResult(StrictModel):
         left_width = len(self.left_space.axes)
         right_width = len(self.right_space.axes)
         if len(self.join.space.axes) != left_width + right_width + 1 or (
-            tuple(row.source_axis for row in self.left_axis_map)
-            != self.left_space.axes
+            tuple(row.source_axis for row in self.left_axis_map) != self.left_space.axes
             or tuple(row.target_axis for row in self.left_axis_map)
             != self.join.space.axes[:left_width]
             or tuple(row.source_axis for row in self.right_axis_map)
@@ -2834,7 +2855,6 @@ __all__ = [
     "JoinRequest",
     "JoinResult",
     "JoinVertexMap",
-    "PolytopeAxisTransport",
     "PolytopeEdge",
     "PolytopeSupportRequest",
     "PolytopeSupportResult",

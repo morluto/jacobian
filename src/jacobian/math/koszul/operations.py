@@ -6,7 +6,6 @@ from fractions import Fraction
 from itertools import combinations
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.koszul._admission import (
     SparsePolynomial,
@@ -72,20 +71,6 @@ def _as_value(
     )
     return RationalPolynomial(
         variables=variables, polynomial=SparseRationalPolynomial(terms=terms)
-    )
-
-
-def _scalar_spelling(polynomial: SparsePolynomial) -> str:
-    """Spell one constant polynomial in the canonical chain-complex grammar."""
-
-    if not polynomial:
-        return "0"
-    coefficient = next(iter(polynomial.values()))
-    if coefficient.denominator == 1:
-        return format_canonical_integer(coefficient.numerator)
-    return (
-        f"{format_canonical_integer(coefficient.numerator)}/"
-        f"{format_canonical_integer(coefficient.denominator)}"
     )
 
 

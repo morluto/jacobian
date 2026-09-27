@@ -163,11 +163,11 @@ def cartan_type_matrix(cartan_type: str, rank: int) -> tuple[tuple[int, ...], ..
             for row in range(rank)
         ]
         if cartan_type == "B":
-            rows[rank - 2][rank - 1] = -2
-            rows[rank - 1][rank - 2] = -1
-        else:
             rows[rank - 2][rank - 1] = -1
             rows[rank - 1][rank - 2] = -2
+        else:
+            rows[rank - 2][rank - 1] = -2
+            rows[rank - 1][rank - 2] = -1
         return tuple(tuple(row) for row in rows)
     if cartan_type == "D":
         rows = [[0] * rank for _ in range(rank)]

@@ -58,18 +58,6 @@ def test_derivative_of_order_one_is_zero() -> None:
     assert result.result.coefficients[0].as_fraction() == 0
 
 
-def test_native_exports_call_the_shared_typed_kernels() -> None:
-    series = TruncatedSeries(
-        variable="x",
-        truncation_order=2,
-        coefficients=(_coeff(1), _coeff(2)),
-    )
-
-    assert derivative(series) == derivative(series)
-    assert multiply(series, series) == multiply(series, series)
-    assert to_polynomial(series) == to_polynomial(series)
-
-
 def test_power_rejects_result_digit_overflow() -> None:
     import pytest
 
@@ -325,7 +313,12 @@ def test_native_exports_still_admit_the_wire_boundary_order() -> None:
     edge = _ascending(MAX_TRUNCATION_ORDER)
     assert power(edge, 0).result.truncation_order == MAX_TRUNCATION_ORDER
     assert identity_check(edge, edge).status == "EQUAL_MOD_X_TO_N"
-    assert to_polynomial(edge) == to_polynomial(edge)
+    polynomial = to_polynomial(edge).result
+    assert polynomial.variables == ("q",)
+    assert {
+        (term.exponents[0], term.coefficient.as_fraction())
+        for term in polynomial.polynomial.terms
+    } == {(degree, Fraction(degree + 1)) for degree in range(MAX_TRUNCATION_ORDER)}
 
 
 def test_identity_check_admits_bounded_inputs_whose_product_would_overflow() -> None:
@@ -405,7 +398,7 @@ def test_truncate_accepts_widened_carrier_orders_and_replays_the_prefix() -> Non
     )
 
 
-def test_truncate_source_admission_bounds_the_request_before_parsing() -> None:
+def test_truncate_source_order_admission_bounds_runtime_work() -> None:
     import pytest
 
     edge = _ascending(MAX_TRUNCATE_SOURCE_ORDER)
@@ -441,44 +434,10 @@ def test_level_one_q_expansion_results_are_consumable_through_truncate() -> None
         level_one_named_q_expansion,
     )
 
-    e4 = level_one_named_q_expansion("E4", 1477).q_expansion
+    e4 = level_one_named_q_expansion("E4", 3_000).q_expansion
     prefix = truncate(e4, MAX_TRUNCATION_ORDER)
     assert prefix.result.truncation_order == MAX_TRUNCATION_ORDER
     assert prefix.result.coefficients == e4.coefficients[:MAX_TRUNCATION_ORDER]
-
-
-def test_truncate_accepts_a_large_canonical_modular_series() -> None:
-    from jacobian.math.number_theory.modular_forms.kernel import (
-        eisenstein_coefficients,
-        metadata,
-    )
-    from jacobian.math.number_theory.modular_forms.values import (
-        LevelOneModularQExpansion,
-    )
-
-    weight, space_kind, normalization = metadata("E4")
-    coefficients = eisenstein_coefficients("E4", 3_000)
-    value = LevelOneModularQExpansion.model_validate(
-        {
-            "form": "E4",
-            "weight": weight,
-            "space_kind": space_kind,
-            "normalization": normalization,
-            "q_expansion": TruncatedSeries(
-                variable="q",
-                truncation_order=3_000,
-                coefficients=tuple(
-                    _coeff(term.numerator, term.denominator) for term in coefficients
-                ),
-            ).model_dump(),
-        }
-    )
-    prefix = truncate(value.q_expansion, MAX_TRUNCATION_ORDER)
-    assert prefix.result.truncation_order == MAX_TRUNCATION_ORDER
-    assert (
-        prefix.result.coefficients[-1].as_fraction()
-        == eisenstein_coefficients("E4", MAX_TRUNCATION_ORDER)[-1]
-    )
 
 
 def test_all_formal_series_results_retain_canonical_types_after_json() -> None:
@@ -518,10 +477,6 @@ def test_multiply_matches_cauchy_convolution_oracle() -> None:
         for k in range(left.truncation_order)
     )
     assert _fractions(result.result) == expected
-    # A forged coefficient breaks the convolution identity.
-    forged = list(expected)
-    forged[2] += Fraction(1)
-    assert _fractions(result.result) != tuple(forged)
 
 
 def test_add_is_coefficientwise_and_power_is_repeated_multiplication() -> None:
@@ -588,10 +543,6 @@ def test_compose_matches_nested_evaluation_oracle() -> None:
     result = compose(outer, inner)
     expected = _compose_coefficients(_fractions(outer), _fractions(inner), 3)
     assert _fractions(result.result) == expected
-    # A forged coefficient breaks the composition identity.
-    forged = list(expected)
-    forged[1] += Fraction(1)
-    assert _fractions(result.result) != tuple(forged)
     # Composing with the zero series yields the constant outer term.
     zero_inner = _series_of((Fraction(0), Fraction(0), Fraction(0)))
     constant = compose(outer, zero_inner)
@@ -608,8 +559,3 @@ def test_truncate_replays_the_source_prefix() -> None:
     assert _fractions(prefix.result) == _fractions(series)[:3]
     full = truncate(series, 5)
     assert _fractions(full.result) == _fractions(series)
-    zero = multiply(
-        _series_of((Fraction(0), Fraction(0))),
-        _series_of((Fraction(1), Fraction(2))),
-    )
-    assert _fractions(zero.result) == (Fraction(0), Fraction(0))

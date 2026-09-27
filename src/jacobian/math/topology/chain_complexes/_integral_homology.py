@@ -1460,6 +1460,8 @@ def _execute_smith_reduction(
 
 def compute_integral_homology(
     plan: IntegralHomologyExecutionPlan,
+    *,
+    right_inverses: list[Matrix] | None = None,
 ) -> tuple[IntegralHomologyGroupValue, ...]:
     """Execute the two certified Smith reductions in every admitted degree."""
 
@@ -1491,6 +1493,8 @@ def compute_integral_homology(
         cycle_rank = degree_plan.chain_rank - outgoing_rank
         cycle_basis = matrix_columns(outgoing_reduction.right, start=outgoing_rank)
         right_inverse = outgoing_execution.right_inverse
+        if right_inverses is not None:
+            right_inverses.append(right_inverse)
         all_cycle_coordinates = matrix_multiply(
             right_inverse,
             degree_plan.incoming,

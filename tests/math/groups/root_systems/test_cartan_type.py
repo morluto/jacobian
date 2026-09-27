@@ -24,8 +24,8 @@ Matrix = tuple[tuple[int, ...], ...]
 A1: Matrix = ((2,),)
 A2: Matrix = ((2, -1), (-1, 2))
 A3: Matrix = ((2, -1, 0), (-1, 2, -1), (0, -1, 2))
-B2: Matrix = ((2, -2), (-1, 2))
-C2: Matrix = ((2, -1), (-2, 2))
+B2: Matrix = ((2, -1), (-2, 2))
+C2: Matrix = ((2, -2), (-1, 2))
 G2: Matrix = ((2, -3), (-1, 2))
 D4: Matrix = (
     (2, -1, 0, 0),
@@ -139,8 +139,8 @@ class TestCartanTypeKnownAnswers:
     def test_b_and_c_differ_only_in_bond_direction(self) -> None:
         long_end = cartan_matrix_from_type("B", 3).matrix.entries
         short_end = cartan_matrix_from_type("C", 3).matrix.entries
-        assert long_end[1][2] == -2 and long_end[2][1] == -1
-        assert short_end[1][2] == -1 and short_end[2][1] == -2
+        assert long_end[1][2] == -1 and long_end[2][1] == -2
+        assert short_end[1][2] == -2 and short_end[2][1] == -1
 
     def test_e_family_shares_the_branch_node(self) -> None:
         for rank in (6, 7, 8):

@@ -4,6 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.ore_algebras._models import (
+    DFinitePowerSeries,
+    DFinitePowerSeriesRequest,
     DifferentialOperatorAddRequest,
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyRequest,
@@ -32,6 +34,7 @@ from jacobian.math.ore_algebras.operations import (
     differential_operator_apply,
     differential_operator_multiply,
     differential_operator_normalize_polynomial_coefficients,
+    differential_series_construct,
     polynomial_recurrence_generate_prefix,
     shift_operator_add,
     shift_operator_apply_to_sequence_prefix,
@@ -90,10 +93,61 @@ def _operator(terms: list[tuple[int, dict[str, Any]]]) -> dict[str, Any]:
     }
 
 
+def _differential_operator(terms: list[tuple[int, dict[str, Any]]]) -> dict[str, Any]:
+    return {
+        "variable": "x",
+        "terms": [
+            {"order": order, "coefficient": coefficient} for order, coefficient in terms
+        ],
+    }
+
+
 _DIFF_ONE = _rf_num_den([(1, [0])], [(1, [0])], "x")
 _DIFF_X = _rf_num_den([(1, [1])], [(1, [0])], "x")
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="holonomic.differential_series.construct",
+        title="Represent a D-finite formal power series",
+        description=(
+            "Bind a nonzero differential Ore operator over QQ(x) to the "
+            "exact initial derivatives f(0), ..., f^(r-1)(0), where r is "
+            "the operator order. Every coefficient must be regular at x=0 "
+            "and the leading coefficient must be nonzero there. These "
+            "ordinary-point data determine one exact formal Taylor series; "
+            "the value does not assert analytic convergence or materialize "
+            "a coefficient prefix."
+        ),
+        request_type=DFinitePowerSeriesRequest,
+        result_type=DFinitePowerSeries,
+        run=lambda request: differential_series_construct(
+            request.operator, request.initial_derivatives
+        ),
+        tags=("holonomic", "d-finite", "formal-power-series", "exact"),
+        discovery_terms=(
+            "represent a D-finite power series",
+            "formal series differential equation initial values",
+            "holonomic series ordinary point",
+        ),
+        examples=(
+            OperationExample(
+                name="sinh_series_from_ode",
+                description=(
+                    "Represent the unique formal series satisfying y''-y=0, "
+                    "y(0)=0, and y'(0)=1."
+                ),
+                input={
+                    "operator": _differential_operator(
+                        [
+                            (0, _rf_num_den([(-1, [0])], [(1, [0])], "x")),
+                            (2, _DIFF_ONE),
+                        ]
+                    ),
+                    "initial_derivatives": {"values": ["0", "1"]},
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="ore.shift.operator.add.compute",
         title="Add polynomial-coefficient shift operators",

@@ -462,6 +462,58 @@ def _admit_character_form(
     return space, field, scalar, character_request
 
 
+def _modular_character_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Compare canonical coordinates in one identical character space."""
+    if (
+        type(left) is not ModularFormCoordinates
+        or type(right) is not ModularFormCoordinates
+    ):
+        _domain("character equality requires canonical coordinate values")
+    if (
+        left.basis_id == "gamma0-cyclotomic-character-sturm-rref-v1"
+        and right.basis_id == left.basis_id
+    ):
+        space, field, _ = _require_basis_space(left.space)
+        cusp_dimension, full_dimension = character_space_dimensions(
+            space.level,
+            space.weight,
+            cast(DirichletCharacter, space.character),
+            field,
+        )
+        expected_dimension = cusp_dimension if space.kind == "S" else full_dimension
+        if (
+            right.space != space
+            or type(left.coordinates) is not tuple
+            or type(right.coordinates) is not tuple
+            or len(left.coordinates) != expected_dimension
+            or len(right.coordinates) != expected_dimension
+            or not 1 <= expected_dimension <= 32
+        ):
+            _domain(
+                "generic character coordinates must cover the exact canonical basis axis"
+            )
+        for form in (left, right):
+            for coordinate in form.coordinates:
+                if (
+                    type(coordinate) is not RationalCyclotomicElement
+                    or coordinate.field != field
+                ):
+                    _domain(
+                        "generic character coordinates must use the exact coefficient field"
+                    )
+                cyclotomic._validate_element(coordinate)
+        return left.coordinates == right.coordinates
+    left_admitted = _admit_character_form(left)
+    if right.space != left_admitted[0]:
+        _domain("character equality requires the identical modular-form space")
+    right_admitted = _admit_character_form(
+        right, (left_admitted[0], left_admitted[1], left_admitted[3])
+    )
+    return left_admitted[2] == right_admitted[2]
+
+
 def _character_form_prefix(
     form: ModularFormCoordinates,
     admitted: tuple[

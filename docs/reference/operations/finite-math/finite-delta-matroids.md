@@ -31,6 +31,11 @@ result-binding obstruction check. The aggregate worst case is therefore
 1,000,000 candidate checks per accepted call, which is part of this operation's
 advertised envelope rather than a universal result-construction rule.
 
+The catalog also exposes exact twists, widths, duals, deletion/contraction
+minors, and binary principal-minor reconstruction. These are separate
+mathematical postconditions rather than fields of the recognition result.
+Graph conversions, interlace and transition polynomials, lower/upper matroids,
+and graph local-complement profiles remain outside the current contract.
 
 `delta_matroid.twist.compute` returns a `DeltaMatroidTwistResult` that retains
 the source `FiniteDeltaMatroid`, the sorted ground-index subset, and the exact
@@ -51,7 +56,6 @@ deletion/contraction minor operations return complete reusable delta-matroid
 values. `delta_matroid.from_binary_matrix.compute` enumerates all principal
 submatrices of an admitted symmetric `GF(2)` matrix and selects exactly those
 with nonzero determinant.
-
 `delta_matroid.twist_width_profile.compute` returns one width for every subset
 of the ground set. The tuple position is the integer subset mask, with bit
 `i` selecting ground element `i`; thus position zero is the untwisted width.
@@ -59,14 +63,12 @@ Before exchange validation or profile computation, admission bounds the state
 count to 4,096 and the product of states and feasible rows to 262,144. The
 profile is complete within this admitted scope; an over-limit request is
 rejected, never returned as a partial profile.
-
 `delta_matroid.feasible_size_profile.compute` returns the exact histogram
 `(c_0, ..., c_|E|)`, where `c_k` counts feasible sets with cardinality `k`.
 The result retains the labelled ground axis. Admission bounds the complete
 output to 4,096 entries and 32,768 retained allocation units (one per entry
 index position, per decimal digit of each count, and per ground label
 codepoint) before validating the source exchange axiom.
-
 `delta_matroid.direct_sum.compute` combines two values whose labelled grounds
 are disjoint. Its ground axis concatenates the left and right grounds, with the
 corresponding index injections returned explicitly. Each output feasible set
@@ -80,17 +82,32 @@ The product family satisfies symmetric exchange by the direct-sum theorem, so
 admission does not charge a recognition replay this operation never performs.
 Input ground labels must be disjoint; overlapping names are rejected rather
 than silently tagged.
-
 Graph conversions, other interlace or transition polynomials, and graph
 local-complement profiles remain outside the current contract.
-
-The catalog also exposes exact twists, widths, duals, deletion/contraction
 minors, binary principal-minor reconstruction, relabelling, and the
 subset-distance interlace polynomial. These are separate mathematical
 postconditions rather than fields of the recognition result.
 
+`delta_matroid.twist.compute` returns the canonical twisted
+`FiniteDeltaMatroid`. `delta_matroid.width.compute` returns the exact width
+`max(|F|)-min(|F|)` over the complete feasible family.
 
+`delta_matroid.relabel.compute` renames and reorders the ground axis through a
+bijective `target_to_source` map. Each feasible subset is transported by the
+inverse `source_to_target` map, with its indices sorted in the target axis; the
+result retains both source and target delta-matroids and both maps. The empty
+ground set and the identity permutation are valid. The operation admits at most
+2,049 ground positions, 16,384 source feasible-set memberships, 2,048 UTF-8
+bytes of target labels, 329,784 units of axis-check and row-transport work,
+73,740 materialized result cells (retained labels, rows, memberships, and axis
+maps), and 903,524 total reserved work units, including two 250,000-candidate
+source-exchange passes for admission and recognition. Source exchange checks and
+relabelling work are admitted before target feasible rows are materialized. Relabelling preserves the symmetric-exchange axiom because
+a bijection preserves symmetric difference and membership.
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
+Width `max(|F|)-min(|F|)` is a native projection of the feasible family and is
+not a catalog operation. It scans every retained feasible-row length of the
+canonical value and has no extra row ceiling.
 
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 The native `lower_matroid` and `upper_matroid` conversions return canonical
@@ -105,7 +122,6 @@ carriers must call `require_basis_exchange()` before relying on the matroid
 claim. The lower/upper matroid theorem is stated in Section 6.1 of Dupont, Fink,
 and Moci, [*Universal Tutte characters via combinatorial
 coalgebras*](https://doi.org/10.5802/alco.35).
-
 These conversions retain the 16,384 source-membership, 2,048 UTF-8 source-label,
 and 250,000 source exchange-work limits. The target `FiniteBasisMatroid` admits
 at most 64 ground labels, 4,096 basis rows, 65,536 basis memberships, 1,024
@@ -114,7 +130,6 @@ basis-exchange candidate checks. Output bounds are checked before materializing
 the selected basis family. A source with more than 64 ground elements remains a
 valid delta-matroid input but is refused for these conversions because the
 canonical basis carrier cannot represent that output size.
-
 `delta_matroid.width.compute` returns the exact width
 `max(|F|)-min(|F|)` over the complete feasible family and has no extra row
 ceiling.
@@ -165,7 +180,6 @@ source-exchange passes for admission and recognition. Source exchange checks and
 relabelling work are admitted before target feasible rows are materialized.
 Relabelling preserves the symmetric-exchange axiom because a bijection preserves
 symmetric difference and membership.
-
 `delta_matroid.twist_polynomial.compute` returns the exact twist polynomial
 \[
   \mathrm{Tw}_D(z)=\sum_{A\subseteq E}z^{\mathrm{width}(D*A)},
@@ -187,7 +201,6 @@ Native source revalidation and UTF-8 checks copy retained labels, however, so
 this operation admits at most 1,000,000 aggregate ground-label codepoints
 before copying them. Labels must remain unique and UTF-8-representable;
 wire-byte limits belong to the delivery boundary.
-
 `delta_matroid.distance_interlace_polynomial.compute` returns the exact
 distance histogram and the polynomial
 `Q_D(x) = sum_{X subset E} (x - 1)^{d_D(X)}`, where

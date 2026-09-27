@@ -217,14 +217,18 @@ def test_order_complex_result_rejects_reversed_and_incomparable_chains() -> None
     )
     forged = comparable.model_dump()
     forged["maximal_chains"] = [["b", "a"]]
-    with pytest.raises(ValueError, match="cover relations"):
+    with pytest.raises(
+        ValueError, match="maximal_chains must be determined by the retained poset"
+    ):
         OrderComplexResult.model_validate_json(json.dumps(forged))
 
     antichain = order_complex(OrderComplexRequest(poset=_poset(("a", "b"), ())))
     forged = antichain.model_dump()
     forged["maximal_chains"] = [["a", "b"]]
     forged["complex"] = canonical_complex(("a", "b"), (("a", "b"),)).model_dump()
-    with pytest.raises(ValueError, match="cover relations"):
+    with pytest.raises(
+        ValueError, match="maximal_chains must be determined by the retained poset"
+    ):
         OrderComplexResult.model_validate(forged)
 
 
@@ -235,7 +239,7 @@ def test_order_complex_result_rejects_coordinated_forged_poset_covers() -> None:
     forged["maximal_chains"] = [["b", "a"]]
     decoded_poset = type(result.poset).model_validate(forged["poset"])
     assert not verify_finite_poset(decoded_poset)
-    with pytest.raises(ValueError, match="canonical finite poset"):
+    with pytest.raises(ValueError, match="poset must be canonical"):
         OrderComplexResult.model_validate_json(json.dumps(forged))
 
 
@@ -383,7 +387,7 @@ def test_order_complex_rechecks_caller_supplied_poset_claims() -> None:
     poset = _poset(("a", "b"), (("a", "b"),))
     malformed = poset.model_copy(update={"poset_digest": "sha256:" + "0" * 64})
 
-    with pytest.raises(OperationDomainValidationError, match="canonical finite poset"):
+    with pytest.raises(OperationDomainValidationError, match="poset must be canonical"):
         order_complex(OrderComplexRequest(poset=malformed))
 
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from itertools import combinations
+from itertools import combinations, pairwise
 from math import gcd
 from typing import Literal, Self
 
@@ -1283,7 +1283,6 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
             )
     if lattice_index == 0:
         raise ValueError("normality requires a full-rank generated lattice")
-    ambient_ray_determinant = abs(lower[0] * upper[1] - lower[1] * upper[0])
     # Compute the exact order of each primitive ray in Z^2 / L. Appending a
     # ray to the generator matrix changes the generated lattice index from D
     # to gcd(D, det(ray, v_1), ..., det(ray, v_m)); the quotient is the least
@@ -1298,9 +1297,16 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
             )
         ray_orders.append(lattice_index // enlarged_index)
     lower_order, upper_order = ray_orders
-    candidate_bound = min(
-        MAX_AFFINE_NORMALITY_CANDIDATES,
-        ambient_ray_determinant * lower_order * upper_order // lattice_index + 1,
+    # Subdivide the cone at its input generator rays before pricing the
+    # normalization candidates. Each adjacent lattice cone contributes at
+    # most its determinant plus one Hilbert generators.
+    candidate_bound = _subdivided_hilbert_candidate_bound(
+        lower,
+        upper,
+        lower_order,
+        upper_order,
+        unique_vectors,
+        lattice_index,
     )
     ray_grades = tuple(
         sum(grading[row] * ray[row] for row in range(2)) for ray in (lower, upper)
@@ -1350,6 +1356,39 @@ def _preflight_normality_work(semigroup: PositiveAffineSemigroup) -> None:
                 f"{MAX_AFFINE_NORMALITY_WORK}-unit work envelope"
             ),
         )
+
+
+def _subdivided_hilbert_candidate_bound(
+    lower: tuple[int, int],
+    upper: tuple[int, int],
+    lower_order: int,
+    upper_order: int,
+    generators: tuple[tuple[int, int], ...],
+    lattice_index: int,
+) -> int:
+    points = [
+        (lower_order * lower[0], lower_order * lower[1]),
+        *generators,
+        (upper_order * upper[0], upper_order * upper[1]),
+    ]
+
+    def ray_key(point: tuple[int, int]) -> tuple[int, Fraction]:
+        numerator = lower[0] * point[1] - lower[1] * point[0]
+        denominator = point[0] * upper[1] - point[1] * upper[0]
+        return (1, Fraction(0)) if denominator == 0 else (0, Fraction(numerator, denominator))
+
+    points.sort(key=ray_key)
+    ordered_rays: list[tuple[int, int]] = []
+    for point in points:
+        if not ordered_rays or (
+            ordered_rays[-1][0] * point[1] - ordered_rays[-1][1] * point[0]
+        ) != 0:
+            ordered_rays.append(point)
+    bound = sum(
+        abs(left[0] * right[1] - left[1] * right[0]) // lattice_index + 1
+        for left, right in pairwise(ordered_rays)
+    )
+    return min(MAX_AFFINE_NORMALITY_CANDIDATES, bound)
 
 
 def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:

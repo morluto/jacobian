@@ -155,6 +155,13 @@ def test_normality_admits_the_unit_grade_eight_cone_generators() -> None:
     assert result.hole is None
 
 
+def test_normality_admits_large_sloped_generator_subdivision() -> None:
+    result = normality(_semigroup(((1, 0), (998, 999), (1, 1))))
+
+    assert result.normal
+    assert result.hole is None
+
+
 def test_normality_manifest_example_round_trips() -> None:
     tool = next(
         tool

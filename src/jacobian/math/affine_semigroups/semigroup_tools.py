@@ -164,6 +164,8 @@ def _normality(r: AffineSemigroupNormalityRequest) -> AffineSemigroupNormality:
         return normality(r.semigroup)
     except OperationResourceAdmissionError:
         raise
+    except OperationDomainValidationError:
+        raise
     except (TypeError, ValueError, IndexError, OverflowError) as e:
         raise OperationDomainValidationError(
             location=("semigroup",),

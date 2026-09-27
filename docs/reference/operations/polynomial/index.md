@@ -94,6 +94,8 @@ to another polynomial operation.
 - [Finite sequence prefixes for shift operators](ore-shift-sequence-prefix.md)
 
 - [Exact cyclotomic polynomials](cyclotomic.md)
+- [Additive-group actions from locally nilpotent derivations](ga-actions-from-locally-nilpotent-derivations.md)
+- [Diagonal multiplicative-group actions](diagonal-gm-weight-actions.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Rational discrete antiderivatives](rational-discrete-antiderivative.md)
   compute the unique zero-based inverse of a selected-variable forward

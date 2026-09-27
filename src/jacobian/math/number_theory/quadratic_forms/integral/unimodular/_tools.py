@@ -25,7 +25,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=UnimodularChangeRequest,
         result_type=UnimodularChangeResult,
-        run=unimodular_change,
+        run=lambda request: unimodular_change(
+            request.form, request.matrix, request.target_axis
+        ),
         tags=("quadratic-form", "integral", "basis-change", "exact"),
         discovery_terms=(
             "unimodular equivalence transformation of an integral quadratic form",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
@@ -13,6 +14,7 @@ from jacobian._exact import (
 )
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
+from jacobian.math.groups.characters._cyclotomic import reduce_coefficients
 from jacobian.math.matrices.cyclic_linear._models import (
     MAX_CYCLIC_FIELD_ELEMENT_DIGITS,
     RationalCyclotomicElement,
@@ -259,6 +261,17 @@ class FiniteGaussSumResult(StrictModel):
             count < 0 or count > MAX_QUADRATIC_GAUSS_STATES for count in self.histogram
         ):
             raise ValueError("finite Gauss histogram exceeds its admitted state count")
+        reduced_histogram = reduce_coefficients(
+            self.modulus, tuple(Fraction(count) for count in self.histogram)
+        )
+        value_coordinates = tuple(
+            Fraction(coordinate.num, coordinate.den)
+            for coordinate in self.value.coefficients_ascending
+        )
+        if value_coordinates != reduced_histogram:
+            raise ValueError(
+                "finite Gauss value must be the reduction of its histogram"
+            )
         if any(
             max(len(str(abs(coordinate.num))), len(str(abs(coordinate.den))))
             > MAX_CYCLIC_FIELD_ELEMENT_DIGITS

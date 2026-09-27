@@ -138,17 +138,33 @@ def _validate_scale_request_before_dump(request: object) -> QuadraticFormScaleRe
         type(getattr(form, "domain", None)) is not str
         or getattr(form, "domain", None) != "QQ"
         or type(axis) is not tuple
-        or len(axis) > MAX_QUADRATIC_SCALE_AXIS
         or type(diagonal) is not tuple
         or len(diagonal) != len(axis)
         or type(crosses) is not tuple
-        or len(diagonal) + len(crosses) > MAX_QUADRATIC_SCALE_SUPPORT
         or any(type(label) is not str or not 1 <= len(label) <= 64 for label in axis)
     ):
         raise OperationDomainValidationError(
             location=("form",),
             code="quadratic_form.scale_invalid_request",
             message="quadratic-form scaling request exceeds its bounded shape",
+        )
+    if len(axis) > MAX_QUADRATIC_SCALE_AXIS:
+        raise OperationResourceAdmissionError(
+            location=("form", "axis"),
+            code="quadratic_form.scale_axis_bound",
+            message=(
+                "quadratic-form scaling axis exceeds the "
+                f"{MAX_QUADRATIC_SCALE_AXIS}-coordinate envelope"
+            ),
+        )
+    if len(diagonal) + len(crosses) > MAX_QUADRATIC_SCALE_SUPPORT:
+        raise OperationResourceAdmissionError(
+            location=("form",),
+            code="quadratic_form.scale_support_bound",
+            message=(
+                "quadratic-form scaling support exceeds the "
+                f"{MAX_QUADRATIC_SCALE_SUPPORT}-term envelope"
+            ),
         )
     values = [*diagonal]
     for term in crosses:
@@ -187,7 +203,9 @@ def _validate_scale_request_before_dump(request: object) -> QuadraticFormScaleRe
             or type(denominator) is not int
             or denominator <= 0
             or max(abs(numerator).bit_length(), denominator.bit_length())
-            > 3 * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+                > 4 * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+            or max(len(str(abs(numerator))), len(str(denominator)))
+            > MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
         ):
             raise OperationDomainValidationError(
                 location=("form",),

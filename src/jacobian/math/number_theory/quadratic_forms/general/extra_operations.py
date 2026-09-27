@@ -41,7 +41,6 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_QUADRATIC_PULLBACK_AXIS,
     MAX_QUADRATIC_PULLBACK_OUTPUT_ENTRIES,
     MAX_QUADRATIC_PULLBACK_WORK,
-    FiniteGaussSumRequest,
     FiniteGaussSumResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.operations import (
@@ -455,10 +454,12 @@ def modular_histogram(
     return tuple(hist), states
 
 
-def finite_quadratic_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSumResult:
+def finite_quadratic_gauss_sum(
+    form: RationalQuadraticForm,
+    modulus: int,
+) -> FiniteGaussSumResult:
     """Compute sum_x zeta_m^Q(x), reducing the full histogram in QQ[zeta_m]."""
 
-    form, modulus = request.form, request.modulus
     if (
         not isinstance(modulus, int)
         or isinstance(modulus, bool)

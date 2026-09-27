@@ -19,6 +19,7 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral.unimodular._models import (
     UnimodularChangeRequest,
+    UnimodularChangeResult,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.unimodular.operations import (
     unimodular_change,
@@ -52,15 +53,15 @@ def _request(
     form: IntegralQuadraticForm,
     matrix: tuple[tuple[int, ...], ...],
     target_axis: tuple[str, ...],
-) -> UnimodularChangeRequest:
-    return UnimodularChangeRequest(
-        form=form,
-        matrix=IntegerMatrix(
+) -> tuple[IntegralQuadraticForm, IntegerMatrix, tuple[str, ...]]:
+    return (
+        form,
+        IntegerMatrix(
             row_count=len(matrix),
             column_count=len(matrix),
             entries=matrix,
         ),
-        target_axis=target_axis,
+        target_axis,
     )
 
 
@@ -70,7 +71,7 @@ def test_unimodular_shear_preserves_form_by_exact_coordinate_transport() -> None
         diagonal_coefficients=(1, 2),
         cross_terms=({"left": 0, "right": 1, "coefficient": 3},),
     )
-    result = unimodular_change(_request(source, ((1, 1), (0, 1)), ("u", "v")))
+    result = unimodular_change(*_request(source, ((1, 1), (0, 1)), ("u", "v")))
 
     assert result.target.diagonal_coefficients == (1, 6)
     assert [
@@ -98,12 +99,12 @@ def test_unimodular_shear_preserves_form_by_exact_coordinate_transport() -> None
 
 def test_unimodular_reflection_and_zero_dimensional_change() -> None:
     source = IntegralQuadraticForm(axis=("x",), diagonal_coefficients=(7,))
-    reflection = unimodular_change(_request(source, ((-1,),), ("u",)))
+    reflection = unimodular_change(*_request(source, ((-1,),), ("u",)))
     assert reflection.target.diagonal_coefficients == (7,)
     assert reflection.inverse.entries == ((-1,),)
 
     empty = IntegralQuadraticForm(axis=(), diagonal_coefficients=())
-    identity = unimodular_change(_request(empty, (), ()))
+    identity = unimodular_change(*_request(empty, (), ()))
     assert identity.target == empty
     assert identity.matrix.row_count == identity.inverse.row_count == 0
 
@@ -118,7 +119,7 @@ def test_three_dimensional_row_swap_and_shear() -> None:
         ),
     )
     matrix = ((0, 1, 0), (1, 0, 1), (0, 1, 1))
-    result = unimodular_change(_request(source, matrix, ("a", "b", "c")))
+    result = unimodular_change(*_request(source, matrix, ("a", "b", "c")))
     assert result.inverse.entries == ((1, 1, -1), (1, 0, 0), (-1, 0, 1))
     for vector in itertools.product(range(-2, 3), repeat=3):
         assert _polynomial_value(result.target, vector) == _polynomial_value(
@@ -128,7 +129,7 @@ def test_three_dimensional_row_swap_and_shear() -> None:
     # The leading principal pivot at column 1 vanishes, so Bareiss must swap
     # rows a second time after its first elimination step.
     second_pivot_swap = unimodular_change(
-        _request(source, ((1, 1, 0), (1, 1, 1), (0, 1, 2)), ("p", "q", "r"))
+        *_request(source, ((1, 1, 0), (1, 1, 1), (0, 1, 2)), ("p", "q", "r"))
     )
     for vector in itertools.product(range(-2, 3), repeat=3):
         assert _polynomial_value(second_pivot_swap.target, vector) == _polynomial_value(
@@ -139,7 +140,7 @@ def test_three_dimensional_row_swap_and_shear() -> None:
 def test_nonunimodular_matrix_is_rejected_before_transport() -> None:
     source = IntegralQuadraticForm(axis=("x",), diagonal_coefficients=(1,))
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        unimodular_change(_request(source, ((2,),), ("u",)))
+        unimodular_change(*_request(source, ((2,),), ("u",)))
     assert exc_info.value.errors()[0]["type"] == (
         "quadratic_form.unimodular.determinant_not_unit"
     )
@@ -158,10 +159,10 @@ def test_all_small_two_by_two_determinants_match_independent_formula() -> None:
         request = _request(source, matrix, ("u", "v"))
         if abs(determinant) != 1:
             with pytest.raises(OperationDomainValidationError):
-                unimodular_change(request)
+                unimodular_change(*request)
             continue
 
-        result = unimodular_change(request)
+        result = unimodular_change(*request)
         expected_inverse = (
             (d // determinant, -b // determinant),
             (-c // determinant, a // determinant),
@@ -179,10 +180,24 @@ def test_coefficient_growth_is_rejected_during_preflight() -> None:
         diagonal_coefficients=(10**255, 0),
     )
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        unimodular_change(_request(source, ((1, 9), (0, 1)), ("u", "v")))
+        unimodular_change(*_request(source, ((1, 9), (0, 1)), ("u", "v")))
     assert exc_info.value.errors()[0]["type"] == (
         "quadratic_form.unimodular.coefficient_growth_bound"
     )
+
+
+def test_deserialization_checks_inverse_and_congruence_relations() -> None:
+    source = IntegralQuadraticForm(axis=("x",), diagonal_coefficients=(1,))
+    result = unimodular_change(*_request(source, ((1,),), ("u",)))
+    forged_inverse = result.model_dump(mode="python")
+    forged_inverse["inverse"]["entries"] = ((0,),)
+    with pytest.raises(ValidationError, match="inverse must be two-sided"):
+        UnimodularChangeResult.model_validate(forged_inverse)
+
+    forged_target = result.model_dump(mode="python")
+    forged_target["target"]["diagonal_coefficients"] = (2,)
+    with pytest.raises(ValidationError, match="exact congruence image"):
+        UnimodularChangeResult.model_validate(forged_target)
 
 
 def test_matrix_shape_and_entry_limits_precede_nested_matrix_parse() -> None:

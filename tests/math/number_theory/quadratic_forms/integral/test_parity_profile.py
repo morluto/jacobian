@@ -15,7 +15,6 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral.modular import (
     ModularCoordinateVector,
-    ModularEvaluationRequest,
     evaluate_modular_form,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.parity import (
@@ -144,9 +143,7 @@ def test_profile_json_round_trip_and_derived_flag_validation() -> None:
     assert round_tripped == profile
     assert round_tripped.all_basis_norms_even
     vector = ModularCoordinateVector(modulus=2, axis=("x", "y"), coordinates=(1, 1))
-    actual = evaluate_modular_form(
-        ModularEvaluationRequest(polynomial=round_tripped.polynomial, vector=vector)
-    ).residue
+    actual = evaluate_modular_form(round_tripped.polynomial, vector).residue
     assert actual == 1
     assert actual == _evaluate_directly(form, (1, 1)) % 2
     with pytest.raises(ValidationError, match="must agree with the diagonal"):

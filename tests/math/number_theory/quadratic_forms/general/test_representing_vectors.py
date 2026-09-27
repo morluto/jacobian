@@ -138,6 +138,32 @@ def test_representation_request_requires_canonical_bounded_indices(
         ThetaRepresentingVectorsRequest(form=_form((1,)), indices=indices)
 
 
+def test_native_representation_request_is_bounded_before_nested_dump() -> None:
+    form = _form((1,))
+    forged_form = form.model_copy(
+        update={
+            "cross_terms": (
+                QuadraticCrossTerm.model_construct(
+                    left=0,
+                    right=4,
+                    coefficient=CanonicalRational(num=1, den=1),
+                ),
+            )
+        }
+    )
+    forged = ThetaRepresentingVectorsRequest.model_construct(
+        form=forged_form, indices=(0,)
+    )
+    with pytest.raises(OperationDomainValidationError, match="cross-term indices"):
+        theta_representing_vectors(forged)
+
+    oversized = ThetaRepresentingVectorsRequest.model_construct(
+        form=form, indices=(0,) * 129
+    )
+    with pytest.raises(OperationDomainValidationError, match="bounded and strictly increasing"):
+        theta_representing_vectors(oversized)
+
+
 def test_representing_vectors_reject_nonintegral_and_nonpositive_forms() -> None:
     nonintegral = RationalQuadraticForm(
         axis=("x",),

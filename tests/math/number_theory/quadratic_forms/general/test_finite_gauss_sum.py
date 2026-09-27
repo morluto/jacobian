@@ -5,10 +5,11 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.matrices.cyclic_linear._models import (
+    RationalCyclotomicElement,
     RationalCyclotomicField,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    FiniteGaussSumRequest,
+    FiniteGaussSumResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.extra_operations import (
     finite_quadratic_gauss_sum,
@@ -36,9 +37,7 @@ def test_mod_five_sum_matches_independent_classical_gauss_sum() -> None:
     # For the Legendre symbol modulo 5, sum_x zeta_5^(x^2)=sqrt(5).
     # Since sqrt(5)=1+2(zeta_5+zeta_5^-1), reduce with
     # Phi_5(z)=1+z+z^2+z^3+z^4 to obtain -1-2z^2-2z^3.
-    result = finite_quadratic_gauss_sum(
-        FiniteGaussSumRequest(form=_form(("x",), (1,)), modulus=5)
-    )
+    result = finite_quadratic_gauss_sum(_form(("x",), (1,)), 5)
     assert result.histogram == (1, 2, 0, 0, 2)
     assert result.total == 5
     assert result.value.field == RationalCyclotomicField(order=5)
@@ -58,7 +57,7 @@ def test_mixed_form_profile_matches_direct_residue_oracle() -> None:
             ),
         ),
     )
-    result = finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=4))
+    result = finite_quadratic_gauss_sum(form, 4)
 
     # Independent direct enumeration of Q(x,y)=x^2+3xy+2y^2 modulo 4.
     expected = [0] * 4
@@ -71,9 +70,7 @@ def test_mixed_form_profile_matches_direct_residue_oracle() -> None:
 
 
 def test_zero_dimensional_form_has_one_term_for_every_modulus() -> None:
-    result = finite_quadratic_gauss_sum(
-        FiniteGaussSumRequest(form=_form((), ()), modulus=7)
-    )
+    result = finite_quadratic_gauss_sum(_form((), ()), 7)
     assert result.total == 1
     assert result.histogram == (1, 0, 0, 0, 0, 0, 0)
     assert tuple(v.num for v in result.value.coefficients_ascending) == (
@@ -87,13 +84,10 @@ def test_zero_dimensional_form_has_one_term_for_every_modulus() -> None:
 
 
 def test_rejects_residue_space_above_bound_before_enumeration() -> None:
-    request = FiniteGaussSumRequest(
-        form=_form(("x", "y", "z", "w"), (1, 1, 1, 1)), modulus=64
-    )
     with pytest.raises(
         OperationResourceAdmissionError, match="complete residue domain"
     ):
-        finite_quadratic_gauss_sum(request)
+        finite_quadratic_gauss_sum(_form(("x", "y", "z", "w"), (1, 1, 1, 1)), 64)
 
 
 def test_rejects_dense_support_before_enumeration() -> None:
@@ -114,7 +108,7 @@ def test_rejects_dense_support_before_enumeration() -> None:
         ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="work bound"):
-        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=2))
+        finite_quadratic_gauss_sum(form, 2)
 
 
 def test_rejects_oversized_support_before_enumeration() -> None:
@@ -135,7 +129,7 @@ def test_rejects_oversized_support_before_enumeration() -> None:
         ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="support"):
-        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+        finite_quadratic_gauss_sum(form, 1)
 
 
 def test_rejects_retained_source_above_output_digit_envelope() -> None:
@@ -159,18 +153,27 @@ def test_rejects_retained_source_above_output_digit_envelope() -> None:
         ),
     )
     with pytest.raises(OperationResourceAdmissionError, match="output digit envelope"):
-        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=1))
+        finite_quadratic_gauss_sum(form, 1)
 
 
 def test_small_support_with_tall_coefficients_remains_admitted() -> None:
     # The output envelope must not evict tall-but-small forms: 10^256-1 is
     # divisible by 3, so every residue of Q(x) = tall*x^2 vanishes mod 3.
     tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
-    result = finite_quadratic_gauss_sum(
-        FiniteGaussSumRequest(form=_form(("x",), (tall,)), modulus=3)
-    )
+    result = finite_quadratic_gauss_sum(_form(("x",), (tall,)), 3)
     assert result.histogram == (3, 0, 0)
     assert result.total == 3
+
+
+def test_deserialization_binds_gauss_value_to_histogram() -> None:
+    result = finite_quadratic_gauss_sum(_form(("x",), (1,)), 2)
+    payload = result.model_dump(mode="python")
+    payload["value"] = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=2),
+        coefficients_ascending=(CanonicalRational(num=1, den=1),),
+    )
+    with pytest.raises(ValueError, match="reduction of its histogram"):
+        FiniteGaussSumResult.model_validate(payload)
 
 
 def test_rejects_rational_coefficients() -> None:
@@ -179,4 +182,4 @@ def test_rejects_rational_coefficients() -> None:
         diagonal_coefficients=(CanonicalRational(num=1, den=2),),
     )
     with pytest.raises(ValueError, match="integral coefficients"):
-        finite_quadratic_gauss_sum(FiniteGaussSumRequest(form=form, modulus=3))
+        finite_quadratic_gauss_sum(form, 3)

@@ -14,7 +14,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    FiniteBoxProfileRequest,
     FiniteBoxProfileResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.finite_box_operations import (
@@ -46,15 +45,14 @@ def _form(axis, diagonal, crosses=()):
 
 def test_native_boundary_rejects_negative_radius_even_for_zero_dimensional_form():
     empty = _form((), ())
-    request = FiniteBoxProfileRequest.model_construct(form=empty, radius=-1)
     with pytest.raises(OperationDomainValidationError):
-        finite_box_value_profile(request)
+        finite_box_value_profile(empty, -1)
 
 
 def test_finite_box_profile_matches_independent_polar_matrix_oracle():
     form = _form(("u", "v", "w"), (2, -1, 0), ((0, 1, 3), (1, 2, -2)))
     radius = 2
-    result = finite_box_value_profile(FiniteBoxProfileRequest(form=form, radius=radius))
+    result = finite_box_value_profile(form, radius)
 
     # Q(x)=x^T B_Q x/2, where B_Q has diagonal 2*a_i and off-diagonal
     # polynomial cross coefficients. This independent oracle uses matrix form.
@@ -78,15 +76,13 @@ def test_finite_box_profile_matches_independent_polar_matrix_oracle():
 
 def test_zero_dimensional_and_radius_zero_profiles_are_complete():
     empty = _form((), ())
-    result = finite_box_value_profile(FiniteBoxProfileRequest(form=empty, radius=0))
+    result = finite_box_value_profile(empty, 0)
     assert result.vector_count == 1
     assert result.rows[0].value == 0
     assert result.rows[0].representation_count == 1
 
     one_axis = _form(("coordinate",), (7,))
-    origin_only = finite_box_value_profile(
-        FiniteBoxProfileRequest(form=one_axis, radius=0)
-    )
+    origin_only = finite_box_value_profile(one_axis, 0)
     assert origin_only.rows[0].value == 0
     assert origin_only.coordinate_bounds == ((0, 0),)
 
@@ -94,7 +90,7 @@ def test_zero_dimensional_and_radius_zero_profiles_are_complete():
 def test_nonintegral_form_is_rejected_before_enumeration():
     form = _form(("x",), (Fraction(1, 2),))
     with pytest.raises(OperationDomainValidationError) as exc_info:
-        finite_box_value_profile(FiniteBoxProfileRequest(form=form, radius=1))
+        finite_box_value_profile(form, 1)
     assert (
         exc_info.value.errors()[0]["type"]
         == "quadratic_form.finite_box_requires_integral"
@@ -104,7 +100,7 @@ def test_nonintegral_form_is_rejected_before_enumeration():
 def test_box_vector_count_is_admitted_before_evaluation():
     form = _form(("x", "y", "z", "w"), (1, 1, 1, 1))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        finite_box_value_profile(FiniteBoxProfileRequest(form=form, radius=8))
+        finite_box_value_profile(form, 8)
     assert (
         exc_info.value.errors()[0]["type"] == "quadratic_form.finite_box_vector_bound"
     )
@@ -117,7 +113,7 @@ def test_box_output_digit_envelope_is_admitted_before_evaluation():
     tall = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1
     form = _form(("x", "y", "z", "w"), (tall, tall, tall, tall))
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
-        finite_box_value_profile(FiniteBoxProfileRequest(form=form, radius=4))
+        finite_box_value_profile(form, 4)
     assert (
         exc_info.value.errors()[0]["type"] == "quadratic_form.finite_box_output_bound"
     )
@@ -128,9 +124,7 @@ def test_profile_values_are_exact_decimal_integers_over_json():
     # safe-integer range; the canonical JSON transport must carry them as
     # exact decimal strings that round-trip without rounding.
     tall = 10**20
-    result = finite_box_value_profile(
-        FiniteBoxProfileRequest(form=_form(("x",), (tall,)), radius=1)
-    )
+    result = finite_box_value_profile(_form(("x",), (tall,)), 1)
     payload = result.model_dump_json()
     assert '"value":"0"' in payload
     assert f'"value":"{tall}"' in payload

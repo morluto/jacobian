@@ -15,13 +15,13 @@ from jacobian.catalog.models import (
 from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaSelectedCoefficientsRequest,
-    ThetaSeriesPrefixRequest,
 )
 from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
     theta_selected_coefficients,
     theta_series_prefix,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     QuadraticCrossTerm,
     RationalQuadraticForm,
 )
@@ -68,7 +68,7 @@ def _brute_prefix(
 
 def test_theta_prefix_matches_independent_box_oracle_with_cross_term() -> None:
     form = _form((1, 1), ((0, 1, 1),))
-    result = theta_series_prefix(ThetaSeriesPrefixRequest(form=form, cutoff=12))
+    result = theta_series_prefix(form, 12)
     assert result.coefficients == _brute_prefix(form, 12, 4)
     assert result.coefficients[:5] == (1, 6, 0, 6, 6)
     assert result.form == form
@@ -77,7 +77,7 @@ def test_theta_prefix_matches_independent_box_oracle_with_cross_term() -> None:
 
 def test_theta_prefix_admits_zero_dimensional_positive_definite_form() -> None:
     form = _form(())
-    result = theta_series_prefix(ThetaSeriesPrefixRequest(form=form, cutoff=4))
+    result = theta_series_prefix(form, 4)
     assert result.coefficients == (1, 0, 0, 0, 0)
 
 
@@ -86,22 +86,20 @@ def test_theta_prefix_rejects_nonintegral_and_indefinite_forms() -> None:
         axis=("x",), diagonal_coefficients=(CanonicalRational(num=1, den=2),)
     )
     with pytest.raises(OperationDomainValidationError, match="integral"):
-        theta_series_prefix(ThetaSeriesPrefixRequest(form=nonintegral, cutoff=1))
+        theta_series_prefix(nonintegral, 1)
     with pytest.raises(OperationDomainValidationError, match="positive-definite"):
-        theta_series_prefix(ThetaSeriesPrefixRequest(form=_form((1, -1)), cutoff=3))
+        theta_series_prefix(_form((1, -1)), 3)
 
 
 def test_theta_prefix_rejects_nonpositive_definite_singular_form() -> None:
     with pytest.raises(OperationDomainValidationError, match="positive-definite"):
-        theta_series_prefix(
-            ThetaSeriesPrefixRequest(form=_form((1, 1), ((0, 1, 2),)), cutoff=3)
-        )
+        theta_series_prefix(_form((1, 1), ((0, 1, 2),)), 3)
 
 
 def test_theta_prefix_rejects_when_proved_box_exceeds_vector_admission() -> None:
     broad = _form((1, 1, 1, 1, 1, 1, 1))
     with pytest.raises(OperationResourceAdmissionError, match="lattice box"):
-        theta_series_prefix(ThetaSeriesPrefixRequest(form=broad, cutoff=512))
+        theta_series_prefix(broad, 512)
 
 
 def test_theta_prefix_result_requires_complete_prefix_shape() -> None:
@@ -200,6 +198,20 @@ def test_selected_theta_admission_bounds_proved_search_box() -> None:
     ) as exc_info:
         theta_selected_coefficients(form, (1_000_000,))
     assert exc_info.value.errors()[0]["loc"] == ("indices",)
+
+
+def test_selected_theta_accepts_coefficients_at_the_decimal_digit_limit() -> None:
+    form = RationalQuadraticForm(
+        axis=("x",),
+        diagonal_coefficients=(
+            CanonicalRational(
+                num=10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1), den=1
+            ),
+        ),
+    )
+    result = theta_selected_coefficients(form, (0,))
+    assert result.coefficients[0].index == 0
+    assert result.coefficients[0].coefficient == 1
 
 
 def test_selected_theta_operation_composes_through_json_catalog_dispatch() -> None:

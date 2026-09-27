@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.matrices.values import IntegerMatrix
@@ -22,6 +22,11 @@ MAX_COXETER_NUMBER = 30
 MAX_WEYL_WORD_LENGTH = 1024
 # E8 is the largest finite crystallographic Weyl group at the admitted rank.
 MAX_WEYL_GROUP_ORDER = 696_729_600
+# Bruhat intervals materialize an exact finite poset and every ambient Weyl
+# element needed to establish it. Keep this complete-enumeration lane small.
+MAX_BRUHAT_INTERVAL_GROUP_ORDER = 64
+MAX_BRUHAT_INTERVAL_ELEMENTS = 64
+MAX_BRUHAT_INTERVAL_OUTPUT_CELLS = 65_536
 # Lagrange bounds every element order by the largest admitted Weyl-group order.
 MAX_WEYL_ELEMENT_ORDER = MAX_WEYL_GROUP_ORDER
 MAX_WEIGHT_ORBIT_SIZE = 4096
@@ -179,14 +184,14 @@ class LatticeVectorCreateRequest(StrictModel):
     """Create one exact vector in a named basis of a finite Cartan datum."""
 
     matrix: CartanMatrix
-    coordinates: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
 
 class _FiniteCartanLatticeVector(StrictModel):
     """Shared structure for vectors in four distinct datum-owned lattices."""
 
     datum: FiniteCartanDatum
-    coordinates: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
     @model_validator(mode="after")
     def require_bounded_datum_axis(self) -> Self:
@@ -1126,6 +1131,57 @@ class WeylElementInverseRequest(StrictModel):
     element: WeylElement
 
 
+class WeylBruhatIntervalRequest(StrictModel):
+    """Two elements of one finite Weyl group defining a closed interval."""
+
+    lower: WeylElement
+    upper: WeylElement
+
+
+class WeylBruhatIntervalResult(StrictModel):
+    """Complete Bruhat interval with a poset-label to Weyl-element binding.
+
+    ``elements[i]`` is the Weyl element named ``poset.elements[i]``. The
+    endpoint values are retained even when the interval is empty.
+    """
+
+    matrix: CartanMatrix
+    lower: WeylElement
+    upper: WeylElement
+    elements: tuple[WeylElement, ...] = Field(
+        default=(), max_length=MAX_BRUHAT_INTERVAL_ELEMENTS
+    )
+    poset: FinitePoset
+
+    @model_validator(mode="after")
+    def require_bound_interval(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            self.lower.matrix != self.matrix
+            or self.upper.matrix != self.matrix
+            or any(element.matrix != self.matrix for element in self.elements)
+            or len(self.elements) != len(self.poset.elements)
+            or len(self.elements) > MAX_BRUHAT_INTERVAL_ELEMENTS
+            or any(
+                element.root_action.row_count != rank
+                or element.root_action.column_count != rank
+                for element in (self.lower, self.upper, *self.elements)
+            )
+        ):
+            raise _validation_error(
+                "bruhat_interval_binding",
+                "interval elements and endpoints must bind to the same Cartan parent and poset carrier",
+            )
+        if self.poset.elements != tuple(
+            f"w{index:03d}" for index in range(len(self.elements))
+        ):
+            raise _validation_error(
+                "bruhat_interval_labels",
+                "poset labels must canonically index the bound Weyl elements",
+            )
+        return self
+
+
 class WeylVectorActionRequest(WeylElementRequest):
     """Apply a bounded Weyl word to a vector in the simple-root basis."""
 
@@ -1228,7 +1284,7 @@ class WeylWeightOrbitResult(StrictModel):
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 
-    highest_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    highest_weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
     @model_validator(mode="after")
     def require_dominant_weight_axis(self) -> Self:
@@ -1247,8 +1303,8 @@ class WeylDimensionFactor(StrictModel):
 
     positive_root: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
     positive_coroot: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    numerator_pairing: StrictInt = Field(gt=0)
-    denominator_pairing: StrictInt = Field(gt=0)
+    numerator_pairing: ExactInteger = Field(gt=0)
+    denominator_pairing: ExactInteger = Field(gt=0)
 
 
 class WeylDimensionResult(StrictModel):
@@ -1256,8 +1312,8 @@ class WeylDimensionResult(StrictModel):
 
     matrix: CartanMatrix
     weight_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_RANK)
-    highest_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    dimension: StrictInt = Field(ge=1)
+    highest_weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
+    dimension: ExactInteger = Field(ge=1)
     positive_root_factors: tuple[WeylDimensionFactor, ...] = Field(
         min_length=1, max_length=MAX_POSITIVE_ROOTS
     )

@@ -7,11 +7,12 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import DecimalIntegerEncoding
+from jacobian._exact import CanonicalRational, DecimalIntegerEncoding
 from jacobian._models import StrictModel
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    QuadraticCrossTerm,
     RationalQuadraticForm,
 )
 
@@ -106,6 +107,30 @@ class IntegralQuadraticFormInclusion(StrictModel):
     map: Literal["ZZ_TO_QQ_COEFFICIENT_INCLUSION"] = "ZZ_TO_QQ_COEFFICIENT_INCLUSION"
     source: IntegralQuadraticForm
     target: RationalQuadraticForm
+
+    @model_validator(mode="after")
+    def require_coefficientwise_target(self) -> Self:
+        expected_diagonal = tuple(
+            CanonicalRational.from_integer_ratio(value, 1)
+            for value in self.source.diagonal_coefficients
+        )
+        expected_cross_terms = tuple(
+            QuadraticCrossTerm(
+                left=term.left,
+                right=term.right,
+                coefficient=CanonicalRational.from_integer_ratio(term.coefficient, 1),
+            )
+            for term in self.source.cross_terms
+        )
+        if (
+            self.target.axis != self.source.axis
+            or self.target.diagonal_coefficients != expected_diagonal
+            or self.target.cross_terms != expected_cross_terms
+        ):
+            raise ValueError(
+                "rational target must be the coefficient-wise image of the integral source"
+            )
+        return self
 
 
 __all__ = [

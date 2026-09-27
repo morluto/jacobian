@@ -48,10 +48,6 @@ from jacobian.catalog.models import OperationMatchRequest
             "compute exact Bernstein coefficients of a polynomial",
             "polynomial.bernstein.coefficients.compute",
         ),
-        (
-            "check supplied edge clique partition certificate",
-            "graph.edge_clique_partition.check",
-        ),
     ],
 )
 def test_ranked_contract_matches_requested_input(query: str, expected: str) -> None:

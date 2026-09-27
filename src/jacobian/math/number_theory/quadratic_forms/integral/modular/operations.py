@@ -21,12 +21,10 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular._models import
     MAX_MODULAR_QUADRATIC_FORM_TERMS,
     MAX_MODULAR_QUADRATIC_RESULT_DIGITS,
     ModularCoordinateVector,
-    ModularEvaluationRequest,
     ModularInteger,
     ModularQuadraticCrossTerm,
     ModularQuadraticPolynomial,
     ModularQuadraticReduction,
-    ModularReductionRequest,
 )
 
 MAX_MODULAR_REDUCTION_WORK = 1_100_000
@@ -140,22 +138,13 @@ def _admit_modulus(modulus: int) -> int:
 
 
 def reduce_integral_form_modulus(
-    request: ModularReductionRequest,
+    form: IntegralQuadraticForm,
+    modulus: int,
 ) -> ModularQuadraticReduction:
     """Reduce polynomial coefficients canonically into the ring ``Z/mZ``."""
 
-    if not isinstance(request, ModularReductionRequest):
-        raise _domain_error(
-            "request_type", "expected a typed modular reduction request"
-        )
-    try:
-        request = ModularReductionRequest.model_validate(request.model_dump())
-    except Exception as exc:
-        raise _domain_error(
-            "request_shape", "modular reduction request must be canonical"
-        ) from exc
-    target = _reduce_integral_form_modulus_value(request.form, request.modulus)
-    return ModularQuadraticReduction(source=request.form, target=target)
+    target = _reduce_integral_form_modulus_value(form, modulus)
+    return ModularQuadraticReduction(source=form, target=target)
 
 
 def _reduce_integral_form_modulus_value(
@@ -268,7 +257,7 @@ def _check_modular_polynomial(
     if (
         len(polynomial.cross_terms) + n > MAX_MODULAR_QUADRATIC_FORM_TERMS
         or positions != tuple(sorted(set(positions)))
-            or any(
+        or any(
             not isinstance(term.left, int)
             or isinstance(term.left, bool)
             or not isinstance(term.right, int)
@@ -323,14 +312,12 @@ def _check_modular_values(
     return n, modulus_digits
 
 
-def evaluate_modular_form(request: ModularEvaluationRequest) -> ModularInteger:
+def evaluate_modular_form(
+    polynomial: ModularQuadraticPolynomial,
+    vector: ModularCoordinateVector,
+) -> ModularInteger:
     """Evaluate a residue polynomial on a vector with the same parent and axis."""
 
-    if not isinstance(request, ModularEvaluationRequest):
-        raise _domain_error(
-            "request_type", "expected a typed modular evaluation request"
-        )
-    polynomial, vector = request.polynomial, request.vector
     _, modulus_digits = _check_modular_values(polynomial, vector)
     term_count = sum(value != 0 for value in polynomial.diagonal_residues) + len(
         polynomial.cross_terms

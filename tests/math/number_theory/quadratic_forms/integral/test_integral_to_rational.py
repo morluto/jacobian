@@ -11,9 +11,7 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    FiniteBoxProfileRequest,
-)
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.quadratic_forms.general.finite_box_operations import (
     finite_box_value_profile,
 )
@@ -25,6 +23,7 @@ from jacobian.math.number_theory.quadratic_forms.general.values import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral import (
     IntegralQuadraticForm,
+    IntegralQuadraticFormInclusionRequest,
     integral_form_to_rational,
 )
 
@@ -36,6 +35,13 @@ def _rational_vector(axis: tuple[str, ...], values: tuple[int, ...]):
             CanonicalRational.from_integer_ratio(value, 1) for value in values
         ),
     )
+
+
+def test_inclusion_request_remains_available_from_public_package() -> None:
+    form = IntegralQuadraticForm(
+        axis=("x",), diagonal_coefficients=(1,), cross_terms=()
+    )
+    assert IntegralQuadraticFormInclusionRequest(form=form).form == form
 
 
 def test_zz_inclusion_round_trips_and_composes_with_exact_box_profile() -> None:
@@ -74,15 +80,33 @@ def test_zz_inclusion_round_trips_and_composes_with_exact_box_profile() -> None:
         )
         assert actual == Fraction(expected)
 
-    profile = finite_box_value_profile(
-        FiniteBoxProfileRequest(form=restored.target, radius=1)
-    )
+    profile = finite_box_value_profile(restored.target, 1)
     actual_profile = {row.value: row.representation_count for row in profile.rows}
     expected_profile: dict[int, int] = {}
     for vector in product(range(-1, 2), repeat=2):
         value = 2 * vector[0] ** 2 + 3 * vector[0] * vector[1]
         expected_profile[value] = expected_profile.get(value, 0) + 1
     assert actual_profile == expected_profile
+
+
+def test_inclusion_result_is_bound_to_source_and_native_input_is_revalidated() -> None:
+    source = IntegralQuadraticForm(axis=("x",), diagonal_coefficients=(1,))
+    inclusion = integral_form_to_rational(source)
+    forged = inclusion.model_dump(mode="python")
+    forged["target"]["diagonal_coefficients"] = (
+        CanonicalRational.from_integer_ratio(2, 1),
+    )
+    with pytest.raises(ValueError, match="coefficient-wise image"):
+        type(inclusion).model_validate(forged)
+
+    oversized = IntegralQuadraticForm.model_construct(
+        domain="ZZ",
+        axis=tuple(f"x{index}" for index in range(129)),
+        diagonal_coefficients=(0,) * 129,
+        cross_terms=(),
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="128 labels"):
+        integral_form_to_rational(oversized)
 
 
 @pytest.mark.parametrize(

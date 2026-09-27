@@ -10,9 +10,6 @@ from jacobian.canonical import encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.dispatch import invoke_operation
-from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
-    ThetaSeriesPrefixRequest,
-)
 from jacobian.math.number_theory.quadratic_forms.general._tools import (
     TOOLS,
     compute_scale,
@@ -96,7 +93,7 @@ def test_scaled_integral_form_composes_through_theta_after_json_roundtrip() -> N
     source = _form((_q(1), _q(1)))
     result = compute_scale(QuadraticFormScaleRequest(form=source, factor=_q(2)))
     decoded = QuadraticFormScaleResult.model_validate_json(result.model_dump_json())
-    theta = theta_series_prefix(ThetaSeriesPrefixRequest(form=decoded.form, cutoff=6))
+    theta = theta_series_prefix(decoded.form, 6)
 
     # Independent finite enumeration in [-2,2]^2 contains every vector with
     # 2*(x^2+y^2) <= 6, since either coordinate of magnitude 2 already exceeds 6.
@@ -121,6 +118,11 @@ def test_zero_scale_omits_cross_terms_and_keeps_axis_and_diagonal_shape() -> Non
 
 def test_scale_preflight_uses_exact_cancellation_and_rejects_true_growth() -> None:
     large = 10 ** (MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS - 1)
+    large_factor = scale_rational_quadratic_form(
+        QuadraticFormScaleRequest(form=_form((_q(1),)), factor=_q(large))
+    )
+    assert large_factor.form.diagonal_coefficients == (_q(large),)
+
     canceling = _form((_q(large),))
     result = scale_rational_quadratic_form(
         QuadraticFormScaleRequest(form=canceling, factor=_q(1, large))
@@ -201,5 +203,5 @@ def test_scaling_composes_through_public_catalog_dispatch() -> None:
     decoded = operation.result_type.model_validate_json(
         encode_strict_json(response.output), strict=True
     )
-    theta = theta_series_prefix(ThetaSeriesPrefixRequest(form=decoded.form, cutoff=4))
+    theta = theta_series_prefix(decoded.form, 4)
     assert theta.coefficients == (1, 0, 4, 0, 4)

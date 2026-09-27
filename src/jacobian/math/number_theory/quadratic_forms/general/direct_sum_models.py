@@ -12,6 +12,7 @@ from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import RationalMatrix
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
+    QuadraticCrossTerm,
     RationalQuadraticForm,
 )
 
@@ -99,6 +100,44 @@ class QuadraticFormRestrictionResult(StrictModel):
         if self.form.axis != self.selected_axis:
             raise ValueError(
                 "restricted form axis must preserve selected coordinate order"
+            )
+        source_positions = {
+            label: index for index, label in enumerate(self.source_form.axis)
+        }
+        selected_positions = tuple(
+            source_positions[label] for label in self.selected_axis
+        )
+        expected_diagonal = tuple(
+            self.source_form.diagonal_coefficients[index]
+            for index in selected_positions
+        )
+        restricted_index = {
+            source_index: index for index, source_index in enumerate(selected_positions)
+        }
+        expected_cross_terms = tuple(
+            sorted(
+                (
+                    QuadraticCrossTerm(
+                        left=min(
+                            restricted_index[term.left], restricted_index[term.right]
+                        ),
+                        right=max(
+                            restricted_index[term.left], restricted_index[term.right]
+                        ),
+                        coefficient=term.coefficient,
+                    )
+                    for term in self.source_form.cross_terms
+                    if term.left in restricted_index and term.right in restricted_index
+                ),
+                key=lambda term: (term.left, term.right),
+            )
+        )
+        if (
+            self.form.diagonal_coefficients != expected_diagonal
+            or self.form.cross_terms != expected_cross_terms
+        ):
+            raise ValueError(
+                "restricted coefficients must be retained from the source form"
             )
         if (self.inclusion.row_count, self.inclusion.column_count) != (
             len(self.source_form.axis),
@@ -192,6 +231,33 @@ class QuadraticFormDirectSumResult(StrictModel):
         if total > MAX_DIRECT_SUM_AXIS or support > MAX_DIRECT_SUM_FORM_TERMS:
             raise ValueError(
                 "direct-sum result exceeds its admitted aggregate envelope"
+            )
+        expected_axis: list[str] = []
+        expected_diagonal: list[CanonicalRational] = []
+        expected_cross_terms: list[QuadraticCrossTerm] = []
+        source_offset = 0
+        for component, source in enumerate(self.source_forms):
+            dimension = len(source.axis)
+            expected_axis.extend(
+                f"qf{component}_{coordinate}" for coordinate in range(dimension)
+            )
+            expected_diagonal.extend(source.diagonal_coefficients)
+            expected_cross_terms.extend(
+                QuadraticCrossTerm(
+                    left=term.left + source_offset,
+                    right=term.right + source_offset,
+                    coefficient=term.coefficient,
+                )
+                for term in source.cross_terms
+            )
+            source_offset += dimension
+        if (
+            self.form.axis != tuple(expected_axis)
+            or self.form.diagonal_coefficients != tuple(expected_diagonal)
+            or self.form.cross_terms != tuple(expected_cross_terms)
+        ):
+            raise ValueError(
+                "direct-sum form coefficients must be the orthogonal sum of its factors"
             )
         map_component_digits = max(
             (

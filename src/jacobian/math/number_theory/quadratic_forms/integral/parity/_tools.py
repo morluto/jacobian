@@ -40,8 +40,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="diagonal_norm_and_polar_residues",
                 description=(
-                    "For Q(x,y)=2x^2+3xy+y^2, Q(e_x) and Q(e_y) are even "
-                    "while B(e_x,e_y) has residue one."
+                    "For Q(x,y)=2x^2+3xy+y^2, Q(e_x) is even, Q(e_y) is "
+                    "odd, and B(e_x,e_y) has residue one."
                 ),
                 input={
                     "form": {

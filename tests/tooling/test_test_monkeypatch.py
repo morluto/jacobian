@@ -57,7 +57,7 @@ def test_typed_error_counts_as_evidence(tmp_path: Path) -> None:
     assert _violations(tmp_path) == []
 
 
-def test_assert_helper_counts_as_evidence(tmp_path: Path) -> None:
+def test_no_op_assert_helper_is_not_evidence(tmp_path: Path) -> None:
     _write(
         tmp_path,
         "tests/example/test_helper.py",
@@ -67,6 +67,37 @@ def test_assert_helper_counts_as_evidence(tmp_path: Path) -> None:
         "def test_patch_uses_helper(monkeypatch: pytest.MonkeyPatch) -> None:\n"
         "    monkeypatch.setattr('x.y', lambda *a, **k: None)\n"
         "    _assert_rejected()\n",
+    )
+
+    assert _violations(tmp_path) == ["tests/example/test_helper.py"]
+
+
+def test_assertion_helper_with_real_assertion_is_evidence(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tests/example/test_helper.py",
+        "import pytest\n"
+        "def _assert_rejected(value: object) -> None:\n"
+        "    assert value is None\n"
+        "def test_patch_uses_helper(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    monkeypatch.setattr('x.y', lambda *a, **k: None)\n"
+        "    _assert_rejected(compute())\n",
+    )
+
+    assert _violations(tmp_path) == []
+
+
+def test_owner_local_raises_helper_is_evidence(tmp_path: Path) -> None:
+    _write(
+        tmp_path,
+        "tests/example/test_helper.py",
+        "import pytest\n"
+        "def _assert_rejected(callback: object) -> None:\n"
+        "    with pytest.raises(ValueError):\n"
+        "        callback()\n"
+        "def test_patch_uses_helper(monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "    monkeypatch.setattr('x.y', lambda *a, **k: None)\n"
+        "    _assert_rejected(compute)\n",
     )
 
     assert _violations(tmp_path) == []
@@ -108,8 +139,11 @@ def test_non_test_functions_and_other_methods_are_ignored(tmp_path: Path) -> Non
         "import pytest\n"
         "def _helper(monkeypatch: pytest.MonkeyPatch) -> None:\n"
         "    monkeypatch.setattr('x.y', lambda *a, **k: None)\n"
-        "def test_uses_helper(monkeypatch: pytest.MonkeyPatch) -> None:\n"
-        "    _helper(monkeypatch)\n",
+        "class Example:\n"
+        "    def patch(self, monkeypatch: pytest.MonkeyPatch) -> None:\n"
+        "        monkeypatch.setattr('x.y', lambda *a, **k: None)\n"
+        "def test_has_independent_evidence() -> None:\n"
+        "    assert True\n",
     )
 
     assert _violations(tmp_path) == []

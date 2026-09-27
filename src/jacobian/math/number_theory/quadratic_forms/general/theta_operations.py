@@ -265,12 +265,13 @@ def _admit_box_and_output(
     determinant: int,
     diagonal_cofactors: tuple[int, ...],
 ) -> tuple[int, ...]:
+    form = request.form
+    cutoff = request.cutoff
     request_location = (
         ("cutoff",) if isinstance(request, ThetaSeriesPrefixRequest) else ("indices",)
     )
     radii = tuple(
-        isqrt((2 * request.cutoff * cofactor) // determinant)
-        for cofactor in diagonal_cofactors
+        isqrt((2 * cutoff * cofactor) // determinant) for cofactor in diagonal_cofactors
     )
     vector_count = 1
     for radius in radii:
@@ -295,7 +296,6 @@ def _admit_box_and_output(
     # The result retains the source form and the coefficient prefix. Bound
     # both by their aggregate decimal digits; per-entry serialization
     # structure scales with the already bounded coefficient count.
-    form = request.form
     source_digits = sum(len(label) for label in form.axis) + 2 * sum(
         canonical_rational_component_digits(value)
         for value in (
@@ -334,7 +334,8 @@ def _admit_box_and_output(
 
 
 def theta_series_prefix(
-    request: ThetaSeriesPrefixRequest,
+    form: RationalQuadraticForm,
+    cutoff: int,
 ) -> ThetaSeriesPrefixResult:
     """Return every coefficient through q^N, with a proved finite search box.
 
@@ -343,8 +344,14 @@ def theta_series_prefix(
     x_i^2 <= (C^-1)_ii * x^T C x <= 2N*(C^-1)_ii for every vector with
     Q(x)<=N. The exact adjugate diagonal therefore yields a complete box.
     """
-    request = _revalidate_request(request, ThetaSeriesPrefixRequest, "request")
+    _require_bounded_form_structure(form)
+    request = _revalidate_request(
+        ThetaSeriesPrefixRequest(form=form, cutoff=cutoff),
+        ThetaSeriesPrefixRequest,
+        "request",
+    )
     form = request.form
+    cutoff = request.cutoff
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
@@ -356,7 +363,7 @@ def theta_series_prefix(
         diagonal_cofactors,
     )
 
-    table = [0] * (request.cutoff + 1)
+    table = [0] * (cutoff + 1)
     diagonal = tuple(value.num for value in form.diagonal_coefficients)
     crosses = tuple(
         (term.left, term.right, term.coefficient.num) for term in form.cross_terms
@@ -371,11 +378,9 @@ def theta_series_prefix(
             coefficient * vector[left] * vector[right]
             for left, right, coefficient in crosses
         )
-        if 0 <= value <= request.cutoff:
+        if 0 <= value <= cutoff:
             table[value] += 1
-    return ThetaSeriesPrefixResult(
-        form=form, cutoff=request.cutoff, coefficients=tuple(table)
-    )
+    return ThetaSeriesPrefixResult(form=form, cutoff=cutoff, coefficients=tuple(table))
 
 
 def theta_selected_coefficients(

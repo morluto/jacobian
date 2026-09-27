@@ -25,7 +25,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=ModularReductionRequest,
         result_type=ModularQuadraticReduction,
-        run=native.reduce_integral_form_modulus,
+        run=lambda request: native.reduce_integral_form_modulus(
+            request.form, request.modulus
+        ),
         tags=("quadratic-form", "modular", "coefficient-map", "exact"),
         discovery_terms=(
             "reduce an integral quadratic form modulo m",
@@ -57,7 +59,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=ModularEvaluationRequest,
         result_type=ModularInteger,
-        run=native.evaluate_modular_form,
+        run=lambda request: native.evaluate_modular_form(
+            request.polynomial, request.vector
+        ),
         tags=("quadratic-form", "modular", "evaluation", "exact"),
         discovery_terms=(
             "evaluate quadratic polynomial over Z/mZ",

@@ -15,7 +15,6 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular import (
     ModularEvaluationRequest,
     ModularQuadraticCrossTerm,
     ModularQuadraticPolynomial,
-    ModularReductionRequest,
     evaluate_modular_form,
     reduce_integral_form_modulus,
 )
@@ -27,9 +26,7 @@ def test_composite_modulus_evaluation_matches_exhaustive_independent_oracle() ->
         diagonal_coefficients=(2, -1),
         cross_terms=(IntegralQuadraticCrossTerm(left=0, right=1, coefficient=3),),
     )
-    reduced = reduce_integral_form_modulus(
-        ModularReductionRequest(form=form, modulus=6)
-    )
+    reduced = reduce_integral_form_modulus(form, 6)
     assert reduced.map == "ZZ_TO_Z_MOD_N_COEFFICIENT_REDUCTION"
     assert reduced.source == form
     assert reduced.target.diagonal_residues == (2, 5)
@@ -37,9 +34,7 @@ def test_composite_modulus_evaluation_matches_exhaustive_independent_oracle() ->
 
     for x, y in product(range(6), repeat=2):
         vector = ModularCoordinateVector(modulus=6, axis=("x", "y"), coordinates=(x, y))
-        actual = evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=reduced.target, vector=vector)
-        )
+        actual = evaluate_modular_form(reduced.target, vector)
         expected = (2 * x**2 + 3 * x * y - y**2) % 6
         assert (actual.modulus, actual.residue) == (6, expected)
 
@@ -50,18 +45,11 @@ def test_zero_ring_and_zero_mixed_residue_are_canonical() -> None:
         diagonal_coefficients=(7, -4),
         cross_terms=(IntegralQuadraticCrossTerm(left=0, right=1, coefficient=6),),
     )
-    reduced = reduce_integral_form_modulus(
-        ModularReductionRequest(form=form, modulus=1)
-    )
+    reduced = reduce_integral_form_modulus(form, 1)
     assert reduced.target.diagonal_residues == (0, 0)
     assert reduced.target.cross_terms == ()
     vector = ModularCoordinateVector(modulus=1, axis=("x", "y"), coordinates=(0, 0))
-    assert (
-        evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=reduced.target, vector=vector)
-        ).residue
-        == 0
-    )
+    assert evaluate_modular_form(reduced.target, vector).residue == 0
 
 
 def test_forged_mixed_term_indices_are_rejected_before_indexing() -> None:
@@ -77,11 +65,7 @@ def test_forged_mixed_term_indices_are_rejected_before_indexing() -> None:
     )
     vector = ModularCoordinateVector(modulus=7, axis=("x", "y"), coordinates=(2, 3))
     with pytest.raises(OperationDomainValidationError):
-        evaluate_modular_form(
-            ModularEvaluationRequest.model_construct(
-                polynomial=polynomial, vector=vector
-            )
-        )
+        evaluate_modular_form(polynomial, vector)
 
 
 def test_forged_boolean_mixed_term_indices_are_rejected() -> None:
@@ -99,11 +83,7 @@ def test_forged_boolean_mixed_term_indices_are_rejected() -> None:
     )
     vector = ModularCoordinateVector(modulus=7, axis=("x", "y"), coordinates=(2, 3))
     with pytest.raises(OperationDomainValidationError):
-        evaluate_modular_form(
-            ModularEvaluationRequest.model_construct(
-                polynomial=polynomial, vector=vector
-            )
-        )
+        evaluate_modular_form(polynomial, vector)
 
 
 def test_forged_source_axis_labels_are_rejected() -> None:
@@ -113,9 +93,7 @@ def test_forged_source_axis_labels_are_rejected() -> None:
         domain="ZZ", axis=([],), diagonal_coefficients=(1,), cross_terms=()
     )
     with pytest.raises(OperationDomainValidationError):
-        reduce_integral_form_modulus(
-            ModularReductionRequest.model_construct(form=form, modulus=7)
-        )
+        reduce_integral_form_modulus(form, 7)
 
 
 def test_target_parent_axis_and_canonical_residues_are_enforced() -> None:
@@ -154,9 +132,7 @@ def test_serialized_values_round_trip_and_compose() -> None:
     )
     vector = ModularCoordinateVector.model_validate_json(json.dumps(vector_data))
     assert (
-        evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=polynomial, vector=vector)
-        ).residue
+        evaluate_modular_form(polynomial, vector).residue
         == (3 * 49 + 9 * 4 + 4 * 14) % 11
     )
 
@@ -164,15 +140,8 @@ def test_serialized_values_round_trip_and_compose() -> None:
 def test_zero_form_at_maximum_axis_is_admitted() -> None:
     axis = tuple(f"x{i}" for i in range(128))
     form = IntegralQuadraticForm(axis=axis, diagonal_coefficients=(0,) * len(axis))
-    reduced = reduce_integral_form_modulus(
-        ModularReductionRequest(form=form, modulus=97)
-    )
+    reduced = reduce_integral_form_modulus(form, 97)
     vector = ModularCoordinateVector(
         modulus=97, axis=axis, coordinates=(0,) * len(axis)
     )
-    assert (
-        evaluate_modular_form(
-            ModularEvaluationRequest(polynomial=reduced.target, vector=vector)
-        ).residue
-        == 0
-    )
+    assert evaluate_modular_form(reduced.target, vector).residue == 0

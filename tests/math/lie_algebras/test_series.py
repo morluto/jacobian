@@ -14,10 +14,12 @@ from jacobian.math.lie_algebras._models import (
     LieDerivedSeriesResult,
     LieLowerCentralSeriesResult,
     LieSubspace,
+    LieUpperCentralSeriesResult,
 )
 from jacobian.math.lie_algebras.operations import (
     lie_derived_series,
     lie_lower_central_series,
+    lie_upper_central_series,
 )
 
 F = Fraction
@@ -64,6 +66,7 @@ GL2 = _algebra(
     ),
 )
 JACOBI_VIOLATOR = _algebra(("e", "f", "h"), ((0, 1, 2, 1), (0, 2, 0, 1), (1, 2, 0, 1)))
+FILIFORM_4 = _algebra(("x", "y", "z", "w"), ((0, 1, 2, 1), (0, 2, 3, 1)))
 
 
 class TestDerivedSeries:
@@ -146,6 +149,74 @@ class TestLowerCentralSeries:
         result = lie_lower_central_series(GL2)
         assert all(term.basis == GL2.basis for term in result.terms)
         assert result.algebra == GL2
+
+
+class TestUpperCentralSeries:
+    @pytest.mark.parametrize(
+        ("algebra", "dimensions", "nilpotent"),
+        (
+            (FILIFORM_4, (0, 1, 2, 4), True),
+            (HEISENBERG, (0, 1, 3), True),
+            (ABELIAN_2, (0, 2), True),
+            (AFFINE, (0,), False),
+            (SL2, (0,), False),
+        ),
+    )
+    def test_exact_ascending_terms_and_decision(
+        self,
+        algebra: FiniteDimensionalLieAlgebra,
+        dimensions: tuple[int, ...],
+        nilpotent: bool,
+    ) -> None:
+        result = lie_upper_central_series(algebra)
+        assert _dims(result.terms) == dimensions
+        assert result.nilpotent is nilpotent
+        assert result.terms[0].generators.column_count == len(algebra.basis)
+        assert result.algebra == algebra
+
+    def test_filiform_terms_are_the_preimages_of_quotient_centers(self) -> None:
+        result = lie_upper_central_series(FILIFORM_4)
+        assert tuple(_rows(term) for term in result.terms) == (
+            (),
+            ((F(0), F(0), F(0), F(1)),),
+            ((F(0), F(0), F(1), F(0)), (F(0), F(0), F(0), F(1))),
+            (
+                (F(1), F(0), F(0), F(0)),
+                (F(0), F(1), F(0), F(0)),
+                (F(0), F(0), F(1), F(0)),
+                (F(0), F(0), F(0), F(1)),
+            ),
+        )
+
+    def test_serialized_result_and_catalog_example(self) -> None:
+        import json
+
+        from jacobian.canonical import encode_strict_json
+        from jacobian.math.lie_algebras._tools import TOOLS
+
+        result = lie_upper_central_series(HEISENBERG)
+        assert (
+            LieUpperCentralSeriesResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+        tool = next(
+            t
+            for t in TOOLS
+            if t.operation_id == "lie_algebra.upper_central_series.compute"
+        )
+        payload = tool.request_type.model_validate_json(
+            encode_strict_json(tool.examples[0].input), strict=True
+        )
+        assert tool.run(payload) == lie_upper_central_series(payload.algebra)
+        forged = json.loads(result.model_dump_json())
+        forged["nilpotent"] = False
+        with pytest.raises(ValidationError):
+            LieUpperCentralSeriesResult.model_validate(forged)
+
+    def test_jacobi_violator_is_rejected(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            lie_upper_central_series(JACOBI_VIOLATOR)
+        assert exc_info.value.errors()[0]["type"] == "lie_algebra.jacobi_identity"
 
 
 class TestSeriesRejections:

@@ -172,7 +172,7 @@ def test_later_degree_rejection_precedes_any_product_expansion(monkeypatch) -> N
         {
             "variable": "n",
             "terms": [
-                {"exponent": 0, "coefficient": _rf_polynomial(((1, 32),))},
+                {"exponent": 0, "coefficient": _rf_polynomial(((1, 33),))},
                 {"exponent": 1, "coefficient": _rf(1)},
             ],
         }

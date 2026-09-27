@@ -258,6 +258,25 @@ class OrderComplexResult(StrictModel):
     vertex_elements: tuple[ElementLabel, ...]
     maximal_chains: tuple[tuple[ElementLabel, ...], ...]
 
+    @model_validator(mode="after")
+    def require_poset_binding(self) -> OrderComplexResult:
+        if not verify_finite_poset(self.poset):
+            raise ValueError("poset must be canonical")
+        if self.vertex_elements != self.poset.elements:
+            raise ValueError("vertex_elements must equal the retained poset elements")
+        plan = _order_complex_plan(self.poset)
+        closure, expected_chains = _enumerate_order_complex_chains(
+            self.poset.elements, plan
+        )
+        if self.maximal_chains != expected_chains:
+            raise ValueError("maximal_chains must be determined by the retained poset")
+        expected_complex = canonical_complex(
+            self.poset.elements, expected_chains, closure=closure
+        )
+        if self.complex != expected_complex:
+            raise ValueError("complex vertices and faces must match the retained poset")
+        return self
+
 
 class CliqueRequest(StrictModel):
     complex: SimplicialComplexRequest

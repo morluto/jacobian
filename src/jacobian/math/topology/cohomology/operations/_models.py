@@ -645,7 +645,7 @@ class CohomologyRingResult(StrictModel):
             for left_index in range(left_betti):
                 for right_degree, right_betti in betti.items():
                     total = left_degree + right_degree
-                    if total > self.complex.dimension:
+                    if total > self.complex.dimension or total not in betti:
                         continue
                     for right_index in range(right_betti):
                         expected.append(
@@ -705,7 +705,7 @@ class InducedCohomologyMatrix(StrictModel):
     either side is empty when the degree exceeds its complex dimension.
     """
 
-    degree: StrictInt = Field(ge=0, le=MAX_TOPOLOGY_DIMENSION)
+    degree: StrictInt = Field(ge=-1, le=MAX_TOPOLOGY_DIMENSION)
     rows: tuple[tuple[StrictInt, ...], ...]
 
 
@@ -739,7 +739,16 @@ class InducedCohomologyMapResult(StrictModel):
                     "retained cohomologies must bind the prime and convention",
                 )
         top = max(self.map.source.dimension, self.map.target.dimension)
-        if tuple(matrix.degree for matrix in self.matrices) != tuple(range(top + 1)):
+        represented_degrees = list(range(max(top, 0) + 1))
+        if self.convention is HomologyConvention.REDUCED and any(
+            group.dimension == -1
+            for cohomology in (self.source_cohomology, self.target_cohomology)
+            for group in cohomology.groups
+        ):
+            represented_degrees.insert(0, -1)
+        if tuple(matrix.degree for matrix in self.matrices) != tuple(
+            represented_degrees
+        ):
             raise _validation_error(
                 "induced_map_degree_coverage",
                 "matrices must cover every degree through the top dimension",

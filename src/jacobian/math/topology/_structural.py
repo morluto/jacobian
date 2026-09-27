@@ -374,6 +374,13 @@ class LinkResult(StrictModel):
     @model_validator(mode="after")
     def require_structural_link(self) -> Self:
         target = frozenset(self.simplex)
+        try:
+            _require_simplex_in_complex(self.complex, self.simplex)
+        except ValueError as error:
+            raise _validation_error(
+                "topology.require_link_source_face",
+                "simplex must be a face of the source complex",
+            ) from error
         expected_facets = _maximal_faces(
             tuple(sorted(frozenset(facet) - target))
             for facet in self.complex.facets

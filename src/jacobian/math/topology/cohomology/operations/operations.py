@@ -922,7 +922,14 @@ def induced_cohomology_map(
     target_groups = {group.dimension: group for group in target_cohomology.groups}
     matrices: list[InducedCohomologyMatrix] = []
     top = max(simplicial_map.source.dimension, simplicial_map.target.dimension)
-    for degree in range(top + 1):
+    represented_degrees = list(range(max(top, 0) + 1))
+    if convention is HomologyConvention.REDUCED and any(
+        group.dimension == -1
+        for cohomology in (source_cohomology, target_cohomology)
+        for group in cohomology.groups
+    ):
+        represented_degrees.insert(0, -1)
+    for degree in represented_degrees:
         source_group = source_groups.get(degree)
         target_group = target_groups.get(degree)
         source_basis = (
@@ -936,7 +943,10 @@ def induced_cohomology_map(
             else ()
         )
         columns: list[tuple[int, ...]] = []
-        if target_group is not None:
+        if degree == -1:
+            if target_group is not None:
+                columns.extend((1,) for _ in target_group.cohomology_basis)
+        elif target_group is not None:
             for vector in target_group.cohomology_basis:
                 pulled = _pullback_vector(
                     simplicial_map.source,

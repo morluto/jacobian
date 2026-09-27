@@ -3,10 +3,14 @@
 from itertools import combinations
 from typing import TypedDict
 
+import pytest
+from pydantic import ValidationError
+
 from jacobian.math.topology._models import SimplicialComplexRequest, canonical_complex
 from jacobian.math.topology._structural import (
     FVectorRequest,
     LinkRequest,
+    LinkResult,
     compute_link,
 )
 
@@ -180,3 +184,19 @@ def test_link_rejects_non_face() -> None:
         raise AssertionError("Should have raised ValueError")
     except ValueError:
         pass
+
+
+def test_decoded_link_rejects_unknown_source_simplex() -> None:
+    source = _complex(
+        {"vertices": ["a", "b", "c", "d"], "facets": [["a", "b"], ["c", "d"]]}
+    )
+    payload = {
+        "complex": source.model_dump(),
+        "simplex": ["a", "c"],
+        "link_facets": [],
+        "link_is_empty": True,
+        "link_complex": canonical_complex((), ()).model_dump(),
+    }
+
+    with pytest.raises(ValidationError, match="face of the source complex"):
+        LinkResult.model_validate(payload)

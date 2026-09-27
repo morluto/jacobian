@@ -15,7 +15,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import MathTool, OperationDomainValidationError
-from jacobian.math.topology._models import FiniteSimplicialComplex
+from jacobian.math.topology._models import FiniteSimplicialComplex, HomologyConvention
 from jacobian.math.topology.cohomology.operations._models import (
     CohomologyRingRequest,
     CohomologyRingResult,
@@ -280,6 +280,15 @@ class TestCupProduct:
 
 
 class TestCohomologyRing:
+    def test_reduced_empty_ring_omits_unrepresented_degree_minus_two(self) -> None:
+        empty = _complex([], [])
+        result = cohomology_ring(empty, 2, HomologyConvention.REDUCED)
+
+        assert result.products == ()
+        assert (
+            CohomologyRingResult.model_validate_json(result.model_dump_json()) == result
+        )
+
     def test_torus_has_nonzero_degree_one_products(self) -> None:
         ring = cohomology_ring(_torus(), 2)
         table = {
@@ -402,6 +411,19 @@ class TestCohomologyRing:
 
 
 class TestInducedMaps:
+    def test_reduced_empty_map_retains_degree_minus_one_identity(self) -> None:
+        empty = _complex([], [])
+        empty_map = SimplicialMap(source=empty, target=empty, vertex_map=())
+
+        result = induced_cohomology_map(empty_map, 2, HomologyConvention.REDUCED)
+
+        assert tuple(matrix.degree for matrix in result.matrices) == (-1,)
+        assert result.matrices[0].rows == ((1,),)
+        assert (
+            InducedCohomologyMapResult.model_validate_json(result.model_dump_json())
+            == result
+        )
+
     def _identity(self, complex_: FiniteSimplicialComplex) -> SimplicialMap:
         return SimplicialMap(
             source=complex_, target=complex_, vertex_map=complex_.vertices

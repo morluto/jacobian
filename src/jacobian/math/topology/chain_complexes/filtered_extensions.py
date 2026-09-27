@@ -773,6 +773,12 @@ def _filtered_map_status_admitted(
         parsed = []
         for degree, matrix in enumerate(request.maps):
             try:
+                if p is not None and any(
+                    type(value) is not int or not 0 <= value < p
+                    for row in matrix
+                    for value in row
+                ):
+                    raise ValueError("finite-field entries must be canonical residues")
                 parsed.append([[_parse_entry(v, p) for v in row] for row in matrix])
             except (TypeError, ValueError, ZeroDivisionError, RuntimeError) as exc:
                 raise OperationDomainValidationError(
@@ -1535,7 +1541,9 @@ def _coefficient_sum_bound(terms: list[tuple[int | Fraction, int | Fraction]]) -
             message="a composed coefficient may exceed the exact chain-map "
             "coefficient digit limit",
         )
-    return numerator_digits + denominator_digits + 1
+    return numerator_digits + (
+        0 if all(size[2] for size in term_sizes) else denominator_digits + 1
+    )
 
 
 def _composition_preflight(
@@ -1620,41 +1628,35 @@ def _composition_preflight(
 
 
 def filtered_chain_map_compose(
-    request: FilteredChainMapCompositionRequest,
+    first: FilteredChainMapResult, second: FilteredChainMapResult
 ) -> FilteredChainMapResult:
     """Compose exact filtration-preserving chain maps in application order."""
-    if not isinstance(request, FilteredChainMapCompositionRequest):
-        raise _fail(
-            ("request",),
-            "filtered_chain_map.composition_request_invalid",
-            "request must be a filtered chain map composition value",
-        )
-    if not isinstance(request.first, FilteredChainMapResult) or not isinstance(
-        request.second, FilteredChainMapResult
+    if not isinstance(first, FilteredChainMapResult) or not isinstance(
+        second, FilteredChainMapResult
     ):
         raise _fail(
-            ("request",),
+            ("maps",),
             "filtered_chain_map.composition_input_invalid",
             "both composition components must be filtered chain map results",
         )
     try:
         first_request = FilteredChainMapRequest(
-            source=request.first.source,
-            source_filtration=request.first.source_filtration,
-            target=request.first.target,
-            target_filtration=request.first.target_filtration,
-            maps=request.first.maps,
+            source=first.source,
+            source_filtration=first.source_filtration,
+            target=first.target,
+            target_filtration=first.target_filtration,
+            maps=first.maps,
         )
         second_request = FilteredChainMapRequest(
-            source=request.second.source,
-            source_filtration=request.second.source_filtration,
-            target=request.second.target,
-            target_filtration=request.second.target_filtration,
-            maps=request.second.maps,
+            source=second.source,
+            source_filtration=second.source_filtration,
+            target=second.target,
+            target_filtration=second.target_filtration,
+            maps=second.maps,
         )
     except (TypeError, ValueError, ValidationError) as exc:
         raise _fail(
-            ("request",),
+            ("maps",),
             "filtered_chain_map.composition_input_invalid",
             "both composition components must have valid filtered map axes",
         ) from exc

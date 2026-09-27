@@ -21,7 +21,7 @@ def _page_map(r: Any) -> Any:
 
 
 def _compose_map(r: Any) -> Any:
-    return filtered_chain_map_compose(r)
+    return filtered_chain_map_compose(r.first, r.second)
 
 
 def _pages(r: Any) -> Any:

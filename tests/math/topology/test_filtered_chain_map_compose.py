@@ -59,14 +59,16 @@ def _map(scalar: int) -> FilteredChainMapRequest:
 
 def _composition(
     first: FilteredChainMapRequest, second: FilteredChainMapRequest
-) -> FilteredChainMapCompositionRequest:
-    return FilteredChainMapCompositionRequest(
-        first=filtered_map(first), second=filtered_map(second)
-    )
+) -> tuple[FilteredChainMapResult, FilteredChainMapResult]:
+    return filtered_map(first), filtered_map(second)
+
+
+def _native_compose(request: FilteredChainMapCompositionRequest) -> FilteredChainMapResult:
+    return filtered_chain_map_compose(request.first, request.second)
 
 
 def test_composition_is_exact_and_remains_a_chain_map_after_roundtrip() -> None:
-    result = filtered_chain_map_compose(_composition(_map(2), _map(3)))
+    result = filtered_chain_map_compose(*_composition(_map(2), _map(3)))
 
     assert result.maps == (((6,),), ((6,),))
     assert result.filtration_preserving and result.chain_map
@@ -74,12 +76,7 @@ def test_composition_is_exact_and_remains_a_chain_map_after_roundtrip() -> None:
     # The output's source, target, filtration and matrices can be consumed
     # unchanged as the next filtered-map input after JSON serialization.
     restored = FilteredChainMapResult.model_validate_json(result.model_dump_json())
-    continued = filtered_chain_map_compose(
-        FilteredChainMapCompositionRequest(
-            first=restored,
-            second=filtered_map(_map(1)),
-        )
-    )
+    continued = filtered_chain_map_compose(restored, filtered_map(_map(1)))
     assert continued.maps == result.maps
     replayed = filtered_map(
         FilteredChainMapRequest(
@@ -129,7 +126,7 @@ def test_composition_rejects_a_mismatched_middle_filtration() -> None:
         maps=(((3, 0), (0, 3)),),
     )
     with pytest.raises(ValueError, match="middle filtrations"):
-        filtered_chain_map_compose(_composition(first, second))
+        filtered_chain_map_compose(*_composition(first, second))
 
 
 def test_middle_filtrations_may_use_different_spanning_vectors() -> None:
@@ -160,7 +157,7 @@ def test_middle_filtrations_may_use_different_spanning_vectors() -> None:
         maps=(((3, 0), (0, 3)),),
     )
 
-    result = filtered_chain_map_compose(_composition(first, second))
+    result = filtered_chain_map_compose(*_composition(first, second))
     assert result.maps == (((6, 0), (0, 6)),)
 
 
@@ -168,16 +165,12 @@ def test_composition_rejects_a_caller_supplied_non_chain_map() -> None:
     invalid = _map(1).model_copy(update={"maps": (((1,),), ((2,),))})
     forged_profile = filtered_map(invalid).model_copy(update={"chain_map": True})
     with pytest.raises(ValueError, match="must commute with their chain differentials"):
-        filtered_chain_map_compose(
-            FilteredChainMapCompositionRequest(
-                first=forged_profile, second=filtered_map(_map(3))
-            )
-        )
+        filtered_chain_map_compose(forged_profile, filtered_map(_map(3)))
 
 
 def test_identity_composition_accepts_maximum_bounded_coefficient() -> None:
     large_scalar = 10**4095
-    result = filtered_chain_map_compose(
+    result = _native_compose(
         FilteredChainMapCompositionRequest(
             first=filtered_map(_map(1)),
             second=filtered_map(_map(large_scalar)),
@@ -192,7 +185,7 @@ def test_composition_admits_exact_coefficient_growth_before_multiplication() -> 
         OperationResourceAdmissionError,
         match="composed coefficient may exceed",
     ):
-        filtered_chain_map_compose(
+        _native_compose(
             FilteredChainMapCompositionRequest(
                 first=filtered_map(_map(large_scalar)),
                 second=filtered_map(_map(large_scalar)),
@@ -208,28 +201,30 @@ def test_composition_operation_exposes_the_native_contract() -> None:
     )
     assert isinstance(tool, MathTool)
     assert tool.result_type is FilteredChainMapResult
-    request = _composition(_map(2), _map(3))
+    first, second = _composition(_map(2), _map(3))
+    request = FilteredChainMapCompositionRequest(first=first, second=second)
     assert tool.run(request).maps == (((6,),), ((6,),))
 
 
 def test_composition_rejects_malformed_component_axes_before_indexing() -> None:
-    malformed = _composition(_map(1), _map(2)).model_copy(
+    first, second = _composition(_map(1), _map(2))
+    malformed = FilteredChainMapCompositionRequest(first=first, second=second).model_copy(
         update={
-            "first": _composition(_map(1), _map(2)).first.model_copy(
+            "first": first.model_copy(
                 update={"target": ChainComplexValue(coefficient_ring=CoefficientRing.RATIONAL, degree_min=0, degree_max=0, basis_sizes=(1,), differential_matrices=())}
             )
         }
     )
     with pytest.raises(ValueError, match="target complex of the first map"):
-        filtered_chain_map_compose(malformed)
+        _native_compose(malformed)
 
 
 def test_composition_rejects_non_result_components_at_native_boundary() -> None:
     malformed = FilteredChainMapCompositionRequest.model_construct(
         first={"source": None}, second=filtered_map(_map(1))
     )
-    with pytest.raises(ValueError, match="components must be filtered chain map results"):
-        filtered_chain_map_compose(malformed)
+    with pytest.raises(ValueError, match="both composition components"):
+        _native_compose(malformed)
 
 
 def test_composition_counts_integer_input_characters_without_fraction_overhead() -> None:
@@ -262,7 +257,7 @@ def test_composition_counts_integer_input_characters_without_fraction_overhead()
             )
         }
     )
-    result = filtered_chain_map_compose(_composition(unit, large_map))
+    result = filtered_chain_map_compose(*_composition(unit, large_map))
     assert result.maps == (
         tuple(tuple(Fraction(value) for value in row) for row in large_map.maps[0]),
     )
@@ -298,7 +293,7 @@ def test_composition_preflights_semantic_work_before_exact_admission() -> None:
         chain_map=True,
     )
     with pytest.raises(OperationResourceAdmissionError, match="semantic admission"):
-        filtered_chain_map_compose(
+        _native_compose(
             FilteredChainMapCompositionRequest(first=component, second=component)
         )
 
@@ -344,7 +339,7 @@ def test_composition_rejects_oversized_map_shape_before_parsing_entries(
 
     monkeypatch.setattr(filtered_extensions, "_parse_entry", parsing_was_not_reached)
     with pytest.raises(OperationResourceAdmissionError, match="cell envelope"):
-        filtered_chain_map_compose(
+        _native_compose(
             FilteredChainMapCompositionRequest(first=component, second=component)
         )
 
@@ -370,4 +365,54 @@ def test_composition_rejects_rational_coefficient_in_finite_field_map() -> None:
         FilteredChainMapRequest(source=finite, target=finite, source_filtration=filtration,
                                 target_filtration=filtration, maps=(((1,),),))))
     with pytest.raises(ValueError, match="finite-field map entries must be canonical residues"):
-        filtered_chain_map_compose(request)
+        _native_compose(request)
+
+
+@pytest.mark.parametrize("entry", [3, -1])
+def test_filtered_map_rejects_noncanonical_finite_field_residues(entry: int) -> None:
+    finite = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=3,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(1,),
+        differential_matrices=(),
+    )
+    filtration = (FiltrationLevel(subspaces=(FilteredSubspace(vectors=((1,),)),)),)
+    with pytest.raises(ValueError, match="retained canonical coefficient grammar"):
+        filtered_map(
+            FilteredChainMapRequest(
+                source=finite,
+                target=finite,
+                source_filtration=filtration,
+                target_filtration=filtration,
+                maps=(((entry,),),),
+            )
+        )
+
+
+def test_composition_output_admission_counts_only_integer_digits() -> None:
+    dimension = 4
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(dimension,),
+        differential_matrices=(),
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(FilteredSubspace(vectors=tuple(tuple(int(i == j) for i in range(dimension)) for j in range(dimension))),),
+        ),
+    )
+    scalar = 10**4095
+    identity = FilteredChainMapResult(
+        source=complex_value, target=complex_value,
+        source_filtration=filtration, target_filtration=filtration,
+        maps=(tuple(tuple(int(i == j) for j in range(dimension)) for i in range(dimension)),),
+        filtration_preserving=True, chain_map=True,
+    )
+    dense = identity.model_copy(
+        update={"maps": (tuple(tuple(scalar for _ in range(dimension)) for _ in range(dimension)),)}
+    )
+    assert filtered_chain_map_compose(identity, dense).maps[0][0][0] == scalar

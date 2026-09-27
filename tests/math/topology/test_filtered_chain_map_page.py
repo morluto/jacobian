@@ -10,7 +10,6 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
     FiltrationLevel,
 )
 from jacobian.math.topology.chain_complexes.filtered_extensions import (
-    FilteredChainMapCompositionRequest,
     FilteredChainMapPageRequest,
     FilteredChainMapPageResult,
     FilteredChainMapRequest,
@@ -84,10 +83,7 @@ def test_e1_page_map_transports_representatives_and_commutes_with_d1() -> None:
 
 def test_page_maps_preserve_composition_on_a_late_page() -> None:
     first, second = _map(2), _map(3)
-    composite = filtered_chain_map_compose(
-        # Arguments are in application order.
-        FilteredChainMapCompositionRequest(first=first, second=second)
-    )
+    composite = filtered_chain_map_compose(first, second)
     direct = filtered_chain_map_page(FilteredChainMapPageRequest(map=composite, page=1))
     first_page = filtered_chain_map_page(FilteredChainMapPageRequest(map=first, page=1))
     second_page = filtered_chain_map_page(

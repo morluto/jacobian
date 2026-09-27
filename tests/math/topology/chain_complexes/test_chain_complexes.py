@@ -1645,7 +1645,6 @@ class TestNativeSurface:
             "ChainComplexValue",
             "CoefficientRing",
             "FilteredChainComplexRequest",
-            "FilteredChainMapCompositionRequest",
             "FilteredChainMapPageZeroResult",
             "FilteredHomologyDegree",
             "FilteredHomologyLevel",

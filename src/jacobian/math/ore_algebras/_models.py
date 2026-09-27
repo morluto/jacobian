@@ -95,6 +95,53 @@ class DifferentialOreOperator(StrictModel):
         return max((term.order for term in self.terms), default=-1)
 
 
+class DFinitePowerSeries(StrictModel):
+    """A formal power series fixed by an ODE at the ordinary point x=0."""
+
+    operator: DifferentialOreOperator
+    initial_derivatives: FiniteRationalSequence = Field(
+        description=(
+            "Exact values f(0), f'(0), ..., f^(r-1)(0), where r is the "
+            "differential-operator order."
+        )
+    )
+    center: Literal[0] = 0
+
+    @model_validator(mode="after")
+    def require_ordinary_initial_value_problem(self) -> Self:
+        if not self.operator.terms:
+            raise _validation_error(
+                "zero_differential_operator",
+                "a D-finite series requires a nonzero differential operator",
+            )
+        if len(self.initial_derivatives.values) != self.operator.order:
+            raise _validation_error(
+                "differential_initial_data",
+                "initial_derivatives must contain exactly order(operator) values",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: DifferentialOreOperator,
+        initial_derivatives: FiniteRationalSequence,
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator,
+            initial_derivatives=initial_derivatives,
+            center=0,
+        )
+
+
+class DFinitePowerSeriesRequest(StrictModel):
+    """Input data for an ordinary-point D-finite formal-series value."""
+
+    operator: DifferentialOreOperator
+    initial_derivatives: FiniteRationalSequence
+    center: Literal[0] = 0
+
+
 class DifferentialOperatorMultiplyRequest(StrictModel):
     left: DifferentialOreOperator
     right: DifferentialOreOperator

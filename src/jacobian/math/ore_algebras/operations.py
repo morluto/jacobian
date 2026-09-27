@@ -41,6 +41,11 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_RESULT_DIGITS,
     MAX_SHIFT_RESULT_ORDER,
     MAX_SHIFT_TERMS,
+<<<<<<< HEAD
+    DFinitePowerSeries,
+    DFinitePowerSeriesRequest,
+=======
+>>>>>>> origin/main
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyResult,
     DifferentialOperatorMultiplyResult,
@@ -1866,6 +1871,122 @@ def _admit_differential_operator(
                 message=str(exc),
             ) from exc
     return value
+
+
+def _polynomial_order_at_zero(value: SparseRationalPolynomial) -> int | None:
+    """Return the least exponent, or None for the zero polynomial."""
+    if not value.terms:
+        return None
+    return min(term.exponents[0] for term in value.terms)
+
+
+def _rational_function_order_at_zero(value: RationalFunction) -> int:
+    """Return the zero/pole order of a nonzero exact rational function."""
+    numerator_order = _polynomial_order_at_zero(value.numerator)
+    denominator_order = _polynomial_order_at_zero(value.denominator)
+    if numerator_order is None or denominator_order is None:
+        raise ValueError("differential coefficients must be nonzero rational functions")
+    return numerator_order - denominator_order
+
+
+def _require_ordinary_series_operator(operator: DifferentialOreOperator) -> None:
+    """Check regularity after dividing every coefficient by the leading one."""
+    leading = next(
+        term.coefficient for term in operator.terms if term.order == operator.order
+    )
+    leading_order = _rational_function_order_at_zero(leading)
+    for term in operator.terms:
+        if _rational_function_order_at_zero(term.coefficient) < leading_order:
+            raise ValueError("monic differential coefficients have a pole at x=0")
+
+
+def differential_series_construct(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+    initial_derivatives: FiniteRationalSequence | Mapping[str, Any],
+) -> DFinitePowerSeries:
+    """Bind an ordinary-point differential equation to complete initial data."""
+    try:
+        request = DFinitePowerSeriesRequest.model_validate(
+            {
+                "operator": operator.model_dump()
+                if isinstance(operator, DifferentialOreOperator)
+                else operator,
+                "initial_derivatives": initial_derivatives.model_dump()
+                if isinstance(initial_derivatives, FiniteRationalSequence)
+                else initial_derivatives,
+                "center": 0,
+            }
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be nonzero, regular at x=0, "
+                "and have complete initial derivatives at its ordinary center"
+            ),
+        ) from exc
+
+    # The series carrier stores coefficients without performing differential
+    # arithmetic, so admit against the rational-function representation domain,
+    # not the narrower shift-arithmetic envelope.
+    admitted_operator = request.operator
+    if (
+        not admitted_operator.terms
+        or len(request.initial_derivatives.values) != admitted_operator.order
+    ):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be nonzero and have exactly "
+                "order(operator) initial derivatives"
+            ),
+        )
+    for index, term in enumerate(admitted_operator.terms):
+        try:
+            require_canonical_rational_function(
+                term.coefficient,
+                maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+                maximum_exponent=MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT,
+                maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+                label=f"differential coefficient {index}",
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("operator", "terms", index),
+                code="ore_algebra.differential_coefficient",
+                message=str(exc),
+            ) from exc
+    output_weight = (
+        _differential_operator_representation_weight(admitted_operator)
+        + 256
+        + sum(
+            128 + _digit_count(value.num) + _digit_count(value.den)
+            for value in request.initial_derivatives.values
+        )
+    )
+    if output_weight > MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.dfinite_series_output_weight",
+            message="the D-finite formal-series value exceeds its serialized-output weight budget",
+        )
+    try:
+        _require_ordinary_series_operator(admitted_operator)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be regular at x=0 and have a "
+                "nonzero leading coefficient at its ordinary center x=0"
+            ),
+        ) from exc
+    return DFinitePowerSeries._from_kernel(
+        admitted_operator,
+        request.initial_derivatives,
+    )
 
 
 def _admit_differential_function(value: RationalFunction) -> RationalFunction:

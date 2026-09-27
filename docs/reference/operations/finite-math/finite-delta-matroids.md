@@ -91,6 +91,8 @@ postconditions rather than fields of the recognition result.
 
 
 `delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
+
+`delta_matroid.twist.compute` returns the canonical twisted `FiniteDeltaMatroid`.
 The native `lower_matroid` and `upper_matroid` conversions return canonical
 `FiniteBasisMatroid` values directly, whose bases are all minimum-cardinality or
 all maximum-cardinality feasible sets, respectively. These deterministic

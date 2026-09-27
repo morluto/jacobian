@@ -9,9 +9,13 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras._models import (
     FiniteDimensionalLieAlgebra,
     LieAlgebraRequest,
+    LieKillingRadicalResult,
     LieKillingResult,
 )
-from jacobian.math.lie_algebras.operations import lie_killing_form
+from jacobian.math.lie_algebras.operations import (
+    lie_killing_form,
+    lie_killing_form_radical,
+)
 
 
 def _algebra(
@@ -155,3 +159,60 @@ class TestKillingComposition:
             encode_strict_json(tool.examples[0].input), strict=True
         )
         assert tool.run(payload) == lie_killing_form(payload.algebra)
+
+
+class TestKillingFormRadical:
+    def test_sl2_has_zero_killing_form_radical(self) -> None:
+        result = lie_killing_form_radical(SL2)
+        expected_killing = (
+            (Fraction(0), Fraction(4), Fraction(0)),
+            (Fraction(4), Fraction(0), Fraction(0)),
+            (Fraction(0), Fraction(0), Fraction(8)),
+        )
+
+        assert _entries(result.killing_result) == expected_killing
+        assert result.killing_result.algebra == SL2
+        assert result.radical.basis == SL2.basis
+        assert result.radical.generators.row_count == 0
+        assert result.radical.generators.column_count == 3
+
+    def test_heisenberg_has_full_killing_form_radical(self) -> None:
+        result = lie_killing_form_radical(HEISENBERG)
+        expected_killing = ((Fraction(0),) * 3,) * 3
+        expected_radical = (
+            (Fraction(1), Fraction(0), Fraction(0)),
+            (Fraction(0), Fraction(1), Fraction(0)),
+            (Fraction(0), Fraction(0), Fraction(1)),
+        )
+
+        assert _entries(result.killing_result) == expected_killing
+        assert (
+            tuple(
+                tuple(value.as_fraction() for value in row)
+                for row in result.radical.generators.entries
+            )
+            == expected_radical
+        )
+        assert result.radical.basis == HEISENBERG.basis
+
+    def test_result_round_trips_and_retains_killing_result(self) -> None:
+        result = lie_killing_form_radical(SL2)
+        restored = LieKillingRadicalResult.model_validate_json(result.model_dump_json())
+
+        assert restored == result
+        assert restored.killing_result == lie_killing_form(SL2)
+
+    def test_catalog_example_returns_the_declared_operation_value(self) -> None:
+        from jacobian.canonical import encode_strict_json
+        from jacobian.math.lie_algebras._tools import TOOLS
+
+        tool = next(
+            item
+            for item in TOOLS
+            if item.operation_id == "lie_algebra.killing_form.radical.compute"
+        )
+        payload = tool.request_type.model_validate_json(
+            encode_strict_json(tool.examples[0].input), strict=True
+        )
+
+        assert tool.run(payload) == lie_killing_form_radical(payload.algebra)

@@ -10,7 +10,6 @@ from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     UnivariateGaussianPolynomialTerm,
 )
 from jacobian.math.geometry.algebraic_curves._models import (
-    PlaneCurveBlowupChartRequest,
     PlaneCurveBlowupChartResult,
 )
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
@@ -38,7 +37,6 @@ __all__ = [
     "GaussianRealificationResult",
     "PlaneCurveArclengthBudget",
     "PlaneCurveArclengthResult",
-    "PlaneCurveBlowupChartRequest",
     "PlaneCurveBlowupChartResult",
     "ProjectivePlaneCurveSingularityBudget",
     "ProjectivePlaneCurveSingularityProfile",

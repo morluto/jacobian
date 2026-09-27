@@ -231,6 +231,11 @@ class DirichletCharacterGroup(StrictModel):
                 "invariant_factor_order",
                 "invariant factors must be sorted increasingly",
             )
+        if any(factor < 1 for factor in self.invariant_factors):
+            raise _validation_error(
+                "invariant_factor_range",
+                "invariant factors must be positive",
+            )
         for first, second in zip(
             self.invariant_factors, self.invariant_factors[1:], strict=False
         ):

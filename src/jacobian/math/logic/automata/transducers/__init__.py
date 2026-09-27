@@ -6,6 +6,7 @@ from jacobian.math.logic.automata.transducers.operations import (
     identity_transducer,
     invert_rational,
     minimize_subsequential,
+    reachable_state_witnesses,
     reachable_states,
     replay_rational_path,
     run_subsequential,
@@ -13,6 +14,7 @@ from jacobian.math.logic.automata.transducers.operations import (
     verify_composition,
     verify_minimization,
     verify_subsequential_run,
+    word_morphism_to_subsequential,
 )
 from jacobian.math.logic.automata.transducers.values import (
     FiniteAlphabet,
@@ -35,6 +37,7 @@ __all__ = [
     "identity_transducer",
     "invert_rational",
     "minimize_subsequential",
+    "reachable_state_witnesses",
     "reachable_states",
     "replay_rational_path",
     "run_subsequential",
@@ -42,4 +45,5 @@ __all__ = [
     "verify_composition",
     "verify_minimization",
     "verify_subsequential_run",
+    "word_morphism_to_subsequential",
 ]

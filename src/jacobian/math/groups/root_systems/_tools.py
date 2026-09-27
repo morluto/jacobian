@@ -9,6 +9,7 @@ from jacobian.math.groups.root_systems._highest_coroot_models import (
 )
 from jacobian.math.groups.root_systems._highest_coroot_operations import highest_coroots
 from jacobian.math.groups.root_systems._models import (
+    MAX_BRUHAT_INTERVAL_GROUP_ORDER,
     MAX_RANK,
     CartanDatumRequest,
     CartanMatrixRequest,
@@ -32,6 +33,8 @@ from jacobian.math.groups.root_systems._models import (
     SimpleReflectionResult,
     SimpleReflectionsResult,
     WeightLatticeVector,
+    WeylBruhatIntervalRequest,
+    WeylBruhatIntervalResult,
     WeylDescentsResult,
     WeylDimensionRequest,
     WeylDimensionResult,
@@ -52,6 +55,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylWeightOrbitRequest,
     WeylWeightOrbitResult,
 )
+from jacobian.math.groups.root_systems._weight_character_models import (
+    HighestWeightCharacterRequest,
+    IrreducibleWeightCharacter,
+)
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
     cartan_matrix_from_type,
@@ -71,6 +78,7 @@ from jacobian.math.groups.root_systems.operations import (
     simple_reflection,
     simple_reflections,
     weight_lattice_vector,
+    weyl_bruhat_interval,
     weyl_element_compose,
     weyl_element_descents,
     weyl_element_from_word,
@@ -85,6 +93,7 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 from jacobian.math.polynomials._models import IntegerPolynomial
 
@@ -215,6 +224,12 @@ def _run_weyl_element_inverse(request: WeylElementInverseRequest) -> WeylElement
     return weyl_element_inverse(request.element)
 
 
+def _run_weyl_bruhat_interval(
+    request: WeylBruhatIntervalRequest,
+) -> WeylBruhatIntervalResult:
+    return weyl_bruhat_interval(request.lower, request.upper)
+
+
 def _run_weyl_element_descents(
     request: WeylElementRequest,
 ) -> WeylDescentsResult:
@@ -241,6 +256,12 @@ def _run_weyl_weight_orbit(
 
 def _run_weyl_dimension(request: WeylDimensionRequest) -> WeylDimensionResult:
     return weyl_dimension(request.matrix, request.highest_weight)
+
+
+def _run_highest_weight_character(
+    request: HighestWeightCharacterRequest,
+) -> IrreducibleWeightCharacter:
+    return highest_weight_character(request.matrix, request.highest_weight)
 
 
 _A2 = {
@@ -1138,6 +1159,30 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="root_system.highest_weight_character.compute",
+        title="Compute an exact irreducible type-A highest-weight character",
+        description=(
+            "Return the complete weight-multiplicity table for an irreducible "
+            "type-A representation using its dominant integral highest weight."
+        ),
+        request_type=HighestWeightCharacterRequest,
+        result_type=IrreducibleWeightCharacter,
+        run=_run_highest_weight_character,
+        tags=("algebra", "root-system", "representation", "character", "exact"),
+        discovery_terms=(
+            "highest weight character",
+            "weight multiplicities",
+            "Weyl character",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_adjoint_character",
+                description="Compute the eight-dimensional adjoint character of A2.",
+                input={"matrix": _A2["matrix"], "highest_weight": [1, 1]},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="root_system.weyl_dimension.compute",
         title="Compute an exact Weyl dimension from a dominant highest weight",
         description=(
@@ -1225,6 +1270,53 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "in A2; each word index must be below the Cartan rank and "
                 "the word within the length budget.",
                 input={"matrix": _A2["matrix"], "word": [0, 1]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="weyl_group.bruhat_interval.compute",
+        title="Compute a complete finite Weyl Bruhat interval",
+        description=(
+            "Return every Weyl element x with lower <= x <= upper in the "
+            "strong Bruhat order, together with exact length ranks and the "
+            "finite-poset covers. The endpoints must share an ordered finite "
+            "Cartan parent whose Weyl group has order at most "
+            f"{MAX_BRUHAT_INTERVAL_GROUP_ORDER}. Incomparable endpoints give "
+            "the empty interval; equal endpoints give a singleton."
+        ),
+        request_type=WeylBruhatIntervalRequest,
+        result_type=WeylBruhatIntervalResult,
+        run=_run_weyl_bruhat_interval,
+        tags=("algebra", "root-system", "weyl-group", "poset", "exact"),
+        discovery_terms=(
+            "Bruhat order interval",
+            "Weyl group Bruhat interval poset",
+            "strong Bruhat interval",
+        ),
+        examples=(
+            OperationExample(
+                name="a2_identity_to_reflection_interval",
+                description="Return [e,s0] in A2, a two-element chain.",
+                input={
+                    "lower": {
+                        **_A2,
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["1", "0"], ["0", "1"]],
+                        },
+                    },
+                    "upper": {
+                        **_A2,
+                        "root_action": {
+                            "domain": "ZZ",
+                            "row_count": 2,
+                            "column_count": 2,
+                            "entries": [["-1", "1"], ["0", "1"]],
+                        },
+                    },
+                },
             ),
         ),
     ),

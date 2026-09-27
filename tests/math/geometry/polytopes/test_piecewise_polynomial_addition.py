@@ -180,6 +180,29 @@ def test_addition_preflights_union_term_count_before_coefficient_arithmetic():
         )
 
 
+def test_addition_admits_result_support_after_exact_cancellation():
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    shared_terms = 3_000
+    left_terms = {(exponent,): 1 for exponent in range(MAX_POLYNOMIAL_TERMS)}
+    right_terms = {
+        **{(exponent,): -1 for exponent in range(shared_terms)},
+        **{
+            (exponent,): 1
+            for exponent in range(MAX_POLYNOMIAL_TERMS, MAX_POLYNOMIAL_TERMS + 1_096)
+        },
+    }
+
+    result = piecewise_polynomial_add(
+        PiecewisePolynomialAdditionRequest(
+            left=_function(complex_value, left_terms),
+            right=_function(complex_value, right_terms),
+        )
+    )
+
+    output_terms = result.pieces[0].polynomial.polynomial.terms
+    assert len(output_terms) == 2 * (MAX_POLYNOMIAL_TERMS - shared_terms)
+
+
 def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound():
     modulus = 10**20_000 + 3
 

@@ -8,7 +8,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
     CrystallographicAffineRealization,
@@ -21,7 +24,11 @@ from jacobian.math.geometry.crystallographic.extensions.operations import (
     check_crystallographic_fundamental_domain,
     pair_crystallographic_polytope_facets,
 )
-from jacobian.math.geometry.polytopes._models import RationalVPolytope
+from jacobian.math.geometry.polytopes._models import (
+    RationalCoordinateSpace,
+    RationalPolytopeVertex,
+    RationalVPolytope,
+)
 
 
 def _request() -> CrystallographicPolytopePairingRequest:
@@ -81,6 +88,32 @@ def test_pairing_native_boundary_revalidates_affine_realization():
         pair_crystallographic_polytope_facets(
             CrystallographicAffineRealization.model_construct(),
             request.polytope,
+            request.lattice_axes,
+            request.pairings,
+        )
+
+
+def test_oversized_pairing_coordinates_are_resource_refusals():
+    request = _request()
+    large_polytope = RationalVPolytope(
+        space=RationalCoordinateSpace(axes=("x", "y")),
+        vertices=tuple(
+            RationalPolytopeVertex(
+                vertex_id=f"v{index}",
+                coordinates=tuple(
+                    CanonicalRational(num=value, den=1) for value in point
+                ),
+            )
+            for index, point in enumerate(
+                ((0, 0), (0, 1), (10**32, 0), (10**32, 1))
+            )
+        ),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="facet-profile digit bound"):
+        pair_crystallographic_polytope_facets(
+            request.affine_realization,
+            large_polytope,
             request.lattice_axes,
             request.pairings,
         )

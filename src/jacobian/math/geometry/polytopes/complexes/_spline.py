@@ -291,37 +291,37 @@ def _admit_pieces(
         ),
         default=0,
     )
-    # Restriction to an affine face can expand a monomial.  Admit a complete
-    # carrier-sized bound for every reduced polynomial, not just its source
-    # term count, before Groebner reduction starts.
-    reduced_term_bound = term_count * comb(max_degree + dimension, dimension)
-    if reduced_term_bound > 4_096:
-        raise OperationResourceAdmissionError(
-            location=("pieces",),
-            code="polytopal_complex.compatibility_terms",
-            message="reduced compatibility polynomials exceed the admitted term envelope",
-        )
     pair_count = sum(
         len(face.maximal_cell_ids) * (len(face.maximal_cell_ids) - 1) // 2
         for face in complex_value.faces
     )
-    # Charge both polynomial conversion and the exact reduction, then admit
-    # the complete ledger before creating a SymPy expression.
-    work = pair_count * max(reduced_term_bound, 1) * (dimension + 1) ** 3
-    if work > MAX_PIECE_COMPATIBILITY_WORK:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="polytopal_complex.compatibility_work",
-            message="piece compatibility reduction exceeds the admitted envelope",
-        )
-    row_digits = (2 * reduced_term_bound + 8) * MAX_RATIONAL_SCALAR_DIGITS
-    estimated_digits = pair_count * row_digits
-    if estimated_digits > MAX_PIECE_RESULT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="polytopal_complex.compatibility_output",
-            message="piece compatibility ledger exceeds the admitted output envelope",
-        )
+    if pair_count:
+        # Restriction to an affine face can expand a monomial. Admit a complete
+        # carrier-sized bound before Groebner reduction starts.
+        reduced_term_bound = term_count * comb(max_degree + dimension, dimension)
+        if reduced_term_bound > 4_096:
+            raise OperationResourceAdmissionError(
+                location=("pieces",),
+                code="polytopal_complex.compatibility_terms",
+                message="reduced compatibility polynomials exceed the admitted term envelope",
+            )
+        # Charge both polynomial conversion and exact reduction, then admit
+        # the complete ledger before creating a SymPy expression.
+        work = pair_count * reduced_term_bound * (dimension + 1) ** 3
+        if work > MAX_PIECE_COMPATIBILITY_WORK:
+            raise OperationResourceAdmissionError(
+                location=("complex",),
+                code="polytopal_complex.compatibility_work",
+                message="piece compatibility reduction exceeds the admitted envelope",
+            )
+        row_digits = (2 * reduced_term_bound + 8) * MAX_RATIONAL_SCALAR_DIGITS
+        estimated_digits = pair_count * row_digits
+        if estimated_digits > MAX_PIECE_RESULT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("complex",),
+                code="polytopal_complex.compatibility_output",
+                message="piece compatibility ledger exceeds the admitted output envelope",
+            )
     return complex_value
 
 
@@ -331,16 +331,27 @@ def piecewise_polynomial_from_maximal_pieces(
 ) -> PiecewisePolynomialResult:
     complex_value = _admit_pieces(complex_value, pieces)
     by_id = {row.cell_id: row.polynomial for row in pieces}
-    symbols = _poly_symbols(pieces[0].polynomial)
-    polynomials = {
-        cell_id: _to_poly(polynomial, symbols) for cell_id, polynomial in by_id.items()
-    }
+    compatibility_faces = tuple(
+        face
+        for face in complex_value.faces
+        if len(face.maximal_cell_ids) >= 2 and face.dimension >= 0
+    )
     rows = []
     first_obstruction: tuple[str, RationalPolynomial] | None = None
-    for face in complex_value.faces:
+    if compatibility_faces:
+        symbols = _poly_symbols(pieces[0].polynomial)
+        needed_cell_ids = {
+            cell_id for face in compatibility_faces for cell_id in face.maximal_cell_ids
+        }
+        polynomials = {
+            cell_id: _to_poly(by_id[cell_id], symbols)
+            for cell_id in needed_cell_ids
+        }
+    else:
+        symbols = ()
+        polynomials = {}
+    for face in compatibility_faces:
         supports = tuple(sorted(face.maximal_cell_ids))
-        if len(supports) < 2 or face.dimension < 0:
-            continue
         ideal = _affine_ideal(face, symbols)
         basis = sp.groebner(ideal, *symbols, domain=sp.QQ)
         for first, second in combinations(supports, 2):
@@ -483,7 +494,6 @@ def piecewise_polynomial_add(  # noqa: C901
 
     # Preflight the exact union support and every rational sum before any
     # coefficient arithmetic or compatibility reduction is performed.
-    output_term_count = 0
     max_piece_term_count = 0
     output_digit_bound = 0
     maximum_degree = 0
@@ -493,27 +503,23 @@ def piecewise_polynomial_add(  # noqa: C901
         first_by_exponent = {term.exponents: term.coefficient for term in first}
         second_by_exponent = {term.exponents: term.coefficient for term in second}
         exponents = first_by_exponent.keys() | second_by_exponent.keys()
-        if len(exponents) > MAX_POLYNOMIAL_TERMS:
-            raise OperationResourceAdmissionError(
-                location=("pieces", cell_id),
-                code="polytopal_complex.addition_terms",
-                message=f"a sum piece may contain at most {MAX_POLYNOMIAL_TERMS} terms",
-            )
-        output_term_count += len(exponents)
-        max_piece_term_count = max(max_piece_term_count, len(exponents))
+        surviving_term_count = 0
         for exponent in exponents:
-            maximum_degree = max(maximum_degree, sum(exponent))
             left_coefficient = first_by_exponent.get(exponent)
             right_coefficient = second_by_exponent.get(exponent)
+            if (
+                left_coefficient is not None
+                and right_coefficient is not None
+                and left_coefficient.num == -right_coefficient.num
+                and left_coefficient.den == right_coefficient.den
+            ):
+                # Canonical reduced form makes exact cancellation an equality
+                # test on the components. The zero sum never enters the
+                # output, so the growth bound does not apply.
+                continue
+            surviving_term_count += 1
+            maximum_degree = max(maximum_degree, sum(exponent))
             if left_coefficient is not None and right_coefficient is not None:
-                if (
-                    left_coefficient.num == -right_coefficient.num
-                    and left_coefficient.den == right_coefficient.den
-                ):
-                    # Canonical reduced form makes exact cancellation an
-                    # equality test on the components.  The zero sum never
-                    # enters the output, so the growth bound does not apply.
-                    continue
                 numerator_digits = (
                     max(
                         _decimal_digits_upper(left_coefficient.num)
@@ -546,6 +552,13 @@ def piecewise_polynomial_add(  # noqa: C901
                 ) + _decimal_digits_upper(right_coefficient.den)
             else:
                 raise ArithmeticError("sum support disagrees with its operand union")
+        if surviving_term_count > MAX_POLYNOMIAL_TERMS:
+            raise OperationResourceAdmissionError(
+                location=("pieces", cell_id),
+                code="polytopal_complex.addition_terms",
+                message=f"a sum piece may contain at most {MAX_POLYNOMIAL_TERMS} terms",
+            )
+        max_piece_term_count = max(max_piece_term_count, surviving_term_count)
     if output_digit_bound > MAX_PIECE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("pieces",),
@@ -554,24 +567,27 @@ def piecewise_polynomial_add(  # noqa: C901
         )
 
     dimension = len(left.complex.space.axes)
-    reduced_terms = max_piece_term_count * comb(maximum_degree + dimension, dimension)
-    if reduced_terms > 4_096:
-        raise OperationResourceAdmissionError(
-            location=("pieces",),
-            code="polytopal_complex.addition_compatibility_terms",
-            message="the sum's reduced compatibility polynomials exceed the admitted term envelope",
-        )
     pair_count = sum(
         len(face.maximal_cell_ids) * (len(face.maximal_cell_ids) - 1) // 2
         for face in left.complex.faces
     )
-    aggregate_work = 3 * pair_count * max(reduced_terms, 1) * (dimension + 1) ** 3
-    if aggregate_work > MAX_PIECE_COMPATIBILITY_WORK:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="polytopal_complex.addition_work",
-            message="input validation and sum compatibility exceed the admitted work envelope",
+    if pair_count:
+        reduced_terms = max_piece_term_count * comb(
+            maximum_degree + dimension, dimension
         )
+        if reduced_terms > 4_096:
+            raise OperationResourceAdmissionError(
+                location=("pieces",),
+                code="polytopal_complex.addition_compatibility_terms",
+                message="the sum's reduced compatibility polynomials exceed the admitted term envelope",
+            )
+        aggregate_work = 3 * pair_count * max(reduced_terms, 1) * (dimension + 1) ** 3
+        if aggregate_work > MAX_PIECE_COMPATIBILITY_WORK:
+            raise OperationResourceAdmissionError(
+                location=("complex",),
+                code="polytopal_complex.addition_work",
+                message="input validation and sum compatibility exceed the admitted work envelope",
+            )
 
     left_checked = piecewise_polynomial_from_maximal_pieces(left.complex, left.pieces)
     right_checked = piecewise_polynomial_from_maximal_pieces(

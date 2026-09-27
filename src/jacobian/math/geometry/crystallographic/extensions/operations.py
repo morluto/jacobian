@@ -461,8 +461,8 @@ def _admit_polytope_pairing(polytope: RationalVPolytope, pairing_count: int) -> 
                     label="facet-pairing polytope coordinate",
                 )
     except ValueError:
-        _domain(
-            "polytope_pairing_coordinate",
+        _resource(
+            "polytope_pairing_coordinate_over_envelope",
             "polytope coordinates exceed the facet-profile digit bound",
             ("polytope", "vertices"),
         )

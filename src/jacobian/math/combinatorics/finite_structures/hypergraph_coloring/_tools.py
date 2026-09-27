@@ -26,8 +26,9 @@ TOOLS: MathTools = (
             "monochromatic. Returns COLORABLE with one witness colouring, or "
             "NOT_COLORABLE after complete search. Search projects away isolated "
             "vertices, checks at most 2,000,000 active-coloring/edge pairs, and "
-            "returns immediately on a checked witness; exhaustion is an execution "
-            "error."
+            "returns immediately on a checked witness. If the work allowance is "
+            "exhausted, the operation raises an execution resource error rather "
+            "than returning NOT_COLORABLE."
         ),
         request_type=NonmonochromaticColoringRequest,
         result_type=NonmonochromaticColoringResult,

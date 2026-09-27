@@ -28,7 +28,6 @@ from jacobian.math.topology.discrete_morse import (
 )
 from jacobian.math.topology.discrete_morse._models import (
     GradientPathsRequest,
-    MorseComplexRequest,
 )
 from jacobian.math.topology.discrete_morse._tools import TOOLS
 from jacobian.math.topology.operations import canonicalize
@@ -210,6 +209,7 @@ class TestGradientPathsKnownAnswer:
     def test_vertex_start_has_no_lower_critical_target(self) -> None:
         result = compute_gradient_paths(CIRCLE, CIRCLE_PAIRS, ("b",))
         assert result.paths == ()
+        assert result.counts_by_target == ()
 
 
 class TestGradientPathReplay:
@@ -337,7 +337,7 @@ class TestMorseBettiOracle:
             assert result.betti_numbers == _oracle_betti(complex_)
             assert result.boundary_square_zero is True
             checked += 1
-        assert checked >= 1
+        assert checked == 2
 
 
 class TestEulerIdentity:
@@ -517,36 +517,6 @@ class TestResourceEnvelope:
 
 
 class TestNativeVsCatalogParity:
-    def test_gradient_paths_catalog_matches_native(self) -> None:
-        tool = _tool(GRADIENT_OPERATION_ID)
-        request = GradientPathsRequest.model_validate(
-            {
-                "complex": {
-                    "vertices": ["a", "b", "c"],
-                    "facets": [["a", "b"], ["b", "c"], ["a", "c"]],
-                },
-                "pairs": [
-                    {"face": ["a"], "coface": ["a", "b"]},
-                    {"face": ["c"], "coface": ["a", "c"]},
-                ],
-                "start": ["b", "c"],
-                "target": ["b"],
-            }
-        )
-        assert tool.run(request) == compute_gradient_paths(
-            CIRCLE, CIRCLE_PAIRS, ("b", "c"), ("b",)
-        )
-
-    def test_morse_complex_catalog_matches_native(self) -> None:
-        tool = _tool(COMPLEX_OPERATION_ID)
-        request = MorseComplexRequest.model_validate(
-            {
-                "complex": {"vertices": ["a", "b"], "facets": [["a", "b"]]},
-                "pairs": [],
-            }
-        )
-        assert tool.run(request) == compute_morse_complex(INTERVAL, ())
-
     @pytest.mark.parametrize(
         "operation_id", [GRADIENT_OPERATION_ID, COMPLEX_OPERATION_ID]
     )
@@ -554,11 +524,38 @@ class TestNativeVsCatalogParity:
         self, operation_id: str
     ) -> None:
         tool = _tool(operation_id)
-        assert tool.examples
+        expected_names = (
+            {
+                "circle_edge_to_critical_vertex",
+                "interval_single_down_step",
+            }
+            if operation_id == GRADIENT_OPERATION_ID
+            else {"interval_boundary_over_gf2", "circle_morse_complex"}
+        )
+        assert {example.name for example in tool.examples} == expected_names
         for example in tool.examples:
-            request = tool.request_type.model_validate_json(json.dumps(example.input))
+            request = tool.request_type.model_validate_json(
+                json.dumps(example.input), strict=True
+            )
             result = tool.run(request)
             assert isinstance(result, (GradientPathsResult, MorseComplexResult))
+            complex_ = canonicalize(
+                tuple(request.complex.vertices),
+                tuple(tuple(facet) for facet in request.complex.facets),
+            ).complex
+            if operation_id == GRADIENT_OPERATION_ID:
+                expected = compute_gradient_paths(
+                    complex_, request.pairs, request.start, request.target
+                )
+            else:
+                expected = compute_morse_complex(complex_, request.pairs)
+            assert result == expected
+            assert (
+                tool.result_type.model_validate_json(
+                    result.model_dump_json(), strict=True
+                )
+                == result
+            )
 
 
 class TestSerialization:

@@ -1,6 +1,10 @@
 # Number theory operations
 
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
+- [Standard cyclotomic field inclusions](cyclotomic-field-inclusions.md)
+- [Modular-form spaces, bases, and coordinates](modular-forms-level-one-bases-coordinates.md)
+- [Rational Gamma0 modular-form bases](modular-forms-gamma0-rational-bases.md)
+- [Formal q-series U and V prefix maps](modular-form-formal-q-series-operators.md)
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
@@ -25,3 +29,6 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Dense Kempner reciprocal-series enclosures](kempner-dense-series.md)
 - [Simultaneous square-free affine interval counts](squarefree-affine-interval-count.md)
 - [Square-free affine infinite-product enclosures](squarefree-affine-infinite-product.md)
+- [Exact fixed fields for supported quadratic splitting fields](galois-fixed-fields.md)
+- [Complete Galois correspondence for supported quadratic splitting fields](galois-correspondence.md)
+- [Exact element orbits in supported quadratic splitting fields](galois-element-orbits.md)

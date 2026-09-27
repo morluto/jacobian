@@ -39,14 +39,19 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     restriction,
     sections,
 )
+from jacobian.math.topology.cellular_sheaves.hodge import (
+    SheafHodgeResult,
+    hodge_laplacians,
+)
+from jacobian.math.topology.cellular_sheaves.morphism_image import (
+    SheafMorphismImageRequest,
+    SheafMorphismImageResult,
+    image_of_morphism,
+)
 from jacobian.math.topology.cellular_sheaves.morphism_kernel import (
     SheafMorphismKernelRequest,
     SheafMorphismKernelResult,
     kernel_of_morphism,
-)
-from jacobian.math.topology.cellular_sheaves.hodge import (
-    SheafHodgeResult,
-    hodge_laplacians,
 )
 from jacobian.math.topology.cellular_sheaves.operations import (
     from_cover_maps,
@@ -69,10 +74,12 @@ __all__ = [
     "SheafField",
     "SheafHodgeResult",
     "SheafMorphismComposeRequest",
-    "SheafMorphismRequest",
-    "SheafMorphismResult",
+    "SheafMorphismImageRequest",
+    "SheafMorphismImageResult",
     "SheafMorphismKernelRequest",
     "SheafMorphismKernelResult",
+    "SheafMorphismRequest",
+    "SheafMorphismResult",
     "SheafObstruction",
     "SheafObstructionCode",
     "SheafOutcome",
@@ -89,8 +96,9 @@ __all__ = [
     "direct_sum",
     "from_cover_maps",
     "hodge_laplacians",
-    "morphism",
+    "image_of_morphism",
     "kernel_of_morphism",
+    "morphism",
     "restrict_sections",
     "restrict_to_subcomplex",
     "restriction",

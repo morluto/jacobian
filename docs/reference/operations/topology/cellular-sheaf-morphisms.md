@@ -45,3 +45,15 @@ inclusion morphism into the source. The operation rechecks naturality from the
 component matrices and verifies that each source restriction preserves the
 pointwise kernel before it returns the induced map. A zero-dimensional kernel
 stalk is represented by an empty basis and correctly shaped empty matrices.
+
+`cellular_sheaf.morphism.image.compute` computes the pointwise image sheaf over
+the same exact fields. At each simplex, the canonical pivot columns of the
+stalk component give a based image stalk. Naturality implies that each target
+restriction carries one image stalk into the next; the operation solves for
+the induced image restriction in those bases. Its result includes the
+inclusion into the target and the factor map from the source, whose composite
+reconstructs the supplied morphism. Zero images retain all simplex axes with
+zero-dimensional stalks and correctly shaped empty matrices. This follows the
+cellular-sheaf convention as a functor from the face poset to vector spaces;
+see Hansen and Ghrist, [Toward a Spectral Theory of Cellular
+Sheaves](https://doi.org/10.1007/s41468-019-00038-7).

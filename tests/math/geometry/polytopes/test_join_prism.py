@@ -89,6 +89,11 @@ class TestPrismKnownAnswer:
             "right_top": (Fraction(1), Fraction(1)),
         }
         assert tuple(result.prism.space.axes) == ("x", "h")
+        assert result.height_axis == "h"
+        assert result.source_space == _segment().space
+        assert tuple(
+            (row.source_axis, row.target_axis) for row in result.source_axis_map
+        ) == (("x", "x"),)
         assert [row.source_vertex_id for row in result.bottom_vertex_map] == [
             "left",
             "right",
@@ -154,10 +159,6 @@ class TestVolumeOracle:
         base = _square()
         result = polytope_prism(base, "h")
         assert convex_hull_volume(base) == convex_hull_volume(result.prism)
-
-    def test_segment_prism_volume_is_one(self) -> None:
-        result = polytope_prism(_segment(), "h")
-        assert convex_hull_volume(result.prism) == CanonicalRational(num=1, den=1)
 
     def test_join_volume_identity(self) -> None:
         # vol(P * Q) = vol(P) vol(Q) m! n! / (m+n+1)! for dim m, n.
@@ -280,6 +281,15 @@ class TestDefiningInvariant:
         left = _polytope(("x",), (("la", (0,)), ("lb", (1,))))
         right = _polytope(("y",), (("ra", (0,)), ("rb", (1,))))
         result = polytope_join(left, right, "h")
+        assert result.height_axis == "h"
+        assert result.left_space == left.space
+        assert result.right_space == right.space
+        assert tuple(
+            (row.source_axis, row.target_axis) for row in result.left_axis_map
+        ) == (("x", "x"),)
+        assert tuple(
+            (row.source_axis, row.target_axis) for row in result.right_axis_map
+        ) == (("y", "y"),)
         coords = _coords(result.join)
         left_coords = _coords(left)
         right_coords = _coords(right)

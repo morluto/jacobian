@@ -41,6 +41,7 @@ from jacobian.math.polynomials.rational_functions._bounds import (
 from jacobian.math.polynomials.rational_functions.gradient._gcd_process import (
     DerivativeGcdFactor,
     forced_denominator_derivative_gcds,
+    recognize_and_forced_denominator_derivative_gcds,
 )
 from jacobian.math.polynomials.rational_functions.gradient._kernel import (
     _differentiate_fractions,
@@ -277,6 +278,41 @@ def _admit_general_factors(
     )
 
 
+def _admit_gradient_factors(
+    function: RationalFunction,
+    bounds: tuple[FractionBound, ...],
+) -> tuple[DerivativeGcdFactor, ...]:
+    """Admit source coprimality and derivative factors with shared inputs."""
+
+    numerator_terms = function.numerator.terms
+    requires_coprimality_worker = (
+        bool(function.variables)
+        and bool(numerator_terms)
+        and len(function.denominator.terms) > 1
+        and any(any(term.exponents) for term in numerator_terms)
+    )
+    axes = tuple(axis for axis, bound in enumerate(bounds) if not bound.is_zero)
+    if not requires_coprimality_worker:
+        _recognize_source(function)
+        return forced_denominator_derivative_gcds(
+            function.denominator,
+            len(function.variables),
+            axes=axes,
+        )
+
+    coprime, factors = recognize_and_forced_denominator_derivative_gcds(
+        function,
+        axes=axes,
+    )
+    if not coprime:
+        raise OperationDomainValidationError(
+            location=(),
+            code="not_coprime",
+            message="rational-function numerator and denominator must be coprime",
+        )
+    return factors
+
+
 def _reduced_admitted_bound(
     bound: FractionBound, factor: DerivativeGcdFactor
 ) -> FractionBound:
@@ -349,7 +385,7 @@ def gradient(function: RationalFunction) -> RationalFunctionGradient:
     else:
         ledger = _Ledger()
         bounds = _admit_general_gradient(function, ledger)
-        factors = _admit_general_factors(function, bounds)
+        factors = _admit_gradient_factors(function, bounds)
         _validate_admitted_factors(bounds, factors, ledger)
         derivatives = _general_gradient_admitted(function, factors, bounds)
     result = RationalFunctionGradient(

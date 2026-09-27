@@ -16,8 +16,6 @@ def _run_clique(r: CliqueRequest) -> CliqueResult:
 
 def _run_graph_clique(r: GraphCliqueRequest) -> CliqueResult:
     return graph_clique_complex(r.graph)
-
-
 def _run_one_skeleton(r: OneSkeletonRequest) -> OneSkeletonResult:
     return one_skeleton(r)
 

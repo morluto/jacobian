@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -32,6 +33,7 @@ from jacobian.math.topology.chain_complexes.filtered_extensions import (
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
 )
 from jacobian.math.topology.cubical_complexes._models import CubicalCell
@@ -61,11 +63,15 @@ from jacobian.math.topology.simplicial_sets.maps import normalized_chains
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 
 
+def _q(value: int) -> CanonicalRational:
+    return CanonicalRational(num=value, den=1)
+
+
 def test_standard_simplex_normalized_prefix_has_square_zero_boundary() -> None:
     simplex = standard_simplex(1, 2)
     normalized = normalized_chains(simplex)
-    assert normalized.differential_squared_zero is True
-    assert normalized.nondegenerate_counts == (2, 1, 0)
+    assert normalized.chain_complex.basis_sizes == (2, 1, 0)
+    assert normalized.nondegenerate_bases[0] == simplex.sets[0]
 
 
 def test_face_poset_and_clique_reconstruct_small_triangle() -> None:
@@ -160,14 +166,16 @@ def test_triangulation_retains_source_axis_through_serialization() -> None:
     square = CubicalCell(intervals=((0, 1), (0, 1)))
     result = triangulate(CubicalTriangulationRequest(cells=(square,)))
     restored = type(result).model_validate(result.model_dump(mode="json"))
-    assert restored.source_cells == (square,)
-    assert len(restored.complex.cells) == 9
-    assert len(restored.simplices_by_cell) == len(restored.source_cells)
+    assert square in restored.source_complex.cells
+    assert len(restored.source_complex.cells) == 9
+    assert len(restored.simplicial_complex.faces_by_dimension[0].faces) == 4
+    assert len(restored.cell_maps) == 1
+    assert restored.cell_maps[0].source_cell == square
 
 
 def test_triangulation_rejects_factorial_output_before_materialization() -> None:
     cube = CubicalCell(intervals=tuple((0, 1) for _ in range(10)))
-    with pytest.raises(OperationResourceAdmissionError, match="simplex output"):
+    with pytest.raises(OperationResourceAdmissionError, match="dimension"):
         triangulate(CubicalTriangulationRequest(cells=(cube,)))
 
 
@@ -191,7 +199,7 @@ def _rank_one_interval_sheaf() -> FiniteCellularSheaf:
                 target=target,
                 row_basis=("x",),
                 column_basis=("x",),
-                entries=(("1",),),
+                entries=((_q(1),),),
                 cover_path=(source, target),
             )
             for source, target in covers[:1]
@@ -212,7 +220,7 @@ def test_sheaf_morphism_requires_a_proved_prime_field() -> None:
             target=("a", "b"),
             row_basis=("x",),
             column_basis=("x",),
-            entries=(("1",),),
+            entries=((1,),),
             cover_path=(source, ("a", "b")),
         )
         for source in (("a",), ("b",))
@@ -226,7 +234,7 @@ def test_sheaf_morphism_requires_a_proved_prime_field() -> None:
         stalks=stalks,
         cover_restrictions=restrictions,
     )
-    components = tuple((face, (("1",),)) for face in sheaf.canonical_face_order)
+    components = tuple((face, ((1,),)) for face in sheaf.canonical_face_order)
     with pytest.raises(OperationDomainValidationError, match="prime"):
         morphism(sheaf, sheaf, components)
     # Neither a serialized carrier nor a native bypass carries trusted field
@@ -251,7 +259,7 @@ def test_sheaf_morphism_uses_modular_arithmetic_and_tuple_axes() -> None:
             target=("a", "b"),
             row_basis=("x",),
             column_basis=("x",),
-            entries=(("2",),),
+            entries=((0,),),
             cover_path=(source, ("a", "b")),
         )
         for source in (("a",), ("b",))
@@ -264,10 +272,10 @@ def test_sheaf_morphism_uses_modular_arithmetic_and_tuple_axes() -> None:
         cover_restrictions=restrictions,
         comparable_pairs=2,
     )
-    components = tuple((face, (("2",),)) for face in sheaf.canonical_face_order)
+    components = tuple((face, ((0,),)) for face in sheaf.canonical_face_order)
     result = morphism(sheaf, sheaf, components)
     assert result.natural is True
-    assert all(matrix == (("0",),) for _key, matrix in result.components)
+    assert all(matrix == ((0,),) for _key, matrix in result.components)
 
 
 def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
@@ -304,15 +312,15 @@ def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
                 target=("a", "b"),
                 row_basis=("x",),
                 column_basis=("x",),
-                entries=(("0",),),
+                entries=((_q(0),),),
                 cover_path=(vertex, ("a", "b")),
             )
             for vertex in (("a",), ("b",))
         ),
     )
     components = (
-        (("a",), (("0",),)),
-        (("b",), (("0",),)),
+        (("a",), ((_q(0),),)),
+        (("b",), ((_q(0),),)),
         (("a", "b"), ((),)),
     )
 
@@ -323,8 +331,10 @@ def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
 
 def test_sheaf_morphism_rejects_incomplete_forged_diagram() -> None:
     sheaf = _rank_one_interval_sheaf()
-    components = (("a", (("1",),)), ("b", (("1",),)), ("a.b", (("1",),)))
-    with pytest.raises(OperationDomainValidationError, match="every canonical"):
+    components = (("a", ((_q(1),),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
+    with pytest.raises(
+        OperationDomainValidationError, match="does not define a cellular sheaf"
+    ):
         morphism(sheaf, sheaf, components)
 
 
@@ -345,16 +355,16 @@ def test_sheaf_morphism_translates_malformed_scalar_to_owner_error() -> None:
                 target=("a", "b"),
                 row_basis=("x",),
                 column_basis=("x",),
-                entries=(("1",),),
+                entries=((_q(1),),),
                 cover_path=(source, ("a", "b")),
             )
             for source in (("a",), ("b",))
         ),
     )
-    components = (("a", (("bad",),)), ("b", (("1",),)), ("a.b", (("1",),)))
+    components = (("a", (("bad",),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
     with pytest.raises(OperationDomainValidationError, match="exact scalars"):
         morphism(sheaf, sheaf, components)
-    malformed: Any = (("a", ((None,),)), ("b", (("1",),)), ("a.b", (("1",),)))
+    malformed: Any = (("a", ((None,),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
     with pytest.raises(OperationDomainValidationError, match="exact scalars"):
         morphism(sheaf, sheaf, malformed)
 
@@ -368,7 +378,7 @@ def test_relative_homology_admits_group_and_matrix_bounds_before_dense_work() ->
         )
 
 
-def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
+def test_filtered_chain_map_retains_canonical_value_and_checks_its_relation() -> None:
     complex_ = ChainComplexValue(
         coefficient_ring=CoefficientRing.PRIME_FIELD,
         prime=2,
@@ -387,15 +397,17 @@ def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
     )
     result = filtered_map(
         FilteredChainMapRequest(
-            source=complex_,
+            chain_map=ChainMapValue(
+                source=complex_,
+                target=complex_,
+                map_matrices=(((0,),), ((0,),)),
+            ),
             source_filtration=filtration,
-            target=complex_,
             target_filtration=filtration,
-            maps=(((0,),), ((2,),)),
         )
     )
-    assert result.chain_map is True
-    assert result.maps == (((0,),), ((0,),))
+    assert result.is_chain_map is True
+    assert result.chain_map.map_matrices == (((0,),), ((0,),))
 
 
 def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
@@ -432,19 +444,21 @@ def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
 
     result = filtered_map(
         FilteredChainMapRequest(
-            source=source,
+            chain_map=ChainMapValue(
+                source=source,
+                target=target,
+                map_matrices=(((),), ((0,),)),
+            ),
             source_filtration=source_filtration,
-            target=target,
             target_filtration=target_filtration,
-            maps=(((),), ((0,),)),
         )
     )
 
-    assert result.chain_map is True
+    assert result.is_chain_map is True
     assert result.filtration_preserving is True
 
 
-def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> None:
+def test_filtered_chain_map_rejects_non_nested_filtration() -> None:
     complex_ = ChainComplexValue(
         coefficient_ring=CoefficientRing.PRIME_FIELD,
         prime=2,
@@ -470,11 +484,43 @@ def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> No
     with pytest.raises(OperationDomainValidationError, match="not contained"):
         filtered_map(
             FilteredChainMapRequest(
-                source=complex_,
+                chain_map=ChainMapValue(
+                    source=complex_,
+                    target=complex_,
+                    map_matrices=(((1,),), ((1,),)),
+                ),
                 source_filtration=malformed,
-                target=complex_,
                 target_filtration=malformed,
-                maps=(((1,),), ((1,),)),
+            )
+        )
+
+
+def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
+    complex_ = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=2,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 1),
+        differential_matrices=(((1,),),),
+    )
+    zero = FilteredSubspace(vectors=())
+    filtration = (
+        FiltrationLevel(subspaces=(zero, zero)),
+        FiltrationLevel(subspaces=(zero, zero)),
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="top filtration level must span"
+    ):
+        filtered_map(
+            FilteredChainMapRequest(
+                chain_map=ChainMapValue(
+                    source=complex_,
+                    target=complex_,
+                    map_matrices=(((1,),), ((1,),)),
+                ),
+                source_filtration=filtration,
+                target_filtration=filtration,
             )
         )
 

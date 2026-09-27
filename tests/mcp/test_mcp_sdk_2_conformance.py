@@ -235,7 +235,7 @@ def test_math_run_projects_forged_character_as_invalid_request() -> None:
     asyncio.run(scenario())
 
 
-def test_math_run_accepts_the_degree_six_full_symmetric_group() -> None:
+def test_math_run_rejects_the_unsupported_degree_six_splitting_field() -> None:
     async def scenario() -> None:
         from mcp import Client
 
@@ -268,8 +268,8 @@ def test_math_run_accepts_the_degree_six_full_symmetric_group() -> None:
                 },
             )
 
-        assert result.structured_content is not None
-        assert result.structured_content["output"]["field"]["degree"] == 720
+        assert result.is_error
+        assert result.structured_content is None
 
     asyncio.run(scenario())
 

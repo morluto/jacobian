@@ -105,6 +105,13 @@ def test_lattice_vectors_roundtrip_with_their_datum_parent(
     assert restored.coordinates == (2, -3)
 
 
+def test_lattice_coordinates_roundtrip_as_exact_json_integers() -> None:
+    vector = root_lattice_vector(_cartan(((2,),)), (1 << 100,))
+    encoded = vector.model_dump_json()
+    assert '"coordinates":["1267650600228229401496703205376"]' in encoded
+    assert type(vector).model_validate_json(encoded) == vector
+
+
 def test_coordinate_axis_must_match_rank_and_coordinates_are_bounded() -> None:
     matrix = _cartan(((2, -1), (-1, 2)))
     with pytest.raises((ValidationError, OperationDomainValidationError)):

@@ -1113,6 +1113,14 @@ def polytope_prism(polytope: RationalVPolytope, height_axis: str) -> PrismResult
             code="polytope.prism.source_not_a_v_polytope",
             message="prism source must be a labelled rational V-polytope value",
         )
+    try:
+        polytope = RationalVPolytope.model_validate(polytope.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("polytope",),
+            code="polytope.prism.source_not_canonical",
+            message="prism source must be a canonical rational V-polytope",
+        ) from exc
     _admit_prism(polytope, height_axis)
     zero = CanonicalRational.from_integer_ratio(0, 1)
     one = CanonicalRational.from_integer_ratio(1, 1)

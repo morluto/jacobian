@@ -45,6 +45,7 @@ that need more context than an operation card:
 - [Deterministic tree-automaton state algebra](tree-automaton-state-algebra.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
+- [Integral quadratic forms](integral-quadratic-forms.md)
 - [Exact qubit stabilizer groups](quantum-exact-stabilizer-groups.md)
 - [Stabilizer code spaces](quantum-stabilizer-code-space.md)
 - [Pauli measurement on stabilizer states](quantum-stabilizer-state-measurement.md)

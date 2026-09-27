@@ -26,7 +26,11 @@ from jacobian.math.number_theory.characters.operations import (
 )
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms import cyclotomic
+from jacobian.math.number_theory.modular_forms.basis import (
+    modular_form_coordinates_equal,
+)
 from jacobian.math.number_theory.modular_forms.character_basis import (
+    _modular_character_coordinates_equal,
     modular_character_basis_q_expansions,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
@@ -220,6 +224,39 @@ def test_common_target_global_equality_equal_and_v2_unequal_forms() -> None:
     assert not modular_character_coordinates_equal_in_common_space(
         from_level_13, target_form_f_plus_v2
     ).equal
+
+
+def test_same_character_space_coordinate_equality_uses_canonical_coordinates() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    source_space = _space(13, source_character)
+    form = _level_13_form(source_space)
+    same = _level_13_form(source_space)
+    unequal = ModularFormCoordinates(
+        space=source_space,
+        basis_id=_LEGACY_BASIS,
+        coordinates=(_element(2),),
+    )
+    assert _modular_character_coordinates_equal(form, same)
+    assert not _modular_character_coordinates_equal(form, unequal)
+
+
+def test_global_same_space_equality_accepts_generic_character_basis() -> None:
+    source_character = dirichlet_character(character_group(13), (2,))
+    generic_space = _space(26, _inflate(source_character, 26))
+    form = ModularFormCoordinates(
+        space=generic_space,
+        basis_id=_GENERIC_BASIS,
+        coordinates=(_element(1), _element(0)),
+    )
+    same = ModularFormCoordinates.model_validate(form.model_dump())
+    unequal = ModularFormCoordinates(
+        space=generic_space,
+        basis_id=_GENERIC_BASIS,
+        coordinates=(_element(0), _element(1)),
+    )
+
+    assert modular_form_coordinates_equal(form, same)
+    assert not modular_form_coordinates_equal(form, unequal)
 
 
 def test_nonnested_26_39_forms_compare_in_their_level_78_common_space() -> None:

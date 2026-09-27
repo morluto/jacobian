@@ -196,3 +196,18 @@ def test_final_power_digit_bound_matches_rational_function_carrier(monkeypatch) 
     monkeypatch.setattr(ore_operations, "shift_operator_multiply", forbidden_multiply)
     with pytest.raises(OperationResourceAdmissionError):
         shift_operator_power(base, 2)
+
+
+def test_final_power_term_bound_uses_coefficient_carrier() -> None:
+    polynomial = _rf_polynomial(tuple((1, degree) for degree in range(9)))
+    base = ShiftOreOperator.model_validate(
+        {
+            "variable": "n",
+            "terms": [{"exponent": 0, "coefficient": polynomial}],
+        }
+    )
+
+    result = shift_operator_power(base, 2).power
+
+    assert len(result.terms) == 1
+    assert len(result.terms[0].coefficient.numerator.terms) == 17

@@ -686,7 +686,9 @@ def _finish_shift_power_stage(
         degree_limit = (
             MAX_SHIFT_RESULT_DEGREE if final else MAX_SHIFT_COEFFICIENT_DEGREE
         )
-        term_limit = MAX_SHIFT_TERMS if final else MAX_SHIFT_COEFFICIENT_TERMS
+        term_limit = (
+            MAX_RATIONAL_FUNCTION_TERMS if final else MAX_SHIFT_COEFFICIENT_TERMS
+        )
         digit_limit = (
             MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
             if final

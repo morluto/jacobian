@@ -16,7 +16,10 @@ from jacobian.catalog.models import (
 from jacobian.math.number_theory.characters.operations import (
     require_complete_character_group,
 )
-from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.characters.values import (
+    MAX_CHARACTER_GROUP_MODULUS,
+    DirichletCharacter,
+)
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_GAMMA0_OPERATION_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
@@ -417,8 +420,146 @@ def _euler_counts(n: int) -> tuple[int, int, int]:
     return e2, e3, cusps
 
 
+def _require_sturm_character_group(space: ModularFormSpace) -> None:
+    """Check the exact complete character parent used by a Sturm bound."""
+    if not isinstance(space.character, DirichletCharacter):
+        return
+    try:
+        group = require_complete_character_group(space.character.group)
+    except (
+        OperationDomainValidationError,
+        OperationResourceAdmissionError,
+    ) as error:
+        raise OperationDomainValidationError(
+            location=("space", "character", "group"),
+            code="modular_form.invalid_character_group",
+            message="Sturm bounds require a complete canonical character group",
+        ) from error
+    coordinates = space.character.coordinates
+    if (
+        type(coordinates) is not tuple
+        or len(coordinates) != len(group.generator_orders)
+        or any(
+            type(value) is not int or value < 0 or value >= order
+            for value, order in zip(coordinates, group.generator_orders, strict=True)
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("space", "character", "coordinates"),
+            code="modular_form.invalid_character_coordinates",
+            message="Sturm bounds require canonical character coordinates",
+        )
+
+
+def _sturm_space(space: object) -> ModularFormSpace:
+    if type(space) is not ModularFormSpace:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.unsupported_space",
+            message="Sturm bounds require a canonical Gamma0 modular-form space",
+        )
+    raw_level = getattr(space, "level", None)
+    if type(raw_level) is int and raw_level > MAX_GAMMA0_OPERATION_LEVEL:
+        raise OperationResourceAdmissionError(
+            location=("space", "level"),
+            code="modular_form.level_bound",
+            message="modular-form level exceeds the exact Sturm-index envelope",
+        )
+    raw_character = getattr(space, "character", None)
+    if type(raw_character) is not DirichletCharacter and not (
+        type(raw_character) is str and raw_character == "TRIVIAL"
+    ):
+        raise OperationDomainValidationError(
+            location=("space", "character"),
+            code="modular_form.invalid_character_parent",
+            message="Sturm bounds require a typed character or the trivial character",
+        )
+    if type(raw_character) is DirichletCharacter:
+        raw_group = getattr(raw_character, "group", None)
+        raw_axes = (
+            getattr(raw_group, "invariant_factors", None),
+            getattr(raw_group, "generators", None),
+            getattr(raw_group, "generator_orders", None),
+            getattr(raw_character, "coordinates", None),
+        )
+        if any(type(axis) is not tuple or len(axis) > 32 for axis in raw_axes):
+            raise OperationResourceAdmissionError(
+                location=("space", "character"),
+                code="modular_form.character_group_bound",
+                message="character group axes exceed the bounded Sturm parent envelope",
+            )
+        if any(
+            type(value) is not int
+            for axis in raw_axes
+            if type(axis) is tuple
+            for value in axis
+        ):
+            raise OperationDomainValidationError(
+                location=("space", "character"),
+                code="modular_form.invalid_character_coordinates",
+                message="character group axes must contain exact integer scalars",
+            )
+        raw_units = getattr(raw_group, "unit_residues", None)
+        raw_coordinates = getattr(raw_group, "unit_coordinates", None)
+        if type(raw_units) is not tuple or type(raw_coordinates) is not tuple:
+            raise OperationDomainValidationError(
+                location=("space", "character", "group"),
+                code="modular_form.invalid_character_group",
+                message="Sturm bounds require bounded canonical character group tables",
+            )
+        if (
+            len(raw_units) > MAX_CHARACTER_GROUP_MODULUS
+            or len(raw_coordinates) > MAX_CHARACTER_GROUP_MODULUS
+        ):
+            raise OperationResourceAdmissionError(
+                location=("space", "character", "group"),
+                code="modular_form.character_group_bound",
+                message="character group tables exceed the bounded Sturm parent envelope",
+            )
+        if any(type(row) is not tuple or len(row) > 32 for row in raw_coordinates):
+            raise OperationResourceAdmissionError(
+                location=("space", "character", "group", "unit_coordinates"),
+                code="modular_form.character_group_bound",
+                message="character coordinate rows exceed the bounded Sturm parent envelope",
+            )
+        if any(type(value) is not int for value in raw_units) or any(
+            type(value) is not int
+            for row in raw_coordinates
+            if type(row) is tuple
+            for value in row
+        ):
+            raise OperationDomainValidationError(
+                location=("space", "character", "group"),
+                code="modular_form.invalid_character_group",
+                message="character group tables must contain exact integer scalars",
+            )
+    try:
+        # Re-run the parent validators because a caller can construct a model
+        # without validation and later rely on its character/field claims.
+        space = ModularFormSpace.model_validate(space.model_dump(mode="python"))
+    except (TypeError, ValueError, AttributeError) as error:
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.unsupported_space",
+            message="Sturm bounds require a valid exact modular-form parent",
+        ) from error
+    _require_sturm_character_group(space)
+    if (
+        space.group != "GAMMA0"
+        or type(space.level) is not int
+        or type(space.weight) is not int
+        or space.kind not in {"M", "S"}
+    ):
+        raise OperationDomainValidationError(
+            location=("space",),
+            code="modular_form.unsupported_space",
+            message="Sturm bounds require a bounded exact Gamma0 space",
+        )
+    return space
+
+
 def sturm_bound(space: ModularFormSpace) -> SturmBoundResult:
-    _space(space)
+    space = _sturm_space(space)
     return SturmBoundResult(
         space=space,
         index=_index(space.level),

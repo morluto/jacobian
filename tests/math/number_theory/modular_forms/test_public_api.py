@@ -5,18 +5,19 @@ from jacobian.math.number_theory import modular_forms
 
 def test_exact_public_api_symbols() -> None:
     assert tuple(modular_forms.__all__) == (
+        "CyclotomicCharacterMap",
+        "CyclotomicIdentityFieldMap",
         "LevelOneModularQExpansion",
         "ModularCharacterBasis",
         "ModularCharacterBasisElement",
-        "ModularCharacterBasisRequest",
-        "ModularCharacterCoordinatesProductRequest",
-        "ModularCharacterCoordinatesRequest",
+        "ModularCharacterCommonTargetPrefix",
+        "ModularCharacterEqualityResult",
         "ModularCharacterHeckeMatrix",
-        "ModularCharacterHeckeMatrixRequest",
-        "ModularCharacterHeckeRequest",
         "ModularCharacterQExpansion",
         "ModularCharacterSpaceInclusion",
+        "ModularCharacterVDegeneracyImage",
         "ModularCharacterVDegeneracyRequest",
+        "ModularCharacterTransportedForm",
         "ModularFormBasis",
         "ModularFormChangeOfBasisFrame",
         "ModularFormCoordinates",
@@ -34,14 +35,17 @@ def test_exact_public_api_symbols() -> None:
         "formal_q_series_v_operator",
         "level_one_named_q_expansion",
         "modular_character_basis_q_expansions",
+        "modular_character_coordinates_equal_in_common_space",
         "modular_character_coordinates_hecke",
         "modular_character_coordinates_product",
         "modular_character_coordinates_q_expansion",
+        "modular_character_coordinates_transport",
         "modular_character_coordinates_v_degeneracy",
         "modular_character_hecke_matrix",
         "modular_form_basis_frame",
         "modular_form_basis_q_expansions",
         "modular_form_character_space_inclusion",
+        "modular_form_coordinates_add",
         "modular_form_coordinates_atkin_lehner",
         "modular_form_coordinates_equal",
         "modular_form_coordinates_extend_field",
@@ -49,9 +53,11 @@ def test_exact_public_api_symbols() -> None:
         "modular_form_coordinates_hecke",
         "modular_form_coordinates_product",
         "modular_form_coordinates_q_expansion",
+        "modular_form_coordinates_scalar_multiply",
         "modular_form_coordinates_to_frame",
         "modular_form_coordinates_transport",
         "modular_form_coordinates_u2",
+        "modular_form_coordinates_u_prime",
         "modular_form_coordinates_v2",
         "modular_form_coordinates_v3",
         "modular_form_coordinates_v_degeneracy",
@@ -69,29 +75,44 @@ def test_exact_public_api_symbols() -> None:
 
 
 def test_q_series_operator_tools_do_not_claim_modular_space_membership() -> None:
-    from jacobian.catalog.catalog import Catalog
+    from jacobian.math.number_theory.modular_forms._tools import TOOLS
 
-    catalog = Catalog.open()
-    u_prime = catalog.inspect("modular_form.u_operator.apply")
-    operations = {
-        operation.operation_id
-        for operation in catalog.browse(
-            namespace="modular_form", limit=100, cursor=None
-        ).operations
-    }
+    u_prime = next(
+        tool for tool in TOOLS if tool.operation_id == "modular_form.u_operator.apply"
+    )
+    formal_u = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "modular_form.formal_q_series.u_operator.compute"
+    )
+    formal_v = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "modular_form.formal_q_series.v_operator.compute"
+    )
+    operations = {operation.operation_id for operation in TOOLS}
 
     assert "modular_form.named.q_expansion.compute" in operations
     assert "modular_form.space.sturm_bound.compute" in operations
     assert "modular_form.hecke.apply" not in operations
     assert "modular_form.u_operator.apply" in operations
     assert u_prime is not None
-    assert {"form", "prime"} <= set(u_prime.input_schema["properties"])
+    assert {"form", "prime"} <= set(
+        u_prime.request_type.model_json_schema()["properties"]
+    )
     assert {"space", "basis_id", "coordinates"} <= set(
-        u_prime.output_schema["properties"]
+        u_prime.result_type.model_json_schema()["properties"]
     )
     assert "modular_form.v_operator.apply" not in operations
     assert "modular_form.formal_q_series.u_operator.compute" in operations
     assert "modular_form.formal_q_series.v_operator.compute" in operations
+    for formal_operator in (formal_u, formal_v):
+        assert {"series", "prime", "output_precision"} <= set(
+            formal_operator.request_type.model_json_schema()["properties"]
+        )
+        assert {"variable", "truncation_order", "coefficients"} <= set(
+            formal_operator.result_type.model_json_schema()["properties"]
+        )
     assert "modular_form.coordinates.hecke.apply" in operations
     assert "modular_form.coordinates.product.compute" in operations
     assert "modular_form.coordinates.extend_field.compute" in operations
@@ -107,10 +128,10 @@ def test_q_series_operator_tools_do_not_claim_modular_space_membership() -> None
     assert "modular_form.coordinates.from_frame.compute" in operations
     assert "modular_form.coordinates.transport.compute" in operations
     assert "modular_form.space.inclusion.compute" in operations
-    assert "modular_form.character_space.inclusion.compute" in operations
-    assert "modular_form.equal.check" in operations
     assert "modular_form.equal.check" in operations
     assert "modular_form.character_coordinates.q_expansion.compute" in operations
     assert "modular_form.character_coordinates.product.compute" in operations
     assert "modular_form.character_hecke_matrix.compute" in operations
     assert "modular_form.character_basis.compute" in operations
+    assert "modular_form.character_coordinates.transport.compute" in operations
+    assert "modular_form.character.equal.check" in operations

@@ -118,19 +118,6 @@ class ModularFormCoordinatesTransportRequest(StrictModel):
     inclusion: ModularFormSpaceInclusion
 
 
-class ModularFormEqualityRequest(StrictModel):
-    """Compare two complete exact modular-form coordinate values."""
-
-    left: ModularFormCoordinates
-    right: ModularFormCoordinates
-
-
-class ModularFormEqualityResult(StrictModel):
-    """Exact equality outcome for two canonical modular-form values."""
-
-    equal: StrictBool
-
-
 class ModularFormSpaceInclusionRequest(StrictModel):
     """Construct the natural inclusion between two supported Gamma0 spaces."""
 
@@ -138,22 +125,15 @@ class ModularFormSpaceInclusionRequest(StrictModel):
     target_space: ModularFormSpace
 
 
-class ModularCharacterSpaceInclusionRequest(StrictModel):
-    """Construct a same-weight inclusion along exact character inflation."""
-
-    source_space: ModularFormSpace
-    target_space: ModularFormSpace
-
-
 class ModularFormEqualityRequest(StrictModel):
-    """Compare coordinate-defined forms through a common Sturm bound."""
+    """Compare two complete modular forms represented in supported spaces."""
 
     left: ModularFormCoordinates
     right: ModularFormCoordinates
 
 
 class ModularFormEqualityResult(StrictModel):
-    """Exact equality of two globally represented modular forms."""
+    """Exact equality result for two represented modular forms."""
 
     equal: StrictBool
 
@@ -364,16 +344,15 @@ class SpaceDimensionResult(StrictModel):
 __all__ = [
     "Gamma0DimensionSpaceInput",
     "LevelOneNamedQExpansionRequest",
-    "ModularCharacterSpaceInclusionRequest",
     "ModularFormBasisRequest",
-    "ModularFormEqualityRequest",
-    "ModularFormEqualityResult",
     "ModularFormCoordinatesHeckeRequest",
     "ModularFormCoordinatesQExpansionRequest",
     "ModularFormCoordinatesU2Request",
     "ModularFormCoordinatesUPrimeRequest",
     "ModularFormCoordinatesV2Request",
     "ModularFormCoordinatesV3Request",
+    "ModularFormEqualityRequest",
+    "ModularFormEqualityResult",
     "ModularFormFramedHeckeMatrixRequest",
     "ModularFormHeckeMatrixRequest",
     "ModularFormOperatorImagePrefixRequest",

@@ -6,7 +6,6 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
-    ModularCharacterSpaceInclusionRequest,
     ModularFormBasisFrameRequest,
     ModularFormBasisRequest,
     ModularFormCanonicalToFramedRequest,
@@ -66,6 +65,14 @@ from jacobian.math.number_theory.modular_forms.character_degeneracy_models impor
     ModularCharacterVDegeneracyImage,
     ModularCharacterVDegeneracyRequest,
 )
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic import (
+    modular_form_coordinates_add,
+    modular_form_coordinates_scalar_multiply,
+)
+from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models import (
+    ModularFormCoordinatesAddRequest,
+    ModularFormCoordinatesScalarMultiplyRequest,
+)
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
     TOOLS as FIELD_COORDINATE_TOOLS,
 )
@@ -74,7 +81,6 @@ from jacobian.math.number_theory.modular_forms.transform_tools import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
-    ModularCharacterSpaceInclusion,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -108,6 +114,18 @@ def compute_coordinate_q_expansion(
     return modular_form_coordinates_q_expansion(request.form, request.precision)
 
 
+def compute_coordinate_addition(
+    request: ModularFormCoordinatesAddRequest,
+) -> ModularFormCoordinates:
+    return modular_form_coordinates_add(request.left, request.right)
+
+
+def compute_coordinate_scalar_multiplication(
+    request: ModularFormCoordinatesScalarMultiplyRequest,
+) -> ModularFormCoordinates:
+    return modular_form_coordinates_scalar_multiply(request.form, request.scalar)
+
+
 def multiply_coordinate_forms(
     request: ModularFormCoordinatesProductRequest,
 ) -> ModularFormCoordinates:
@@ -124,14 +142,6 @@ def compute_modular_form_space_inclusion(
     request: ModularFormSpaceInclusionRequest,
 ) -> ModularFormSpaceInclusion:
     return modular_form_space_inclusion(request.source_space, request.target_space)
-
-
-def compute_modular_character_space_inclusion(
-    request: ModularCharacterSpaceInclusionRequest,
-) -> ModularCharacterSpaceInclusion:
-    return native.modular_form_character_space_inclusion(
-        request.source_space, request.target_space
-    )
 
 
 def decide_coordinate_equality(
@@ -214,6 +224,20 @@ def apply_coordinate_v_degeneracy(
     return modular_form_coordinates_v_degeneracy(request.form, request.d)
 
 
+def compute_operator_image(
+    request: ModularFormOperatorImageRequest,
+) -> ModularFormOperatorImage:
+    return modular_form_operator_image(
+        request.source_form, request.operator, request.prime
+    )
+
+
+def compute_operator_image_prefix(
+    request: ModularFormOperatorImagePrefixRequest,
+) -> ModularFormOperatorImagePrefix:
+    return modular_form_operator_image_q_expansion(request.image, request.precision)
+
+
 def apply_character_coordinate_v_degeneracy(
     request: ModularCharacterVDegeneracyRequest,
 ) -> ModularCharacterVDegeneracyImage:
@@ -252,94 +276,7 @@ def _character_v_target_space_example() -> dict[str, object]:
     return target
 
 
-def compute_operator_image(
-    request: ModularFormOperatorImageRequest,
-) -> ModularFormOperatorImage:
-    return modular_form_operator_image(
-        request.source_form, request.operator, request.prime
-    )
-
-
-def compute_operator_image_prefix(
-    request: ModularFormOperatorImagePrefixRequest,
-) -> ModularFormOperatorImagePrefix:
-    return modular_form_operator_image_q_expansion(request.image, request.precision)
-
-
 TOOLS: MathTools = (
-    MathTool(
-        operation_id="modular_form.character_space.inclusion.compute",
-        title="Construct a character-valued modular-space inclusion",
-        description=(
-            "Construct the same-weight inclusion from a Gamma0(M) space to a "
-            "Gamma0(N) space when M divides N, the space kinds and exact "
-            "coefficient parents agree, and the target Dirichlet character is "
-            "the source character pulled back along reduction modulo M. The "
-            "operation checks the relation on every target unit. This map "
-            "establishes space inclusion only; it does not transport coordinates "
-            "or construct a target basis. Levels are bounded by 2,048."
-        ),
-        request_type=ModularCharacterSpaceInclusionRequest,
-        result_type=ModularCharacterSpaceInclusion,
-        run=compute_modular_character_space_inclusion,
-        tags=("modular-forms", "characters", "spaces", "inclusion", "exact"),
-        examples=(
-            OperationExample(
-                name="quadratic_character_level_inclusion",
-                description=(
-                    "Include S2(Gamma0(3), chi) into S2(Gamma0(15), chi') "
-                    "when chi' is the exact inflation of the quadratic chi."
-                ),
-                input={
-                    "source_space": {
-                        "level": 3,
-                        "weight": 2,
-                        "kind": "S",
-                        "character": {
-                            "group": {
-                                "modulus": 3,
-                                "unit_residues": [1, 2],
-                                "character_count": 2,
-                                "invariant_factors": [2],
-                                "generators": [2],
-                                "generator_orders": [2],
-                                "unit_coordinates": [[0], [1]],
-                                "exponent": 2,
-                            },
-                            "coordinates": [1],
-                        },
-                    },
-                    "target_space": {
-                        "level": 15,
-                        "weight": 2,
-                        "kind": "S",
-                        "character": {
-                            "group": {
-                                "modulus": 15,
-                                "unit_residues": [1, 2, 4, 7, 8, 11, 13, 14],
-                                "character_count": 8,
-                                "invariant_factors": [2, 4],
-                                "generators": [11, 7],
-                                "generator_orders": [2, 4],
-                                "unit_coordinates": [
-                                    [0, 0],
-                                    [1, 1],
-                                    [0, 2],
-                                    [0, 1],
-                                    [1, 3],
-                                    [1, 0],
-                                    [0, 3],
-                                    [1, 2],
-                                ],
-                                "exponent": 4,
-                            },
-                            "coordinates": [1, 0],
-                        },
-                    },
-                },
-            ),
-        ),
-    ),
     MathTool(
         operation_id="modular_form.space.inclusion.compute",
         title="Construct a natural inclusion of modular-form spaces",
@@ -764,6 +701,75 @@ TOOLS: MathTools = (
                         },
                         "basis_id": "level-one-e4-e6-monomials-v1",
                         "coordinates": [{"num": "1", "den": "1"}],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.coordinates.scalar_multiply.compute",
+        title="Scale exact modular-form coordinates",
+        description=(
+            "Multiply rational coordinates by an exact rational scalar while "
+            "preserving their complete modular-space parent and canonical basis."
+        ),
+        request_type=ModularFormCoordinatesScalarMultiplyRequest,
+        result_type=ModularFormCoordinates,
+        run=compute_coordinate_scalar_multiplication,
+        tags=("modular-forms", "coordinates", "scalar-action", "exact"),
+        examples=(
+            OperationExample(
+                name="scale_level_one_weight_twelve_coordinates",
+                description="Scale E4^3 by two in the canonical M_12 basis.",
+                input={
+                    "form": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "scalar": {"num": "2", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="modular_form.coordinates.add.compute",
+        title="Add exact modular-form coordinates",
+        description=(
+            "Add rational coordinate vectors in the identical exact modular "
+            "space and canonical basis. The complete space parent and ordered "
+            "basis coordinates are preserved in the result."
+        ),
+        request_type=ModularFormCoordinatesAddRequest,
+        result_type=ModularFormCoordinates,
+        run=compute_coordinate_addition,
+        tags=("modular-forms", "coordinates", "addition", "exact"),
+        examples=(
+            OperationExample(
+                name="add_level_one_weight_twelve_coordinates",
+                description=(
+                    "Add E4^3 and one third of E6^2 in the canonical basis of "
+                    "M_12(SL2Z)."
+                ),
+                input={
+                    "left": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "right": {
+                        "space": {"level": 1, "weight": 12, "kind": "M"},
+                        "basis_id": "level-one-e4-e6-monomials-v1",
+                        "coordinates": [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "3"},
+                        ],
                     },
                 },
             ),
@@ -1281,36 +1287,6 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="modular_form.character_coordinates.v_degeneracy.apply",
-        title="Represent a character-valued V_d image in its exact target space",
-        description=(
-            "Return the exact source-bound V_d image, defined by "
-            "V_d(f)(q)=f(q^d), for either normalized form in "
-            "S2(Gamma0(13), chi) for the admitted order-six characters over "
-            "Q(zeta_6), with d=2 or 3. Supply the exact target S2 space at "
-            "level 26 or 39; its character-inflation inclusion is checked. "
-            "The result retains the exact source form, degeneracy index, "
-            "inflated target space, and finite q-prefix through q^(2d), the "
-            "image of the source's Sturm-determining prefix."
-        ),
-        request_type=ModularCharacterVDegeneracyRequest,
-        result_type=ModularCharacterVDegeneracyImage,
-        run=apply_character_coordinate_v_degeneracy,
-        tags=("modular-forms", "characters", "v-operator", "exact"),
-        examples=(
-            OperationExample(
-                name="v2_order6_character_form",
-                description=(
-                    "Apply V_2 with the exact level-26 inflated-character target."
-                ),
-                input={
-                    "form": _character_form_example(),
-                    "target_space": _character_v_target_space_example(),
-                },
-            ),
-        ),
-    ),
-    MathTool(
         operation_id="modular_form.coordinates.operator_image.compute",
         title="Bind a level-one form to an exact U_p or V_p image",
         description=(
@@ -1509,3 +1485,30 @@ TOOLS = (
 __all__ = ["TOOLS"]
 TOOLS = TOOLS + CHARACTER_BASIS_TOOLS
 TOOLS = TOOLS + FIELD_COORDINATE_TOOLS
+TOOLS = (
+    *TOOLS,
+    MathTool(
+        operation_id="modular_form.character_coordinates.v_degeneracy.apply",
+        title="Represent a character-valued V_d image in its exact target space",
+        description=(
+            "Return the exact source-bound V_d image f(q^d) for the supported "
+            "order-six character forms at level 13, with d=2 or 3. The exact "
+            "inflated target inclusion is checked and the result retains the "
+            "source, target, and determined finite q-prefix."
+        ),
+        request_type=ModularCharacterVDegeneracyRequest,
+        result_type=ModularCharacterVDegeneracyImage,
+        run=apply_character_coordinate_v_degeneracy,
+        tags=("modular-forms", "characters", "v-operator", "exact"),
+        examples=(
+            OperationExample(
+                name="v2_order6_character_form",
+                description="Apply V_2 with the exact level-26 inflated-character target.",
+                input={
+                    "form": _character_form_example(),
+                    "target_space": _character_v_target_space_example(),
+                },
+            ),
+        ),
+    ),
+)

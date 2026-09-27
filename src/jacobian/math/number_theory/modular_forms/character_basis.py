@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from fractions import Fraction
 from math import gcd
-from typing import Literal, NoReturn
+from typing import Literal, NoReturn, cast
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -51,6 +51,20 @@ _MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
 _MAX_CHARACTER_HECKE_COEFFICIENT_DIGITS = 4
+# (dimension, coefficient digits) for the finite S2 transport Sturm prefixes.
+# Cell counts are derived as dimension * precision * field degree. Independent
+# exact fixtures cover both conjugate characters at every entry.
+_TRANSPORT_STURM_BASIS_ENVELOPE = {
+    (13, 3): (1, 1),
+    (13, 8): (1, 1),
+    (13, 10): (1, 1),
+    (13, 29): (1, 1),
+    (26, 8): (2, 1),
+    (26, 10): (2, 1),
+    (26, 29): (2, 1),
+    (39, 10): (3, 1),
+    (39, 29): (3, 1),
+}
 
 
 def _domain(message: str) -> NoReturn:
@@ -148,9 +162,7 @@ def _character_sturm_precision(space: ModularFormSpace) -> int:
 
 
 def _is_zero(value: RationalCyclotomicElement) -> bool:
-    return all(
-        int(coefficient.num) == 0 for coefficient in value.coefficients_ascending
-    )
+    return all(coefficient.num == 0 for coefficient in value.coefficients_ascending)
 
 
 def _rref_character_prefix(
@@ -211,25 +223,44 @@ def _coefficient(
 
 def modular_character_basis_q_expansions(
     space: ModularFormSpace,
+    precision: int | None = None,
 ) -> ModularCharacterBasis:
-    """Construct the exact Sturm-determining q-prefix basis for the admitted space."""
+    """Construct the exact canonical basis, optionally extending its q-prefix."""
     space, field, character_request = _require_basis_space(space)
-    return _character_basis_from_admission(space, field, character_request)
+    return _character_basis_from_admission(
+        space, field, character_request, precision=precision
+    )
 
 
 def _character_basis_from_admission(
     space: ModularFormSpace,
     field: RationalCyclotomicField,
     character_request: dict[str, object],
+    *,
+    precision: int | None = None,
+    admitted_dimensions: tuple[int, int] | None = None,
 ) -> ModularCharacterBasis:
     """Construct the basis after source and character admission has completed."""
     # Quer, Thm. 2.3, gives the exact independent dimension formula for this
     # bounded character family. Admission is complete before entering PARI.
-    cusp_dimension, full_dimension = character_space_dimensions(
-        space.level, space.weight, space.character, field
+    cusp_dimension, full_dimension = (
+        character_space_dimensions(
+            space.level,
+            space.weight,
+            cast(DirichletCharacter, space.character),
+            field,
+        )
+        if admitted_dimensions is None
+        else admitted_dimensions
     )
     dimension = cusp_dimension if space.kind == "S" else full_dimension
-    precision = _character_sturm_precision(space)
+    sturm_precision = _character_sturm_precision(space)
+    if precision is None:
+        precision = sturm_precision
+    if type(precision) is not int or not sturm_precision <= precision <= 128:
+        _domain(
+            "character basis precision must reach the space Sturm bound and remain at most 128"
+        )
     work = precision * max(1, dimension) ** 2 * field.degree * 16
     if field.degree != 2 or precision > MAX_PARI_BASIS_PRECISION or dimension > 32:
         _domain(
@@ -252,6 +283,26 @@ def _character_basis_from_admission(
             message="character-valued basis work or output exceeds its exact envelope",
         )
 
+    transport_envelope = (
+        _TRANSPORT_STURM_BASIS_ENVELOPE.get((space.level, precision))
+        if space.kind == "S"
+        else None
+    )
+    if transport_envelope is not None:
+        expected_dimension, coefficient_digits = transport_envelope
+        if dimension != expected_dimension:
+            raise RuntimeError(
+                "independent character dimension differs from the transport basis envelope"
+            )
+        envelope_cells = dimension * precision * field.degree
+        envelope_bytes = envelope_cells * (2 * coefficient_digits + 32)
+        if envelope_bytes > _MAX_ALLOCATION_BYTES:
+            raise OperationResourceAdmissionError(
+                location=("space",),
+                code="modular_form.character_basis_transport_admission",
+                message="transport Sturm basis exceeds its declared coefficient envelope",
+            )
+
     # The adapter canonicalizes character coordinates once; the isolated PARI
     # worker independently compares that character on every unit residue.
     # A q-Sturm elimination can clear at most a dimension-by-degree pivot
@@ -273,6 +324,26 @@ def _character_basis_from_admission(
     if len(raw_basis) != dimension:
         raise RuntimeError("PARI returned a character basis of the wrong dimension")
     normalized = _rref_character_prefix(raw_basis, field, precision)
+    # The explicit inflation transport has a tighter, source-independent
+    # coefficient-growth bound for these target Sturm prefixes. Make this a
+    # canonical basis producer postcondition so transport can admit its exact
+    # linear combinations before requesting either basis from PARI.
+    if (
+        space.kind == "S"
+        and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
+        and any(
+            canonical_rational_component_digits(value)
+            > _TRANSPORT_STURM_BASIS_ENVELOPE[(space.level, precision)][1]
+            for vector in normalized
+            for coefficient in vector
+            for value in coefficient.coefficients_ascending
+        )
+    ):
+        raise OperationResourceAdmissionError(
+            location=("space",),
+            code="modular_form.character_basis_transport_height",
+            message="transportable cusp Sturm bases exceed their declared cyclotomic coefficient envelope",
+        )
     basis_id = (
         CHARACTER_BASIS_ID
         if space.level == 13 and space.kind == "S"
@@ -501,18 +572,6 @@ def modular_character_coordinates_product(
             location=("form",),
             code="modular_form.character_product_admission",
             message="character product exceeds its exact work, height, or output envelope",
-        )
-    if left_space == right_space and left_scalar == right_scalar:
-        request_checkpoint("before character coordinate equality")
-        return ModularFormFieldQExpansion(
-            space=target_space,
-            coefficients=tuple(
-                _coefficient(field, cyclotomic._validate_element(value)[1])
-                for value in left_scalar.coefficients_ascending
-            )
-            + tuple(
-                _coefficient(field, (Fraction(0),) * field.degree) for _ in range(2)
-            ),
         )
     if not any(value.num for value in left_scalar.coefficients_ascending) or not any(
         value.num for value in right_scalar.coefficients_ascending

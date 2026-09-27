@@ -217,7 +217,7 @@ def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
 
 
 def _admit_lattice_coordinates(
-    coordinates: tuple[int, ...], rank: int, *, output: bool = False
+    coordinates: tuple[int, ...] | list[int], rank: int, *, output: bool = False
 ) -> None:
     max_bits = (
         MAX_LATTICE_OUTPUT_COORDINATE_BITS if output else MAX_LATTICE_COORDINATE_BITS
@@ -249,8 +249,14 @@ def _create_lattice_vector[LatticeVectorT: _FiniteCartanLatticeVector](
 ) -> LatticeVectorT:
     cartan = _as_cartan(matrix)
     _admit_cartan_finite_type(cartan.entries)
+    if type(coordinates) not in (tuple, list):
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="root_system.lattice_coordinates_type",
+            message="lattice coordinates must be a tuple or list of integers",
+        )
+    _admit_lattice_coordinates(coordinates, len(cartan))
     coords = tuple(coordinates)
-    _admit_lattice_coordinates(coords, len(cartan))
     datum = _cartan_datum_from_admitted(cartan)
     return result_type.model_construct(datum=datum, coordinates=coords)
 

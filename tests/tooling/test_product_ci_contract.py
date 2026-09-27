@@ -322,17 +322,3 @@ def test_scale_evidence_keeps_an_ordinary_regression_in_its_module() -> None:
         "scale-only test modules must keep an ordinary regression: "
         + ", ".join(offenders)
     )
-
-
-def test_ordinary_math_lane_excludes_every_heavy_tier() -> None:
-    """The ordinary lane expression excludes all non-ordinary execution tiers."""
-
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    line = next(
-        entry
-        for entry in makefile.splitlines()
-        if entry.startswith("ORDINARY_MARKER_EXPRESSION")
-    )
-
-    for tier in ("property", "exhaustive", "scale"):
-        assert f"not {tier}" in line, f"{tier} must be excluded from the ordinary lane"

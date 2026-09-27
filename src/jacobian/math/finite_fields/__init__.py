@@ -9,6 +9,7 @@ from jacobian.math.finite_fields._algebraic_sets import (
     affine_zero_count,
     affine_zero_set,
     base_change_system,
+    embed_field_element,
     projective_zero_count,
     projective_zero_set,
 )
@@ -124,6 +125,7 @@ __all__ = [
     "check_jacobian_syzygy",
     "direction_rank_ledger",
     "element",
+    "embed_field_element",
     "evaluate_finite_polynomial",
     "fiber_partition",
     "finite_field",

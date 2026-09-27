@@ -24,9 +24,17 @@ from jacobian.math.topology.simplicial_sets.degeneracy import (
     DegeneracyProfileResult,
     degeneracy_profile,
 )
+from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
+    DegenerateSubmoduleResult,
+    degenerate_submodule,
+)
 from jacobian.math.topology.simplicial_sets.image import (
     SimplicialMapImageResult,
     simplicial_map_image,
+)
+from jacobian.math.topology.simplicial_sets.map_preimage import (
+    SimplicialMapPreimageResult,
+    simplicial_map_preimage,
 )
 from jacobian.math.topology.simplicial_sets.maps import (
     NormalizedHomologyResult,
@@ -48,8 +56,11 @@ from jacobian.math.topology.simplicial_sets.product_models import (
 )
 from jacobian.math.topology.simplicial_sets.quotient import simplicial_set_quotient
 from jacobian.math.topology.simplicial_sets.quotient_models import (
-    SimplicialSetQuotientRequest,
     SimplicialSetQuotientResult,
+)
+from jacobian.math.topology.simplicial_sets.skeleton import (
+    SimplicialSetSkeletonResult,
+    simplicial_set_skeleton,
 )
 from jacobian.math.topology.simplicial_sets.standard import (
     simplex_boundary,
@@ -63,16 +74,18 @@ from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_
 __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
+    "DegenerateSubmoduleResult",
     "FiniteTruncatedSimplicialSet",
     "NormalizedHomologyResult",
     "SimplicialComplexPrefixResult",
     "SimplicialHomologyMapValue",
     "SimplicialIdentityObstruction",
     "SimplicialMapImageResult",
+    "SimplicialMapPreimageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
-    "SimplicialSetQuotientRequest",
     "SimplicialSetQuotientResult",
+    "SimplicialSetSkeletonResult",
     "SimplicialSetTablesResult",
     "SimplicialSubsetPrefix",
     "TruncatedSimplicialMap",
@@ -80,6 +93,7 @@ __all__ = [
     "compose_simplicial_homology_maps",
     "compose_simplicial_maps",
     "degeneracy_profile",
+    "degenerate_submodule",
     "from_tables",
     "identity_simplicial_map",
     "induced_normalized_chain_map",
@@ -90,10 +104,12 @@ __all__ = [
     "simplex_horn",
     "simplicial_map",
     "simplicial_map_image",
+    "simplicial_map_preimage",
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",
     "simplicial_set_quotient",
+    "simplicial_set_skeleton",
     "simplicial_subset",
     "standard_simplex",
     "truncate_simplicial_set",

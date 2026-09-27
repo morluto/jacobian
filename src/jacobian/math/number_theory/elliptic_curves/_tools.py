@@ -15,6 +15,8 @@ from jacobian.math.number_theory.elliptic_curves._models import (
 )
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldCardinalityResult,
+    FiniteFieldCurveBaseChangeRequest,
+    FiniteFieldCurveBaseChangeResult,
     FiniteFieldCurveRequest,
     FiniteFieldDiscriminantRequest,
     FiniteFieldDiscriminantResult,
@@ -35,6 +37,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
+    finite_field_curve_base_change,
     finite_field_discriminant,
     finite_field_extension_counts,
     finite_field_group_structure,
@@ -331,6 +334,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="elliptic_curve.finite_field.base_change.compute",
+        title="Transport a finite-field elliptic curve along an embedding",
+        description="Transport a nonsingular short-Weierstrass curve and optional curve-bound point along an explicit finite-field embedding whose source-generator root relation is checked exactly.",
+        request_type=FiniteFieldCurveBaseChangeRequest,
+        result_type=FiniteFieldCurveBaseChangeResult,
+        run=lambda request: finite_field_curve_base_change(
+            request.curve, request.embedding, request.point
+        ),
+        tags=("elliptic-curve", "finite-field", "base-change", "exact"),
+        examples=(
+            OperationExample(
+                name="transport_five_field_curve_to_f25",
+                description="Transport y²=x³+x+1 from F5 to F25 along the explicit embedding sending the F5 generator to zero.",
+                input={
+                    "curve": _finite_curve(),
+                    "embedding": {
+                        "source": _F5_PRESENTATION,
+                        "target": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["2", "0", "1"],
+                            "generator": "a",
+                        },
+                        "generator_image": {
+                            "presentation": {
+                                "characteristic": "5",
+                                "modulus_coefficients": ["2", "0", "1"],
+                                "generator": "a",
+                            },
+                            "coordinates": ["0", "0"],
+                        },
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="elliptic_curve.finite_field.cardinality.exhaustive.compute",
         title="Count finite-field elliptic-curve points",
         description="Compute the exact cardinality and Frobenius trace from exhaustive projective point enumeration, retaining the field and curve model.",
@@ -366,15 +405,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="elliptic_curve.finite_field.quadratic_twist.compute",
-        title="Construct the canonical quadratic twist",
+        title="Construct the canonical nontrivial quadratic twist",
         description=(
-            "Return the canonical quadratic twist of a nonsingular "
+            "Return the canonical nontrivial quadratic twist of a nonsingular "
             "short-Weierstrass curve over an admitted finite field. The kernel "
             "chooses the least encoded nonsquare d and returns y^2 = x^3 + "
-            "d^2 A x + d^3 B. Its point count has the opposite Frobenius "
-            "trace; for exceptional curves the returned model can be "
-            "isomorphic to the source, so class distinctness is not "
-            "guaranteed and the isomorphism decision can be composed."
+            "d^2 A x + d^3 B. Its point count has the opposite Frobenius trace."
         ),
         request_type=FiniteFieldCurveRequest,
         result_type=FiniteFieldShortWeierstrassCurve,
@@ -387,7 +423,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         examples=(
             OperationExample(
                 name="nontrivial_twist_over_five",
-                description="Return the canonical quadratic twist over F5.",
+                description="Return the canonical nontrivial twist over F5.",
                 input={"curve": _finite_curve()},
             ),
         ),

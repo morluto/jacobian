@@ -2,23 +2,29 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, NoReturn
 
 from pydantic import ValidationError
 
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
+    DeltaMatroidDistanceResult,
     DeltaMatroidRecognitionResult,
     require_twist_subset,
 )
+from jacobian.math.combinatorics.matroids.delta.extra import DeltaMatroidDirectSumResult
 from jacobian.math.combinatorics.matroids.delta.values import (
+    MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS,
+    MAX_DELTA_DISTANCE_PROFILE_STATES,
     MAX_DELTA_LABEL_BYTES,
     MAX_DELTA_MEMBERSHIPS,
     DeltaMatroidAdmissionError,
+    DeltaMatroidDistanceProfile,
     FiniteDeltaMatroid,
     canonical_feasible_rows,
     first_symmetric_exchange_obstruction,
@@ -37,6 +43,9 @@ from jacobian.math.combinatorics.matroids.values import (
 )
 
 __all__ = [
+    "distance_profile",
+    "direct_sum",
+    "distance",
     "from_feasible_sets",
     "lower_matroid",
     "twist",
@@ -44,6 +53,21 @@ __all__ = [
     "verify_from_feasible_sets",
     "width",
 ]
+
+
+def _raise_direct_sum_admission(
+    exc: DeltaMatroidAdmissionError, location: tuple[str, ...]
+) -> NoReturn:
+    error_type = (
+        OperationResourceAdmissionError
+        if exc.reason.endswith("_exceeded")
+        else OperationDomainValidationError
+    )
+    raise error_type(
+        location=location,
+        code=f"delta_matroid.{exc.reason}",
+        message=str(exc),
+    ) from exc
 
 
 def from_feasible_sets(
@@ -366,3 +390,238 @@ def upper_matroid(
 ) -> FiniteBasisMatroid:
     """Return the matroid whose bases are the maximum-size feasible sets."""
     return _extremal_matroid(delta_matroid, extremum="maximum")
+
+
+def distance_profile(
+    delta_matroid: FiniteDeltaMatroid,
+) -> DeltaMatroidDistanceProfile:
+    """Return exact Hamming distance-to-feasibility data for every subset.
+
+    A mask's bit ``i`` records whether ground index ``i`` is present. The
+    profile is complete over all masks and counts every nearest feasible set.
+    """
+    request_checkpoint("before delta-matroid distance profile")
+
+    try:
+        if not isinstance(delta_matroid, FiniteDeltaMatroid):
+            delta_matroid = FiniteDeltaMatroid.model_validate(delta_matroid)
+        system = FiniteFeasibleSetSystem(
+            ground=delta_matroid.ground, feasible=delta_matroid.feasible
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+def _admit_direct_sum_source(value: object, name: str) -> FiniteDeltaMatroid:
+    """Revalidate one native direct-sum operand before any field access.
+    A deserialized or ``model_construct``-forged operand is caller-authored, so
+    the carrier is reconstructed through the canonical contract and malformed
+    values map to the operation's declared domain error instead of leaking
+    attribute, indexing, or Pydantic exceptions.
+    if type(value) is not FiniteDeltaMatroid:
+        raise OperationDomainValidationError(
+            location=(name,),
+            code="delta_matroid.source_not_valid",
+            message=f"direct-sum {name} operand must be a finite delta-matroid",
+    if not isinstance(value.ground, tuple) or not isinstance(value.feasible, tuple):
+            message=f"direct-sum {name} operand must use immutable canonical tuples",
+    if len(value.ground) > MAX_DELTA_MEMBERSHIPS + 1:
+        raise DeltaMatroidAdmissionError(
+            "ground_size_exceeded", "source ground axis exceeds the envelope"
+    if len(value.feasible) > MAX_DELTA_MEMBERSHIPS + 1:
+            "row_count_exceeded",
+            "source feasible-family row count exceeds the envelope",
+    memberships = 0
+    for row in value.feasible:
+        if not isinstance(row, tuple) or len(row) > len(value.ground):
+            raise OperationDomainValidationError(
+                location=(name,),
+                code="delta_matroid.source_not_valid",
+                message=f"direct-sum {name} operand has a malformed feasible row",
+            )
+        memberships += len(row)
+        if memberships > MAX_DELTA_MEMBERSHIPS:
+            raise DeltaMatroidAdmissionError(
+                "memberships_exceeded",
+                "source feasible-family memberships exceed the envelope",
+        return FiniteDeltaMatroid.model_validate(value.model_dump(mode="python"))
+    except Exception as exc:
+            message=f"direct-sum {name} operand is not a canonical finite "
+            "delta-matroid",
+        ) from exc
+__all__ = [
+    "direct_sum",
+    "distance",
+    "from_feasible_sets",
+    "twist",
+    "verify_from_feasible_sets",
+    "width",
+]
+def direct_sum(
+    left: FiniteDeltaMatroid, right: FiniteDeltaMatroid
+) -> DeltaMatroidDirectSumResult:
+    """Return the disjoint-ground direct sum, with concatenated ground axis.
+    Both operands are revalidated as canonical carriers before any field is
+    read.  The pairwise-union family satisfies symmetric exchange by the
+    direct-sum theorem, so admission bounds the actual product construction
+    and retained output through the ground, feasible-pair, membership, and
+    label envelopes rather than replaying the recognition axiom.
+    from jacobian.math.combinatorics.matroids.delta.extra import (
+        MAX_DIRECT_SUM_FEASIBLE_PAIRS,
+        MAX_DIRECT_SUM_GROUND,
+    )
+        left = _admit_direct_sum_source(left, "left")
+    except DeltaMatroidAdmissionError as exc:
+        _raise_direct_sum_admission(exc, ("left",))
+        right = _admit_direct_sum_source(right, "right")
+        _raise_direct_sum_admission(exc, ("right",))
+    left_system = FiniteFeasibleSetSystem(ground=left.ground, feasible=left.feasible)
+    right_system = FiniteFeasibleSetSystem(ground=right.ground, feasible=right.feasible)
+    # Admit source envelopes and verify caller-authored values before composing.
+    for name, source in (("left", left_system), ("right", right_system)):
+        try:
+            require_delta_matroid_envelope(source)
+            require_delta_matroid_exchange_work(source)
+            if first_symmetric_exchange_obstruction(source) is not None:
+                raise OperationDomainValidationError(
+                    location=(name,),
+                    code="delta_matroid.source_not_valid",
+                    message="direct-sum source is not a delta-matroid",
+                )
+        except DeltaMatroidAdmissionError as exc:
+            _raise_direct_sum_admission(exc, (name,))
+    ground_size = len(left.ground) + len(right.ground)
+    if ground_size > MAX_DIRECT_SUM_GROUND:
+        _raise_direct_sum_admission(
+            DeltaMatroidAdmissionError(
+                "direct_sum_ground_exceeded",
+                f"direct-sum ground exceeds {MAX_DIRECT_SUM_GROUND} elements",
+            ),
+            ("left", "right"),
+    if set(left.ground).intersection(right.ground):
+                "direct_sum_ground_overlap",
+                "direct-sum ground labels must be disjoint",
+            ("left", "right", "ground"),
+    pairs = len(left.feasible) * len(right.feasible)
+    if pairs > MAX_DIRECT_SUM_FEASIBLE_PAIRS:
+                "direct_sum_work_exceeded",
+                f"direct-sum feasible-pair work exceeds {MAX_DIRECT_SUM_FEASIBLE_PAIRS}",
+    membership_count = len(right.feasible) * sum(map(len, left.feasible)) + len(
+        left.feasible
+    ) * sum(map(len, right.feasible))
+    if membership_count > MAX_DELTA_MEMBERSHIPS:
+                "direct-sum feasible memberships exceed the delta-matroid envelope",
+        combined_label_bytes = sum(
+            len(label.encode("utf-8")) for label in (*left.ground, *right.ground)
+    except UnicodeEncodeError as exc:
+            location=("ground",),
+            code="delta_matroid.labels_not_utf8",
+            message="direct-sum labels must be UTF-8-representable",
+    from jacobian.math.combinatorics.matroids.delta.values import MAX_DELTA_LABEL_BYTES
+    if combined_label_bytes > MAX_DELTA_LABEL_BYTES:
+                "label_bytes_exceeded",
+                "direct-sum ground labels exceed the delta-matroid label envelope",
+    # The pair and membership bounds above exactly bound the result family's
+    # rows and index positions, so the direct sum materializes within the
+    # carrier's declared cardinality envelopes without estimating encoded
+    # bytes and without charging a symmetric-exchange replay this operation
+    # never performs.
+    rows = tuple(
+        sorted(
+            tuple(sorted((*a, *(len(left.ground) + i for i in b))))
+            for a in left.feasible
+            for b in right.feasible
+    result = FiniteDeltaMatroid._from_kernel(
+        FiniteFeasibleSetSystem(ground=left.ground + right.ground, feasible=rows)
+    return DeltaMatroidDirectSumResult.model_construct(
+        left=left,
+        right=right,
+        direct_sum=result,
+        left_injection=tuple(range(len(left.ground))),
+        right_injection=tuple(range(len(left.ground), ground_size)),
+def distance(
+    delta_matroid: FiniteDeltaMatroid, subset: tuple[int, ...]
+) -> DeltaMatroidDistanceResult:
+    """Return the exact symmetric-difference distance to feasibility.
+    Ties are resolved by the canonical feasible-row order. The operation is
+    linear in the retained family after source delta-matroid admission.
+    delta_matroid = _admit_direct_sum_source(delta_matroid, "delta_matroid")
+        require_twist_subset(delta_matroid, subset)
+            location=("subset",),
+            code="delta_matroid.twist_subset",
+            message="subset must be a canonical in-range ground-index tuple",
+        require_delta_matroid_envelope(system)
+    except DeltaMatroidAdmissionError:
+        raise
+    except (ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message=str(exc),
+        ) from exc
+
+    ground_size = len(system.ground)
+    if ground_size > MAX_DELTA_DISTANCE_PROFILE_STATES.bit_length() - 1:
+        raise DeltaMatroidAdmissionError(
+            "distance_profile_states_exceeded",
+            "the complete ground-subset profile exceeds the subset-state envelope",
+        )
+    state_count = 1 << ground_size
+    if state_count > MAX_DELTA_DISTANCE_PROFILE_STATES:
+        raise DeltaMatroidAdmissionError(
+            "distance_profile_states_exceeded",
+            "the complete ground-subset profile exceeds the subset-state envelope",
+        )
+    distance_evaluations = state_count * len(system.feasible)
+    if distance_evaluations > MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS:
+        raise DeltaMatroidAdmissionError(
+            "distance_profile_work_exceeded",
+            "subset/feasible-set distance work exceeds its admitted envelope",
+        )
+
+    require_delta_matroid_admission(system)
+    obstruction = first_symmetric_exchange_obstruction(system)
+    if obstruction is not None:
+        raise OperationDomainValidationError(
+            location=("delta_matroid",),
+            code="delta_matroid.source_not_valid",
+            message="source feasible family fails symmetric exchange",
+        )
+
+    feasible_masks = tuple(sum(1 << index for index in row) for row in system.feasible)
+    distances: list[int] = []
+    nearest_counts: list[int] = []
+    histogram = [0] * (ground_size + 1)
+    evaluations = 0
+    for subset_mask in range(state_count):
+        minimum = ground_size + 1
+        nearest_count = 0
+        for feasible_mask in feasible_masks:
+            evaluations += 1
+            if evaluations % 4_096 == 0:
+                request_checkpoint("during delta-matroid distance profile")
+            distance = (subset_mask ^ feasible_mask).bit_count()
+            if distance < minimum:
+                minimum = distance
+                nearest_count = 1
+            elif distance == minimum:
+                nearest_count += 1
+        distances.append(minimum)
+        nearest_counts.append(nearest_count)
+        histogram[minimum] += 1
+
+    return DeltaMatroidDistanceProfile._from_kernel(
+        FiniteDeltaMatroid._from_kernel(system),
+        tuple(distances),
+        tuple(nearest_counts),
+        tuple(histogram),
+    _require_delta_matroid_axiom(system)
+    target = sum(1 << index for index in subset)
+    nearest = min(
+        delta_matroid.feasible,
+        key=lambda row: (
+            (target ^ sum(1 << index for index in row)).bit_count(),
+            row,
+        ),
+    )
+    value = (target ^ sum(1 << index for index in nearest)).bit_count()
+    return DeltaMatroidDistanceResult._from_kernel(
+        delta_matroid, subset, value, nearest
+    )

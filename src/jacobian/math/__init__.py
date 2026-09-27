@@ -19,6 +19,8 @@ _SUBMODULES = frozenset(
         "finite_dim_algebras",
         "finite_fields",
         "finite_semigroups",
+        "gauge",
+        "function_fields",
         "geometry",
         "graphs",
         "groups",
@@ -29,6 +31,7 @@ _SUBMODULES = frozenset(
         "optimization",
         "polynomials",
         "probability",
+        "quaternions",
         "topology",
         "universal_algebra",
     }
@@ -54,6 +57,8 @@ __all__ = [
     "finite_dim_algebras",
     "finite_fields",
     "finite_semigroups",
+    "gauge",
+    "function_fields",
     "geometry",
     "graphs",
     "groups",
@@ -64,6 +69,7 @@ __all__ = [
     "optimization",
     "polynomials",
     "probability",
+    "quaternions",
     "topology",
     "universal_algebra",
 ]

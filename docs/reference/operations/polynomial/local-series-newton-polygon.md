@@ -18,7 +18,9 @@ those edges and returns its characteristic polynomial over `QQ`. If its left
 endpoint has degree `j0`, each on-edge source term `a_j(t)y^j` contributes
 `lc(a_j) c^(j-j0)`. The result retains the source, edge, and transported
 leading coefficient for every term. Its nonzero roots are candidate leading
-coefficients under the edge valuation substitution.
+coefficients under the edge valuation substitution. The operation does not
+adjoin roots, choose among them, or lift a branch; those steps require a target
+representation for algebraic coefficients and branch state.
 
 `local_series.polynomial.newton_edge_characteristic_roots.compute` returns all
 roots with multiplicities when the edge polynomial has degree at most two.

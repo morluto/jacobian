@@ -21,10 +21,10 @@ not only a finite q-prefix.
 
 The basis and coordinate expansion operations return exact finite q-prefixes,
 while `modular_form.space.sturm_bound.compute` returns the exact Sturm integer.
-Callers can compose these values and compare the required coefficients
-themselves; Jacobian publishes no general global equality checker. For the
-narrow order-6 `S_2` family at levels 13, 26, and 39, explicit character
-inflation and common-target comparison are available through
+`modular_form.equal.check` decides global equality for the represented rational
+families and same-space cyclotomic forms; its result retains both operands.
+For the narrow order-6 `S_2` family at levels 13, 26, and 39, explicit
+character inflation and common-target comparison are available through
 `modular_form.character_coordinates.transport.compute` and
 `modular_form.character.equal.check`, as described in [Rational Gamma0
 modular-form bases](modular-forms-gamma0-rational-bases.md). For a Sturm bound
@@ -57,12 +57,13 @@ Gamma0(N), weight-k Sturm bound in `mfsturm(N,k)` in its
 
 `ModularFormSpace` can represent a bounded cyclotomic coefficient parent using
 the canonical `RationalCyclotomicField` power-basis value. A narrow
-field-valued character basis slice supports even order-6 characters of
-conductor 13 at levels 13, 26, and 39, in both `M_2` and `S_2`, over
+field-valued character basis slice supports even characters of conductor 13
+and order dividing six at levels 13, 26, and 39, in both `M_2` and `S_2`, over
 `Q(zeta_6)`. `modular_form.character_basis.compute` returns the complete
 q-Sturm RREF basis at precisions 3, 8, and 10 for those levels.
 `S_2(Gamma0(13), chi)` remains one-dimensional and retains its previous
 basis identifier and normalization through q^0..q^2.
+For the one-dimensional order-six level-13 cusp subspaces,
 `ModularFormCoordinates` represents one exact scalar multiple of that
 basis element; `modular_form.character_coordinates.q_expansion.compute`
 returns its exact field-valued Sturm prefix. For this space the index is 14

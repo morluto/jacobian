@@ -11,7 +11,7 @@ from pydantic import Field, StrictInt, TypeAdapter, ValidationError, model_valid
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
-from jacobian.canonical import decimal_digit_width
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -569,8 +569,8 @@ def _admit(
         for offset, coefficient in enumerate(row.series.coefficients):
             value = coefficient.as_fraction()
             if max(
-                decimal_digit_width(value.numerator),
-                decimal_digit_width(value.denominator),
+                len(format_canonical_integer(abs(value.numerator))),
+                len(format_canonical_integer(value.denominator)),
             ) > min(
                 MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
                 MAX_NEWTON_POLYGON_SCALAR_DIGITS,
@@ -592,13 +592,13 @@ def _admit(
         points.append((row.y_degree, valuation))
     center = source.center.as_fraction()
     center_digits = max(
-        decimal_digit_width(center.numerator),
-        decimal_digit_width(center.denominator),
+        len(format_canonical_integer(abs(center.numerator))),
+        len(format_canonical_integer(center.denominator)),
     )
     component_digits = sum(
         max(
-            decimal_digit_width(value.numerator),
-            decimal_digit_width(value.denominator),
+            len(format_canonical_integer(abs(value.numerator))),
+            len(format_canonical_integer(value.denominator)),
         )
         for row in source.coefficients
         if row.series is not None

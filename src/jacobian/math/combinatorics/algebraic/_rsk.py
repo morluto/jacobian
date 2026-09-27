@@ -4,9 +4,12 @@ from __future__ import annotations
 
 from bisect import bisect_left, bisect_right
 
+from jacobian._execution import request_checkpoint
 from jacobian.math.combinatorics.algebraic.values import (
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions.values import (
@@ -19,25 +22,31 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 from jacobian.math.logic.languages.words.values import FiniteWord
 
 
-def word_payload_bytes(word: FiniteWord) -> int:
-    """Return the UTF-8 bytes carried by the alphabet and positioned letters."""
-    try:
-        alphabet_bytes = sum(len(symbol.encode("utf-8")) for symbol in word.alphabet)
-        letter_bytes = sum(len(letter.encode("utf-8")) for letter in word.letters)
-    except UnicodeEncodeError as error:
-        raise ValueError(
-            "RSK word symbols must be Unicode scalar values without surrogates"
-        ) from error
-    return alphabet_bytes + letter_bytes
+def word_payload_scalars(word: FiniteWord) -> int:
+    """Return the Unicode scalar values carried by the payload.
+
+    The count covers the alphabet and every positioned letter. A surrogate
+    code point is not a Unicode scalar value, so a payload containing one is
+    rejected before any count is returned.
+    """
+    payload = 0
+    for symbol in (*word.alphabet, *word.letters):
+        if any("\ud800" <= character <= "\udfff" for character in symbol):
+            raise ValueError(
+                "RSK word symbols must be Unicode scalar values without surrogates"
+            )
+        payload += len(symbol)
+    return payload
 
 
 def require_rsk_word_budget(word: FiniteWord) -> None:
     """Validate the complete work and source-payload envelope before insertion."""
     if len(word.letters) > MAX_RSK_WORD_LENGTH:
         raise ValueError(f"RSK word length must not exceed {MAX_RSK_WORD_LENGTH}")
-    if word_payload_bytes(word) > MAX_RSK_WORD_BYTES:
+    if word_payload_scalars(word) > MAX_RSK_WORD_PAYLOAD_SCALARS:
         raise ValueError(
-            f"RSK word payload must not exceed {MAX_RSK_WORD_BYTES} UTF-8 bytes"
+            "RSK word payload must not exceed "
+            f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values"
         )
 
 
@@ -94,32 +103,49 @@ def _inverse(pair: RSKTableauPair) -> FiniteWord:
         for entry in row
     ):
         raise ValueError("insertion tableau entry is outside the ordered alphabet")
-    cell_count = sum(pair.shape.parts)
-    insertion = [list(row) for row in pair.insertion_tableau.rows]
+    reversed_ranks = _reverse_insert_ranks(
+        pair.insertion_tableau.rows, pair.recording_tableau.rows
+    )
+    letters = tuple(pair.alphabet[rank - 1] for rank in reversed(reversed_ranks))
+    return FiniteWord(alphabet=pair.alphabet, letters=letters)
+
+
+def _reverse_insert_ranks(
+    insertion_rows: tuple[tuple[int, ...], ...],
+    recording_rows: tuple[tuple[int, ...], ...],
+) -> tuple[int, ...]:
+    """Return output ranks in reverse source order for a compatible pair."""
+
+    cell_count = sum(map(len, recording_rows))
+    insertion = [list(row) for row in insertion_rows]
     label_rows_by_entry = [0] * cell_count
-    for row_index, row in enumerate(pair.recording_tableau.rows):
+    for row_index, row in enumerate(recording_rows):
         for label in row:
             label_rows_by_entry[label - 1] = row_index
     reversed_ranks: list[int] = []
 
     for label in range(cell_count, 0, -1):
+        request_checkpoint("during reverse row insertion")
         row_index = label_rows_by_entry[label - 1]
+        if row_index >= len(insertion) or not insertion[row_index]:
+            raise ValueError("recording tableau does not select an outer corner")
         current = insertion[row_index].pop()
         if not insertion[row_index]:
             if row_index != len(insertion) - 1:
-                raise RuntimeError("reverse insertion produced a non-partition shape")
+                raise ValueError("reverse insertion produced a non-partition shape")
             insertion.pop()
 
         for upper_index in range(row_index - 1, -1, -1):
             upper_row = insertion[upper_index]
             column = bisect_left(upper_row, current) - 1
             if column < 0:
-                raise RuntimeError("semistandard pair failed reverse row insertion")
+                raise ValueError("tableau pair failed reverse row insertion")
             upper_row[column], current = current, upper_row[column]
         reversed_ranks.append(current)
 
-    letters = tuple(pair.alphabet[rank - 1] for rank in reversed(reversed_ranks))
-    return FiniteWord(alphabet=pair.alphabet, letters=letters)
+    if insertion:
+        raise ValueError("reverse insertion did not remove every tableau cell")
+    return tuple(reversed_ranks)
 
 
 def row_insertion_rsk(word: FiniteWord) -> RSKTableauPair:
@@ -142,4 +168,15 @@ def inverse_row_insertion_rsk(pair: RSKTableauPair) -> FiniteWord:
     return _inverse(pair)
 
 
-__all__ = ["inverse_row_insertion_rsk", "row_insertion_rsk"]
+def inverse_permutation_rsk(pair: PermutationRSKPair) -> FinitePermutation:
+    """Invert a standard-tableau permutation pair by reverse row insertion."""
+
+    reversed_images = _reverse_insert_ranks(pair.p_tableau.rows, pair.q_tableau.rows)
+    return FinitePermutation._from_kernel(tuple(reversed(reversed_images)))
+
+
+__all__ = [
+    "inverse_permutation_rsk",
+    "inverse_row_insertion_rsk",
+    "row_insertion_rsk",
+]

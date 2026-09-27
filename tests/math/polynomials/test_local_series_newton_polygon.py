@@ -167,6 +167,19 @@ def test_edge_characteristic_returns_normalized_native_source() -> None:
     assert isinstance(result.source.coefficients[0], LocalPolynomialCoefficient)
 
 
+@pytest.mark.parametrize("edge_index", [-1, True, 0.5])
+def test_edge_characteristic_rejects_invalid_native_edge_index(edge_index):
+    request = NewtonEdgeCharacteristicRequest.model_construct(
+        polynomial=_polynomial([(0, _series(1, (1, 1)))]), edge_index=edge_index
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        newton_edge_characteristic_polynomial(request)
+    assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
+    with pytest.raises(OperationDomainValidationError) as error:
+        newton_edge_characteristic_roots(request)
+    assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
+
+
 def test_native_newton_admission_rejects_missing_parent_and_request_fields() -> None:
     with pytest.raises(OperationDomainValidationError):
         local_polynomial_newton_polygon(LocalPolynomialInSeries.model_construct())

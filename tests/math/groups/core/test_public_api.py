@@ -7,8 +7,11 @@ from jacobian.math import groups as group
 
 def test_native_group_api_exports_the_canonical_group_value() -> None:
     assert tuple(group.__all__) == (
+        "FiniteGroupTable",
+        "FiniteGroupTableElement",
         "PermutationGroup",
         "element_order",
+        "finite_group_table",
         "group_conjugacy_classes",
         "group_orbit",
         "group_order",

@@ -13,13 +13,16 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree import (
-    AcceptedTreeHeightProfileRequest,
     BottomUpTreeAutomaton,
     CompleteDeterministicBottomUpTreeAutomaton,
     TreeAutomatonTransition,
     accepted_tree_height_profile,
 )
 from jacobian.math.logic.automata.tree import operations as tree_operations
+<<<<<<< HEAD
+=======
+from jacobian.math.logic.automata.tree._models import AcceptedTreeHeightProfileRequest
+>>>>>>> origin/main
 from jacobian.math.logic.automata.tree._tools import (
     compute_accepted_tree_height_profile,
 )

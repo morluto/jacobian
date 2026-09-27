@@ -761,10 +761,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "subspace on its exact ordered basis, verify bracket closure and "
             "return the induced structure-constant algebra in the candidate "
             "row basis, together with the row-coordinate inclusion into the "
-            "source. The induced basis labels are supplied in candidate row "
-            "order. The valid source and exact bracket closure imply the "
-            "induced Jacobi identity; dimensions, rational heights, closure "
-            "work, and output are bounded before construction."
+            "source. The induced basis labels follow candidate row order; the "
+            "zero subalgebra uses no rows or labels. Source Jacobi and exact "
+            "bracket closure imply the induced Jacobi identity. Dimensions, "
+            "rational heights, closure work, and output are bounded."
         ),
         request_type=LieSubalgebraConstructionRequest,
         result_type=LieSubalgebraResult,

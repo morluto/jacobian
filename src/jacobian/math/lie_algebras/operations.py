@@ -211,13 +211,13 @@ def _require_lie_algebra_jacobi(algebra: FiniteDimensionalLieAlgebra) -> None:
 
 def _admit_lie_algebra_limits(algebra: FiniteDimensionalLieAlgebra) -> None:
     """Admit operation-owned dimension, sparsity, and coefficient limits."""
-    if not 1 <= len(algebra.basis) <= MAX_LIE_DIMENSION:
+    if len(algebra.basis) > MAX_LIE_DIMENSION:
         raise OperationResourceAdmissionError(
             location=("algebra", "basis"),
             code="lie_algebra.dimension_bound",
             message=(
                 "the Lie algebra dimension must stay within the admitted "
-                f"1..{MAX_LIE_DIMENSION} basis bound"
+                f"0..{MAX_LIE_DIMENSION} basis bound"
             ),
         )
     if len(algebra.structure_constants) > MAX_STRUCTURE_NONZEROS:
@@ -843,6 +843,7 @@ def lie_algebra_is_semisimple(
 
     killing_radical = lie_killing_form_radical(algebra)
     return LieSemisimplicityResult(
+        algebra=killing_radical.killing_result.algebra,
         is_semisimple=killing_radical.radical.generators.row_count == 0,
     )
 
@@ -1962,8 +1963,7 @@ def lie_subalgebra(
         tuple(subalgebra_basis) if isinstance(subalgebra_basis, (tuple, list)) else ()
     )
     if (
-        not labels
-        or any(not isinstance(label, str) for label in labels)
+        any(not isinstance(label, str) for label in labels)
         or len(labels) != len(rows)
         or len(set(labels)) != len(labels)
     ):
@@ -2089,7 +2089,7 @@ def lie_quotient(
             code="lie_algebra.quotient_labels",
             message="quotient basis labels must be unique strings",
         )
-    if len(labels) != len(free) or not labels:
+    if len(labels) != len(free):
         raise OperationDomainValidationError(
             location=("quotient_basis",),
             code="lie_algebra.quotient_dimension",

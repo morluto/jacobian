@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from math import gcd
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import decimal_digit_width
 from jacobian.math.lie_algebras._models import FiniteDimensionalLieAlgebra
@@ -25,10 +27,18 @@ def _decimal_width(component: object) -> int:
     return len(str(component).lstrip("-"))
 
 
+def _rational_components(scalar: object) -> tuple[object, ...]:
+    if isinstance(scalar, CanonicalRational):
+        return (scalar.num, scalar.den)
+    if isinstance(scalar, dict):
+        return (scalar.get("num", "0"), scalar.get("den", "1"))
+    return (scalar,)
+
+
 class LieMatrixSpanRequest(StrictModel):
     """An independent ordered basis for a commutator-closed QQ matrix span."""
 
-    matrices: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8)
+    matrices: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8, strict=False)
 
     @model_validator(mode="before")
     @classmethod
@@ -43,6 +53,7 @@ class LieMatrixSpanRequest(StrictModel):
                 "lie_algebra.matrix_span_dimension",
                 "matrix span dimension must be 1..8",
             )
+        value = {**value, "matrices": tuple(matrices)}
         for matrix in matrices:
             if not isinstance(matrix, dict):
                 continue
@@ -63,11 +74,7 @@ class LieMatrixSpanRequest(StrictModel):
                 )
             for row in entries:
                 for scalar in row:
-                    components = (
-                        (scalar.get("num", "0"), scalar.get("den", "1"))
-                        if isinstance(scalar, dict)
-                        else (scalar,)
-                    )
+                    components = _rational_components(scalar)
                     if any(
                         _decimal_width(component) > MAX_MATRIX_SPAN_INPUT_DIGITS
                         for component in components
@@ -76,14 +83,37 @@ class LieMatrixSpanRequest(StrictModel):
                             "lie_algebra.matrix_span_input_height",
                             "input matrix entries are limited to 64 decimal digits",
                         )
+                    if isinstance(scalar, CanonicalRational) and (
+                        type(scalar.num) is not int
+                        or type(scalar.den) is not int
+                        or scalar.den <= 0
+                        or gcd(abs(scalar.num), scalar.den) != 1
+                    ):
+                        raise PydanticCustomError(
+                            "lie_algebra.matrix_span_rational",
+                            "matrix entries must be reduced canonical rationals",
+                        )
         return value
+
+    @model_validator(mode="after")
+    def bound_canonical_matrices(self) -> Self:
+        if any(
+            matrix.row_count < 1
+            or matrix.row_count > MAX_MATRIX_ORDER
+            or matrix.column_count != matrix.row_count
+            for matrix in self.matrices
+        ):
+            raise PydanticCustomError(
+                "lie_algebra.matrix_span_order", "matrix order must be 1..8"
+            )
+        return self
 
 
 class LieMatrixSpanRealization(StrictModel):
     """A Lie algebra basis together with its exact ordered matrix realization."""
 
     algebra: FiniteDimensionalLieAlgebra
-    matrix_basis: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8)
+    matrix_basis: tuple[RationalMatrix, ...] = Field(min_length=1, max_length=8, strict=False)
 
     @model_validator(mode="after")
     def require_aligned_basis(self) -> Self:

@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.lie_algebras.matrix_span._models import (
     LieMatrixSpanRealization,
     LieMatrixSpanRequest,
@@ -13,7 +13,7 @@ from jacobian.math.lie_algebras.matrix_span.operations import (
 
 
 def _run(request: LieMatrixSpanRequest) -> LieMatrixSpanRealization:
-    return lie_algebra_from_matrix_span(request)
+    return lie_algebra_from_matrix_span(request.matrices)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -26,7 +26,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "induced finite-dimensional Lie algebra over QQ and retain the exact "
             "matrix basis in matching order. Reject dependent or nonclosed input; "
             "this operation does not generate a larger subalgebra. Matrix order "
-            "and span dimension are at most 8, with admitted exact work and output."
+            "and span dimension are at most 8. Each matrix numerator and "
+            "denominator is limited to 64 decimal digits, with admitted exact "
+            "work and output."
         ),
         request_type=LieMatrixSpanRequest,
         result_type=LieMatrixSpanRealization,
@@ -38,7 +40,17 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "induced bracket on rational matrices",
             "commutator closed matrix basis",
         ),
-        examples=(),
+        examples=(
+            OperationExample(
+                name="sl2_matrices",
+                description="Construct the Lie algebra on the standard rational sl2 matrix basis.",
+                input={"matrices": [
+                    {"domain": "QQ", "entries": [[{"num": "0", "den": "1"}, {"num": "1", "den": "1"}], [{"num": "0", "den": "1"}, {"num": "0", "den": "1"}]]},
+                    {"domain": "QQ", "entries": [[{"num": "0", "den": "1"}, {"num": "0", "den": "1"}], [{"num": "1", "den": "1"}, {"num": "0", "den": "1"}]]},
+                    {"domain": "QQ", "entries": [[{"num": "1", "den": "1"}, {"num": "0", "den": "1"}], [{"num": "0", "den": "1"}, {"num": "-1", "den": "1"}]]},
+                ]},
+            ),
+        ),
     ),
 )
 

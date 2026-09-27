@@ -38,6 +38,21 @@ def _subspace(rows: list[list[int]]) -> LieSubspace:
     )
 
 
+def _zero_subspace_of(algebra: FiniteDimensionalLieAlgebra) -> LieSubspace:
+    from jacobian.math.matrices.values import RationalMatrix
+
+    return LieSubspace(
+        basis=algebra.basis,
+        generators=RationalMatrix(
+            row_count=0, column_count=len(algebra.basis), entries=()
+        ),
+    )
+
+
+def _zero_subspace() -> LieSubspace:
+    return _zero_subspace_of(SL2)
+
+
 def test_borel_subalgebra_has_exact_induced_structure_constants_and_inclusion() -> None:
     result = lie_subalgebra(SL2, _subspace([[1, 0, 0], [0, 0, 1]]), ["e", "h"])
 
@@ -177,3 +192,79 @@ def test_catalog_declares_subalgebra_structure_constant_transform() -> None:
         tool for tool in TOOLS if tool.operation_id == "lie_algebra.subalgebra.compute"
     )
     assert tool.request_type.__name__ == "LieSubalgebraConstructionRequest"
+
+
+def test_malformed_induced_label_is_rejected_before_closure_expansion() -> None:
+    # span(e, f) is not closed: [e, f] = h escapes. A malformed label must
+    # still be refused first, which shows grammar admission precedes any
+    # bracket expansion.
+    with pytest.raises(
+        OperationDomainValidationError, match="canonical Lie basis grammar"
+    ):
+        lie_subalgebra(SL2, _subspace([[1, 0, 0], [0, 1, 0]]), ["bad-label", "f"])
+
+
+def test_induced_labels_must_match_candidate_dimension_including_zero() -> None:
+    with pytest.raises(OperationDomainValidationError, match="one unique basis label"):
+        lie_subalgebra(SL2, _subspace([[1, 0, 0], [0, 0, 1]]), [])
+    with pytest.raises(OperationDomainValidationError, match="one unique basis label"):
+        lie_subalgebra(SL2, _zero_subspace(), ["e"])
+
+
+def test_zero_subalgebra_is_canonical_and_composes_with_consumers() -> None:
+    from jacobian.math.lie_algebras.operations import (
+        lie_adjoint_representation,
+        lie_algebra_is_semisimple,
+        lie_center,
+        lie_derived_series,
+        lie_direct_sum,
+        lie_quotient,
+        lie_upper_central_series,
+    )
+
+    result = lie_subalgebra(SL2, _zero_subspace(), [])
+
+    assert result.induced.basis == ()
+    assert result.induced.structure_constants == ()
+    assert result.subspace.generators.row_count == 0
+    assert (
+        LieSubalgebraResult.model_validate_json(result.model_dump_json(), strict=True)
+        == result
+    )
+
+    induced = result.induced
+    # The zero-dimensional carrier is admitted unchanged by consumers and
+    # passes each invariant through without a dimension-bound rejection.
+    assert lie_center(induced).center.generators.row_count == 0
+    # Cartan's criterion reads the vacuously nondegenerate 0x0 Killing form
+    # as semisimple, which is the contract this operation states.
+    assert lie_algebra_is_semisimple(induced).is_semisimple is True
+    derived = lie_derived_series(induced)
+    assert derived.solvable is True
+    assert derived.terms[0].generators.row_count == 0
+    upper = lie_upper_central_series(induced)
+    assert upper.nilpotent is True
+    assert upper.terms[-1].generators.row_count == 0
+    assert lie_quotient(induced, _zero_subspace_of(induced), []).quotient.basis == ()
+    assert lie_adjoint_representation(induced).matrices == ()
+    assert lie_direct_sum(induced, induced, []).basis == ()
+
+
+def test_catalog_request_admits_zero_subalgebra_labels() -> None:
+    from jacobian.math.lie_algebras._models import LieSubalgebraConstructionRequest
+
+    request = LieSubalgebraConstructionRequest.model_validate(
+        {
+            "algebra": SL2.model_dump(),
+            "candidate": {
+                "basis": SL2.basis,
+                "generators": _zero_subspace().generators.model_dump(),
+            },
+            "subalgebra_basis": [],
+        }
+    )
+    result = lie_subalgebra(
+        request.algebra, request.candidate, request.subalgebra_basis
+    )
+    assert result.induced.basis == ()
+    assert result.induced.structure_constants == ()

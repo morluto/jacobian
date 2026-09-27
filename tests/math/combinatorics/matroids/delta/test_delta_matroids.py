@@ -771,6 +771,13 @@ def test_twist_polynomial_request_preflights_raw_nested_ground() -> None:
     assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_work"
 
 
+def test_twist_polynomial_request_rejects_boolean_membership_indices() -> None:
+    with pytest.raises(ValidationError, match="integer indices"):
+        DeltaMatroidTwistPolynomialRequest.model_validate(
+            {"delta_matroid": {"ground": ["a", "b"], "feasible": [[], [True]]}}
+        )
+
+
 def test_twist_polynomial_request_preflights_raw_feasible_memberships() -> None:
     raw_request = {
         "delta_matroid": {

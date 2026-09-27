@@ -172,6 +172,11 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
         remaining = MAX_DELTA_MEMBERSHIPS
         for row in feasible_rows:
             if isinstance(row, (tuple, list)):
+                if any(type(index) is not int for index in row):
+                    raise PydanticCustomError(
+                        "delta_matroid.membership_index_type",
+                        "feasible-set memberships must be integer indices",
+                    )
                 remaining -= len(row)
             if remaining < 0:
                 raise PydanticCustomError(

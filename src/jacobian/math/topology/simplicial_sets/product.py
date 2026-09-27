@@ -43,9 +43,11 @@ def simplicial_set_product(
             code="simplicial_set.product_factor_invalid",
             message="product factors must satisfy the simplicial identities",
         )
-    left = left_result.simplicial_set
-    right = right_result.simplicial_set
-    assert left is not None and right is not None
+    checked_left = left_result.simplicial_set
+    checked_right = right_result.simplicial_set
+    assert checked_left is not None and checked_right is not None
+    left = checked_left
+    right = checked_right
     if left.max_degree != right.max_degree:
         raise OperationDomainValidationError(
             location=("right", "max_degree"),

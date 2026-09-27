@@ -109,7 +109,9 @@ def _checked_carrier(
     return checked.simplicial_set
 
 
-def _preflight(request: SimplicialMapPreimageRequest) -> tuple[TruncatedSimplicialMap, TruncatedSimplicialMap]:
+def _preflight(
+    request: SimplicialMapPreimageRequest,
+) -> tuple[TruncatedSimplicialMap, TruncatedSimplicialMap]:
     value = request.simplicial_map
     target_inclusion = request.target_subset.inclusion
     # Native callers can bypass Pydantic with model_construct/_from_kernel.
@@ -125,7 +127,9 @@ def _preflight(request: SimplicialMapPreimageRequest) -> tuple[TruncatedSimplici
     # Rebuild the map envelopes against admitted carriers before estimates walk
     # their rows; this also rechecks row counts, lengths, and index ranges.
     try:
-        checked_map = TruncatedSimplicialMap(source=source, target=target, maps=value.maps)
+        checked_map = TruncatedSimplicialMap(
+            source=source, target=target, maps=value.maps
+        )
         checked_inclusion = TruncatedSimplicialMap(
             source=selected_target, target=inclusion_target, maps=target_inclusion.maps
         )

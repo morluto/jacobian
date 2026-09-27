@@ -175,7 +175,9 @@ def degenerate_submodule(
             prime=prime,
         )
     elif not isinstance(request, DegenerateSubmoduleRequest):
-        raise TypeError("request must be a degenerate-submodule request or simplicial set")
+        raise TypeError(
+            "request must be a degenerate-submodule request or simplicial set"
+        )
     source, basis_indices = _admit(request)
     ambient = chains_module._unnormalized_chains_from_checked_source(request, source)
     sizes = tuple(len(level) for level in ambient.simplex_bases)

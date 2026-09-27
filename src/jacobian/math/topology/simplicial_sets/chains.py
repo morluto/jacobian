@@ -127,16 +127,22 @@ def _preflight(
 def _checked_simplicial_set(
     source: FiniteTruncatedSimplicialSet,
 ) -> FiniteTruncatedSimplicialSet:
-    checked = from_tables(source.max_degree, source.sets, source.face_maps, source.degeneracy_maps)
+    checked = from_tables(
+        source.max_degree, source.sets, source.face_maps, source.degeneracy_maps
+    )
     if checked.status != "SIMPLICIAL_SET" or checked.simplicial_set is None:
         obstruction = checked.obstruction
         raise OperationDomainValidationError(
             location=("simplicial_set",),
             code="simplicial_set.unnormalized_source_invalid",
-            message=("source tables fail a visible simplicial identity" if obstruction is None else (
-                f"source fails {obstruction.left_description} = {obstruction.right_description} "
-                f"at degree {obstruction.degree}, simplex {obstruction.row}"
-            )),
+            message=(
+                "source tables fail a visible simplicial identity"
+                if obstruction is None
+                else (
+                    f"source fails {obstruction.left_description} = {obstruction.right_description} "
+                    f"at degree {obstruction.degree}, simplex {obstruction.row}"
+                )
+            ),
         )
     return checked.simplicial_set
 
@@ -158,10 +164,17 @@ def _unnormalized_chains_from_checked_source(
                 raise RuntimeError("GF_p coefficients require a prime modulus")
             matrix = [[entry % prime for entry in row] for row in matrix]
         matrices.append(tuple(tuple(entry for entry in row) for row in matrix))
-    value = ChainComplexValue(coefficient_ring=request.coefficient_ring, prime=request.prime,
-        degree_min=0, degree_max=source.max_degree, basis_sizes=sizes,
-        differential_matrices=tuple(matrices))
-    return UnnormalizedChainsResult(simplicial_set=source, simplex_bases=source.sets, chain_complex=value)
+    value = ChainComplexValue(
+        coefficient_ring=request.coefficient_ring,
+        prime=request.prime,
+        degree_min=0,
+        degree_max=source.max_degree,
+        basis_sizes=sizes,
+        differential_matrices=tuple(matrices),
+    )
+    return UnnormalizedChainsResult(
+        simplicial_set=source, simplex_bases=source.sets, chain_complex=value
+    )
 
 
 def unnormalized_chains(

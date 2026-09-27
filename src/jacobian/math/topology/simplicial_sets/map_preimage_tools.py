@@ -11,9 +11,7 @@ from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 from jacobian.math.topology.simplicial_sets.subset import simplicial_subset
 
 _DELTA_ONE = standard_simplex(1, 1)
-_DELTA_ONE_SUBSET = simplicial_subset(
-    _DELTA_ONE, ((0,), (0,))
-)
+_DELTA_ONE_SUBSET = simplicial_subset(_DELTA_ONE, ((0,), (0,)))
 _IDENTITY = TruncatedSimplicialMap(
     source=_DELTA_ONE,
     target=_DELTA_ONE,

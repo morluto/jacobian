@@ -27,6 +27,7 @@ ROOT_MATH_DOMAINS = (
     "finite_dim_algebras",
     "finite_fields",
     "finite_semigroups",
+    "gauge",
     "function_fields",
     "geometry",
     "graphs",
@@ -38,6 +39,7 @@ ROOT_MATH_DOMAINS = (
     "optimization",
     "polynomials",
     "probability",
+    "quaternions",
     "topology",
     "universal_algebra",
 )

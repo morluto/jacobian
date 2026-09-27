@@ -9,6 +9,7 @@ results.
 
 - [Finite posets](finite-posets.md)
 - [Finite probability operations](finite-probability-operations.md)
+- [Bounded finite groups from multiplication tables](finite-group-multiplication-tables.md)
 - [Finite-group character operations](finite-group-character-theory.md)
 - [Finite Abelian character tables](../finite-abelian-character-tables.md)
 - [Finite delta-matroids](finite-delta-matroids.md)

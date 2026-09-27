@@ -1,8 +1,13 @@
 """Supported exact finite group API."""
 
 from jacobian.math.groups._models import PermutationGroup
+from jacobian.math.groups._table_models import (
+    FiniteGroupTable,
+    FiniteGroupTableElement,
+)
 from jacobian.math.groups.operations import (
     element_order,
+    finite_group_table,
     group_conjugacy_classes,
     group_orbit,
     group_order,
@@ -17,8 +22,11 @@ from jacobian.math.groups.operations import (
 )
 
 __all__ = [
+    "FiniteGroupTable",
+    "FiniteGroupTableElement",
     "PermutationGroup",
     "element_order",
+    "finite_group_table",
     "group_conjugacy_classes",
     "group_orbit",
     "group_order",

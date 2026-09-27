@@ -11,6 +11,10 @@ from jacobian.math.matrices.finite_fields._models import (
     PrimeFieldRrefResult,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+from jacobian.math.matrices.finite_fields.quotient_spaces import (
+    PrimeFieldQuotientRequest,
+    PrimeFieldQuotientSpace,
+)
 
 
 def compute_rank(request: PrimeFieldMatrixRequest) -> PrimeFieldMatrixRankResult:
@@ -42,6 +46,12 @@ def compute_nullspace(request: PrimeFieldMatrixRequest) -> PrimeFieldNullspaceRe
             columns=request.matrix.columns,
         ),
     )
+
+
+def compute_quotient_space(
+    request: PrimeFieldQuotientRequest,
+) -> PrimeFieldQuotientSpace:
+    return native.quotient_space(request.subspace)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -127,6 +137,35 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "prime": 2,
                         "entries": [[1, 0, 1], [0, 1, 1]],
                         "columns": 3,
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="prime_field.vector_space.quotient.compute",
+        title="Construct a prime-field quotient space",
+        description=(
+            "Construct GF(p)^n/W from bounded subspace generators. Return a "
+            "source-bound quotient basis and the exact projection matrix from "
+            "ambient coordinates to quotient coordinates."
+        ),
+        request_type=PrimeFieldQuotientRequest,
+        result_type=PrimeFieldQuotientSpace,
+        run=compute_quotient_space,
+        tags=("linear-algebra", "finite-field", "quotient", "exact"),
+        examples=(
+            OperationExample(
+                name="coordinate_quotient_gf3",
+                description=(
+                    "Form GF(3)^2 / span((1,1)); the returned map sends (x,y) "
+                    "to x-y in the basis represented by (1,0)."
+                ),
+                input={
+                    "subspace": {
+                        "prime": 3,
+                        "ambient_dimension": 2,
+                        "generators": [[1, 1]],
                     }
                 },
             ),

@@ -155,6 +155,14 @@ def test_group_checker_rejects_a_swapped_generator_claim() -> None:
 def test_group_model_rejects_structurally_invalid_shapes() -> None:
     group = character_group(12)
     payload = group.model_dump(mode="json")
+    payload["invariant_factors"] = [0, 2]
+    with pytest.raises(ValidationError) as error:
+        DirichletCharacterGroup.model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == (
+        "dirichlet_character.invariant_factor_range"
+    )
+
+    payload = group.model_dump(mode="json")
     payload["invariant_factors"] = [3, 2]
     with pytest.raises(ValidationError) as error:
         DirichletCharacterGroup.model_validate_json(json.dumps(payload))

@@ -775,11 +775,11 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
         )
     pieces = []
     for piece in checked.pieces:
-        terms = []
+        scaled_terms = []
         for term in piece.polynomial.polynomial.terms:
             coefficient = term.coefficient.as_fraction() * scalar
             if coefficient:
-                terms.append(
+                scaled_terms.append(
                     RationalPolynomialTerm(
                         coefficient=CanonicalRational.from_fraction(coefficient),
                         exponents=term.exponents,
@@ -790,7 +790,7 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
                 cell_id=piece.cell_id,
                 polynomial=RationalPolynomial(
                     variables=piece.polynomial.variables,
-                    polynomial=SparseRationalPolynomial(terms=tuple(terms)),
+                    polynomial=SparseRationalPolynomial(terms=tuple(scaled_terms)),
                 ),
             )
         )

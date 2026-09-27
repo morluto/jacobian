@@ -212,7 +212,22 @@ def _admit_transform(
     boundary_numerator_bits = max(
         (abs(value.numerator).bit_length() for value in forcing.values()), default=1
     )
-    denominator_bits = _denominator_factor_bits(input_scalars + list(forcing.values()))
+    # Operator coefficients from distinct shifts occupy distinct (D-order,
+    # x-degree) slots. Boundary terms have already been combined by output
+    # degree, so only their retained denominators belong in this bound.
+    denominator_bits = max(
+        max(
+            (
+                _denominator_factor_bits(list(polynomial.values()))
+                for _shift, polynomial in polynomials
+            ),
+            default=1,
+        ),
+        max(
+            (value.denominator.bit_length() for value in forcing.values()),
+            default=1,
+        ),
+    )
     # Evaluating a degree-d polynomial at integer points of magnitude at most r
     # adds at most d*ceil(log2(r+1)) bits. The shift order alone does not imply
     # coefficient growth (e.g. a_(n+r)=0 has unit coefficients throughout).

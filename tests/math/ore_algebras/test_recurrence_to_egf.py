@@ -173,3 +173,17 @@ def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> No
 
     with pytest.raises(OperationResourceAdmissionError, match="above the order bound"):
         polynomial_recurrence_to_egf_equation(_recurrence((0, [(17, 1)])))
+
+
+def test_egf_denominator_admission_is_local_to_each_output_shift() -> None:
+    primes = [int(sp.nextprime(10**63 + 1000 * index)) for index in range(17)]
+    recurrence = _recurrence(*((shift, [(0, 1)]) for shift in range(17)))
+    for term, prime in zip(recurrence["terms"], primes, strict=True):
+        term["coefficient"]["numerator"]["terms"][0]["coefficient"] = {
+            "num": 1,
+            "den": prime,
+        }
+
+    result = polynomial_recurrence_to_egf_equation(recurrence)
+
+    assert len(result.differential_operator.terms) == 17

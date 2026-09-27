@@ -169,7 +169,16 @@ def _admit_transform(
             code="ore_algebra.recurrence_egf_work",
             message="recurrence to EGF conversion exceeds its admitted exact-arithmetic work",
         )
-    denominator_bits = _denominator_factor_bits(input_scalars)
+    # Different shifts occupy different derivative orders, so their
+    # denominators never share an output coefficient. Keep the common-factor
+    # bound local to one recurrence polynomial.
+    denominator_bits = max(
+        (
+            _denominator_factor_bits(list(polynomial.values()))
+            for _shift, polynomial in polynomials
+        ),
+        default=1,
+    )
     numerator_bits = max(
         (abs(value.numerator).bit_length() for value in input_scalars), default=1
     )

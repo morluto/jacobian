@@ -1051,10 +1051,9 @@ def test_result_preflights_authored_leaf_endpoints_before_fraction_work() -> Non
         "den": "1",
     }
 
-    with pytest.raises(
-        ValidationError, match=rf"{MAX_RATIONAL_BOX_ENDPOINT_DIGITS}-digit bound"
-    ):
+    with pytest.raises(ValidationError) as error:
         AdaptiveRangeEnclosureResult.model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == "analysis.invariant"
 
 
 def test_result_structurally_bounds_authored_dyadic_exponents() -> None:

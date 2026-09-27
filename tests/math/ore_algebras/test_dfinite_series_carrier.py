@@ -132,10 +132,55 @@ def test_coefficient_pole_at_center_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="ordinary center"):
         differential_series_construct(
             DifferentialOreOperator.model_validate(
-                {"terms": [{"order": 1, "coefficient": pole.model_dump()}]}
+                {
+                    "terms": [
+                        {"order": 0, "coefficient": pole.model_dump()},
+                        {"order": 1, "coefficient": _rf([(1, 0)]).model_dump()},
+                    ]
+                }
             ),
             {"values": [0]},
         )
+
+
+def test_rational_unit_with_common_pole_preserves_ordinary_point() -> None:
+    pole = RationalFunction.model_validate(
+        {
+            "domain": "QQ",
+            "variables": ["x"],
+            "numerator": {
+                "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [0]}]
+            },
+            "denominator": {
+                "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [1]}]
+            },
+        }
+    )
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": 0, "coefficient": pole.model_dump()},
+                {"order": 1, "coefficient": pole.model_dump()},
+            ]
+        }
+    )
+    carrier = differential_series_construct(operator, {"values": [1]})
+    assert carrier.operator == operator
+
+
+def test_series_value_decoding_does_not_repeat_ordinary_point_admission() -> None:
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": 0, "coefficient": _rf([(1, 0)]).model_dump()},
+                {"order": 1, "coefficient": _rf([(1, 1)]).model_dump()},
+            ]
+        }
+    )
+    value = DFinitePowerSeries.model_validate(
+        {"operator": operator, "initial_derivatives": {"values": [0]}}
+    )
+    assert DFinitePowerSeries.model_validate_json(value.model_dump_json()) == value
 
 
 def test_order_zero_operator_represents_the_zero_formal_series() -> None:
@@ -155,3 +200,10 @@ def test_zero_operator_cannot_define_a_dfinite_series() -> None:
             DifferentialOreOperator.model_validate({"terms": []}),
             {"values": []},
         )
+
+
+def test_incomplete_initial_derivatives_are_rejected_before_kernel_construction() -> (
+    None
+):
+    with pytest.raises(OperationDomainValidationError, match="exactly order"):
+        differential_series_construct(_sinh_operator(), {"values": [0]})

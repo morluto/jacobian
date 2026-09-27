@@ -110,8 +110,9 @@ def test_verifier_preserves_operational_noncompletion(
         raise error
 
     monkeypatch.setattr(module, boundary, fail)
-    with pytest.raises(failure, match="injected noncompletion"):
+    with pytest.raises(failure, match="injected noncompletion") as caught:
         verifier(claim)
+    assert caught.value is error
 
 
 @pytest.mark.parametrize("restriction", (False, True))

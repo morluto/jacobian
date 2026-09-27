@@ -3,7 +3,10 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
     PolynomialRecurrencePrefixRequest,
@@ -58,6 +61,71 @@ def test_fibonacci_prefix_obeys_finite_declared_recurrence() -> None:
         for n in result.recurrence_indices
     )
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_prefix_deserialization_enforces_interval_and_value_count() -> None:
+    result = polynomial_recurrence_generate_prefix(
+        _op([(0, [(-1, 0)]), (1, [(-1, 0)]), (2, [(1, 0)])]),
+        0,
+        FiniteRationalSequence.model_validate({"values": [0, 1]}),
+        1,
+    )
+    payload = result.model_dump()
+    payload["recurrence_indices"] = [99]
+    with pytest.raises(ValueError, match="consecutive from start_index"):
+        type(result).model_validate(payload)
+    payload = result.model_dump()
+    payload["values"]["values"] = [0, 1]
+    with pytest.raises(ValueError, match="prefix values must cover"):
+        type(result).model_validate(payload)
+
+
+def test_rationally_scaled_fibonacci_has_linear_height_bound() -> None:
+    result = polynomial_recurrence_generate_prefix(
+        _op([(0, [(-1, 0)]), (1, [(-1, 0)]), (2, [(1, 0)])]),
+        0,
+        FiniteRationalSequence.model_validate({"values": [0, {"num": 1, "den": 2}]}),
+        11,
+    )
+    assert [value.as_fraction() for value in result.values.values][-1] == Fraction(
+        72, 1
+    )
+
+
+def test_joint_initial_denominator_is_admitted_before_recurrence_expansion() -> None:
+    from math import gcd
+
+    denominators = []
+    for prime in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47):
+        exponent = 1
+        while len(str(prime**exponent)) < 2_500:
+            exponent += 1
+        denominators.append(prime**exponent)
+    assert all(
+        gcd(left, right) == 1
+        for index, left in enumerate(denominators)
+        for right in denominators[index + 1 :]
+    )
+    operator = _op([(exponent, [(1, 0)]) for exponent in (*range(15), 16)])
+    initial_values = FiniteRationalSequence.model_validate(
+        {"values": [{"num": 1, "den": value} for value in denominators] + [0]}
+    )
+
+    with pytest.raises(OperationResourceAdmissionError):
+        polynomial_recurrence_generate_prefix(operator, 0, initial_values, 1)
+
+
+def test_prefix_deserialization_rejects_nonrecurrence_operator() -> None:
+    payload = {
+        "operator": {"terms": []},
+        "start_index": 0,
+        "recurrence_indices": [0],
+        "values": {"values": []},
+    }
+    with pytest.raises(ValueError, match="positive-order polynomial recurrence"):
+        from jacobian.math.ore_algebras._models import PolynomialRecurrencePrefix
+
+        PolynomialRecurrencePrefix.model_validate(payload)
 
 
 def test_alternating_recurrence_preserves_rational_values() -> None:

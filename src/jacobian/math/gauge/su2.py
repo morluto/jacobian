@@ -71,18 +71,18 @@ def _admit_su2_path(
     path: OrientedGaugePath,
     labels: dict[str, RationalUnitQuaternion],
 ) -> tuple[str, str]:
-    if not isinstance(path, OrientedGaugePath) or not isinstance(path.steps, tuple):
+    steps = getattr(path, "steps", None)
+    if not isinstance(path, OrientedGaugePath) or not isinstance(steps, tuple):
         _reject("path_shape", "path must be a typed oriented gauge path")
-    if len(path.steps) > 256:
+    if len(steps) > 256:
         _reject("path_bound", "path exceeds the 256-edge envelope")
     edges = {edge.edge_id: edge for edge in field.lattice.edges}
     aggregate_work = 0
     accumulated_digits = 1
-    accumulated_is_single_traversal = False
-    previous_factor: RationalUnitQuaternion | None = None
+    factor_stack: list[tuple[RationalUnitQuaternion, int]] = []
     cursor: str | None = None
     start: str | None = None
-    for step in path.steps:
+    for step in steps:
         if (
             not isinstance(step, GaugePathStep)
             or type(getattr(step, "edge_id", None)) is not str
@@ -102,21 +102,14 @@ def _admit_su2_path(
         factor = labels[step.edge_id]
         if not step.forward:
             factor = inverse_rational_unit_quaternion(factor)
-        cancels_accumulator = (
-            accumulated_is_single_traversal
-            and previous_factor is not None
-            and _are_inverses(previous_factor, factor)
-        )
         aggregate_work += 64 * accumulated_digits * step_digits
-        if cancels_accumulator:
-            accumulated_digits = 1
-            accumulated_is_single_traversal = False
+        if factor_stack and _are_inverses(factor_stack[-1][0], factor):
+            _, accumulated_digits = factor_stack.pop()
         else:
-            accumulated_is_single_traversal = accumulated_digits == 1
+            factor_stack.append((factor, accumulated_digits))
             accumulated_digits += step_digits + 1
-        previous_factor = factor
     _admit_aggregate_work(aggregate_work, "path")
-    if not path.steps:
+    if not steps:
         basepoint: object = getattr(path, "basepoint", None)
         if not isinstance(basepoint, str) or type(basepoint) is not str:
             _reject("empty_path_basepoint", "empty path needs a lattice basepoint")

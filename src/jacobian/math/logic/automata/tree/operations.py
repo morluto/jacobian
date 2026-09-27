@@ -12,7 +12,7 @@ from pydantic import ValidationError
 
 from jacobian._exact import MAX_CANONICAL_INTEGER_DIGITS
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import decimal_digit_width, encode_strict_json
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -38,7 +38,7 @@ from jacobian.math.logic.automata.tree.values import (
     MAX_TA_TRANSITIONS,
     MAX_TREE_AUTOMATON_WORK,
     MAX_TREE_COUNT_HEIGHT,
-    MAX_TREE_COUNT_OUTPUT_BYTES,
+    MAX_TREE_COUNT_PROFILE_DIGITS,
     BottomUpTreeAutomaton,
     CompleteDeterministicBottomUpTreeAutomaton,
     DeterministicBottomUpTreeAutomaton,
@@ -1361,13 +1361,14 @@ def accepted_tree_height_profile(
     else:
         digit_bounds = [1] * (max_height + 1)
 
-    input_bytes = len(encode_strict_json(automaton.model_dump(mode="json")))
-    output_bytes = input_bytes + sum(digit_bounds) + 3 * (max_height + 1) + 128
-    if output_bytes > MAX_TREE_COUNT_OUTPUT_BYTES:
+    if sum(digit_bounds) > MAX_TREE_COUNT_PROFILE_DIGITS:
         raise OperationResourceAdmissionError(
             location=("max_height",),
-            code="tree_automata.height_count_output_bound",
-            message="the source automaton and height count profile exceed the output bound",
+            code="tree_automata.height_count_profile_digits_bound",
+            message=(
+                "the admitted height profile exceeds the aggregate exact-digit "
+                f"limit of {MAX_TREE_COUNT_PROFILE_DIGITS}"
+            ),
         )
     if not automaton.final_states or not any(
         not transition.child_states for transition in automaton.transitions

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -50,16 +50,48 @@ class SimplicialSetSkeletonResult(StrictModel):
 
     @model_validator(mode="after")
     def require_inclusion_source(self) -> Self:
-        if self.inclusion.source != self.skeleton:
-            raise ValueError("the inclusion source must be the returned skeleton")
-        if self.k > self.inclusion.target.max_degree:
-            raise ValueError("k must be visible in the source prefix")
         try:
-            SimplicialSubsetPrefix(inclusion=self.inclusion)
-        except (ValueError, IndexError) as error:
+            skeleton = FiniteTruncatedSimplicialSet.model_validate(
+                self.skeleton.model_dump()
+            )
+            target = FiniteTruncatedSimplicialSet.model_validate(
+                self.inclusion.target.model_dump()
+            )
+            inclusion = TruncatedSimplicialMap.model_validate(
+                {
+                    "source": skeleton,
+                    "target": target,
+                    "maps": self.inclusion.maps,
+                }
+            )
+            SimplicialSubsetPrefix(inclusion=inclusion)
+        except (
+            ValidationError,
+            AttributeError,
+            TypeError,
+            ValueError,
+            IndexError,
+        ) as error:
             raise ValueError(
-                "the inclusion must retain ordered injective ambient simplex axes"
+                "the result must retain canonical simplicial sets and an injective inclusion"
             ) from error
+        if inclusion.source != skeleton:
+            raise ValueError("the inclusion source must be the returned skeleton")
+        if self.k > target.max_degree:
+            raise ValueError("k must be visible in the source prefix")
+        expected = [
+            set(range(len(target.sets[degree]))) if degree <= self.k else set()
+            for degree in range(target.max_degree + 1)
+        ]
+        for degree in range(target.max_degree):
+            for degeneracy in target.degeneracy_maps[degree]:
+                for source_index in tuple(expected[degree]):
+                    expected[degree + 1].add(degeneracy[source_index])
+        expected_maps = tuple(tuple(sorted(level)) for level in expected)
+        if inclusion.maps != expected_maps:
+            raise ValueError(
+                "the retained simplices must equal degrees through k and their degeneracy closure"
+            )
         return self
 
 

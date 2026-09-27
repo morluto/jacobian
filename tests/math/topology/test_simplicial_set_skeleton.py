@@ -83,6 +83,15 @@ def test_maximal_skeleton_is_the_identity_subset_and_round_trips() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_result_rejects_an_inclusion_that_is_not_the_requested_skeleton() -> None:
+    source = standard_simplex(1, 1)
+    full = simplicial_set_skeleton(source, 1)
+    forged = full.model_dump()
+    forged["k"] = 0
+    with pytest.raises(ValidationError, match="degeneracy closure"):
+        type(full).model_validate(forged)
+
+
 def test_empty_simplicial_set_has_empty_skeleton_and_inclusion() -> None:
     source = from_tables(
         2,

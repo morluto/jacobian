@@ -30,6 +30,7 @@ from jacobian.math.number_theory.modular_forms.character_coordinates import (
     CHARACTER_RREF_BASIS_ID,
     _admit_coordinate_space,
     _CoordinateSpace,
+    _require_character_hecke_field,
 )
 from jacobian.math.number_theory.modular_forms.multidimensional_hecke.models import (
     ModularCharacterHeckeMatrixResult,
@@ -114,6 +115,7 @@ class _HeckeAdmission(NamedTuple):
 
 
 def _admit_hecke_request(space: ModularFormSpace, index: int) -> _HeckeAdmission:
+    _require_character_hecke_field(space)
     context = _admit_coordinate_space(space)
     if context.basis_id != CHARACTER_RREF_BASIS_ID:
         raise OperationDomainValidationError(

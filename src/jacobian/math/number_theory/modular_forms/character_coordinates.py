@@ -18,9 +18,6 @@ from jacobian.math.number_theory.characters.values import (
     DirichletCharacterGroup,
 )
 from jacobian.math.number_theory.modular_forms import cyclotomic
-from jacobian.math.number_theory.modular_forms.character_basis import (
-    _require_basis_space,
-)
 from jacobian.math.number_theory.modular_forms.character_dimensions import (
     character_space_dimensions,
 )
@@ -120,6 +117,20 @@ class _CoordinateSpace(NamedTuple):
     field: RationalCyclotomicField
     dimension: int
     basis_id: str
+
+
+def _require_character_hecke_field(space: object) -> None:
+    """Reject unsupported Hecke parents before coordinate dimension admission."""
+    if (
+        type(space) is not ModularFormSpace
+        or type(space.coefficient_domain) is not RationalCyclotomicField
+        or space.coefficient_domain.degree != 2
+    ):
+        raise OperationDomainValidationError(
+            location=("space", "coefficient_domain"),
+            code="modular_form.character_hecke_coefficient_field",
+            message="character Hecke operations require a quadratic cyclotomic coefficient field",
+        )
 
 
 def _admit_coordinate_space(space: object) -> _CoordinateSpace:

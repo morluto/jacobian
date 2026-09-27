@@ -750,8 +750,10 @@ def _rref_character_coordinates_hecke(
         CHARACTER_RREF_BASIS_ID,
         _admit_coordinate_space,
         _admit_coordinate_vector,
+        _require_character_hecke_field,
     )
 
+    _require_character_hecke_field(form.space)
     context = _admit_coordinate_space(form.space)
     _admit_coordinate_vector(form, context, "form")
     if form.basis_id != CHARACTER_RREF_BASIS_ID:

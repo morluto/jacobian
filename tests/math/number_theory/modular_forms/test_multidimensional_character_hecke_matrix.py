@@ -9,6 +9,7 @@ import pytest
 from cypari import pari
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
 )
@@ -173,3 +174,19 @@ def test_precision_81_boundary_is_admitted_for_level39_t8():
     assert len(result.entries) == 6
     assert result.index == 8
     assert result.labels == tuple(f"q^{index}" for index in range(6))
+
+
+def test_hecke_paths_reject_rational_parent_before_coordinate_admission():
+    request = _request(character_coordinate=6)
+    rational_space = request.space.model_copy(update={"coefficient_domain": "QQ"})
+    with pytest.raises(OperationDomainValidationError, match="quadratic cyclotomic"):
+        modular_character_hecke_matrix_multidimensional(rational_space, 2)
+
+    from jacobian.math.number_theory.modular_forms.character_basis import (
+        _rref_character_coordinates_hecke,
+    )
+    from jacobian.math.number_theory.modular_forms.values import ModularFormCoordinates
+
+    form = ModularFormCoordinates.model_construct(space=rational_space)
+    with pytest.raises(OperationDomainValidationError, match="quadratic cyclotomic"):
+        _rref_character_coordinates_hecke(form, 2)

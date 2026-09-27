@@ -1067,7 +1067,7 @@ def modular_character_coordinates_u_prime(
         for row in range(dimension)
     )
     if any(
-        canonical_rational_component_digits(value) > linear_digits
+        canonical_rational_component_digits(value) > addition_digits
         for coordinate in result_coordinates
         for value in coordinate.coefficients_ascending
     ):

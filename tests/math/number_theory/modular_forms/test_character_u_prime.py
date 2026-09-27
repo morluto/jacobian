@@ -213,6 +213,42 @@ def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> 
     )
 
 
+def test_u_prime_result_height_allows_distinct_component_denominators() -> None:
+    space = _space(2, 26)
+    form = _coordinates(space, 0)
+    form = form.model_copy(
+        update={
+            "coordinates": (
+                RationalCyclotomicElement(
+                    field=_FIELD,
+                    coefficients_ascending=(
+                        {"num": 1, "den": 10_007},
+                        {"num": 1, "den": 10_009},
+                    ),
+                ),
+                RationalCyclotomicElement(
+                    field=_FIELD,
+                    coefficients_ascending=(
+                        {"num": 1, "den": 10_037},
+                        {"num": 1, "den": 10_039},
+                    ),
+                ),
+            )
+        }
+    )
+
+    result = modular_character_coordinates_u_prime(form, 2)
+
+    assert (
+        max(
+            len(str(coefficient.den))
+            for value in result.coordinates
+            for coefficient in value.coefficients_ascending
+        )
+        > 15
+    )
+
+
 @pytest.mark.parametrize("digits", [42, 43, 255])
 def test_u_prime_output_bound_is_admitted_before_backend_expansion(
     monkeypatch, digits: int

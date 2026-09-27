@@ -178,7 +178,19 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
                     "delta_matroid.memberships_exceeded",
                     "source feasible-family memberships exceed the admitted envelope",
                 )
-        return value
+        # This before-validator receives decoded Python containers, where strict
+        # tuple fields would otherwise lose Pydantic's JSON-array conversion.
+        # Convert only after the axes and row counts have passed raw admission.
+        normalized_delta = dict(delta)
+        if isinstance(ground, list):
+            normalized_delta["ground"] = tuple(ground)
+        if isinstance(feasible, list):
+            normalized_delta["feasible"] = tuple(
+                tuple(row) if isinstance(row, list) else row for row in feasible
+            )
+        normalized_value = dict(raw_value)
+        normalized_value["delta_matroid"] = normalized_delta
+        return normalized_value
 
     model_config = ConfigDict(
         json_schema_extra={

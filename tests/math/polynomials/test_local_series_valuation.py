@@ -108,16 +108,16 @@ def test_defining_invariant_leading_term_reconstruction() -> None:
     assert result.zero_order == max(result.valuation, 0)
 
 
-def test_native_and_catalog_results_agree() -> None:
+def test_native_and_helper_results_agree() -> None:
     series = _window((_rational(2), _rational(0), _rational(1, 3)), valuation_lower=-1)
 
     native = laurent_valuation_profile(series)
-    catalog = compute_valuation_profile(ValuationProfileRequest(series=series))
+    helper = compute_valuation_profile(ValuationProfileRequest(series=series))
 
-    assert catalog == native
-    assert catalog.series == series
+    assert helper == native
+    assert helper.series == series
     assert (
-        ValuationProfileResult.model_validate_json(catalog.model_dump_json()) == catalog
+        ValuationProfileResult.model_validate_json(helper.model_dump_json()) == helper
     )
 
 
@@ -165,3 +165,17 @@ def test_window_at_envelope_is_accepted() -> None:
 def test_native_rejects_a_non_window_value() -> None:
     with pytest.raises(OperationDomainValidationError):
         laurent_valuation_profile("not-a-window")  # type: ignore[arg-type]
+
+
+def test_native_rejects_forged_infinity_center() -> None:
+    forged = TruncatedLaurentWindow.model_construct(
+        variable="t",
+        place="INFINITY",
+        center=_rational(1),
+        valuation_lower=0,
+        precision=1,
+        coefficients=(_rational(1),),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="infinity"):
+        laurent_valuation_profile(forged)

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from fractions import Fraction
 from typing import Annotated, Self
 
 from pydantic import Field, WithJsonSchema, model_validator
@@ -20,8 +21,11 @@ from jacobian.math.topology.chain_complexes.values import (
     MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS,
     MAX_MATRIX_CELLS,
     MAX_OPERATION_MATRIX_CELLS,
+    ChainCoefficient,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
+    _bounded_integer_digits,
 )
 
 
@@ -122,11 +126,18 @@ HomologyInputComplex = Annotated[
 ]
 
 
-def _raw_component_digit_count(value: str) -> int:
-    return max(
-        (len(part) - int(part.startswith("-")) for part in value.split("/", 1)),
-        default=0,
-    )
+def _raw_component_digit_count(value: object, maximum_digits: int) -> int:
+    if isinstance(value, str):
+        parts = value.split("/", 1)
+        return max((len(part.lstrip("-")) for part in parts), default=0)
+    if type(value) is int:
+        return _bounded_integer_digits(value, maximum_digits)
+    if type(value) is Fraction:
+        return max(
+            _bounded_integer_digits(value.numerator, maximum_digits),
+            _bounded_integer_digits(value.denominator, maximum_digits),
+        )
+    return 0
 
 
 def _preflight_raw_differentials(
@@ -135,7 +146,7 @@ def _preflight_raw_differentials(
     maximum_axis: int,
     maximum_cells: int,
     maximum_digits: int,
-) -> tuple[tuple[tuple[str, ...], ...], ...] | None:
+) -> tuple[tuple[tuple[object, ...], ...], ...] | None:
     if not isinstance(differentials, (list, tuple)):
         return None
     if len(differentials) > 2 * MAX_CHAIN_DEGREE:
@@ -145,7 +156,7 @@ def _preflight_raw_differentials(
         )
 
     cells = 0
-    canonical_matrices: list[tuple[tuple[str, ...], ...]] = []
+    canonical_matrices: list[tuple[tuple[object, ...], ...]] = []
     for matrix in differentials:
         if not isinstance(matrix, (list, tuple)):
             raise _validation_error(
@@ -157,7 +168,7 @@ def _preflight_raw_differentials(
                 "homology_raw_matrix_rows_exceeded",
                 f"a homology differential has more than {maximum_axis} rows",
             )
-        canonical_rows: list[tuple[str, ...]] = []
+        canonical_rows: list[tuple[object, ...]] = []
         for row in matrix:
             if not isinstance(row, (list, tuple)):
                 raise _validation_error(
@@ -176,19 +187,27 @@ def _preflight_raw_differentials(
                     "homology differential cells exceed the raw "
                     f"{maximum_cells}-cell envelope",
                 )
-            canonical_entries: list[str] = []
+            canonical_entries: list[str | int | Fraction] = []
             for entry in row:
-                if not isinstance(entry, str):
+                if not (
+                    isinstance(entry, str)
+                    or type(entry) is int
+                    or type(entry) is Fraction
+                ):
                     raise _validation_error(
                         "homology_raw_coefficient_invalid",
-                        "each raw homology coefficient must be a string",
+                        "each raw homology coefficient must be an exact scalar",
                     )
-                if _raw_component_digit_count(entry) > maximum_digits:
+                if _raw_component_digit_count(entry, maximum_digits) > maximum_digits:
                     raise _validation_error(
                         "homology_raw_coefficient_digits_exceeded",
                         "a homology coefficient exceeds the raw "
                         f"{maximum_digits}-digit envelope",
                     )
+                # Preserve the caller's scalar representation. JSON supplies
+                # canonical decimal strings; native calls supply int/Fraction.
+                # The ChainCoefficient leaf codec decodes each in its own
+                # validation mode, so converting here would break the other mode.
                 canonical_entries.append(entry)
             canonical_rows.append(tuple(canonical_entries))
         canonical_matrices.append(tuple(canonical_rows))
@@ -204,6 +223,8 @@ def _preflight_raw_homology_complex(data: object) -> object:
     if isinstance(raw_complex, ChainComplexValue) or not isinstance(
         raw_complex, Mapping
     ):
+        return data
+    if not isinstance(raw_complex.get("differential_matrices"), (list, tuple)):
         return data
 
     raw_ring = raw_complex.get("coefficient_ring")
@@ -269,18 +290,16 @@ class ConstructChainComplexRequest(StrictModel):
             "matrices."
         ),
     )
-    differential_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
+    differential_matrices: tuple[tuple[tuple[ChainCoefficient, ...], ...], ...] = Field(
         description=(
             "Exactly one fewer dense row-major differential matrix than "
             "basis sizes. Matrix i maps chain group i+1 into chain group i "
             "and must have shape basis_sizes[i] x basis_sizes[i+1]; "
             "adjacent matrices must compose to zero (d^2 = 0). Each entry "
-            "is one canonical coefficient string: an integer with no "
-            "leading zeros and no negative zero ('0', '5', '-3'), or for "
-            "QQ a fully reduced fraction with denominator >= 2 ('-1/2'). "
-            "ZZ accepts integers and GF(p) accepts only residues in [0, p). "
-            "Parsing is plain integer/fraction string parsing and never "
-            "evaluates input."
+            "is a native exact integer or Fraction in Python. JSON uses one "
+            "canonical decimal/rational string per entry to preserve exact "
+            "values across clients; ZZ requires integers, QQ permits rationals, "
+            "and GF(p) requires residues in [0, p)."
         )
     )
 
@@ -300,136 +319,22 @@ class VerifyDifferentialRequest(StrictModel):
         return self
 
 
-def _require_component_entry_grammar(
-    coefficient_ring: CoefficientRing,
-    matrix: tuple[tuple[str, ...], ...],
-    *,
-    prime: int | None = None,
-) -> tuple[int, int]:
-    """Validate one component's entries; return its (cells, characters)."""
-    from jacobian.math.topology.chain_complexes.values import (
-        _require_rational_entry_grammar,
-    )
-
-    for row in matrix:
-        for entry in row:
-            # Shape alone does not make an entry parseable: the exact
-            # kernels parse entries with Fraction/int and would turn an
-            # accepted request into a host exception.
-            _require_rational_entry_grammar(coefficient_ring, entry, prime=prime)
-    return (
-        sum(len(row) for row in matrix),
-        sum(len(entry) for row in matrix for entry in row),
-    )
-
-
-def _require_chain_map_components(
-    source: ChainComplexValue,
-    target: ChainComplexValue,
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...],
-    *,
-    label: str,
-) -> None:
-    """Admit only complete, correctly shaped degree-aligned chain maps.
-
-    One component per source degree is required; component ``i`` must have
-    exactly ``target.basis_sizes[i]`` rows and ``source.basis_sizes[i]``
-    columns. Degree intervals must coincide so tuple indices are actual
-    chain degrees.
-    """
-    if source.coefficient_ring != target.coefficient_ring:
-        raise _validation_error(
-            "chain_map_ring_mismatch",
-            f"{label} requires equal coefficient rings "
-            f"({source.coefficient_ring} vs {target.coefficient_ring})",
-        )
-    if source.prime != target.prime:
-        raise _validation_error(
-            "chain_map_prime_mismatch",
-            f"{label} requires equal prime moduli ({source.prime} vs {target.prime})",
-        )
-    if (source.degree_min, source.degree_max) != (
-        target.degree_min,
-        target.degree_max,
-    ):
-        raise _validation_error(
-            "chain_map_degree_interval_mismatch",
-            f"{label} requires source and target complexes concentrated on "
-            "the same degree interval "
-            f"({source.degree_min}..{source.degree_max} vs "
-            f"{target.degree_min}..{target.degree_max})",
-        )
-    expected_count = len(source.basis_sizes)
-    if len(map_matrices) != expected_count:
-        raise _validation_error(
-            "chain_map_component_count_mismatch",
-            f"{label} requires one map component per chain degree "
-            f"({expected_count}), got {len(map_matrices)}",
-        )
-    from jacobian.math.topology.chain_complexes.values import (
-        MAX_CHAIN_MAP_CELLS,
-        MAX_CHAIN_MAP_ENTRY_CHARS,
-    )
-
-    total_map_cells = 0
-    total_entry_chars = 0
-    for index, matrix in enumerate(map_matrices):
-        rows = target.basis_sizes[index]
-        cols = source.basis_sizes[index]
-        if len(matrix) != rows or any(len(row) != cols for row in matrix):
-            raise _validation_error(
-                "chain_map_component_shape_mismatch",
-                f"{label} map component {index} must have shape "
-                f"{rows}x{cols} (target rows x source columns)",
-            )
-        cells, chars = _require_component_entry_grammar(
-            source.coefficient_ring, matrix, prime=source.prime
-        )
-        total_map_cells += cells
-        total_entry_chars += chars
-    if total_map_cells > MAX_CHAIN_MAP_CELLS:
-        raise _validation_error(
-            "chain_map_cell_budget_exceeded",
-            f"{label} map components total {total_map_cells} cells, "
-            f"exceeding the {MAX_CHAIN_MAP_CELLS}-cell aggregate budget",
-        )
-    if total_entry_chars > MAX_CHAIN_MAP_ENTRY_CHARS:
-        raise _validation_error(
-            "chain_map_entry_budget_exceeded",
-            f"{label} map components total {total_entry_chars} entry "
-            f"characters, exceeding the {MAX_CHAIN_MAP_ENTRY_CHARS}-character aggregate budget",
-        )
-
-
 class VerifyChainMapRequest(StrictModel):
     """Verify that a chain map commutes with differentials."""
 
-    source: ChainComplexValue
-    target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
-        description=(
-            "One dense component per chain degree, each shaped "
-            "(target basis size) x (source basis size). Entries follow the "
-            "same canonical coefficient grammar as differential matrices: "
-            "integers without leading zeros, reduced QQ fractions, and "
-            "GF(p) residues in [0, p); strings are parsed, never evaluated."
-        )
-    )
+    chain_map: ChainMapValue
 
     @model_validator(mode="after")
     def require_admissible_map_components(self) -> Self:
-        for label, complex_value in (("source", self.source), ("target", self.target)):
+        for label, complex_value in (
+            ("source", self.chain_map.source),
+            ("target", self.chain_map.target),
+        ):
             _require_complex_cell_budget(
                 complex_value,
                 maximum=MAX_OPERATION_MATRIX_CELLS,
                 label=f"chain-map {label}",
             )
-        _require_chain_map_components(
-            self.source,
-            self.target,
-            self.map_matrices,
-            label="chain-map verification",
-        )
         return self
 
 
@@ -465,32 +370,19 @@ class ComputeHomologyRequest(StrictModel):
 class MappingConeRequest(StrictModel):
     """Compute the mapping cone of a chain map."""
 
-    source: ChainComplexValue
-    target: ChainComplexValue
-    map_matrices: tuple[tuple[tuple[str, ...], ...], ...] = Field(
-        description=(
-            "One dense component per chain degree, each shaped "
-            "(target basis size) x (source basis size). Entries follow the "
-            "same canonical coefficient grammar as differential matrices: "
-            "integers without leading zeros, reduced QQ fractions, and "
-            "GF(p) residues in [0, p); strings are parsed, never evaluated."
-        )
-    )
+    chain_map: ChainMapValue
 
     @model_validator(mode="after")
     def require_input_budgets(self) -> Self:
-        for label, complex_value in (("source", self.source), ("target", self.target)):
+        for label, complex_value in (
+            ("source", self.chain_map.source),
+            ("target", self.chain_map.target),
+        ):
             _require_complex_cell_budget(
                 complex_value,
                 maximum=MAX_OPERATION_MATRIX_CELLS,
                 label=f"mapping-cone {label}",
             )
-        _require_chain_map_components(
-            self.source,
-            self.target,
-            self.map_matrices,
-            label="mapping cone",
-        )
         return self
 
 

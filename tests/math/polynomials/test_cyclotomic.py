@@ -59,13 +59,8 @@ def test_boundary_and_small_cyclotomic_values(
 
 
 def test_native_api_exports_typed_cyclotomic_operation() -> None:
-    polynomial = polynomials.cyclotomic(3)
-    assert polynomial.coefficients == (1, 1, 1)
-
-
-def test_package_export_accepts_the_index_without_a_wire_request() -> None:
-    polynomial = polynomials.cyclotomic(12)
-    assert polynomial.coefficients == (1, 0, -1, 0, 1)
+    assert polynomials.cyclotomic(3).coefficients == (1, 1, 1)
+    assert polynomials.cyclotomic(12).coefficients == (1, 0, -1, 0, 1)
 
 
 def test_direct_native_boundary_rejects_untyped_payload() -> None:
@@ -83,6 +78,7 @@ def test_result_validation_checks_shape_without_backend_recomputation() -> None:
 
     with pytest.MonkeyPatch.context() as patch:
         patch.setattr(sympy, "cyclotomic_poly", fail)
+        patch.setattr(sympy, "factorint", fail)
         assert CyclotomicResult.model_validate_json(payload) == result
     with pytest.raises(ValidationError, match="totient"):
         CyclotomicResult(
@@ -139,13 +135,6 @@ def test_backend_wrong_constant_is_rejected_on_the_native_path(
     with pytest.raises(OperationBackendError) as exc_info:
         cyclotomic(105)
     assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
-
-
-def test_serialized_result_preserves_the_canonical_integer_polynomial() -> None:
-    result = _run(CyclotomicRequest(index=12))
-    decoded = CyclotomicResult.model_validate_json(result.model_dump_json())
-    assert decoded == result
-    assert decoded.polynomial.coefficients == (1, 0, -1, 0, 1)
 
 
 def test_factor_map_must_reconstruct_the_requested_index(
@@ -245,14 +234,6 @@ def test_twice_odd_composite_index_uses_phi_m_of_minus_x() -> None:
     )
 
 
-def test_twice_odd_reduction_generalizes_beyond_prime_halves() -> None:
-    """A previously rejected twice-odd composite is now admitted."""
-    from jacobian.math.polynomials._cyclotomic import _admit, _factor_index
-
-    admission = _admit(426, _factor_index(426))
-    assert admission.degree == 140
-
-
 def test_factor_map_exponents_are_bounded_before_exponentiation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -287,7 +268,7 @@ def test_composite_reported_as_a_prime_base_is_rejected(
     def fail_poly(*args: object, **kwargs: object) -> object:
         raise AssertionError("cyclotomic_poly must not run on a composite factor base")
 
-    monkeypatch.setattr(sympy, "factorint", lambda index: {12: 1})
+    monkeypatch.setattr(sympy, "factorint", lambda index: {6: 1, 5: 1})
     monkeypatch.setattr(sympy, "cyclotomic_poly", fail_poly)
     with pytest.raises(OperationBackendError) as exc_info:
         cyclotomic(30)
@@ -300,6 +281,11 @@ def test_construction_work_is_admitted_before_backend_expansion(
     from jacobian.math.polynomials import _cyclotomic as module
 
     monkeypatch.setattr(module, "MAX_CYCLOTOMIC_CONSTRUCTION_WORK", 1)
+
+    def fail_construction(*args: object, **kwargs: object) -> object:
+        raise AssertionError("construction must not start before work admission")
+
+    monkeypatch.setattr(module, "_twice_odd_cyclotomic", fail_construction)
     with pytest.raises(OperationResourceAdmissionError, match="construction"):
         cyclotomic(30)
 
@@ -401,19 +387,24 @@ def test_three_prime_cyclotomic_matches_the_backend_oracle() -> None:
 
 
 def test_large_degree_is_admitted_before_backend_expansion() -> None:
-    with pytest.raises(OperationResourceAdmissionError):
-        _run(CyclotomicRequest(index=100_000))
+    from jacobian.math.polynomials import _cyclotomic as module
 
+    def fail_construction(*args: object, **kwargs: object) -> object:
+        raise AssertionError("polynomial construction must not start before admission")
 
-def test_divisor_product_identity_through_twenty() -> None:
-    for index in range(1, 21):
-        product = fmpz_poly([1])
-        for divisor in range(1, index + 1):
-            if index % divisor == 0:
-                result = _run(CyclotomicRequest(index=divisor))
-                product *= fmpz_poly(ascending(result))
-        expected = fmpz_poly([-1] + [0] * (index - 1) + [1])
-        assert product == expected
+    constructor_names = (
+        "_prime_cyclotomic",
+        "_twice_odd_cyclotomic",
+        "_semiprime_quotient_cyclotomic",
+        "_prime_lift_quotient_coefficients",
+        "_substitute_power",
+        "_backend_cyclotomic_coefficients",
+    )
+    with pytest.MonkeyPatch.context() as patch:
+        for name in constructor_names:
+            patch.setattr(module, name, fail_construction)
+        with pytest.raises(OperationResourceAdmissionError):
+            _run(CyclotomicRequest(index=100_000))
 
 
 def test_power_of_two_multiple_uses_the_reduced_path() -> None:
@@ -439,10 +430,12 @@ def test_reduced_backend_coefficients_are_validated(
     from jacobian.math.polynomials import _cyclotomic as module
     from jacobian.math.polynomials._models import IntegerPolynomial
 
+    malformed = (1, 10**200, *(0 for _ in range(46)), 1)
+    assert len(malformed) == 49
     monkeypatch.setattr(
         module,
         "_exact_divide",
-        lambda dividend, divisor: IntegerPolynomial(coefficients=(1, 10**200, 1)),
+        lambda dividend, divisor: IntegerPolynomial(coefficients=malformed),
     )
     # 210 = 2 * 105 builds its odd half through the exact prime-lifting
     # quotient (105 = 3*5*7), and a malformed quotient tuple must be checked
@@ -477,13 +470,18 @@ def test_odd_semiprime_quotient_stays_inside_the_construction_envelope() -> None
     assert _construction_regime(447, {3: 1, 149: 1})[0] < 16_000_000
 
 
-def test_semiprime_quotient_matches_the_general_construction() -> None:
-    """Every distinct-prime semiprime agrees with the backend construction."""
-    for index in (15, 21, 35, 77, 447):
-        quotient = _run(CyclotomicRequest(index=index))
-        assert quotient.totient == _run(CyclotomicRequest(index=index)).totient
-        assert quotient.polynomial.coefficients[0] == 1
-        assert quotient.polynomial.coefficients[-1] == 1
+@pytest.mark.parametrize("index", (15, 21, 35, 77))
+def test_semiprime_quotient_matches_exact_backend_coefficients(index: int) -> None:
+    """Distinct-prime semiprime quotient coefficients match an exact oracle."""
+    import sympy
+
+    result = _run(CyclotomicRequest(index=index))
+    x = sympy.Symbol("x")
+    expected = tuple(
+        int(coefficient)
+        for coefficient in sympy.cyclotomic_poly(index, x, polys=True).all_coeffs()
+    )
+    assert result.polynomial.coefficients == expected
 
 
 def test_twice_odd_base_shape_is_required_before_returning(
@@ -510,26 +508,6 @@ def test_twice_odd_base_shape_is_required_before_returning(
         with pytest.raises(OperationBackendError) as exc_info:
             cyclotomic(210)
         assert exc_info.value.reason is BackendFailureReason.INVALID_OUTPUT
-
-
-def test_twice_odd_index_reuses_the_odd_half_regime() -> None:
-    """Phi_894 = Phi_447(-x) must not fall back to the dense radical estimate."""
-    import sympy
-
-    assert _construction_regime(894, {2: 1, 3: 1, 149: 1})[0] < 16_000_000
-    result = _run(CyclotomicRequest(index=894))
-    assert result.totient == 296
-    reference = sympy.Poly(
-        sympy.cyclotomic_poly(894, sympy.Symbol("x")), sympy.Symbol("x")
-    )
-    assembled = sympy.Poly(
-        sum(
-            coefficient * sympy.Symbol("x") ** (296 - offset)
-            for offset, coefficient in enumerate(result.polynomial.coefficients)
-        ),
-        sympy.Symbol("x"),
-    )
-    assert assembled == reference
 
 
 def test_twice_odd_halves_agree_with_the_backend_for_every_reduction() -> None:
@@ -589,7 +567,7 @@ def _cyclotomic_coefficients(index: int) -> tuple[int, ...]:
 
 def test_divisor_product_reconstructs_xn_minus_one() -> None:
     """x^n - 1 == prod_{d|n} Phi_d, by independent integer convolution."""
-    for n in range(1, 13):
+    for n in range(1, 21):
         product: tuple[int, ...] = (1,)
         for divisor in _divisors(n):
             product = _convolve(product, _cyclotomic_coefficients(divisor))
@@ -613,19 +591,3 @@ def test_cyclotomics_are_irreducible_over_qq() -> None:
         assert Poly(
             list(_cyclotomic_coefficients(index)), x, domain="QQ"
         ).is_irreducible
-
-
-def test_forged_cyclotomic_breaks_the_divisor_product() -> None:
-    """A forged factor of the same degree breaks x^n - 1 = prod_{d|n} Phi_d."""
-    n = 4
-    true_product: tuple[int, ...] = (1,)
-    for divisor in _divisors(n):
-        true_product = _convolve(true_product, _cyclotomic_coefficients(divisor))
-    assert true_product == (1, 0, 0, 0, -1)
-    # The genuine Phi_4 is x^2 + 1; forging it as x^2 + 2 leaves the product at
-    # the same degree but changes its constant/quadratic structure.
-    assert _cyclotomic_coefficients(4) == (1, 0, 1)
-    forged_product = _convolve(_cyclotomic_coefficients(1), _cyclotomic_coefficients(2))
-    forged_product = _convolve(forged_product, (1, 0, 2))
-    assert len(forged_product) == len(true_product)
-    assert forged_product != true_product

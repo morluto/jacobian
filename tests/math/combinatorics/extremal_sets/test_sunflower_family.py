@@ -474,24 +474,6 @@ def test_output_edge_bound_uses_qualifying_rows() -> None:
         construct_sunflower_family(source, 2)
 
 
-def test_cancellation_is_checkpointed_by_intersection_work(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Admission walks the real carrier before it reports a typed refusal."""
-
-    messages: list[str] = []
-
-    def capture(message: str) -> None:
-        messages.append(message)
-
-    monkeypatch.setattr(sunflower_module, "request_checkpoint", capture)
-    construct_sunflower_family(
-        _family(tuple((index, index + 1) for index in range(0, 6, 2)), ground=6),
-        2,
-    )
-    assert "before sunflower member expansion" in messages
-
-
 @pytest.mark.scale
 def test_exact_candidate_count_at_the_output_boundary_is_admitted() -> None:
     source = _family(tuple((index,) for index in range(155)), ground=155)

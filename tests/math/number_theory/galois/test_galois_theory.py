@@ -38,11 +38,19 @@ def test_catalog_contains_only_audited_operations() -> None:
         "polynomial.galois.factor_mod_p.compute",
         "polynomial.galois.frobenius_cycle.compute",
         "polynomial.galois_group.compute",
+        "polynomial.galois.discriminant_profile.compute",
         "polynomial.solvable_by_radicals.decide",
         "number_field.polynomial.splitting_field.compute",
         "number_field.extension.automorphisms.compute",
+        "number_field.automorphism.inverse.compute",
         "number_field.automorphism.compose.compute",
         "number_field.automorphism.apply.compute",
+        "number_field.automorphism.apply_element.compute",
+        "number_field.element.embedding_orbit.compute",
+        "number_field.galois.subgroup.compute",
+        "number_field.galois.fixed_field.compute",
+        "number_field.galois.intermediate_stabilizer.compute",
+        "number_field.galois_correspondence.compute",
     }
 
 

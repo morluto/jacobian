@@ -17,6 +17,10 @@ from jacobian.math.polynomials.local_series import (
 )
 from jacobian.math.polynomials.local_series._tools import TOOLS
 from jacobian.math.polynomials.local_series.arithmetic import add
+from jacobian.math.polynomials.local_series.arithmetic_models import (
+    RationalFunctionExpansionRequest,
+    RationalFunctionInfinityExpansionRequest,
+)
 from jacobian.math.polynomials.values import RationalFunction
 
 
@@ -136,6 +140,17 @@ def test_tool_is_published_and_coefficient_work_is_bounded() -> None:
     function = rational_function_from_sympy(1 / x, ("x",))
     with pytest.raises(OperationResourceAdmissionError):
         rational_function_at_point(function, CanonicalRational(num=0, den=1), 4097)
+
+
+def test_expansion_request_schemas_advertise_runtime_precision_limit() -> None:
+    for request_type in (
+        RationalFunctionExpansionRequest,
+        RationalFunctionInfinityExpansionRequest,
+    ):
+        assert (
+            request_type.model_json_schema()["properties"]["precision"]["maximum"]
+            == 4096
+        )
 
 
 def test_geometric_expansion_reaches_precision_without_compounding_padding() -> None:

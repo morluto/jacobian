@@ -174,3 +174,10 @@ def test_catalog_piecewise_multiplication_example_executes():
         (2,): Fraction(1),
         (1,): Fraction(1),
     }
+
+
+def test_native_multiplication_rejects_a_forged_request_with_a_typed_error():
+    with pytest.raises(OperationDomainValidationError, match="canonical"):
+        piecewise_polynomial_multiply(
+            PiecewisePolynomialMultiplicationRequest.model_construct()
+        )

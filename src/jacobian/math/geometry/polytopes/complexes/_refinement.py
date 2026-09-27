@@ -43,6 +43,32 @@ def _reject(code: str, message: str, *, location: tuple[str, ...] = ()) -> None:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
+def _validate_complex_carrier(value: object, side: str) -> PolytopalComplexClosureResult:
+    """Restore nested structure before the admission code reads carrier fields."""
+    if not isinstance(value, PolytopalComplexClosureResult):
+        _reject(
+            "polytopal_complex.refinement_type",
+            "both inputs must be canonical polytopal complexes",
+            location=(side,),
+        )
+    try:
+        payload = value.model_dump(mode="python", warnings=False)
+        canonical = PolytopalComplexClosureResult.model_validate(payload)
+    except Exception:
+        _reject(
+            "polytopal_complex.refinement_malformed",
+            "complex carrier fields must satisfy their canonical structure",
+            location=(side,),
+        )
+    if canonical.model_dump(mode="python", warnings=False) != payload:
+        _reject(
+            "polytopal_complex.refinement_malformed",
+            "complex carrier fields must satisfy their canonical structure",
+            location=(side,),
+        )
+    return canonical
+
+
 def _validate_source_coordinates(
     side: str, complex_value: PolytopalComplexClosureResult, dimension: int
 ) -> None:
@@ -177,13 +203,11 @@ def common_refinement(
     owner.
     """
 
-    if not isinstance(left, PolytopalComplexClosureResult) or not isinstance(
-        right, PolytopalComplexClosureResult
-    ):
-        _reject(
-            "polytopal_complex.refinement_type",
-            "both inputs must be canonical polytopal complexes",
-        )
+    # Validate nested carriers before _admit reads their spaces, cells, or
+    # vertices. Full geometric reconstruction follows once the admitted source
+    # records are canonicalized by _canonical_source.
+    left = _validate_complex_carrier(left, "left")
+    right = _validate_complex_carrier(right, "right")
     dimension = _admit(left, right)
     left = _canonical_source(left, "L")
     right = _canonical_source(right, "R")

@@ -14,6 +14,7 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.complexes._models import (
     ComplexPoint,
     MaximalCellRecord,
+    PolytopalComplexClosureResult,
 )
 from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_closure,
@@ -129,6 +130,12 @@ def test_common_refinement_rejects_different_supports():
 
     with pytest.raises(OperationDomainValidationError, match="exactly equal support"):
         polytopal_complex_common_refinement(left, right)
+
+
+def test_common_refinement_revalidates_both_complexes_before_reading_fields():
+    malformed = PolytopalComplexClosureResult.model_construct()
+    with pytest.raises(OperationDomainValidationError, match="canonical structure"):
+        polytopal_complex_common_refinement(malformed, malformed)
 
 
 def test_common_refinement_rejects_unmeasured_lower_dimensional_components():

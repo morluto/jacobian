@@ -5,7 +5,10 @@ import pytest
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import decimal_digit_width, encode_strict_json
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
@@ -16,10 +19,12 @@ from jacobian.math.geometry.polytopes.complexes import _spline as spline_kernel
 from jacobian.math.geometry.polytopes.complexes._models import (
     SplineDimensionRequest,
     SplineDimensionResult,
+    SplineEvaluationRequest,
 )
 from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_closure,
     spline_dimension,
+    spline_evaluate,
     spline_space,
 )
 
@@ -205,3 +210,10 @@ def test_dimension_admits_matrix_when_full_basis_output_exceeds_its_bound():
     assert result.compatibility_matrix.column_count == 910
     assert result.rank == 117
     assert result.nullity == 793
+
+
+def test_native_spline_entry_points_reject_forged_requests_with_typed_errors():
+    with pytest.raises(OperationDomainValidationError, match="dimension request"):
+        spline_dimension(SplineDimensionRequest.model_construct())
+    with pytest.raises(OperationDomainValidationError, match="evaluation request"):
+        spline_evaluate(SplineEvaluationRequest.model_construct())

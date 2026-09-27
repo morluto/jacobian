@@ -11,6 +11,7 @@ from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
+    CrystallographicAffineRealization,
     CrystallographicPolytopePairingRequest,
     FiniteLatticeExtension,
     PolytopeFacetPairing,
@@ -72,6 +73,17 @@ def _request() -> CrystallographicPolytopePairingRequest:
             ),
         ),
     )
+
+
+def test_pairing_native_boundary_revalidates_affine_realization():
+    request = _request()
+    with pytest.raises(OperationDomainValidationError, match="must be canonical"):
+        pair_crystallographic_polytope_facets(
+            CrystallographicAffineRealization.model_construct(),
+            request.polytope,
+            request.lattice_axes,
+            request.pairings,
+        )
 
 
 def _pair(request: CrystallographicPolytopePairingRequest):

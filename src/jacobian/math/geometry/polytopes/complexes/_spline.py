@@ -62,6 +62,20 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
+def _admit_request(request: Any, request_type: type, code: str, description: str) -> Any:
+    """Revalidate native request carriers before reading their nested fields."""
+    if not isinstance(request, request_type):
+        _reject(code, description)
+    try:
+        payload = request.model_dump(mode="python", warnings=False)
+        checked = request_type.model_validate(payload)
+    except Exception:
+        _reject(code, description)
+    if checked.model_dump(mode="python", warnings=False) != payload:
+        _reject(code, description)
+    return checked
+
+
 def _poly_symbols(poly: RationalPolynomial) -> tuple[Any, ...]:
     return sp.symbols(" ".join(poly.variables), seq=True) if poly.variables else ()
 
@@ -413,8 +427,12 @@ def piecewise_polynomial_add(  # noqa: C901
     request: PiecewisePolynomialAdditionRequest,
 ) -> PiecewisePolynomialResult:
     """Add two compatible C0 functions on the identical canonical complex."""
-    if not isinstance(request, PiecewisePolynomialAdditionRequest):
-        _reject("addition_type", "expected two canonical piecewise-polynomial values")
+    request = _admit_request(
+        request,
+        PiecewisePolynomialAdditionRequest,
+        "addition_type",
+        "expected a canonical piecewise-polynomial addition request",
+    )
     left, right = request.left, request.right
     try:
         left_payload = left.model_dump(mode="python")
@@ -620,10 +638,12 @@ def piecewise_polynomial_multiply(  # noqa: C901
     returned ledger records those exact zero differences after both source
     ledgers have been recomputed.
     """
-    if not isinstance(request, PiecewisePolynomialMultiplicationRequest):
-        _reject(
-            "multiplication_type", "expected two canonical piecewise-polynomial values"
-        )
+    request = _admit_request(
+        request,
+        PiecewisePolynomialMultiplicationRequest,
+        "multiplication_type",
+        "expected a canonical piecewise-polynomial multiplication request",
+    )
     left, right = request.left, request.right
     try:
         left_payload = left.model_dump(mode="python")
@@ -1337,10 +1357,12 @@ def _spline_dimension_output_digit_bound(
 
 def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
     """Return the exact spline dimension without constructing a nullspace basis."""
-    if not isinstance(request, SplineDimensionRequest):
-        _reject(
-            "spline_dimension_type", "expected a canonical spline dimension request"
-        )
+    request = _admit_request(
+        request,
+        SplineDimensionRequest,
+        "spline_dimension_type",
+        "expected a canonical spline dimension request",
+    )
     # Matrix construction has a row bound admitted above.  Measure exact scalar
     # heights and serialized matrix output before handing the matrix to rank().
     complex_value, axis, rows, width = _spline_constraint_data(
@@ -1556,8 +1578,12 @@ def spline_evaluate(
     basis construction are the same bounded path used by ``spline_space``.
     """
 
-    if not isinstance(request, SplineEvaluationRequest):
-        _reject("spline_evaluation_type", "expected a canonical spline evaluation")
+    request = _admit_request(
+        request,
+        SplineEvaluationRequest,
+        "spline_evaluation_type",
+        "expected a canonical spline evaluation request",
+    )
     point, basis_coefficients = _canonical_spline_evaluation_inputs(request)
     spline = spline_space(request.complex, request.degree, request.smoothness)
     if len(basis_coefficients) != spline.nullity:

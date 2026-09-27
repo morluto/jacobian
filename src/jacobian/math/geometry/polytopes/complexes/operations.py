@@ -910,12 +910,12 @@ def polytopal_complex_affine_transform(
     translation: tuple[CanonicalRational, ...],
 ) -> PolytopalComplexAffineTransformResult:
     """Transport a complete complex through one invertible rational affine map."""
-    linear_map, shift = _affine_transport_preflight(complex_value, matrix, translation)
     # The incidence ledger is caller-supplied mathematical data. Rebuild it
     # from source maximal cells before relying on it for face transport.
     from jacobian.math.geometry.polytopes.complexes._spline import _admit_complex
 
     source = _admit_complex(complex_value)
+    linear_map, shift = _affine_transport_preflight(source, matrix, translation)
     transformed_point_map: dict[Point, Point] = {}
     for point in (
         _point(vertex.coordinates) for face in source.faces for vertex in face.vertices

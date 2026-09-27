@@ -17,6 +17,9 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.complexes import (
     polytopal_complex_affine_transform as exported_affine_transform,
 )
+from jacobian.math.geometry.polytopes.complexes._models import (
+    PolytopalComplexClosureResult,
+)
 from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
@@ -120,6 +123,14 @@ def test_affine_transform_requires_nonsingular_matrix():
     with pytest.raises(OperationDomainValidationError, match="invertible matrix"):
         polytopal_complex_affine_transform(
             source, *_bound_map(((1, 2), (2, 4)), (0, 0))
+        )
+
+
+def test_affine_transform_revalidates_complex_before_preflight():
+    with pytest.raises(OperationDomainValidationError, match="malformed"):
+        polytopal_complex_affine_transform(
+            PolytopalComplexClosureResult.model_construct(),
+            *_bound_map(((1, 0), (0, 1)), (0, 0)),
         )
 
 

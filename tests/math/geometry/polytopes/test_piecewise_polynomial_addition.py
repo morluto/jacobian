@@ -223,3 +223,8 @@ def test_catalog_addition_example_executes_through_typed_contract():
     validated = PiecewisePolynomialResult.model_validate_json(json.dumps(result.output))
     assert validated.status == "COMPATIBLE"
     assert _coefficient_map(validated.pieces[0].polynomial) == {(0,): Fraction(3)}
+
+
+def test_native_addition_rejects_a_forged_request_with_a_typed_error():
+    with pytest.raises(OperationDomainValidationError, match="canonical"):
+        piecewise_polynomial_add(PiecewisePolynomialAdditionRequest.model_construct())

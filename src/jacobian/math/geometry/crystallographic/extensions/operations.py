@@ -45,6 +45,7 @@ from jacobian.math.geometry.polytopes._models import (
     MAX_VERTICES,
     CoordinateAxis,
     FacetIncidenceResult,
+    RationalCoordinateSpace,
     RationalVPolytope,
     _canonical_v_polytope_vertices,
 )
@@ -524,7 +525,39 @@ def pair_crystallographic_polytope_facets(
     the exact inverse extension element. It does not establish a tiling,
     quotient cell structure, torsion-freeness, or a resolution.
     """
-    realization = affine_realization
+    # Native callers can pass model_construct carriers that bypass Pydantic's
+    # nested validation. Rebuild every retained input before reading source,
+    # axes, vertices, or pairing fields.
+    try:
+        realization = CrystallographicAffineRealization.model_validate(
+            affine_realization.model_dump(mode="python", warnings=False),
+            strict=True,
+        )
+        polytope = RationalVPolytope.model_validate(
+            polytope.model_dump(mode="python", warnings=False), strict=True
+        )
+        if not isinstance(lattice_axes, tuple) or any(
+            not isinstance(axis, str) for axis in lattice_axes
+        ):
+            raise TypeError("lattice axes must be a tuple of labels")
+        axes = RationalCoordinateSpace.model_validate(
+            {"axes": lattice_axes}, strict=True
+        ).axes
+        lattice_axes = tuple(axes)
+        if not isinstance(pairings, tuple):
+            raise TypeError("pairings must be a tuple")
+        pairings = tuple(
+            PolytopeFacetPairing.model_validate(
+                item.model_dump(mode="python", warnings=False), strict=True
+            )
+            for item in pairings
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError):
+        _domain(
+            "polytope_pairing_input",
+            "affine realization, polytope, axes, and pairings must be canonical",
+            ("source",),
+        )
     source, order, rank = _admit_and_validate(realization.source)
     if lattice_axes != polytope.space.axes or len(lattice_axes) != rank:
         _domain(

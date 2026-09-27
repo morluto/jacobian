@@ -3,7 +3,10 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
     PolynomialRecurrencePrefixRequest,
@@ -87,6 +90,29 @@ def test_rationally_scaled_fibonacci_has_linear_height_bound() -> None:
     assert [value.as_fraction() for value in result.values.values][-1] == Fraction(
         72, 1
     )
+
+
+def test_joint_initial_denominator_is_admitted_before_recurrence_expansion() -> None:
+    from math import gcd
+
+    denominators = []
+    for prime in (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47):
+        exponent = 1
+        while len(str(prime**exponent)) < 2_500:
+            exponent += 1
+        denominators.append(prime**exponent)
+    assert all(
+        gcd(left, right) == 1
+        for index, left in enumerate(denominators)
+        for right in denominators[index + 1 :]
+    )
+    operator = _op([(exponent, [(1, 0)]) for exponent in (*range(15), 16)])
+    initial_values = FiniteRationalSequence.model_validate(
+        {"values": [{"num": 1, "den": value} for value in denominators] + [0]}
+    )
+
+    with pytest.raises(OperationResourceAdmissionError):
+        polynomial_recurrence_generate_prefix(operator, 0, initial_values, 1)
 
 
 def test_prefix_deserialization_rejects_nonrecurrence_operator() -> None:

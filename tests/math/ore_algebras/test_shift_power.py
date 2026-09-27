@@ -184,3 +184,15 @@ def test_later_degree_rejection_precedes_any_product_expansion(monkeypatch) -> N
     monkeypatch.setattr(ore_operations, "shift_operator_multiply", forbidden_multiply)
     with pytest.raises(OperationResourceAdmissionError):
         shift_operator_power(base, 3)
+
+
+def test_final_power_digit_bound_matches_rational_function_carrier(monkeypatch) -> None:
+    coefficient = 10**64 - 1
+    base = _operator((0, coefficient), (1, coefficient))
+
+    def forbidden_multiply(*_args, **_kwargs):
+        raise AssertionError("final power admission must precede multiplication")
+
+    monkeypatch.setattr(ore_operations, "shift_operator_multiply", forbidden_multiply)
+    with pytest.raises(OperationResourceAdmissionError):
+        shift_operator_power(base, 2)

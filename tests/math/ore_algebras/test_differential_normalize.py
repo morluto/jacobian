@@ -95,6 +95,27 @@ def test_normalization_is_positive_at_the_leading_ore_monomial() -> None:
     assert _poly(result.normalized, 1) == {1: Fraction(1)}
 
 
+def test_normalization_admits_large_shared_content_after_exact_division() -> None:
+    content = 10**63 + 7
+    first_denominator = 10**63 + 9
+    second_denominator = 10**63 + 11
+    source = _operator(
+        (
+            (0, _rf(((content, 0),))),
+            (1, _rf(((Fraction(content, first_denominator), 0),))),
+            (2, _rf(((Fraction(content, second_denominator), 0),))),
+        )
+    )
+
+    result = differential_operator_normalize_polynomial_coefficients(source)
+
+    assert _poly(result.normalized, 0) == {
+        0: Fraction(first_denominator * second_denominator)
+    }
+    assert _poly(result.normalized, 1) == {0: Fraction(second_denominator)}
+    assert _poly(result.normalized, 2) == {0: Fraction(first_denominator)}
+
+
 def test_zero_operator_normalizes_to_itself_with_unit_scale() -> None:
     zero = _operator(())
 

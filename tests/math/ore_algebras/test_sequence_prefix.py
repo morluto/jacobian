@@ -180,6 +180,16 @@ def test_zero_operator_covers_each_stored_index_without_boundary_loss() -> None:
     assert result.right_boundary_indices == ()
 
 
+def test_empty_operator_prefix_charges_each_residual_row_once(monkeypatch) -> None:
+    monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_OUTPUT_WEIGHT", 8_000)
+    source = FiniteRationalSequence(values=(0,) * 10)
+
+    result = shift_operator_apply_to_sequence_prefix(_operator(()), 0, source)
+
+    assert len(result.residuals) == 10
+    assert all(row.residual.as_fraction() == 0 for row in result.residuals)
+
+
 def test_work_admission_precedes_coefficient_evaluation(monkeypatch) -> None:
     monkeypatch.setattr(operations, "MAX_SHIFT_PREFIX_EVALUATION_CELLS", 0)
 

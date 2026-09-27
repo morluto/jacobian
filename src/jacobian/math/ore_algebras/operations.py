@@ -686,7 +686,11 @@ def _finish_shift_power_stage(
             MAX_SHIFT_RESULT_DEGREE if final else MAX_SHIFT_COEFFICIENT_DEGREE
         )
         term_limit = MAX_SHIFT_TERMS if final else MAX_SHIFT_COEFFICIENT_TERMS
-        digit_limit = MAX_SHIFT_RESULT_DIGITS if final else MAX_SHIFT_COEFFICIENT_DIGITS
+        digit_limit = (
+            MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS
+            if final
+            else MAX_SHIFT_COEFFICIENT_DIGITS
+        )
         if degree > degree_limit or terms > term_limit or digits > digit_limit:
             raise OperationResourceAdmissionError(
                 location=("exponent", stage_number),
@@ -1228,8 +1232,7 @@ def _admit_shift_prefix_output(
         )
 
     output_weight_bound = (
-        512 * residual_count
-        + 24 * right_boundary_count
+        24 * right_boundary_count
         + 256 * len(operator.terms)
         + sum(
             _digit_count(value.num) + _digit_count(value.den) + 64
@@ -1242,7 +1245,6 @@ def _admit_shift_prefix_output(
             for coefficient in (entry.coefficient for entry in polynomial.terms)
         )
     )
-    residual_digit_bound = 1
     for offset in range(residual_count):
         contribution_bounds: list[tuple[int, int]] = []
         for term, (coefficient_num_digits, coefficient_den_digits) in zip(
@@ -1283,10 +1285,7 @@ def _admit_shift_prefix_output(
                 code="ore_algebra.shift_prefix_residual_digits",
                 message="the exact shift-prefix residual can exceed the rational result carrier",
             )
-        residual_digit_bound = max(
-            residual_digit_bound, numerator_digits, denominator_digits
-        )
-        output_weight_bound += 2 * residual_digit_bound + 512
+        output_weight_bound += 2 * max(1, numerator_digits, denominator_digits) + 512
     if output_weight_bound > MAX_SHIFT_PREFIX_OUTPUT_WEIGHT:
         raise OperationResourceAdmissionError(
             location=("sequence", "values"),
@@ -1406,7 +1405,9 @@ def shift_operator_apply_to_sequence_prefix(
 
 
 def _preflight_recurrence_coefficients(
-    request: PolynomialRecurrencePrefixRequest,
+    start_index: int,
+    initial_values: FiniteRationalSequence,
+    steps: int,
     operator: ShiftOreOperator,
     coefficients: dict[int, _Poly],
     order: int,
@@ -1419,8 +1420,8 @@ def _preflight_recurrence_coefficients(
         for value in poly.values()
     )
     max_index = max(
-        abs(request.start_index),
-        abs(request.start_index + request.steps + order - 1),
+        abs(start_index),
+        abs(start_index + steps + order - 1),
         1,
     )
     max_coefficient_digits = max(
@@ -1441,19 +1442,22 @@ def _preflight_recurrence_coefficients(
         + coefficient_terms.bit_length()
         + 2
     )
-    initial_height = max(
-        (
-            max(_digit_count(v.num), _digit_count(v.den))
-            for v in request.initial_values.values
-        ),
+    initial_numerator_digits = max(
+        (_digit_count(value.num) for value in initial_values.values),
         default=1,
+    )
+    initial_denominator_digits = sum(
+        _digit_count(value.den) for value in initial_values.values
+    )
+    initial_height = (
+        initial_numerator_digits + initial_denominator_digits + _digit_count(order) + 1
     )
     # Clearing coefficient denominators gives an integer recurrence. With
     # rational initial values, every subsequent term is an integer linear
     # combination of those initial values; its common denominator therefore
     # never grows. Bound numerator height additively in all cases.
     height = initial_height
-    for _ in range(request.steps):
+    for _ in range(steps):
         height = height + c_digits + order.bit_length() + 2
         if height > MAX_CANONICAL_RATIONAL_DIGITS:
             raise OperationResourceAdmissionError(
@@ -1461,7 +1465,7 @@ def _preflight_recurrence_coefficients(
                 code="ore_algebra.recurrence_coefficient_growth",
                 message="finite recurrence coefficient-growth bound exceeds the exact rational carrier",
             )
-    output_cells = order + request.steps
+    output_cells = order + steps
     if output_cells * height > MAX_RECURRENCE_PREFIX_WORK_CELLS:
         raise OperationResourceAdmissionError(
             location=("steps",),
@@ -1536,7 +1540,13 @@ def polynomial_recurrence_generate_prefix(
     # Admission proves height/output limits before denominator clearing or
     # recurrence expansion.
     integer_coefficients = _preflight_recurrence_coefficients(
-        request, op, coefficients, order, coefficient_terms
+        request.start_index,
+        request.initial_values,
+        request.steps,
+        op,
+        coefficients,
+        order,
+        coefficient_terms,
     )
 
     leading = integer_coefficients[order]

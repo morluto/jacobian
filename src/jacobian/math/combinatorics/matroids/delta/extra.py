@@ -130,6 +130,51 @@ class BinaryMatrixResult(StrictModel):
 class DeltaMatroidTwistPolynomialRequest(StrictModel):
     """Compute the generating function of widths across all twists."""
 
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_raw_delta_matroid(cls, value: object) -> object:
+        """Reject oversized nested axes before Pydantic builds their value model."""
+
+        if type(value) is not dict:
+            return value
+        delta = value.get("delta_matroid")
+        if type(delta) is not dict:
+            return value
+        ground = delta.get("ground")
+        if type(ground) not in (tuple, list):
+            return value
+        if len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_work",
+                "complete twist polynomial exceeds its subset-state envelope",
+            )
+        if all(type(label) is str for label in ground) and sum(map(len, ground)) > (
+            MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
+        ):
+            raise PydanticCustomError(
+                "delta_matroid.twist_polynomial_labels",
+                "ground labels exceed the admitted native codepoint budget",
+            )
+        feasible = delta.get("feasible")
+        if type(feasible) not in (tuple, list):
+            return value
+        if len(feasible) > MAX_TWIST_POLYNOMIAL_SOURCE_ROWS:
+            raise PydanticCustomError(
+                "delta_matroid.memberships_exceeded",
+                "source feasible family exceeds its admitted row envelope",
+            )
+        remaining = MAX_DELTA_MEMBERSHIPS
+        for row in feasible:
+            if type(row) not in (tuple, list):
+                return value
+            remaining -= len(row)
+            if remaining < 0:
+                raise PydanticCustomError(
+                    "delta_matroid.memberships_exceeded",
+                    "source feasible-family memberships exceed the admitted envelope",
+                )
+        return value
+
     model_config = ConfigDict(
         json_schema_extra={
             "description": (

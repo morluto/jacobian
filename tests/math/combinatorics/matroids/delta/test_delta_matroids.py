@@ -757,6 +757,34 @@ def test_twist_polynomial_rejects_before_expanding_too_many_masks(
         twist_polynomial(too_wide)
 
 
+def test_twist_polynomial_request_preflights_raw_nested_ground() -> None:
+    raw_request = {
+        "delta_matroid": {
+            "ground": ["same-label"] * 100_000,
+            "feasible": [[]],
+        }
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidTwistPolynomialRequest.model_validate(raw_request)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_work"
+
+
+def test_twist_polynomial_request_preflights_raw_feasible_memberships() -> None:
+    raw_request = {
+        "delta_matroid": {
+            "ground": ["a"],
+            "feasible": [[0]] * 16_385,
+        }
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidTwistPolynomialRequest.model_validate(raw_request)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
+
+
 @pytest.mark.parametrize("oversized_rows", (False, True))
 def test_twist_polynomial_preflights_forged_feasible_family_before_copy(
     monkeypatch: pytest.MonkeyPatch, oversized_rows: bool

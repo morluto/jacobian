@@ -269,6 +269,12 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     """Compute the image sheaf and exact factorization ``F -> im(phi) -> G``."""
     if not isinstance(value, SheafMorphismResult):
         raise _domain("morphism_type", "input must be a typed sheaf morphism")
+    if not isinstance(value.source, FiniteCellularSheaf) or not isinstance(
+        value.target, FiniteCellularSheaf
+    ):
+        raise _domain(
+            "parent_type", "morphism parents must be typed finite cellular sheaves"
+        )
     source, target = value.source, value.target
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)

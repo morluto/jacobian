@@ -31,6 +31,10 @@ from jacobian.math.polynomials._mahler_kernel import (
     quadratic_root_profile,
     reciprocal_profile,
 )
+from jacobian.math.polynomials._quartic_resolvent import (
+    QuarticCubicResolventResult,
+    compute_quartic_cubic_resolvent,
+)
 from jacobian.math.polynomials.operations import (
     derivative,
     discriminant,
@@ -83,9 +87,11 @@ def __getattr__(name: str) -> object:
 
 __all__ = [
     "PolynomialExpressionSource",
+    "QuarticCubicResolventResult",
     "RationalDiscreteAntiderivativeResult",
     "RationalLaurentPolynomial",
     "RationalLaurentPolynomialTerm",
+    "compute_quartic_cubic_resolvent",
     "cyclotomic",
     "derivative",
     "discriminant",

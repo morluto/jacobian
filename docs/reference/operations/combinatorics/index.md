@@ -5,4 +5,6 @@
 These operations construct exact, source-indexed values for finite set systems
 and hypergraphs.
 
+- [Linear matroid optimization and graphic representations](linear-matroid-optimization.md)
+- [Maximum-cardinality weighted matroid intersection](maximum-cardinality-weighted-matroid-intersection.md)
 - [Complete sunflower hypergraphs](sunflower-hypergraphs.md)

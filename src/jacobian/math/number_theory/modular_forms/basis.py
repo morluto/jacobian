@@ -7,6 +7,8 @@ from fractions import Fraction
 from math import comb, factorial, gcd, isqrt, lcm
 from typing import Literal
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian._execution import request_checkpoint
 from jacobian.canonical import encode_strict_json, format_canonical_integer
@@ -40,6 +42,7 @@ from jacobian.math.number_theory.modular_forms.values import (
     MAX_LEVEL_ONE_BASIS_COORDINATES,
     MAX_LEVEL_ONE_BASIS_PRECISION,
     MAX_LEVEL_ONE_BASIS_WEIGHT,
+    MAX_MODULAR_FORM_LEVEL,
     MAX_MODULAR_FORM_WEIGHT,
     MAX_Q_TRANSFORM_OUTPUT_PRECISION,
     MAX_Q_TRANSFORM_SOURCE_ORDER,
@@ -1380,12 +1383,48 @@ def _require_canonical_coordinate_space(
     form: ModularFormCoordinates,
     side: str,
 ) -> None:
-    if not isinstance(form.space, ModularFormSpace):
+    space = getattr(form, "space", None)
+    if type(space) is not ModularFormSpace:
         raise OperationDomainValidationError(
             location=(side, "space"),
             code="modular_form.coordinates_space_type",
             message="both coordinate values must carry a canonical modular-form space",
         )
+    try:
+        canonical_space = ModularFormSpace.model_validate(space.model_dump())
+    except (AttributeError, TypeError, ValidationError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(side, "space"),
+            code="modular_form.coordinates_space_invalid",
+            message="coordinate spaces must contain all canonical required fields",
+        ) from error
+    if canonical_space != space:
+        raise OperationDomainValidationError(
+            location=(side, "space"),
+            code="modular_form.coordinates_space_invalid",
+            message="coordinate spaces must have canonical exact values",
+        )
+
+
+def _revalidate_equality_operand(
+    form: ModularFormCoordinates, side: str
+) -> ModularFormCoordinates:
+    if type(form) is not ModularFormCoordinates:
+        raise OperationDomainValidationError(
+            location=(side,),
+            code="modular_form.coordinates_carrier_invalid",
+            message="coordinate values must contain all canonical required fields",
+        )
+    try:
+        checked = ModularFormCoordinates.model_validate(form.model_dump())
+    except (AttributeError, TypeError, ValidationError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=(side,),
+            code="modular_form.coordinates_carrier_invalid",
+            message="coordinate values must contain all canonical required fields",
+        ) from error
+    _require_canonical_coordinate_space(checked, side)
+    return checked
 
 
 def modular_form_coordinates_equal(
@@ -1393,24 +1432,22 @@ def modular_form_coordinates_equal(
 ) -> bool:
     """Decide exact equality in a shared supported modular-form ambient space."""
 
-    if not isinstance(left, ModularFormCoordinates) or not isinstance(
-        right, ModularFormCoordinates
-    ):
+    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
         raise OperationDomainValidationError(
             location=(),
             code="modular_form.coordinates_type",
             message="both operands must be exact modular-form coordinate values",
         )
-    for side, form in (("left", left), ("right", right)):
-        _require_canonical_coordinate_space(form, side)
+    left = _revalidate_equality_operand(left, "left")
+    right = _revalidate_equality_operand(right, "right")
     if left.space == right.space:
         if left.space.coefficient_domain != "QQ":
             if left.space.character != "TRIVIAL":
                 from jacobian.math.number_theory.modular_forms.character_basis import (
-                    modular_character_coordinates_equal,
+                    _modular_character_coordinates_equal,
                 )
 
-                return modular_character_coordinates_equal(left, right)
+                return _modular_character_coordinates_equal(left, right)
             from jacobian.math.number_theory.modular_forms.field_coordinates import (
                 modular_form_field_coordinates_equal,
             )
@@ -1465,6 +1502,12 @@ def modular_form_coordinates_equal(
     common_level = (
         left_space.level * right_space.level // gcd(left_space.level, right_space.level)
     )
+    if common_level > MAX_MODULAR_FORM_LEVEL:
+        raise OperationResourceAdmissionError(
+            location=("right", "space", "level"),
+            code="modular_form.equality_common_level_bound",
+            message="the common Gamma0 level exceeds the modular-form carrier limit",
+        )
     common_space = ModularFormSpace(
         level=common_level, weight=left_space.weight, kind="M"
     )

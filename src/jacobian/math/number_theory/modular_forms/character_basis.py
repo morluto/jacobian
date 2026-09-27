@@ -418,6 +418,19 @@ def _admit_character_form(
     return space, field, scalar, character_request
 
 
+def _modular_character_coordinates_equal(
+    left: ModularFormCoordinates, right: ModularFormCoordinates
+) -> bool:
+    """Compare canonical coordinates in one identical character space."""
+    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+        _domain("character equality requires canonical coordinate values")
+    left_admitted = _admit_character_form(left)
+    if right.space != left_admitted[0]:
+        _domain("character equality requires the identical modular-form space")
+    right_admitted = _admit_character_form(right, (left_admitted[0], left_admitted[1], left_admitted[3]))
+    return left_admitted[2] == right_admitted[2]
+
+
 def _character_form_prefix(
     form: ModularFormCoordinates,
     admitted: tuple[

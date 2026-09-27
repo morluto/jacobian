@@ -17,6 +17,7 @@ from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import BASIS_ID
 from jacobian.math.number_theory.modular_forms.field_coordinates import (
     modular_form_coordinates_extend_field,
+    modular_form_field_coordinates_equal,
     modular_form_field_coordinates_q_expansion,
 )
 from jacobian.math.number_theory.modular_forms.values import (
@@ -61,6 +62,19 @@ def test_scalar_extension_and_q_expansion_preserve_exact_parent() -> None:
     )
     restored = ModularFormCoordinates.model_validate_json(extended.model_dump_json())
     assert restored == extended
+
+
+def test_field_coordinate_equality_compares_canonical_same_parent_values() -> None:
+    extended = modular_form_coordinates_extend_field(
+        _rational_form(), RationalCyclotomicField(order=6)
+    )
+    assert modular_form_field_coordinates_equal(extended, extended)
+    changed_scalar = RationalCyclotomicElement(
+        field=RationalCyclotomicField(order=6),
+        coefficients_ascending=(_canon(3), _canon(0)),
+    )
+    changed = extended.model_copy(update={"coordinates": (changed_scalar,)})
+    assert not modular_form_field_coordinates_equal(extended, changed)
     malformed = ModularFormCoordinates.model_construct(
         space=extended.space,
         basis_id=extended.basis_id,

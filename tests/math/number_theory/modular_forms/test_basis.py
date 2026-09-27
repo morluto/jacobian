@@ -18,6 +18,7 @@ from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.basis import (
     BASIS_ID,
     modular_form_basis_q_expansions,
+    modular_form_coordinates_equal,
     modular_form_coordinates_hecke,
     modular_form_coordinates_q_expansion,
     modular_form_coordinates_u2,
@@ -38,6 +39,37 @@ from jacobian.math.number_theory.modular_forms.values import (
 
 def _space(weight: int, kind: str = "M") -> ModularFormSpace:
     return ModularFormSpace(level=1, weight=weight, kind=kind)
+
+
+def test_global_equality_rejects_incomplete_constructed_coordinate_values() -> None:
+    with pytest.raises(OperationDomainValidationError, match="required fields"):
+        modular_form_coordinates_equal(
+            ModularFormCoordinates.model_construct(),
+            ModularFormCoordinates.model_construct(),
+        )
+
+    incomplete_space = ModularFormSpace.model_construct(weight=4, kind="M")
+    malformed = ModularFormCoordinates.model_construct(
+        space=incomplete_space, basis_id=BASIS_ID, coordinates=()
+    )
+    with pytest.raises(OperationDomainValidationError, match="required fields"):
+        modular_form_coordinates_equal(malformed, malformed)
+
+
+def test_global_equality_admits_common_level_before_space_construction() -> None:
+    left = ModularFormCoordinates(
+        space=ModularFormSpace(level=9_973, weight=0, kind="M"),
+        basis_id=BASIS_ID,
+        coordinates=(),
+    )
+    right = ModularFormCoordinates(
+        space=ModularFormSpace(level=9_967, weight=0, kind="M"),
+        basis_id=BASIS_ID,
+        coordinates=(),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        modular_form_coordinates_equal(left, right)
+    assert error.value.code == "modular_form.equality_common_level_bound"
 
 
 def _coordinate_values(*values: tuple[int, int]) -> tuple[CanonicalRational, ...]:

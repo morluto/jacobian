@@ -1,5 +1,8 @@
 """Supported exact values and operations for bounded modular-form spaces."""
 
+from jacobian.math.number_theory.modular_forms._models import (
+    ModularFormEqualityResult,
+)
 from jacobian.math.number_theory.modular_forms.basis import (
     modular_form_basis_frame,
     modular_form_basis_q_expansions,

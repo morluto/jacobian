@@ -514,14 +514,15 @@ def test_request_admission_rejects_matrices_above_the_computation_dimension() ->
 
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
-    ):
+    ) as exc_info:
         compute_rref(rref_request)
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
-    ):
+    ) as exc_info:
         compute_rank(rank_request)
+
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 def test_exact_linear_requests_admit_tall_matrices_above_the_square_dimension() -> None:
@@ -668,10 +669,10 @@ def test_raw_preflight_keeps_exact_linear_and_determinant_axis_boundaries() -> N
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_EXACT_LINEAR_MATRIX_AXIS} rows and columns",
-    ):
+    ) as exc_info:
         compute_rank(rank_above_operation_axis)
 
+    assert exc_info.value.errors()[0]["type"] == "matrix.budget_exceeded"
     determinant_boundary = {
         "matrix": {"entries": wire_identity(MAX_DETERMINANT_MATRIX_DIMENSION)}
     }

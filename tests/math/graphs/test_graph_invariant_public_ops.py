@@ -90,19 +90,17 @@ def test_invariant_requests_retain_256_vertex_result_envelope() -> None:
             for index in range(257)
         ],
     }
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    with pytest.raises(ValidationError) as error:
         girth.request_type.model_validate({"graph": oversized_cycle})
+    assert error.value.errors()[0]["type"] == "graph.invariant.vertex_bound"
 
     oversized_matching = {
         "vertices": [f"{index:03d}" for index in range(MAX_SIMPLE_GRAPH_VERTICES + 2)],
         "edges": [[f"{2 * index:03d}", f"{2 * index + 1:03d}"] for index in range(129)],
     }
-    with pytest.raises(
-        ValidationError, match=f"at most {MAX_SIMPLE_GRAPH_VERTICES} vertices"
-    ):
+    with pytest.raises(ValidationError) as error:
         matching.request_type.model_validate({"graph": oversized_matching})
+    assert error.value.errors()[0]["type"] == "graph.invariant.vertex_bound"
 
 
 def test_disconnected_graph_metrics_report_not_applicable() -> None:

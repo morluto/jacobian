@@ -162,6 +162,15 @@ def test_edge_characteristic_rejects_invalid_native_edge_index(edge_index):
     assert error.value.errors()[0]["type"] == "local_series.newton_edge_index"
 
 
+def test_native_newton_admission_rejects_missing_parent_and_request_fields() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        local_polynomial_newton_polygon(LocalPolynomialInSeries.model_construct())
+    with pytest.raises(OperationDomainValidationError):
+        newton_edge_characteristic_polynomial(
+            NewtonEdgeCharacteristicRequest.model_construct()
+        )
+
+
 def test_edge_characteristic_rejects_nonexistent_edge() -> None:
     from jacobian.math.polynomials.local_series.newton_polygon import (
         NewtonEdgeCharacteristicRequest,

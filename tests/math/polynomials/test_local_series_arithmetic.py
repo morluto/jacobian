@@ -58,16 +58,26 @@ def test_laurent_arithmetic_preserves_exact_residual_prefixes() -> None:
     source = _s()
     inverse_prefix = inverse(source)
     product = multiply(source, inverse_prefix, output_precision=2)
-    assert product.coefficients[0].as_fraction() == 1
+    assert tuple(value.as_fraction() for value in product.coefficients) == (1, 0)
     assert residue(source).residue.num == 1
     recovered = derivative(integral(source).laurent_part)
-    assert recovered.coefficients[1].as_fraction() == 2
+    assert recovered.valuation_lower == -1
+    assert recovered.precision == 2
+    assert tuple(value.as_fraction() for value in recovered.coefficients) == (0, 2, 3)
 
 
 def test_ramification_multiplies_exponents() -> None:
     result = ramify(_s(), 2)
     assert result.valuation_lower == -2
     assert result.precision == 4
+    assert tuple(value.as_fraction() for value in result.coefficients) == (
+        1,
+        0,
+        2,
+        0,
+        3,
+        0,
+    )
 
 
 def test_principal_and_regular_parts_are_disjoint() -> None:
@@ -80,7 +90,13 @@ def test_principal_and_regular_parts_are_disjoint() -> None:
         0,
         2,
     )
-    assert result.regular_part.coefficients[0].as_fraction() == 2
+    assert tuple(
+        value.as_fraction() for value in result.principal_part.coefficients
+    ) == (1,)
+    assert tuple(value.as_fraction() for value in result.regular_part.coefficients) == (
+        2,
+        3,
+    )
 
     regular_source = TruncatedLaurentWindow(
         valuation_lower=0,

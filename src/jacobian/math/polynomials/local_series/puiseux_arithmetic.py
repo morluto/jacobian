@@ -90,6 +90,7 @@ def _check(
             "series must be a truncated Puiseux window",
             ("series",),
         )
+    _require_window_fields(window)
     if type(window.variable) is not str:
         _domain(
             "puiseux_variable",
@@ -104,15 +105,7 @@ def _check(
             code="local_series.puiseux_variable",
             message="variable must match the polynomial identifier grammar",
         ) from error
-    if (
-        not isinstance(window.terms, tuple)
-        or len(window.terms) > MAX_LOCAL_SERIES_TERMS
-    ):
-        _resource(
-            "puiseux_terms",
-            "Puiseux arithmetic exceeds the retained-term bound",
-            ("series", "terms"),
-        )
+    admitted_terms = _require_terms(window)
     lower = _check_rational(
         window.valuation_lower, label="valuation_lower", exponent=True
     )
@@ -142,7 +135,7 @@ def _check(
             "Puiseux lattice exceeds its ramification bound",
             ("series",),
         )
-    for term in window.terms:
+    for term in admitted_terms:
         if not isinstance(term, PuiseuxTerm):
             _domain(
                 "puiseux_term_type",
@@ -185,6 +178,39 @@ def _check(
             ("series", "ramification_index"),
         )
     return center, lower, tuple(terms), precision
+
+
+def _require_window_fields(window: TruncatedPuiseuxWindow) -> None:
+    required_fields = (
+        "variable",
+        "terms",
+        "valuation_lower",
+        "precision",
+        "center",
+        "ramification_index",
+    )
+    if any(not hasattr(window, field) for field in required_fields):
+        _domain(
+            "puiseux_series_shape",
+            "Puiseux window is missing required structural fields",
+            ("series",),
+        )
+
+
+def _require_terms(window: TruncatedPuiseuxWindow) -> tuple[PuiseuxTerm, ...]:
+    if not isinstance(window.terms, tuple):
+        _domain(
+            "puiseux_terms_shape",
+            "Puiseux terms must be a tuple",
+            ("series", "terms"),
+        )
+    if len(window.terms) > MAX_LOCAL_SERIES_TERMS:
+        _resource(
+            "puiseux_terms",
+            "Puiseux arithmetic exceeds the retained-term bound",
+            ("series", "terms"),
+        )
+    return window.terms
 
 
 def _pair(
@@ -232,10 +258,11 @@ def _admit_sum_growth(contributions: list[Fraction]) -> None:
                 ("terms",),
             )
         return
-    denominator_bits = sum(value.denominator.bit_length() for value in contributions)
-    numerator_bits = max(value.numerator.bit_length() for value in contributions)
-    numerator_bound = numerator_bits + denominator_bits + ceil(log2(len(contributions)))
-    if max(denominator_bits, numerator_bound) > _MAX_SCALAR_BITS:
+    # A grouped sum has at most one term from each of the two operands. Its
+    # exact reduced result is cheap to form after both inputs were admitted and
+    # avoids charging denominator width that cancels in the sum.
+    total = sum(contributions, Fraction())
+    if max(abs(total.numerator).bit_length(), total.denominator.bit_length()) > _MAX_SCALAR_BITS:
         _resource(
             "puiseux_coefficient_growth",
             "worst-case exact coefficient growth exceeds the scalar digit bound",
@@ -251,11 +278,8 @@ def _admit_product_sum_growth(
         return
     if len(contributions) == 1:
         left, right = contributions[0]
-        numerator_bound = left.numerator.bit_length() + right.numerator.bit_length()
-        denominator_bound = (
-            left.denominator.bit_length() + right.denominator.bit_length()
-        )
-        if max(numerator_bound, denominator_bound) > _MAX_SCALAR_BITS:
+        product = left * right
+        if max(abs(product.numerator).bit_length(), product.denominator.bit_length()) > _MAX_SCALAR_BITS:
             _resource(
                 "puiseux_coefficient_growth",
                 "single exact product coefficient growth exceeds the scalar digit bound",
@@ -453,7 +477,7 @@ def _admit_result_envelope(
             + len(format_canonical_integer(exponent.denominator))
             + len(format_canonical_integer(value.numerator))
             + len(format_canonical_integer(value.denominator))
-            + 64
+            + 80
         )
         if total > MAX_PUISEUX_RESULT_DIGITS:
             _resource(

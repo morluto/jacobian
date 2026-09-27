@@ -12,7 +12,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.finite_structures.hypergraphs import FiniteHypergraph
-from jacobian.math.combinatorics.finite_structures.hypergraphs._models import MAX_EDGES
 from jacobian.math.combinatorics.finite_structures.hypergraphs.colorings import (
     HyperedgeColorAssignment,
     IndexedHyperedgeColoring,
@@ -97,7 +96,7 @@ def test_missing_source_edge_is_not_given_an_implicit_colour() -> None:
 def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
     vertices = tuple(str(i) for i in range(5))
     members = complete_edges(vertices, 3)
-    colors = [index % 2 for index, _ in enumerate(members)]
+    colors = [0 if index == 0 else 1 for index, _ in enumerate(members)]
     source = make_coloring(vertices, members, colors)
 
     result = construct(source, 3, 4)
@@ -105,10 +104,13 @@ def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
     lookup = {
         frozenset(edge): color for edge, color in zip(members, colors, strict=True)
     }
-    for target in combinations(vertices, 4):
-        target_colors = {lookup[frozenset(edge)] for edge in combinations(target, 3)}
+    source_ids = {frozenset(edge): f"e{index}" for index, edge in enumerate(members)}
+    for candidate_vertices in combinations(vertices, 4):
+        target_colors = {
+            lookup[frozenset(edge)] for edge in combinations(candidate_vertices, 3)
+        }
         if len(target_colors) == 1:
-            expected[target] = target_colors.pop()
+            expected[candidate_vertices] = target_colors.pop()
 
     assert {
         members: color
@@ -116,6 +118,18 @@ def test_complete_two_colouring_matches_independent_subset_oracle() -> None:
             result.hypergraph.edges, result.candidate_colors, strict=True
         )
     } == expected
+    assert expected
+    assert result.source_edge_witnesses
+
+    for (_, target_members), candidate_color, witness in zip(
+        result.hypergraph.edges,
+        result.candidate_colors,
+        result.source_edge_witnesses,
+        strict=True,
+    ):
+        required = tuple(combinations(tuple(sorted(target_members)), 3))
+        assert witness == tuple(source_ids[frozenset(edge)] for edge in required)
+        assert {lookup[frozenset(edge)] for edge in required} == {candidate_color}
 
 
 def test_target_equal_source_uniformity_returns_each_source_edge() -> None:
@@ -227,8 +241,10 @@ def test_source_sensitive_candidate_bound_rejects_large_possible_profile() -> No
     vertices = tuple(str(index) for index in range(200))
     source = make_coloring(vertices, [(vertex,) for vertex in vertices], [0] * 200)
 
-    with pytest.raises(OperationResourceAdmissionError, match=f"{MAX_EDGES}-edge"):
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
         construct(source, 1, 2)
+
+    assert exc_info.value.errors()[0]["type"] == "monochromatic_profile.candidate_bound"
 
 
 def test_enumerated_target_count_is_charged_for_sparse_high_uniformity() -> None:

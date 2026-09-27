@@ -147,7 +147,12 @@ def _check_expansion_precision(precision: int) -> None:
 
 
 def _check_expansion_function(function: RationalFunction) -> None:
-    if not isinstance(function, RationalFunction) or len(function.variables) != 1:
+    if (
+        not isinstance(function, RationalFunction)
+        or any(not hasattr(function, field) for field in ("variables", "numerator", "denominator"))
+        or not isinstance(function.variables, tuple)
+        or len(function.variables) != 1
+    ):
         raise OperationDomainValidationError(
             location=("function",),
             code="local_series.rational_function_univariate",
@@ -184,17 +189,18 @@ def _admit_expansion_recurrence(
     if count == 0:
         return
     values = (*numerator, *denominator)
-    common_denominator_digits = sum(len(str(value.denominator)) for value in values)
-    if common_denominator_digits > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("function",),
-            code="local_series.expansion_denominator_bound",
-            message=(
-                "translated polynomial coefficient denominators exceed the "
-                f"{MAX_LOCAL_SERIES_COEFFICIENT_DIGITS}-digit common-denominator envelope"
-            ),
-        )
-    common_denominator = lcm(*(value.denominator for value in values))
+    common_denominator = 1
+    for value in values:
+        common_denominator = lcm(common_denominator, value.denominator)
+        if len(str(common_denominator)) > MAX_LOCAL_SERIES_COEFFICIENT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("function",),
+                code="local_series.expansion_denominator_bound",
+                message=(
+                    "translated polynomial common denominator exceeds the "
+                    f"{MAX_LOCAL_SERIES_COEFFICIENT_DIGITS}-digit envelope"
+                ),
+            )
     common_denominator_digit_count = len(str(common_denominator))
     numerator_digit_bound = max(
         (len(str(abs(value.numerator))) for value in values),
@@ -223,21 +229,21 @@ def _admit_expansion_recurrence(
     maximum_coefficient_digits = integer_digit_bound
     for n in range(1, count):
         summands = min(n, len(denominator) - 1)
-        recurrence_height = (
+        # Bound the integer recurrence numerator using the source height once
+        # per multiplication, without feeding padding from earlier estimates
+        # back into later coefficients. For 1/(1-x), this is exactly one digit
+        # at every order.
+        recurrence_height = max(
+            (n + 1) * integer_digit_bound,
             max(
-                integer_digit_bound + n * integer_digit_bound,
-                max(
-                    (
-                        numerator_height[n - j]
-                        + (j - 1) * integer_digit_bound
-                        + integer_digit_bound
-                        for j in range(1, summands + 1)
-                    ),
-                    default=1,
+                (
+                    numerator_height[n - j]
+                    + j * integer_digit_bound
+                    + _ceil_log10(summands)
+                    for j in range(1, summands + 1)
                 ),
-            )
-            + (summands + 1).bit_length()
-            + 2
+                default=integer_digit_bound,
+            ),
         )
         numerator_height.append(recurrence_height)
         maximum_coefficient_digits = max(
@@ -268,6 +274,13 @@ def _admit_expansion_recurrence(
                 f"{MAX_PUISEUX_RESULT_DIGITS}-digit result envelope"
             ),
         )
+
+
+def _ceil_log10(value: int) -> int:
+    if value <= 1:
+        return 0
+    digits = len(str(value))
+    return digits - 1 if value == 10 ** (digits - 1) else digits
 
 
 def _check_expansion_center(center: CanonicalRational) -> Fraction:
@@ -627,6 +640,15 @@ def from_power_series(series: TruncatedSeries) -> TruncatedLaurentWindow:
             location=("series",),
             code="local_series.power_series_type",
             message="series must be an exact truncated power-series value",
+        )
+    if any(
+        not hasattr(series, field)
+        for field in ("truncation_order", "variable", "coefficients")
+    ):
+        raise OperationDomainValidationError(
+            location=("series",),
+            code="local_series.power_series_shape",
+            message="power-series value is missing required structural fields",
         )
     if (
         type(series.truncation_order) is not int

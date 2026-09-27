@@ -190,6 +190,12 @@ def newton_edge_characteristic_polynomial(
             code="local_series.newton_characteristic_request_type",
             message="request must select an edge of a local polynomial",
         )
+    if not hasattr(request, "edge_index") or not hasattr(request, "polynomial"):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="local_series.newton_characteristic_request_shape",
+            message="request must contain polynomial and edge_index fields",
+        )
     if type(request.edge_index) is not int or request.edge_index < 0:
         raise OperationDomainValidationError(
             location=("edge_index",),
@@ -357,6 +363,7 @@ def newton_edge_characteristic_roots(
 
 
 def _admit_parent(source: LocalPolynomialInSeries) -> None:
+    _require_parent_fields(source)
     if not isinstance(source.coefficients, tuple):
         raise OperationDomainValidationError(
             location=("polynomial", "coefficients"),
@@ -460,6 +467,24 @@ def _admit_parent(source: LocalPolynomialInSeries) -> None:
             location=("polynomial", "coefficients"),
             code="local_series.newton_row_order",
             message="local polynomial rows must have unique increasing y degrees",
+        )
+
+
+def _require_parent_fields(source: LocalPolynomialInSeries) -> None:
+    if not isinstance(source, LocalPolynomialInSeries):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="local_series.newton_parent_type",
+            message="polynomial must be a local polynomial value",
+        )
+    if any(
+        not hasattr(source, field)
+        for field in ("coefficients", "variable", "place", "center")
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="local_series.newton_parent_shape",
+            message="local polynomial is missing required parent fields",
         )
 
 

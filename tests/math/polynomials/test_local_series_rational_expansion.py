@@ -17,6 +17,7 @@ from jacobian.math.polynomials.local_series import (
 )
 from jacobian.math.polynomials.local_series._tools import TOOLS
 from jacobian.math.polynomials.local_series.arithmetic import add
+from jacobian.math.polynomials.values import RationalFunction
 
 
 def test_simple_pole_and_repeated_pole_have_exact_laurent_prefixes() -> None:
@@ -135,6 +136,41 @@ def test_tool_is_published_and_coefficient_work_is_bounded() -> None:
     function = rational_function_from_sympy(1 / x, ("x",))
     with pytest.raises(OperationResourceAdmissionError):
         rational_function_at_point(function, CanonicalRational(num=0, den=1), 4097)
+
+
+def test_geometric_expansion_reaches_precision_without_compounding_padding() -> None:
+    import sympy as sp
+
+    x = sp.symbols("x")
+    result = rational_function_at_point(
+        rational_function_from_sympy(1 / (1 - x), ("x",)),
+        CanonicalRational(num=0, den=1),
+        1000,
+    )
+    assert len(result.series.coefficients) == 1000
+    assert all(value.as_fraction() == 1 for value in result.series.coefficients)
+
+
+def test_expansion_bounds_the_reduced_common_denominator() -> None:
+    import sympy as sp
+
+    x = sp.symbols("x")
+    q_value = 10**127 + 19
+    denominator = x**32 + sum(x**degree for degree in range(32)) / q_value
+    function = rational_function_from_sympy(1 / denominator, ("x",))
+
+    result = rational_function_at_point(
+        function, CanonicalRational(num=0, den=1), 1
+    )
+
+    assert result.series.coefficients[0].as_fraction() == q_value
+
+
+def test_native_expansion_rejects_missing_rational_function_fields() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        rational_function_at_point(
+            RationalFunction.model_construct(), CanonicalRational(num=0, den=1), 1
+        )
 
 
 def test_infinity_expansion_records_reciprocal_parent_and_exact_growth_order() -> None:

@@ -14,6 +14,7 @@ from jacobian.math.polynomials.local_series.puiseux_values import (
 from jacobian.math.polynomials.local_series.values import (
     MAX_LOCAL_SERIES_EXPONENT,
     MAX_LOCAL_SERIES_POWER_EXPONENT,
+    MAX_LOCAL_SERIES_TERMS,
     TruncatedLaurentWindow,
 )
 from jacobian.math.polynomials.series._models import TruncatedSeries
@@ -27,7 +28,7 @@ class RationalFunctionExpansionRequest(StrictModel):
     center: CanonicalRational
     precision: StrictInt = Field(
         ge=1,
-        le=MAX_LOCAL_SERIES_EXPONENT,
+        le=MAX_LOCAL_SERIES_TERMS,
         description="Exclusive exponent cutoff in t = x - center.",
     )
 
@@ -38,7 +39,7 @@ class RationalFunctionInfinityExpansionRequest(StrictModel):
     function: RationalFunction
     precision: StrictInt = Field(
         ge=1,
-        le=MAX_LOCAL_SERIES_EXPONENT,
+        le=MAX_LOCAL_SERIES_TERMS,
         description="Exclusive exponent cutoff in the reciprocal parameter t = 1/x.",
     )
 

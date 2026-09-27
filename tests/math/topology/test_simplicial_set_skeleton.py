@@ -92,6 +92,20 @@ def test_result_rejects_an_inclusion_that_is_not_the_requested_skeleton() -> Non
         type(full).model_validate(forged)
 
 
+def test_result_rejects_an_inclusion_with_a_different_source() -> None:
+    source = standard_simplex(1, 1)
+    result = simplicial_set_skeleton(source, 1)
+    forged = result.model_dump()
+    wrong_source = source.model_dump()
+    wrong_source["sets"] = tuple(
+        tuple(label.replace("0", "x") for label in level)
+        for level in wrong_source["sets"]
+    )
+    forged["inclusion"]["source"] = wrong_source
+    with pytest.raises(ValidationError, match="canonical simplicial sets"):
+        type(result).model_validate(forged)
+
+
 def test_empty_simplicial_set_has_empty_skeleton_and_inclusion() -> None:
     source = from_tables(
         2,

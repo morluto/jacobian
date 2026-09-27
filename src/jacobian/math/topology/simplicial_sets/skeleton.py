@@ -54,12 +54,19 @@ class SimplicialSetSkeletonResult(StrictModel):
             skeleton = FiniteTruncatedSimplicialSet.model_validate(
                 self.skeleton.model_dump()
             )
+            inclusion_source = FiniteTruncatedSimplicialSet.model_validate(
+                self.inclusion.source.model_dump()
+            )
             target = FiniteTruncatedSimplicialSet.model_validate(
                 self.inclusion.target.model_dump()
             )
+            if inclusion_source != skeleton:
+                raise ValueError(
+                    "the inclusion source must equal the returned skeleton"
+                )
             inclusion = TruncatedSimplicialMap.model_validate(
                 {
-                    "source": skeleton,
+                    "source": inclusion_source,
                     "target": target,
                     "maps": self.inclusion.maps,
                 }

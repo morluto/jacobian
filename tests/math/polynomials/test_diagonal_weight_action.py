@@ -196,5 +196,6 @@ def test_weight_action_is_catalogued_with_valid_example() -> None:
             request.action, request.polynomial, request.parameter
         ).weight_zero
     )
+    assert operation_id in {item.operation_id for item in TOOLS}
     found = Catalog.open().match(OperationMatchRequest(need="diagonal integer weights"))
     assert any(item.operation_id == operation_id for item in found.matches)

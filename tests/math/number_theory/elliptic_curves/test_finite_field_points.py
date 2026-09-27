@@ -1,18 +1,41 @@
-import pytest
+import math
 
-from jacobian.catalog.models import OperationDomainValidationError
+import pytest
+import rfc8785
+from pydantic import ValidationError
+
+from jacobian.canonical import CanonicalLimits
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
 )
+from jacobian.math.groups.abelian._models import AbelianPresentation
+from jacobian.math.number_theory.elliptic_curves import (
+    finite_field as finite_field_module,
+)
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
+    FiniteFieldCurveBaseChangeResult,
     FiniteFieldEllipticPoint,
+    FiniteFieldGroupStructureResult,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
+    finite_field_curve_base_change,
     finite_field_discriminant,
+    finite_field_extension_counts,
+    finite_field_group_structure,
+    finite_field_isogeny_class,
+    finite_field_isomorphism,
     finite_field_point_add,
+    finite_field_point_check,
     finite_field_point_negate,
+    finite_field_point_order,
+    finite_field_point_scalar,
     finite_field_points,
+    finite_field_quadratic_twist,
 )
 
 
@@ -35,6 +58,842 @@ def test_finite_field_group_identities_and_cardinality() -> None:
     assert result.trace == 5 + 1 - len(points)
 
 
+def test_isogeny_class_decision_matches_independent_finite_field_counts() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def curve(a: int, b: int) -> FiniteFieldShortWeierstrassCurve:
+        return FiniteFieldShortWeierstrassCurve(
+            field=field,
+            coefficient_a=FiniteFieldElement(presentation=field, coordinates=(a,)),
+            coefficient_b=FiniteFieldElement(presentation=field, coordinates=(b,)),
+        )
+
+    def direct_count(a: int, b: int) -> int:
+        return 1 + sum(
+            1
+            for x in range(5)
+            for y in range(5)
+            if (y * y - x * x * x - a * x - b) % 5 == 0
+        )
+
+    first, other_in_class, different_class = curve(1, 1), curve(1, 4), curve(2, 1)
+    same = finite_field_isogeny_class(first, other_in_class)
+    different = finite_field_isogeny_class(first, different_class)
+
+    first_count = direct_count(1, 1)
+    same_count = direct_count(1, 4)
+    different_count = direct_count(2, 1)
+    assert same.first_cardinality == first_count == 9
+    assert same.second_cardinality == same_count == 9
+    assert same.first_trace == 5 + 1 - first_count
+    assert same.second_trace == 5 + 1 - same_count
+    assert same.first_frobenius_polynomial == (5, -same.first_trace, 1)
+    assert same.second_frobenius_polynomial == (5, -same.second_trace, 1)
+    assert same.same_isogeny_class is True
+    assert different.first_cardinality == first_count
+    assert different.second_cardinality == different_count == 7
+    assert different.same_isogeny_class is False
+
+
+def test_model_isomorphism_matches_independent_complete_scaling_oracle() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def curve(a: int, b: int) -> FiniteFieldShortWeierstrassCurve:
+        return FiniteFieldShortWeierstrassCurve(
+            field=field,
+            coefficient_a=FiniteFieldElement(presentation=field, coordinates=(a,)),
+            coefficient_b=FiniteFieldElement(presentation=field, coordinates=(b,)),
+        )
+
+    def scaling_oracle(source: tuple[int, int], target: tuple[int, int]) -> int | None:
+        a, b = source
+        target_a, target_b = target
+        return next(
+            (
+                u
+                for u in range(1, 5)
+                if (pow(u, 4, 5) * a) % 5 == target_a
+                and (pow(u, 6, 5) * b) % 5 == target_b
+            ),
+            None,
+        )
+
+    source = curve(1, 1)
+    # u=2 transports (1,1) to (u^4,u^6)=(1,4) in F5.
+    target = curve(1, 4)
+    unrelated = curve(2, 1)
+    positive = finite_field_isomorphism(source, target)
+    negative = finite_field_isomorphism(source, unrelated)
+    assert scaling_oracle((1, 1), (1, 4)) == 2
+    assert positive.isomorphic is True
+    assert positive.scaling is not None
+    u = positive.scaling.coordinates[0]
+    assert (pow(u, 4, 5), pow(u, 6, 5)) == (1, 4)
+    assert scaling_oracle((1, 1), (2, 1)) is None
+    assert negative.isomorphic is False
+    assert negative.scaling is None
+
+
+def test_model_isomorphism_example_projects_through_canonical_output() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    source = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    target = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=one,
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(4,)),
+    decision = finite_field_isomorphism(source, target)
+    envelope = OperationResult(
+        operation_id="elliptic_curve.finite_field.isomorphism.decide",
+        runtime_ms=0,
+        output=decision.model_dump(mode="json"),
+    validated = FiniteFieldIsomorphismResult.model_validate_json(
+        json.dumps(envelope.output)
+    assert validated.isomorphic is True
+    assert validated.scaling is not None
+
+@pytest.mark.parametrize("scaling_value", [0, 2])
+def test_model_isomorphism_result_rejects_a_forged_scaling(
+    scaling_value: int,
+) -> None:
+    curve = FiniteFieldShortWeierstrassCurve(
+    forged = {
+        "source": curve.model_dump(mode="python"),
+        "target": curve.model_dump(mode="python"),
+        "isomorphic": True,
+        "scaling": FiniteFieldElement(
+            presentation=field, coordinates=(scaling_value,)
+        ).model_dump(mode="python"),
+    }
+    with pytest.raises(ValidationError, match="scaling must be nonzero and carry"):
+        FiniteFieldIsomorphismResult.model_validate(forged)
+def test_model_isomorphism_bounds_complete_search_before_field_arithmetic(
+    monkeypatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    monkeypatch.setattr(finite_field_module, "MAX_FINITE_FIELD_ISOMORPHISM_ORDER", 4)
+    monkeypatch.setattr(
+        finite_field_module,
+        "_decode_field_element",
+        lambda *_args: pytest.fail("field arithmetic must follow search admission"),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_isomorphism(curve, curve)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.isomorphism_order_bound"
+    )
+
+
+def test_canonical_quadratic_twist_flips_trace_over_prime_field() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+
+    def element(value: int) -> FiniteFieldElement:
+        return FiniteFieldElement(presentation=field, coordinates=(value,))
+
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=element(1), coefficient_b=element(1)
+    )
+    twist = finite_field_quadratic_twist(curve)
+    # 2 is the first encoded nonsquare in F5, so d^2 A=4 and d^3 B=3.
+    assert twist.coefficient_a.coordinates == (4,)
+    assert twist.coefficient_b.coordinates == (3,)
+
+    def direct_count(a: int, b: int) -> int:
+        return 1 + sum(
+            (y * y - x * x * x - a * x - b) % 5 == 0 for x in range(5) for y in range(5)
+        )
+
+    source_order = direct_count(1, 1)
+    twist_order = direct_count(4, 3)
+    assert source_order == 9
+    assert twist_order == 3
+    assert source_order + twist_order == 2 * (5 + 1)
+
+
+def test_quadratic_twist_composes_with_extension_count_consumer() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5,
+        modulus_coefficients=(2, 0, 1),
+        generator="a",
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1, 0))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    twist = finite_field_quadratic_twist(curve)
+    source_count = finite_field_cardinality(curve)
+    twist_count = finite_field_cardinality(twist)
+    assert source_count.trace + twist_count.trace == 0
+    assert source_count.cardinality + twist_count.cardinality == 2 * (25 + 1)
+
+
+def test_quadratic_twist_rejects_field_order_before_search(monkeypatch) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    monkeypatch.setattr(finite_field_module, "MAX_FINITE_FIELD_TWIST_ORDER", 4)
+    monkeypatch.setattr(
+        finite_field_module,
+        "_power",
+        lambda *_args: pytest.fail("field search must follow order admission"),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_module.finite_field_quadratic_twist(curve)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.twist_order_bound"
+    )
+
+
+@pytest.mark.parametrize(
+    ("prime", "coefficient_a", "coefficient_b", "expected_factors"),
+    [(5, 1, 1, (9,)), (5, 1, 0, (2, 2)), (7, 1, 1, (5,))],
+)
+def test_group_structure_and_generators_match_independent_exhaustive_oracle(
+    prime: int,
+    coefficient_a: int,
+    coefficient_b: int,
+    expected_factors: tuple[int, ...],
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="a"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(
+            presentation=field, coordinates=(coefficient_a,)
+        ),
+        coefficient_b=FiniteFieldElement(
+            presentation=field, coordinates=(coefficient_b,)
+        ),
+    )
+
+    def add(
+        left: tuple[int, int] | None, right: tuple[int, int] | None
+    ) -> tuple[int, int] | None:
+        if left is None:
+            return right
+        if right is None:
+            return left
+        x, y = left
+        u, v = right
+        if x == u and (y + v) % prime == 0:
+            return None
+        if left == right:
+            slope = (3 * x * x + coefficient_a) * pow(2 * y, -1, prime) % prime
+        else:
+            slope = (v - y) * pow(u - x, -1, prime) % prime
+        new_x = (slope * slope - x - u) % prime
+        return new_x, (slope * (x - new_x) - y) % prime
+
+    points: set[tuple[int, int] | None] = {None}
+    points.update(
+        (x, y)
+        for x in range(prime)
+        for y in range(prime)
+        if (y * y - x * x * x - coefficient_a * x - coefficient_b) % prime == 0
+    )
+    result = finite_field_group_structure(curve)
+    factors = tuple(result.group.invariant_factors)
+    assert factors == expected_factors
+    assert len(result.generators) == len(factors)
+    assert all(generator.curve == curve for generator in result.generators)
+
+    generated: set[tuple[int, int] | None] = {None}
+    for generator, order in zip(result.generators, factors, strict=True):
+        assert not generator.at_infinity
+        assert generator.x is not None and generator.y is not None
+        point = (generator.x.coordinates[0], generator.y.coordinates[0])
+        multiples: set[tuple[int, int] | None] = set()
+        multiple = None
+        for _ in range(order):
+            multiples.add(multiple)
+            multiple = add(multiple, point)
+        assert multiple is None
+        assert len(multiples) == order
+        generated = {add(left, right) for left in generated for right in multiples}
+
+    assert len(generated) == len(points) == math.prod(factors)
+    assert generated == points
+
+
+def test_group_structure_rejects_work_before_point_enumeration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    monkeypatch.setattr(finite_field_module, "MAX_FINITE_FIELD_GROUP_STRUCTURE_WORK", 1)
+    monkeypatch.setattr(
+        finite_field_module,
+        "_enumerate_admitted_points",
+        lambda *_args: pytest.fail("group work must be admitted before enumeration"),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_group_structure(curve)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.group_structure_work_bound"
+    )
+
+
+def test_isogeny_class_requires_identical_field_presentation() -> None:
+    first_field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    second_field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="b"
+    )
+    first = FiniteFieldShortWeierstrassCurve(
+        field=first_field,
+        coefficient_a=FiniteFieldElement(presentation=first_field, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=first_field, coordinates=(1,)),
+    )
+    second = FiniteFieldShortWeierstrassCurve(
+        field=second_field,
+        coefficient_a=FiniteFieldElement(presentation=second_field, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=second_field, coordinates=(1,)),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_field_isogeny_class(first, second)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.isogeny_field_mismatch"
+    )
+
+
+def test_point_orders_match_independent_repeated_addition_and_witnesses() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+
+    def add(left, right):
+        if left is None:
+            return right
+        if right is None:
+            return left
+        x1, y1 = left
+        x2, y2 = right
+        if x1 == x2 and (y1 + y2) % 5 == 0:
+            return None
+        if left == right:
+            if y1 == 0:
+                return None
+            slope = (3 * x1 * x1 + 1) * pow(2 * y1, -1, 5) % 5
+        else:
+            slope = (y2 - y1) * pow(x2 - x1, -1, 5) % 5
+        x3 = (slope * slope - x1 - x2) % 5
+        return (x3, (slope * (x1 - x3) - y1) % 5)
+
+    for point in finite_field_points(curve).points:
+        coordinates = (
+            None
+            if point.at_infinity
+            else (point.x.coordinates[0], point.y.coordinates[0])
+        )
+        multiple = None
+        expected_order = None
+        for scalar in range(1, 10):
+            multiple = add(multiple, coordinates)
+            if multiple is None:
+                expected_order = scalar
+                break
+        assert expected_order is not None
+
+        result = finite_field_point_order(curve, point)
+        assert result.group_cardinality == 9
+        assert result.order == expected_order
+        assert result.annihilating_multiple.at_infinity
+        assert tuple(w.prime for w in result.prime_divisor_witnesses) == tuple(
+            prime
+            for prime in range(2, expected_order + 1)
+            if expected_order % prime == 0
+            and all(prime % divisor for divisor in range(2, int(prime**0.5) + 1))
+        )
+        for witness in result.prime_divisor_witnesses:
+            assert witness.reduced_scalar == result.order // witness.prime
+            assert not witness.reduced_multiple.at_infinity
+
+
+def test_point_order_rejects_field_above_exact_counting_envelope() -> None:
+    prime = 5003
+    field = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="a"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+    point = FiniteFieldEllipticPoint.affine(
+        curve,
+        FiniteFieldElement(presentation=field, coordinates=(0,)),
+        FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_point_order(curve, point)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.enumeration_bound"
+    )
+
+
+@pytest.mark.parametrize("prime", [5, 7, 11])
+def test_point_enumeration_is_exact_against_exhaustive_integer_oracle(
+    prime: int,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    expected = {
+        (x, y)
+        for x in range(prime)
+        for y in range(prime)
+        if (y * y - (x * x * x + x + 1)) % prime == 0
+    }
+    actual = finite_field_points(curve)
+    coordinates = {
+        (point.x.coordinates[0], point.y.coordinates[0])
+        for point in actual.points
+        if not point.at_infinity and point.x is not None and point.y is not None
+    }
+    assert coordinates == expected
+    assert len(actual.points) == len(expected) + 1
+    assert sum(point.at_infinity for point in actual.points) == 1
+
+
+def test_scaled_point_enumeration_uses_exact_character_count_oracle() -> None:
+    """Native enumeration accepts bounded values above the delivery byte cap."""
+    prime = 20_011
+    field = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    expected_count = 1
+    for x in range(prime):
+        rhs = (x * x * x + x + 1) % prime
+        if rhs == 0:
+            expected_count += 1
+        elif pow(rhs, (prime - 1) // 2, prime) == 1:
+            expected_count += 2
+
+    point_set = finite_field_points(curve)
+    assert len(point_set.points) == expected_count
+    assert len(rfc8785.dumps(point_set.model_dump(mode="json"))) > (
+        CanonicalLimits().max_output_bytes
+    )
+    assert sum(point.at_infinity for point in point_set.points) == 1
+    affine = [point for point in point_set.points if not point.at_infinity]
+    pairs = {(point.x.coordinates[0], point.y.coordinates[0]) for point in affine}
+    assert len(pairs) == len(affine)
+    assert all((y * y - (x * x * x + x + 1)) % prime == 0 for x, y in pairs)
+
+
+def test_point_enumeration_rejects_materialization_bound_before_expansion() -> None:
+    prime = 65_521
+    field = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_points(curve)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.enumeration_materialization_bound"
+    )
+
+
+def test_point_enumeration_rejects_singular_curve() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    zero = FiniteFieldElement(presentation=field, coordinates=(0,))
+    singular = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=zero, coefficient_b=zero
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_field_points(singular)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.singular_curve"
+    )
+
+
+def test_f5_point_group_law_matches_independent_oracle_and_hand_examples() -> None:
+    """Check the group law against an integer-coordinate F5 oracle."""
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+
+    def affine(x: int, y: int) -> FiniteFieldEllipticPoint:
+        return FiniteFieldEllipticPoint.affine(
+            curve,
+            FiniteFieldElement(presentation=field, coordinates=(x,)),
+            FiniteFieldElement(presentation=field, coordinates=(y,)),
+        )
+
+    identity = FiniteFieldEllipticPoint.infinity(curve)
+    p = affine(0, 1)
+    q = affine(2, 1)
+    assert finite_field_point_add(curve, p, p).point == affine(4, 2)
+    assert finite_field_point_add(curve, p, q).point == affine(3, 4)
+    assert finite_field_point_add(curve, identity, p).point == p
+    assert (
+        finite_field_point_add(
+            curve, p, finite_field_point_negate(curve, p).point
+        ).point
+        == identity
+    )
+
+    def oracle(left: tuple[int, int] | None, right: tuple[int, int] | None):
+        if left is None:
+            return right
+        if right is None:
+            return left
+        x1, y1 = left
+        x2, y2 = right
+        if x1 == x2 and (y1 + y2) % 5 == 0:
+            return None
+        if left == right:
+            slope = ((3 * x1 * x1 + 1) * pow(2 * y1, -1, 5)) % 5
+        else:
+            slope = ((y2 - y1) * pow(x2 - x1, -1, 5)) % 5
+        x3 = (slope * slope - x1 - x2) % 5
+        return (x3, (slope * (x1 - x3) - y1) % 5)
+
+    def coordinates(point: FiniteFieldEllipticPoint):
+        if point.at_infinity:
+            return None
+        assert point.x is not None and point.y is not None
+        return (point.x.coordinates[0], point.y.coordinates[0])
+
+    expected = {
+        (x, y)
+        for x in range(5)
+        for y in range(5)
+        if (y * y - (x * x * x + x + 1)) % 5 == 0
+    }
+    points = finite_field_points(curve).points
+    assert {coordinates(point) for point in points if not point.at_infinity} == expected
+    assert sum(point.at_infinity for point in points) == 1
+    for left in points:
+        for right in points:
+            actual = finite_field_point_add(curve, left, right).point
+            assert coordinates(actual) == oracle(coordinates(left), coordinates(right))
+
+
+def test_finite_field_scalar_multiplication_rejects_work_above_bound() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    point = FiniteFieldEllipticPoint.affine(
+        curve,
+        FiniteFieldElement(presentation=field, coordinates=(0,)),
+        one,
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        finite_field_point_scalar(curve, point, 1_000_001)
+    assert error.value.errors()[0]["type"] == "elliptic_curve.finite_field.scalar_bound"
+
+
+def test_extension_counts_match_direct_count_over_f25() -> None:
+    base = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    extension = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
+    )
+    one_base = FiniteFieldElement(presentation=base, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=base, coefficient_a=one_base, coefficient_b=one_base
+    )
+
+    def multiply(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        # In F25 = F5[b]/(b^2 + 2), b^2 = 3.
+        return (
+            (left[0] * right[0] + 3 * left[1] * right[1]) % 5,
+            (left[0] * right[1] + left[1] * right[0]) % 5,
+        )
+
+    def add(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        return ((left[0] + right[0]) % 5, (left[1] + right[1]) % 5)
+
+    one = (1, 0)
+    direct_count = 1  # The point at infinity.
+    for x0 in range(5):
+        for x1 in range(5):
+            x = (x0, x1)
+            rhs = add(add(multiply(multiply(x, x), x), x), one)
+            for y0 in range(5):
+                for y1 in range(5):
+                    if multiply((y0, y1), (y0, y1)) == rhs:
+                        direct_count += 1
+
+    result = finite_field_extension_counts(curve, 2)
+    assert extension.degree == 2
+    assert result.base_cardinality == 9
+    assert result.base_trace == -3
+    assert result.counts[0].cardinality == result.base_cardinality
+    assert result.counts[1].cardinality == direct_count == 27
+    assert result.counts[1].frobenius_power_sum == -1
+
+
+def test_large_extension_counts_keep_decimal_integer_wire_encoding() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    output = finite_field_extension_counts(curve, 24).model_dump(mode="json")
+    assert isinstance(output["counts"][-1]["cardinality"], str)
+    assert int(output["counts"][-1]["cardinality"]) > 2**53
+    assert isinstance(output["counts"][-1]["frobenius_power_sum"], str)
+
+
+def test_point_enumeration_over_directly_presented_extension_field() -> None:
+    """Directly presented F25 curves are supported; no base-field lift occurs."""
+    # This is a curve declared over this exact F25 presentation. It does not
+    # claim a canonical transport from a curve over F5: that needs an explicit
+    # typed embedding between the two field presentations.
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(1, 0)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(1, 0)),
+    )
+
+    def add(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        return ((left[0] + right[0]) % 5, (left[1] + right[1]) % 5)
+
+    def multiply(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+        # The declared modulus is b^2 + 2, hence b^2 = 3 in F25.
+        return (
+            (left[0] * right[0] + 3 * left[1] * right[1]) % 5,
+            (left[0] * right[1] + left[1] * right[0]) % 5,
+        )
+
+    expected: set[tuple[tuple[int, int], tuple[int, int]]] = set()
+    one = (1, 0)
+    for x0 in range(5):
+        for x1 in range(5):
+            x = (x0, x1)
+            rhs = add(add(multiply(multiply(x, x), x), x), one)
+            for y0 in range(5):
+                for y1 in range(5):
+                    y = (y0, y1)
+                    if multiply(y, y) == rhs:
+                        expected.add((x, y))
+
+    result = finite_field_points(curve)
+    actual = {
+        (point.x.coordinates, point.y.coordinates)
+        for point in result.points
+        if not point.at_infinity and point.x is not None and point.y is not None
+    }
+    assert len(result.points) == 27
+    assert actual == expected
+    assert all(point.curve == curve for point in result.points)
+    # The independently enumerated order is 27; Lagrange then checks every
+    # returned affine point through the public group operation.
+    for point in result.points:
+        assert finite_field_point_scalar(curve, point, 27).point.at_infinity
+
+
+def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
+    base = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    extension = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(2, 0, 1), generator="b"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=base,
+        coefficient_a=FiniteFieldElement(presentation=base, coordinates=(1,)),
+        coefficient_b=FiniteFieldElement(presentation=base, coordinates=(1,)),
+    )
+    point = FiniteFieldEllipticPoint.affine(
+        curve,
+        FiniteFieldElement(presentation=base, coordinates=(0,)),
+        FiniteFieldElement(presentation=base, coordinates=(1,)),
+    )
+    # The source modulus is X, so its generator maps to zero in F25.
+    embedding = finite_field_module.FieldEmbedding(
+        source=base,
+        target=extension,
+        generator_image=FiniteFieldElement(presentation=extension, coordinates=(0, 0)),
+    )
+    result = finite_field_curve_base_change(curve, embedding, point)
+    assert result.curve.field == extension
+    assert result.curve.coefficient_a.coordinates == (1, 0)
+    assert result.curve.coefficient_b.coordinates == (1, 0)
+    assert result.point is not None
+    assert result.point.curve == result.curve
+    assert result.point.x is not None and result.point.x.coordinates == (0, 0)
+    assert result.point.y is not None and result.point.y.coordinates == (1, 0)
+    assert finite_field_point_check(result.curve, result.point).on_curve
+    assert finite_field_point_scalar(result.curve, result.point, 9).point.at_infinity
+
+    invalid = finite_field_module.FieldEmbedding(
+        source=base,
+        target=extension,
+        generator_image=FiniteFieldElement(presentation=extension, coordinates=(1, 0)),
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_field_curve_base_change(curve, invalid)
+    assert error.value.errors()[0]["type"] == (
+        "finite_field.embedding_generator_not_root"
+    )
+
+
+def test_base_change_result_rejects_point_from_another_curve() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    source = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    other = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=one,
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(2,)),
+    )
+    foreign_point = FiniteFieldEllipticPoint.infinity(other)
+    with pytest.raises(ValueError, match="transported curve"):
+        FiniteFieldCurveBaseChangeResult(curve=source, point=foreign_point)
+
+
+def test_group_structure_result_rejects_rank_above_two() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    identity = FiniteFieldEllipticPoint.infinity(curve)
+    with pytest.raises(ValueError, match="at most two invariant factors"):
+        FiniteFieldGroupStructureResult(
+            curve=curve,
+            group=AbelianPresentation(invariant_factors=(2, 2, 2)),
+            generators=(identity, identity, identity),
+        )
+
+
+@pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])
+def test_character_sum_count_matches_independent_point_enumeration(
+    prime: int, a: int, b: int
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=prime, modulus_coefficients=(0, 1), generator="a"
+    )
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=FiniteFieldElement(presentation=field, coordinates=(a,)),
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(b,)),
+    )
+
+    count = finite_field_extension_counts(curve, 1)
+    enumerated = finite_field_points(curve)
+    assert count.base_cardinality == len(enumerated.points)
+    assert count.base_trace == prime + 1 - len(enumerated.points)
+
+
+def test_large_admitted_prime_field_count_uses_character_sum_boundary() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=4093, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+
+    result = finite_field_extension_counts(curve, 1)
+    assert result.base_cardinality == 4100
+    assert result.base_trace == -6
+
+
+def test_extension_count_degree_is_bounded_before_counting() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        finite_field_extension_counts(curve, 65)
+    assert error.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.extension_degree_bound"
+    )
+
+
+def test_extension_count_example_projects_with_typed_output() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    result = finite_field_extension_counts(curve, 2)
+    envelope = OperationResult(
+        operation_id="elliptic_curve.finite_field.extension_counts.compute",
+        runtime_ms=0,
+        output=result.model_dump(mode="json"),
+    validated = FiniteFieldExtensionCountsResult.model_validate_json(
+        json.dumps(envelope.output)
+    assert validated.counts[0].cardinality == 9
+    assert validated.counts[1].cardinality == 27
+
+def test_extension_count_result_rejects_forged_recurrence_value() -> None:
+    forged = result.model_dump(mode="python")
+    forged["counts"][1]["cardinality"] += 1
+    with pytest.raises(ValidationError, match="exact Frobenius recurrence"):
+        FiniteFieldExtensionCountsResult.model_validate(forged)
 def test_native_curve_consumers_reject_missing_authored_fields() -> None:
     field = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"

@@ -20,7 +20,6 @@ from jacobian._execution import (
     current_request_execution,
     request_checkpoint,
 )
-from jacobian.canonical import parse_canonical_integer
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.certified_snf.operations import (
     Matrix,
@@ -939,12 +938,10 @@ def _require_height(bound: SmithHeightBound, *, label: str) -> None:
         )
 
 
-def _parse_integer_differentials(source: ChainComplexValue) -> tuple[Matrix, ...]:
+def _copy_integer_differentials(source: ChainComplexValue) -> tuple[Matrix, ...]:
     parsed: list[Matrix] = []
     for matrix in source.differential_matrices:
-        parsed.append(
-            [[parse_canonical_integer(value) for value in row] for row in matrix]
-        )
+        parsed.append([[int(entry) for entry in row] for row in matrix])
     return tuple(parsed)
 
 
@@ -977,7 +974,7 @@ def _require_integral_source_bounds(source: ChainComplexValue) -> None:
             f"{MAX_INTEGRAL_HOMOLOGY_MATRIX_CELLS} cells",
         )
     if any(
-        len(value.lstrip("-")) > MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS
+        len(str(abs(value))) > MAX_INTEGRAL_HOMOLOGY_INPUT_DIGITS
         for matrix in source.differential_matrices
         for row in matrix
         for value in row
@@ -1104,13 +1101,13 @@ def admit_integral_homology(source: ChainComplexValue) -> IntegralHomologyExecut
         len(source.basis_sizes)
         + matrix_cells
         + sum(
-            len(value)
+            len(str(abs(value)))
             for matrix in source.differential_matrices
             for row in matrix
             for value in row
         )
     )
-    differentials = _parse_integer_differentials(source)
+    differentials = _copy_integer_differentials(source)
     square_zero_work = _require_square_zero(source, differentials)
     _require_deadline(deadline, "after d^2 admission")
 
@@ -1463,6 +1460,8 @@ def _execute_smith_reduction(
 
 def compute_integral_homology(
     plan: IntegralHomologyExecutionPlan,
+    *,
+    right_inverses: list[Matrix] | None = None,
 ) -> tuple[IntegralHomologyGroupValue, ...]:
     """Execute the two certified Smith reductions in every admitted degree."""
 
@@ -1494,6 +1493,8 @@ def compute_integral_homology(
         cycle_rank = degree_plan.chain_rank - outgoing_rank
         cycle_basis = matrix_columns(outgoing_reduction.right, start=outgoing_rank)
         right_inverse = outgoing_execution.right_inverse
+        if right_inverses is not None:
+            right_inverses.append(right_inverse)
         all_cycle_coordinates = matrix_multiply(
             right_inverse,
             degree_plan.incoming,

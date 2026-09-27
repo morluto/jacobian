@@ -15,6 +15,11 @@ from jacobian.math.number_theory.number_fields._binary_power_sum import (
 from jacobian.math.number_theory.number_fields._discriminant_process import (
     compute_nf_discriminant,
 )
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    SimpleNumberFieldEmbeddingRequest,
+    SimpleNumberFieldEmbeddingResult,
+    apply_simple_number_field_embedding,
+)
 from jacobian.math.number_theory.number_fields._models import (
     MAX_CLASS_GROUP_DEGREE,
     NumberFieldClassGroupRequest,
@@ -125,6 +130,12 @@ def _compute_relative_trace_norm(
     request: NumberFieldRelativeTraceNormRequest,
 ) -> NumberFieldRelativeTraceNormResult:
     return relative_trace_norm(request.field, request.element)
+
+
+def _apply_field_embedding(
+    request: SimpleNumberFieldEmbeddingRequest,
+) -> SimpleNumberFieldEmbeddingResult:
+    return apply_simple_number_field_embedding(request)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -461,6 +472,66 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {"num": "0", "den": "1"},
                             {"num": "1", "den": "1"},
                             {"num": "0", "den": "1"},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.embedding.apply_exact.compute",
+        title="Apply an exact simple number-field embedding",
+        description=(
+            "Apply a proposed QQ-embedding between simple number fields of degree at most six. "
+            "The source and target presentations must be irreducible, and the supplied target-field image "
+            "of the source generator must satisfy its defining polynomial exactly. Returns the reusable "
+            "embedding value and the exact image of one source element. Polynomial and coordinate inputs "
+            "are limited to 32 digits to bound exact coordinate growth."
+        ),
+        request_type=SimpleNumberFieldEmbeddingRequest,
+        result_type=SimpleNumberFieldEmbeddingResult,
+        run=_apply_field_embedding,
+        tags=("number-field", "embedding", "exact"),
+        discovery_terms=(
+            "exact embedding between number fields",
+            "map a number-field element by generator image",
+            "field homomorphism in power-basis coordinates",
+        ),
+        examples=(
+            OperationExample(
+                name="quadratic_into_quartic",
+                description=(
+                    "Embed QQ(sqrt(2)) into QQ(beta), beta^4=2, by sending its generator to beta^2."
+                ),
+                input={
+                    "source": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "-2"],
+                    },
+                    "target": {
+                        "domain": "QQ",
+                        "coefficients_descending": ["1", "0", "0", "0", "-2"],
+                    },
+                    "generator_image": {
+                        "presentation": {
+                            "domain": "QQ",
+                            "coefficients_descending": ["1", "0", "0", "0", "-2"],
+                        },
+                        "coefficients_ascending": [
+                            {"num": "0", "den": "1"},
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                    },
+                    "element": {
+                        "presentation": {
+                            "domain": "QQ",
+                            "coefficients_descending": ["1", "0", "-2"],
+                        },
+                        "coefficients_ascending": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
                         ],
                     },
                 },

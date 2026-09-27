@@ -129,6 +129,7 @@ def test_operation_is_catalogued_with_usable_example() -> None:
     )
     result = tool.run(request)
     assert result.dimension == sum(row.dimension for row in result.hilbert_prefix)
+    assert operation_id in {item.operation_id for item in TOOLS}
     found = Catalog.open().match(
         OperationMatchRequest(need="weight zero polynomial basis by degree")
     )

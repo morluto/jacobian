@@ -173,6 +173,58 @@ def test_triangular_locally_nilpotent_derivation_exponentiates_exactly() -> None
     _independent_coaction_oracle(action.generator_images)
 
 
+def test_action_rejects_lying_outer_and_empty_inner_sequences() -> None:
+    from collections.abc import Sequence
+
+    derivation, chains = _derivation()
+
+    class TooMany(Sequence[Any]):
+        def __len__(self) -> int:
+            return len(chains)
+
+        def __getitem__(self, index: int) -> Any:
+            if index < len(chains):
+                return chains[index]
+            raise IndexError
+
+        def __iter__(self):
+            yield from chains
+            while True:
+                yield chains[0]
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, TooMany())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+    class ShortOuter(Sequence[Any]):
+        def __len__(self) -> int:
+            return len(chains)
+
+        def __getitem__(self, index: int) -> Any:
+            return chains[index] if index == 0 else (_ for _ in ()).throw(IndexError)
+
+        def __iter__(self):
+            yield chains[0]
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, ShortOuter())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+    class EmptyChain(Sequence[Any]):
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> Any:
+            raise IndexError
+
+        def __iter__(self):
+            return iter(())
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, (EmptyChain(), *chains[1:]))
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+
 def test_action_checks_every_generator_chain() -> None:
     derivation, chains = _derivation()
     invalid = (chains[0], (chains[1][0], _poly(("x", "y", "z"), ())), chains[2])
@@ -262,6 +314,11 @@ def test_ga_action_catalog_example_and_request_are_publishable() -> None:
     assert result.generator_images[0].variables == ("x", "y", "t")
     assert GaActionRequest.model_validate(request.model_dump()) == request
 
+    assert result.parameter == "t"
+    assert [
+        (term.coefficient.num, term.coefficient.den, term.exponents)
+        for term in result.generator_images[0].polynomial.terms
+    ] == [(1, 1, (1, 0, 0)), (1, 1, (0, 1, 1))]
     catalog = Catalog(TOOLS)
     operation = catalog.operation(tool.operation_id)
     assert operation is not None

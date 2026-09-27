@@ -744,3 +744,4 @@ __all__ = [
     "gm_generated_subrepresentation",
     "gm_invariants_through_degree",
 ]
+__all__ = ["diagonal_weight_action", "gm_invariants_through_degree"]

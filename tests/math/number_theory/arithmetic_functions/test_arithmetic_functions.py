@@ -29,7 +29,6 @@ from jacobian.math.number_theory.arithmetic_functions.operations import (
     MAX_DIVISOR_INCIDENCES,
     _divisor_incidence_count,
     _divisor_incidences,
-    _shared_denominator_lcm,
     _SlotLCMHeightSums,
 )
 
@@ -85,20 +84,6 @@ class TestDirichletConvolution:
             Fraction(3),
             Fraction(4),
         ]
-
-    def test_constant_one_convolution_gives_divisor_count(self) -> None:
-        """1 * 1 = tau where 1 is the constant-one function and tau is the
-        divisor-count function."""
-        result = compute_dirichlet_convolution(
-            DirichletConvolutionRequest.model_validate(
-                {
-                    "f": _vals((1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1)),
-                    "g": _vals((1, 1), (1, 1), (1, 1), (1, 1), (1, 1), (1, 1)),
-                }
-            )
-        )
-        # tau: 1, 2, 2, 3, 2, 4
-        assert [int(v.as_fraction()) for v in result.values] == [1, 2, 2, 3, 2, 4]
 
     def test_identity_convolution_with_constant_one(self) -> None:
         """id * 1 = sigma (sum of divisors): sigma(k) = sum_{d|k} d."""
@@ -206,20 +191,14 @@ class TestMobiusTransform:
                 {"values": list(first.values), "inverse": True}
             )
         )
+        assert first.inverse is False
+        assert second.inverse is True
         assert [v.as_fraction() for v in second.values] == [
             Fraction(3),
             Fraction(5),
             Fraction(7),
             Fraction(11),
         ]
-
-    def test_inverse_flag_returned(self) -> None:
-        result = compute_mobius_transform(
-            MobiusTransformRequest.model_validate(
-                {"values": _vals((1, 1), (1, 1)), "inverse": True}
-            )
-        )
-        assert result.inverse is True
 
     def test_empty_rejected(self) -> None:
         with pytest.raises(ValidationError):
@@ -344,17 +323,14 @@ class TestDirichletInverse:
 # ---------------------------------------------------------------------------
 
 
-class TestLargerN:
-    def test_convolution_of_constant_one_up_to_20(self) -> None:
-        """1 * 1 = tau for n = 20; verify known values of tau."""
-        n = 20
-        ones = [_rat(1, 1)] * n
-        result = compute_dirichlet_convolution(
-            DirichletConvolutionRequest.model_validate({"f": ones, "g": ones})
-        )
-        # tau(1..20): 1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6, 2, 4, 4, 5, 2, 6, 2, 6
-        expected = [1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6, 2, 4, 4, 5, 2, 6, 2, 6]
-        assert [int(v.as_fraction()) for v in result.values] == expected
+def test_convolution_of_constant_one_up_to_20_gives_divisor_count() -> None:
+    n = 20
+    ones = [_rat(1, 1)] * n
+    result = compute_dirichlet_convolution(
+        DirichletConvolutionRequest.model_validate({"f": ones, "g": ones})
+    )
+    expected = [1, 2, 2, 3, 2, 4, 2, 4, 3, 4, 2, 6, 2, 4, 4, 5, 2, 6, 2, 6]
+    assert [int(v.as_fraction()) for v in result.values] == expected
 
 
 def test_divisor_prefix_bound_is_derived_from_incidence_work() -> None:
@@ -369,49 +345,39 @@ def test_divisor_prefix_bound_is_derived_from_incidence_work() -> None:
     assert sum(1 for _ in _divisor_incidences(_MAX_DIVISOR_PREFIX_LENGTH)) == (599_992)
 
 
-def test_materialized_prefix_above_former_cap_is_exact() -> None:
-    length = 50_000
-    one = CanonicalRational(num=1, den=1)
-
-    result = dirichlet_convolution((one,) * length, (one,) * length)
-
-    assert len(result) == length
-    assert result[-1].as_fraction() == Fraction(30)
-
-
-def test_mobius_admission_preserves_a_shared_denominator() -> None:
+def test_mobius_max_prefix_admission_handles_many_denominators() -> None:
+    """A shared prefix, two large primes, and many small primes fit the bound."""
     length = _MAX_DIVISOR_PREFIX_LENGTH
-    value = CanonicalRational(num=1, den=1000000007)
-
-    result = compute_mobius_transform(MobiusTransformRequest(values=(value,) * length))
-
-    assert result.values[0] == value
-    assert all(entry.num == 0 and entry.den == 1 for entry in result.values[1:])
-
-
-def test_mobius_admission_bounds_two_prime_denominator_lcm() -> None:
-    """Alternating 1/p and 1/q dens share an LCM, not just max(den)."""
-
     first_prime = 1_000_000_007
     second_prime = 1_000_000_009
+    small_primes: list[int] = []
+    candidate = 2
+    while len(small_primes) < 48:
+        if all(candidate % prime != 0 for prime in small_primes):
+            small_primes.append(candidate)
+        candidate += 1
+
     common = first_prime * second_prime
-    values = tuple(
-        CanonicalRational(
-            num=1,
-            den=first_prime if index % 2 == 0 else second_prime,
-        )
-        for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
-    )
+    for prime in small_primes:
+        common *= prime
+    assert len(str(max(small_primes))) == 3
+    assert len(str(common)) >= 80
 
-    result = compute_mobius_transform(MobiusTransformRequest(values=values))
+    values = [CanonicalRational(num=1, den=first_prime)] * length
+    values[-49:-1] = [CanonicalRational(num=1, den=prime) for prime in small_primes]
+    values[-1] = CanonicalRational(num=1, den=second_prime)
+    result = compute_mobius_transform(MobiusTransformRequest(values=tuple(values)))
 
+    assert len(result.values) == length
     assert result.values[0] == CanonicalRational(num=1, den=first_prime)
-    # f(2) = F(2) - F(1) = 1/q - 1/p; f(3) = F(3) - F(1) = 0.
-    assert result.values[1].as_fraction() == (
+    assert all(
+        entry.num == 0 and entry.den == 1 for entry in result.values[1 : length - 49]
+    )
+    assert result.values[-1].as_fraction() == (
         Fraction(1, second_prime) - Fraction(1, first_prime)
     )
-    assert result.values[2].as_fraction() == Fraction(0)
     assert all(common % int(entry.den) == 0 for entry in result.values)
+    assert max(len(str(value.den)) for value in result.values) <= len(str(common))
 
 
 def test_mobius_admission_accounts_for_lifting_carries() -> None:
@@ -424,16 +390,18 @@ def test_mobius_admission_accounts_for_lifting_carries() -> None:
     assert result.values[1].as_fraction() == Fraction(70, 99) - Fraction(-97, 10)
 
 
-def test_mobius_admission_sizes_lcm_without_decimal_stringification() -> None:
+def test_mobius_transform_returns_exact_values_with_a_huge_denominator_lcm() -> None:
+    huge_denominator = 10**4299 + 1
     values = (
         CanonicalRational(num=1, den=2),
-        CanonicalRational(num=1, den=10**4299 + 1),
+        CanonicalRational(num=1, den=huge_denominator),
     )
-    shared = _shared_denominator_lcm(values)
-    assert shared is not None
-    assert shared.bit_length() > 14_000
     result = compute_mobius_transform(MobiusTransformRequest(values=values))
     assert result.values[0].as_fraction() == Fraction(1, 2)
+    assert result.values[1].as_fraction() == (
+        Fraction(1, huge_denominator) - Fraction(1, 2)
+    )
+    assert result.values[1].den.bit_length() > 14_000
 
 
 def test_mobius_mixed_two_prime_denominators_match_the_defining_sum() -> None:
@@ -461,31 +429,6 @@ def test_mobius_mixed_two_prime_denominators_match_the_defining_sum() -> None:
         assert result.values[index - 1].as_fraction() == expected
 
 
-def test_mobius_admission_uses_rational_height_not_encoded_size() -> None:
-    """Many small denominators may grow the LCM within the height bound."""
-
-    primes: list[int] = []
-    candidate = 2
-    while len(primes) < 50:
-        if all(candidate % prime != 0 for prime in primes):
-            primes.append(candidate)
-        candidate += 1
-    common = 1
-    for prime in primes:
-        common *= prime
-    assert len(str(max(primes))) == 3
-    assert len(str(common)) >= 80
-    values = tuple(
-        CanonicalRational(num=1, den=primes[index % len(primes)])
-        for index in range(_MAX_DIVISOR_PREFIX_LENGTH)
-    )
-
-    result = compute_mobius_transform(MobiusTransformRequest(values=values))
-
-    assert len(result.values) == len(values)
-    assert max(len(str(value.den)) for value in result.values) <= len(str(common))
-
-
 def test_slot_lcm_height_sums_require_concrete_length_checked_slots() -> None:
     with pytest.raises(ValueError):
         _SlotLCMHeightSums(2, (1,))
@@ -493,29 +436,22 @@ def test_slot_lcm_height_sums_require_concrete_length_checked_slots() -> None:
         _SlotLCMHeightSums(1, (0,))
 
 
-def test_convolution_admission_preserves_shared_denominators() -> None:
+def test_convolution_max_prefix_preserves_shared_and_slot_denominators() -> None:
     length = _MAX_DIVISOR_PREFIX_LENGTH
-    value = CanonicalRational(num=1, den=1000000007)
-    values = (value,) * length
-
-    result = dirichlet_convolution(values, values)
-
-    assert len(result) == length
-    assert result[0] == CanonicalRational(num=1, den=1000000014000000049)
-    assert all(entry.den == 1000000014000000049 for entry in result)
-    # tau(k) / D^2 for the constant-1/D prefix.
-    assert result[5].as_fraction() == Fraction(4, 1000000014000000049)
-
-
-def test_convolution_admission_tracks_denominators_per_result_slot() -> None:
-    length = 54_269
-    values = [CanonicalRational(num=1, den=1) for _ in range(length)]
-    values[-1] = CanonicalRational(num=1, den=10**100 + 1)
-
+    shared_denominator = 1_000_000_007
+    exceptional_denominator = 10**100 + 1
+    values = [CanonicalRational(num=1, den=shared_denominator) for _ in range(length)]
+    values[-1] = CanonicalRational(num=1, den=exceptional_denominator)
     result = dirichlet_convolution(tuple(values), tuple(values))
-
+    common_denominator_square = shared_denominator**2
     assert len(result) == length
-    assert result[-1].as_fraction() == Fraction(2, 10**100 + 1)
+    assert result[0] == CanonicalRational(num=1, den=common_denominator_square)
+    assert all(entry.den == common_denominator_square for entry in result[:-1])
+    assert result[5].as_fraction() == Fraction(4, common_denominator_square)
+    assert result[49_999].as_fraction() == Fraction(30, common_denominator_square)
+    assert result[-1].as_fraction() == Fraction(
+        2, shared_denominator * exceptional_denominator
+    )
 
 
 def test_constant_one_inverse_admits_widened_prefix() -> None:

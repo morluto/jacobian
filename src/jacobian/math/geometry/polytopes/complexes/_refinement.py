@@ -214,6 +214,29 @@ def common_refinement(
     dimension = _admit(left, right)
     left = _canonical_source(left, "L")
     right = _canonical_source(right, "R")
+    return _common_refinement_sources(left, right, dimension)
+
+
+def common_refinement_admitted(
+    left: PolytopalComplexClosureResult,
+    right: PolytopalComplexClosureResult,
+) -> CommonRefinementResult:
+    """Overlay already canonical, consumer-admitted complex values.
+
+    The spline refinement-map operation has already re-established both
+    closures. Rebuilding them here would repeat the expensive face and
+    intersection enumeration; the public common-refinement path continues to
+    canonicalize its own untrusted inputs before calling the shared kernel.
+    """
+    dimension = _admit(left, right)
+    return _common_refinement_sources(left, right, dimension)
+
+
+def _common_refinement_sources(
+    left: PolytopalComplexClosureResult,
+    right: PolytopalComplexClosureResult,
+    dimension: int,
+) -> CommonRefinementResult:
     left_facets = []
     right_facets = []
     for cell in left.maximal_cells:
@@ -303,4 +326,4 @@ def common_refinement(
     )
 
 
-__all__ = ["common_refinement"]
+__all__ = ["common_refinement", "common_refinement_admitted"]

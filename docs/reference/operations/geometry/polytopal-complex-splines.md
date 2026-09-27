@@ -121,8 +121,11 @@ rational linear combination of the canonical basis returned by
 `polytopal_complex.spline.space.compute`. Supply the same closed complex,
 degree, and smoothness, then give one rational coefficient for each basis row
 and a point on the complex's labelled coordinate axes. The result reports all
-containing cell IDs and the exact value. A point outside the complex returns
-the containing-cell list empty and no value.
+containing cell IDs and one exact value per containing cell, in the same order.
+When those values agree, `value` carries their common scalar value. If they
+differ (which is possible for `smoothness=-1` on a shared face), `value` is
+empty and `cell_values` preserves each piece's exact boundary value. A point
+outside the complex returns both lists empty and no scalar value.
 
 The operation admits degree at most 12, smoothness at most 4, and at most 4096
 basis coordinates. It constructs the canonical spline basis through the same

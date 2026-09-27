@@ -1,4 +1,5 @@
 from fractions import Fraction
+from types import SimpleNamespace
 
 import pytest
 
@@ -27,8 +28,8 @@ from jacobian.math.geometry.polytopes.complexes._models import (
 from jacobian.math.geometry.polytopes.complexes.operations import (
     polytopal_complex_closure,
     spline_dimension,
-    spline_evaluate,
     spline_dimension_profile,
+    spline_evaluate,
     spline_space,
 )
 
@@ -168,6 +169,22 @@ def test_spline_dimension_matches_interval_derivative_oracle_and_full_space():
     assert result.coefficient_axis == full.coefficient_axis
 
 
+def test_dimension_only_path_rejects_cells_below_ambient_dimension():
+    malformed_internal = SimpleNamespace(
+        space=SimpleNamespace(axes=("x", "y")),
+        dimension=1,
+        maximal_cells=(SimpleNamespace(dimension=1),),
+        faces=(),
+    )
+    with pytest.raises(
+        OperationDomainValidationError,
+        match="full-dimensional in the ambient space",
+    ):
+        spline_kernel._admit_spline_dimension(
+            malformed_internal, 1, 0, validate_complex=False
+        )
+
+
 def test_finite_dimension_profile_matches_independent_interval_matrices():
     complex_value = polytopal_complex_closure(
         (_interval(0, 1, "a"), _interval(1, 2, "b"))
@@ -187,6 +204,40 @@ def test_finite_dimension_profile_matches_independent_interval_matrices():
         )
         == result
     )
+
+
+def test_profile_admits_every_actual_rank_matrix_before_any_rank(monkeypatch):
+    complex_value = polytopal_complex_closure(
+        (_interval(0, 1, "a"), _interval(1, 2, "b"))
+    )
+    checked = 0
+    ranked = False
+
+    def admit(_rows, _width):
+        nonlocal checked
+        checked += 1
+        if checked == 3:
+            raise OperationResourceAdmissionError(
+                location=("degree",),
+                code="polytopal_complex.spline_dimension_height",
+                message="test height refusal",
+            )
+
+    def rank(*_args, **_kwargs):
+        nonlocal ranked
+        ranked = True
+        return 1
+
+    monkeypatch.setattr(spline_kernel, "_admit_spline_rank_matrix", admit)
+    monkeypatch.setattr(spline_kernel, "_spline_dimension_nullity_from_rows", rank)
+    with pytest.raises(OperationResourceAdmissionError, match="test height refusal"):
+        spline_dimension_profile(
+            SplineDimensionProfileRequest(
+                complex=complex_value, max_degree=3, smoothness=0
+            )
+        )
+    assert checked == 3
+    assert not ranked
 
 
 def test_finite_dimension_profile_one_cell_has_no_interface_rows():

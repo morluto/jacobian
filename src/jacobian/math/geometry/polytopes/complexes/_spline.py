@@ -11,7 +11,12 @@ import sympy as sp
 from pydantic import BaseModel
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import decimal_digit_width
+from jacobian.canonical import (
+    CanonicalizationError,
+    CanonicalLimits,
+    decimal_digit_width,
+    encode_strict_json,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -1267,8 +1272,6 @@ MAX_SPLINE_DIMENSION_RANK_WORK = 32_000_000
 MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
 MAX_SPLINE_DIMENSION_OUTPUT_DIGITS = 10 * 1024 * 1024
 """Decimal-digit ceiling summed over stored rational cells of the matrix."""
-MAX_SPLINE_DIMENSION_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
-MAX_SPLINE_PROFILE_OUTPUT_BYTES = 2 * 1024 * 1024 * 1024
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
 MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
 MAX_SPLINE_REFINEMENT_MAP_WORK = 32_000_000
@@ -1784,6 +1787,11 @@ def _admit_spline_dimension(
     if any(not axis.strip() for axis in complex_value.space.axes):
         _reject("spline_axes", "complex coordinate axes must be nonempty symbols")
     _require_pure_spline_complex(complex_value, smoothness)
+    if any(cell.dimension != dimension for cell in complex_value.maximal_cells):
+        _reject(
+            "spline_ambient_dimension",
+            "spline dimensions require maximal cells full-dimensional in the ambient space",
+        )
     monomial_count = comb(dimension + degree, degree)
     width = len(complex_value.maximal_cells) * monomial_count
     if width > 4096:
@@ -2032,27 +2040,10 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
     )
 
 
-def _spline_dimension_nullity_admitted(
-    complex_value: PolytopalComplexClosureResult, degree: int, smoothness: int
+def _spline_dimension_nullity_from_rows(
+    rows: tuple[tuple[Fraction, ...], ...], width: int
 ) -> int:
-    """Rank one profile matrix after the aggregate prefix admission."""
-    _, _, rows, width = _spline_constraint_data(
-        complex_value,
-        degree,
-        smoothness,
-        dimension_only=True,
-        validate_complex=False,
-    )
-    dimension = len(complex_value.space.axes)
-    row_bound = sum(
-        len(face.maximal_cell_ids) == 2
-        and face.dimension == dimension - 1
-        and smoothness >= 0
-        for face in complex_value.faces
-    ) * _facet_remainder_dimension(dimension, degree, smoothness)
-    if len(rows) > row_bound:
-        raise ArithmeticError("spline dimension matrix shape admission mismatch")
-    _admit_spline_rank_matrix(rows, width)
+    """Rank a profile matrix after all matrices have passed height admission."""
     if rows:
         from flint import fmpq, fmpq_mat
 
@@ -2077,8 +2068,12 @@ def spline_dimension_profile(
     The finite differences describe only the supplied prefix; no eventual
     Hilbert polynomial or extrapolation is inferred.
     """
-    if not isinstance(request, SplineDimensionProfileRequest):
-        _reject("spline_profile_type", "expected a canonical spline profile request")
+    request = _admit_request(
+        request,
+        SplineDimensionProfileRequest,
+        "spline_profile_type",
+        "expected a canonical spline profile request",
+    )
     if type(request.max_degree) is not int or not 0 <= request.max_degree <= 12:
         _reject("spline_profile_degree", "maximum degree must be in [0, 12]")
     # Admit the complete requested workload before constructing any degree
@@ -2107,26 +2102,62 @@ def spline_dimension_profile(
             message="finite spline profile ranks exceed the aggregate work envelope",
         )
     _admit_spline_profile_heights(complex_value, request.smoothness, tuple(shapes))
-    # The profile omits the degree-specific matrices. Bound its canonical
-    # output from the source and fixed maximum integer widths before computing.
+    # Finite differences of an n-term prefix have magnitude at most 2**n
+    # times the largest dimension. Encode that upper profile before ranking.
+    max_width = max((width for width, _ in shapes), default=0)
+    maximum_difference = max_width
     try:
-        source_size = len(encode_strict_json(complex_value.model_dump(mode="json")))
+        difference_rows = []
+        for order in range(request.max_degree + 1):
+            difference_rows.append(
+                [maximum_difference] * (request.max_degree + 1 - order)
+            )
+            maximum_difference *= 2
+        output_bound = len(
+            encode_strict_json(
+                {
+                    "complex": complex_value.model_dump(mode="json"),
+                    "max_degree": request.max_degree,
+                    "smoothness": request.smoothness,
+                    "dimensions": [max_width] * (request.max_degree + 1),
+                    "forward_differences": difference_rows,
+                },
+                limits=CanonicalLimits(),
+            )
+        )
     except CanonicalizationError as exc:
-        raise OperationResourceAdmissionError(
-            location=("complex",),
-            code="polytopal_complex.spline_profile_output",
-            message="spline profile source exceeds its output envelope",
-        ) from exc
-    output_bound = source_size + 1024 + (request.max_degree + 1) * 24
-    if output_bound > MAX_SPLINE_PROFILE_OUTPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="polytopal_complex.spline_profile_output",
-            message="finite spline profile exceeds its intrinsic output envelope",
+            message="finite spline profile exceeds the canonical output envelope",
+        ) from exc
+    if output_bound > CanonicalLimits().max_output_bytes:
+        raise OperationResourceAdmissionError(
+            location=("max_degree",),
+            code="polytopal_complex.spline_profile_output",
+            message="finite spline profile exceeds its canonical output envelope",
         )
+
+    # Construct and height-admit the entire prefix before the first FLINT rank.
+    rows_by_degree = []
+    for degree, (width, _) in enumerate(shapes):
+        _, _, rows, admitted_width = _spline_constraint_data(
+            complex_value,
+            degree,
+            request.smoothness,
+            dimension_only=True,
+            validate_complex=False,
+        )
+        if admitted_width != width:
+            raise ArithmeticError("spline profile width admission mismatch")
+        _admit_spline_rank_matrix(rows, width)
+        rows_by_degree.append(rows)
+
+    # The profile omits its degree-specific matrices. The bounded values above
+    # establish that the complete result fits before exact rank work begins.
     dimensions = tuple(
-        _spline_dimension_nullity_admitted(complex_value, degree, request.smoothness)
-        for degree in range(request.max_degree + 1)
+        _spline_dimension_nullity_from_rows(rows, width)
+        for rows, (width, _) in zip(rows_by_degree, shapes, strict=True)
     )
     differences = [dimensions]
     while len(differences[-1]) > 1:
@@ -2141,7 +2172,7 @@ def spline_dimension_profile(
     )
 
 
-def spline_refinement_map(  # noqa: C901
+def spline_refinement_map(
     request: SplineRefinementMapRequest,
 ) -> SplineRefinementMapResult:
     """Return the exact cellwise coefficient injection from coarse splines.
@@ -2222,12 +2253,47 @@ def spline_refinement_map(  # noqa: C901
             code="polytopal_complex.spline_refinement_map_rank_work",
             message="combined exact spline rank work exceeds the refinement-map envelope",
         )
-    source_input_bytes = len(encode_strict_json(request.coarse.model_dump(mode="json")))
+    refined_cells = tuple(
+        sorted(_refined_admitted.maximal_cells, key=lambda cell: cell.cell_id)
+    )
+    coarse_complex, coarse_axis, coarse_rows, coarse_width = _spline_constraint_rows(
+        coarse_admitted,
+        coarse_cells,
+        coarse_width,
+        request.degree,
+        request.smoothness,
+    )
+    _refined_complex, refined_axis, refined_rows, refined_width = (
+        _spline_constraint_rows(
+            _refined_admitted,
+            refined_cells,
+            refined_width,
+            request.degree,
+            request.smoothness,
+        )
+    )
+    _admit_spline_rank_matrix(coarse_rows, coarse_width)
+    _admit_spline_rank_matrix(refined_rows, refined_width)
+    basis_scalar_digits = _spline_nullspace_scalar_digit_bound(
+        coarse_rows, coarse_width
+    )
+    matrix_scalar_digits = max(
+        (
+            _decimal_digits_upper(value.numerator)
+            + _decimal_digits_upper(value.denominator)
+            for rows in (coarse_rows, refined_rows)
+            for row in rows
+            for value in row
+        ),
+        default=1,
+    )
+    retained_scalar_digits = max(basis_scalar_digits, matrix_scalar_digits)
+    source_input_bytes = len(encode_strict_json(coarse_complex.model_dump(mode="json")))
     refined_input_bytes = len(
-        encode_strict_json(request.refined.model_dump(mode="json"))
+        encode_strict_json(_refined_complex.model_dump(mode="json"))
     )
     output_bytes_bound = (
-        (source_cells_bound + target_cells_bound) * MAX_SPLINE_SCALAR_DIGITS
+        (source_cells_bound + target_cells_bound) * (retained_scalar_digits + 24)
         + 3 * source_input_bytes
         + 3 * refined_input_bytes
         + 4096 * (coarse_width + refined_width)
@@ -2236,19 +2302,13 @@ def spline_refinement_map(  # noqa: C901
         raise OperationResourceAdmissionError(
             location=("degree",),
             code="polytopal_complex.spline_refinement_map_output",
-            message="source, target, and refinement map exceed the composite output envelope",
+            message="source, target, and refinement map exceed the canonical output envelope",
         )
-
-    from jacobian.math.geometry.polytopes.complexes._models import (
-        CommonRefinementRequest,
-    )
-    from jacobian.math.geometry.polytopes.complexes.operations import (
-        polytopal_complex_common_refinement,
+    from jacobian.math.geometry.polytopes.complexes._refinement import (
+        common_refinement_admitted,
     )
 
-    refinement = polytopal_complex_common_refinement(
-        CommonRefinementRequest(left=request.coarse, right=request.refined)
-    )
+    refinement = common_refinement_admitted(coarse_admitted, _refined_admitted)
     # A refinement of the coarse complex has one top-dimensional intersection
     # per fine cell, and the overlay must be the supplied refined complex.
     target_geometry = {
@@ -2272,9 +2332,6 @@ def spline_refinement_map(  # noqa: C901
     pairs_by_target: dict[str, list[Any]] = {}
     for pair in refinement.cell_pairs:
         pairs_by_target.setdefault(pair.right_cell_id, []).append(pair)
-    refined_cells = tuple(
-        sorted(refinement.right.maximal_cells, key=lambda cell: cell.cell_id)
-    )
     target_ids = tuple(cell.cell_id for cell in refined_cells)
     if (
         target_geometry != overlay_geometry
@@ -2298,39 +2355,6 @@ def spline_refinement_map(  # noqa: C901
         for cell_id in target_ids
     )
 
-    # The common-refinement constructors return canonical complexes. Build
-    # coefficient data from those exact values so all retained axes and matrix
-    # columns use the same canonical cell IDs.
-    coarse_complex, coarse_axis, coarse_rows, coarse_width = _spline_constraint_rows(
-        refinement.left,
-        coarse_cells,
-        coarse_width,
-        request.degree,
-        request.smoothness,
-    )
-    _refined_complex, refined_axis, refined_rows, refined_width = (
-        _spline_constraint_rows(
-            refinement.right,
-            refined_cells,
-            refined_width,
-            request.degree,
-            request.smoothness,
-        )
-    )
-    _admit_spline_rank_matrix(coarse_rows, coarse_width)
-    _admit_spline_rank_matrix(refined_rows, refined_width)
-    basis_scalar_digits = _spline_nullspace_scalar_digit_bound(
-        coarse_rows, coarse_width
-    )
-    basis_output_bytes_bound = output_bytes_bound + coarse_width * coarse_width * max(
-        0, 2 * basis_scalar_digits + 32 - MAX_SPLINE_SCALAR_DIGITS
-    )
-    if basis_output_bytes_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_refinement_map_output",
-            message="the exact source basis and refinement map exceed the output envelope",
-        )
     source_space = _spline_space_from_data(
         coarse_complex,
         request.degree,
@@ -2588,13 +2612,13 @@ def _evaluate_spline_basis_combination(
     coefficients: tuple[CanonicalRational, ...],
     point: ComplexPoint,
     containing_ids: frozenset[str],
-) -> tuple[tuple[str, ...], Fraction | None]:
+) -> tuple[tuple[str, ...], tuple[Fraction, ...]]:
     cells = tuple(
         cell for cell in spline.complex.maximal_cells if cell.cell_id in containing_ids
     )
     point_fractions = tuple(value.as_fraction() for value in point.coordinates)
     if not cells:
-        return (), None
+        return (), ()
     coefficient_fractions = tuple(value.as_fraction() for value in coefficients)
     basis_values = tuple(
         tuple(value.as_fraction() for value in row)
@@ -2617,10 +2641,9 @@ def _evaluate_spline_basis_combination(
         for coordinate, power in zip(point_fractions, exponents, strict=True):
             monomial *= coordinate**power
         by_cell[cell_id].append(coefficient * monomial)
-    values = tuple(sum(terms, Fraction(0)) for terms in by_cell.values())
-    if any(other != values[0] for other in values[1:]):
-        raise ArithmeticError("canonical spline basis disagrees on a shared face")
-    return tuple(cell.cell_id for cell in cells), values[0]
+    return tuple(cell.cell_id for cell in cells), tuple(
+        sum(by_cell[cell.cell_id], Fraction(0)) for cell in cells
+    )
 
 
 def spline_evaluate(
@@ -2655,8 +2678,13 @@ def spline_evaluate(
         _admit_spline_evaluation_growth(
             spline, basis_coefficients, point, containing_ids
         )
-    cell_ids, value = _evaluate_spline_basis_combination(
+    cell_ids, cell_values = _evaluate_spline_basis_combination(
         spline, basis_coefficients, point, containing_ids
+    )
+    common_value = (
+        cell_values[0]
+        if cell_values and all(value == cell_values[0] for value in cell_values[1:])
+        else None
     )
     return SplineEvaluationResult(
         complex=spline.complex,
@@ -2665,7 +2693,14 @@ def spline_evaluate(
         basis_coefficients=basis_coefficients,
         point=point,
         containing_cell_ids=cell_ids,
-        value=None if value is None else CanonicalRational.from_fraction(value),
+        cell_values=tuple(
+            CanonicalRational.from_fraction(value) for value in cell_values
+        ),
+        value=(
+            None
+            if common_value is None
+            else CanonicalRational.from_fraction(common_value)
+        ),
     )
 
 

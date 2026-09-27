@@ -114,3 +114,16 @@ def test_refinement_map_rejects_a_coarsening_with_equal_support():
                 coarse=coarse, refined=one_cell, degree=1, smoothness=0
             )
         )
+
+
+def test_degree_twelve_identity_refinement_admits_its_actual_basis_height():
+    segment = polytopal_complex_closure((_interval(0, 1, "unit"),))
+    result = spline_refinement_map(
+        SplineRefinementMapRequest(
+            coarse=segment, refined=segment, degree=12, smoothness=0
+        )
+    )
+
+    assert result.coarse_nullspace_basis.row_count == 13
+    assert result.coarse_nullspace_basis.column_count == 13
+    assert result.refined_compatibility_matrix.row_count == 0

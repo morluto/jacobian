@@ -730,13 +730,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="polyhedral_complex.spline.evaluate.compute",
         title="Evaluate an exact rational spline from basis coordinates",
         description=(
-            "Compute the admitted C^r spline space for a face-closed rational "
+            "Compute the admitted spline space for a face-closed rational "
             "polytopal complex, interpret basis_coefficients in the canonical "
             "nullspace basis returned by that space, and evaluate the resulting "
             "spline at one rational point. The point may lie on shared faces; "
-            "C^0 continuity makes the exact values agree there. A point outside "
-            "the union of maximal cells returns an empty containing-cell list and "
-            "no value. Exact coefficient growth is admitted before evaluation. "
+            "the result gives one exact value per containing cell and includes a "
+            "scalar value when those values agree. With smoothness -1, adjacent "
+            "pieces may differ at a shared face. A point outside the union of "
+            "maximal cells returns empty cell lists and no scalar value. Exact "
+            "coefficient growth is admitted before evaluation. "
             "The same degree, smoothness, and complex envelope as the spline-space "
             "operation applies."
         ),

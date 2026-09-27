@@ -752,20 +752,35 @@ class SplineEvaluationResult(StrictModel):
     basis_coefficients: tuple[CanonicalRational, ...] = Field(max_length=4096)
     point: ComplexPoint
     containing_cell_ids: tuple[str, ...] = Field(max_length=MAX_COMPLEX_CELLS)
+    cell_values: tuple[CanonicalRational, ...] = Field(max_length=MAX_COMPLEX_CELLS)
     value: CanonicalRational | None = None
 
     @model_validator(mode="after")
     def require_evaluation_shape(self) -> Self:
-        if self.containing_cell_ids:
-            if self.value is None:
-                raise _validation_error(
-                    "spline_evaluation_value",
-                    "a point in the complex requires an exact evaluated value",
-                )
-        elif self.value is not None:
+        if len(self.containing_cell_ids) != len(self.cell_values):
+            raise _validation_error(
+                "spline_evaluation_cells",
+                "each containing cell must have one exact piece value",
+            )
+        if not self.containing_cell_ids and (
+            self.cell_values or self.value is not None
+        ):
             raise _validation_error(
                 "spline_evaluation_value",
                 "a point outside the complex must not carry a value",
+            )
+        if self.cell_values and all(
+            item == self.cell_values[0] for item in self.cell_values[1:]
+        ):
+            if self.value != self.cell_values[0]:
+                raise _validation_error(
+                    "spline_evaluation_value",
+                    "the scalar value must equal the common value on all containing cells",
+                )
+        elif self.cell_values and self.value is not None:
+            raise _validation_error(
+                "spline_evaluation_value",
+                "a point with differing piece values must not carry a scalar value",
             )
         return self
 

@@ -31,6 +31,7 @@ from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
     BraidClosureResult,
+    BraidProductRequest,
     BraidWordRequest,
     GoeritzDataRequest,
     GoeritzDataResult,
@@ -326,6 +327,40 @@ class TestLinkExtensionTools:
             )
             == 2
         )
+        inverse = catalog["braid.word.inverse.compute"].run(
+            BraidWordRequest(word=_two_braid(1, -1))
+        )
+        assert tuple(letter.exponent for letter in inverse.letters) == (1, -1)
+        product = catalog["braid.word.multiply.compute"].run(
+            BraidProductRequest(left=_two_braid(1, -1), right=_two_braid(-1, 1))
+        )
+        assert tuple(letter.exponent for letter in product.letters) == (1, -1, -1, 1)
+        assert product.strand_count == 2
         assert catalog["link_diagram.wirtinger_presentation.compute"].run(
             WirtingerPresentationRequest(diagram=OrientedLinkDiagram(free_loops=1))
         ).presentation.generators == ("meridian_000",)
+
+    def test_braid_product_public_bounds_are_exact(self) -> None:
+        catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
+        multiply = catalog["braid.word.multiply.compute"]
+        with pytest.raises(OperationDomainValidationError, match="same strand count"):
+            multiply.run(
+                BraidProductRequest(left=_two_braid(1), right=BraidWord(strand_count=3))
+            )
+        with pytest.raises(OperationResourceAdmissionError, match="64-letter"):
+            multiply.run(
+                BraidProductRequest(
+                    left=BraidWord(
+                        strand_count=2,
+                        letters=tuple(
+                            BraidLetter(generator=1, exponent=1) for _ in range(32)
+                        ),
+                    ),
+                    right=BraidWord(
+                        strand_count=2,
+                        letters=tuple(
+                            BraidLetter(generator=1, exponent=1) for _ in range(33)
+                        ),
+                    ),
+                )
+            )

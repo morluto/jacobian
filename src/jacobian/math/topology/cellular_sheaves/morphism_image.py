@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import BaseModel, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -33,7 +33,6 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismResult,
     _admit_component_matrix,
     _admit_morphism_resources,
-    _admit_section_plan,
     _mul,
     _resolve_component_key,
 )
@@ -122,6 +121,19 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
         code=f"topology.cellular_sheaf.morphism_image.{code}",
         message=message,
     )
+
+
+def _unvalidated_payload(value: object) -> object:
+    """Expose nested model fields as raw containers for trust-boundary revalidation."""
+    if isinstance(value, BaseModel):
+        return {key: _unvalidated_payload(item) for key, item in value.__dict__.items()}
+    if isinstance(value, tuple):
+        return tuple(_unvalidated_payload(item) for item in value)
+    if isinstance(value, list):
+        return [_unvalidated_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _unvalidated_payload(item) for key, item in value.items()}
+    return value
 
 
 def _require_image_diagram_axes(
@@ -302,6 +314,14 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
             "parent_type", "morphism parents must be typed finite cellular sheaves"
         )
     source, target = value.source, value.target
+    try:
+        source = FiniteCellularSheaf.model_validate(_unvalidated_payload(source))
+        target = FiniteCellularSheaf.model_validate(_unvalidated_payload(target))
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise _domain(
+            "parent_structure",
+            "morphism parents must contain structurally valid cellular sheaf data",
+        ) from error
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (
@@ -313,8 +333,6 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
             "parent_mismatch",
             "sheaf morphisms require one complex and coefficient field",
         )
-    _admit_section_plan(source)
-    _admit_section_plan(target)
     cells = source.canonical_face_order
     _canonical_component_cells(value.components, cells)
     _require_component_shapes(value.components, cells, source, target)

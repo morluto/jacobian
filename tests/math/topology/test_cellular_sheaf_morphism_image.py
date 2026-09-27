@@ -305,14 +305,24 @@ def test_image_rejects_non_natural_candidate_even_if_flag_claims_true() -> None:
     with pytest.raises(OperationDomainValidationError, match="parents"):
         image_of_morphism(malformed_parent)
 
-    malformed = SheafMorphismResult.model_construct(
-        source=source,
+    malformed_nested_parent = SheafMorphismResult.model_construct(
+        source=source.model_copy(update={"stalks": ({},)}),
         target=target,
-        components=((source.canonical_face_order[0], (1,)),),
+        components=(),
         natural=True,
         obstruction=None,
     )
-    with pytest.raises(OperationDomainValidationError, match="simplex, matrix"):
+    with pytest.raises(OperationDomainValidationError, match="structurally valid"):
+        image_of_morphism(malformed_nested_parent)
+
+    malformed = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=tuple((cell, (1,)) for cell in source.canonical_face_order),
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError, match="pairs"):
         image_of_morphism(malformed)
 
     malformed_key = SheafMorphismResult.model_construct(

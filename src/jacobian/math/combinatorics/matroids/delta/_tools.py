@@ -167,25 +167,18 @@ def _run_loop_complement(
 ) -> BinaryLoopComplementResult:
     return loop_complement(request.matrix, request.subset)
 
-
 def _run_direct_sum(
     request: DeltaMatroidDirectSumRequest,
 ) -> DeltaMatroidDirectSumResult:
     return direct_sum(request.left, request.right)
-
-
 def _run_twist_width_profile(
     request: DeltaMatroidTwistWidthProfileRequest,
 ) -> DeltaMatroidTwistWidthProfileResult:
     return twist_width_profile(request.delta_matroid)
-
-
 def _run_feasible_size_profile(
     request: DeltaMatroidFeasibleSizeProfileRequest,
 ) -> DeltaMatroidFeasibleSizeProfile:
     return feasible_size_profile(request.delta_matroid)
-
-
 def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
     return relabel(
         request.delta_matroid,
@@ -588,6 +581,38 @@ TOOLS: MathTools = (  # noqa: RUF005
                         "ground": ["a", "b"],
                         "feasible": [[], [0], [0, 1], [1]],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="delta_matroid.relabel.compute",
+        title="Relabel and reorder a finite delta-matroid ground set",
+        description=(
+            "Apply a bijection from the target ground axis to the source axis, "
+            "transport every feasible subset to the target indices, and retain "
+            "both inverse axis maps. The complete source family is checked "
+            "before transport; memberships, ground labels, work, and result "
+            "allocations are bounded."
+        ),
+        request_type=DeltaMatroidRelabelRequest,
+        result_type=DeltaMatroidRelabelling,
+        run=_run_relabel,
+        tags=("delta-matroid", "relabel", "isomorphism", "exact"),
+        examples=(
+            OperationExample(
+                name="swap_ground_axis",
+                description=(
+                    "Swap the source axes while renaming them; feasible subsets "
+                    "and the inverse coordinate maps are transported exactly."
+                ),
+                input={
+                    "delta_matroid": {
+                        "ground": ["a", "b"],
+                        "feasible": [[], [0], [0, 1]],
+                    },
+                    "target_ground": ["B", "A"],
+                    "target_to_source": [1, 0],
                 },
             ),
         ),

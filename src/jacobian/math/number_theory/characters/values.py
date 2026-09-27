@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import BeforeValidator, Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -17,6 +17,20 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by Dirichlet-character values."""
 
     return PydanticCustomError(f"dirichlet_character.{reason}", message)
+
+
+def _validate_invariant_factor(value: object) -> object:
+    """Reject non-positive invariant factors with the stable range error."""
+
+    if type(value) is int and value < 1:
+        raise _validation_error(
+            "invariant_factor_range",
+            "invariant factors must be positive",
+        )
+    return value
+
+
+InvariantFactor = Annotated[StrictInt, BeforeValidator(_validate_invariant_factor)]
 
 
 class CyclotomicValue(StrictModel):
@@ -380,7 +394,7 @@ class DirichletCharacterGroup(StrictModel):
         min_length=1, max_length=MAX_CHARACTER_GROUP_MODULUS
     )
     character_count: StrictInt = Field(ge=1, le=MAX_CHARACTER_GROUP_MODULUS)
-    invariant_factors: tuple[Annotated[StrictInt, Field(ge=2)], ...] = Field(
+    invariant_factors: tuple[InvariantFactor, ...] = Field(
         max_length=32,
         description=(
             "Divisibility chain of the finite Abelian unit group; empty exactly "

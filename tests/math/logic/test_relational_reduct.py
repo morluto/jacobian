@@ -138,9 +138,7 @@ def test_native_kernel_rejects_validation_bypassed_unknown_symbol() -> None:
 
 def test_reduct_catalog_example_is_wired() -> None:
     operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "relational.reduct.compute"
+        tool for tool in TOOLS if tool.operation_id == "relational.reduct.compute"
     )
     request = operation.request_type.model_validate(operation.examples[0].input)
     result = operation.run(request)

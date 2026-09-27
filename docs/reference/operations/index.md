@@ -34,6 +34,7 @@ that need more context than an operation card:
 - [Weyl-group Poincare polynomials](groups/weyl-poincare-polynomial.md)
 - [Standard parabolic Weyl subgroups](groups/weyl-parabolic.md)
 - [Regular languages](regular-languages.md)
+- [Finite-state transducers](finite-state-transducers.md)
 - [Accepted ranked trees by height](tree-automaton-height-count.md)
 - [Deterministic tree-automaton complement](tree-automaton-complement.md)
 - [Nondeterministic tree-automaton run counts](tree-automaton-run-counts.md)

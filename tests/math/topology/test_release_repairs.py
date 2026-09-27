@@ -31,6 +31,7 @@ from jacobian.math.topology.chain_complexes.filtered_extensions import (
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
 )
 from jacobian.math.topology.cubical_complexes._models import CubicalCell
@@ -64,8 +65,8 @@ from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 def test_standard_simplex_normalized_prefix_has_square_zero_boundary() -> None:
     simplex = standard_simplex(1, 2)
     normalized = normalized_chains(simplex)
-    assert normalized.differential_squared_zero is True
-    assert normalized.nondegenerate_counts == (2, 1, 0)
+    assert normalized.chain_complex.basis_sizes == (2, 1, 0)
+    assert normalized.nondegenerate_bases[0] == simplex.sets[0]
 
 
 def test_face_poset_and_clique_reconstruct_small_triangle() -> None:
@@ -385,7 +386,7 @@ def test_relative_homology_admits_group_and_matrix_bounds_before_dense_work() ->
         )
 
 
-def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
+def test_filtered_chain_map_retains_canonical_value_and_checks_its_relation() -> None:
     complex_ = ChainComplexValue(
         coefficient_ring=CoefficientRing.PRIME_FIELD,
         prime=2,
@@ -404,15 +405,17 @@ def test_filtered_chain_map_reduces_compositions_and_map_output() -> None:
     )
     result = filtered_map(
         FilteredChainMapRequest(
-            source=complex_,
+            chain_map=ChainMapValue(
+                source=complex_,
+                target=complex_,
+                map_matrices=(((0,),), ((0,),)),
+            ),
             source_filtration=filtration,
-            target=complex_,
             target_filtration=filtration,
-            maps=(((0,),), ((2,),)),
         )
     )
-    assert result.chain_map is True
-    assert result.maps == (((0,),), ((0,),))
+    assert result.is_chain_map is True
+    assert result.chain_map.map_matrices == (((0,),), ((0,),))
 
 
 def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
@@ -449,19 +452,21 @@ def test_filtered_chain_map_preserves_width_through_zero_chain_group() -> None:
 
     result = filtered_map(
         FilteredChainMapRequest(
-            source=source,
+            chain_map=ChainMapValue(
+                source=source,
+                target=target,
+                map_matrices=(((),), ((0,),)),
+            ),
             source_filtration=source_filtration,
-            target=target,
             target_filtration=target_filtration,
-            maps=(((),), ((0,),)),
         )
     )
 
-    assert result.chain_map is True
+    assert result.is_chain_map is True
     assert result.filtration_preserving is True
 
 
-def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> None:
+def test_filtered_chain_map_rejects_non_nested_filtration() -> None:
     complex_ = ChainComplexValue(
         coefficient_ring=CoefficientRing.PRIME_FIELD,
         prime=2,
@@ -487,11 +492,43 @@ def test_filtered_chain_map_rejects_non_nested_non_exhaustive_filtration() -> No
     with pytest.raises(OperationDomainValidationError, match="not contained"):
         filtered_map(
             FilteredChainMapRequest(
-                source=complex_,
+                chain_map=ChainMapValue(
+                    source=complex_,
+                    target=complex_,
+                    map_matrices=(((1,),), ((1,),)),
+                ),
                 source_filtration=malformed,
-                target=complex_,
                 target_filtration=malformed,
-                maps=(((1,),), ((1,),)),
+            )
+        )
+
+
+def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
+    complex_ = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=2,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 1),
+        differential_matrices=(((1,),),),
+    )
+    zero = FilteredSubspace(vectors=())
+    filtration = (
+        FiltrationLevel(subspaces=(zero, zero)),
+        FiltrationLevel(subspaces=(zero, zero)),
+    )
+    with pytest.raises(
+        OperationDomainValidationError, match="top filtration level must span"
+    ):
+        filtered_map(
+            FilteredChainMapRequest(
+                chain_map=ChainMapValue(
+                    source=complex_,
+                    target=complex_,
+                    map_matrices=(((1,),), ((1,),)),
+                ),
+                source_filtration=filtration,
+                target_filtration=filtration,
             )
         )
 

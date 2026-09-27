@@ -25,6 +25,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_coordinates_hecke,
     modular_character_coordinates_product,
     modular_character_coordinates_q_expansion,
+    modular_character_coordinates_u_prime,
     modular_character_hecke_matrix,
 )
 from jacobian.math.number_theory.modular_forms.character_basis_models import (
@@ -38,6 +39,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
     ModularCharacterTransportedForm,
+    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
     modular_character_coordinates_equal_in_common_space,
@@ -53,6 +55,7 @@ from jacobian.math.number_theory.modular_forms.field_coordinates import (
 )
 from jacobian.math.number_theory.modular_forms.operations import (
     level_one_named_q_expansion,
+    modular_form_atkin_lehner_target,
     named_q_expansion,
     space_dimension,
     sturm_bound,
@@ -63,6 +66,7 @@ from jacobian.math.number_theory.modular_forms.transforms import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularFormAtkinLehnerTarget,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
     ModularFormCoordinates,
@@ -88,6 +92,8 @@ __all__ = [
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
     "ModularCharacterTransportedForm",
+    "ModularCharacterUPrimeRequest",
+    "ModularFormAtkinLehnerTarget",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",
     "ModularFormCoordinates",
@@ -108,7 +114,9 @@ __all__ = [
     "modular_character_coordinates_product",
     "modular_character_coordinates_q_expansion",
     "modular_character_coordinates_transport",
+    "modular_character_coordinates_u_prime",
     "modular_character_hecke_matrix",
+    "modular_form_atkin_lehner_target",
     "modular_form_basis_frame",
     "modular_form_basis_q_expansions",
     "modular_form_coordinates_add",

@@ -188,6 +188,13 @@ class ModularCharacterSpaceInclusion(StrictModel):
         return self
 
 
+class ModularCharacterUPrimeRequest(StrictModel):
+    """Apply the modular U_p operator at a prime dividing the level."""
+
+    form: ModularFormCoordinates
+    prime: StrictInt = Field(ge=2, le=13)
+
+
 class ModularCharacterCommonTargetPrefix(StrictModel):
     """An exact q-prefix in an explicitly embedded character space."""
 
@@ -277,4 +284,5 @@ __all__ = [
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
     "ModularCharacterTransportedForm",
+    "ModularCharacterUPrimeRequest",
 ]

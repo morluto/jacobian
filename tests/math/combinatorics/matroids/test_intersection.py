@@ -15,6 +15,7 @@ from jacobian.math.combinatorics.matroids._models import (
 )
 from jacobian.math.combinatorics.matroids._tools import TOOLS
 from jacobian.math.combinatorics.matroids.intersection import (
+    matroid_common_basis,
     matroid_intersection,
     replay_intersection_result,
 )
@@ -31,6 +32,14 @@ def test_intersection_uses_bounded_exchange_work_at_twenty_elements() -> None:
     result = matroid_intersection(_zero_matroid(20), _zero_matroid(20))
     assert result.common_independent == ()
     assert result.witness.equality == 0
+
+
+def test_common_basis_presolves_large_rank_zero_grounds() -> None:
+    result = matroid_common_basis(_zero_matroid(84), _zero_matroid(84))
+
+    assert result.status == "COMMON_BASIS"
+    assert result.common_basis == ()
+    assert result.rank_first == result.rank_second == 0
 
 
 def test_intersection_presolves_large_rank_zero_grounds(

@@ -189,6 +189,20 @@ def test_optimizer_wide_split_round_trips_and_verifies() -> None:
     assert verify_weighted_intersection_result(decoded)
 
 
+def test_weighted_optimizer_presolves_large_rank_zero_grounds() -> None:
+    labels = tuple(f"e{index}" for index in range(41))
+    zero_rank = _matroid(tuple((0,) for _ in labels), labels)
+
+    result = maximum_weight_matroid_intersection(
+        *_request(zero_rank, zero_rank, (0,) * len(labels))
+    )
+
+    assert result.common_independent == ()
+    assert result.total_weight == 0
+    assert result.first_maximizer.independent_set == ()
+    assert result.second_maximizer.independent_set == ()
+
+
 def test_weighted_intersection_matches_exhaustive_gf2_instances() -> None:
     """Compare all small represented matroid pairs with a coefficient oracle."""
     labels = ("a", "b", "c")

@@ -24,6 +24,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
+    MaximumWeightIndependentSetResult,
     ground_axis_codepoints,
 )
 from jacobian.math.combinatorics.matroids.operations import (
@@ -246,6 +247,26 @@ def _rank_zero_intersection_result(
     )
 
 
+def _rank_zero_intersection_presolve(
+    first: LinearMatroid, second: LinearMatroid
+) -> tuple[int, int, MatroidIntersectionResult] | None:
+    """Admit and compute the two source ranks before a rejected exchange bound."""
+    try:
+        _admit_work(first, second, source_rank_calls=2, skip_exchange=True)
+    except OperationResourceAdmissionError:
+        return None
+    _admit_prime(first.matrix.prime)
+    first_rank = pf_rank(first.matrix)
+    second_rank = pf_rank(second.matrix)
+    if first_rank != 0 and second_rank != 0:
+        return None
+    return (
+        first_rank,
+        second_rank,
+        _rank_zero_intersection_result(first, second, first_rank, second_rank),
+    )
+
+
 def _independent(m: LinearMatroid, subset: Sequence[int]) -> bool:
     return len(subset) == pf_rank(_selected_columns_matrix(m, list(subset)))
 
@@ -438,18 +459,10 @@ def matroid_intersection(
     try:
         _admit_work(first, second)
     except OperationResourceAdmissionError as admission_error:
-        n = first.ground_size
-        rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
-        rank_cost = rows * n * min(rows, n)
-        rank_zero_work = 6 * rank_cost
-        if rank_zero_work > MAX_INTERSECTION_WORK:
+        presolved = _rank_zero_intersection_presolve(first, second)
+        if presolved is None:
             raise admission_error
-        first_rank = pf_rank(first.matrix)
-        second_rank = pf_rank(second.matrix)
-        if first_rank != 0 and second_rank != 0:
-            raise admission_error
-        _admit_work(first, second, source_rank_calls=2, skip_exchange=True)
-        return _rank_zero_intersection_result(first, second, first_rank, second_rank)
+        return presolved[2]
     return _matroid_intersection_admitted(first, second)
 
 
@@ -460,7 +473,18 @@ def matroid_common_basis(
     first, second = _admit_pair(first, second)
     # The one operation admission includes exchange, witness, feasibility, and
     # the two added source-rank computations before any exact expansion.
-    _admit_work(first, second, source_rank_calls=2)
+    try:
+        _admit_work(first, second, source_rank_calls=2)
+    except OperationResourceAdmissionError as admission_error:
+        presolved = _rank_zero_intersection_presolve(first, second)
+        if presolved is None:
+            raise admission_error
+        rank_first, rank_second, intersection = presolved
+        return MatroidCommonBasisResult._from_kernel(
+            intersection=intersection,
+            rank_first=rank_first,
+            rank_second=rank_second,
+        )
     maximum = _matroid_intersection_admitted(first, second)
     return MatroidCommonBasisResult._from_kernel(
         intersection=maximum,
@@ -808,7 +832,45 @@ def _maximum_weight_matroid_intersection_from_values(
     """Native-value kernel shared by the wire adapter and composable operations."""
     first, second = _admit_pair(first, second)
     weights, canonical_function = _canonical_weight_function(first, weight_function)
-    _weighted_intersection_optimization_admission(first, second, weights)
+    try:
+        _weighted_intersection_optimization_admission(first, second, weights)
+    except OperationResourceAdmissionError as admission_error:
+        presolved = _rank_zero_intersection_presolve(first, second)
+        if presolved is None:
+            raise admission_error
+        first_rank, second_rank, _ = presolved
+        zero_weights = (0,) * first.ground_size
+        first_split_values = weights if first_rank == 0 else zero_weights
+        second_split_values = weights if second_rank == 0 else zero_weights
+        first_split = MatroidWeightFunction(
+            ground_axis=first.ground_axis, values=first_split_values
+        )
+        second_split = MatroidWeightFunction(
+            ground_axis=second.ground_axis, values=second_split_values
+        )
+        first_order = tuple(
+            sorted(
+                (i for i, value in enumerate(first_split_values) if value > 0),
+                key=lambda i: (-first_split_values[i], i),
+            )
+        )
+        second_order = tuple(
+            sorted(
+                (i for i, value in enumerate(second_split_values) if value > 0),
+                key=lambda i: (-second_split_values[i], i),
+            )
+        )
+        return MatroidWeightedIntersectionResult._from_kernel(
+            weight_function=canonical_function,
+            common_independent=(),
+            total_weight=0,
+            first_maximizer=MaximumWeightIndependentSetResult._from_kernel(
+                first, first_split, (), 0, 0, first_order
+            ),
+            second_maximizer=MaximumWeightIndependentSetResult._from_kernel(
+                second, second_split, (), 0, 0, second_order
+            ),
+        )
     _admit_prime(first.matrix.prime)
     selected = _weighted_matroid_intersection_admitted(first, second, weights)
     first_split_values, second_split_values = (

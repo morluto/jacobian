@@ -89,6 +89,29 @@ MAX_SOLVABLE_RADICAL_WORK = 20_000_000
 MAX_SOLVABLE_RADICAL_OUTPUT_BYTES = 4 * 1024 * 1024
 
 
+def _solvable_radical_scale(coefficients: tuple[Fraction, ...]) -> Fraction:
+    """Use a common scale only when it reduces the largest coefficient height."""
+    scale = max((abs(value) for value in coefficients), default=Fraction(0))
+    if scale == 0:
+        return Fraction(1)
+
+    def height(values: tuple[Fraction, ...]) -> int:
+        return max(
+            (
+                max(
+                    decimal_digit_width(abs(value.numerator)),
+                    decimal_digit_width(value.denominator),
+                )
+                for value in values
+            ),
+            default=1,
+        )
+
+    raw_height = height(coefficients)
+    normalized = tuple(value / scale for value in coefficients)
+    return scale if height(normalized) <= raw_height else Fraction(1)
+
+
 def _as_algebra(
     value: FiniteDimensionalLieAlgebra | Mapping[str, Any],
 ) -> FiniteDimensionalLieAlgebra:
@@ -603,9 +626,7 @@ def _solvable_radical_admission(algebra: FiniteDimensionalLieAlgebra) -> int:
     raw_coefficients = tuple(
         item.coefficient.as_fraction() for item in algebra.structure_constants
     )
-    scale = max((abs(value) for value in raw_coefficients), default=Fraction(0))
-    if scale == 0:
-        scale = Fraction(1)
+    scale = _solvable_radical_scale(raw_coefficients)
     # A uniform nonzero bracket scaling preserves [g,g] and scales the Killing
     # form by a nonzero square, so its orthogonal complement is unchanged.
     coefficients = tuple(value / scale for value in raw_coefficients)
@@ -727,15 +748,12 @@ def lie_solvable_radical(
     algebra_value = _as_algebra(algebra)
     admitted_work = _solvable_radical_admission(algebra_value)
     table = _admit_lie_algebra(algebra_value)
-    scale = max(
-        (
-            abs(item.coefficient.as_fraction())
+    scale = _solvable_radical_scale(
+        tuple(
+            item.coefficient.as_fraction()
             for item in algebra_value.structure_constants
-        ),
-        default=Fraction(0),
+        )
     )
-    if scale == 0:
-        scale = Fraction(1)
     # Run derived-space and Killing calculations on the scale-normalized
     # bracket. Its radical is exactly the radical of the source bracket.
     table = {

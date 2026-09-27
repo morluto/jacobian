@@ -104,6 +104,37 @@ def test_common_scaling_does_not_inflate_radical_admission() -> None:
     )
 
 
+def test_anisotropic_basis_scaling_keeps_the_sparse_radical_admissible() -> None:
+    scale = 10**63
+    algebra = FiniteDimensionalLieAlgebra.model_validate(
+        {
+            "basis": ["e", "f", "scaled_h"],
+            "structure_constants": [
+                {"i": 0, "j": 1, "k": 2, "coefficient": {"num": scale, "den": 1}},
+                {
+                    "i": 0,
+                    "j": 2,
+                    "k": 0,
+                    "coefficient": {
+                        "num": Fraction(-2, scale).numerator,
+                        "den": Fraction(-2, scale).denominator,
+                    },
+                },
+                {
+                    "i": 1,
+                    "j": 2,
+                    "k": 1,
+                    "coefficient": {
+                        "num": Fraction(2, scale).numerator,
+                        "den": Fraction(2, scale).denominator,
+                    },
+                },
+            ],
+        }
+    )
+    assert _rows(lie_solvable_radical(algebra)) == ()
+
+
 def test_manifest_declares_the_typed_radical_result_and_example() -> None:
     tool = next(
         item

@@ -12,9 +12,9 @@ from jacobian.math.graphs.decks import (
     UnlabelledVertexDeck,
     VertexDeletionFamily,
     unlabelled_vertex_deck,
-    vertex_deck_degree_multiset,
     vertex_deletion_family,
 )
+from jacobian.math.graphs.decks.operations import vertex_deck_degree_multiset
 from jacobian.math.graphs.realization._models import DegreeSequence
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 

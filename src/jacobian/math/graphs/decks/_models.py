@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from itertools import combinations, permutations
 from math import comb, factorial
 from typing import Annotated, Any, Self
 
@@ -24,11 +23,6 @@ MAX_DECK_CARD_EDGES = 130_000
 MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
-MAX_UNLABELLED_EDGE_DECK_RESULT_BYTES = 1_000_000
-MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
-MAX_ANONYMOUS_CARD_RESULT_BYTES = 1_000_000
-MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_BYTES // 64
-"""Admission cap on aggregate card edges across the whole family."""
 MAX_VERTEX_DECK_SOURCE_EDGES = comb(MAX_UNLABELLED_DECK_VERTICES, 2)
 MAX_VERTEX_DECK_CARD_EDGE_TOTAL = MAX_UNLABELLED_DECK_VERTICES * comb(
     MAX_UNLABELLED_DECK_VERTICES - 1, 2
@@ -52,162 +46,6 @@ MAX_DEGREE_MULTISET_DIGITS = 64
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"graph_deck.{reason}", message)
-
-
-def _anonymous_canonicalization_work(order: int, card_count: int) -> int:
-    """Charge each permutation for vector generation and worst-case comparison."""
-    pair_count = comb(order, 2)
-    return card_count * factorial(order) * (order + 2 * max(1, pair_count))
-
-
-def _canonical_card_edges(
-    vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
-) -> tuple[tuple[str, str], ...]:
-    """Return the least fixed-axis adjacency encoding in the permutation orbit."""
-    n = len(vertices)
-    index = {vertex: i for i, vertex in enumerate(vertices)}
-    edge_indices = {frozenset((index[left], index[right])) for left, right in edges}
-    pairs = tuple(combinations(range(n), 2))
-    best: tuple[int, ...] | None = None
-    for order in permutations(range(n)):
-        bits = tuple(
-            int(frozenset((order[i], order[j])) in edge_indices) for i, j in pairs
-        )
-        if best is None or bits < best:
-            best = bits
-    assert best is not None
-    labels = tuple(f"v{i:02d}" for i in range(n))
-    return tuple(
-        (labels[i], labels[j]) for bit, (i, j) in zip(best, pairs, strict=True) if bit
-    )
-
-
-class AnonymousGraphCardMultisetRequest(StrictModel):
-    """Unordered finite multiset input; card_order disambiguates the empty case."""
-
-    card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
-    cards: tuple[SimpleUndirectedGraph, ...] = Field(
-        max_length=MAX_ANONYMOUS_CARD_CLASSES,
-        description=(
-            "An unordered list of simple graphs, each with exactly card_order "
-            "vertices. Repeated isomorphic cards encode multiplicity. An empty "
-            "list is the empty multiset of cards of the declared order."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_declared_order(self) -> Self:
-        if any(len(card.vertices) != self.card_order for card in self.cards):
-            raise _validation_error(
-                "anonymous_card_order", "every card must have the declared card_order"
-            )
-        return self
-
-
-class AnonymousGraphCardClass(StrictModel):
-    """One canonically relabelled isomorphism class and its exact multiplicity."""
-
-    representative: SimpleUndirectedGraph
-    multiplicity: Annotated[int, DecimalIntegerEncoding(max_digits=12)] = Field(
-        ge=1, json_schema_extra={"pattern": "^[1-9][0-9]*$"}
-    )
-
-
-class AnonymousGraphCardMultiset(StrictModel):
-    """Anonymous card multiset; it carries no source graph or deletion keys."""
-
-    card_order: int = Field(ge=0, le=MAX_UNLABELLED_DECK_VERTICES)
-    classes: tuple[AnonymousGraphCardClass, ...] = Field(
-        max_length=MAX_ANONYMOUS_CARD_CLASSES
-    )
-
-    @model_validator(mode="after")
-    def require_structural_canonical_form(self) -> Self:
-        n = self.card_order
-        if type(n) is not int or n < 0 or n > MAX_UNLABELLED_DECK_VERTICES:
-            raise _validation_error(
-                "anonymous_card_order", "card_order is outside its bound"
-            )
-        if (
-            type(self.classes) is not tuple
-            or len(self.classes) > MAX_ANONYMOUS_CARD_CLASSES
-        ):
-            raise _validation_error(
-                "anonymous_card_classes", "classes exceed the carrier bound"
-            )
-        pair_count = comb(n, 2)
-        output_bytes = len(self.classes) * (64 + 16 * pair_count)
-        if output_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES:
-            raise _validation_error(
-                "anonymous_card_output_bound",
-                "canonical classes exceed the result byte bound",
-            )
-        previous_key: tuple[tuple[str, str], ...] | None = None
-        expected_vertices = tuple(f"v{i:02d}" for i in range(n))
-        for item in self.classes:
-            if type(item) is not AnonymousGraphCardClass:
-                raise _validation_error(
-                    "anonymous_card_class_carrier", "classes have the wrong carrier"
-                )
-            multiplicity = getattr(item, "multiplicity", None)
-            if (
-                type(multiplicity) is not int
-                or multiplicity < 1
-                or multiplicity >= 10**12
-            ):
-                raise _validation_error(
-                    "anonymous_card_multiplicity",
-                    "class multiplicity must be a positive bounded exact integer",
-                )
-            graph = getattr(item, "representative", None)
-            if (
-                type(graph) is not SimpleUndirectedGraph
-                or type(graph.vertices) is not tuple
-                or len(graph.vertices) != n
-                or graph.vertices != expected_vertices
-                or type(graph.edges) is not tuple
-                or len(graph.edges) > pair_count
-            ):
-                raise _validation_error(
-                    "anonymous_card_labels",
-                    "representatives must have the canonical fixed-width axis and bounded edges",
-                )
-            if any(
-                type(edge) is not tuple
-                or len(edge) != 2
-                or any(type(label) is not str for label in edge)
-                for edge in graph.edges
-            ):
-                raise _validation_error(
-                    "anonymous_card_edges", "representative edges must be pairs"
-                )
-            if (
-                len(set(graph.edges)) != len(graph.edges)
-                or any(
-                    left >= right
-                    or left not in expected_vertices
-                    or right not in expected_vertices
-                    for left, right in graph.edges
-                )
-                or tuple(sorted(graph.edges)) != graph.edges
-            ):
-                raise _validation_error(
-                    "anonymous_card_edges",
-                    "representative edges must be valid, unique, and ordered",
-                )
-            if previous_key is not None and graph.edges <= previous_key:
-                raise _validation_error(
-                    "anonymous_card_classes",
-                    "classes must be unique and lexicographically ordered",
-                )
-            previous_key = graph.edges
-        return self
-
-    @classmethod
-    def _from_kernel(
-        cls, card_order: int, classes: tuple[AnonymousGraphCardClass, ...]
-    ) -> Self:
-        return cls.model_construct(card_order=card_order, classes=classes)
 
 
 class VertexDeckRequest(StrictModel):

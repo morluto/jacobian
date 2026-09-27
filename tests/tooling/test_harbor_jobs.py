@@ -11,7 +11,7 @@ from benchmarks.tooling.benchmark_contracts import (
     collect_contract_failures,
     validate_job_contract,
 )
-from benchmarks.tooling.harbor_suite import load_registry
+from benchmarks.tooling.harbor_suite import get_suite, load_registry
 from tools.command_runner import ToolCommandStatus, run_operator_command
 
 ROOT = Path(__file__).parents[2]
@@ -36,6 +36,22 @@ def _read_json(path: Path) -> dict[str, object]:
 
 def test_observation_job_uses_harbor_dataset_selection() -> None:
     job = _read_json(JOB)
+    environment = job.get("environment")
+    assert isinstance(environment, dict)
+    canonical_task_names = {
+        task.path.name for task in get_suite("mathematical-benchmarks-v1").tasks
+    }
+    datasets = job["datasets"]
+    assert isinstance(datasets, list)
+    selected_task_names: set[str] = set()
+    for dataset in datasets:
+        if not isinstance(dataset, dict):
+            continue
+        task_names = dataset.get("task_names")
+        if isinstance(task_names, list):
+            selected_task_names.update(
+                name for name in task_names if isinstance(name, str)
+            )
 
     assert "tasks" not in job
     assert job["datasets"] == [
@@ -50,6 +66,10 @@ def test_observation_job_uses_harbor_dataset_selection() -> None:
             "kwargs": {"web_search": "disabled"},
         }
     ]
+    assert environment["extra_docker_compose"] == [
+        "benchmarks/datasets/mathematical-benchmarks-v1/jacobian-observation.compose.yaml",
+    ]
+    assert selected_task_names <= canonical_task_names
 
 
 def test_benchmark_inventory_covers_proxy_control_and_observation_jobs() -> None:
@@ -197,16 +217,41 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
 ) -> None:
     """Harbor egress control shares service networking, so MCP stays on loopback."""
     trace = tmp_path / "harbor-args.txt"
+    env_trace = tmp_path / "harbor-env.txt"
+    uv_trace = tmp_path / "uv-calls.txt"
+    gost_config = tmp_path / "gost.yaml"
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "auth.json").write_text("{}", encoding="utf-8")
     fake_uv = tmp_path / "uv"
-    fake_uv.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    fake_uv.write_text(
+        "#!/bin/sh\n"
+        'printf \'%s|%s\\n\' "$*" "${JACOBIAN_EVAL_UPSTREAM_PROXY-unset}" >> "$UV_TRACE"\n'
+        'case "$*" in *harbor_proxy*)\n'
+        "  while [ $# -gt 0 ]; do\n"
+        '    if [ "$1" = --output ]; then shift; : > "$1"; fi\n'
+        "    shift\n"
+        "  done\n"
+        "  ;;\nesac\n",
+        encoding="utf-8",
+    )
     fake_uv.chmod(0o755)
     fake_harbor = tmp_path / "harbor"
     fake_harbor.write_text(
-        '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$TRACE"\n',
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "$@" > "$TRACE"\n'
+        'printf \'%s\\n\' "$JACOBIAN_EVAL_HTTP_PROXY" "$JACOBIAN_EVAL_HTTPS_PROXY" "$JACOBIAN_EVAL_ALL_PROXY" "$JACOBIAN_EVAL_NO_PROXY" "$JACOBIAN_EVAL_GOST_CONFIG" "${CODEX_FORCE_AUTH_JSON-unset}" > "$ENV_TRACE"\n',
         encoding="utf-8",
     )
     fake_harbor.chmod(0o755)
 
+    environment = os.environ | {
+        "TRACE": str(trace),
+        "ENV_TRACE": str(env_trace),
+        "UV_TRACE": str(uv_trace),
+        "HOME": str(tmp_path),
+    }
+    environment.pop("OPENAI_API_KEY", None)
+    environment.pop("CODEX_FORCE_AUTH_JSON", None)
     completed = run_operator_command(
         "make",
         (
@@ -216,13 +261,20 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
             "JACOBIAN_IMAGE=jacobian:test",
             f"JACOBIAN_EVAL_PROXY={proxy}",
             "JACOBIAN_EVAL_HTTP_PROXY=http://proxy.invalid:7890",
+            "JACOBIAN_EVAL_HTTPS_PROXY=https://proxy.invalid:7891",
+            "JACOBIAN_EVAL_ALL_PROXY=socks5://proxy.invalid:7892",
+            "JACOBIAN_EVAL_NO_PROXY=localhost,127.0.0.1,jacobian,custom.example",
+            "JACOBIAN_EVAL_UPSTREAM_PROXY=https://upstream.invalid:443",
+            f"JACOBIAN_EVAL_GOST_CONFIG={gost_config}",
+            "JACOBIAN_EVAL_BUILDX_BUILDER=eval-builder",
+            "CODEX_WEB_SEARCH=enabled",
             "EVAL_ATTEMPTS=2",
             "EVAL_REASONING_EFFORT=high",
             f"UV_RUN={fake_uv}",
             f"HARBOR_RUNNER={fake_harbor}",
         ),
         cwd=ROOT,
-        environment=os.environ | {"TRACE": str(trace)},
+        environment=environment,
         timeout_seconds=120.0,
     )
 
@@ -232,9 +284,159 @@ def test_agent_eval_keeps_the_local_mcp_endpoint_independent_of_egress_proxy(
     assert arguments[arguments.index("-c") + 1].endswith(expected_job)
     mcp_index = arguments.index("--mcp-config")
     assert arguments[mcp_index + 1] == "benchmarks/config/jacobian-loopback.mcp.json"
+    assert "web_search=enabled" in arguments
     attempts_index = arguments.index("--n-attempts")
     assert arguments[attempts_index + 1] == "2"
     assert "reasoning_effort=high" in arguments
+    assert env_trace.read_text(encoding="utf-8").splitlines() == [
+        "http://proxy.invalid:7890",
+        "https://proxy.invalid:7891",
+        "socks5://proxy.invalid:7892",
+        "localhost,127.0.0.1,jacobian,custom.example",
+        str(gost_config),
+        "1",
+    ]
+    if proxy == "1":
+        assert uv_trace.read_text(encoding="utf-8").splitlines() == [
+            "python -m benchmarks.tooling.harbor_proxy --output "
+            f"{gost_config}|https://upstream.invalid:443"
+        ]
+        assert gost_config.is_file()
+    else:
+        assert not uv_trace.exists()
+
+
+def test_agent_eval_validate_dispatches_to_observation_results(tmp_path: Path) -> None:
+    invocation = tmp_path / "validation-args.txt"
+    fake_python = tmp_path / "python"
+    fake_python.write_text(
+        '#!/bin/sh\nprintf \'%s\\n\' "$@" > "$TRACE"\n',
+        encoding="utf-8",
+    )
+    fake_python.chmod(0o755)
+
+    completed = run_operator_command(
+        "make",
+        (
+            "agent-eval-validate",
+            "RESULTS=results",
+            "JOB=job.json",
+            "CONDITION=treatment",
+            "OUTPUT=observation.json",
+            f"HARBOR_PROJECT_PYTHON={fake_python}",
+        ),
+        cwd=ROOT,
+        environment=os.environ | {"TRACE": str(invocation)},
+        timeout_seconds=15,
+    )
+
+    assert completed.status is ToolCommandStatus.EXITED
+    assert completed.exit_code == 0, completed.stderr.decode("utf-8", errors="replace")
+    assert invocation.read_text(encoding="utf-8").splitlines() == [
+        "-m",
+        "benchmarks.tooling.observation_results",
+        "validate",
+        "--dataset",
+        "mathematical-benchmarks-v1",
+        "--condition",
+        "treatment",
+        "--job",
+        "job.json",
+        "--jobs-dir",
+        "results",
+        "--output",
+        "observation.json",
+    ]
+
+
+@pytest.mark.parametrize(
+    ("http_proxy", "https_proxy", "all_proxy", "expected_upstream"),
+    [
+        (
+            "http://127.0.0.1:7890",
+            "https://localhost:7891",
+            "socks5://127.0.0.1:7892",
+            "https://host.docker.internal:7891",
+        ),
+        ("", "", "socks5://127.0.0.1:7892", "socks5://host.docker.internal:7892"),
+        ("http://127.0.0.1:7890", "", "", "http://host.docker.internal:7890"),
+    ],
+)
+def test_agent_eval_maps_host_proxy_defaults_for_harbor(
+    tmp_path: Path,
+    http_proxy: str,
+    https_proxy: str,
+    all_proxy: str,
+    expected_upstream: str,
+) -> None:
+    env_trace = tmp_path / "harbor-proxy-defaults.txt"
+    uv_trace = tmp_path / "uv-upstream-proxy.txt"
+    gost_config = tmp_path / "gost.yaml"
+    fake_harbor = tmp_path / "harbor"
+    fake_harbor.write_text(
+        "#!/bin/sh\n"
+        'printf \'%s\\n\' "$JACOBIAN_EVAL_HTTP_PROXY" "$JACOBIAN_EVAL_HTTPS_PROXY" "$JACOBIAN_EVAL_ALL_PROXY" > "$TRACE"\n',
+        encoding="utf-8",
+    )
+    fake_harbor.chmod(0o755)
+    fake_uv = tmp_path / "uv"
+    fake_uv.write_text(
+        "#!/bin/sh\n"
+        'printf \'%s|%s\\n\' "$*" "$JACOBIAN_EVAL_UPSTREAM_PROXY" > "$UV_TRACE"\n'
+        'while [ $# -gt 0 ]; do if [ "$1" = --output ]; then shift; : > "$1"; fi; shift; done\n',
+        encoding="utf-8",
+    )
+    fake_uv.chmod(0o755)
+    environment = os.environ | {
+        "TRACE": str(env_trace),
+        "UV_TRACE": str(uv_trace),
+        "HTTP_PROXY": http_proxy,
+        "HTTPS_PROXY": https_proxy,
+        "ALL_PROXY": all_proxy,
+        "JACOBIAN_MODEL": "test-model",
+    }
+    for name in (
+        "JACOBIAN_EVAL_HTTP_PROXY",
+        "JACOBIAN_EVAL_HTTPS_PROXY",
+        "JACOBIAN_EVAL_ALL_PROXY",
+        "JACOBIAN_EVAL_UPSTREAM_PROXY",
+    ):
+        environment.pop(name, None)
+
+    completed = run_operator_command(
+        "make",
+        (
+            "agent-eval",
+            "EVAL_EXECUTE=1",
+            "JACOBIAN_EVAL_PROXY=1",
+            "JACOBIAN_EVAL_BUILDX_BUILDER=eval-builder",
+            f"JACOBIAN_EVAL_GOST_CONFIG={gost_config}",
+            "JACOBIAN_ENABLED=0",
+            f"UV_RUN={fake_uv}",
+            f"HARBOR_RUNNER={fake_harbor}",
+        ),
+        cwd=ROOT,
+        environment=environment,
+        timeout_seconds=30,
+    )
+
+    assert completed.status is ToolCommandStatus.EXITED
+    assert completed.exit_code == 0, completed.stderr.decode("utf-8", errors="replace")
+    assert env_trace.read_text(encoding="utf-8").splitlines() == [
+        http_proxy.replace("127.0.0.1", "host.docker.internal").replace(
+            "localhost", "host.docker.internal"
+        ),
+        https_proxy.replace("127.0.0.1", "host.docker.internal").replace(
+            "localhost", "host.docker.internal"
+        ),
+        all_proxy.replace("127.0.0.1", "host.docker.internal").replace(
+            "localhost", "host.docker.internal"
+        ),
+    ]
+    assert uv_trace.read_text(encoding="utf-8").splitlines() == [
+        "python -m benchmarks.tooling.harbor_proxy --output "
+        f"{gost_config}|{expected_upstream}"
+    ]
 
 
 def test_agent_eval_forwards_an_explicit_buildx_builder(tmp_path: Path) -> None:

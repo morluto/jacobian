@@ -70,6 +70,7 @@ class DFA(StrictModel):
 
     A valid DFA declares exactly one transition for every ``(state, symbol)``
     pair so that simulation and word counting share one consistent semantics.
+    ``alphabet`` optionally retains names for those integer symbols in rank order.
     """
 
     state_count: int = Field(ge=1, le=MAX_DFA_STATES)

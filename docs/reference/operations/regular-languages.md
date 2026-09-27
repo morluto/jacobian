@@ -15,6 +15,11 @@ considered first. A zero-symbol alphabet is valid and has only the empty word;
 DFAs with a positive alphabet must still provide exactly one transition for
 every state-symbol pair.
 
+DFA symbols are zero-based integers. A DFA may also retain an optional ordered
+`alphabet` of names, where entry `i` names integer symbol `i`. Run requests
+continue to use integer ranks, and operations that return a DFA preserve its
+names.
+
 Product-state, transition, predecessor, witness, work, and result-allocation
 envelopes are admitted before traversal. Resource refusal is not an equivalence
 result. The result model checks witness and trace shape without replaying the

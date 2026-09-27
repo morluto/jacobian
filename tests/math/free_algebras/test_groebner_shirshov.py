@@ -62,6 +62,17 @@ def test_completion_prefix_excludes_higher_homogeneous_generators_and_compositio
     assert prefix.basis == (degree_one,)
     assert _maximum_degree(prefix.compositions) <= 2
 
+    irrelevant_large = _poly(alphabet, {tuple("x" for _ in range(64)): 1})
+    bounded_prefix = groebner_shirshov_through_degree(
+        FreeAlgebraIdeal(
+            alphabet=alphabet,
+            generators=(degree_one, irrelevant_large),
+            side="two-sided",
+        ),
+        2,
+    )
+    assert bounded_prefix.basis == (degree_one,)
+
     full = groebner_shirshov_through_degree(ideal, 3)
     assert _maximum_degree(full.basis) <= 3
     assert _maximum_degree(full.compositions) <= 3

@@ -11,6 +11,7 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraIdeal,
     FreeAlgebraPolynomial,
     FreeAlgebraTerm,
+    canonical_word_key,
 )
 from jacobian.math.free_algebras.operations import (
     groebner_shirshov_through_degree,
@@ -58,7 +59,9 @@ def _nc(*terms: tuple[int, tuple[str, ...]]) -> FreeAlgebraPolynomial:
         terms=tuple(
             FreeAlgebraTerm(coefficient=_q(coefficient), word=word)
             for coefficient, word in sorted(
-                terms, key=lambda item: item[1], reverse=True
+                terms,
+                key=lambda item: canonical_word_key(("a", "b", "c"), item[1]),
+                reverse=True,
             )
         ),
     )
@@ -68,23 +71,29 @@ def test_groebner_shirshov_checks_reverse_ordered_overlap_and_reaches_fixed_poin
     None
 ):
     # The first generator has leading word bc and the second ab.  Only the
-    # reverse ordered pair (ab, bc) has the b overlap.
+    # reverse ordered pair (ab, bc) has the b overlap.  The direct composition
+    # is (ab-aa)c - a(bc-bb) = abb-aac; reducing ab to aa twice gives
+    # aaa-aac, which must enter the basis before the ordered pairs reach a
+    # fixed point.
     ideal = FreeAlgebraIdeal(
         alphabet=("a", "b", "c"),
-        generators=(_nc((1, ("b", "c")), (-1, ())), _nc((1, ("a", "b")), (-1, ()))),
+        generators=(
+            _nc((1, ("b", "c")), (-1, ("b", "b"))),
+            _nc((1, ("a", "b")), (-1, ("a", "a"))),
+        ),
         side="two-sided",
     )
     result = groebner_shirshov_through_degree(ideal, 3)
 
     assert result.status == "COMPLETE_THROUGH_DEGREE"
     assert any(
-        {term.word for term in composition.terms} == {("a",), ("c",)}
+        {term.word for term in composition.terms} == {("a", "a", "a"), ("a", "a", "c")}
         for composition in result.compositions
     )
     # The returned basis has the reverse overlap remainder and its final
     # ordered-pair checks have reached a zero-composition fixed point.
     assert any(
-        {term.word for term in value.terms} == {("a",), ("c",)}
+        {term.word for term in value.terms} == {("a", "a", "a"), ("a", "a", "c")}
         for value in result.basis
     )
 
@@ -94,8 +103,8 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
     first = FreeAlgebraPolynomial(
         alphabet=("a", "b", "c"),
         terms=(
+            FreeAlgebraTerm(coefficient=_q(1), word=("c", "c")),
             FreeAlgebraTerm(coefficient=_q(large), word=("a", "b")),
-            FreeAlgebraTerm(coefficient=_q(1), word=("a",)),
         ),
     )
     second = FreeAlgebraPolynomial(
@@ -105,7 +114,7 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
                 coefficient=CanonicalRational(num=1, den=large),
                 word=("b", "c"),
             ),
-            FreeAlgebraTerm(coefficient=_q(1), word=("b",)),
+            FreeAlgebraTerm(coefficient=_q(1), word=("b", "b")),
         ),
     )
     ideal = FreeAlgebraIdeal(

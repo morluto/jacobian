@@ -16,6 +16,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.free_algebras import operations
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS,
     MAX_FREE_ALGEBRA_OPERAND_TERMS,
@@ -354,6 +355,23 @@ def test_full_result_term_budget_is_reachable_and_ledger_is_exact() -> None:
     assert result.ledger.result_term_count == MAX_FREE_ALGEBRA_RESULT_TERMS
     assert len(result.product.terms) == MAX_FREE_ALGEBRA_RESULT_TERMS
     assert result.ledger.max_result_word_length == 12
+
+
+def test_product_output_allocation_is_admitted_before_expansion(monkeypatch) -> None:
+    alphabet = ("a" * 64, "b" * 64)
+    words = tuple(
+        tuple(alphabet[(index >> bit) & 1] for bit in range(6))
+        + (alphabet[0],) * (MAX_FREE_ALGEBRA_WORD_LENGTH - 6)
+        for index in range(MAX_FREE_ALGEBRA_OPERAND_TERMS)
+    )
+    polynomial = _poly(alphabet, dict.fromkeys(words, 1))
+
+    def unexpected_expansion(*args, **kwargs):
+        raise AssertionError("product expansion started before output admission")
+
+    monkeypatch.setattr(operations, "multiply_sparse", unexpected_expansion)
+    with pytest.raises(OperationResourceAdmissionError, match="allocation bound"):
+        multiply(polynomial, polynomial)
 
 
 def test_tampered_result_structures_are_rejected() -> None:

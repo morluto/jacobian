@@ -6,15 +6,16 @@ constructs the canonical result without replaying the computed mathematics.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
-from math import factorial, gcd, lcm
+from math import ceil, factorial, gcd, lcm, log2
 from typing import Any, Literal, cast
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import CanonicalLimits, format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -42,6 +43,8 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_IDEAL_PREFIX_TOTAL_TERMS,
     MAX_FREE_ALGEBRA_LETTER_LENGTH,
     MAX_FREE_ALGEBRA_OPERAND_TERMS,
+    MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT,
+    MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_RESULT_TERMS,
@@ -49,6 +52,9 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_SUBSTITUTION_WORK,
     MAX_FREE_ALGEBRA_TERM_PAIRS,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK,
     MAX_FREE_ALGEBRA_WORD_LENGTH,
     MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
     MAX_FREE_WORD_FACTOR_DISTINCT,
@@ -88,6 +94,7 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraWordSuffixSplit,
     FreeWordImageInterval,
     GroebnerShirshovResult,
+    TruncatedFreeAlgebraQuotient,
     canonical_word_key,
 )
 from jacobian.math.logic.languages.regular.values import DFA, DFATransition
@@ -155,7 +162,11 @@ def _admit_polynomial(
 
 
 def _admit_product(
-    left: FreeAlgebraPolynomial, right: FreeAlgebraPolynomial
+    left: FreeAlgebraPolynomial,
+    right: FreeAlgebraPolynomial,
+    *,
+    operand_term_limit: int = MAX_FREE_ALGEBRA_OPERAND_TERMS,
+    operand_word_length_limit: int = MAX_FREE_ALGEBRA_WORD_LENGTH,
 ) -> tuple[FreeAlgebraPolynomial, FreeAlgebraPolynomial]:
     """Admit one product request before any word-pair expansion.
 
@@ -177,28 +188,23 @@ def _admit_product(
             ),
         )
 
-    max_operand_digits = 0
     for side, polynomial in (("left", left), ("right", right)):
-        if len(polynomial.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+        if len(polynomial.terms) > operand_term_limit:
             _reject_resource(
                 (side, "terms"),
                 "operand_term_budget",
                 f"{side} operand exceeds the "
-                f"{MAX_FREE_ALGEBRA_OPERAND_TERMS}-term multiplication budget",
+                f"{operand_term_limit}-term multiplication budget",
             )
         for index, term in enumerate(polynomial.terms):
-            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            if len(term.word) > operand_word_length_limit:
                 _reject_resource(
                     (side, "terms", index, "word"),
                     "operand_word_length_budget",
                     f"{side} operand word exceeds the "
-                    f"{MAX_FREE_ALGEBRA_WORD_LENGTH}-letter multiplication "
+                    f"{operand_word_length_limit}-letter multiplication "
                     "budget",
                 )
-            max_operand_digits = max(
-                max_operand_digits,
-                canonical_rational_component_digits(term.coefficient),
-            )
 
     term_pair_count = len(left.terms) * len(right.terms)
     if term_pair_count > MAX_FREE_ALGEBRA_TERM_PAIRS:
@@ -208,26 +214,110 @@ def _admit_product(
             "product term pairs exceed the "
             f"{MAX_FREE_ALGEBRA_TERM_PAIRS}-pair multiplication budget",
         )
-    # Distinct product words are a subset of the term pairs, so this bounds
-    # the result term count before product expansion.
-    if term_pair_count > MAX_FREE_ALGEBRA_RESULT_TERMS:
+    # Encode each word in base |alphabet|+1. Every generator receives a
+    # nonzero digit, so the pair (length, code) identifies concatenations
+    # exactly without allocating the concatenated result words.
+    base = len(left.alphabet) + 1
+    letter_code = {letter: index + 1 for index, letter in enumerate(left.alphabet)}
+    left_codes = tuple(_word_code(term.word, letter_code, base) for term in left.terms)
+    right_codes = tuple(
+        _word_code(term.word, letter_code, base) for term in right.terms
+    )
+    right_place_values = tuple(base ** len(term.word) for term in right.terms)
+    support_bounds: dict[tuple[int, int], list[int]] = {}
+    left_fractions = tuple(term.coefficient.as_fraction() for term in left.terms)
+    right_fractions = tuple(term.coefficient.as_fraction() for term in right.terms)
+    left_word_widths = tuple(
+        sum(len(letter) + 4 for letter in term.word) for term in left.terms
+    )
+    right_word_widths = tuple(
+        sum(len(letter) + 4 for letter in term.word) for term in right.terms
+    )
+    for left_index, (left_term, left_code) in enumerate(
+        zip(left.terms, left_codes, strict=True)
+    ):
+        left_fraction = left_fractions[left_index]
+        left_numerator_digits = len(str(abs(left_fraction.numerator)))
+        left_denominator_digits = len(str(left_fraction.denominator))
+        for right_index, (right_term, right_code, right_place) in enumerate(
+            zip(right.terms, right_codes, right_place_values, strict=True)
+        ):
+            right_fraction = right_fractions[right_index]
+            numerator_digits = left_numerator_digits + len(
+                str(abs(right_fraction.numerator))
+            )
+            denominator_digits = left_denominator_digits + len(
+                str(right_fraction.denominator)
+            )
+            key = (
+                len(left_term.word) + len(right_term.word),
+                left_code * right_place + right_code,
+            )
+            bound = support_bounds.setdefault(key, [0, 0, 0, 0])
+            bound[0] += denominator_digits
+            bound[1] = max(bound[1], numerator_digits - denominator_digits)
+            bound[2] += 1
+            bound[3] = left_word_widths[left_index] + right_word_widths[right_index]
+    distinct_product_words = len(support_bounds)
+    if distinct_product_words > MAX_FREE_ALGEBRA_RESULT_TERMS:
         _reject_resource(
             ("left", "terms"),
             "result_term_budget",
-            "product can exceed the "
+            "product support exceeds the "
             f"{MAX_FREE_ALGEBRA_RESULT_TERMS}-term result budget",
         )
+    if any(
+        word_length > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+        for word_length, _word_code_value in support_bounds
+    ):
+        _reject_resource(
+            ("left", "terms"),
+            "result_word_length_budget",
+            "product word exceeds the "
+            f"{MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH}-letter result bound",
+        )
 
-    addition_digits = len(str(term_pair_count - 1)) if term_pair_count >= 2 else 0
-    predicted_coefficient_digits = 2 * max_operand_digits + addition_digits
-    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+    coefficient_digit_bounds = tuple(
+        denominator_digits
+        + max(0, numerator_minus_denominator)
+        + (len(str(contribution_count - 1)) if contribution_count > 1 else 0)
+        for denominator_digits, numerator_minus_denominator, contribution_count, _ in support_bounds.values()
+    )
+    if max(coefficient_digit_bounds, default=1) > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
         _reject_resource(
             ("left", "terms"),
             "coefficient_growth_budget",
             "predicted product coefficient growth exceeds the "
             f"{MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS}-digit multiplication budget",
         )
+    output_cell_bound = sum(
+        128 + word_width + 2 * (coefficient_digits + 1)
+        for (_, _, _, word_width), coefficient_digits in zip(
+            support_bounds.values(), coefficient_digit_bounds, strict=True
+        )
+    )
+    output_cell_bound += sum(
+        128
+        + len(term.word)
+        + 2 * (canonical_rational_component_digits(term.coefficient) + 1)
+        for polynomial in (left, right)
+        for term in polynomial.terms
+    )
+    if output_cell_bound > MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS:
+        _reject_resource(
+            ("left", "right"),
+            "product_output_cells_budget",
+            "predicted product output exceeds the admitted "
+            f"{MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS}-cell allocation bound",
+        )
     return left, right
+
+
+def _word_code(word: tuple[str, ...], letter_code: dict[str, int], base: int) -> int:
+    code = 0
+    for letter in word:
+        code = code * base + letter_code[letter]
+    return code
 
 
 def _sum_coefficient_digit_bound(
@@ -268,20 +358,20 @@ def _admit_add(
         )
 
     for side, polynomial in (("left", left), ("right", right)):
-        if len(polynomial.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+        if len(polynomial.terms) > MAX_FREE_ALGEBRA_ADDITION_TERMS:
             _reject_resource(
                 (side, "terms"),
                 "addition_operand_term_budget",
                 f"{side} operand exceeds the "
-                f"{MAX_FREE_ALGEBRA_OPERAND_TERMS}-term addition budget",
+                f"{MAX_FREE_ALGEBRA_ADDITION_TERMS}-term canonical support bound",
             )
         for index, term in enumerate(polynomial.terms):
-            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+            if len(term.word) > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH:
                 _reject_resource(
                     (side, "terms", index, "word"),
                     "addition_operand_word_length_budget",
                     "addition operand words are limited to "
-                    f"{MAX_FREE_ALGEBRA_WORD_LENGTH} letters",
+                    f"{MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH} letters",
                 )
     left_by_word = {term.word: term for term in left.terms}
     right_by_word = {term.word: term for term in right.terms}
@@ -371,8 +461,66 @@ def multiply(
     )
 
 
+def _multiply_for_power(
+    left: FreeAlgebraPolynomial, right: FreeAlgebraPolynomial
+) -> FreeAlgebraPolynomial:
+    left, right = _admit_product(
+        left,
+        right,
+        operand_term_limit=MAX_FREE_ALGEBRA_RESULT_TERMS,
+        operand_word_length_limit=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
+    )
+    product, _ledger = multiply_sparse(left, right)
+    return product
+
+
+def power_polynomial(
+    polynomial: FreeAlgebraPolynomial, exponent: int
+) -> FreeAlgebraPolynomial:
+    """Return a bounded nonnegative power using admitted squaring products."""
+
+    value = _admit_polynomial(polynomial, label="polynomial")
+    if (
+        not isinstance(exponent, int)
+        or isinstance(exponent, bool)
+        or not 0 <= exponent <= MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT
+    ):
+        _reject_resource(
+            ("exponent",),
+            "polynomial_power_exponent",
+            "polynomial power exponent must be an integer from 0 through 64",
+        )
+    unit = FreeAlgebraPolynomial(
+        alphabet=value.alphabet,
+        terms=(
+            FreeAlgebraTerm(
+                coefficient=CanonicalRational.from_fraction(Fraction(1)), word=()
+            ),
+        ),
+    )
+    if exponent == 0:
+        return unit
+    if exponent == 1:
+        return value
+    if value.is_zero:
+        return value
+
+    result: FreeAlgebraPolynomial | None = None
+    factor = value
+    remaining = exponent
+    while remaining:
+        if remaining & 1:
+            result = factor if result is None else _multiply_for_power(result, factor)
+        remaining >>= 1
+        if remaining:
+            factor = _multiply_for_power(factor, factor)
+    return unit if result is None else result
+
+
 def _admit_substitution_images(
     substitution: FreeAlgebraPolynomialHomomorphism,
+    *,
+    location_prefix: tuple[str | int, ...] = ("substitution",),
 ) -> tuple[dict[str, tuple[FreeAlgebraTerm, ...]], dict[str, int], dict[str, int], int]:
     """Reauthenticate images and gather the bounded expansion metadata."""
     image_term_counts: dict[str, int] = {}
@@ -382,14 +530,12 @@ def _admit_substitution_images(
         (len(letter) for letter in substitution.target_alphabet),
         default=0,
     )
-    for letter, image in zip(
-        substitution.source_alphabet,
-        substitution.images,
-        strict=True,
+    for image_index, (letter, image) in enumerate(
+        zip(substitution.source_alphabet, substitution.images, strict=True)
     ):
         if len(image.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
             _reject_resource(
-                ("substitution", "images", letter, "terms"),
+                (*location_prefix, "images", image_index, "terms"),
                 "substitution_image_term_budget",
                 "each generator image is limited to 64 terms",
             )
@@ -401,7 +547,14 @@ def _admit_substitution_images(
         for index, term in enumerate(image.terms):
             if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
                 _reject_resource(
-                    ("substitution", "images", letter, "terms", index, "word"),
+                    (
+                        *location_prefix,
+                        "images",
+                        image_index,
+                        "terms",
+                        index,
+                        "word",
+                    ),
                     "substitution_image_word_budget",
                     "generator image words are limited to 32 letters",
                 )
@@ -415,50 +568,76 @@ def _admit_substitution_images(
 
 def _preflight_substitution_expansion(
     substitution: FreeAlgebraPolynomialHomomorphism,
-    source: FreeAlgebraPolynomial,
+    sources: tuple[FreeAlgebraPolynomial, ...],
     image_terms: dict[str, tuple[FreeAlgebraTerm, ...]],
     image_term_counts: dict[str, int],
     image_word_lengths: dict[str, int],
     maximum_letter_scalars: int,
+    *,
+    source_locations: tuple[tuple[str | int, ...], ...] | None = None,
 ) -> None:
     """Admit expansion, coefficient, work, and result envelopes up front."""
 
     expansion_count = 0
     maximum_source_word_length = 0
     maximum_output_word_length = 0
-    maximum_contribution_digits = 0
-    for term in source.terms:
-        maximum_source_word_length = max(maximum_source_word_length, len(term.word))
-        expansion = 1
-        output_length = 0
-        contribution_digits = canonical_rational_component_digits(term.coefficient)
-        for letter in term.word:
-            expansion *= image_term_counts[letter]
-            if not expansion:
-                break
-            output_length += image_word_lengths[letter]
-            contribution_digits += max(
-                (
-                    canonical_rational_component_digits(image_term.coefficient)
-                    for image_term in image_terms[letter]
-                ),
-                default=0,
-            )
-        expansion_count += expansion
-        maximum_output_word_length = max(maximum_output_word_length, output_length)
-        maximum_contribution_digits = max(
-            maximum_contribution_digits, contribution_digits
+    source_expansion_counts = []
+    source_coefficient_digit_bounds = []
+    locations = source_locations or tuple(("polynomial", "terms") for _ in sources)
+    for source_index, source in enumerate(sources):
+        location = locations[source_index]
+        source_expansion_count = 0
+        source_maximum_contribution_digits = 0
+        for term in source.terms:
+            maximum_source_word_length = max(maximum_source_word_length, len(term.word))
+            expansion = 1
+            output_length = 0
+            contribution_digits = canonical_rational_component_digits(term.coefficient)
+            for letter in term.word:
+                expansion *= image_term_counts[letter]
+                if not expansion:
+                    break
+                output_length += image_word_lengths[letter]
+                contribution_digits += max(
+                    (
+                        (
+                            0
+                            if abs(image_term.coefficient.num) == 1
+                            and image_term.coefficient.den == 1
+                            else canonical_rational_component_digits(
+                                image_term.coefficient
+                            )
+                        )
+                        for image_term in image_terms[letter]
+                    ),
+                    default=0,
+                )
+            expansion_count += expansion
+            source_expansion_count += expansion
+            if expansion:
+                maximum_output_word_length = max(
+                    maximum_output_word_length, output_length
+                )
+            if expansion:
+                source_maximum_contribution_digits = max(
+                    source_maximum_contribution_digits, contribution_digits
+                )
+        source_coefficient_digits = (
+            source_expansion_count * source_maximum_contribution_digits
+            + (len(str(source_expansion_count)) if source_expansion_count > 1 else 0)
         )
+        source_expansion_counts.append(source_expansion_count)
+        source_coefficient_digit_bounds.append(source_coefficient_digits)
         if expansion_count > MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS:
             _reject_resource(
-                ("polynomial", "terms"),
+                location,
                 "substitution_expansion_budget",
                 "polynomial substitution exceeds the admitted expansion count",
             )
 
     if maximum_output_word_length > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH:
         _reject_resource(
-            ("substitution",),
+            locations[0],
             "substitution_word_length_budget",
             "substituted words exceed the 64-letter exact value limit",
         )
@@ -470,23 +649,34 @@ def _preflight_substitution_expansion(
     )
     if work_bound > MAX_FREE_ALGEBRA_SUBSTITUTION_WORK:
         _reject_resource(
-            ("polynomial", "terms"),
+            locations[0],
             "substitution_work_budget",
             "polynomial substitution exceeds the admitted exact work bound",
         )
-    if expansion_count > MAX_FREE_ALGEBRA_RESULT_TERMS:
+    if any(count > MAX_FREE_ALGEBRA_RESULT_TERMS for count in source_expansion_counts):
         _reject_resource(
-            ("polynomial", "terms"),
+            next(
+                location
+                for location, count in zip(
+                    locations, source_expansion_counts, strict=True
+                )
+                if count > MAX_FREE_ALGEBRA_RESULT_TERMS
+            ),
             "substitution_result_term_budget",
             "polynomial substitution can exceed the exact result term limit",
         )
-
-    predicted_coefficient_digits = expansion_count * maximum_contribution_digits + (
-        len(str(expansion_count)) if expansion_count > 1 else 0
-    )
-    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+    if any(
+        digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+        for digits in source_coefficient_digit_bounds
+    ):
         _reject_resource(
-            ("substitution",),
+            next(
+                location
+                for location, digits in zip(
+                    locations, source_coefficient_digit_bounds, strict=True
+                )
+                if digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+            ),
             "substitution_coefficient_growth",
             "predicted exact coefficient growth exceeds the 64-digit limit",
         )
@@ -497,7 +687,7 @@ def _preflight_substitution_expansion(
     )
     if output_cell_bound > MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS:
         _reject_resource(
-            ("polynomial",),
+            locations[0],
             "substitution_output_cells",
             "predicted canonical output exceeds the admitted "
             f"{MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS}-cell allocation bound",
@@ -577,13 +767,73 @@ def substitute_polynomial(
     )
     _preflight_substitution_expansion(
         canonical_substitution,
-        source,
+        (source,),
         images,
         counts,
         lengths,
         letter_scalars,
     )
     return _expand_polynomial_substitution(canonical_substitution, source, images)
+
+
+def compose_polynomial_homomorphisms(
+    f: FreeAlgebraPolynomialHomomorphism,
+    g: FreeAlgebraPolynomialHomomorphism,
+) -> FreeAlgebraPolynomialHomomorphism:
+    """Return ``g ∘ f`` after aggregate admission of all generator images."""
+
+    try:
+        first = FreeAlgebraPolynomialHomomorphism.model_validate(f.model_dump())
+        second = FreeAlgebraPolynomialHomomorphism.model_validate(g.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("homomorphisms",),
+            code="free_algebra.homomorphism_composition_shape",
+            message="both polynomial homomorphisms must be canonical",
+        ) from exc
+    if first.target_alphabet != second.source_alphabet:
+        raise OperationDomainValidationError(
+            location=("g", "source_alphabet"),
+            code="free_algebra.homomorphism_composition_alphabet",
+            message="f target alphabet must equal g source alphabet in the same order",
+        )
+
+    images, counts, lengths, letter_scalars = _admit_substitution_images(
+        second, location_prefix=("g",)
+    )
+    for index, image in enumerate(first.images):
+        if len(image.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS:
+            _reject_resource(
+                ("f", "images", index, "terms"),
+                "substitution_operand_term_budget",
+                "each generator image being composed is limited to 64 terms",
+            )
+        for term_index, term in enumerate(image.terms):
+            if len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH:
+                _reject_resource(
+                    ("f", "images", index, "terms", term_index, "word"),
+                    "substitution_operand_word_length_budget",
+                    "composed-map source image words are limited to 32 letters",
+                )
+    _preflight_substitution_expansion(
+        second,
+        first.images,
+        images,
+        counts,
+        lengths,
+        letter_scalars,
+        source_locations=tuple(
+            ("f", "images", i, "terms") for i in range(len(first.images))
+        ),
+    )
+    composed_images = tuple(
+        _expand_polynomial_substitution(second, image, images) for image in first.images
+    )
+    return FreeAlgebraPolynomialHomomorphism.model_construct(
+        source_alphabet=first.source_alphabet,
+        target_alphabet=second.target_alphabet,
+        images=composed_images,
+    )
 
 
 def concatenate_words(
@@ -661,7 +911,14 @@ def compare_words(
 ) -> FreeAlgebraWordCompareResult:
     """Compare words in the algebra's degree-lexicographic monomial order."""
 
-    left_value, right_value = _admit_word_pair(left, right)
+    left_value = _admit_word(left, label="left")
+    right_value = _admit_word(right, label="right")
+    if left_value.alphabet != right_value.alphabet:
+        raise OperationDomainValidationError(
+            location=("right", "alphabet"),
+            code="free_algebra.word_alphabet_mismatch",
+            message="both words must use the same ordered generator alphabet",
+        )
     degree_comparison = cast(
         Literal[-1, 0, 1],
         (left_value.length > right_value.length)
@@ -1550,14 +1807,6 @@ def _gs_prefix_generators(
 
     basis: list[FreeAlgebraPolynomial] = []
     for index, generator in enumerate(ideal.generators):
-        if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
-            len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH for term in generator.terms
-        ):
-            raise OperationResourceAdmissionError(
-                location=("ideal", "generators", index),
-                code="free_algebra.gs_generator_budget",
-                message="GS generator expansion exceeds the admitted envelope",
-            )
         if not generator.terms:
             continue
         generator_degree = len(generator.terms[0].word)
@@ -1568,6 +1817,15 @@ def _gs_prefix_generators(
                 message="degree-bounded GS completion requires homogeneous generators",
             )
         if generator_degree <= degree:
+            if len(generator.terms) > MAX_FREE_ALGEBRA_OPERAND_TERMS or any(
+                len(term.word) > MAX_FREE_ALGEBRA_WORD_LENGTH
+                for term in generator.terms
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("ideal", "generators", index),
+                    code="free_algebra.gs_generator_budget",
+                    message="GS generator expansion exceeds the admitted envelope",
+                )
             basis.append(generator)
     return basis
 
@@ -2094,6 +2352,283 @@ def factor_avoidance_dfa(
     return dfa
 
 
+def _normal_words_through_degree(
+    ideal: FreeAlgebraIdeal,
+    degree: int,
+    leading_words: tuple[tuple[str, ...], ...],
+) -> tuple[tuple[str, ...], ...]:
+    words = []
+    visited = 0
+    for word_degree in range(degree + 1):
+        for word in product(ideal.alphabet, repeat=word_degree):
+            visited += 1
+            if visited % 4_096 == 0:
+                request_checkpoint("during truncated quotient normal-word enumeration")
+            if not any(
+                word[start : start + len(leading)] == leading
+                for leading in leading_words
+                for start in range(len(word) - len(leading) + 1)
+            ):
+                words.append(word)
+    return tuple(words)
+
+
+def _is_reducible_word(
+    word: tuple[str, ...], leading_words: tuple[tuple[str, ...], ...]
+) -> bool:
+    return any(
+        word[start : start + len(leading)] == leading
+        for leading in leading_words
+        for start in range(len(word) - len(leading) + 1)
+    )
+
+
+def _reduction_ratio_component_digits(
+    basis: tuple[FreeAlgebraPolynomial, ...],
+) -> int:
+    """Bound component digits of one reducer tail-to-leading coefficient ratio.
+
+    A normal-form rewrite replaces the accumulated coefficient ``C`` by
+    ``-C * tail / leading`` for every tail term of the reducer.  The quotient
+    between the reducer's coefficients, not either coefficient's individual
+    width, drives component growth, so bind the cross-product components of
+    each leading term and its tail terms before any reduction executes.
+    """
+
+    digits = 1
+    for polynomial in basis:
+        leading = _leading(polynomial)
+        if leading is None:
+            continue
+        _, leading_coefficient = leading
+        for term in polynomial.terms[1:]:
+            tail = term.coefficient.as_fraction()
+            digits = max(
+                digits,
+                len(str(abs(tail.numerator * leading_coefficient.denominator))),
+                len(str(abs(tail.denominator * leading_coefficient.numerator))),
+            )
+    return digits
+
+
+def _admit_truncated_table(
+    ideal: FreeAlgebraIdeal,
+    completion: GroebnerShirshovResult,
+    degree: int,
+    basis: tuple[tuple[str, ...], ...],
+    leading_words: tuple[tuple[str, ...], ...],
+) -> frozenset[tuple[int, int]]:
+    """Preflight table cells, reduction work, and complete serialized output."""
+    dimension = len(basis)
+    pair_count = dimension**2
+    term_count_bound = dimension**3
+    if term_count_bound > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_table_terms",
+            f"multiplication output may contain {term_count_bound} terms, exceeding the "
+            f"{MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS}-term bound",
+        )
+
+    scan_work = pair_count * (degree + 1 + len(leading_words) * (degree + 1) ** 2)
+    if scan_work > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_scan_work",
+            "normal-word boundary checks exceed the truncated quotient work envelope",
+        )
+    reducible_pairs = set()
+    for left_index, left_word in enumerate(basis):
+        for right_index, right_word in enumerate(basis):
+            if len(left_word) + len(right_word) <= degree and _is_reducible_word(
+                left_word + right_word, leading_words
+            ):
+                reducible_pairs.add((left_index, right_index))
+            if (left_index * max(1, dimension) + right_index) % 4_096 == 0:
+                request_checkpoint("during truncated quotient multiplication preflight")
+
+    candidate_count = sum(
+        len(ideal.alphabet) ** word_degree for word_degree in range(degree + 1)
+    )
+    basis_term_count = sum(len(polynomial.terms) for polynomial in completion.basis)
+    sort_work = (
+        candidate_count * max(1, ceil(log2(max(2, candidate_count)))) * (degree + 1)
+    )
+    reduction_work = candidate_count * (
+        candidate_count * len(completion.basis) * (degree + 1)
+        + sort_work
+        + basis_term_count
+    )
+    # Each reduction may multiply coefficients from input relations. Bound the
+    # largest mandatory product before any table construction begins.
+    coefficient_digits = max(
+        (
+            canonical_rational_component_digits(term.coefficient)
+            for p in completion.basis
+            for term in p.terms
+        ),
+        default=1,
+    )
+    # A normal-form rewrite replaces the accumulated coefficient C by
+    # -C * (tail / leading) for every reducer tail term.  The quotient between
+    # the reducer coefficients, not their individual component widths, drives
+    # growth: a leading coefficient 1/10^8 beside a 10^8 tail multiplies by
+    # 10^16 per crossing.  Across an at-most-degree-long reduction chain, bound
+    # every such ratio before constructing the multiplication table.
+    ratio_digits = _reduction_ratio_component_digits(completion.basis)
+    predicted_coefficient_digits = (degree + 1) * max(coefficient_digits, ratio_digits)
+    if predicted_coefficient_digits > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS:
+        _reject_resource(
+            ("degree",),
+            "gs_coefficient_growth_budget",
+            "truncated quotient reduction may exceed the admitted coefficient digit envelope",
+        )
+    total_work = scan_work + len(reducible_pairs) * reduction_work
+    if total_work > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_reduction_work",
+            f"bounded multiplication reduction needs at most {total_work} work units, "
+            f"exceeding {MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK}",
+        )
+
+    ideal_bytes = len(
+        json.dumps(
+            ideal.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":")
+        )
+    )
+    completion_bytes = len(
+        json.dumps(
+            completion.model_dump(mode="json"),
+            ensure_ascii=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
+    basis_bytes = len(
+        json.dumps(basis, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
+    )
+    alphabet_bytes = (
+        sum(
+            len(json.dumps(letter, ensure_ascii=True).encode("utf-8")) + 1
+            for letter in ideal.alphabet
+        )
+        + 2
+    )
+    max_letter_bytes = max(
+        (
+            len(json.dumps(letter, ensure_ascii=True).encode("utf-8"))
+            for letter in ideal.alphabet
+        ),
+        default=2,
+    )
+    term_bytes = 256 + degree * (max_letter_bytes + 3)
+    output_bound = (
+        ideal_bytes
+        + completion_bytes
+        + basis_bytes
+        + pair_count * (256 + alphabet_bytes)
+        + term_count_bound * term_bytes
+        + term_bytes
+        + 2_048
+    )
+    output_limit = min(
+        MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES,
+        CanonicalLimits().max_output_bytes,
+    )
+    if output_bound > output_limit:
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_output_bytes",
+            f"truncated quotient needs at most {output_bound} serialized bytes, "
+            f"exceeding the {output_limit}-byte output bound",
+        )
+    return frozenset(reducible_pairs)
+
+
+def _truncated_multiplication_table(
+    alphabet: tuple[str, ...],
+    degree: int,
+    basis: tuple[tuple[str, ...], ...],
+    completion: GroebnerShirshovResult,
+    reducible_pairs: frozenset[tuple[int, int]],
+) -> tuple[tuple[FreeAlgebraPolynomial, ...], ...]:
+    zero = FreeAlgebraPolynomial.model_construct(alphabet=alphabet, terms=())
+    multiplication = []
+    dimension = len(basis)
+    for left_index, left_word in enumerate(basis):
+        row = []
+        for right_index, right_word in enumerate(basis):
+            product_word = left_word + right_word
+            if len(product_word) > degree:
+                row.append(zero)
+            elif (left_index, right_index) in reducible_pairs:
+                monomial = _encode(alphabet, {product_word: Fraction(1)})
+                row.append(_normal_form(monomial, completion.basis, degree))
+            else:
+                row.append(_encode(alphabet, {product_word: Fraction(1)}))
+            if (left_index * max(1, dimension) + right_index) % 4_096 == 0:
+                request_checkpoint("during truncated quotient multiplication table")
+        multiplication.append(tuple(row))
+    return tuple(multiplication)
+
+
+def truncated_quotient_algebra(
+    ideal: FreeAlgebraIdeal | Mapping[str, Any], degree: int
+) -> TruncatedFreeAlgebraQuotient:
+    """Return the exact finite algebra ``QQ<X>/(I + F_{>D})``.
+
+    The ideal must be two-sided and homogeneous. Products above D are zero;
+    other basis products reduce through the complete degree-D Groebner-Shirshov
+    basis.
+    """
+    value = _as_ideal(ideal)
+    if value.side != "two-sided":
+        raise OperationDomainValidationError(
+            location=("ideal", "side"),
+            code="free_algebra.truncated_quotient_requires_two_sided",
+            message="a truncated quotient requires side='two-sided'",
+        )
+    if (
+        not isinstance(degree, int)
+        or isinstance(degree, bool)
+        or not 0 <= degree <= MAX_FREE_ALGEBRA_WORD_LENGTH
+    ):
+        _reject_resource(
+            ("degree",),
+            "truncated_quotient_degree_bound",
+            "truncated quotient degree exceeds the admitted envelope",
+        )
+    _admit_quotient_profile(value, degree)
+    completion = groebner_shirshov_through_degree(value, degree)
+    leading_words = tuple(
+        sorted(
+            {
+                leading[0]
+                for polynomial in completion.basis
+                if (leading := _leading(polynomial)) is not None
+            },
+            key=lambda word: canonical_word_key(value.alphabet, word),
+        )
+    )
+    basis = _normal_words_through_degree(value, degree, leading_words)
+    reducible_pairs = _admit_truncated_table(
+        value, completion, degree, basis, leading_words
+    )
+    multiplication = _truncated_multiplication_table(
+        value.alphabet, degree, basis, completion, reducible_pairs
+    )
+    zero = FreeAlgebraPolynomial.model_construct(alphabet=value.alphabet, terms=())
+    unit = _encode(value.alphabet, {(): Fraction(1)}) if () in set(basis) else zero
+    return TruncatedFreeAlgebraQuotient.model_construct(
+        ideal=value,
+        completion=completion,
+        degree=degree,
+        basis_words=basis,
+        multiplication=multiplication,
+        unit=unit,
+    )
+
+
 __all__ = [
     "compare_words",
     "concatenate_words",
@@ -2103,6 +2638,7 @@ __all__ = [
     "ideal_generated_prefix",
     "ideal_membership",
     "multiply",
+    "power_polynomial",
     "power_word",
     "quotient_normal_word_profile",
     "reverse_word",

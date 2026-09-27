@@ -1432,7 +1432,10 @@ def modular_form_coordinates_equal(
 ) -> bool:
     """Decide exact equality in a shared supported modular-form ambient space."""
 
-    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+    if (
+        type(left) is not ModularFormCoordinates
+        or type(right) is not ModularFormCoordinates
+    ):
         raise OperationDomainValidationError(
             location=(),
             code="modular_form.coordinates_type",

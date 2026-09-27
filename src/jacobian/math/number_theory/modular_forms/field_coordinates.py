@@ -230,7 +230,10 @@ def modular_form_field_coordinates_equal(
     left: ModularFormCoordinates, right: ModularFormCoordinates
 ) -> bool:
     """Compare validated cyclotomic coordinates in the same exact space."""
-    if type(left) is not ModularFormCoordinates or type(right) is not ModularFormCoordinates:
+    if (
+        type(left) is not ModularFormCoordinates
+        or type(right) is not ModularFormCoordinates
+    ):
         raise OperationDomainValidationError(
             location=(),
             code="modular_form.field_coordinates_type",

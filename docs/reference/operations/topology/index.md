@@ -2,6 +2,12 @@
 
 [Documentation home](../../../index.md) · [Tool surface](../../tools.md)
 
+Topology operations use bounded finite simplicial and elementary cubical
+complexes with direct typed results. Cubical standard triangulation returns the
+canonical simplicial value and exact coordinate transport, so it composes with
+existing simplicial operations. Recurrence and generating-series operations
+belong to combinatorics; their historical page is retained below for that
+mathematical reference.
 Topology operations use bounded finite simplicial complexes and simplicial sets,
 with direct typed results. The live catalog includes canonicalization,
 chain-complex construction, finite-field and integral homology, and induced
@@ -9,6 +15,8 @@ chain and homology maps. Recurrence and generating-series operations belong to
 combinatorics; their historical page is retained below for that mathematical
 reference.
 
+- [Cubical face posets](cubical-face-posets.md)
+- [Cubical standard triangulation](cubical-triangulation.md)
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
 - [Normalized chains of a finite simplicial set](simplicial-set-normalized-chains.md)
 - [Degenerate subcomplex of a finite simplicial set](simplicial-set-degenerate-submodule.md)

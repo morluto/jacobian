@@ -127,6 +127,7 @@ HomologyInputComplex = Annotated[
 
 
 def _raw_component_digit_count(value: object, maximum_digits: int) -> int:
+    """Count digits safely, without decimal expansion of native integers."""
     if isinstance(value, str):
         parts = value.split("/", 1)
         return max((len(part.lstrip("-")) for part in parts), default=0)

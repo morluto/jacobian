@@ -170,6 +170,7 @@ def test_u_prime_matches_independent_q_prefix_action_and_target_coordinates(
 
     assert tuple(result_columns) == _EXPECTED[(character_coordinate, level, prime)]
     tool = Catalog.open().operation("modular_form.character_coordinates.u_prime.apply")
+    assert "order-six" in tool.description
     request = ModularCharacterUPrimeRequest(form=_coordinates(space, 0), prime=prime)
     assert tool.run(request).space == space
 

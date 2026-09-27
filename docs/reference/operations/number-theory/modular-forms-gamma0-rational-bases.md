@@ -112,9 +112,9 @@ matrices on other character spaces.
 [PARI modular-forms reference](https://pari.math.u-bordeaux.fr/dochtml/ref-stable/Modular_forms.html)
 
 The character-coordinate slice also supports the modular `U_p` action at bad
-primes for `(N,p) = (26,2), (26,13), (39,3), (39,13)`. The operation accepts
-only the generalized cusp coordinates for the exact weight-two spaces already
-represented above, and returns coordinates in that same space. It computes
+primes for order-six characters when `(N,p) = (26,2), (26,13), (39,3), (39,13)`.
+The operation accepts only order-six cusp coordinates in the exact weight-two
+spaces already represented above, and returns coordinates in that same space. It computes
 the complete source prefix through `p * (B - 1)`, where `B` is the target
 Sturm precision, selects `a_(p n)` for each target coefficient, and solves
 against the canonical target basis through all `B` coefficients. Exact closure

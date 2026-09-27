@@ -52,19 +52,20 @@ _MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
 _MAX_CHARACTER_HECKE_COEFFICIENT_DIGITS = 4
-# (dimension, coefficient digits) for the finite S2 transport Sturm prefixes.
-# Cell counts are derived as dimension * precision * field degree. Independent
-# exact fixtures cover both conjugate characters at every entry.
+# (dimension, coefficient digits) for the order-six S2 transport Sturm
+# prefixes, keyed by character order, level, and precision. Cell counts are
+# derived as dimension * precision * field degree; independent exact fixtures
+# cover both conjugate characters at every entry.
 _TRANSPORT_STURM_BASIS_ENVELOPE = {
-    (13, 3): (1, 1),
-    (13, 8): (1, 1),
-    (13, 10): (1, 1),
-    (13, 29): (1, 1),
-    (26, 8): (2, 1),
-    (26, 10): (2, 1),
-    (26, 29): (2, 1),
-    (39, 10): (3, 1),
-    (39, 29): (3, 1),
+    (6, 13, 3): (1, 1),
+    (6, 13, 8): (1, 1),
+    (6, 13, 10): (1, 1),
+    (6, 13, 29): (1, 1),
+    (6, 26, 8): (2, 1),
+    (6, 26, 10): (2, 1),
+    (6, 26, 29): (2, 1),
+    (6, 39, 10): (3, 1),
+    (6, 39, 29): (3, 1),
 }
 # Exact finite envelope for the generalized-character U_p slice. The entries
 # are (Sturm precision, source precision, dimension, basis coefficient digits,
@@ -72,10 +73,10 @@ _TRANSPORT_STURM_BASIS_ENVELOPE = {
 # supported level/prime pair. The two conductor-13 order-six characters are
 # conjugates; focused fixtures check both conjugates at every pair.
 _CHARACTER_U_PRIME_ENVELOPE = {
-    (26, 2): (8, 15, 2, 1, 2, 2),
-    (26, 13): (8, 92, 2, 2, 2, 4),
-    (39, 3): (10, 28, 3, 1, 2, 4),
-    (39, 13): (10, 118, 3, 2, 2, 7),
+    (6, 26, 2): (8, 15, 2, 1, 2, 2),
+    (6, 26, 13): (8, 92, 2, 2, 2, 4),
+    (6, 39, 3): (10, 28, 3, 1, 2, 4),
+    (6, 39, 13): (10, 118, 3, 2, 2, 7),
 }
 
 
@@ -318,9 +319,10 @@ def _character_basis_from_admission(
             message="character-valued basis work or output exceeds its exact envelope",
         )
 
+    character_order = _character_order(space)
     transport_envelope = (
-        _TRANSPORT_STURM_BASIS_ENVELOPE.get((space.level, precision))
-        if space.kind == "S" and _character_order(space) == 6
+        _TRANSPORT_STURM_BASIS_ENVELOPE.get((character_order, space.level, precision))
+        if space.kind == "S"
         else None
     )
     if transport_envelope is not None:
@@ -365,11 +367,12 @@ def _character_basis_from_admission(
     # linear combinations before requesting either basis from PARI.
     if (
         space.kind == "S"
-        and _character_order(space) == 6
-        and (space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
+        and (character_order, space.level, precision) in _TRANSPORT_STURM_BASIS_ENVELOPE
         and any(
             canonical_rational_component_digits(value)
-            > _TRANSPORT_STURM_BASIS_ENVELOPE[(space.level, precision)][1]
+            > _TRANSPORT_STURM_BASIS_ENVELOPE[
+                (character_order, space.level, precision)
+            ][1]
             for vector in normalized
             for coefficient in vector
             for value in coefficient.coefficients_ascending
@@ -936,7 +939,8 @@ def modular_character_coordinates_u_prime(
     form, space, field, character_request, dimensions, input_digits = admitted
     input_coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
     dimension = dimensions[0]
-    if _character_order(space) != 6:
+    character_order = _character_order(space)
+    if character_order != 6:
         raise OperationDomainValidationError(
             location=("form", "space", "character"),
             code="modular_form.character_u_prime_parent",
@@ -944,7 +948,7 @@ def modular_character_coordinates_u_prime(
         )
     if (
         type(prime) is not int
-        or (space.level, prime) not in _CHARACTER_U_PRIME_ENVELOPE
+        or (character_order, space.level, prime) not in _CHARACTER_U_PRIME_ENVELOPE
     ):
         raise OperationDomainValidationError(
             location=("prime",),
@@ -958,7 +962,7 @@ def modular_character_coordinates_u_prime(
         basis_digits,
         matrix_digits,
         matrix_coefficient_bound,
-    ) = _CHARACTER_U_PRIME_ENVELOPE[(space.level, prime)]
+    ) = _CHARACTER_U_PRIME_ENVELOPE[(character_order, space.level, prime)]
     if (
         dimension != expected_dimension
         or _character_sturm_precision(space) != sturm_precision

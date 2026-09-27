@@ -599,7 +599,12 @@ def compose_homomorphisms(
     )
     if first_check.status is not HomomorphismStatus.HOMOMORPHISM:
         witness = first_check.witness
-        assert witness is not None
+        if witness is None:
+            raise OperationDomainValidationError(
+                location=("first",),
+                code="relational.homomorphism.missing_counterexample",
+                message="failed homomorphism check did not retain its counterexample",
+            )
         raise OperationDomainValidationError(
             location=("first",),
             code="relational.homomorphism.claim_not_preserved",
@@ -621,7 +626,12 @@ def compose_homomorphisms(
     )
     if second_check.status is not HomomorphismStatus.HOMOMORPHISM:
         witness = second_check.witness
-        assert witness is not None
+        if witness is None:
+            raise OperationDomainValidationError(
+                location=("second",),
+                code="relational.homomorphism.missing_counterexample",
+                message="failed homomorphism check did not retain its counterexample",
+            )
         raise OperationDomainValidationError(
             location=("second",),
             code="relational.homomorphism.claim_not_preserved",

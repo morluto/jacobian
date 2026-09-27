@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Self
+from collections.abc import Sequence
+from typing import Self, cast
 
 from pydantic import ConfigDict, Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
@@ -137,35 +138,40 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
 
         if type(value) is not dict:
             return value
-        delta = value.get("delta_matroid")
-        if type(delta) is not dict:
+        raw_value = cast(dict[str, object], value)
+        delta_value = raw_value.get("delta_matroid")
+        if type(delta_value) is not dict:
             return value
+        delta = cast(dict[str, object], delta_value)
         ground = delta.get("ground")
-        if type(ground) in (tuple, list) and len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
-            raise PydanticCustomError(
-                "delta_matroid.twist_polynomial_work",
-                "complete twist polynomial exceeds its subset-state envelope",
-            )
-        if (
-            type(ground) in (tuple, list)
-            and all(type(label) is str for label in ground)
-            and sum(map(len, ground)) > MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
-        ):
-            raise PydanticCustomError(
-                "delta_matroid.twist_polynomial_labels",
-                "ground labels exceed the admitted native codepoint budget",
-            )
+        if isinstance(ground, (tuple, list)):
+            ground_items = cast(Sequence[object], ground)
+            if len(ground_items) > MAX_TWIST_POLYNOMIAL_GROUND:
+                raise PydanticCustomError(
+                    "delta_matroid.twist_polynomial_work",
+                    "complete twist polynomial exceeds its subset-state envelope",
+                )
+            if all(type(label) is str for label in ground_items):
+                ground_labels = cast(Sequence[str], ground_items)
+                if sum(len(label) for label in ground_labels) > (
+                    MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
+                ):
+                    raise PydanticCustomError(
+                        "delta_matroid.twist_polynomial_labels",
+                        "ground labels exceed the admitted native codepoint budget",
+                    )
         feasible = delta.get("feasible")
-        if type(feasible) not in (tuple, list):
+        if not isinstance(feasible, (tuple, list)):
             return value
-        if len(feasible) > MAX_TWIST_POLYNOMIAL_SOURCE_ROWS:
+        feasible_rows = cast(tuple[object, ...] | list[object], feasible)
+        if len(feasible_rows) > MAX_TWIST_POLYNOMIAL_SOURCE_ROWS:
             raise PydanticCustomError(
                 "delta_matroid.memberships_exceeded",
                 "source feasible family exceeds its admitted row envelope",
             )
         remaining = MAX_DELTA_MEMBERSHIPS
-        for row in feasible:
-            if type(row) in (tuple, list):
+        for row in feasible_rows:
+            if isinstance(row, (tuple, list)):
                 remaining -= len(row)
             if remaining < 0:
                 raise PydanticCustomError(

@@ -522,11 +522,13 @@ def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
     ):
         filtered_map(
             FilteredChainMapRequest(
-                source=complex_,
+                chain_map=ChainMapValue(
+                    source=complex_,
+                    target=complex_,
+                    map_matrices=(((1,),), ((1,),)),
+                ),
                 source_filtration=filtration,
-                target=complex_,
                 target_filtration=filtration,
-                maps=(((1,),), ((1,),)),
             )
         )
 

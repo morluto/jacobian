@@ -11,7 +11,7 @@ separate `tree_automaton.accepted_tree_count.compute` operation counts trees of
 one exact node size and also supports nondeterministic automata.
 
 The operation admits transition work, a conservative all-tree integer digit
-bound, and aggregate output bytes before recurrence evaluation. A large
+bound, and aggregate profile digits before recurrence evaluation. A large
 all-tree bound may refuse an automaton whose accepted language is smaller; an
 empty final-state set is handled directly and returns a zero profile. Height
 is bounded at 100, and resource refusal does not imply a count or language

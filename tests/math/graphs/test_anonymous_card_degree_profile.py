@@ -16,7 +16,6 @@ from jacobian.math.graphs.decks import (
     AnonymousCardDegreeProfileRequest,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetRequest,
     anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
 )
@@ -56,9 +55,7 @@ def _path6(prefix: str) -> SimpleUndirectedGraph:
 
 
 def _profile(cards: tuple[SimpleUndirectedGraph, ...], order: int):
-    multiset = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=order, cards=cards)
-    )
+    multiset = anonymous_graph_card_multiset(order, cards)
     return multiset, anonymous_card_degree_profile(multiset)
 
 
@@ -101,9 +98,7 @@ def test_profile_is_relabel_invariant_and_sensitive_to_card_multiplicity() -> No
 
 
 def test_empty_profile_retains_card_order_and_round_trips() -> None:
-    multiset = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=7, cards=())
-    )
+    multiset = anonymous_graph_card_multiset(7, ())
     result = anonymous_card_degree_profile(multiset)
     assert result.card_order == 7
     assert result.total_card_multiplicity == 0
@@ -115,9 +110,7 @@ def test_empty_profile_retains_card_order_and_round_trips() -> None:
 
 
 def test_empty_profile_rejects_card_order_different_from_source() -> None:
-    multiset = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=3, cards=())
-    )
+    multiset = anonymous_graph_card_multiset(3, ())
     with pytest.raises(ValueError, match="must match the retained source"):
         AnonymousCardDegreeProfile(
             source=multiset,
@@ -166,15 +159,13 @@ def test_profile_work_cells_and_output_are_admitted_at_exact_boundaries(
     monkeypatch,
 ) -> None:
     multiset = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(
-            card_order=4,
-            cards=(
-                SimpleUndirectedGraph(
-                    vertices=("a", "b", "c", "d"),
-                    edges=(("a", "b"), ("b", "c")),
-                ),
+        4,
+        (
+            SimpleUndirectedGraph(
+                vertices=("a", "b", "c", "d"),
+                edges=(("a", "b"), ("b", "c")),
             ),
-        )
+        ),
     )
     request = AnonymousCardDegreeProfileRequest(multiset=multiset)
     canonical_work = factorial(4) * (4 + 2 * comb(4, 2))

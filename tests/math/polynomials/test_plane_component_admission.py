@@ -381,9 +381,10 @@ def test_term_and_total_term_boundaries_reject_before_backend_execution() -> Non
     )
     with pytest.raises(
         OperationDomainValidationError,
-        match=f"{MAX_PLANE_COMPONENT_TOTAL_TERMS} terms",
-    ):
+    ) as exc_info:
         _profile(above)
+
+    assert exc_info.value.errors()[0]["type"] == "plane_semialgebraic.total_terms"
 
 
 def test_plane_dimension_polynomial_and_sign_row_bounds_reject_raw_excess() -> None:

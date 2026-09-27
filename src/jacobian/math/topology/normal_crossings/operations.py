@@ -28,6 +28,7 @@ from jacobian.math.topology.chain_complexes.operations import (
 from jacobian.math.topology.chain_complexes.values import (
     MAX_BASIS_SIZE,
     MAX_OPERATION_MATRIX_CELLS,
+    ChainCoefficient,
     CoefficientRing,
 )
 from jacobian.math.topology.normal_crossings._models import (
@@ -222,7 +223,7 @@ def _cardinality_groups(
 
 def _cech_matrices(
     admitted: AdmittedPresentation,
-) -> tuple[tuple[tuple[str, ...], ...], ...]:
+) -> tuple[tuple[tuple[ChainCoefficient, ...], ...], ...]:
     """Assemble the signed Cech incidence matrices in canonical stratum order.
 
     For a stratum ``S`` with sorted components ``(i_0, ..., i_k)`` the
@@ -230,7 +231,7 @@ def _cech_matrices(
     target rows use each cardinality group's canonical sorted order.
     """
 
-    matrices: list[tuple[tuple[str, ...], ...]] = []
+    matrices: list[tuple[tuple[ChainCoefficient, ...], ...]] = []
     for degree in range(1, len(admitted.groups)):
         source = admitted.groups[degree]
         target = admitted.groups[degree - 1]
@@ -241,7 +242,7 @@ def _cech_matrices(
                 face = key[:position] + key[position + 1 :]
                 sign = 1 if position % 2 == 0 else -1
                 dense[row_for[face]][column] += sign
-        matrices.append(tuple(tuple(str(value) for value in row) for row in dense))
+        matrices.append(tuple(tuple(row) for row in dense))
     return tuple(matrices)
 
 

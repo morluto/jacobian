@@ -12,6 +12,7 @@ from jacobian.catalog.builtins import (
     BUILTIN_TOOLS,
     _load_tools,
 )
+from jacobian.catalog.catalog import Catalog
 
 
 def test_tool_manifest_discovery_is_deterministic_and_owner_local() -> None:
@@ -26,6 +27,8 @@ def test_tool_manifest_discovery_is_deterministic_and_owner_local() -> None:
 def test_public_catalog_is_sorted_and_unique() -> None:
     operation_ids = tuple(tool.operation_id for tool in BUILTIN_TOOLS)
     assert operation_ids == tuple(sorted(set(operation_ids)))
+    catalog = Catalog.open()
+    assert all(catalog.operation(tool.operation_id) is tool for tool in BUILTIN_TOOLS)
 
 
 def test_friable_count_manifest_has_one_executable_example() -> None:

@@ -33,9 +33,6 @@ from jacobian.math.number_theory.number_fields import (
     SimpleNumberFieldPresentation,
     embeddings,
 )
-from jacobian.math.number_theory.number_fields.values import (
-    MAX_SIMPLE_NUMBER_FIELD_DEGREE,
-)
 
 
 def _rational(value: int | Fraction) -> CanonicalRational:
@@ -128,15 +125,14 @@ def test_raw_embedded_matrix_bounds_iterable_axes_before_nested_validation() -> 
         "entries": [[element]],
     }
 
-    with pytest.raises(
-        ValidationError,
-        match=f"at most {MAX_SIMPLE_NUMBER_FIELD_DEGREE} coordinates",
-    ):
+    with pytest.raises(ValidationError) as coordinate_error:
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
+    assert coordinate_error.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
     payload["entries"] = [[[]] for _ in range(MAX_MATRIX_DIMENSION + 1)]
-    with pytest.raises(ValidationError, match=f"at most {MAX_MATRIX_DIMENSION} rows"):
+    with pytest.raises(ValidationError) as axis_error:
         EmbeddedRealSimpleNumberFieldMatrix.model_validate(payload)
+    assert axis_error.value.errors()[0]["type"] == "matrix.budget_exceeded"
 
 
 @pytest.mark.parametrize("location", ("entry", "embedding", "root"))

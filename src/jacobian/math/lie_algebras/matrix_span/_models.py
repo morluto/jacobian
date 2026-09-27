@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from math import gcd
 from typing import Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.canonical import decimal_digit_width
 from jacobian.math.lie_algebras._models import FiniteDimensionalLieAlgebra
@@ -23,6 +25,14 @@ def _decimal_width(component: object) -> int:
     if isinstance(component, int):
         return decimal_digit_width(abs(component))
     return len(str(component).lstrip("-"))
+
+
+def _rational_components(scalar: object) -> tuple[object, ...]:
+    if isinstance(scalar, CanonicalRational):
+        return (scalar.num, scalar.den)
+    if isinstance(scalar, dict):
+        return (scalar.get("num", "0"), scalar.get("den", "1"))
+    return (scalar,)
 
 
 class LieMatrixSpanRequest(StrictModel):
@@ -64,11 +74,7 @@ class LieMatrixSpanRequest(StrictModel):
                 )
             for row in entries:
                 for scalar in row:
-                    components = (
-                        (scalar.get("num", "0"), scalar.get("den", "1"))
-                        if isinstance(scalar, dict)
-                        else (scalar,)
-                    )
+                    components = _rational_components(scalar)
                     if any(
                         _decimal_width(component) > MAX_MATRIX_SPAN_INPUT_DIGITS
                         for component in components
@@ -76,6 +82,16 @@ class LieMatrixSpanRequest(StrictModel):
                         raise PydanticCustomError(
                             "lie_algebra.matrix_span_input_height",
                             "input matrix entries are limited to 64 decimal digits",
+                        )
+                    if isinstance(scalar, CanonicalRational) and (
+                        type(scalar.num) is not int
+                        or type(scalar.den) is not int
+                        or scalar.den <= 0
+                        or gcd(abs(scalar.num), scalar.den) != 1
+                    ):
+                        raise PydanticCustomError(
+                            "lie_algebra.matrix_span_rational",
+                            "matrix entries must be reduced canonical rationals",
                         )
         return value
 

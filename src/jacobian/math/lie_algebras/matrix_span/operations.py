@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations
-from math import factorial
+from math import factorial, gcd
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import decimal_digit_width
@@ -78,17 +78,26 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_shape",
             message="all matrices must have the same square order",
         )
-    if any(
-        not isinstance(entry, CanonicalRational)
-        for matrix in matrices
-        for row in matrix.entries
-        for entry in row
-    ):
-        raise OperationDomainValidationError(
-            location=("matrices",),
-            code="lie_algebra.matrix_span_shape",
-            message="matrix entries must be canonical rational scalars",
-        )
+    for matrix_index, matrix in enumerate(matrices):
+        for row_index, row in enumerate(matrix.entries):
+            for column_index, entry in enumerate(row):
+                if not isinstance(entry, CanonicalRational):
+                    raise OperationDomainValidationError(
+                        location=("matrices", matrix_index, "entries", row_index, column_index),
+                        code="lie_algebra.matrix_span_shape",
+                        message="matrix entries must be canonical rational scalars",
+                    )
+                if (
+                    type(entry.num) is not int
+                    or type(entry.den) is not int
+                    or entry.den <= 0
+                    or gcd(abs(entry.num), entry.den) != 1
+                ):
+                    raise OperationDomainValidationError(
+                        location=("matrices", matrix_index, "entries", row_index, column_index),
+                        code="lie_algebra.matrix_span_rational",
+                        message="matrix entries must be reduced canonical rationals",
+                    )
     input_numerator_growth = max(
         decimal_digit_width(entry.num) - 1
         for matrix in matrices

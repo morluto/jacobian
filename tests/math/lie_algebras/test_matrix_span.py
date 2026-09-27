@@ -4,6 +4,7 @@ from itertools import combinations
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.lie_algebras.matrix_span._models import (
     LieMatrixSpanRealization,
@@ -12,6 +13,7 @@ from jacobian.math.lie_algebras.matrix_span._models import (
 from jacobian.math.lie_algebras.matrix_span.operations import (
     lie_algebra_from_matrix_span,
 )
+from jacobian.math.matrices.values import RationalMatrix
 
 
 def _matrix(entries: tuple[tuple[int, ...], ...]) -> dict[str, object]:
@@ -117,3 +119,30 @@ def test_raw_scalar_height_is_rejected_before_matrix_canonicalization() -> None:
     payload = {"matrices": [_matrix(((10**64, 0), (0, 0)))]}
     with pytest.raises(ValidationError, match="limited to 64"):
         LieMatrixSpanRequest.model_validate(payload)
+
+
+def test_canonical_rational_input_is_measured_by_its_components() -> None:
+    large = CanonicalRational(num=10**54, den=1)
+    matrix = RationalMatrix(
+        entries=((large,),),
+    )
+    result = lie_algebra_from_matrix_span(
+        LieMatrixSpanRequest(matrices=(matrix,))
+    )
+    assert result.matrix_basis[0].entries[0][0] == large
+
+
+@pytest.mark.parametrize(
+    ("numerator", "denominator"),
+    ((1, 0), (2, 2), (True, 1), (0, -1)),
+)
+def test_native_execution_rejects_forged_noncanonical_rationals(
+    numerator: object, denominator: object
+) -> None:
+    scalar = CanonicalRational.model_construct(num=numerator, den=denominator)
+    matrix = RationalMatrix.model_construct(
+        domain="QQ", row_count=1, column_count=1, entries=((scalar,),)
+    )
+    request = LieMatrixSpanRequest.model_construct(matrices=(matrix,))
+    with pytest.raises(OperationDomainValidationError, match="reduced canonical"):
+        lie_algebra_from_matrix_span(request)

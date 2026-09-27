@@ -77,6 +77,7 @@ from jacobian.math.number_theory.modular_forms.transforms import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularCharacterInflationInclusion,
     ModularFormAtkinLehnerTarget,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
@@ -101,6 +102,7 @@ __all__ = [
     "ModularCharacterCommonTargetPrefix",
     "ModularCharacterEqualityResult",
     "ModularCharacterHeckeMatrix",
+    "ModularCharacterInflationInclusion",
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
     "ModularCharacterTransportedForm",

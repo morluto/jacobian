@@ -20,7 +20,7 @@ from jacobian.math.number_theory.modular_forms.space_maps import (
 )
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_MODULAR_CHARACTER_INCLUSION_LEVEL,
-    ModularCharacterSpaceInclusion,
+    ModularCharacterInflationInclusion,
     ModularFormSpace,
 )
 
@@ -100,7 +100,7 @@ def test_character_inclusion_is_parented_and_survives_serialization() -> None:
         _space(3, source), _space(15, target)
     )
 
-    restored = ModularCharacterSpaceInclusion.model_validate_json(
+    restored = ModularCharacterInflationInclusion.model_validate_json(
         value.model_dump_json()
     )
 
@@ -124,7 +124,7 @@ def test_character_inclusion_rejects_noninflated_target_character() -> None:
 def test_consumer_rechecks_serialized_map_claims() -> None:
     source = _character(character_group(3), (1,))
     target = _character(character_group(15), (0, 0))
-    forged = ModularCharacterSpaceInclusion.model_construct(
+    forged = ModularCharacterInflationInclusion.model_construct(
         map_kind="gamma0_character_inflation",
         source_space=_space(3, source),
         target_space=_space(15, target),
@@ -147,13 +147,13 @@ def test_character_space_inclusion_contract_and_structural_bound() -> None:
             source_space=_space(3, source), target_space=_space(15, target)
         )
     )
-    assert isinstance(result, ModularCharacterSpaceInclusion)
+    assert isinstance(result, ModularCharacterInflationInclusion)
 
 
 def test_character_inclusion_rejects_constructed_structurally_invalid_map() -> None:
     source_character = _character(character_group(3), (0,))
     target_character = _character(character_group(3), (0,))
-    forged = ModularCharacterSpaceInclusion.model_construct(
+    forged = ModularCharacterInflationInclusion.model_construct(
         map_kind="gamma0_character_inflation",
         source_space=_space(3, source_character),
         target_space=ModularFormSpace(

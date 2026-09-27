@@ -1747,7 +1747,7 @@ class TestSchemaVisibleCoefficientGrammar:
         for model in (VerifyChainMapRequest, MappingConeRequest):
             assert "chain_map" in model.model_json_schema()["properties"]
             assert "canonical decimal strings" in description
-            assert "residues in [0, p)" in description
+            assert "residues in [0,p)" in description
 
 
 class TestChainMapEndpointPrecondition:

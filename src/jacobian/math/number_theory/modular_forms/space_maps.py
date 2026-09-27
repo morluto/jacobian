@@ -17,7 +17,7 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.values import (
     MAX_MODULAR_CHARACTER_INCLUSION_LEVEL,
-    ModularCharacterSpaceInclusion,
+    ModularCharacterInflationInclusion,
     ModularFormSpace,
 )
 
@@ -56,11 +56,11 @@ def _character_angle(
 
 
 def require_modular_character_space_inclusion(
-    inclusion: ModularCharacterSpaceInclusion,
-) -> ModularCharacterSpaceInclusion:
+    inclusion: ModularCharacterInflationInclusion,
+) -> ModularCharacterInflationInclusion:
     """Re-establish the exact character-inflation relation of a supplied map."""
 
-    if type(inclusion) is not ModularCharacterSpaceInclusion:
+    if type(inclusion) is not ModularCharacterInflationInclusion:
         _domain("a canonical modular-character space inclusion is required")
     # Values that cross serialization are revalidated here. Native canonical
     # values have already passed their owner models; rebuilding them would replay
@@ -70,7 +70,7 @@ def require_modular_character_space_inclusion(
         or type(inclusion.target_space) is not ModularFormSpace
     ):
         try:
-            canonical = ModularCharacterSpaceInclusion.model_validate(
+            canonical = ModularCharacterInflationInclusion.model_validate(
                 inclusion.model_dump()
             )
         except (ValidationError, AttributeError, TypeError, ValueError) as error:
@@ -176,7 +176,7 @@ def require_modular_character_space_inclusion(
 def modular_form_character_space_inclusion(
     source_space: ModularFormSpace,
     target_space: ModularFormSpace,
-) -> ModularCharacterSpaceInclusion:
+) -> ModularCharacterInflationInclusion:
     """Construct a nested-level inclusion with exact character inflation."""
 
     if (
@@ -187,7 +187,7 @@ def modular_form_character_space_inclusion(
             "source and target must be exact modular-form space values",
             code="modular_form.character_inclusion_space_type",
         )
-    inclusion = ModularCharacterSpaceInclusion.model_construct(
+    inclusion = ModularCharacterInflationInclusion.model_construct(
         map_kind="gamma0_character_inflation",
         source_space=source_space,
         target_space=target_space,

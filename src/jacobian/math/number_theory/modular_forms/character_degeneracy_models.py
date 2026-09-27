@@ -11,7 +11,7 @@ from jacobian._models import StrictModel
 from jacobian.math.matrices.cyclic_linear._models import RationalCyclotomicField
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.values import (
-    ModularCharacterSpaceInclusion,
+    ModularCharacterInflationInclusion,
     ModularFormCoordinates,
     ModularFormFieldQExpansion,
     ModularFormSpace,
@@ -35,7 +35,7 @@ class ModularCharacterVDegeneracyImage(StrictModel):
 
     source_form: ModularFormCoordinates
     d: StrictInt = Field(ge=2, le=3)
-    inclusion: ModularCharacterSpaceInclusion
+    inclusion: ModularCharacterInflationInclusion
     q_expansion: ModularFormFieldQExpansion
 
     @classmethod
@@ -44,7 +44,7 @@ class ModularCharacterVDegeneracyImage(StrictModel):
         *,
         source_form: ModularFormCoordinates,
         d: int,
-        inclusion: ModularCharacterSpaceInclusion,
+        inclusion: ModularCharacterInflationInclusion,
         q_expansion: ModularFormFieldQExpansion,
     ) -> Self:
         """Construct after source, map, and prefix admission in the owner."""
@@ -62,7 +62,7 @@ class ModularCharacterVDegeneracyImage(StrictModel):
             source_form = ModularFormCoordinates.model_validate(
                 self.source_form.model_dump()
             )
-            inclusion = ModularCharacterSpaceInclusion.model_validate(
+            inclusion = ModularCharacterInflationInclusion.model_validate(
                 self.inclusion.model_dump()
             )
             expansion = ModularFormFieldQExpansion.model_validate(
@@ -107,32 +107,25 @@ class ModularCharacterVDegeneracyImage(StrictModel):
                 "modular_forms.character_v_image_binding",
                 "V_d image must retain its source, inflated target, and determined prefix",
             )
-        # This carrier is publicly decodable, so bind its authored expansion to
-        # the retained source form at that boundary. The owner-local admission
-        # bounds the exact basis work before the source prefix is reconstructed.
-        from jacobian.math.number_theory.modular_forms.character_basis import (
-            _admit_character_form,
-            _character_basis_from_admission,
-            _character_form_prefix,
-        )
-        from jacobian.math.number_theory.modular_forms.character_degeneracy import (
-            _zero,
+        # Model decoding admits only canonical structure. The character relation
+        # is checked here because it is cheap and operation bounded; coefficient
+        # claims are checked by the producer after its single admitted basis
+        # computation, never by replaying a PARI solve during deserialization.
+        from jacobian.math.number_theory.modular_forms.space_maps import (
+            modular_form_character_space_inclusion,
         )
 
-        admitted = _admit_character_form(source_form)
-        _, field, _, _ = admitted
-        basis = _character_basis_from_admission(source, field, admitted[3])
-        source_expansion = _character_form_prefix(source_form, admitted, basis)
-        expected_coefficients = tuple(
-            source_expansion.coefficients[index // self.d]
-            if index % self.d == 0
-            else _zero(field)
-            for index in range(2 * self.d + 1)
-        )
-        if expansion.coefficients != expected_coefficients:
+        try:
+            expected = modular_form_character_space_inclusion(source, target)
+        except Exception as error:
             raise PydanticCustomError(
-                "modular_forms.character_v_image_coefficients",
-                "V_d expansion coefficients must equal the source coefficients at divisible indices",
+                "modular_forms.character_v_image_inclusion",
+                "V_d target character must be the exact inflation of the source character",
+            ) from error
+        if expected.source_space != source or expected.target_space != target:
+            raise PydanticCustomError(
+                "modular_forms.character_v_image_inclusion",
+                "V_d target character must be the exact inflation of the source character",
             )
         return self
 

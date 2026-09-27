@@ -287,7 +287,7 @@ class ModularFormSpaceInclusion(StrictModel):
         return self
 
 
-class ModularCharacterSpaceInclusion(StrictModel):
+class ModularCharacterInflationInclusion(StrictModel):
     """Same-weight inclusion along Gamma0 level and Dirichlet-character inflation.
 
     Source and target use identical coefficient parents. The character values
@@ -751,7 +751,7 @@ __all__ = [
     "MAX_MODULAR_FORM_LEVEL",
     "MAX_MODULAR_FORM_WEIGHT",
     "LevelOneModularQExpansion",
-    "ModularCharacterSpaceInclusion",
+    "ModularCharacterInflationInclusion",
     "ModularFormBasis",
     "ModularFormBasisElement",
     "ModularFormCoordinates",

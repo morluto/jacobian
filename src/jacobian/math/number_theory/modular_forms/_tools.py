@@ -6,6 +6,7 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.modular_forms import operations as native
 from jacobian.math.number_theory.modular_forms._models import (
     LevelOneNamedQExpansionRequest,
+    ModularCharacterSpaceInclusionRequest,
     ModularFormAtkinLehnerTargetRequest,
     ModularFormBasisFrameRequest,
     ModularFormBasisRequest,
@@ -77,11 +78,15 @@ from jacobian.math.number_theory.modular_forms.coordinate_arithmetic_models impo
 from jacobian.math.number_theory.modular_forms.field_coordinates_tools import (
     TOOLS as FIELD_COORDINATE_TOOLS,
 )
+from jacobian.math.number_theory.modular_forms.space_maps import (
+    modular_form_character_space_inclusion,
+)
 from jacobian.math.number_theory.modular_forms.transform_tools import (
     TOOLS as TRANSFORM_TOOLS,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     LevelOneModularQExpansion,
+    ModularCharacterInflationInclusion,
     ModularFormAtkinLehnerTarget,
     ModularFormBasis,
     ModularFormChangeOfBasisFrame,
@@ -144,6 +149,14 @@ def compute_modular_form_space_inclusion(
     request: ModularFormSpaceInclusionRequest,
 ) -> ModularFormSpaceInclusion:
     return modular_form_space_inclusion(request.source_space, request.target_space)
+
+
+def compute_modular_character_space_inclusion(
+    request: ModularCharacterSpaceInclusionRequest,
+) -> ModularCharacterInflationInclusion:
+    return modular_form_character_space_inclusion(
+        request.source_space, request.target_space
+    )
 
 
 def decide_coordinate_equality(
@@ -309,6 +322,19 @@ TOOLS: MathTools = (
                 },
             ),
         ),
+    ),
+    MathTool(
+        operation_id="modular_form.character_space.inclusion.compute",
+        title="Construct an exact character-space inclusion",
+        description=(
+            "Construct the same-weight Gamma0 inclusion when the target Dirichlet "
+            "character is the exact pullback of the source character along unit "
+            "reduction. Character values are compared exactly on all target units."
+        ),
+        request_type=ModularCharacterSpaceInclusionRequest,
+        result_type=ModularCharacterInflationInclusion,
+        run=compute_modular_character_space_inclusion,
+        tags=("modular-forms", "characters", "spaces", "inclusion", "exact"),
     ),
     MathTool(
         operation_id="modular_form.equal.check",

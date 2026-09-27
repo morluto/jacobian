@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import itertools
+
 import pytest
 from pydantic import ValidationError
 
@@ -15,12 +17,15 @@ from jacobian.math.logic.automata.tree._tools import (
     compute_tree_automaton_determinize,
 )
 from jacobian.math.logic.automata.tree.operations import (
+    complement_tree_automaton,
+    complete_deterministic_tree_automaton,
     determinize_tree_automaton,
     run_tree_automaton,
     verify_determinization,
 )
 from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
+    DeterministicBottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
 )
@@ -257,6 +262,103 @@ class TestNativeCatalogParity:
 
         assert result.status == "COMPLETE"
         assert result.deterministic.state_count == 2
+
+
+class TestComposition:
+    @staticmethod
+    def _partial_source() -> BottomUpTreeAutomaton:
+        # A nondeterministic automaton whose determinization is partial: the
+        # mixed-subset row f((0,), (1, 2)) has no image.
+        return BottomUpTreeAutomaton(
+            state_count=3,
+            arity=(0, 0, 2),
+            transitions=(
+                TreeAutomatonTransition(symbol=0, child_states=(), target_state=0),
+                TreeAutomatonTransition(symbol=1, child_states=(), target_state=1),
+                TreeAutomatonTransition(symbol=1, child_states=(), target_state=2),
+                TreeAutomatonTransition(symbol=2, child_states=(0, 0), target_state=0),
+                TreeAutomatonTransition(symbol=2, child_states=(1, 1), target_state=2),
+                TreeAutomatonTransition(symbol=2, child_states=(2, 2), target_state=1),
+            ),
+            final_states=(2,),
+        )
+
+    @staticmethod
+    def _ground_trees(arity: tuple[int, ...], height: int) -> list[RankedTree]:
+        levels: list[list[RankedTree]] = []
+        current = [
+            RankedTree(symbol=symbol) for symbol, rank in enumerate(arity) if rank == 0
+        ]
+        levels.append(current)
+        trees = list(current)
+        for _ in range(height):
+            following: list[RankedTree] = []
+            for symbol, rank in enumerate(arity):
+                if rank == 0:
+                    continue
+                for children in itertools.product(levels[-1], repeat=rank):
+                    node = RankedTree(symbol=symbol, children=children)
+                    following.append(node)
+                    trees.append(node)
+            if not following:
+                break
+            levels.append(following)
+        return trees
+
+    @staticmethod
+    def _nfa_accepts(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
+        return bool(run_tree_automaton(machine, tree) & set(machine.final_states))
+
+    @staticmethod
+    def _partial_dfa_accepts(machine: BottomUpTreeAutomaton, tree: RankedTree) -> bool:
+        table = {
+            (row.symbol, row.child_states): row.target_state
+            for row in machine.transitions
+        }
+
+        def state(node: RankedTree) -> int | None:
+            children = tuple(state(child) for child in node.children)
+            if any(child is None for child in children):
+                return None
+            return table.get(
+                (node.symbol, tuple(child for child in children if child is not None))
+            )
+
+        root = state(tree)
+        return root is not None and root in machine.final_states
+
+    def test_determinized_result_flows_into_completion_and_complement(
+        self,
+    ) -> None:
+        source = self._partial_source()
+
+        result = determinize_tree_automaton(source, 64, 3)
+
+        assert result.status == "COMPLETE"
+        assert isinstance(result.deterministic, DeterministicBottomUpTreeAutomaton)
+        completion = complete_deterministic_tree_automaton(result.deterministic)
+        assert completion.sink_state is not None
+        complemented = complement_tree_automaton(completion.completed)
+        decoded = TreeDeterminizeResult.model_validate_json(result.model_dump_json())
+        assert isinstance(decoded.deterministic, DeterministicBottomUpTreeAutomaton)
+        for tree in self._ground_trees(source.arity, 3):
+            source_accepted = self._nfa_accepts(source, tree)
+            assert source_accepted == self._partial_dfa_accepts(
+                result.deterministic, tree
+            ), tree
+            assert source_accepted == self._partial_dfa_accepts(
+                completion.completed, tree
+            ), tree
+            assert (
+                self._partial_dfa_accepts(complemented.complement, tree)
+                is not source_accepted
+            ), tree
+
+    def test_truncated_result_carries_the_deterministic_carrier(self) -> None:
+        result = determinize_tree_automaton(_blowup_automaton(), 2, 2)
+
+        assert result.status == "TRUNCATED"
+        assert isinstance(result.deterministic, DeterministicBottomUpTreeAutomaton)
 
 
 class TestSerialization:

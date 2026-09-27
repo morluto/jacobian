@@ -314,16 +314,6 @@ class TestIncidenceGraph:
         assert r.edge_incidence == ()
         assert r.edges == ()
 
-    def test_edge_incidence_is_canonical(self) -> None:
-        hg = _hypergraph(
-            {
-                "vertices": ["a", "b", "c"],
-                "edges": [["e", ["c", "a", "b"]]],
-            }
-        )
-        r = incidence_graph(hg)
-        assert dict(r.edge_incidence)["e"] == ("a", "b", "c")
-
     def test_edge_incidence_uses_lexical_member_order_not_declared_vertices(
         self,
     ) -> None:
@@ -336,6 +326,7 @@ class TestIncidenceGraph:
         result = incidence_graph(hg)
         assert result.hypergraph.edges == (("e", ("a", "z")),)
         assert dict(result.edge_incidence)["e"] == ("a", "z")
+        assert result.edge_incidence == (("e", ("a", "z")),)
         restored = type(result).model_validate(result.model_dump())
         assert restored == result
         assert restored.graph == result.graph
@@ -354,19 +345,6 @@ class TestIncidenceGraph:
 
 
 class TestCliqueExpansion:
-    def test_canonical_graph(self) -> None:
-        r = clique_expansion(_hypergraph(HYPERGRAPH))
-        assert isinstance(r.graph, SimpleUndirectedGraph)
-        assert r.graph.vertices == ("a", "b", "c", "d")
-        assert set(r.graph.edges) == {
-            ("a", "b"),
-            ("a", "c"),
-            ("a", "d"),
-            ("b", "c"),
-            ("b", "d"),
-            ("c", "d"),
-        }
-
     def test_endpoint_order_follows_graph_convention(self) -> None:
         """The ('z', 'a') reproduction: endpoints are lexical, not declared."""
 
@@ -381,6 +359,17 @@ class TestCliqueExpansion:
             members = [set(members) for _, members in hg.edges]
             adjacent = set(r.graph.edges)
             vertices = hg.vertices
+            if hypergraph == HYPERGRAPH:
+                assert isinstance(r.graph, SimpleUndirectedGraph)
+                assert r.graph.vertices == ("a", "b", "c", "d")
+                assert adjacent == {
+                    ("a", "b"),
+                    ("a", "c"),
+                    ("a", "d"),
+                    ("b", "c"),
+                    ("b", "d"),
+                    ("c", "d"),
+                }
             for i, u in enumerate(vertices):
                 for v in vertices[i + 1 :]:
                     shared = any(u in m and v in m for m in members)

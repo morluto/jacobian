@@ -118,32 +118,6 @@ def test_vertex_count_matches_interval() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_edge_count_matches_formula_n5_k3() -> None:
-    result = construct_arithmetic_progression_hypergraph(1, 5, 3)
-    assert len(result.hypergraph.edges) == _edge_count(5, 3)
-    assert len(result.hypergraph.edges) == 4
-
-
-def test_edge_count_matches_formula_n10_k3() -> None:
-    result = construct_arithmetic_progression_hypergraph(0, 9, 3)
-    assert len(result.hypergraph.edges) == _edge_count(10, 3)
-
-
-def test_edge_count_matches_formula_n10_k4() -> None:
-    result = construct_arithmetic_progression_hypergraph(0, 9, 4)
-    assert len(result.hypergraph.edges) == _edge_count(10, 4)
-
-
-def test_edge_count_matches_formula_n20_k3() -> None:
-    result = construct_arithmetic_progression_hypergraph(5, 24, 3)
-    assert len(result.hypergraph.edges) == _edge_count(20, 3)
-
-
-def test_edge_count_matches_formula_n20_k5() -> None:
-    result = construct_arithmetic_progression_hypergraph(5, 24, 5)
-    assert len(result.hypergraph.edges) == _edge_count(20, 5)
-
-
 # ---------------------------------------------------------------------------
 # Edge member correctness: every edge is a valid AP
 # ---------------------------------------------------------------------------
@@ -360,6 +334,10 @@ def test_edge_count_matches_formula_exhaustive_k5() -> None:
         assert len(result.hypergraph.edges) == _edge_count(n, 5), (
             f"Edge count mismatch for N={n}, k=5"
         )
+
+    shifted = construct_arithmetic_progression_hypergraph(5, 24, 5)
+    assert shifted.hypergraph.vertices == tuple(str(value) for value in range(5, 25))
+    assert len(shifted.hypergraph.edges) == _edge_count(20, 5)
 
 
 # ---------------------------------------------------------------------------

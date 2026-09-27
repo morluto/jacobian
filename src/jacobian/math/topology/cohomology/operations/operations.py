@@ -922,7 +922,7 @@ def induced_cohomology_map(
     target_groups = {group.dimension: group for group in target_cohomology.groups}
     matrices: list[InducedCohomologyMatrix] = []
     top = max(simplicial_map.source.dimension, simplicial_map.target.dimension)
-    represented_degrees = list(range(max(top, 0) + 1))
+    represented_degrees = list(range(top + 1))
     if convention is HomologyConvention.REDUCED and any(
         group.dimension == -1
         for cohomology in (source_cohomology, target_cohomology)

@@ -739,7 +739,7 @@ class InducedCohomologyMapResult(StrictModel):
                     "retained cohomologies must bind the prime and convention",
                 )
         top = max(self.map.source.dimension, self.map.target.dimension)
-        represented_degrees = list(range(max(top, 0) + 1))
+        represented_degrees = list(range(top + 1))
         if self.convention is HomologyConvention.REDUCED and any(
             group.dimension == -1
             for cohomology in (self.source_cohomology, self.target_cohomology)

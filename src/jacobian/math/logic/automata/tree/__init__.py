@@ -32,6 +32,9 @@ from jacobian.math.logic.automata.tree.operations import (
     verify_tree_run,
     verify_trim_tree_automaton,
 )
+from jacobian.math.logic.automata.tree.state_algebra import (
+    deterministic_tree_automaton_state_algebra,
+)
 from jacobian.math.logic.automata.tree.values import (
     BottomUpTreeAutomaton,
     CompleteDeterministicBottomUpTreeAutomaton,
@@ -66,6 +69,7 @@ __all__ = [
     "boolean_product_tree_automata",
     "complement_tree_automaton",
     "complete_deterministic_tree_automaton",
+    "deterministic_tree_automaton_state_algebra",
     "determinize_tree_automaton",
     "minimize_tree_automaton",
     "nondeterministic_run_counts",

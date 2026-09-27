@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections import deque
 from itertools import combinations
-from math import comb
+from math import comb, gcd
 from typing import Literal
 
 from jacobian.canonical import strict_json_object_size
@@ -37,6 +37,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
+    PetriNetDisjointUnionResult,
     PetriNonnegativeInvariantResult,
     PetriPlaceSubset,
     PetriReachabilityEdge,
@@ -54,6 +55,8 @@ from jacobian.math.logic.automata.petri_nets._models import (
 )
 from jacobian.math.logic.automata.petri_nets.values import (
     MAX_PETRI_MARKING,
+    MAX_PETRI_PLACES,
+    MAX_PETRI_TRANSITIONS,
     FiringSequence,
     Marking,
     PetriNet,
@@ -71,6 +74,7 @@ __all__ = [
     "check_pumping_witness",
     "compute_incidence_matrix",
     "concurrent_step",
+    "disjoint_union",
     "enabled_transitions",
     "find_minimal_siphons",
     "find_minimal_traps",
@@ -97,6 +101,214 @@ __all__ = [
 ]
 
 MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_WORK = 2 * MAX_PETRI_PLACES * MAX_PETRI_TRANSITIONS
+
+
+def _petri_net_union_output_bound(
+    left: PetriNet, right: PetriNet, *, include_markings: bool
+) -> tuple[int, int]:
+    """Conservatively admit serialized output and matrix-entry work."""
+
+    def matrix_bound(rows: int, columns: int) -> int:
+        row = 2 + max(0, columns - 1) + 4 * columns
+        return 2 + max(0, rows - 1) + rows * row
+
+    def raw_ids_bound(ids: tuple[str, ...] | None) -> int:
+        if ids is None:
+            return 4
+        return 2 + max(0, len(ids) - 1) + sum(6 * len(item) + 2 for item in ids)
+
+    def source_bound(net: PetriNet) -> int:
+        return (
+            256
+            + 2 * matrix_bound(net.place_count, net.transition_count)
+            + raw_ids_bound(net.place_ids)
+            + raw_ids_bound(net.transition_ids)
+        )
+
+    def union_ids_bound(
+        left_ids: tuple[str, ...] | None,
+        right_ids: tuple[str, ...] | None,
+        left_count: int,
+        right_count: int,
+    ) -> int:
+        if left_ids is None and right_ids is None:
+            return 8
+        size = 2 + max(0, left_count + right_count - 1)
+        for side, ids, count in (
+            ("L", left_ids, left_count),
+            ("R", right_ids, right_count),
+        ):
+            for index in range(count):
+                identifier = "" if ids is None else ids[index]
+                label_length = (
+                    len(side)
+                    + 1
+                    + len(str(index))
+                    + (1 + len(identifier) if ids is not None else 0)
+                )
+                size += 6 * label_length + 2
+        return size
+
+    places = left.place_count + right.place_count
+    transitions = left.transition_count + right.transition_count
+    union_bound = (
+        256
+        + 2 * matrix_bound(places, transitions)
+        + union_ids_bound(
+            left.place_ids, right.place_ids, left.place_count, right.place_count
+        )
+        + union_ids_bound(
+            left.transition_ids,
+            right.transition_ids,
+            left.transition_count,
+            right.transition_count,
+        )
+    )
+    mappings_bound = 128 + 12 * (places + transitions)
+    # Markings serialize their parent net recursively. The result retains two
+    # source markings (each with its source net) and one union marking (with the
+    # union net), in addition to the explicit net fields above.
+    markings_bound = (
+        128 + 15 * places + source_bound(left) + source_bound(right) + union_bound
+        if include_markings
+        else 0
+    )
+    output_bound = (
+        source_bound(left)
+        + source_bound(right)
+        + union_bound
+        + mappings_bound
+        + markings_bound
+    )
+    return output_bound, 2 * places * transitions
+
+
+def disjoint_union(
+    left_net: PetriNet,
+    right_net: PetriNet,
+    left_marking: Marking | None = None,
+    right_marking: Marking | None = None,
+) -> PetriNetDisjointUnionResult:
+    """Return the block-disjoint union of two weighted place/transition nets.
+
+    The place and transition axes are concatenated in left-then-right order.
+    Each source marking may be supplied as a pair; the result then includes
+    their concatenation on the union place axis.
+    """
+
+    left_net = _admit_net(left_net)
+    right_net = _admit_net(right_net)
+    if (left_marking is None) != (right_marking is None):
+        raise OperationDomainValidationError(
+            location=("marking",),
+            code="petri_net.union_marking_pair",
+            message="both source markings must be supplied together",
+        )
+    if left_marking is not None and right_marking is not None:
+        left_marking = _require_marking_size(left_net, left_marking)
+        right_marking = _require_marking_size(right_net, right_marking)
+
+    # Complete canonical validation before any resource envelope is applied, so
+    # the same malformed axis no longer changes error category with its length.
+    _require_valid_axis_encoding(left_net)
+    _require_valid_axis_encoding(right_net)
+
+    place_count = left_net.place_count + right_net.place_count
+    transition_count = left_net.transition_count + right_net.transition_count
+    if place_count > MAX_PETRI_PLACES or transition_count > MAX_PETRI_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_axis_bound",
+            message=(
+                "disjoint union exceeds the "
+                f"{MAX_PETRI_PLACES}-place or {MAX_PETRI_TRANSITIONS}-transition carrier bound"
+            ),
+        )
+    output_bound, work = _petri_net_union_output_bound(
+        left_net, right_net, include_markings=left_marking is not None
+    )
+    if work > MAX_PETRI_NET_DISJOINT_UNION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_work_bound",
+            message="disjoint-union matrix expansion exceeds its admitted work bound",
+        )
+    if output_bound > MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_output_bound",
+            message="disjoint-union result exceeds its admitted serialized-output bound",
+        )
+
+    def combine_ids(
+        left_ids: tuple[str, ...] | None,
+        right_ids: tuple[str, ...] | None,
+        left_count: int,
+        right_count: int,
+    ) -> tuple[str, ...] | None:
+        if left_ids is None and right_ids is None:
+            return None
+        left_names = tuple(
+            f"L:{index}:{identifier}" if left_ids is not None else f"L:{index}"
+            for index, identifier in enumerate(left_ids or range(left_count))
+        )
+        right_names = tuple(
+            f"R:{index}:{identifier}" if right_ids is not None else f"R:{index}"
+            for index, identifier in enumerate(right_ids or range(right_count))
+        )
+        return left_names + right_names
+
+    left_zeroes = (0,) * left_net.transition_count
+    right_zeroes = (0,) * right_net.transition_count
+    pre = tuple(
+        tuple(left_net.pre[row]) + right_zeroes for row in range(left_net.place_count)
+    ) + tuple(
+        left_zeroes + tuple(right_net.pre[row]) for row in range(right_net.place_count)
+    )
+    post = tuple(
+        tuple(left_net.post[row]) + right_zeroes for row in range(left_net.place_count)
+    ) + tuple(
+        left_zeroes + tuple(right_net.post[row]) for row in range(right_net.place_count)
+    )
+    union_net = PetriNet(
+        place_count=place_count,
+        transition_count=transition_count,
+        place_ids=combine_ids(
+            left_net.place_ids,
+            right_net.place_ids,
+            left_net.place_count,
+            right_net.place_count,
+        ),
+        transition_ids=combine_ids(
+            left_net.transition_ids,
+            right_net.transition_ids,
+            left_net.transition_count,
+            right_net.transition_count,
+        ),
+        pre=pre,
+        post=post,
+    )
+    union_marking = None
+    if left_marking is not None and right_marking is not None:
+        union_marking = Marking(
+            tokens=left_marking.tokens + right_marking.tokens, net=union_net
+        )
+    return PetriNetDisjointUnionResult(
+        left_net=left_net,
+        right_net=right_net,
+        net=union_net,
+        left_place_embedding=tuple(range(left_net.place_count)),
+        right_place_embedding=tuple(range(left_net.place_count, place_count)),
+        left_transition_embedding=tuple(range(left_net.transition_count)),
+        right_transition_embedding=tuple(
+            range(left_net.transition_count, transition_count)
+        ),
+        left_marking=left_marking,
+        right_marking=right_marking,
+        marking=union_marking,
+    )
 
 
 def _petri_net_reverse_output_bound(net: PetriNet) -> int:
@@ -169,6 +381,25 @@ def _admit_net(net: object) -> PetriNet:
         ) from exc
 
 
+def _require_valid_axis_encoding(net: PetriNet) -> None:
+    """Reject unpaired surrogates before resource admission and label synthesis.
+
+    Canonical JSON cannot encode unpaired UTF-16 surrogates.  This is a domain
+    property of the representation, so it must be decided independently of any
+    serialized-size or work envelope.
+    """
+
+    for ids in (net.place_ids, net.transition_ids):
+        if ids is not None and any(
+            0xD800 <= ord(character) <= 0xDFFF for item in ids for character in item
+        ):
+            raise OperationDomainValidationError(
+                location=("net", "axis_ids"),
+                code="petri_net.net_axis_encoding",
+                message="place and transition IDs must be valid Unicode strings",
+            )
+
+
 def reverse_petri_net(net: PetriNet) -> PetriNet:
     """Reverse every transition by exchanging its input and output arcs."""
 
@@ -236,8 +467,7 @@ def _bound_marking(net: PetriNet, marking: Marking, tokens: tuple[int, ...]) -> 
 
 
 def _enabled_transition_indices(net: PetriNet, marking: Marking) -> list[int]:
-    """Return indices of all transitions enabled at the given marking."""
-    marking = _require_marking_size(net, marking)
+    """Return indices of all transitions enabled at an admitted marking."""
     result: list[int] = []
     for t in range(net.transition_count):
         enabled = True
@@ -318,7 +548,6 @@ def _fire_transition_tokens(
 ) -> tuple[bool, tuple[int, ...]]:
     """Return whether a transition fired and its successor token tuple."""
 
-    _require_marking_size(net, marking)
     if not 0 <= transition < net.transition_count:
         raise OperationDomainValidationError(
             location=("transition",),
@@ -442,6 +671,19 @@ def concurrent_step(
             status="ESCAPES_DECLARED_ENVELOPE",
             envelope_escape=target,
         )
+    derived_bytes = len(marking.model_dump_json().encode("utf-8")) + 3 * net.place_count
+    output_bound = (
+        3 * len(net.model_dump_json().encode("utf-8"))
+        + 2 * derived_bytes
+        + 10 * (net.place_count + net.transition_count)
+        + 1024
+    )
+    if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.concurrent_step_output_bound",
+            message="concurrent step result exceeds its output bound",
+        )
     return ConcurrentStepResult(
         net=net,
         marking=marking,
@@ -456,6 +698,12 @@ def concurrent_step(
 def _require_sequence_axes(net: PetriNet, sequence: tuple[int, ...]) -> None:
     """Share the catalog sequence-axis admission with native callers."""
 
+    if type(sequence) is not tuple:
+        raise OperationDomainValidationError(
+            location=("sequence",),
+            code="petri_net.firing_sequence_container",
+            message="firing sequence must be a tuple",
+        )
     if len(sequence) > MAX_FIRING_SEQUENCE_LENGTH:
         raise OperationResourceAdmissionError(
             location=("sequence",),
@@ -893,6 +1141,21 @@ def marking_reachability(
                 queue.append(target_index)
             if successor == target:
                 transitions = witness(target_index)
+                replay_bound = _firing_sequence_replay_output_bound(
+                    net, initial_marking, len(transitions)
+                )
+                if replay_bound > MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES:
+                    incomplete_reasons.add("SEQUENCE_LIMIT")
+                    return MarkingReachabilityResult(
+                        net=net,
+                        initial_marking=initial_marking,
+                        target_marking=target_marking,
+                        max_states=max_states,
+                        status="INCOMPLETE",
+                        sequence=None,
+                        explored_state_count=len(states),
+                        incomplete_reasons=tuple(sorted(incomplete_reasons)),
+                    )
                 if len(transitions) > MAX_FIRING_SEQUENCE_LENGTH:
                     incomplete_reasons.add("SEQUENCE_LIMIT")
                     return MarkingReachabilityResult(
@@ -1241,6 +1504,18 @@ def place_set_initial_marking_profile(
             message="subset must use the net place axis",
         )
 
+    # The result may retain the net directly, in the source marking, and in
+    # the nested support profile. Account for the parent convention explicitly.
+    nested_net_bytes = len(net.model_dump_json().encode("utf-8"))
+    marking_parent_copies = 1 if marking.net is not None else 0
+    if (
+        2 + marking_parent_copies
+    ) * nested_net_bytes + 2048 > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.initial_profile_output_bound",
+            message="initial marking profile exceeds its output bound",
+        )
     support = _place_set_support_admitted(net, places)
     total = sum(marking.tokens[place] for place in places.places)
     implications: list[
@@ -1483,6 +1758,52 @@ def _nonnegative_kernel_admission(
     return height, work, output_bytes
 
 
+def _reduce_nonnegative_kernel_constraints(
+    matrix: tuple[tuple[int, ...], ...], dimension: int
+) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...]]:
+    """Remove coordinates forced to zero and normalize equivalent rows."""
+    active = set(range(dimension))
+    changed = True
+    while changed and active:
+        changed = False
+        for row in matrix:
+            restricted = tuple(row[index] for index in sorted(active))
+            if all(value >= 0 for value in restricted) or all(
+                value <= 0 for value in restricted
+            ):
+                forced = {index for index in active if row[index] != 0}
+                if forced:
+                    active.difference_update(forced)
+                    changed = True
+
+    coordinates = tuple(sorted(active))
+    normalized_rows: set[tuple[int, ...]] = set()
+    for row in matrix:
+        restricted = tuple(row[index] for index in coordinates)
+        content = 0
+        for value in restricted:
+            content = gcd(content, abs(value))
+        if not content:
+            continue
+        normalized_rows.add(tuple(value // content for value in restricted))
+    return tuple(sorted(normalized_rows)), coordinates
+
+
+def _lift_nonnegative_kernel_generators(
+    generators: tuple[tuple[int, ...], ...],
+    dimension: int,
+    coordinates: tuple[int, ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Restore reduced-coordinate generators to the original axis."""
+    lifted: list[tuple[int, ...]] = []
+    for generator in generators:
+        vector = [0] * dimension
+        for coordinate, value in zip(coordinates, generator, strict=True):
+            vector[coordinate] = value
+        lifted.append(tuple(vector))
+    return tuple(sorted(lifted))
+
+
 def _weak_compositions(total: int, length: int):
     """Generate weak compositions in lexicographic order."""
     if length == 0:
@@ -1552,8 +1873,14 @@ def petri_nonnegative_invariant_generators(
         tuple(incidence[place][transition] for place in range(net.place_count))
         for transition in range(net.transition_count)
     )
-    t_bound = _nonnegative_kernel_admission(incidence, net.transition_count)
-    p_bound = _nonnegative_kernel_admission(transposed, net.place_count)
+    reduced_incidence, transition_axis = _reduce_nonnegative_kernel_constraints(
+        incidence, net.transition_count
+    )
+    reduced_transposed, place_axis = _reduce_nonnegative_kernel_constraints(
+        transposed, net.place_count
+    )
+    t_bound = _nonnegative_kernel_admission(reduced_incidence, len(transition_axis))
+    p_bound = _nonnegative_kernel_admission(reduced_transposed, len(place_axis))
     total_work = t_bound[1] + p_bound[1]
     if total_work > MAX_PETRI_NONNEGATIVE_INVARIANT_WORK:
         raise OperationResourceAdmissionError(
@@ -1563,11 +1890,19 @@ def petri_nonnegative_invariant_generators(
         )
     return PetriNonnegativeInvariantResult._from_kernel(
         net=net,
-        p_generators=_nonnegative_integer_kernel_generators(
-            transposed, net.place_count, p_bound[0]
+        p_generators=_lift_nonnegative_kernel_generators(
+            _nonnegative_integer_kernel_generators(
+                reduced_transposed, len(place_axis), p_bound[0]
+            ),
+            net.place_count,
+            place_axis,
         ),
-        t_generators=_nonnegative_integer_kernel_generators(
-            incidence, net.transition_count, t_bound[0]
+        t_generators=_lift_nonnegative_kernel_generators(
+            _nonnegative_integer_kernel_generators(
+                reduced_incidence, len(transition_axis), t_bound[0]
+            ),
+            net.transition_count,
+            transition_axis,
         ),
     )
 

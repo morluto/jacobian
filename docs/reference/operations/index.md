@@ -24,6 +24,7 @@ that need more context than an operation card:
 - [Petri-net marking conflict profiles](petri-net-marking-conflict-profile.md)
 - [Petri-net sequential commutation profiles](petri-net-marking-commutation-profile.md)
 - [Petri-net reversal](petri-net-reversal.md)
+- [Petri-net disjoint union](petri-net-disjoint-union.md)
 - [Petri-net state equation](petri-net-state-equation.md)
 - [Nonnegative Petri-net invariant generators](petri-net-nonnegative-invariants.md)
 - [Petri-net target marking reachability](petri-net-target-reachability.md)

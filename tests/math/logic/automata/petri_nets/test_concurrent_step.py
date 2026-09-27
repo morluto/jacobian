@@ -4,16 +4,15 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.automata.petri_nets import (
     concurrent_step,
     replay_firing_sequence,
 )
+from jacobian.math.logic.automata.petri_nets._tools import TOOLS
 from jacobian.math.logic.automata.petri_nets.values import Marking, PetriNet
 
 
@@ -105,22 +104,27 @@ def test_declared_envelope_escape_is_not_reported_as_a_marking():
 
 
 def test_catalog_invocation_has_typed_deficit_result():
-    result = invoke_operation(
-        "petri_net.marking.concurrent_step.compute",
-        {
-            "net": {
-                "place_count": 1,
-                "transition_count": 2,
-                "pre": [[1, 1]],
-                "post": [[0, 0]],
-            },
-            "marking": {"tokens": [1]},
-            "transition_counts": [1, 1],
-        },
-        Catalog.open(),
+    tool = next(
+        t
+        for t in TOOLS
+        if t.operation_id == "petri_net.marking.concurrent_step.compute"
     )
-    assert result.output["status"] == "NOT_ENABLED"
-    assert result.output["deficit"] == [1]
+    result = tool.run(
+        tool.request_type.model_validate(
+            {
+                "net": {
+                    "place_count": 1,
+                    "transition_count": 2,
+                    "pre": [[1, 1]],
+                    "post": [[0, 0]],
+                },
+                "marking": {"tokens": [1]},
+                "transition_counts": [1, 1],
+            }
+        )
+    )
+    assert result.status == "NOT_ENABLED"
+    assert result.deficit == (1,)
 
 
 def test_occurrence_cap_is_enforced_before_step_expansion():

@@ -77,3 +77,37 @@ def test_large_candidate_space_is_rejected_before_enumeration() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="Hilbert-basis"):
         petri_nonnegative_invariant_generators(net)
+
+
+def test_sign_definite_support_is_removed_before_work_admission() -> None:
+    all_positive = PetriNet(
+        place_count=1,
+        transition_count=12,
+        pre=((0,) * 12,),
+        post=((1,) * 12,),
+    )
+    result = petri_nonnegative_invariant_generators(all_positive)
+    assert result.t_generators == ()
+    assert result.p_generators == ()
+
+    one_free_transition = PetriNet(
+        place_count=1,
+        transition_count=12,
+        pre=((0,) * 12,),
+        post=((0, *([1] * 11)),),
+    )
+    result = petri_nonnegative_invariant_generators(one_free_transition)
+    assert result.t_generators == ((1, *((0,) * 11)),)
+    assert result.p_generators == ()
+
+
+def test_row_content_normalization_preserves_weighted_kernel() -> None:
+    net = PetriNet(
+        place_count=1,
+        transition_count=2,
+        pre=((22, 0),),
+        post=((0, 22),),
+    )
+    result = petri_nonnegative_invariant_generators(net)
+    assert result.t_generators == ((1, 1),)
+    assert result.p_generators == ()

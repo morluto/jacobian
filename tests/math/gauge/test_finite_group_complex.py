@@ -147,6 +147,17 @@ def test_open_or_foreign_face_boundary_is_rejected():
         FiniteGroupGaugeComplex.model_validate(foreign.model_dump())
 
 
+def test_group_law_errors_point_to_the_group_request_field():
+    lattice, _, _ = _square()
+    malformed_group = _group().model_copy(update={"identity": 1})
+    request = FiniteGroupGaugeComplexRequest.model_construct(
+        lattice=lattice, group=malformed_group, faces=()
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        construct_finite_group_gauge_complex(request)
+    assert error.value.location == ("group",)
+
+
 def test_aggregate_face_growth_is_rejected_before_nested_value_parsing():
     lattice = {
         "vertices": ["v"],

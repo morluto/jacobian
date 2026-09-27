@@ -44,24 +44,26 @@ def _is_gauge_label(value: object) -> bool:
 
 def _admit_group(
     group: FiniteGroupTable,
+    *,
+    location: str = "field",
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[int, ...], int, int]:
     table, inverse, identity = group.multiplication, group.inverse, group.identity
     order = len(table) if isinstance(table, tuple) else 0
     if not 1 <= order <= 24 or not isinstance(inverse, tuple) or len(inverse) != order:
         _reject(
-            "field",
+            location,
             "lattice_gauge.finite_group.table_shape",
             "finite group table is malformed",
         )
     if any(not isinstance(row, tuple) or len(row) != order for row in table):
         _reject(
-            "field",
+            location,
             "lattice_gauge.finite_group.table_shape",
             "finite group table must be square",
         )
     if type(identity) is not int or not 0 <= identity < order:
         _reject(
-            "field",
+            location,
             "lattice_gauge.finite_group.identity",
             "group identity index is malformed",
         )
@@ -69,7 +71,7 @@ def _admit_group(
         type(x) is not int or not 0 <= x < order for row in table for x in row
     ) or any(type(x) is not int or not 0 <= x < order for x in inverse):
         _reject(
-            "field",
+            location,
             "lattice_gauge.finite_group.table_index",
             "table entries and inverses must index the group",
         )
@@ -78,19 +80,19 @@ def _admit_group(
         for i in range(order)
     ):
         _reject(
-            "field",
+            location,
             "lattice_gauge.finite_group.inverse_law",
             "inverse map must give two-sided inverses",
         )
     if any(table[identity][i] != i or table[i][identity] != i for i in range(order)):
         _reject(
-            "field",
+            location,
             "lattice_gauge.finite_group.identity_law",
             "identity index must be two-sided",
         )
     if order**3 > MAX_FINITE_GROUP_GAUGE_WORK:
         raise OperationResourceAdmissionError(
-            location=("field",),
+            location=(location,),
             code="lattice_gauge.finite_group.work_bound",
             message="group-law admission exceeds the work bound",
         )
@@ -99,7 +101,7 @@ def _admit_group(
             for c in range(order):
                 if table[table[a][b]][c] != table[a][table[b][c]]:
                     _reject(
-                        "field",
+                        location,
                         "lattice_gauge.finite_group.associativity",
                         "multiplication table must be associative",
                     )
@@ -257,6 +259,12 @@ def _resolve_path(
         )
     if start is None or cursor is None:
         raise RuntimeError("admitted nonempty path produced no endpoints")
+    if path.basepoint is not None and path.basepoint != start:
+        _reject(
+            "path",
+            "lattice_gauge.finite_group.basepoint_mismatch",
+            "a supplied path basepoint must equal its first vertex",
+        )
     return start, cursor, tuple(resolved)
 
 

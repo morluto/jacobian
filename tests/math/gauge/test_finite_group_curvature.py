@@ -200,6 +200,20 @@ def test_empty_face_is_identity_and_result_round_trips_through_json():
     assert tool.run(request) == result
 
 
+def test_zero_face_curvature_round_trips_through_json():
+    group, index = _s3()
+    lattice, field, _ = _triangle(group, index)
+    complex_value = construct_finite_group_gauge_complex(
+        FiniteGroupGaugeComplexRequest(lattice=lattice, group=group, faces=())
+    )
+    result = finite_group_gauge_curvature(
+        FiniteGroupGaugeCurvatureRequest(complex=complex_value, field=field)
+    )
+    assert result.face_values == ()
+    assert result.flat
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
 def test_parent_table_repetition_is_admitted_before_face_values_are_built():
     order = 24
     table = tuple(tuple((a + b) % order for b in range(order)) for a in range(order))

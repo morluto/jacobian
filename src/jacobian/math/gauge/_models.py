@@ -491,7 +491,7 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
     complex: FiniteGroupGaugeComplex
     field: FiniteGroupGaugeField
     face_values: tuple[FiniteGroupGaugeFaceCurvature, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
+        max_length=MAX_GAUGE_FACES
     )
     flat: StrictBool
 

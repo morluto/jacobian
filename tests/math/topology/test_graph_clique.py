@@ -5,7 +5,12 @@ from __future__ import annotations
 from itertools import combinations
 
 from jacobian.math.graphs.values import IndexedSimpleUndirectedGraph
-from jacobian.math.topology.release import graph_clique_complex
+from jacobian.math.topology._models import SimplicialComplexRequest
+from jacobian.math.topology.release import (
+    OneSkeletonRequest,
+    graph_clique_complex,
+    one_skeleton,
+)
 
 
 def test_graph_clique_complex_matches_independent_powerset_oracle() -> None:
@@ -47,3 +52,12 @@ def test_graph_clique_complex_boundary_and_sparse_large_graph() -> None:
     sparse = IndexedSimpleUndirectedGraph(vertex_count=9, edges=())
     result = graph_clique_complex(sparse)
     assert result.clique_facets == tuple((f"v{index}",) for index in range(9))
+
+
+def test_empty_one_skeleton_composes_through_graph_clique() -> None:
+    empty = SimplicialComplexRequest(vertices=(), facets=())
+    graph = one_skeleton(OneSkeletonRequest(complex=empty)).graph
+    assert graph.vertex_count == 0
+    result = graph_clique_complex(graph)
+    assert result.clique_complex.dimension == -1
+    assert result.clique_complex.vertices == ()

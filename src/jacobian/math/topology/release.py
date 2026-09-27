@@ -371,7 +371,7 @@ class LocalHomologyRequest(StrictModel):
 class LocalHomologyResult(StrictModel):
     complex: FiniteSimplicialComplex
     simplex: Simplex
-    link: FiniteSimplicialComplex | None
+    link: FiniteSimplicialComplex
     reduced: bool
     prime: int
     betti_numbers: tuple[int, ...]
@@ -689,12 +689,12 @@ def graph_clique_complex(graph: IndexedSimpleUndirectedGraph) -> CliqueResult:
     Eight vertices is the largest envelope whose entire nonempty powerset
     stays within the canonical simplicial carrier's dimension-seven limit.
     """
-    if not 1 <= graph.vertex_count <= MAX_TOPOLOGY_VERTICES:
+    if not 0 <= graph.vertex_count <= MAX_TOPOLOGY_VERTICES:
         raise OperationResourceAdmissionError(
             location=("graph", "vertex_count"),
             code="topology.graph_clique.vertex_budget",
             message=(
-                f"graph clique complexes admit between 1 and "
+                f"graph clique complexes admit between 0 and "
                 f"{MAX_TOPOLOGY_VERTICES} vertices"
             ),
         )
@@ -811,7 +811,7 @@ def local_homology(request: LocalHomologyRequest) -> LocalHomologyResult:
         return LocalHomologyResult(
             complex=complex_,
             simplex=simplex,
-            link=None,
+            link=canonical_complex((), ()),
             reduced=True,
             prime=request.prime,
             betti_numbers=(1,),

@@ -51,10 +51,12 @@ from jacobian.math.topology.edge_paths.presentation_maps import direct_relator_m
 from jacobian.math.topology.release import (
     FacePosetRequest,
     HomologyManifoldRequest,
+    LocalHomologyRequest,
     OrientabilityRequest,
     clique_complex,
     face_poset,
     homology_manifold,
+    local_homology,
     orientability,
 )
 from jacobian.math.topology.simplicial_sets.maps import normalized_chains
@@ -89,6 +91,17 @@ def test_clique_complex_expands_graph_beyond_source_dimension() -> None:
     assert result.source.dimension == 1
     assert result.clique_facets == (("a", "b", "c", "d"),)
     assert result.clique_complex.dimension == 3
+
+
+def test_local_homology_retains_canonical_empty_link() -> None:
+    request = LocalHomologyRequest(
+        complex=SimplicialComplexRequest(vertices=("a",), facets=(("a",),)),
+        simplex=("a",),
+        prime=2,
+    )
+    result = local_homology(request)
+    assert result.empty_link
+    assert result.link == canonical_complex((), ())
 
 
 def test_zero_dimensional_orientability_has_independent_facets() -> None:

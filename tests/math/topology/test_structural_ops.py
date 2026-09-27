@@ -260,6 +260,20 @@ class TestSkeleton:
 
 
 class TestJoin:
+    def test_empty_join_rejects_a_forged_nonempty_vertex_axis(self) -> None:
+        empty = SimplicialComplexRequest(vertices=(), facets=())
+        with pytest.raises(ValidationError, match="empty vertex axis"):
+            JoinResult.model_validate(
+                {
+                    "complex_a": empty,
+                    "complex_b": empty,
+                    "join_vertices": ("x",),
+                    "join_facets": (),
+                    "join_dimension": -1,
+                    "join_complex": canonical_complex((), ()),
+                }
+            )
+
     def test_empty_complex_is_the_join_unit(self) -> None:
         empty = SimplicialComplexRequest(vertices=(), facets=())
         point = SimplicialComplexRequest(vertices=("p",), facets=(("p",),))

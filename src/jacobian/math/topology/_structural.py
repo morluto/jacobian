@@ -181,6 +181,11 @@ def _require_complex_matches_facets(
     vertices_message: str,
 ) -> None:
     if not facets:
+        if vertices:
+            raise _validation_error(
+                "topology.require_complex_matches_facets_5",
+                "an empty facet result must have an empty vertex axis",
+            )
         if complex_value is not None and (
             complex_value.vertices
             or complex_value.maximal_simplices

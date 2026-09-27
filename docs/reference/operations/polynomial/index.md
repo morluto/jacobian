@@ -110,10 +110,16 @@ to another polynomial operation.
 - [Finite sequence prefixes for shift operators](ore-shift-sequence-prefix.md)
 
 - [Exact cyclotomic polynomials](cyclotomic.md)
+- [Additive-group actions from locally nilpotent derivations](ga-actions-from-locally-nilpotent-derivations.md)
+- [Diagonal multiplicative-group actions](diagonal-gm-weight-actions.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Rational discrete antiderivatives](rational-discrete-antiderivative.md)
   compute the unique zero-based inverse of a selected-variable forward
   difference over `QQ`.
 - [Monomial-ideal graded Betti profiles](monomial-ideal-graded-betti.md)
 - [Exact rational Laurent-polynomial multiplication](rational-laurent-polynomials.md)
+- [Exact Puiseux window values](local-series-values.md)
+- [Power-series and Laurent conversions](local-series-power-series-conversions.md)
+- [Rational functions to Laurent prefixes](local-series-rational-expansion.md)
+- [Newton polygons for local-series polynomials](local-series-newton-polygon.md)
 - [Exact root--critical-point distance profiles](root-critical-distance-profile.md)

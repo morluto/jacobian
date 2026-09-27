@@ -14,6 +14,7 @@ from pydantic import (
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.math.groups._table_models import FiniteGroupTable, FiniteGroupTableElement
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -29,8 +30,8 @@ MAX_GAUGE_EDGES = 128
 MAX_GAUGE_DEGREE = 8
 """Maximum permutation degree of the structure group S_d."""
 
-MIN_GAUGE_DEGREE = 2
-"""Minimum permutation degree; degree one is trivial transport."""
+MIN_GAUGE_DEGREE = 1
+"""Minimum permutation degree; degree one is the trivial structure group."""
 
 MAX_GAUGE_PATH_LENGTH = 256
 """Maximum oriented steps in one admitted lattice path."""
@@ -96,8 +97,8 @@ class PermutationLabel(StrictModel):
     """One exact permutation of ``0..degree-1`` acting on the right.
 
     The image tuple sends each point to its image; composition applies
-    left-to-right along traversal order. Degree one is excluded as trivial
-    transport.
+    left-to-right along traversal order. Degree one represents the trivial
+    group and has the unique identity permutation ``(0,)``.
     """
 
     degree: StrictInt = Field(ge=MIN_GAUGE_DEGREE, le=MAX_GAUGE_DEGREE)
@@ -165,11 +166,80 @@ class GaugePathStep(StrictModel):
 
 
 class OrientedGaugePath(StrictModel):
-    """An ordered edge-ID/orientation walk over one lattice."""
+    """An ordered edge walk, or a based zero-length identity path."""
 
-    steps: tuple[GaugePathStep, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_PATH_LENGTH
+    steps: tuple[GaugePathStep, ...] = Field(max_length=MAX_GAUGE_PATH_LENGTH)
+    basepoint: GaugeLabel | None = None
+
+    @model_validator(mode="after")
+    def require_basepoint_for_empty_path(self) -> Self:
+        if not self.steps and self.basepoint is None:
+            raise _validation_error(
+                "empty_path_basepoint",
+                "a zero-length path must name its identity-path basepoint",
+            )
+        return self
+
+
+class FiniteGroupGaugeEdgeLabel(StrictModel):
+    """One edge value as an element of a specific finite multiplication table."""
+
+    edge_id: GaugeLabel
+    value: FiniteGroupTableElement
+
+
+class FiniteGroupGaugeField(StrictModel):
+    """A finite-table-valued field; its table is the coefficient group parent."""
+
+    lattice: GaugeLattice
+    group: FiniteGroupTable
+    edge_values: tuple[FiniteGroupGaugeEdgeLabel, ...] = Field(
+        min_length=1, max_length=MAX_GAUGE_EDGES
     )
+
+    @model_validator(mode="after")
+    def require_edge_coverage(self) -> Self:
+        order = len(self.group.multiplication)
+        if any(
+            not isinstance(value.value, FiniteGroupTableElement)
+            or value.value.group != self.group
+            or value.value.index >= order
+            for value in self.edge_values
+        ):
+            raise _validation_error(
+                "finite_group_value_parent",
+                "every edge element must use the field's exact table parent",
+            )
+        have = tuple(value.edge_id for value in self.edge_values)
+        want = tuple(edge.edge_id for edge in self.lattice.edges)
+        if tuple(sorted(have)) != tuple(sorted(set(have))) or set(have) != set(want):
+            raise _validation_error(
+                "finite_group_field_coverage",
+                "edge values must cover every lattice edge once",
+            )
+        return self
+
+
+class FiniteGroupGaugeHolonomyRequest(StrictModel):
+    field: FiniteGroupGaugeField
+    path: OrientedGaugePath
+
+
+class FiniteGroupGaugeContribution(StrictModel):
+    edge_id: GaugeLabel
+    forward: bool
+    value: FiniteGroupTableElement
+
+
+class FiniteGroupGaugeHolonomyResult(StrictModel):
+    field: FiniteGroupGaugeField
+    path: OrientedGaugePath
+    holonomy: FiniteGroupTableElement
+    contributions: tuple[FiniteGroupGaugeContribution, ...] = Field(
+        max_length=MAX_GAUGE_PATH_LENGTH
+    )
+    start: GaugeLabel
+    end: GaugeLabel
 
 
 class EdgeContribution(StrictModel):
@@ -363,12 +433,24 @@ class HolonomyRequest(StrictModel):
     path: OrientedGaugePath
 
 
+class PermutationWilsonTraceResult(StrictModel):
+    """Exact trace in the natural degree-``d`` permutation representation."""
+
+    field: GaugeField
+    path: OrientedGaugePath
+    holonomy: PermutationLabel
+    trace: StrictInt = Field(ge=0, le=MAX_GAUGE_DEGREE)
+
+
 class HolonomyResult(StrictModel):
-    """Ordered holonomy with per-edge contributions and endpoints."""
+    """Ordered holonomy bound to its source field and oriented path."""
+
+    field: GaugeField
+    path: OrientedGaugePath
 
     holonomy: PermutationLabel
     contributions: tuple[EdgeContribution, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_PATH_LENGTH
+        max_length=MAX_GAUGE_PATH_LENGTH
     )
     start: GaugeLabel
     end: GaugeLabel
@@ -389,6 +471,8 @@ class HolonomyResult(StrictModel):
     def _from_kernel(
         cls,
         *,
+        field: GaugeField,
+        path: OrientedGaugePath,
         holonomy: PermutationLabel,
         contributions: tuple[EdgeContribution, ...],
         start: str,
@@ -397,6 +481,8 @@ class HolonomyResult(StrictModel):
         """Build a trusted kernel outcome without replaying its product."""
 
         return cls.model_construct(
+            field=field,
+            path=path,
             holonomy=holonomy,
             contributions=contributions,
             start=start,

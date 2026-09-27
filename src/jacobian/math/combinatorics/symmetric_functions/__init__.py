@@ -1,5 +1,10 @@
 """Canonical values and operations for symmetric functions and tableaux."""
 
+from jacobian.math.combinatorics.symmetric_functions.littlewood_richardson import (
+    littlewood_richardson_coefficient,
+    littlewood_richardson_tableaux,
+    schur_product,
+)
 from jacobian.math.combinatorics.symmetric_functions.operations import (
     partition_conjugate,
     schur_evaluation,
@@ -10,6 +15,8 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
     SemistandardYoungTableau,
     StandardYoungTableau,
     TableauCandidate,
+    TableauContent,
+    TableauContentTerm,
     require_semistandard,
     require_standard,
 )
@@ -19,9 +26,14 @@ __all__ = [
     "SemistandardYoungTableau",
     "StandardYoungTableau",
     "TableauCandidate",
+    "TableauContent",
+    "TableauContentTerm",
+    "littlewood_richardson_coefficient",
+    "littlewood_richardson_tableaux",
     "partition_conjugate",
     "require_semistandard",
     "require_standard",
     "schur_evaluation",
+    "schur_product",
     "verify_schur_evaluation",
 ]

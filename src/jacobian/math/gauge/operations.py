@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    MIN_GAUGE_DEGREE,
     EdgeContribution,
     GaugeEdge,
     GaugeField,
@@ -60,11 +61,11 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
             "holonomy path must be an oriented lattice edge path",
         )
     steps = getattr(path, "steps", _MISSING)
-    if not isinstance(steps, tuple) or not steps:
+    if not isinstance(steps, tuple):
         _reject(
             "path",
-            "lattice_gauge.holonomy.empty_path",
-            "holonomy path must contain at least one oriented edge step",
+            "lattice_gauge.holonomy.path_shape",
+            "holonomy path steps must be a tuple of oriented edge steps",
         )
     if len(steps) > 256:
         raise OperationResourceAdmissionError(
@@ -73,7 +74,17 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
             message="oriented path exceeds the 256-step envelope",
         )
     by_id = {edge.edge_id: edge for edge in lattice.edges}
+    if not steps:
+        basepoint = getattr(path, "basepoint", _MISSING)
+        if not _gauge_label_is_valid(basepoint) or basepoint not in lattice.vertices:
+            _reject(
+                "path",
+                "lattice_gauge.holonomy.empty_path_basepoint",
+                "a zero-length path basepoint must name a vertex of the source lattice",
+            )
+        return
     cursor: str | None = None
+    first: str | None = None
     for step in steps:
         if not isinstance(step, GaugePathStep):
             _reject(
@@ -103,7 +114,16 @@ def _admit_holonomy(field: GaugeField, path: OrientedGaugePath) -> None:
                 "lattice_gauge.holonomy.disconnected_path",
                 "oriented path steps must chain head-to-tail",
             )
+        if first is None:
+            first = tail
         cursor = head
+    basepoint = getattr(path, "basepoint", None)
+    if basepoint is not None and basepoint != first:
+        _reject(
+            "path",
+            "lattice_gauge.holonomy.basepoint_mismatch",
+            "a supplied path basepoint must equal its first vertex",
+        )
 
 
 _MISSING = object()
@@ -125,7 +145,7 @@ def _permutation_is_valid(value: object, degree: int) -> bool:
     return (
         type(value_degree) is int
         and value_degree == degree
-        and 2 <= value_degree <= 8
+        and MIN_GAUGE_DEGREE <= value_degree <= 8
         and type(image) is tuple
         and len(image) == degree
         and all(type(entry) is int for entry in image)
@@ -156,7 +176,7 @@ def _admit_transform_field(
         _reject(
             "field", "lattice_gauge.transform.field_shape", "field lattice is malformed"
         )
-    if type(degree) is not int or not 2 <= degree <= 8:
+    if type(degree) is not int or not MIN_GAUGE_DEGREE <= degree <= 8:
         _reject(
             "field", "lattice_gauge.transform.field_degree", "field degree is malformed"
         )
@@ -252,7 +272,7 @@ def gauge_transform(
     field: GaugeField,
     vertex_values: tuple[GaugeVertexValue, ...] | list[GaugeVertexValue],
 ) -> GaugeTransformResult:
-    """Apply ``U'_e = h_tail^-1 U_e h_head`` on one finite lattice."""
+    """Apply ``U'_e = g_tail U_e g_head^-1`` on one finite lattice."""
     lattice, labels = _admit_transform_field(field)
     if not isinstance(vertex_values, (tuple, list)) or len(vertex_values) > 64:
         _reject(
@@ -292,8 +312,8 @@ def gauge_transform(
     transformed_labels = []
     for edge in lattice.edges:
         value = _compose(
-            _compose(_inverse(by_vertex[edge.tail].image), labels[edge.edge_id].image),
-            by_vertex[edge.head].image,
+            _compose(by_vertex[edge.tail].image, labels[edge.edge_id].image),
+            _inverse(by_vertex[edge.head].image),
         )
         transformed_labels.append(
             GaugeFieldEdgeLabel(
@@ -317,6 +337,12 @@ def gauge_transform(
 
 def plaquette_curvature(field: GaugeField, path: OrientedGaugePath) -> PlaquetteResult:
     """Return exact curvature for a closed oriented plaquette path."""
+    if isinstance(path, OrientedGaugePath) and not path.steps:
+        _reject(
+            "path",
+            "lattice_gauge.plaquette.empty_boundary",
+            "plaquette curvature requires a nonempty oriented face boundary",
+        )
     result = path_holonomy(field, path)
     if result.start != result.end:
         _reject(
@@ -342,6 +368,16 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     by_edge = {edge.edge_id: edge for edge in field.lattice.edges}
     labels = {label.edge_id: label.label for label in field.edge_labels}
     degree = field.degree
+    if not path.steps:
+        basepoint = cast(str, path.basepoint)
+        return HolonomyResult._from_kernel(
+            field=field,
+            path=path,
+            holonomy=PermutationLabel(degree=degree, image=tuple(range(degree))),
+            contributions=(),
+            start=basepoint,
+            end=basepoint,
+        )
     contributions: list[EdgeContribution] = []
     cursor: str | None = None
     start: str | None = None
@@ -366,6 +402,8 @@ def path_holonomy(field: GaugeField, path: OrientedGaugePath) -> HolonomyResult:
     for contribution in contributions:
         product = _compose(product, tuple(contribution.value.image))
     return HolonomyResult._from_kernel(
+        field=field,
+        path=path,
         holonomy=PermutationLabel(degree=degree, image=product),
         contributions=tuple(contributions),
         start=start,

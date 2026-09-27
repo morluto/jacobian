@@ -41,8 +41,11 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_RESULT_DIGITS,
     MAX_SHIFT_RESULT_ORDER,
     MAX_SHIFT_TERMS,
+<<<<<<< HEAD
     DFinitePowerSeries,
     DFinitePowerSeriesRequest,
+=======
+>>>>>>> origin/main
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyResult,
     DifferentialOperatorMultiplyResult,

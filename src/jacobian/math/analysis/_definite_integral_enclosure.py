@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from fractions import Fraction
 from itertools import pairwise
@@ -361,6 +361,29 @@ def _round_fraction_outward(
     return _exact_dyadic(mantissa, exponent)
 
 
+def _round_dyadic_outward(
+    mantissa_value: int,
+    value_exponent: int,
+    precision_bits: int,
+    *,
+    toward_positive: bool,
+) -> ExactDyadic:
+    """Round a dyadic directly, without expanding its power-of-two denominator."""
+    if mantissa_value == 0:
+        return ExactDyadic(mantissa=0, exponent=0)
+    exponent = mantissa_value.bit_length() - 1 + value_exponent - (precision_bits - 1)
+    shift = value_exponent - exponent
+    if shift >= 0:
+        numerator, denominator = mantissa_value << shift, 1
+    else:
+        numerator, denominator = mantissa_value, 1 << (-shift)
+    if toward_positive:
+        mantissa = -((-numerator) // denominator)
+    else:
+        mantissa = numerator // denominator
+    return _exact_dyadic(mantissa, exponent)
+
+
 def _interval_width(interval: ClosedRationalInterval) -> Fraction:
     return interval.upper.as_fraction() - interval.lower.as_fraction()
 
@@ -386,57 +409,36 @@ def _leaf_contribution(
 def _summed_enclosure(
     contributions: tuple[DyadicClosedInterval, ...], precision_bits: int
 ) -> DyadicClosedInterval:
-    lower = _sum_dyadics_outward(
-        (value.lower for value in contributions), precision_bits, toward_positive=False
+    def sum_endpoints(endpoints: tuple[ExactDyadic, ...]) -> tuple[int, int]:
+        nonzero = tuple(value for value in endpoints if value.mantissa)
+        if not nonzero:
+            return 0, 0
+        common_exponent = min(value.exponent for value in nonzero)
+        total = sum(
+            value.mantissa << (value.exponent - common_exponent) for value in nonzero
+        )
+        return total, common_exponent
+
+    lower_mantissa, lower_exponent = sum_endpoints(
+        tuple(value.lower for value in contributions)
     )
-    upper = _sum_dyadics_outward(
-        (value.upper for value in contributions), precision_bits, toward_positive=True
+    upper_mantissa, upper_exponent = sum_endpoints(
+        tuple(value.upper for value in contributions)
     )
     return DyadicClosedInterval(
-        lower=lower,
-        upper=upper,
+        lower=_round_dyadic_outward(
+            lower_mantissa,
+            lower_exponent,
+            precision_bits,
+            toward_positive=False,
+        ),
+        upper=_round_dyadic_outward(
+            upper_mantissa,
+            upper_exponent,
+            precision_bits,
+            toward_positive=True,
+        ),
     )
-
-
-def _sum_dyadics_outward(
-    values: Iterable[ExactDyadic], precision_bits: int, *, toward_positive: bool
-) -> ExactDyadic:
-    """Sum exact dyadics on a common binary scale, then round once outward.
-
-    The integral kernel can retain thousands of leaf contributions. Converting
-    each endpoint to ``Fraction`` makes this reduction spend most of its time
-    repeatedly normalizing denominators even though every denominator is a
-    power of two. Integer alignment preserves the exact sum and uses the same
-    significant-bit rounding rule as ``_round_fraction_outward``.
-    """
-
-    terms = tuple((int(value.mantissa), value.exponent) for value in values)
-    if not terms:
-        return ExactDyadic(mantissa=0, exponent=0)
-    if any(
-        abs(exponent) > MAX_DEFINITE_INTEGRAL_DYADIC_EXPONENT for _, exponent in terms
-    ):
-        raise _validation_error(
-            "definite-integral dyadic exponent exceeds the admitted source bound"
-        )
-    common_exponent = min(exponent for _, exponent in terms)
-    mantissa = sum(value << (exponent - common_exponent) for value, exponent in terms)
-    if mantissa == 0:
-        return ExactDyadic(mantissa=0, exponent=0)
-
-    target_exponent = (
-        abs(mantissa).bit_length() - 1 + common_exponent - (precision_bits - 1)
-    )
-    shift = common_exponent - target_exponent
-    if shift >= 0:
-        rounded_mantissa = mantissa << shift
-    else:
-        denominator = 1 << (-shift)
-        if toward_positive:
-            rounded_mantissa = -((-mantissa) // denominator)
-        else:
-            rounded_mantissa = mantissa // denominator
-    return _exact_dyadic(rounded_mantissa, target_exponent)
 
 
 def _compare_nonnegative_fraction_to_dyadic(

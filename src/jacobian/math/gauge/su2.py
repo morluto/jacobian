@@ -79,7 +79,7 @@ def _admit_su2_path(
     aggregate_work = 0
     accumulated_digits = 1
     accumulated_is_single_traversal = False
-    previous: tuple[str, bool] | None = None
+    previous_factor: RationalUnitQuaternion | None = None
     cursor: str | None = None
     start: str | None = None
     for step in path.steps:
@@ -99,12 +99,13 @@ def _admit_su2_path(
             start = tail
         cursor = head
         step_digits = _value_digits(labels[step.edge_id])
-        traversal = (step.edge_id, step.forward)
+        factor = labels[step.edge_id]
+        if not step.forward:
+            factor = inverse_rational_unit_quaternion(factor)
         cancels_accumulator = (
             accumulated_is_single_traversal
-            and previous is not None
-            and previous[0] == step.edge_id
-            and previous[1] != step.forward
+            and previous_factor is not None
+            and _are_inverses(previous_factor, factor)
         )
         aggregate_work += 64 * accumulated_digits * step_digits
         if cancels_accumulator:
@@ -113,7 +114,7 @@ def _admit_su2_path(
         else:
             accumulated_is_single_traversal = accumulated_digits == 1
             accumulated_digits += step_digits + 1
-        previous = traversal
+        previous_factor = factor
     _admit_aggregate_work(aggregate_work, "path")
     if not path.steps:
         basepoint: object = getattr(path, "basepoint", None)

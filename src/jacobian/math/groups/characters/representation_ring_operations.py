@@ -117,8 +117,9 @@ def _admit_pairings_before_expansion(
         for value in table_order_roots
         for coefficient in value
     )
-    # The only supported noncyclic table is S3, whose largest entry is 2.
-    row_coefficient_bound = max(root_coefficient_bound, 2 if order == 6 else 1)
+    # The supported noncyclic tables are S3 and the two groups of order eight;
+    # each has character entries of absolute value at most 2.
+    row_coefficient_bound = max(root_coefficient_bound, 2 if order in (6, 8) else 1)
     synthetic_row_value = _make_value(
         order, (Fraction(row_coefficient_bound),) * dimension
     )
@@ -217,8 +218,8 @@ def class_function_character_decomposition(
     """Return exact irreducible coordinates when a bounded class function is virtual.
 
     The table is regenerated from the function's concrete group. The current
-    canonical character-table implementation supports the trivial, cyclic, and
-    S3 permutation groups. A class function has integer irreducible
+    canonical character-table implementation supports the trivial, cyclic, S3,
+    and the nonabelian groups of order eight. A class function has integer irreducible
     coordinates exactly when it is a virtual character in this complete
     orthonormal basis.
     """

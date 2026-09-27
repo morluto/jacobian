@@ -31,9 +31,10 @@ coordinates represent ordinary characters. The operation rejects a class
 function whose exact Hermitian pairings with the irreducibles are not integers.
 
 The character basis is reconstructed from the concrete source group before
-use. This release supports only the trivial group, finite cyclic groups up to
-order 60, and `S3`. It does not trust a caller-supplied character table or claim
-to decompose a class function on an unsupported group. The exact coordinate
+use. This release supports the trivial group, finite cyclic groups up to order
+60, `S3`, and the two nonabelian groups of order eight (`D8` and `Q8`). It does
+not trust a caller-supplied character table or claim to decompose a class
+function on an unsupported group. The exact coordinate
 formula is the standard Hermitian pairing
 `<f, chi> = (1/|G|) sum_C |C| f(C) conjugate(chi(C))`; irreducible characters
 form an orthonormal basis of the complex class functions. GAP's reference

@@ -568,7 +568,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "its exact integer coordinates in the canonical irreducible-character "
             "basis and return a table-bound virtual-character ring element. "
             "Signed coordinates are allowed; nonnegative coordinates are ordinary "
-            "characters. Supported groups currently are the trivial, cyclic, and S3 groups."
+            "characters. Supported groups currently are the trivial, cyclic groups "
+            "up to order 60, S3, and the two nonabelian groups of order eight."
         ),
         request_type=CharacterRingDecompositionRequest,
         result_type=CharacterRingDecompositionResult,

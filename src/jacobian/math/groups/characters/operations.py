@@ -988,6 +988,49 @@ MAX_CHARACTER_TENSOR_INNER_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_OUTPUT_BYTES = 2_000_000
 
 
+def _admit_s3_tensor_partition(candidate: object) -> GroupConjugacyClassesResult:
+    """Check cheap S3 shape and concrete order before authenticating classes."""
+    classes = getattr(candidate, "classes", None)
+    if (
+        not isinstance(classes, tuple)
+        or any(not isinstance(cls, tuple) for cls in classes)
+        or tuple(sorted(len(cls) for cls in classes)) != (1, 2, 3)
+    ):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports only S3 class shapes",
+        )
+    if not isinstance(candidate, GroupConjugacyClassesResult):
+        raise OperationDomainValidationError(
+            location=("partition",),
+            code="groups.characters.partition_type",
+            message="partition must be a complete group class partition",
+        )
+
+    # The shape above is only a cheap claim and can be forged against a larger
+    # source group. Check the concrete order before authenticating the full
+    # conjugacy partition, which could otherwise enumerate thousands of
+    # elements (for example, an A7-shaped claim).
+    from jacobian.math.groups.operations import _admitted_backend_group
+
+    try:
+        _, source_order = _admitted_backend_group(candidate.source)
+    except (TypeError, ValueError, AttributeError, KeyError, IndexError) as exc:
+        raise OperationDomainValidationError(
+            location=("partition", "source"),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports only S3 groups",
+        ) from exc
+    if source_order != 6:
+        raise OperationDomainValidationError(
+            location=("partition", "source"),
+            code="groups.characters.tensor_group_unsupported",
+            message="tensor decomposition currently supports only S3 groups",
+        )
+    return _admit_character_partition(candidate)
+
+
 def character_tensor_decomposition(
     request: CharacterTensorDecompositionRequest,
 ) -> CharacterTensorDecompositionResult:
@@ -1008,23 +1051,9 @@ def character_tensor_decomposition(
             code="groups.characters.tensor_request_invalid",
             message="request contains invalid tensor-decomposition fields",
         ) from exc
-    # Tensor decomposition is defined only for S3. Reject incompatible
-    # class-size shapes before authenticated admission materializes the source
-    # group and recomputes its complete conjugacy partition. The claim is still
-    # fully authenticated for either possible S3 class ordering below.
-    classes = getattr(request.partition, "classes", None)
-    if (
-        not isinstance(classes, tuple)
-        or tuple(sorted(len(cls) for cls in classes if isinstance(cls, tuple)))
-        != (1, 2, 3)
-        or any(not isinstance(cls, tuple) for cls in classes)
-    ):
-        raise OperationDomainValidationError(
-            location=("partition",),
-            code="groups.characters.tensor_group_unsupported",
-            message="tensor decomposition currently supports only S3 class shapes",
-        )
-    partition = _admit_character_partition(request.partition)
+    # Authenticate the class order only after rejecting unsupported concrete
+    # source groups without expanding their full conjugacy partitions.
+    partition = _admit_s3_tensor_partition(request.partition)
     table = _character_table_from_admitted_partition(partition)
     if (
         table.axis.group_order != 6

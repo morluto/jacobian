@@ -179,6 +179,20 @@ def test_cyclic_complex_character_uses_exact_hermitian_pairing() -> None:
         )
 
 
+def test_dihedral_order_eight_class_function_uses_published_character_table() -> None:
+    # The square's rotation and reflection generate D8 in its degree-four
+    # action, whose canonical table is already published by character_table.
+    partition = _partition(((1, 2, 3, 0), (0, 3, 2, 1)))
+    trivial = _function_on_partition(partition, Fraction(1))
+
+    result = class_function_character_decomposition(
+        CharacterRingDecompositionRequest(class_function=trivial)
+    )
+
+    assert len(result.ring_element.table.rows) == 5
+    assert result.ring_element.irreducible_multiplicities == (1, 0, 0, 0, 0)
+
+
 def test_nonintegral_class_function_is_not_a_virtual_character() -> None:
     half_trivial = _s3_class_function((Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)))
     with pytest.raises(OperationDomainValidationError):

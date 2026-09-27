@@ -99,15 +99,28 @@ def test_sign_tensor_standard_is_standard() -> None:
 def test_tensor_decomposition_rejects_a7_before_conjugacy_recomputation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # These generators give A7 (order 2520), so re-authenticating its partition
-    # expands thousands of permutations although tensor decomposition is S3-only.
+    # The forged class shape looks like S3, but the source is A7 (order 2520).
+    # Its six claimed members are enough to exercise source-order admission;
+    # constructing A7's real partition here would itself enumerate thousands
+    # of permutations before the operation under test is called.
     degree = 7
     generators = ((1, 2, 3, 4, 5, 6, 0), (1, 2, 0, 3, 4, 5, 6))
     source = PermutationGroup(degree=degree, generators=generators)
-    classes = group_conjugacy_classes(degree, [list(row) for row in generators])
-    partition = GroupConjugacyClassesResult._from_kernel(
-        source, tuple(tuple(tuple(member) for member in row) for row in classes)
+    identity = tuple(range(degree))
+    claimed_classes = (
+        (identity,),
+        tuple(sorted(((0, 2, 1, 3, 4, 5, 6), (0, 2, 3, 1, 4, 5, 6)))),
+        tuple(
+            sorted(
+                (
+                    (1, 0, 2, 3, 4, 5, 6),
+                    (1, 2, 0, 3, 4, 5, 6),
+                    (1, 2, 3, 0, 4, 5, 6),
+                )
+            )
+        ),
     )
+    partition = GroupConjugacyClassesResult(source=source, classes=claimed_classes)
 
     def unexpected_expansion(*args: object, **kwargs: object) -> object:
         raise AssertionError("unsupported A7 partition reached conjugacy expansion")

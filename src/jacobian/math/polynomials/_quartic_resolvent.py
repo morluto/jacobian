@@ -87,6 +87,23 @@ class QuarticCubicResolventResult(StrictModel):
                 "polynomial.quartic_resolvent.result_shape",
                 "result must bind a monic quartic source to a monic cubic",
             )
+        a, b, c, d = (
+            coefficient.as_fraction() for coefficient in self.source.coefficients[3::-1]
+        )
+        expected = (
+            4 * b * d - a * a * d - c * c,
+            a * c - 4 * d,
+            -b,
+            Fraction(1),
+        )
+        if (
+            tuple(value.as_fraction() for value in self.resolvent.coefficients)
+            != expected
+        ):
+            raise PydanticCustomError(
+                "polynomial.quartic_resolvent.coefficient_relation",
+                "resolvent coefficients must be derived from the retained quartic source",
+            )
         return self
 
 

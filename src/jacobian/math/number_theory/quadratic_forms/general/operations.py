@@ -15,6 +15,7 @@ from jacobian.math.number_theory.quadratic_forms.general._models import (
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     RationalCoordinateVector,
     RationalQuadraticForm,
+    require_bilinear_pairing_budget,
     require_evaluation_budget,
 )
 
@@ -52,6 +53,55 @@ def evaluate_rational_quadratic_form(
             term.coefficient.as_fraction()
             * coordinates[term.left]
             * coordinates[term.right]
+            for term in form.cross_terms
+        ),
+        Fraction(),
+    )
+    return diagonal + cross
+
+
+def bilinear_pairing(
+    form: RationalQuadraticForm,
+    left: RationalCoordinateVector,
+    right: RationalCoordinateVector,
+) -> Fraction:
+    """Compute ``Q(left+right)-Q(left)-Q(right)`` exactly on the shared axis."""
+
+    if left.axis != form.axis or right.axis != form.axis:
+        raise OperationDomainValidationError(
+            location=("left", "right", "axis"),
+            code="quadratic_form.axis_mismatch",
+            message="both vectors must use the quadratic-form axis",
+        )
+    if len(left.coordinates) != len(form.axis) or len(right.coordinates) != len(
+        form.axis
+    ):
+        raise OperationDomainValidationError(
+            location=("left", "right", "coordinates"),
+            code="quadratic_form.vector_shape",
+            message="both vectors must have one coordinate per form axis label",
+        )
+    try:
+        require_bilinear_pairing_budget(form, left, right)
+    except ValueError as exc:
+        raise OperationResourceAdmissionError(
+            location=("form", "left", "right"),
+            code="quadratic_form.pairing_budget",
+            message=str(exc),
+        ) from exc
+    x = tuple(value.as_fraction() for value in left.coordinates)
+    y = tuple(value.as_fraction() for value in right.coordinates)
+    diagonal = sum(
+        (
+            2 * coefficient.as_fraction() * x[index] * y[index]
+            for index, coefficient in enumerate(form.diagonal_coefficients)
+        ),
+        Fraction(),
+    )
+    cross = sum(
+        (
+            term.coefficient.as_fraction()
+            * (x[term.left] * y[term.right] + x[term.right] * y[term.left])
             for term in form.cross_terms
         ),
         Fraction(),
@@ -119,6 +169,7 @@ def coefficient_matrix(form: RationalQuadraticForm) -> RationalMatrix:
 
 
 __all__ = [
+    "bilinear_pairing",
     "coefficient_matrix",
     "coefficient_matrix_entries",
     "evaluate_rational_quadratic_form",

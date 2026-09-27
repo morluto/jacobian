@@ -612,13 +612,13 @@ def test_native_square_free_forged_claim_fails_rebuild_and_verify() -> None:
 
     typed = polynomial_square_free_decomposition(_univariate("x", {1: 1, 0: 1}))
     assert verify_polynomial_square_free_decomposition(typed)
-    if len(typed.factors) >= 1:
-        tampered = tuple(
-            type(record)(factor=record.factor, multiplicity=record.multiplicity + 1)
-            if index == 0
-            else record
-            for index, record in enumerate(typed.factors)
-        )
-        assert not verify_polynomial_square_free_decomposition(
-            typed.model_copy(update={"factors": tampered})
-        )
+    assert typed.factors
+    tampered = tuple(
+        type(record)(factor=record.factor, multiplicity=record.multiplicity + 1)
+        if index == 0
+        else record
+        for index, record in enumerate(typed.factors)
+    )
+    assert not verify_polynomial_square_free_decomposition(
+        typed.model_copy(update={"factors": tampered})
+    )

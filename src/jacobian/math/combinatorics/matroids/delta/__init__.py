@@ -12,7 +12,9 @@ from jacobian.math.combinatorics.matroids.delta.interlace import (
 )
 from jacobian.math.combinatorics.matroids.delta.operations import (
     from_feasible_sets,
+    lower_matroid,
     twist,
+    upper_matroid,
     verify_from_feasible_sets,
     width,
 )
@@ -26,10 +28,12 @@ __all__ = [
     "distance_interlace_polynomial",
     "dual",
     "from_feasible_sets",
+    "lower_matroid",
     "minor",
     "relabel",
     "twist",
     "twist_polynomial",
+    "upper_matroid",
     "verify_from_feasible_sets",
     "width",
 ]

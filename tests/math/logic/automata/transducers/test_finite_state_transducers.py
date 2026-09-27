@@ -35,6 +35,7 @@ from jacobian.math.logic.automata.transducers._models import (
     RelationPathReplayRequest,
     SubseqIdentityRequest,
     SubseqRunRequest,
+    SubseqRunResult,
     TrimRequest,
     TrimResult,
 )
@@ -111,7 +112,7 @@ class TestSubsequentialIdentityOperation:
         )
         assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
 
-        words = [()]
+        words: list[tuple[int, ...]] = [()]
         for length in range(1, 6):
             words.extend(
                 tuple((bits >> shift) & 1 for shift in reversed(range(length)))
@@ -153,7 +154,7 @@ class TestWordMorphismTransducerConversion:
         assert tuple(edge.output for edge in transducer.transitions) == ((1, 0), ())
         assert transducer.final_outputs == (SubseqFinalOutput(state=0, output=()),)
 
-        words = [()]
+        words: list[tuple[int, ...]] = [()]
         for length in range(1, 5):
             words.extend(
                 tuple((bits >> shift) & 1 for shift in reversed(range(length)))
@@ -240,7 +241,7 @@ class TestFiniteAlphabetCarrier:
 
 class TestSubsequentialRun:
     @staticmethod
-    def _observed(result: object) -> tuple[object, ...]:
+    def _observed(result: SubseqRunResult) -> tuple[object, ...]:
         return (
             result.status,
             result.output,
@@ -266,7 +267,8 @@ class TestSubsequentialRun:
         state = transducer.initial_state
         states = [state]
         step_outputs: list[tuple[int, ...]] = []
-        prefixes = [()]
+        prefixes: list[tuple[int, ...]] = [()]
+
         emitted: tuple[int, ...] = ()
         for position, symbol in enumerate(word):
             transition = rows.get((state, symbol))

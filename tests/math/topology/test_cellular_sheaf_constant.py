@@ -22,8 +22,10 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafScalar,
 )
 from jacobian.math.topology.cellular_sheaves.constants import (
-    ConstantSheafRequest,
     constant_sheaf,
+)
+from jacobian.math.topology.cellular_sheaves.constants._models import (
+    ConstantSheafRequest,
 )
 from jacobian.math.topology.cellular_sheaves.constants._tools import TOOLS
 from jacobian.math.topology.cellular_sheaves.operations import sheaf_cohomology

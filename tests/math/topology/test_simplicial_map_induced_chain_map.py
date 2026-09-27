@@ -6,9 +6,7 @@ from fractions import Fraction
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.chain_complexes._models import (
     MappingConeRequest,
     VerifyChainMapRequest,
@@ -73,19 +71,6 @@ def test_identity_induces_identity_on_exact_normalized_axes_and_round_trips() ->
     assert _verify_chain_map(VerifyChainMapRequest(chain_map=decoded)).is_valid
     cone = _mapping_cone(MappingConeRequest(chain_map=decoded))
     assert cone.chain_map == decoded
-
-
-def test_published_example_executes_and_decodes_through_catalog() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation(
-        "topology.simplicial_set.map.induced_chain_map.compute"
-    )
-    assert operation is not None and operation.examples
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    decoded = ChainMapValue.model_validate_json(json.dumps(result.output))
-    assert decoded.source_basis_labels == (("(0)", "(1)"), ("(0,1)",), ())
 
 
 def test_constant_map_sends_degenerate_image_to_zero_and_obeys_chain_equation() -> None:

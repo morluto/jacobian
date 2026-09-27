@@ -76,6 +76,8 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.root_actions import weyl_element_act_on_root
+from jacobian.math.groups.root_systems.weight_actions import weyl_element_act_on_weight
 from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 
@@ -135,6 +137,8 @@ __all__ = [
     "weight_lattice_vector",
     "weyl_bruhat_interval",
     "weyl_dimension",
+    "weyl_element_act_on_root",
+    "weyl_element_act_on_weight",
     "weyl_element_compose",
     "weyl_element_descents",
     "weyl_element_from_word",

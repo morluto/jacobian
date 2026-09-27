@@ -18,7 +18,6 @@ from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
     SheafCochainCoordinate,
-    SheafCochainMapRequest,
     SheafCochainMapResult,
     SheafField,
     SheafMorphismResult,
@@ -30,6 +29,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
+    SheafCochainMapRequest,
     SheafMorphismComposeRequest,
     SheafMorphismRequest,
     cochain_map,

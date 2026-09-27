@@ -5,9 +5,10 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations, product
 from math import comb
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypeVar
 
 import sympy as sp
+from pydantic import BaseModel
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import decimal_digit_width
@@ -62,9 +63,15 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
+_RequestModel = TypeVar("_RequestModel", bound=BaseModel)
+
+
 def _admit_request(
-    request: Any, request_type: type, code: str, description: str
-) -> Any:
+    request: object,
+    request_type: type[_RequestModel],
+    code: str,
+    description: str,
+) -> _RequestModel:
     """Revalidate native request carriers before reading their nested fields."""
     if not isinstance(request, request_type):
         _reject(code, description)

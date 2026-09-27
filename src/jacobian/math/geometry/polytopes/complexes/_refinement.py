@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from fractions import Fraction
+from typing import NoReturn
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian.catalog.models import (
@@ -39,7 +40,7 @@ _MAX_SOURCE_VERTICES = 16
 _MAX_REFINEMENT_PAIRS = 16
 
 
-def _reject(code: str, message: str, *, location: tuple[str, ...] = ()) -> None:
+def _reject(code: str, message: str, *, location: tuple[str, ...] = ()) -> NoReturn:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 

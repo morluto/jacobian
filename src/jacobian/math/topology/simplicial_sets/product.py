@@ -45,7 +45,16 @@ def simplicial_set_product(
         )
     checked_left = left_result.simplicial_set
     checked_right = right_result.simplicial_set
+<<<<<<< HEAD
     assert checked_left is not None and checked_right is not None
+=======
+    if checked_left is None or checked_right is None:
+        raise OperationDomainValidationError(
+            location=("left", "right"),
+            code="simplicial_set.product_factor_missing",
+            message="validated product factors must retain their simplicial-set values",
+        )
+>>>>>>> 48f6a9cae2c9735d939585b29165751de0f65d08
     left = checked_left
     right = checked_right
     if left.max_degree != right.max_degree:

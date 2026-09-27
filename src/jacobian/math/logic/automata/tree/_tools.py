@@ -542,8 +542,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the exact number of distinct accepted ranked trees of height "
             "at most h for every h from zero through max_height. Leaves have "
             "height zero. The operation requires a complete deterministic "
-            "bottom-up automaton; transition work, exact integer digits, and "
-            "aggregate output bytes are admitted before the recurrence runs."
+            "bottom-up automaton; transition work, per-count integer digits, and "
+            "the aggregate profile digit allocation are admitted before recurrence."
         ),
         request_type=AcceptedTreeHeightProfileRequest,
         result_type=AcceptedTreeHeightProfileResult,

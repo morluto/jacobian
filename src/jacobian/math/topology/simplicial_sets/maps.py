@@ -52,6 +52,18 @@ MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK = 100_000_000
 _NORMALIZED_CHAIN_OUTPUT_STRUCTURE = 4_096
 
 
+def _require_integral_homology_group(
+    value: object,
+) -> IntegralHomologyGroupValue:
+    if not isinstance(value, IntegralHomologyGroupValue):
+        raise OperationDomainValidationError(
+            location=("homology",),
+            code="simplicial_set.integral_homology_group_required",
+            message="the operation requires an admitted integral homology group",
+        )
+    return value
+
+
 def _normalized_output_cells(
     simplicial_set: FiniteTruncatedSimplicialSet, matrix_cells: int
 ) -> int:
@@ -380,8 +392,8 @@ class SimplicialHomologyMapValue(StrictModel):
         for degree, matrix in enumerate(self.degree_maps):
             source_group = self.source.homology_groups[degree]
             target_group = self.target.homology_groups[degree]
-            assert isinstance(source_group, IntegralHomologyGroupValue)
-            assert isinstance(target_group, IntegralHomologyGroupValue)
+            source_group = _require_integral_homology_group(source_group)
+            target_group = _require_integral_homology_group(target_group)
             target_torsion = target_group.torsion_invariant_factors
             if len(matrix.free_generator_images) != source_group.free_rank or len(
                 matrix.torsion_generator_images
@@ -777,7 +789,7 @@ def _admit_homology_projection(
     )
     target_integral_groups = []
     for group in target.homology_groups:
-        assert isinstance(group, IntegralHomologyGroupValue)
+        group = _require_integral_homology_group(group)
         target_integral_groups.append(group)
     all_matrices = (
         *source_differentials,
@@ -818,8 +830,8 @@ def _admit_homology_projection(
     for degree, (source_group, target_group) in enumerate(
         zip(source.homology_groups, target.homology_groups, strict=True)
     ):
-        assert isinstance(source_group, IntegralHomologyGroupValue)
-        assert isinstance(target_group, IntegralHomologyGroupValue)
+        source_group = _require_integral_homology_group(source_group)
+        target_group = _require_integral_homology_group(target_group)
         inverse_right = inverse_matrices[degree]
         incoming_left = (
             target_group.incoming_smith_certificate.left_transformation.entries
@@ -981,7 +993,12 @@ def _map_homology_generator(
                 message="the induced chain map did not send a cycle to a cycle",
             )
     if torsion_order is not None:
-        assert bounding_chain is not None
+        if bounding_chain is None:
+            raise OperationDomainValidationError(
+                location=("source", "homology", degree),
+                code="simplicial_set.induced_homology_torsion_witness_missing",
+                message="the retained torsion class is missing its boundary witness",
+            )
         source_boundary = _mat_vec(
             source_differentials[degree],
             bounding_chain,
@@ -1103,8 +1120,8 @@ def _compute_induced_normalized_homology_map(
             strict=True,
         )
     ):
-        assert isinstance(source_group, IntegralHomologyGroupValue)
-        assert isinstance(target_group, IntegralHomologyGroupValue)
+        source_group = _require_integral_homology_group(source_group)
+        target_group = _require_integral_homology_group(target_group)
         inverse_right = tuple(tuple(row) for row in plan.target.right_inverses[degree])
         degree_maps.append(
             NormalizedHomologyDegreeMap(
@@ -1396,7 +1413,7 @@ def compose_simplicial_homology_maps(
     composition_checkpoint_steps = [0]
     for degree, first_degree in enumerate(checked_first.degree_maps):
         target_group = checked_second.target.homology_groups[degree]
-        assert isinstance(target_group, IntegralHomologyGroupValue)
+        target_group = _require_integral_homology_group(target_group)
         second_degree = checked_second.degree_maps[degree]
         degree_maps.append(
             NormalizedHomologyDegreeMap(

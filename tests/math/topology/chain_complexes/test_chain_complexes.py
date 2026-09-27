@@ -1216,7 +1216,7 @@ class TestMappingConeDefiningEquations:
             )
         assert caught.value.errors() == (
             {
-                "loc": ("map_matrices",),
+                "loc": ("chain_map",),
                 "type": "chain_complex.chain_map_relation",
                 "msg": "chain map does not commute with differentials at degree index 0",
             },
@@ -1746,7 +1746,7 @@ class TestSchemaVisibleCoefficientGrammar:
         ]
         for model in (VerifyChainMapRequest, MappingConeRequest):
             assert "chain_map" in model.model_json_schema()["properties"]
-            assert "JSON uses canonical decimal" in description
+            assert "canonical decimal strings" in description
             assert "residues in [0, p)" in description
 
 
@@ -2187,7 +2187,7 @@ class TestMappingConeSourceBinding:
         from jacobian.math.topology.chain_complexes.values import MappingConeResult
 
         payload = self._cone_payload()
-        del payload[missing_endpoint]
+        del payload["chain_map"][missing_endpoint]
         with pytest.raises(ValidationError):
             MappingConeResult.model_validate(payload)
 

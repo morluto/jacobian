@@ -748,12 +748,13 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
             message="scalar exceeds the admitted rational digit envelope",
         )
     output_digits = 0
-    total_terms = 0
+    piece_shapes = []
     for piece in function.pieces:
-        terms = piece.polynomial.polynomial.terms
-        total_terms += len(terms)
-        for term in terms:
+        retained_exponents = []
+        for term in piece.polynomial.polynomial.terms:
             coefficient = term.coefficient.as_fraction()
+            if not coefficient or not scalar:
+                continue
             numerator_digits, denominator_digits = _scaled_component_digit_widths(
                 coefficient, scalar
             )
@@ -767,8 +768,24 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
                     message="a scaled coefficient may exceed the canonical rational digit envelope",
                 )
             output_digits += numerator_digits + denominator_digits
-    output_bound = output_digits + 64 * total_terms + _structured_digit_budget(function)
-    if output_bound > MAX_SPLINE_RESULT_DIGITS:
+            retained_exponents.append(term.exponents)
+        piece_shapes.append(
+            (piece.cell_id, piece.polynomial.variables, tuple(retained_exponents))
+        )
+    compatibility_shapes = tuple(
+        (face.face_id, face.maximal_cell_ids, tuple(function.complex.space.axes))
+        for face in function.complex.faces
+        if len(face.maximal_cell_ids) == 2
+        and face.dimension == function.complex.dimension - 1
+    )
+    output_digit_bound = (
+        output_digits
+        + _structured_digit_budget(function.complex)
+        + _structured_digit_budget(tuple(piece_shapes))
+        + _structured_digit_budget(compatibility_shapes)
+        + 512
+    )
+    if output_digit_bound > MAX_SPLINE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("function",),
             code="polytopal_complex.scalar_multiplication_output",
@@ -1509,9 +1526,14 @@ def _admit_spline_coordinate_materialization(
             code="polytopal_complex.spline_coordinates_work",
             message="spline membership and basis-coordinate work exceed the admitted envelope",
         )
-    reconstruction_digits = width * (
-        coordinate_scalar_digits + basis_scalar_digits + len(str(width)) + 2
-    )
+    if not constraint_rows:
+        # The zero-row compatibility matrix has the identity as its canonical
+        # basis, so each reconstructed component copies one source coordinate.
+        reconstruction_digits = coordinate_scalar_digits
+    else:
+        reconstruction_digits = width * (
+            coordinate_scalar_digits + basis_scalar_digits + len(str(width)) + 2
+        )
     if reconstruction_digits > MAX_CANONICAL_RATIONAL_DIGITS:
         raise OperationResourceAdmissionError(
             location=("function",),

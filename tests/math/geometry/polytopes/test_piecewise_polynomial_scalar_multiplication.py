@@ -133,6 +133,39 @@ def test_zero_scalar_returns_the_zero_function_with_the_same_exact_domain():
     )
 
 
+def test_zero_scalar_admits_a_large_input_coefficient_that_it_erases(monkeypatch):
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    large = 10**19_999
+    function = piecewise_polynomial_from_maximal_pieces(
+        complex_value,
+        (
+            PieceAssignment(
+                cell_id=complex_value.maximal_cells[0].cell_id,
+                polynomial=RationalPolynomial(
+                    variables=("x",),
+                    polynomial=SparseRationalPolynomial(
+                        terms=(
+                            RationalPolynomialTerm(
+                                coefficient=CanonicalRational(num=large, den=1),
+                                exponents=(0,),
+                            ),
+                        )
+                    ),
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(spline_kernel, "MAX_SPLINE_RESULT_DIGITS", 10_000)
+
+    result = piecewise_polynomial_scalar_multiply(
+        PiecewisePolynomialScalarMultiplicationRequest(
+            function=function, scalar=CanonicalRational(num=0, den=1)
+        )
+    )
+
+    assert not result.pieces[0].polynomial.polynomial.terms
+
+
 def test_scalar_multiple_recomputes_and_rejects_forged_compatibility_claim():
     function = _function()
     pieces = list(function.pieces)

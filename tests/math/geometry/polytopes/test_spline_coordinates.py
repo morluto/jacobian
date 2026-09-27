@@ -326,6 +326,26 @@ def test_coordinate_output_is_admitted_before_nullspace_materialization(monkeypa
         )
 
 
+def test_identity_basis_copies_large_coordinates_componentwise():
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+    large = 10**19_999
+    function = piecewise_polynomial_from_maximal_pieces(
+        complex_value,
+        (
+            PieceAssignment(
+                cell_id=complex_value.maximal_cells[0].cell_id,
+                polynomial=_polynomial(((0, large),)),
+            ),
+        ),
+    )
+
+    result = spline_coordinates(
+        SplineCoordinatesRequest(function=function, degree=1, smoothness=0)
+    )
+
+    assert sorted(value.num for value in result.basis_coordinates) == [0, large]
+
+
 def test_catalog_exposes_piecewise_to_spline_coordinates():
     function = _two_interval_function(((0, 1),), ((0, 1),))
     operation_id = "polyhedral_complex.spline.coordinates.compute"

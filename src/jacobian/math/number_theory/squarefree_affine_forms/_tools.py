@@ -11,6 +11,10 @@ from jacobian.math.number_theory.squarefree_affine_forms._euler_product import (
     SquarefreeEulerProductRequest,
     SquarefreeEulerProductResult,
 )
+from jacobian.math.number_theory.squarefree_affine_forms._infinite_product import (
+    SquarefreeInfiniteProductEnclosure,
+    SquarefreeInfiniteProductRequest,
+)
 from jacobian.math.number_theory.squarefree_affine_forms._interval_count import (
     IntervalCountRequest,
     IntervalCountResult,
@@ -19,8 +23,15 @@ from jacobian.math.number_theory.squarefree_affine_forms._local_factor import (
     SquarefreeLocalFactorRequest,
     SquarefreeLocalFactorResult,
 )
+from jacobian.math.number_theory.squarefree_affine_forms._models import (
+    MAX_INTERVAL_SIEVE_RESIDUES,
+    MAX_INTERVAL_SIEVE_VISITS,
+)
 from jacobian.math.number_theory.squarefree_affine_forms.operations import (
     euler_product as native_euler_product,
+)
+from jacobian.math.number_theory.squarefree_affine_forms.operations import (
+    infinite_product_enclosure as native_infinite_product_enclosure,
 )
 from jacobian.math.number_theory.squarefree_affine_forms.operations import (
     interval_count as native_interval_count,
@@ -43,6 +54,12 @@ def compute_euler_product(
     request: SquarefreeEulerProductRequest,
 ) -> SquarefreeEulerProductResult:
     return native_euler_product(request.source, request.primes)
+
+
+def compute_infinite_product(
+    request: SquarefreeInfiniteProductRequest,
+) -> SquarefreeInfiniteProductEnclosure:
+    return native_infinite_product_enclosure(request.source, request.prime_cutoff)
 
 
 def compute_local_admissibility(
@@ -146,6 +163,43 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="number_theory.squarefree_affine_forms.infinite_product.enclose",
+        title="Enclose the simultaneous square-free Euler product",
+        description=(
+            "Return an exact rational interval for the convergent infinite "
+            "product of square-free local factors. Every prime through the "
+            "requested cutoff is included exactly. Beyond P, each local "
+            "factor differs from 1 by at most the number of forms divided "
+            "by p^2; summing over all integers greater than P gives the "
+            "checked tail bound k/P. The cutoff must cover the family-derived "
+            "large-prime theorem. A zero local factor gives exactly zero. "
+            "The result makes no claim about simultaneous integer values or "
+            "their density."
+        ),
+        request_type=SquarefreeInfiniteProductRequest,
+        result_type=SquarefreeInfiniteProductEnclosure,
+        run=compute_infinite_product,
+        tags=("number-theory", "squarefree", "infinite-product", "exact"),
+        discovery_terms=(
+            "square-free infinite Euler product enclosure",
+            "simultaneous square-free local density product",
+            "certified squarefree product tail bound",
+        ),
+        examples=(
+            OperationExample(
+                name="consecutive_pair_infinite_product_enclosure",
+                description=(
+                    "Enclose the infinite product for n and n+1 using every "
+                    "prime through 100 and a checked rational tail bound."
+                ),
+                input={
+                    "source": _PAIR_FORM_SOURCE,
+                    "prime_cutoff": 100,
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="number_theory.squarefree_affine_forms.local_admissibility.decide",
         title="Decide local square admissibility with a finite cutoff",
         description=(
@@ -185,7 +239,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "value is square-free, by an exact prime-power sieve recording "
             "the least square divisor of each rejected point. The scalar "
             "count is always returned; the matching list and per-rejection "
-            "obstructions are returned only when the ledger is requested."
+            "obstructions are returned only when the ledger is requested. "
+            f"Before sieving, admission bounds congruence classes at "
+            f"{MAX_INTERVAL_SIEVE_RESIDUES} and their interval visits at "
+            f"{MAX_INTERVAL_SIEVE_VISITS}."
         ),
         request_type=IntervalCountRequest,
         result_type=IntervalCountResult,

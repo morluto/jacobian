@@ -20,7 +20,6 @@ from jacobian.math.combinatorics.algebraic._models import (
     HookLengthRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
-    RSKResult,
     RSKWordRequest,
 )
 from jacobian.math.combinatorics.algebraic._tools import (
@@ -32,8 +31,10 @@ from jacobian.math.combinatorics.algebraic._tools import (
 )
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ROW_SEARCH_COMPARISONS,
-    MAX_RSK_WORD_BYTES,
     MAX_RSK_WORD_LENGTH,
+    MAX_RSK_WORD_PAYLOAD_SCALARS,
+    FinitePermutation,
+    PermutationRSKPair,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.symmetric_functions import (
@@ -105,6 +106,72 @@ def test_row_insertion_known_values(
     assert pair.convention == "ROW_INSERTION_RSK_V1"
     assert pair.source_kind == "WORD"
     assert inverse_row_insertion_rsk(pair) == word
+
+
+def test_plactic_normal_form_is_canonical_row_reading_and_knuth_invariant() -> None:
+    alphabet = ("1", "2", "3")
+    source = FiniteWord(alphabet=alphabet, letters=("1", "3", "2"))
+    equivalent = FiniteWord(alphabet=alphabet, letters=("3", "1", "2"))
+
+    result = algebraic_combinatorics.plactic_normal_form(source)
+    moved = algebraic_combinatorics.plactic_normal_form(equivalent)
+
+    assert result.insertion_tableau.rows == ((1, 2), (3,))
+    assert result.normal_form.letters == ("3", "1", "2")
+    assert result.insertion_tableau == moved.insertion_tableau
+    assert result.normal_form == moved.normal_form
+    assert (
+        algebraic_combinatorics.row_insertion_rsk(result.normal_form).insertion_tableau
+        == result.insertion_tableau
+    )
+
+
+def test_plactic_normal_form_empty_word_keeps_its_empty_alphabet() -> None:
+    result = algebraic_combinatorics.plactic_normal_form(
+        FiniteWord(alphabet=(), letters=())
+    )
+
+    assert result.source_word == FiniteWord(alphabet=(), letters=())
+    assert result.normal_form == FiniteWord(alphabet=(), letters=())
+    assert result.insertion_tableau.rows == ()
+
+
+def test_plactic_normal_form_matches_independent_row_insertion_on_small_words() -> None:
+    alphabet = ("z", "a", "m")
+
+    def reference_insertion(letters: tuple[str, ...]) -> tuple[tuple[int, ...], ...]:
+        ranks = {letter: index + 1 for index, letter in enumerate(alphabet)}
+        rows: list[list[int]] = []
+        for letter in letters:
+            bumped = ranks[letter]
+            row_index = 0
+            while True:
+                if row_index == len(rows):
+                    rows.append([bumped])
+                    break
+                row = rows[row_index]
+                column = next(
+                    (index for index, value in enumerate(row) if value > bumped),
+                    len(row),
+                )
+                if column == len(row):
+                    row.append(bumped)
+                    break
+                row[column], bumped = bumped, row[column]
+                row_index += 1
+        return tuple(tuple(row) for row in rows)
+
+    for length in range(5):
+        for letters in itertools.product(alphabet, repeat=length):
+            source = FiniteWord(alphabet=alphabet, letters=letters)
+            result = algebraic_combinatorics.plactic_normal_form(source)
+            expected_rows = reference_insertion(letters)
+            assert result.insertion_tableau.rows == expected_rows
+            expected_reading = tuple(
+                alphabet[entry - 1] for row in reversed(expected_rows) for entry in row
+            )
+            assert result.normal_form.letters == expected_reading
+            assert reference_insertion(result.normal_form.letters) == expected_rows
 
 
 def test_first_strictly_greater_rule_preserves_repeated_letters_in_a_row() -> None:
@@ -195,9 +262,56 @@ def test_all_short_ternary_words_round_trip_both_directions() -> None:
             assert row_insertion_rsk(reconstructed) == pair
 
 
+def test_forward_pair_matches_independent_scan_oracle_exhaustively() -> None:
+    """Compare both tableaux to direct first-greater row scans.
+
+    Round trips alone can let mutually consistent forward/reverse errors pass,
+    so this checks P and Q against a small independent insertion oracle.
+    """
+    alphabet = ("a", "b", "c")
+
+    def reference_pair(
+        letters: tuple[str, ...],
+    ) -> tuple[tuple[tuple[int, ...], ...], tuple[tuple[int, ...], ...]]:
+        insertion: list[list[int]] = []
+        recording: list[list[int]] = []
+        ranks = {letter: index + 1 for index, letter in enumerate(alphabet)}
+        for position, letter in enumerate(letters, start=1):
+            carried = ranks[letter]
+            row_index = 0
+            while row_index < len(insertion):
+                row = insertion[row_index]
+                column = next(
+                    (index for index, value in enumerate(row) if value > carried),
+                    len(row),
+                )
+                if column == len(row):
+                    row.append(carried)
+                    recording[row_index].append(position)
+                    break
+                row[column], carried = carried, row[column]
+                row_index += 1
+            else:
+                insertion.append([carried])
+                recording.append([position])
+        return tuple(map(tuple, insertion)), tuple(map(tuple, recording))
+
+    for length in range(7):
+        for letters in itertools.product(alphabet, repeat=length):
+            source = FiniteWord(alphabet=alphabet, letters=letters)
+            pair = row_insertion_rsk(source)
+            expected_p, expected_q = reference_pair(letters)
+            assert pair.insertion_tableau.rows == expected_p
+            assert pair.recording_tableau.rows == expected_q
+            assert pair.shape.parts == tuple(map(len, expected_p))
+            assert inverse_row_insertion_rsk(pair) == source
+
+
 def test_permutation_operation_agrees_with_word_specialization() -> None:
     permutation = (3, 1, 4, 2)
-    old_result = rsk_permutation(RSKPermutationRequest(permutation=permutation))
+    old_result = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=permutation))
+    )
     word_pair = _pair(
         FiniteWord(
             alphabet=("1", "2", "3", "4"),
@@ -214,9 +328,11 @@ def test_permutation_inversion_swaps_the_tableaux() -> None:
         inverse = [0] * len(permutation)
         for position, value in enumerate(permutation, start=1):
             inverse[value - 1] = position
-        pair = rsk_permutation(RSKPermutationRequest(permutation=permutation))
+        pair = rsk_permutation(
+            RSKPermutationRequest(permutation=FinitePermutation(images=permutation))
+        )
         inverse_pair = rsk_permutation(
-            RSKPermutationRequest(permutation=tuple(inverse))
+            RSKPermutationRequest(permutation=FinitePermutation(images=tuple(inverse)))
         )
         assert pair.p_tableau == inverse_pair.q_tableau
         assert pair.q_tableau == inverse_pair.p_tableau
@@ -226,29 +342,29 @@ def test_permutation_envelope_is_derived_from_the_canonical_cell_budget() -> Non
     assert MAX_RSK_PERMUTATION_LENGTH == MAX_RSK_WORD_LENGTH
 
     identity_51 = tuple(range(1, 52))
-    result = rsk_permutation(RSKPermutationRequest(permutation=identity_51))
+    result = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=identity_51))
+    )
     assert result.shape.parts == (51,)
-    assert result.lis_length == 51
-    assert result.lds_length == 1
 
     identity_at_cap = tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 1))
-    wide = rsk_permutation(RSKPermutationRequest(permutation=identity_at_cap))
+    wide = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=identity_at_cap))
+    )
     assert wide.p_tableau.rows == (identity_at_cap,)
     assert wide.q_tableau.rows == (identity_at_cap,)
     assert wide.shape.parts == (MAX_RSK_PERMUTATION_LENGTH,)
-    assert RSKResult.model_validate(wide.model_dump()) == wide
+    assert PermutationRSKPair.model_validate(wide.model_dump()) == wide
 
     descending_at_cap = tuple(range(MAX_RSK_PERMUTATION_LENGTH, 0, -1))
-    deep = rsk_permutation(RSKPermutationRequest(permutation=descending_at_cap))
+    deep = rsk_permutation(
+        RSKPermutationRequest(permutation=FinitePermutation(images=descending_at_cap))
+    )
     assert deep.shape.parts == (1,) * MAX_RSK_PERMUTATION_LENGTH
-    assert deep.lis_length == 1
-    assert deep.lds_length == MAX_RSK_PERMUTATION_LENGTH
-    assert RSKResult.model_validate(deep.model_dump()) == deep
+    assert PermutationRSKPair.model_validate(deep.model_dump()) == deep
 
     with pytest.raises(ValidationError):
-        RSKPermutationRequest(
-            permutation=tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 2))
-        )
+        FinitePermutation(images=tuple(range(1, MAX_RSK_PERMUTATION_LENGTH + 2)))
 
 
 def test_structurally_incompatible_pairs_fail_before_reverse_insertion() -> None:
@@ -296,7 +412,7 @@ def _wide_unicode_symbols(count: int) -> tuple[str, ...]:
     return tuple("\U0001f600" * 63 + chr(0x1F600 + index) for index in range(count))
 
 
-def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
+def test_word_length_and_payload_cardinality_bounds_are_closed() -> None:
     length_boundary = FiniteWord(alphabet=("a",), letters=("a",) * MAX_RSK_WORD_LENGTH)
     assert sum(_pair(length_boundary).shape.parts) == MAX_RSK_WORD_LENGTH
 
@@ -332,20 +448,20 @@ def test_word_length_and_utf8_payload_bounds_are_closed() -> None:
         )
 
     boundary_symbols = _wide_unicode_symbols(50)
-    per_symbol_bytes = len(boundary_symbols[0].encode("utf-8"))
-    boundary_letter_count = MAX_RSK_WORD_BYTES // per_symbol_bytes - len(
+    per_symbol_scalars = len(boundary_symbols[0])
+    boundary_letter_count = MAX_RSK_WORD_PAYLOAD_SCALARS // per_symbol_scalars - len(
         boundary_symbols
     )
-    byte_boundary = FiniteWord(
+    payload_boundary = FiniteWord(
         alphabet=boundary_symbols,
         letters=(boundary_symbols[0],) * boundary_letter_count,
     )
-    assert RSKWordRequest(word=byte_boundary).word == byte_boundary
+    assert RSKWordRequest(word=payload_boundary).word == payload_boundary
 
     assert (
-        sum(len(symbol.encode("utf-8")) for symbol in boundary_symbols)
-        + sum(len(letter.encode("utf-8")) for letter in byte_boundary.letters)
-        == MAX_RSK_WORD_BYTES
+        sum(len(symbol) for symbol in boundary_symbols)
+        + sum(len(letter) for letter in payload_boundary.letters)
+        == MAX_RSK_WORD_PAYLOAD_SCALARS
     )
 
 
@@ -457,7 +573,7 @@ def test_comparison_bound_boundary_word_round_trips() -> None:
 
 def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert MAX_RSK_ROW_SEARCH_COMPARISONS == 9
-    assert MAX_RSK_WORD_BYTES == 140_800
+    assert MAX_RSK_WORD_PAYLOAD_SCALARS == 35_200
 
     schema = RSKWordRequest.model_json_schema()
     assert schema["properties"]["convention"]["const"] == "ROW_INSERTION_RSK_V1"
@@ -465,7 +581,7 @@ def test_rsk_request_schema_publishes_convention_and_work_envelope() -> None:
     assert "unique strings" in description
     assert "every positioned letter" in description
     assert f"at most {MAX_RSK_WORD_LENGTH} letters" in description
-    assert f"{MAX_RSK_WORD_BYTES} UTF-8 bytes" in description
+    assert f"{MAX_RSK_WORD_PAYLOAD_SCALARS} Unicode scalar values" in description
     class_description = schema["description"]
     assert "2N" in class_description
     assert (
@@ -498,3 +614,31 @@ def test_public_operations_are_admitted_and_examples_execute() -> None:
         for operation_example in tool.examples:
             request = tool.request_type.model_validate(operation_example.input)
             tool.result_type.model_validate(tool.run(request))
+
+
+def test_strict_lds_matches_independent_subsequence_enumeration() -> None:
+    from itertools import combinations
+
+    from jacobian.math.combinatorics.algebraic import longest_decreasing_subsequence
+    from jacobian.math.combinatorics.algebraic._models import (
+        LongestDecreasingSubsequenceRequest,
+    )
+
+    alphabet = ("a", "b", "c")
+    for length in range(7):
+        for letters in itertools.product(alphabet, repeat=length):
+            source = FiniteWord(alphabet=alphabet, letters=letters)
+            result = longest_decreasing_subsequence(
+                LongestDecreasingSubsequenceRequest(word=source)
+            )
+            feasible_lengths = [
+                len(indices)
+                for size in range(length + 1)
+                for indices in combinations(range(length), size)
+                if all(
+                    letters[left] > letters[right]
+                    for left, right in itertools.pairwise(indices)
+                )
+            ]
+            assert result.length == max(feasible_lengths, default=0)
+            assert result.values == tuple(letters[index] for index in result.indices)

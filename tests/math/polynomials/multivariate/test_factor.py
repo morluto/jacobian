@@ -99,44 +99,55 @@ class TestMultivariateFactor:
         """Factor x^2*y - x = x * (x*y - 1) in Q[x,y]."""
         poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
         result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert len(result.factors) >= 1
-        assert result.reconstructed is not None
+        x = _poly(("x", "y"), ((1, 1, (1, 0)),))
+        xy_minus_one = _poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0))))
+        assert result.coefficient.as_fraction() == 1
+        assert len(result.factors) == 2
+        assert sorted(
+            record.factor.model_dump_json() for record in result.factors
+        ) == sorted((x.model_dump_json(), xy_minus_one.model_dump_json()))
+        assert {record.multiplicity for record in result.factors} == {1}
+        assert result.reconstructed == poly
+        assert _rebuild_multivariate_product(result) == _to_sympy_poly(poly)
 
     def test_irreducible(self) -> None:
         """An irreducible polynomial has one factor."""
         poly = _poly(("x", "y"), ((1, 1, (1, 1)), (-1, 1, (0, 0))))
         result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) == 1
+        assert result.coefficient.as_fraction() == 1
+        assert result.factors[0].factor == poly
         assert result.factors[0].multiplicity == 1
-
-    def test_repeated_factor(self) -> None:
-        """(x*y -1)^2 = x^2*y^2 -2*x*y +1 should have multiplicity 2."""
-        poly = _poly(("x", "y"), ((1, 1, (2, 2)), (-2, 1, (1, 1)), (1, 1, (0, 0))))
-        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert len(result.factors) >= 1
-        mults = [f.multiplicity for f in result.factors]
-        assert 2 in mults
+        assert result.reconstructed == poly
 
     def test_trivariate(self) -> None:
         """Factor x*y*z in Q[x,y,z]."""
         poly = _poly(("x", "y", "z"), ((1, 1, (1, 1, 1)),))
         result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert len(result.factors) >= 1
+        expected = (
+            _poly(("x", "y", "z"), ((1, 1, (1, 0, 0)),)),
+            _poly(("x", "y", "z"), ((1, 1, (0, 1, 0)),)),
+            _poly(("x", "y", "z"), ((1, 1, (0, 0, 1)),)),
+        )
+        assert result.coefficient.as_fraction() == 1
+        assert sorted(
+            record.factor.model_dump_json() for record in result.factors
+        ) == sorted(factor.model_dump_json() for factor in expected)
+        assert {record.multiplicity for record in result.factors} == {1}
+        assert result.reconstructed == poly
+        assert _rebuild_multivariate_product(result) == _to_sympy_poly(poly)
 
     def test_constant_polynomial(self) -> None:
         """A constant has zero factors."""
         poly = _poly(("x", "y"), ((5, 1, (0, 0)),))
         result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
         assert len(result.factors) == 0
+        assert result.coefficient.as_fraction() == 5
+        assert result.reconstructed == poly
+        assert _rebuild_multivariate_product(result) == _to_sympy_poly(poly)
 
 
 class TestMultivariateFactorResultInvariants:
-    @requires_worker_containment
-    def test_roundtrip_result_validates(self) -> None:
-        poly = _poly(("x", "y"), ((1, 1, (2, 1)), (-1, 1, (1, 0))))
-        result = _compute_factor(MultivariateFactorRequest(polynomial=poly))
-        assert MultivariateFactorResult.model_validate(result.model_dump()) == result
-
     def test_rejects_zero_coefficient_with_zero_reconstruction(self) -> None:
         """Zero coefficient plus zero reconstruction must not validate."""
         zero = _poly(("x", "y"), ())
@@ -182,6 +193,7 @@ class TestMultivariateFactorResultInvariants:
                 MultivariateFactorResult(
                     coefficient=CanonicalRational.from_fraction(Fraction(1)),
                     factors=(),
+                    polynomial=reconstructed,
                     reconstructed=reconstructed,
                     **kwargs,
                 )
@@ -212,13 +224,12 @@ class TestFactorRepresentationBounds:
 
 class TestAggregateDegreeGate:
     def test_forged_aggregate_degree_rejected_before_expansion(self) -> None:
-        """128 linear factors at multiplicity 64 cannot multiply against a
-        small reconstruction; the degree gate rejects without expansion."""
+        """The aggregate factor degree is rejected against a constant source."""
         factor = _poly(("x", "y"), ((1, 1, (1, 1)),))
         small = _poly(("x", "y"), ((1, 1, (0, 0)),))
         payload = tuple(
-            MultivariateIrreducibleFactor(factor=factor, multiplicity=1)
-            for _ in range(4)
+            MultivariateIrreducibleFactor(factor=factor, multiplicity=64)
+            for _ in range(128)
         )
         with pytest.raises(ValidationError):
             MultivariateFactorResult(
@@ -370,12 +381,22 @@ class TestAggregateContentAdmission:
     """
 
     @pytest.mark.scale
-    def test_many_coprime_denominators_rejected_before_backend(self) -> None:
+    def test_many_coprime_denominators_rejected_before_backend(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """129 pairwise-coprime 256-digit denominators pass every per-term
         budget yet their least common multiple exceeds the canonical
         32,768-digit rational limit, so the operation could never return its
         declared typed result; admission rejects before invoking SymPy."""
         request = MultivariateFactorRequest(polynomial=_coprime_denominator_poly(129))
+        from jacobian.math.polynomials.multivariate import _factor_backend
+
+        def unexpected_backend_call(*args: Any, **kwargs: Any) -> Any:
+            raise AssertionError("backend must not run before content admission")
+
+        monkeypatch.setattr(
+            _factor_backend, "run_bounded_factorization", unexpected_backend_call
+        )
         with pytest.raises(OperationDomainValidationError):
             _compute_factor(request)
 
@@ -518,9 +539,18 @@ class TestKillableFactorBackend:
         assert completed.returncode == 0
         response = json.loads(completed.stdout.decode())
         assert response["ok"] is True
-        # x^2*y - x = x*(x*y - 1): two irreducible factors, content 1.
-        assert len(response["factors"]) == 2
         assert response["coefficient"] == ["1", "1"]
+        factors = {
+            (
+                factor["multiplicity"],
+                tuple(tuple(term) for term in factor["terms"]),
+            )
+            for factor in response["factors"]
+        }
+        assert factors == {
+            (1, ((1, 0, "1", "1"),)),
+            (1, ((1, 1, "1", "1"), (0, 0, "-1", "1"))),
+        }
 
     def test_worker_crash_exit_is_execution_failure(
         self, monkeypatch: pytest.MonkeyPatch

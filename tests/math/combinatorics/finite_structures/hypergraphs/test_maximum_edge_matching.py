@@ -5,6 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
     FiniteHypergraph,
     MaximumEdgeMatchingRequest,
@@ -174,17 +175,6 @@ class TestMaximumEdgeMatching:
         assert result.matching == tuple([f"empty{i}" for i in range(21)] + ["nonempty"])
         assert result.count == 22
 
-    def test_edge_bound_exceeded(self) -> None:
-        edges = [[f"e{i}", [f"v{i}", f"v{(i + 1) % 21}"]] for i in range(21)]
-        vertices = [f"v{i}" for i in range(21)]
-        request = MaximumEdgeMatchingRequest(
-            hypergraph=FiniteHypergraph.model_validate(
-                {"vertices": vertices, "edges": edges}
-            )
-        )
-        with pytest.raises(ValueError, match="search exceeds"):
-            maximum_edge_matching(request.hypergraph)
-
     def test_many_disjoint_singletons_are_admitted(self) -> None:
         result = _matching(
             {
@@ -211,17 +201,44 @@ class TestMaximumEdgeMatching:
         assert result.count == 3
         assert result.matching == ("e1", "e3", "e4")
 
-    def test_total_search_work_bound_still_rejects(self) -> None:
-        # 21 pairwise-overlapping pair edges form one 21-candidate
-        # component beyond the per-component envelope.
-        result_edges = [[f"e{i}", [f"v{i}", f"v{(i + 1) % 21}"]] for i in range(21)]
-        with pytest.raises(ValueError, match="search exceeds"):
-            _matching(
-                {
-                    "vertices": [f"v{i}" for i in range(21)],
-                    "edges": result_edges,
-                }
-            )
+    def test_single_conflict_component_search_bound_rejects(self) -> None:
+        # 21 pairwise-overlapping pair edges form one 21-candidate component.
+        hypergraph = FiniteHypergraph.model_validate(
+            {
+                "vertices": [f"v{i}" for i in range(21)],
+                "edges": [[f"e{i}", [f"v{i}", f"v{(i + 1) % 21}"]] for i in range(21)],
+            }
+        )
+        request = MaximumEdgeMatchingRequest(hypergraph=hypergraph)
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
+            maximum_edge_matching(request.hypergraph)
+
+        assert (
+            exc_info.value.errors()[0]["type"]
+            == "hypergraph.maximum_edge_matching.search_bound"
+        )
+
+    def test_summed_component_search_work_bound_rejects(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "jacobian.math.combinatorics.finite_structures.hypergraphs.operations.MAX_MATCHING_SEARCH_WORK",
+            3,
+        )
+        hypergraph = FiniteHypergraph.model_validate(
+            {
+                "vertices": ["a", "b", "c", "d"],
+                "edges": [["left", ["a", "b"]], ["right", ["c", "d"]]],
+            }
+        )
+
+        with pytest.raises(OperationResourceAdmissionError) as exc_info:
+            maximum_edge_matching(hypergraph)
+
+        assert exc_info.value.errors()[0]["type"] == (
+            "hypergraph.maximum_edge_matching.search_bound"
+        )
+        assert "3-check exact search bound" in str(exc_info.value)
 
     def test_decomposed_search_matches_undecomposed_search(self) -> None:
         from itertools import combinations

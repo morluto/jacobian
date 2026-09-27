@@ -25,6 +25,11 @@ from jacobian.math.groups._models import (
     GroupSubgroupLatticeResult,
     PermutationGroup,
 )
+from jacobian.math.groups._table_models import (
+    FiniteGroupTableElement,
+    FiniteGroupTableRequest,
+    FiniteGroupTableResult,
+)
 from jacobian.math.groups.finite_abelian import (
     FiniteAbelianCharacterSumIntervalProfileRequest,
     FiniteAbelianCharacterSumIntervalProfileResult,
@@ -79,6 +84,31 @@ def compute_finite_abelian_character_sum_interval_profile(
 def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
     order = native.group_order(request)
     return GroupOrderResult(source=request, order=order)
+
+
+def construct_finite_group_table(
+    request: FiniteGroupTableRequest,
+) -> FiniteGroupTableResult:
+    """Decode the catalog request and adapt the native table value."""
+    if not isinstance(request, FiniteGroupTableRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="finite_group.table.invalid_request",
+            message="request must be a finite-group table request value",
+        )
+    try:
+        request = FiniteGroupTableRequest.model_validate(request.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="finite_group.table.invalid_request",
+            message="request must satisfy the finite-group table request bounds",
+        ) from error
+    group = native.finite_group_table(request.multiplication, request.identity)
+    return FiniteGroupTableResult(
+        group=group,
+        identity_element=FiniteGroupTableElement(group=group, index=group.identity),
+    )
 
 
 def compute_element_order(request: GroupElementOrderRequest) -> GroupElementOrderResult:
@@ -140,6 +170,41 @@ S3_STABILIZER_POINT_0 = {
 }
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="finite_group.table.construct.compute",
+        title="Construct a bounded exact finite group from its multiplication table",
+        description=(
+            "Validate a complete indexed multiplication table (order at most 24) "
+            "against the identity, two-sided inverse, and associativity laws. "
+            "Return a finite-group value with its inverse map and parent-bound "
+            "identity element. This table carrier is not yet accepted by the "
+            "permutation-specific lattice-gauge operations."
+        ),
+        request_type=FiniteGroupTableRequest,
+        result_type=FiniteGroupTableResult,
+        run=construct_finite_group_table,
+        tags=("finite-group", "multiplication-table", "exact"),
+        examples=(
+            OperationExample(
+                name="s3_multiplication_table",
+                description=(
+                    "Construct S3 from its six-element Cayley table; indices "
+                    "encode the permutations e, (01), (02), (12), (012), (021)."
+                ),
+                input={
+                    "identity": 0,
+                    "multiplication": [
+                        [0, 1, 2, 3, 4, 5],
+                        [1, 0, 4, 5, 2, 3],
+                        [2, 5, 0, 4, 3, 1],
+                        [3, 4, 5, 0, 1, 2],
+                        [4, 3, 1, 2, 5, 0],
+                        [5, 2, 3, 1, 0, 4],
+                    ],
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="finite_abelian_group.exact_factorization.compute",
         title="Exact finite abelian group factorization",

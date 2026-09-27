@@ -6,8 +6,8 @@ from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.lie_algebras.matrix_span import LieMatrixSpanRealization
 from jacobian.math.lie_algebras.matrix_span._models import (
-    LieMatrixSpanRealization,
     LieMatrixSpanRequest,
 )
 from jacobian.math.lie_algebras.matrix_span.operations import (

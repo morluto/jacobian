@@ -37,39 +37,64 @@ def _require_qq_matrix_domains(matrices: tuple[RationalMatrix, ...]) -> None:
 def _shared_denominator_growth(
     matrices: tuple[RationalMatrix, ...],
 ) -> tuple[int, int, bool]:
-    """Bound the integer basis obtained by clearing the shared denominator."""
-    entries = tuple(
-        entry for matrix in matrices for row in matrix.entries for entry in row
+    """Bound integer basis rows after clearing each matrix independently."""
+    matrix_denominators = tuple(
+        _lcm(entry.den for row in matrix.entries for entry in row)
+        for matrix in matrices
     )
-    common_denominator = 1
-    for entry in entries:
-        common_denominator = (
-            common_denominator // gcd(common_denominator, entry.den) * entry.den
-        )
-
-    def numerator_digits(entry) -> int:
-        factor = common_denominator // entry.den
-        numerator = abs(entry.num)
-        if numerator == 0:
-            return 1
-        if numerator == 1:
-            return decimal_digit_width(factor)
-        if factor == 1:
-            return decimal_digit_width(numerator)
-        return decimal_digit_width(numerator) + decimal_digit_width(factor)
-
+    numerator_widths = tuple(
+        decimal_digit_width(abs(entry.num) * (denominator // entry.den))
+        for matrix, denominator in zip(matrices, matrix_denominators, strict=True)
+        for row in matrix.entries
+        for entry in row
+    )
     only_unit_entries = all(
-        entry.num == 0 or (abs(entry.num) == 1 and common_denominator // entry.den == 1)
-        for entry in entries
+        entry.num == 0
+        or abs(entry.num) * (denominator // entry.den) == 1
+        for matrix, denominator in zip(matrices, matrix_denominators, strict=True)
+        for row in matrix.entries
+        for entry in row
+    )
+    maximum_denominator_digits = max(
+        (decimal_digit_width(value) for value in matrix_denominators), default=1
     )
     return (
-        decimal_digit_width(common_denominator),
-        max((numerator_digits(entry) for entry in entries), default=1),
+        2 * maximum_denominator_digits,
+        max(numerator_widths, default=1),
         only_unit_entries,
     )
 
 
-def _admit(matrices: tuple[RationalMatrix, ...]) -> tuple[int, int, int]:
+def _lcm(values) -> int:
+    result = 1
+    for value in values:
+        result = result // gcd(result, value) * value
+    return result
+
+
+def _bounded_commutators(
+    matrices: tuple[RationalMatrix, ...], order: int, input_digits: int
+) -> tuple[tuple[tuple[Fraction, ...], ...], int]:
+    pairs = len(matrices) * (len(matrices) - 1) // 2
+    presolve_work = pairs * 2 * order**3 * input_digits
+    if presolve_work > 25_000_000:
+        raise OperationResourceAdmissionError(
+            location=("matrices",),
+            code="lie_algebra.matrix_span_work_bound",
+            message="matrix span commutator presolve exceeds the admitted work bound",
+        )
+    return (
+        tuple(
+            _commutator(matrices[i], matrices[j])
+            for i, j in combinations(range(len(matrices)), 2)
+        ),
+        presolve_work,
+    )
+
+
+def _admit(
+    matrices: tuple[RationalMatrix, ...],
+) -> tuple[int, int, int, tuple[tuple[Fraction, ...], ...]]:
     if type(matrices) is not tuple or not 1 <= len(matrices) <= 8:
         raise OperationDomainValidationError(
             location=("matrices",),
@@ -156,18 +181,16 @@ def _admit(matrices: tuple[RationalMatrix, ...]) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_input_height",
             message="input matrix entries are limited to 64 decimal digits",
         )
-    commuting = all(
-        not any(_commutator(matrices[i], matrices[j]))
-        for i, j in combinations(range(dimension), 2)
-    )
+    pairs = dimension * (dimension - 1) // 2
+    commutators, presolve_work = _bounded_commutators(matrices, order, input_digits)
+    commuting = all(not any(commutator) for commutator in commutators)
     if commuting:
         # No structure constants are produced, so no pivot-coordinate height
         # bound is needed for this span.
         common_denominator_digits = 1
         input_numerator_growth = 0
     else:
-        # Clear the common denominator of the basis before bounding Cramer's
-        # rule. This avoids charging one shared factor per determinant term.
+        # Clear denominators per basis matrix before bounding Cramer's rule.
         (
             common_denominator_digits,
             input_numerator_growth,
@@ -175,7 +198,6 @@ def _admit(matrices: tuple[RationalMatrix, ...]) -> tuple[int, int, int]:
         ) = _shared_denominator_growth(matrices)
         input_numerator_growth = 0 if only_unit_entries else input_numerator_growth
     input_denominator_growth = 0
-    pairs = dimension * (dimension - 1) // 2
     # Bound rational products and sums before matrix expansion. Each
     # commutator entry sums 2*order products; unrelated product denominators
     # are safely charged as their full product. Determinant bounds then charge
@@ -242,7 +264,7 @@ def _admit(matrices: tuple[RationalMatrix, ...]) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_result_height",
             message="induced structure constants may exceed the 64-digit result bound",
         )
-    work = (
+    work = presolve_work + (
         dimension * order**2 * dimension * input_digits
         + 2 * pairs * order**3
         + pairs * dimension**3 * max(commutator_digits, coordinate_digits)
@@ -259,7 +281,7 @@ def _admit(matrices: tuple[RationalMatrix, ...]) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_work_bound",
             message="matrix span exceeds the admitted exact work or output budget",
         )
-    return order, pairs, commutator_digits
+    return order, pairs, commutator_digits, commutators
 
 
 def _commutator(left: RationalMatrix, right: RationalMatrix) -> tuple[Fraction, ...]:
@@ -318,7 +340,7 @@ def lie_algebra_from_matrix_span(
     matrices: tuple[RationalMatrix, ...],
 ) -> LieMatrixSpanRealization:
     """Construct the induced Lie algebra from an independent closed QQ span."""
-    order, _pair_count, _intermediate_digit_bound = _admit(matrices)
+    order, _pair_count, _intermediate_digit_bound, commutators = _admit(matrices)
     dimension = len(matrices)
     rows = tuple(
         tuple(
@@ -337,8 +359,9 @@ def lie_algebra_from_matrix_span(
     pivots = reduced.pivot_columns
     constants: list[StructureConstant] = []
     labels = tuple(f"M{index}" for index in range(dimension))
-    for i, j in combinations(range(dimension), 2):
-        commutator = _commutator(matrices[i], matrices[j])
+    for (i, j), commutator in zip(
+        combinations(range(dimension), 2), commutators, strict=True
+    ):
         coordinates = _coordinates(rows, pivots, commutator)
         if any(
             sum(

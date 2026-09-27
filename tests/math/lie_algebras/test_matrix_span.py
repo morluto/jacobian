@@ -172,7 +172,7 @@ def test_single_digit_denominators_include_multiplicative_carry() -> None:
         RationalMatrix(entries=((CanonicalRational(num=1, den=denominator),),))
         for denominator in (7, 8)
     )
-    _, _, commutator_digits = _admit(matrices)
+    _, _, commutator_digits, _ = _admit(matrices)
 
     assert commutator_digits >= 2
 
@@ -228,3 +228,45 @@ def test_commuting_rational_span_skips_irrelevant_structure_constant_bound() -> 
 
     assert result.matrix_basis == matrices
     assert result.algebra.structure_constants == ()
+
+
+def test_sl2_basis_with_independent_large_denominators_is_admitted() -> None:
+    from fractions import Fraction
+
+    from jacobian.math.matrices.values import rational_matrix_from_fractions
+
+    scales = (1_000_003, 1_000_033, 1_000_037)
+    units = (
+        ((0, 1), (0, 0)),
+        ((0, 0), (1, 0)),
+        ((1, 0), (0, -1)),
+    )
+    matrices = tuple(
+        rational_matrix_from_fractions(
+            tuple(tuple(Fraction(value, scale) for value in row) for row in matrix)
+        )
+        for matrix, scale in zip(units, scales, strict=True)
+    )
+
+    result = lie_algebra_from_matrix_span(matrices)
+
+    assert len(result.algebra.structure_constants) == 3
+
+
+def test_admitted_commutators_are_reused_during_construction(monkeypatch) -> None:
+    import jacobian.math.lie_algebras.matrix_span.operations as operations
+
+    matrices = _request(((0, 1), (0, 0)), ((0, 0), (1, 0))).matrices
+    original = operations._commutator
+    calls = 0
+
+    def count(left, right):
+        nonlocal calls
+        calls += 1
+        return original(left, right)
+
+    monkeypatch.setattr(operations, "_commutator", count)
+    with pytest.raises(OperationDomainValidationError, match="not closed"):
+        lie_algebra_from_matrix_span(matrices)
+
+    assert calls == 1

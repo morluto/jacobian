@@ -1335,7 +1335,10 @@ class WeylDimensionResult(StrictModel):
                 "weyl_dimension_shape",
                 "the dominant weight and every root factor must use the Cartan weight axis",
             )
-        if any(value.bit_length() > MAX_HIGHEST_WEIGHT_BITS for value in self.highest_weight):
+        if any(
+            value.bit_length() > MAX_HIGHEST_WEIGHT_BITS
+            for value in self.highest_weight
+        ):
             raise _validation_error(
                 "weyl_dimension_weight_bound",
                 "highest-weight coordinates exceed the admitted bit bound",

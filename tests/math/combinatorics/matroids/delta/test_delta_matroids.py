@@ -18,6 +18,7 @@ from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids import delta as delta_matroids
 from jacobian.math.combinatorics.matroids.delta import FiniteDeltaMatroid
 from jacobian.math.combinatorics.matroids.delta._models import (
+    DeltaMatroidDistanceProfileRequest,
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
@@ -134,6 +135,8 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.distance.compute",
         "delta_matroid.twist.compute",
         "delta_matroid.width.compute",
+        "delta_matroid.distance_profile.compute",
+        "delta_matroid.binary.from_matrix_twist.compute",
         "delta_matroid.dual.compute",
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",
@@ -364,6 +367,20 @@ def test_empty_ground_identity_delta_matroid_has_native_and_wire_replay() -> Non
     assert (
         DeltaMatroidRecognitionResult.model_validate_json(wire_result.model_dump_json())
         == wire_result
+    )
+
+
+def test_distance_profile_preflights_ground_before_nested_carrier_parsing() -> None:
+    payload = {
+        "delta_matroid": {
+            "ground": [f"e{index}" for index in range(13)],
+            "feasible": [["not-an-index"] for _ in range(20_000)],
+        }
+    }
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidDistanceProfileRequest.model_validate(payload)
+    assert error.value.errors()[0]["type"] == (
+        "delta_matroid.distance_profile_states_exceeded"
     )
 
 

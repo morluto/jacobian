@@ -33,10 +33,7 @@ from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
     CoefficientRing,
 )
-from jacobian.math.topology.cubical_complexes._models import (
-    CubicalCell,
-    CubicalComplex,
-)
+from jacobian.math.topology.cubical_complexes._models import CubicalCell
 from jacobian.math.topology.cubical_complexes.extensions import (
     CubicalTriangulationRequest,
     RelativeCubicalHomologyRequest,
@@ -44,6 +41,7 @@ from jacobian.math.topology.cubical_complexes.extensions import (
     relative_homology,
     triangulate,
 )
+from jacobian.math.topology.cubical_complexes.operations import face_closure
 from jacobian.math.topology.edge_paths._models import (
     FiniteGroupPresentation,
     FiniteGroupWord,
@@ -171,32 +169,28 @@ def test_relative_homology_rejects_composite_modulus_before_rank() -> None:
     with pytest.raises(OperationDomainValidationError, match="prime field"):
         relative_homology(
             RelativeCubicalHomologyRequest(
-                cells=(square,), subcomplex_cells=(edge,), prime=4
+                complex=face_closure((square,)).complex,
+                subcomplex=face_closure((edge,)).complex,
+                prime=4,
             )
         )
 
 
 def test_triangulation_retains_source_axis_through_serialization() -> None:
     square = CubicalCell(intervals=((0, 1), (0, 1)))
-    result = triangulate(
-        CubicalTriangulationRequest(
-            complex=CubicalComplex(ambient_dimension=2, cells=(square,))
-        )
-    )
+    result = triangulate(CubicalTriangulationRequest(cells=(square,)))
     restored = type(result).model_validate(result.model_dump(mode="json"))
-    assert restored.source_cells == (square,)
-    assert len(restored.complex.cells) == 9
-    assert len(restored.simplices_by_cell) == len(restored.source_cells)
+    assert square in restored.source_complex.cells
+    assert len(restored.source_complex.cells) == 9
+    assert len(restored.simplicial_complex.faces_by_dimension[0].faces) == 4
+    assert len(restored.cell_maps) == 1
+    assert restored.cell_maps[0].source_cell == square
 
 
 def test_triangulation_rejects_factorial_output_before_materialization() -> None:
     cube = CubicalCell(intervals=tuple((0, 1) for _ in range(10)))
-    with pytest.raises(OperationResourceAdmissionError, match="simplex output"):
-        triangulate(
-            CubicalTriangulationRequest(
-                complex=CubicalComplex(ambient_dimension=10, cells=(cube,))
-            )
-        )
+    with pytest.raises(OperationResourceAdmissionError, match="dimension"):
+        triangulate(CubicalTriangulationRequest(cells=(cube,)))
 
 
 def _rank_one_interval_sheaf() -> FiniteCellularSheaf:
@@ -388,11 +382,14 @@ def test_sheaf_morphism_translates_malformed_scalar_to_owner_error() -> None:
 
 
 def test_relative_homology_admits_group_and_matrix_bounds_before_dense_work() -> None:
-    cube = CubicalCell(intervals=((0, 1),) * 10)
-    vertex = CubicalCell(intervals=((0, 0),) * 10)
+    cube = CubicalCell(intervals=((0, 1),) * 7)
+    vertex = CubicalCell(intervals=((0, 0),) * 7)
     with pytest.raises(OperationResourceAdmissionError, match="chain group"):
         relative_homology(
-            RelativeCubicalHomologyRequest(cells=(cube,), subcomplex_cells=(vertex,))
+            RelativeCubicalHomologyRequest(
+                complex=face_closure((cube,)).complex,
+                subcomplex=face_closure((vertex,)).complex,
+            )
         )
 
 

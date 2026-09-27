@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from enum import StrEnum
-from itertools import pairwise, product
+from itertools import product
 from typing import Annotated, Any, Literal, Self
 
 from pydantic import Field, StrictBool, StrictInt, model_validator
@@ -59,8 +58,9 @@ MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES = 8 * 1024 * 1024
 MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS = 64
 MAX_CUBICAL_PRIME = 1000003
 MAX_TRIANGULATION_POINTS = 4096
-MAX_TRIANGULATION_SIMPLICES = 16384
-MAX_TRIANGULATION_CELL_SIMPLICES = 720
+MAX_TRIANGULATION_SOURCE_CELLS = 512
+MAX_TRIANGULATION_FACE_CANDIDATES = 8192
+MAX_CUBICAL_TRIANGULATION_RESULT_BYTES = 8 * 1024 * 1024
 MAX_LOWER_STAR_CELLS = 256
 MAX_LOWER_STAR_VERTICES = 256
 MAX_LOWER_STAR_INCIDENCES = 1024
@@ -74,6 +74,19 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     """Build a stable validation error owned by cubical-complex contracts."""
 
     return PydanticCustomError(f"cubical_complex.{reason}", message)
+
+
+def _cubical_coordinate_digits(value: int) -> int:
+    if abs(value).bit_length() > 4 * MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS:
+        return MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS + 1
+    return len(str(abs(value)))
+
+
+def _cell_is_face(face: CubicalCell, coface: CubicalCell) -> bool:
+    return len(face.intervals) == len(coface.intervals) and all(
+        outer[0] <= inner[0] and inner[1] <= outer[1]
+        for inner, outer in zip(face.intervals, coface.intervals, strict=True)
+    )
 
 
 class CubicalCell(StrictModel):
@@ -101,13 +114,18 @@ class CubicalCell(StrictModel):
         return sum(1 for a, b in self.intervals if b > a)
 
 
+class CubicalComplexRequest(StrictModel):
+    """A finite cubical complex: a set of elementary cubes."""
+
+    cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+
+
 class CubicalComplex(StrictModel):
     """Canonical cubical complex with an explicit ambient coordinate axis.
 
-    ``cells`` is a sorted family of distinct cells.  Operations establish that
-    it is face closed before constructing this value; the empty family is the
-    void subcomplex and retains the declared ambient dimension. Decoding checks
-    only the bounded cell and axis representation.
+    ``cells`` is a sorted family of distinct cells. Operations establish that
+    nonempty values are face closed before constructing this value; the empty
+    family is the void subcomplex and retains its ambient dimension.
     """
 
     ambient_dimension: int = Field(ge=1, le=MAX_DIM)
@@ -129,262 +147,88 @@ class CubicalComplex(StrictModel):
         return self
 
 
-class CubicalComplexRequest(StrictModel):
-    """Consume the canonical cubical-complex value without reshaping it."""
+class CubicalComplexValueRequest(StrictModel):
+    """Consume a retained canonical cubical value, including the void value."""
 
     complex: CubicalComplex
 
-    @property
-    def cells(self) -> tuple[CubicalCell, ...]:
-        return self.complex.cells
-
 
 class CubicalBoundarySubcomplexResult(StrictModel):
-    """A pure cubical complex and its source-bound exposed-facet subcomplex.
-
-    The boundary may be empty; its ambient dimension remains the same as the
-    source complex so the void subcomplex has an unambiguous cubical context.
-    """
+    """A pure cubical complex and its source-bound exposed-facet boundary."""
 
     complex: CubicalComplex
     boundary: CubicalComplex
     exposed_facets: tuple[CubicalCell, ...] = Field(max_length=MAX_FACE_CELLS)
 
     @model_validator(mode="after")
-    def require_source_binding(self) -> Self:
-        _validate_boundary_result_claim(self)
-        return self
-
-
-def _validate_boundary_result_claim(result: CubicalBoundarySubcomplexResult) -> None:
-    source_cells, boundary_cells, exposed_facets, top_cells = (
-        _admit_boundary_result_claim(result)
-    )
-    _check_boundary_result_claim(source_cells, boundary_cells, exposed_facets, top_cells)
-
-
-def _admit_boundary_result_claim(
-    result: CubicalBoundarySubcomplexResult,
-) -> tuple[
-    tuple[CubicalCell, ...],
-    tuple[CubicalCell, ...],
-    tuple[CubicalCell, ...],
-    tuple[CubicalCell, ...],
-]:
-    source = result.complex
-    boundary = result.boundary
-    if type(source) is not CubicalComplex or type(boundary) is not CubicalComplex:
-        raise _validation_error(
-            "boundary_subcomplex_source_type",
-            "source and boundary must use the canonical CubicalComplex value",
-        )
-    ambient_dimension = source.ambient_dimension
-    if (
-        type(ambient_dimension) is not int
-        or not 1 <= ambient_dimension <= MAX_DIM
-        or type(boundary.ambient_dimension) is not int
-        or boundary.ambient_dimension != ambient_dimension
-    ):
-        raise _validation_error(
-            "boundary_subcomplex_ambient_axis",
-            "the boundary and source must retain one valid ambient axis",
-        )
-    source_cells = _revalidate_boundary_cells(
-        source.cells, ambient_dimension, "source"
-    )
-    boundary_cells = _revalidate_boundary_cells(
-        boundary.cells, ambient_dimension, "boundary", allow_empty=True
-    )
-    exposed_facets = _revalidate_boundary_cells(
-        result.exposed_facets, ambient_dimension, "exposed facets", allow_empty=True
-    )
-    if not source_cells:
-        raise _validation_error(
-            "boundary_subcomplex_source_empty", "the source complex must be nonempty"
-        )
-    dimension = max(cell.dimension for cell in source_cells)
-    if dimension == 0:
-        raise _validation_error(
-            "boundary_subcomplex_dimension",
-            "the source complex must have positive dimension",
-        )
-    top_cells = tuple(cell for cell in source_cells if cell.dimension == dimension)
-    if len(top_cells) > MAX_CELLS:
-        raise _validation_error(
-            "boundary_subcomplex_top_cell_bound",
-            "the source has too many top-dimensional cells to check",
-        )
-    coordinate_digits = max(
-        _cubical_coordinate_digits(endpoint)
-        for cell in source_cells
-        for interval in cell.intervals
-        for endpoint in interval
-    )
-    if coordinate_digits > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS:
-        raise _validation_error(
-            "boundary_subcomplex_coordinate_bound",
-            "coordinates exceed the boundary-subcomplex digit bound",
-        )
-    top_face_candidates = sum(3**cell.dimension for cell in top_cells)
-    facet_candidate_count = 2 * dimension * len(top_cells)
-    boundary_face_candidates = facet_candidate_count * 3 ** (dimension - 1)
-    generation_work = ambient_dimension * (
-        top_face_candidates + boundary_face_candidates
-    ) + facet_candidate_count
-    sort_work = 2 * ambient_dimension * (
-        len(top_cells) * MAX_CELLS.bit_length()
-        + (
-            len(source_cells) + len(boundary_cells) + len(exposed_facets)
-        )
-        * MAX_FACE_CELLS.bit_length()
-        + (top_face_candidates + boundary_face_candidates + facet_candidate_count)
-        * MAX_FACE_CELLS.bit_length()
-    )
-    cell_bytes = ambient_dimension * (2 * coordinate_digits + 8) + 64
-    result_bytes = 512 + (
-        len(source_cells) + len(boundary_cells) + len(exposed_facets)
-    ) * cell_bytes
-    if (
-        top_face_candidates > MAX_FACE_CELLS
-        or boundary_face_candidates > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK
-        or generation_work + sort_work > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK
-        or result_bytes > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES
-    ):
-        raise _validation_error(
-            "boundary_subcomplex_result_bounds",
-            "the boundary claim exceeds its bounded validation envelope",
-        )
-    return source_cells, boundary_cells, exposed_facets, top_cells
-
-
-def _check_boundary_result_claim(
-    source_cells: tuple[CubicalCell, ...],
-    boundary_cells: tuple[CubicalCell, ...],
-    exposed_facets: tuple[CubicalCell, ...],
-    top_cells: tuple[CubicalCell, ...],
-) -> None:
-    expected_source: set[tuple[tuple[int, int], ...]] = set()
-    for cell in top_cells:
-        expected_source.update(_cubical_cell_face_intervals(cell))
-    if expected_source != {cell.intervals for cell in source_cells}:
-        raise _validation_error(
-            "boundary_subcomplex_source_not_pure",
-            "the source cells must be the face closure of its top cells",
-        )
-    facet_incidence: Counter[tuple[tuple[int, int], ...]] = Counter()
-    for cell in top_cells:
-        for axis, (lower, upper) in enumerate(cell.intervals):
-            if lower == upper:
-                continue
-            for endpoint in (lower, upper):
-                face = list(cell.intervals)
-                face[axis] = (endpoint, endpoint)
-                facet_incidence[tuple(face)] += 1
-    expected_facets = tuple(
-        sorted(face for face, count in facet_incidence.items() if count == 1)
-    )
-    expected_boundary: set[tuple[tuple[int, int], ...]] = set()
-    for facet in expected_facets:
-        expected_boundary.update(_cubical_face_intervals(facet))
-    if (
-        tuple(cell.intervals for cell in exposed_facets) != expected_facets
-        or tuple(cell.intervals for cell in boundary_cells)
-        != tuple(sorted(expected_boundary))
-    ):
-        raise _validation_error(
-            "boundary_subcomplex_claim_invalid",
-            "the exposed facets and boundary must equal the source incidence result",
-        )
-
-
-def _revalidate_boundary_cells(
-    cells: object,
-    ambient_dimension: int,
-    name: str,
-    *,
-    allow_empty: bool = False,
-) -> tuple[CubicalCell, ...]:
-    if (
-        type(cells) is not tuple
-        or (not allow_empty and not cells)
-        or len(cells) > MAX_FACE_CELLS
-    ):
-        raise _validation_error(
-            "boundary_subcomplex_cells_shape",
-            f"{name} must be a bounded canonical tuple of cubical cells",
-        )
-    checked: list[CubicalCell] = []
-    for cell in cells:
-        if type(cell) is not CubicalCell:
+    def require_structural_boundary(self) -> Self:
+        source = self.complex
+        boundary = self.boundary
+        if source.ambient_dimension != boundary.ambient_dimension:
             raise _validation_error(
-                "boundary_subcomplex_cell_invalid",
-                f"every {name} entry must be a CubicalCell",
+                "boundary_subcomplex_ambient_axis",
+                "the boundary and source must retain one ambient axis",
             )
-        intervals = cell.intervals
-        if (
-            type(intervals) is not tuple
-            or len(intervals) != ambient_dimension
-            or any(
-                type(interval) is not tuple
-                or len(interval) != 2
-                or type(interval[0]) is not int
-                or type(interval[1]) is not int
-                for interval in intervals
+        families = (source.cells, boundary.cells, self.exposed_facets)
+        if not source.cells:
+            raise _validation_error(
+                "boundary_subcomplex_source_empty",
+                "the source complex must be nonempty",
             )
+        for name, cells in zip(
+            ("source", "boundary", "exposed facets"), families, strict=True
         ):
-            raise _validation_error(
-                "boundary_subcomplex_cell_invalid",
-                f"every {name} entry must satisfy the canonical cubical-cell shape",
-            )
-        if max(
-            _cubical_coordinate_digits(endpoint)
-            for interval in intervals
-            for endpoint in interval
-        ) > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS:
+            if any(
+                type(cell) is not CubicalCell
+                or len(cell.intervals) != source.ambient_dimension
+                or any(
+                    type(interval) is not tuple
+                    or len(interval) != 2
+                    or type(interval[0]) is not int
+                    or type(interval[1]) is not int
+                    or interval[0] > interval[1]
+                    or interval[1] - interval[0] > 1
+                    for interval in cell.intervals
+                )
+                for cell in cells
+            ):
+                raise _validation_error(
+                    "boundary_subcomplex_cell_invalid",
+                    f"every {name} cell must use the retained ambient axes",
+                )
+            if tuple(sorted(cells, key=lambda cell: cell.intervals)) != cells:
+                raise _validation_error(
+                    "boundary_subcomplex_cells_not_canonical",
+                    f"{name} cells must be sorted canonically",
+                )
+            if len(set(cells)) != len(cells):
+                raise _validation_error(
+                    "boundary_subcomplex_cells_not_canonical",
+                    f"{name} cells must be distinct",
+                )
+        coordinate_digits = max(
+            (
+                _cubical_coordinate_digits(endpoint)
+                for cells in families
+                for cell in cells
+                for interval in cell.intervals
+                for endpoint in interval
+            ),
+            default=1,
+        )
+        if coordinate_digits > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS:
             raise _validation_error(
                 "boundary_subcomplex_coordinate_bound",
                 "coordinates exceed the boundary-subcomplex digit bound",
             )
-        try:
-            checked.append(CubicalCell.model_validate({"intervals": intervals}))
-        except ValueError as exc:
+        cell_bytes = source.ambient_dimension * (2 * coordinate_digits + 8) + 64
+        result_bytes = 512 + sum(map(len, families)) * cell_bytes
+        if result_bytes > MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES:
             raise _validation_error(
-                "boundary_subcomplex_cell_invalid",
-                f"every {name} entry must be a valid elementary cube",
-            ) from exc
-    if any(
-        left.intervals >= right.intervals
-        for left, right in pairwise(checked)
-    ):
-        raise _validation_error(
-            "boundary_subcomplex_cells_not_canonical",
-            f"{name} must be sorted and contain no duplicate cells",
-        )
-    return tuple(checked)
-
-
-def _cubical_coordinate_digits(value: int) -> int:
-    if abs(value).bit_length() > 4 * MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS:
-        return MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS + 1
-    return len(str(abs(value)))
-
-
-def _cubical_cell_face_intervals(
-    cell: CubicalCell,
-) -> set[tuple[tuple[int, int], ...]]:
-    return set(_cubical_face_intervals(cell.intervals))
-
-
-def _cubical_face_intervals(
-    intervals: tuple[tuple[int, int], ...],
-) -> tuple[tuple[tuple[int, int], ...], ...]:
-    choices = tuple(
-        ((lower, upper), (lower, lower), (upper, upper))
-        if lower < upper
-        else ((lower, upper),)
-        for lower, upper in intervals
-    )
-    return tuple(product(*choices))
+                "boundary_subcomplex_result_bounds",
+                "the boundary claim exceeds its bounded representation envelope",
+            )
+        return self
 
 
 class CubicalCellPosetElement(StrictModel):
@@ -417,6 +261,30 @@ class CubicalFacePosetResult(StrictModel):
             raise _validation_error(
                 "face_poset_axis_binding",
                 "face-poset labels and dimensions must bind the canonical cell axis",
+            )
+        label_by_cell = {entry.cell: entry.element for entry in self.cell_elements}
+        strict = {
+            (label_by_cell[lower], label_by_cell[upper])
+            for lower in self.complex.cells
+            for upper in self.complex.cells
+            if lower != upper
+            and lower.dimension < upper.dimension
+            and _cell_is_face(lower, upper)
+        }
+        covers = {
+            (label_by_cell[lower], label_by_cell[upper])
+            for lower in self.complex.cells
+            for upper in self.complex.cells
+            if upper.dimension == lower.dimension + 1 and _cell_is_face(lower, upper)
+        }
+        if {
+            (pair.lower, pair.upper) for pair in self.poset.strict_order_pairs
+        } != strict or {
+            (pair.lower, pair.upper) for pair in self.poset.cover_relations
+        } != covers:
+            raise _validation_error(
+                "face_poset_order_binding",
+                "the poset order and covers must be cubical face inclusion",
             )
         return self
 
@@ -496,6 +364,19 @@ class CubicalClosedStarResult(StrictModel):
                 "closed_star_source_binding",
                 "the selected cell and closed star must be bound to the source complex",
             )
+        expected = tuple(
+            candidate
+            for candidate in self.complex.cells
+            if any(
+                _cell_is_face(candidate, coface) and _cell_is_face(self.cell, coface)
+                for coface in self.complex.cells
+            )
+        )
+        if self.closed_star.cells != expected:
+            raise _validation_error(
+                "closed_star_incomplete",
+                "the closed star must contain exactly cells sharing a source coface with the selected cell",
+            )
         return self
 
 
@@ -528,6 +409,43 @@ class CubicalOneSkeletonResult(StrictModel):
             raise _validation_error(
                 "one_skeleton_vertex_map_source",
                 "every indexed vertex must map to a source zero-cell",
+            )
+        source_vertices = tuple(
+            cell for cell in self.complex.cells if cell.dimension == 0
+        )
+        vertex_index = {cell: index for index, cell in enumerate(source_vertices)}
+        expected_edges = set()
+        for edge in (cell for cell in self.complex.cells if cell.dimension == 1):
+            varying_axes = tuple(
+                axis
+                for axis, (lower, upper) in enumerate(edge.intervals)
+                if lower != upper
+            )
+            if len(varying_axes) != 1:
+                continue
+            axis = varying_axes[0]
+            endpoints = []
+            for endpoint in edge.intervals[axis]:
+                vertex = CubicalCell(
+                    intervals=tuple(
+                        (endpoint, endpoint) if coordinate == axis else interval
+                        for coordinate, interval in enumerate(edge.intervals)
+                    )
+                )
+                if vertex not in vertex_index:
+                    raise _validation_error(
+                        "one_skeleton_missing_endpoint",
+                        "every source cubical edge must have both source vertices",
+                    )
+                endpoints.append(vertex_index[vertex])
+            expected_edges.add(tuple(sorted(endpoints)))
+        if (
+            self.vertex_cells != source_vertices
+            or set(self.graph.edges) != expected_edges
+        ):
+            raise _validation_error(
+                "one_skeleton_source_binding",
+                "the graph must contain every source vertex and cubical edge",
             )
         return self
 
@@ -574,6 +492,16 @@ class CubicalSkeletonResult(StrictModel):
             raise _validation_error(
                 "skeleton_source_binding_invalid",
                 "every retained cell must belong to the source and meet the dimension bound",
+            )
+        expected = tuple(
+            cell
+            for cell in self.complex.cells
+            if cell.dimension <= self.dimension_bound
+        )
+        if self.skeleton.cells != expected:
+            raise _validation_error(
+                "skeleton_incomplete",
+                "the skeleton must contain every source cell within the dimension bound",
             )
         return self
 
@@ -632,23 +560,10 @@ class CubicalCellBirth(StrictModel):
 
 
 class CubicalProductRequest(StrictModel):
-    """Two canonical cubical complexes whose Cartesian product is requested."""
+    """Two finite elementary-cube families whose Cartesian product is requested."""
 
-    left_complex: CubicalComplex
-    right_complex: CubicalComplex
-
-    @model_validator(mode="after")
-    def require_product_dimension_bound(self) -> Self:
-        if (
-            self.left_complex.ambient_dimension
-            + self.right_complex.ambient_dimension
-            > MAX_DIM
-        ):
-            raise _validation_error(
-                "product_ambient_dimension",
-                "the product ambient dimension exceeds the supported bound",
-            )
-        return self
+    left_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
+    right_cells: tuple[CubicalCell, ...] = Field(min_length=1, max_length=MAX_CELLS)
 
 
 class CubicalProductResult(StrictModel):
@@ -734,7 +649,9 @@ class CubicalBitmapResult(StrictModel):
     complex: CubicalComplex
     row_count: int = Field(ge=1, le=MAX_CUBICAL_BITMAP_SIDE)
     column_count: int = Field(ge=1, le=MAX_CUBICAL_BITMAP_SIDE)
-    pixel_to_cell: tuple[CubicalBitmapPixelCell, ...] = Field(max_length=MAX_CELLS)
+    pixel_to_cell: tuple[CubicalBitmapPixelCell, ...] = Field(
+        min_length=1, max_length=MAX_CELLS
+    )
 
     @model_validator(mode="after")
     def require_bitmap_axis_and_bounds(self) -> Self:
@@ -755,6 +672,23 @@ class CubicalBitmapResult(StrictModel):
             raise _validation_error(
                 "bitmap_pixel_map_incomplete",
                 "pixel map cells must equal the complex's full set of unit squares",
+            )
+        expected_cells = {
+            CubicalCell(intervals=face)
+            for entry in self.pixel_to_cell
+            for face in product(
+                *(
+                    ((lower, lower), (lower, upper), (upper, upper))
+                    if upper > lower
+                    else ((lower, lower),)
+                    for lower, upper in entry.cell.intervals
+                )
+            )
+        }
+        if set(self.complex.cells) != expected_cells:
+            raise _validation_error(
+                "bitmap_face_closure_incomplete",
+                "the bitmap complex must contain exactly the faces of its foreground pixels",
             )
         if any(
             a < 0 or b > bound
@@ -783,19 +717,11 @@ class CubicalChainCoefficient(StrEnum):
 
 
 class CubicalChainComplexRequest(StrictModel):
-    """A finite elementary cubical complex with exact chain coefficients.
-
-    The kernel closes the supplied cells under faces once during admission;
-    the request itself need only use one ambient coordinate axis.
-    """
+    """A canonical cubical value and its exact chain coefficients."""
 
     complex: CubicalComplex
     coefficient_ring: CubicalChainCoefficient = CubicalChainCoefficient.INTEGER
     prime: int | None = Field(default=None, ge=2, le=MAX_CUBICAL_PRIME)
-
-    @property
-    def cells(self) -> tuple[CubicalCell, ...]:
-        return self.complex.cells
 
 
 class CubicalCellBasis(StrictModel):
@@ -858,6 +784,18 @@ class FilteredCubicalComplex(StrictModel):
                 "chain_basis_mismatch",
                 "filtered chain groups must retain the cubical cell-basis sizes",
             )
+        expected_groups = tuple(basis.cells for basis in self.cell_bases)
+        if expected_groups != _cubical_cell_groups(self.complex.cells):
+            raise _validation_error(
+                "cell_basis_not_bound",
+                "cell bases must be the canonical degree partition of the source complex",
+            )
+        _require_filtered_cubical_chain_binding(
+            self.filtered_chain_complex,
+            expected_groups,
+            self.cell_births,
+            self.critical_values,
+        )
         if tuple(entry.cell for entry in self.cell_births) != self.complex.cells:
             raise _validation_error(
                 "cell_axis_invalid",
@@ -884,6 +822,38 @@ class FilteredCubicalComplex(StrictModel):
                 "critical_values_invalid",
                 "critical values must be strictly increasing and duplicate-free",
             )
+        value_by_vertex = {
+            entry.vertex: entry.value.as_fraction() for entry in self.vertex_values
+        }
+        expected_critical = tuple(sorted(set(value_by_vertex.values())))
+        if critical != expected_critical:
+            raise _validation_error(
+                "critical_values_not_bound",
+                "critical values must be exactly the distinct source vertex values",
+            )
+        for birth in self.cell_births:
+            choices = tuple(
+                (lower,) if lower == upper else (lower, upper)
+                for lower, upper in birth.cell.intervals
+            )
+            vertices = tuple(
+                CubicalCell(
+                    intervals=tuple((coordinate, coordinate) for coordinate in point)
+                )
+                for point in product(*choices)
+            )
+            maximum = max(value_by_vertex[vertex] for vertex in vertices)
+            maximizers = tuple(
+                vertex for vertex in vertices if value_by_vertex[vertex] == maximum
+            )
+            if (
+                birth.value.as_fraction() != maximum
+                or birth.maximizing_vertices != maximizers
+            ):
+                raise _validation_error(
+                    "lower_star_birth_not_bound",
+                    "each cell birth and maximizing vertices must match its vertex values",
+                )
         if any(
             tuple(
                 sorted(
@@ -945,32 +915,175 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
                 "top_cell_birth_axis_invalid",
                 "cell births must follow the canonical complex cell axis",
             )
-        if any(entry.cell not in self.complex.cells for entry in self.top_cell_values):
+        maximal = tuple(
+            cell
+            for cell in self.complex.cells
+            if not any(
+                cell != candidate and _cell_is_face(cell, candidate)
+                for candidate in self.complex.cells
+            )
+        )
+        if tuple(entry.cell for entry in self.top_cell_values) != maximal:
             raise _validation_error(
                 "top_cell_value_source_invalid",
-                "top-cell values must be attached to source-complex cells",
+                "top-cell values must cover the canonical maximal-cell axis",
             )
-        if any(
-            coface not in self.complex.cells
-            for birth in self.cell_births
-            for coface in birth.minimizing_top_cells
+        value_by_cell = {
+            entry.cell: entry.value.as_fraction() for entry in self.top_cell_values
+        }
+        if tuple(value.as_fraction() for value in self.critical_values) != tuple(
+            sorted(set(value_by_cell.values()))
         ):
             raise _validation_error(
-                "top_cell_witness_invalid",
-                "birth witnesses must belong to the source complex",
+                "top_cell_critical_values_invalid",
+                "critical values must be exactly the distinct maximal-cell values",
             )
+        for birth in self.cell_births:
+            containing = tuple(top for top in maximal if _cell_is_face(birth.cell, top))
+            minimum = min(value_by_cell[top] for top in containing)
+            witnesses = tuple(
+                top for top in containing if value_by_cell[top] == minimum
+            )
+            if (
+                birth.value.as_fraction() != minimum
+                or birth.minimizing_top_cells != witnesses
+            ):
+                raise _validation_error(
+                    "top_cell_birth_not_bound",
+                    "each cell birth and witness set must match its maximal cofaces",
+                )
         basis_sizes = tuple(len(basis.cells) for basis in self.cell_bases)
+        expected_groups = _cubical_cell_groups(self.complex.cells)
+        if (
+            tuple(basis.dimension for basis in self.cell_bases)
+            != tuple(range(len(self.cell_bases)))
+            or tuple(basis.cells for basis in self.cell_bases) != expected_groups
+        ):
+            raise _validation_error(
+                "top_cell_basis_not_bound",
+                "cell bases must be the canonical degree partition of the source complex",
+            )
         if self.filtered_chain_complex.complex.basis_sizes != basis_sizes:
             raise _validation_error(
                 "top_cell_chain_basis_mismatch",
                 "filtered chains must retain the cubical degree-basis sizes",
             )
+        _require_filtered_cubical_chain_binding(
+            self.filtered_chain_complex,
+            expected_groups,
+            self.cell_births,
+            self.critical_values,
+        )
         if self.filtered_chain_complex.complex.prime is None:
             raise _validation_error(
                 "top_cell_chain_field_missing",
                 "filtered cubical chains must retain their finite-field modulus",
             )
         return self
+
+
+def _cubical_cell_groups(
+    cells: tuple[CubicalCell, ...],
+) -> tuple[tuple[CubicalCell, ...], ...]:
+    top = max(cell.dimension for cell in cells)
+    groups: list[list[CubicalCell]] = [[] for _ in range(top + 1)]
+    for cell in cells:
+        groups[cell.dimension].append(cell)
+    return tuple(tuple(group) for group in groups)
+
+
+def _rank_mod_prime(rows: tuple[tuple[int, ...], ...], prime: int) -> int:
+    if not rows:
+        return 0
+    matrix = [[entry % prime for entry in row] for row in rows]
+    pivot_row = 0
+    for column in range(len(matrix[0])):
+        pivot = next(
+            (index for index in range(pivot_row, len(matrix)) if matrix[index][column]),
+            None,
+        )
+        if pivot is None:
+            continue
+        matrix[pivot_row], matrix[pivot] = matrix[pivot], matrix[pivot_row]
+        inverse = pow(matrix[pivot_row][column], -1, prime)
+        matrix[pivot_row] = [(entry * inverse) % prime for entry in matrix[pivot_row]]
+        for index in range(len(matrix)):
+            if index == pivot_row:
+                continue
+            scale = matrix[index][column]
+            if scale:
+                matrix[index] = [
+                    (entry - scale * pivot_entry) % prime
+                    for entry, pivot_entry in zip(
+                        matrix[index], matrix[pivot_row], strict=True
+                    )
+                ]
+        pivot_row += 1
+        if pivot_row == len(matrix):
+            break
+    return pivot_row
+
+
+def _require_filtered_cubical_chain_binding(
+    filtered: FilteredChainComplex,
+    groups: tuple[tuple[CubicalCell, ...], ...],
+    births: tuple[CubicalCellBirth | CubicalTopCellBirth, ...],
+    critical_values: tuple[CanonicalRational, ...],
+) -> None:
+    """Bind a cubical filtration carrier to its source cells and boundaries."""
+    chain = filtered.complex
+    if chain.degree_min != 0 or chain.degree_max != len(groups) - 1:
+        raise _validation_error(
+            "chain_degree_axis_not_bound",
+            "filtered cubical chains must retain the source degree axis",
+        )
+    prime = chain.prime
+    if prime is None:
+        raise _validation_error(
+            "chain_field_missing", "filtered cubical chains require a prime field"
+        )
+    expected_differentials = []
+    for degree in range(1, len(groups)):
+        row_for = {cell: index for index, cell in enumerate(groups[degree - 1])}
+        matrix = [[0] * len(groups[degree]) for _ in groups[degree - 1]]
+        for column, cell in enumerate(groups[degree]):
+            intervals = cell.intervals
+            axes = [
+                axis for axis, (lower, upper) in enumerate(intervals) if upper > lower
+            ]
+            for position, axis in enumerate(axes):
+                lower, upper = intervals[axis]
+                sign = 1 if position % 2 == 0 else -1
+                for coordinate, coefficient in ((upper, sign), (lower, -sign)):
+                    face_intervals = list(intervals)
+                    face_intervals[axis] = (coordinate, coordinate)
+                    face = CubicalCell(intervals=tuple(face_intervals))
+                    matrix[row_for[face]][column] += coefficient
+        expected_differentials.append(
+            tuple(tuple(entry % prime for entry in row) for row in matrix)
+        )
+    if chain.differential_matrices != tuple(expected_differentials):
+        raise _validation_error(
+            "chain_differential_not_bound",
+            "filtered chain differentials must equal the source cubical boundaries",
+        )
+    birth_by_cell = {birth.cell: birth.value.as_fraction() for birth in births}
+    for critical, level in zip(critical_values, filtered.filtration, strict=True):
+        bound = critical.as_fraction()
+        for group, subspace in zip(groups, level.subspaces, strict=True):
+            expected = tuple(
+                tuple(1 if index == basis_index else 0 for index in range(len(group)))
+                for basis_index, cell in enumerate(group)
+                if birth_by_cell[cell] <= bound
+            )
+            combined = (*expected, *subspace.vectors)
+            if _rank_mod_prime(expected, prime) != _rank_mod_prime(
+                subspace.vectors, prime
+            ) or _rank_mod_prime(combined, prime) != len(expected):
+                raise _validation_error(
+                    "filtration_not_bound",
+                    "filtration levels must span exactly the cells born by each critical value",
+                )
 
 
 class CubicalSquareLedgerEntry(StrictModel):
@@ -1041,6 +1154,9 @@ __all__ = [
     "MAX_CUBICAL_BITMAP_PIXELS",
     "MAX_CUBICAL_BITMAP_RESULT_SIZE",
     "MAX_CUBICAL_BITMAP_SIDE",
+    "MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_COORDINATE_DIGITS",
+    "MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_RESULT_BYTES",
+    "MAX_CUBICAL_BOUNDARY_SUBCOMPLEX_WORK",
     "MAX_CUBICAL_CHAIN_CELLS",
     "MAX_CUBICAL_CHAIN_GROUP",
     "MAX_CUBICAL_CLOSED_STAR_COORDINATE_DIGITS",
@@ -1052,7 +1168,10 @@ __all__ = [
     "MAX_CUBICAL_FACE_POSET_RESULT_SIZE",
     "MAX_CUBICAL_PRIME",
     "MAX_CUBICAL_PRODUCT_RESULT_SIZE",
+    "MAX_CUBICAL_SKELETON_RESULT_SIZE",
+    "MAX_CUBICAL_TRIANGULATION_RESULT_BYTES",
     "MAX_DIM",
+    "MAX_FACE_CELLS",
     "MAX_LOWER_STAR_CELLS",
     "MAX_LOWER_STAR_COORDINATE_DIGITS",
     "MAX_LOWER_STAR_FILTER_VECTOR_ENTRIES",
@@ -1060,9 +1179,9 @@ __all__ = [
     "MAX_LOWER_STAR_RESULT_SIZE",
     "MAX_LOWER_STAR_VALUE_DIGITS",
     "MAX_LOWER_STAR_VERTICES",
-    "MAX_TRIANGULATION_CELL_SIMPLICES",
+    "MAX_TRIANGULATION_FACE_CANDIDATES",
     "MAX_TRIANGULATION_POINTS",
-    "MAX_TRIANGULATION_SIMPLICES",
+    "MAX_TRIANGULATION_SOURCE_CELLS",
     "CubicalBitmapPixelCell",
     "CubicalBitmapRequest",
     "CubicalBitmapResult",
@@ -1078,6 +1197,7 @@ __all__ = [
     "CubicalClosedStarResult",
     "CubicalComplex",
     "CubicalComplexRequest",
+    "CubicalComplexValueRequest",
     "CubicalFacePosetResult",
     "CubicalLowerStarRequest",
     "CubicalProductRequest",

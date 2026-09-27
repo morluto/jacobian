@@ -5,8 +5,7 @@ from pydantic import ValidationError
 
 from jacobian.math.topology.cubical_complexes._models import (
     CubicalCell,
-    CubicalComplex,
-    CubicalComplexRequest,
+    CubicalComplexValueRequest,
     FaceClosureRequest,
     FaceClosureResult,
     FVectorResult,
@@ -48,11 +47,8 @@ class TestFaceClosure:
 class TestFVector:
     def test_single_square(self) -> None:
         result = f_vector(
-            CubicalComplexRequest(
-                complex=CubicalComplex(
-                    ambient_dimension=2,
-                    cells=(CubicalCell(intervals=((0, 1), (0, 1))),),
-                )
+            CubicalComplexValueRequest(
+                complex=face_closure((CubicalCell(intervals=((0, 1), (0, 1))),)).complex
             ).complex
         )
         assert result.f_vector.dimension_axis == (0, 1, 2)

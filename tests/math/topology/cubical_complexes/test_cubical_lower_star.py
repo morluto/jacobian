@@ -227,6 +227,22 @@ def test_lower_star_rejects_missing_or_extra_vertex_values() -> None:
         )
 
 
+def test_decoded_lower_star_must_retain_source_boundary_and_birth_filtration() -> None:
+    interval = _cell(((0, 1),))
+    result = _lower_star(_request((interval,), {(0,): Fraction(0), (1,): Fraction(0)}))
+    payload = result.model_dump(mode="python")
+    payload["filtered_chain_complex"]["complex"]["differential_matrices"] = (
+        ((0,), (0,)),
+    )
+    with pytest.raises(ValidationError, match="source cubical boundaries"):
+        FilteredCubicalComplex.model_validate(payload)
+
+    payload = result.model_dump(mode="python")
+    payload["filtered_chain_complex"]["filtration"][0]["subspaces"][1]["vectors"] = ()
+    with pytest.raises(ValidationError, match="cells born by each critical value"):
+        FilteredCubicalComplex.model_validate(payload)
+
+
 def test_lower_star_preflights_filtered_chain_levels_and_face_growth() -> None:
     interval_chain = tuple(_cell(((index, index + 1),)) for index in range(9))
     too_many_levels = {(index,): Fraction(index) for index in range(10)}

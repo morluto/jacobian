@@ -93,6 +93,15 @@ def test_absent_cell_and_wrong_axis_are_rejected():
     )
 
 
+def test_native_closed_star_revalidates_constructed_cells() -> None:
+    malformed = CubicalCell.model_construct(intervals=((0, 2),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        operations.closed_star((_cell((0, 1)),), malformed)
+    assert error.value.errors()[0]["type"] == (
+        "cubical_complex.closed_star_invalid_cell"
+    )
+
+
 def test_digit_and_output_bounds_reject_before_face_expansion(monkeypatch):
     def fail_if_expanded(*_args, **_kwargs):
         raise AssertionError("face expansion ran before admission")

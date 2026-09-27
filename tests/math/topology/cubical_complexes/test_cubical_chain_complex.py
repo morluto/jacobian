@@ -26,7 +26,10 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalComplex,
 )
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
-from jacobian.math.topology.cubical_complexes.operations import chain_complex
+from jacobian.math.topology.cubical_complexes.operations import (
+    chain_complex,
+    face_closure,
+)
 
 _EDGE = (CubicalCell(intervals=((0, 1),)),)
 _SQUARE = (CubicalCell(intervals=((0, 1), (0, 1))),)
@@ -205,13 +208,21 @@ class TestResourceAdmission:
 class TestCatalogParity:
     def test_native_matches_catalog_entry(self) -> None:
         request = CubicalChainComplexRequest(
-            complex=CubicalComplex(ambient_dimension=2, cells=_SQUARE),
+            complex=face_closure(_SQUARE).complex,
             coefficient_ring=CubicalChainCoefficient.PRIME_FIELD,
             prime=5,
         )
         assert _tool_result(request) == chain_complex(
             request.complex, request.coefficient_ring, request.prime
         )
+
+    def test_void_subcomplex_retains_ambient_chain_axes(self) -> None:
+        request = CubicalChainComplexRequest(
+            complex=CubicalComplex(ambient_dimension=3, cells=())
+        )
+        result = chain_complex(request.complex)
+        assert result.complex == request.complex
+        assert result.value.basis_sizes == (0, 0, 0, 0)
 
     def test_examples_execute(self) -> None:
         tool = next(

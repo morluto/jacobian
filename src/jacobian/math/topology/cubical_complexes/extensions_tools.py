@@ -4,7 +4,7 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_CELLS,
-    MAX_CUBICAL_BITMAP_RESULT_BYTES,
+    MAX_CUBICAL_BITMAP_RESULT_SIZE,
     MAX_CUBICAL_BITMAP_SIDE,
 )
 from jacobian.math.topology.cubical_complexes.extensions import *
@@ -37,8 +37,8 @@ TOOLS = (
             "then return the complete cubical face closure. Rows and columns "
             f"are each bounded to {MAX_CUBICAL_BITMAP_SIDE}, foreground pixels "
             f"to {MAX_CELLS}, and the conservative result encoding to "
-            f"{MAX_CUBICAL_BITMAP_RESULT_BYTES} bytes. An all-background bitmap "
-            "returns the empty complex on the ordered (column, row) axes."
+            f"{MAX_CUBICAL_BITMAP_RESULT_SIZE} bytes. All-background bitmaps "
+            "are rejected because the current CubicalComplex type is nonempty."
         ),
         request_type=CubicalBitmapRequest,
         result_type=CubicalBitmapResult,
@@ -84,36 +84,57 @@ TOOLS = (
                 name="square_mod_boundary",
                 description="Compute relative homology of a square modulo its full boundary; the supplied subcomplex must be contained in the ambient face closure.",
                 input={
-                    "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    "subcomplex_cells": [
-                        {"intervals": [[0, 0], [0, 1]]},
-                        {"intervals": [[1, 1], [0, 1]]},
-                        {"intervals": [[0, 1], [0, 0]]},
-                        {"intervals": [[0, 1], [1, 1]]},
-                    ],
+                    "complex": {
+                        "ambient_dimension": 2,
+                        "cells": [
+                            {"intervals": [[0, 0], [0, 0]]},
+                            {"intervals": [[0, 0], [0, 1]]},
+                            {"intervals": [[0, 0], [1, 1]]},
+                            {"intervals": [[0, 1], [0, 0]]},
+                            {"intervals": [[0, 1], [0, 1]]},
+                            {"intervals": [[0, 1], [1, 1]]},
+                            {"intervals": [[1, 1], [0, 0]]},
+                            {"intervals": [[1, 1], [0, 1]]},
+                            {"intervals": [[1, 1], [1, 1]]},
+                        ],
+                    },
+                    "subcomplex": {
+                        "ambient_dimension": 2,
+                        "cells": [
+                            {"intervals": [[0, 0], [0, 0]]},
+                            {"intervals": [[0, 0], [0, 1]]},
+                            {"intervals": [[0, 0], [1, 1]]},
+                            {"intervals": [[0, 1], [0, 0]]},
+                            {"intervals": [[0, 1], [1, 1]]},
+                            {"intervals": [[1, 1], [0, 0]]},
+                            {"intervals": [[1, 1], [0, 1]]},
+                            {"intervals": [[1, 1], [1, 1]]},
+                        ],
+                    },
                     "prime": 2,
                 },
             ),
         ),
     ),
     MathTool(
-        operation_id="cubical.triangulation.compute",
-        title="Triangulate finite cubical cells",
-        description="Return the deterministic staircase triangulation of each source cube and its ambient lattice-point axis.",
+        operation_id="topology.cubical_complex.standard_triangulation.compute",
+        title="Triangulate a cubical complex",
+        description=(
+            "Return the canonical finite simplicial complex from the "
+            "Freudenthal staircase triangulation of every maximal source cube. "
+            "The result retains exact lattice coordinates for each simplicial "
+            "vertex and the target simplex family for each source cube. Input "
+            "and output growth are bounded before triangulation expansion."
+        ),
         request_type=CubicalTriangulationRequest,
         result_type=CubicalTriangulationResult,
         run=_triangulate,
         tags=("topology", "cubical", "triangulation", "exact"),
         examples=(
             OperationExample(
-                name="square_staircase",
-                description="Triangulate one unit square by its two staircase triangles; source intervals must be unit lattice intervals.",
-                input={
-                    "complex": {
-                        "ambient_dimension": 2,
-                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    }
-                },
+                name="square_freudenthal_triangulation",
+                description="Triangulate one unit square into its two canonical path triangles and return a composable finite simplicial complex.",
+                input=_SQUARE,
             ),
         ),
     ),

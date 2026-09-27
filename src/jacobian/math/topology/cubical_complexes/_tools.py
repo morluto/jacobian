@@ -19,6 +19,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     CubicalClosedStarRequest,
     CubicalClosedStarResult,
     CubicalComplexRequest,
+    CubicalComplexValueRequest,
     CubicalFacePosetResult,
     CubicalLowerStarRequest,
     CubicalOneSkeletonResult,
@@ -51,7 +52,7 @@ from jacobian.math.topology.cubical_complexes.operations import (
 )
 
 
-def _f_vector(request: CubicalComplexRequest) -> FVectorResult:
+def _f_vector(request: CubicalComplexValueRequest) -> FVectorResult:
     return f_vector(request.complex)
 
 
@@ -78,7 +79,7 @@ def _boundary_subcomplex(
 
 
 def _product(request: CubicalProductRequest) -> CubicalProductResult:
-    return product(request.left_complex, request.right_complex)
+    return product(request.left_cells, request.right_cells)
 
 
 def _skeleton(request: CubicalSkeletonRequest) -> CubicalSkeletonResult:
@@ -101,13 +102,26 @@ def _one_skeleton(request: CubicalComplexRequest) -> CubicalOneSkeletonResult:
 
 # A single 2D square: [(0,1),(0,1)] + [(0,1),(1,2)] + [(1,2),(0,1)] + [(1,2),(1,2)]
 _CELLS = {
+    "cells": [
+        {"intervals": [[0, 1], [0, 1]]},
+        {"intervals": [[0, 1], [1, 2]]},
+        {"intervals": [[1, 2], [0, 1]]},
+        {"intervals": [[1, 2], [1, 2]]},
+    ]
+}
+_UNIT_SQUARE_COMPLEX = {
     "complex": {
         "ambient_dimension": 2,
         "cells": [
+            {"intervals": [[0, 0], [0, 0]]},
+            {"intervals": [[0, 0], [0, 1]]},
+            {"intervals": [[0, 0], [1, 1]]},
+            {"intervals": [[0, 1], [0, 0]]},
             {"intervals": [[0, 1], [0, 1]]},
-            {"intervals": [[0, 1], [1, 2]]},
-            {"intervals": [[1, 2], [0, 1]]},
-            {"intervals": [[1, 2], [1, 2]]},
+            {"intervals": [[0, 1], [1, 1]]},
+            {"intervals": [[1, 1], [0, 0]]},
+            {"intervals": [[1, 1], [0, 1]]},
+            {"intervals": [[1, 1], [1, 1]]},
         ],
     }
 }
@@ -140,12 +154,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "Return the four exposed edges and all four vertices of a "
                     "single unit square."
                 ),
-                input={
-                    "complex": {
-                        "ambient_dimension": 2,
-                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    }
-                },
+                input={"cells": [{"intervals": [[0, 1], [0, 1]]}]},
             ),
         ),
     ),
@@ -213,12 +222,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "Compute the inclusion order of the square and its four edges "
                     "and four vertices."
                 ),
-                input={
-                    "complex": {
-                        "ambient_dimension": 2,
-                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    }
-                },
+                input=_CELLS,
             ),
         ),
     ),
@@ -247,12 +251,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 description=(
                     "Project a unit square to its four vertex and four boundary-edge graph."
                 ),
-                input={
-                    "complex": {
-                        "ambient_dimension": 2,
-                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    }
-                },
+                input=_CELLS,
             ),
         ),
     ),
@@ -410,14 +409,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "output is an interval on the concatenated coordinate axes."
                 ),
                 input={
-                    "left_complex": {
-                        "ambient_dimension": 1,
-                        "cells": [{"intervals": [[0, 1]]}],
-                    },
-                    "right_complex": {
-                        "ambient_dimension": 1,
-                        "cells": [{"intervals": [[5, 5]]}],
-                    },
+                    "left_cells": [{"intervals": [[0, 1]]}],
+                    "right_cells": [{"intervals": [[5, 5]]}],
                 },
             ),
         ),
@@ -428,16 +421,16 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description="Compute the f-vector (cell counts by dimension) and Euler "
         "characteristic of a finite cubical complex composed of "
         "elementary unit lattice cubes.",
-        request_type=CubicalComplexRequest,
+        request_type=CubicalComplexValueRequest,
         result_type=FVectorResult,
         run=_f_vector,
         tags=("topology", "cubical", "exact"),
         examples=(
             OperationExample(
-                name="four_squares",
-                description="Compute the f-vector of four unit squares forming a 2x2 grid; "
+                name="unit_square_f_vector",
+                description="Compute the f-vector of one unit square and all of its faces; "
                 "each interval must be unit length (b = a + 1).",
-                input=_CELLS,
+                input=_UNIT_SQUARE_COMPLEX,
             ),
         ),
     ),
@@ -463,8 +456,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="topology.cubical_complex.chain_complex.compute",
         title="Compute the oriented cubical chain complex",
-        description="Close a finite family of elementary integer-lattice cubes "
-        "under every cubical face, then construct the exact based chain complex "
+        description="Construct the exact based chain complex of a canonical "
+        "cubical value, including the void subcomplex, "
         "with oriented cubical boundary "
         "dQ = sum_j (-1)^(j-1) (Q_j^+ - Q_j^-) over ZZ or GF(p). Returns the "
         "canonical per-dimension cell bases, the chain complex value, and a "
@@ -488,26 +481,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="unit_square_integer_chain_complex",
                 description="Build the integer cubical chain complex of one unit "
-                "square (4 vertices, 4 edges, 1 square); faces are closed "
-                "automatically and intervals must be unit length (b = a + 1).",
-                input={
-                    "complex": {
-                        "ambient_dimension": 2,
-                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    }
-                },
+                "square and its complete face closure.",
+                input=_UNIT_SQUARE_COMPLEX,
             ),
             OperationExample(
                 name="unit_square_mod_two_chain_complex",
                 description="Build the GF(2) cubical chain complex of the same "
                 "unit square with boundary coefficients reduced modulo two.",
                 input={
-                    "complex": {
-                        "ambient_dimension": 2,
-                        "cells": [{"intervals": [[0, 1], [0, 1]]}],
-                    },
+                    **_UNIT_SQUARE_COMPLEX,
                     "coefficient_ring": "GF_p",
                     "prime": 2,
+                },
+            ),
+            OperationExample(
+                name="void_subcomplex_chain_complex",
+                description="Retain the ambient three-dimensional axes of the void subcomplex.",
+                input={
+                    "complex": {"ambient_dimension": 3, "cells": []},
                 },
             ),
         ),

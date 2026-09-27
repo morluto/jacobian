@@ -156,7 +156,9 @@ those parents. The unit-group levels are bounded by 2,048, and the exact map
 comparison is admitted before its residue scan.
 
 The character-valued `V_d` image retains its source coordinates and a finite
-q-prefix in the inflated target space. Decoding this authored image recomputes
-the admitted source prefix and checks every retained coefficient against
-`f(q^d)`; the output prefix is not trusted from parent and length metadata
-alone.
+q-prefix in the inflated target space. Decoding checks its structural parent
+and inflation binding without running the basis computation. A consumer that
+relies on caller-authored coefficients must call
+`require_modular_character_v_degeneracy_image` to recompute the admitted source
+prefix and check every retained coefficient against `f(q^d)`; parent and
+length metadata alone do not establish the coefficient claim.

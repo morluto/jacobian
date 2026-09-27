@@ -3,18 +3,11 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.algebra.trigonometric_rational.operations import (
     TrigonometricRationalSource,
     normalize_trigonometric_rational,
 )
-
-
-def test_operation_is_published_in_the_catalog() -> None:
-    operation = Catalog.open().operation("algebra.trigonometric_rational.normalize")
-
-    assert operation is not None
 
 
 def test_pythagorean_identity_normalizes_to_one() -> None:

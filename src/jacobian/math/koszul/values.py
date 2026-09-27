@@ -8,9 +8,10 @@ the free ``R``-module on the ``C(c, k)`` wedge basis elements
 ``e_{i_1} ^ ... ^ e_{i_k}`` with ``i_1 < ... < i_k`` in canonical increasing
 order, and each differential ``d_k(e_I) = sum_j (-1)^{position(j)} f_{I_j}
 e_{I \\ {j}}`` is an exact sparse matrix bound to the ordered wedge bases.
-Based-module variants, DG-algebra structure, and sequence transforms are
-deferred; the retained scalar conversion composes with the shared based
-chain-complex homology operations when the ambient ring is exactly ``QQ``.
+Finite-dimensional commutative-algebra modules also have an exact sequence-
+derived complex, homology-dimension profile, and degree-zero quotient module.
+DG-algebra structure, sequence transforms, cycle representatives, and
+polynomial-ring module homology remain deferred.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ from jacobian.math.koszul.module_models import (
     FiniteCommutativeAlgebra,
     ModuleKoszulComplex,
     ModuleKoszulHomology,
+    ModuleKoszulHomologyDegree,
+    ModuleQuotientValue,
 )
 from jacobian.math.polynomials.values import (
     MAX_POLYNOMIAL_VARIABLES,
@@ -320,4 +323,6 @@ __all__ = [
     "KoszulDifferentialMatrix",
     "ModuleKoszulComplex",
     "ModuleKoszulHomology",
+    "ModuleKoszulHomologyDegree",
+    "ModuleQuotientValue",
 ]

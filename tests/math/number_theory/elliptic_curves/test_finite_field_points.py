@@ -3,6 +3,7 @@ import math
 
 import pytest
 import rfc8785
+from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
@@ -161,6 +162,29 @@ def test_model_isomorphism_example_projects_through_canonical_output() -> None:
     )
     assert validated.isomorphic is True
     assert validated.scaling is not None
+
+
+@pytest.mark.parametrize("scaling_value", [0, 2])
+def test_model_isomorphism_result_rejects_a_forged_scaling(
+    scaling_value: int,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    forged = {
+        "source": curve.model_dump(mode="python"),
+        "target": curve.model_dump(mode="python"),
+        "isomorphic": True,
+        "scaling": FiniteFieldElement(
+            presentation=field, coordinates=(scaling_value,)
+        ).model_dump(mode="python"),
+    }
+    with pytest.raises(ValidationError, match="scaling must be nonzero and carry"):
+        FiniteFieldIsomorphismResult.model_validate(forged)
 
 
 def test_model_isomorphism_bounds_complete_search_before_field_arithmetic(
@@ -832,6 +856,21 @@ def test_extension_count_example_projects_with_typed_output() -> None:
     )
     assert validated.counts[0].cardinality == 9
     assert validated.counts[1].cardinality == 27
+
+
+def test_extension_count_result_rejects_forged_recurrence_value() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    result = finite_field_extension_counts(curve, 2)
+    forged = result.model_dump(mode="python")
+    forged["counts"][1]["cardinality"] += 1
+    with pytest.raises(ValidationError, match="exact Frobenius recurrence"):
+        FiniteFieldExtensionCountsResult.model_validate(forged)
 
 
 def test_native_curve_consumers_reject_missing_authored_fields() -> None:

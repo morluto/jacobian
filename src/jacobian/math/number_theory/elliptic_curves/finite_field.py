@@ -645,7 +645,40 @@ class FiniteFieldExtensionCountsResult(StrictModel):
     curve: FiniteFieldShortWeierstrassCurve
     base_cardinality: ExactInteger = Field(ge=1)
     base_trace: ExactInteger
-    counts: tuple[FiniteFieldExtensionCount, ...]
+    counts: tuple[FiniteFieldExtensionCount, ...] = Field(
+        min_length=1, max_length=MAX_FROBENIUS_EXTENSION_DEGREE
+    )
+
+    @model_validator(mode="after")
+    def require_frobenius_count_relations(self) -> Self:
+        q = self.curve.field.characteristic**self.curve.field.degree
+        if (
+            len(self.counts) > MAX_FROBENIUS_EXTENSION_DEGREE
+            or self.base_cardinality != q + 1 - self.base_trace
+            or tuple(entry.degree for entry in self.counts)
+            != tuple(range(1, len(self.counts) + 1))
+        ):
+            raise _validation_error(
+                "extension_count_relation",
+                "extension counts must be consecutive and match the base trace",
+            )
+        power_sums = [2]
+        if self.counts:
+            power_sums.append(self.base_trace)
+        for _ in range(2, len(self.counts) + 1):
+            power_sums.append(
+                self.base_trace * power_sums[-1] - q * power_sums[-2]
+            )
+        if any(
+            entry.frobenius_power_sum != power_sums[entry.degree]
+            or entry.cardinality != q**entry.degree + 1 - power_sums[entry.degree]
+            for entry in self.counts
+        ):
+            raise _validation_error(
+                "extension_count_relation",
+                "extension counts must satisfy the exact Frobenius recurrence",
+            )
+        return self
 
 
 class FiniteFieldIsogenyClassRequest(StrictModel):
@@ -723,6 +756,41 @@ class FiniteFieldIsomorphismResult(StrictModel):
             raise _validation_error(
                 "isomorphism_field_mismatch", "scaling must use the common curve field"
             )
+        if self.scaling is not None:
+            field = self.source.field
+            scaling = _coordinates(self.scaling)
+            zero = (0,) * field.degree
+            source_a, source_b = (
+                _coordinates(self.source.coefficient_a),
+                _coordinates(self.source.coefficient_b),
+            )
+            target_a, target_b = (
+                _coordinates(self.target.coefficient_a),
+                _coordinates(self.target.coefficient_b),
+            )
+            if (
+                len(scaling) != field.degree
+                or len(source_a) != field.degree
+                or len(source_b) != field.degree
+                or len(target_a) != field.degree
+                or len(target_b) != field.degree
+                or scaling == zero
+            ):
+                raise _validation_error(
+                    "isomorphism_scaling_relation",
+                    "scaling must be nonzero and carry both source coefficients to the target",
+                )
+            u2 = _multiply(field, scaling, scaling)
+            u4 = _multiply(field, u2, u2)
+            u6 = _multiply(field, u4, u2)
+            if (
+                _multiply(field, u4, source_a) != target_a
+                or _multiply(field, u6, source_b) != target_b
+            ):
+                raise _validation_error(
+                    "isomorphism_scaling_relation",
+                    "scaling must be nonzero and carry both source coefficients to the target",
+                )
         return self
 
 

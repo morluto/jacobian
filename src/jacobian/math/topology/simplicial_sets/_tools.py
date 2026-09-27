@@ -35,6 +35,9 @@ from jacobian.math.topology.simplicial_sets.product_tools import TOOLS as PRODUC
 from jacobian.math.topology.simplicial_sets.quotient_tools import (
     TOOLS as QUOTIENT_TOOLS,
 )
+from jacobian.math.topology.simplicial_sets.skeleton_tools import (
+    TOOLS as SKELETON_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 from jacobian.math.topology.simplicial_sets.standard_tools import (
     TOOLS as STANDARD_TOOLS,
@@ -80,6 +83,7 @@ _IDENTITY_DELTA_ONE_MAP = {
 
 TOOLS = (
     *STANDARD_TOOLS,
+    *SKELETON_TOOLS,
     *CHAIN_TOOLS,
     *COMPLEX_CONVERSION_TOOLS,
     *PRODUCT_TOOLS,

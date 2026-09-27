@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
@@ -38,6 +38,13 @@ class TruncatedLaurentWindow(StrictModel):
     variable: PolynomialVariable = Field(
         default="t", description="The single local parameter."
     )
+    place: Literal["FINITE", "INFINITY"] = Field(
+        default="FINITE",
+        description=(
+            "Expansion place. FINITE uses t = x - center; INFINITY uses "
+            "t = 1/x and requires center = 0."
+        ),
+    )
     center: CanonicalRational = Field(
         default=CanonicalRational(num=0, den=1),
         description="Rational expansion center; the local parameter is x - center.",
@@ -54,6 +61,11 @@ class TruncatedLaurentWindow(StrictModel):
 
     @model_validator(mode="after")
     def require_dense_window(self) -> Self:
+        if self.place == "INFINITY" and self.center.as_fraction() != 0:
+            raise _validation_error(
+                "infinity_center",
+                "an expansion at infinity uses the reciprocal parameter and center zero",
+            )
         if self.precision < self.valuation_lower:
             raise _validation_error(
                 "empty_window",

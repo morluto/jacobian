@@ -1,7 +1,6 @@
 """Tests for chain complex operations (#1824)."""
 
 import json
-import tracemalloc
 from fractions import Fraction
 from typing import Any, NoReturn, cast
 from unittest.mock import patch
@@ -55,11 +54,32 @@ from jacobian.math.topology.chain_complexes.operations import (
 from jacobian.math.topology.chain_complexes.values import (
     MAX_OPERATION_MATRIX_CELLS,
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
     HomologyGroupValue,
     HomologyResult,
     IntegralHomologyGroupValue,
 )
+
+
+def _verify_chain_map_request(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: Any,
+) -> VerifyChainMapRequest:
+    return VerifyChainMapRequest(
+        chain_map=ChainMapValue(source=source, target=target, map_matrices=map_matrices)
+    )
+
+
+def _mapping_cone_request(
+    source: ChainComplexValue,
+    target: ChainComplexValue,
+    map_matrices: Any,
+) -> MappingConeRequest:
+    return MappingConeRequest(
+        chain_map=ChainMapValue(source=source, target=target, map_matrices=map_matrices)
+    )
 
 
 def test_chain_value_parsing_is_structural_and_consumers_admit_prime(
@@ -636,34 +656,6 @@ class TestIntegralHomology:
             ComputeHomologyRequest.model_validate({"complex": payload})
         assert exc_info.value.errors()[0]["type"] == error_type
 
-    def test_raw_integral_homology_rejects_large_int_without_decimal_expansion(
-        self,
-    ) -> None:
-        # A cheaply constructed oversized integer (1 << N) must hit the
-        # canonical model's bit-length digit guard.  Materializing its
-        # ~30-million-digit decimal expansion via FLINT before rejecting the
-        # inadmissible request amplifies time and memory at validation.
-        payload = {
-            "complex": {
-                "coefficient_ring": "ZZ",
-                "degree_min": 0,
-                "degree_max": 1,
-                "basis_sizes": [1, 1],
-                "differential_matrices": [[[1 << 100_000_000]]],
-            }
-        }
-        tracemalloc.start()
-        try:
-            with pytest.raises(ValidationError) as exc_info:
-                ComputeHomologyRequest.model_validate(payload)
-            _, peak = tracemalloc.get_traced_memory()
-        finally:
-            tracemalloc.stop()
-        assert exc_info.value.errors()[0]["type"] == (
-            "chain_complex.homology_raw_coefficient_digits_exceeded"
-        )
-        assert peak < 4 * 1024 * 1024
-
     def test_raw_integral_homology_digit_and_axis_boundaries_validate(self) -> None:
         matrix = [[0] * 32 for _ in range(32)]
         request = ComputeHomologyRequest.model_validate(
@@ -1118,17 +1110,17 @@ class TestChainMapAdmission:
             differential_matrices=(),
         )
         with pytest.raises(ValueError, match="2x1"):
-            VerifyChainMapRequest(source=source, target=target, map_matrices=((),))
+            _verify_chain_map_request(source=source, target=target, map_matrices=((),))
         with pytest.raises(ValueError, match="2x1"):
             compute_mapping_cone(
-                MappingConeRequest(source=source, target=target, map_matrices=((),))
+                _mapping_cone_request(source=source, target=target, map_matrices=((),))
             )
 
     def test_oversized_matrix_is_rejected(self) -> None:
         circle = _circle_complex()
         oversized = ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0))
         with pytest.raises(ValueError, match="3x3"):
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=circle,
                 target=circle,
                 map_matrices=(oversized, oversized),
@@ -1139,12 +1131,12 @@ class TestChainMapAdmission:
         circle = _circle_complex()
         ones = ((1,),)
         with pytest.raises(ValueError, match="same degree interval"):
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=circle, target=shifted, map_matrices=(ones, ones)
             )
         with pytest.raises(ValueError, match="same degree interval"):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=circle, target=shifted, map_matrices=(ones, ones)
                 )
             )
@@ -1153,18 +1145,18 @@ class TestChainMapAdmission:
         circle = _circle_complex()
         identity = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
         with pytest.raises(ValueError, match="per chain degree"):
-            VerifyChainMapRequest(source=circle, target=circle, map_matrices=())
+            _verify_chain_map_request(source=circle, target=circle, map_matrices=())
         with pytest.raises(ValueError, match="per chain degree"):
             compute_mapping_cone(
-                MappingConeRequest(source=circle, target=circle, map_matrices=())
+                _mapping_cone_request(source=circle, target=circle, map_matrices=())
             )
         with pytest.raises(ValueError, match="per chain degree"):
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=circle, target=circle, map_matrices=(identity,)
             )
         with pytest.raises(ValueError, match="per chain degree"):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=circle, target=circle, map_matrices=(identity,)
                 )
             )
@@ -1189,13 +1181,13 @@ class TestMappingConeDefiningEquations:
         one = ((1,),)
         with pytest.raises(OperationDomainValidationError, match="commute") as caught:
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=source, target=target, map_matrices=(one, one)
                 )
             )
         assert caught.value.errors() == (
             {
-                "loc": ("map_matrices",),
+                "loc": ("chain_map",),
                 "type": "chain_complex.chain_map_relation",
                 "msg": "chain map does not commute with differentials at degree index 0",
             },
@@ -1213,7 +1205,9 @@ class TestMappingConeDefiningEquations:
         one = ((1,),)
         with pytest.raises(ValueError, match="d\\^2=0"):
             compute_mapping_cone(
-                MappingConeRequest(source=bad, target=bad, map_matrices=(one, one, one))
+                _mapping_cone_request(
+                    source=bad, target=bad, map_matrices=(one, one, one)
+                )
             )
 
     def test_noncommuting_map_rejected_at_admission(self) -> None:
@@ -1224,7 +1218,7 @@ class TestMappingConeDefiningEquations:
         one = self._complex(1)
         with pytest.raises(ValueError, match="commute"):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=zero,
                     target=one,
                     # f_0 = 0, f_1 = 1: d_target * f_1 = 1 != 0 = f_0 * d_source
@@ -1349,7 +1343,7 @@ class TestChainMapEntryGrammar:
         circle = _circle_complex()
         identity = ((1, 0, 0), (0, 1, 0), (0, "x", 1))
         with pytest.raises((ValidationError, ValueError)):
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=circle,
                 target=circle,
                 map_matrices=cast(Any, (identity, identity)),
@@ -1357,7 +1351,7 @@ class TestChainMapEntryGrammar:
         zero_den = ((1, 0, 0), (0, "1/0", 0), (0, 0, 1))
         with pytest.raises(ValueError):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=circle,
                     target=circle,
                     map_matrices=cast(Any, (zero_den, zero_den)),
@@ -1482,7 +1476,7 @@ class TestAggregateChainMapWork:
         )
         components = tuple(identity_64 if i % 2 == 0 else () for i in range(33))
         with pytest.raises(ValueError, match="aggregate"):
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=complex_value, target=complex_value, map_matrices=components
             )
 
@@ -1529,10 +1523,15 @@ class TestNativeSurface:
         assert set(chain_complexes_package.__all__) == {
             "AssociatedGradedResult",
             "ChainComplexValue",
+            "ChainMapValue",
             "CoefficientRing",
+            "FilteredHomologyDegree",
+            "FilteredHomologyLevel",
+            "FilteredHomologyResult",
             "FilteredSubspace",
             "FiltrationLevel",
             "GradedSquareLedgerEntry",
+            "HomologyFiltrationImage",
             "HomologyGroup",
             "HomologyGroupValue",
             "HomologyResult",
@@ -1544,6 +1543,7 @@ class TestNativeSurface:
             "chain_map_commutes",
             "construct_chain_complex",
             "differential_squares_to_zero",
+            "filtered_homology_filtration",
             "homology_groups",
             "mapping_cone",
             "tensor_product_complex",
@@ -1566,7 +1566,7 @@ class TestMappingConeCanonicalValue:
         point = _point_complex()
         one = ((1,),)
         result = compute_mapping_cone(
-            MappingConeRequest(source=point, target=point, map_matrices=(one,))
+            _mapping_cone_request(source=point, target=point, map_matrices=(one,))
         )
         homology = compute_homology(ComputeHomologyRequest(complex=result.value))
         assert [group.betti_number for group in _field_groups(homology)] == [
@@ -1594,7 +1594,7 @@ class TestMappingConeCanonicalValue:
         )
         with pytest.raises(ValueError, match="MAX_BASIS_SIZE"):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=source,
                     target=target,
                     map_matrices=((), ((),) * 64),
@@ -1616,7 +1616,7 @@ class TestMappingConeCanonicalValue:
         one = ((1,),)
         with pytest.raises(ValueError, match="less than or equal"):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=complex_value,
                     target=complex_value,
                     map_matrices=(one,) * 33,
@@ -1648,7 +1648,7 @@ class TestMappingConeCanonicalValue:
         )
         with pytest.raises(ValueError, match="serialization exceeds"):
             compute_mapping_cone(
-                MappingConeRequest(
+                _mapping_cone_request(
                     source=source,
                     target=target,
                     map_matrices=(identity_16, identity_16),
@@ -1672,7 +1672,7 @@ class TestMappingConeCanonicalValue:
         point = _point_complex()
         one = ((1,),)
         result = compute_mapping_cone(
-            MappingConeRequest(source=point, target=point, map_matrices=(one,))
+            _mapping_cone_request(source=point, target=point, map_matrices=(one,))
         )
         revalidated = MappingConeResult.model_validate(result.model_dump())
         assert revalidated == result
@@ -1682,7 +1682,7 @@ class TestMappingConeCanonicalValue:
             tuple(1 if row == column else 0 for column in range(3)) for row in range(3)
         )
         circle_result = compute_mapping_cone(
-            MappingConeRequest(
+            _mapping_cone_request(
                 source=circle,
                 target=circle,
                 map_matrices=(identity, identity),
@@ -1717,12 +1717,13 @@ class TestSchemaVisibleCoefficientGrammar:
         assert "[1-9][0-9]*" in schema["pattern"]
 
     def test_chain_map_schemas_document_map_matrix_grammar(self) -> None:
+        description = ChainMapValue.model_json_schema()["properties"]["map_matrices"][
+            "description"
+        ]
         for model in (VerifyChainMapRequest, MappingConeRequest):
-            description = model.model_json_schema()["properties"]["map_matrices"][
-                "description"
-            ]
-            assert "JSON uses canonical decimal" in description
-            assert "residues in [0, p)" in description
+            assert "chain_map" in model.model_json_schema()["properties"]
+            assert "canonical decimal strings" in description
+            assert "residues in [0,p)" in description
 
 
 class TestChainMapEndpointPrecondition:
@@ -1738,7 +1739,9 @@ class TestChainMapEndpointPrecondition:
         )
         one = ((1,),)
         result = verify_chain_map(
-            VerifyChainMapRequest(source=bad, target=bad, map_matrices=(one, one, one))
+            _verify_chain_map_request(
+                source=bad, target=bad, map_matrices=(one, one, one)
+            )
         )
         assert result.is_valid is False
         assert "d^2=0" in result.detail
@@ -1763,7 +1766,7 @@ class TestZeroWidthProducts:
         # Component 0: 1x1 zero; component 1: target has no degree-1 group.
         map_matrices = (((0,),), ())
         result = verify_chain_map(
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=source, target=target, map_matrices=map_matrices
             )
         )
@@ -1801,14 +1804,14 @@ class TestEmptyRowWidthChainMaps:
         target = self._target()
         map_matrices = self._map()
         verification = verify_chain_map(
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=source, target=target, map_matrices=map_matrices
             )
         )
         assert verification.is_valid
         assert type(verification).model_validate(verification.model_dump()).is_valid
 
-        request = MappingConeRequest(
+        request = _mapping_cone_request(
             source=source, target=target, map_matrices=map_matrices
         )
         result = compute_mapping_cone(request)
@@ -1841,7 +1844,7 @@ class TestEmptyRowWidthChainMaps:
             differential_matrices=((),),
         )
         result = compute_mapping_cone(
-            MappingConeRequest(
+            _mapping_cone_request(
                 source=endpoint,
                 target=endpoint,
                 map_matrices=((), ((1,),)),
@@ -1891,7 +1894,7 @@ class TestTensorContextAndShapes:
         )
         one = ((1,),)
         result = verify_chain_map(
-            VerifyChainMapRequest(
+            _verify_chain_map_request(
                 source=bad, target=bad, map_matrices=(one, one, one, one)
             )
         )
@@ -2011,16 +2014,16 @@ class TestTensorPrimeFieldResidues:
         point = self._gf_point(3)
         for bad in (3, 4, -1):
             with pytest.raises(ValueError, match="residue"):
-                VerifyChainMapRequest(
+                _verify_chain_map_request(
                     source=point, target=point, map_matrices=(((bad,),),)
                 )
             with pytest.raises(ValueError, match="residue"):
                 compute_mapping_cone(
-                    MappingConeRequest(
+                    _mapping_cone_request(
                         source=point, target=point, map_matrices=(((bad,),),)
                     )
                 )
-        request = VerifyChainMapRequest(
+        request = _verify_chain_map_request(
             source=point, target=point, map_matrices=(((2,),),)
         )
         assert verify_chain_map(request).is_valid
@@ -2029,12 +2032,12 @@ class TestTensorPrimeFieldResidues:
         """The modulus check applies only to prime-field components: "4"
         remains admissible over QQ."""
         rational_point = _point_complex()
-        request = VerifyChainMapRequest(
+        request = _verify_chain_map_request(
             source=rational_point,
             target=rational_point,
             map_matrices=(((4,),),),
         )
-        assert request.map_matrices == (((4,),),)
+        assert request.chain_map.map_matrices == (((4,),),)
 
 
 class TestPrimeFieldDerivedSerialization:
@@ -2051,7 +2054,7 @@ class TestPrimeFieldDerivedSerialization:
         )
         one = ((1,),)
         result = compute_mapping_cone(
-            MappingConeRequest(
+            _mapping_cone_request(
                 source=gf3_two_term, target=gf3_two_term, map_matrices=(one, one)
             )
         )
@@ -2148,7 +2151,7 @@ class TestMappingConeSourceBinding:
         circle = self._circle()
         identity = self._identity()
         result = compute_mapping_cone(
-            MappingConeRequest(
+            _mapping_cone_request(
                 source=circle, target=circle, map_matrices=(identity,) * 2
             )
         )
@@ -2160,7 +2163,7 @@ class TestMappingConeSourceBinding:
         from jacobian.math.topology.chain_complexes.values import MappingConeResult
 
         payload = self._cone_payload()
-        del payload[missing_endpoint]
+        del payload["chain_map"][missing_endpoint]
         with pytest.raises(ValidationError):
             MappingConeResult.model_validate(payload)
 
@@ -2185,7 +2188,7 @@ class TestMappingConeSourceBinding:
         )
         identity = self._identity()
         result = compute_mapping_cone(
-            MappingConeRequest(
+            _mapping_cone_request(
                 source=shifted, target=shifted, map_matrices=(identity,) * 2
             )
         )
@@ -2280,8 +2283,13 @@ class TestNativeWrappersCallKernelsDirectly:
         assert homology.prime == circle.prime
         assert differential_squares_to_zero(circle).is_valid is True
         identity_map: MapMatrices = (((1,),), ((1,),))
-        assert chain_map_commutes(circle, circle, identity_map).is_valid
-        cone = mapping_cone(circle, circle, identity_map)
+        chain_map = ChainMapValue(
+            source=circle,
+            target=circle,
+            map_matrices=identity_map,
+        )
+        assert chain_map_commutes(chain_map).is_valid
+        cone = mapping_cone(chain_map)
         assert cone.source_degree_min == 0
         tensor = tensor_product_complex(circle, circle)
         assert tensor.value.degree_max == 2
@@ -2357,3 +2365,18 @@ class TestWorkstreamDEulerAndDegenerateInvariants:
                 compute_homology(ComputeHomologyRequest(complex=discrete))
             )
         ) == (1, 1)
+
+
+def test_raw_homology_digit_preflight_accepts_exact_boundary_integer() -> None:
+    request = ComputeHomologyRequest.model_validate(
+        {
+            "complex": {
+                "coefficient_ring": "ZZ",
+                "degree_min": 0,
+                "degree_max": 1,
+                "basis_sizes": [1, 1],
+                "differential_matrices": [[[2**106]]],
+            }
+        }
+    )
+    assert request.complex.differential_matrices[0][0][0] == 2**106

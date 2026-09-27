@@ -28,6 +28,7 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonMinimizeRequest,
     TreeAutomatonMinimizeResult,
     TreeAutomatonReachabilityRequest,
+    TreeAutomatonStateAlgebraRequest,
     TreeAutomatonTrimRequest,
     TreeAutomatonTrimResult,
     TreeDeterminizeRequest,
@@ -51,6 +52,9 @@ from jacobian.math.logic.automata.tree.operations import (
     regular_tree_grammar_to_automaton,
     trim_tree_automaton,
 )
+from jacobian.math.logic.automata.tree.state_algebra import (
+    deterministic_tree_automaton_state_algebra,
+)
 from jacobian.math.logic.automata.tree.values import (
     ReachableStateProfile,
     TreeStateChartEntry,
@@ -58,6 +62,7 @@ from jacobian.math.logic.automata.tree.values import (
     accepted_tree_count_work_bound,
     validate_ranked_tree,
 )
+from jacobian.math.universal_algebra.values import FiniteAlgebra
 
 
 def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
@@ -75,6 +80,12 @@ def compute_tree_run(request: TreeRunRequest) -> TreeRunResult:
         ),
         node_count=node_count,
     )
+
+
+def compute_tree_automaton_state_algebra(
+    request: TreeAutomatonStateAlgebraRequest,
+) -> FiniteAlgebra:
+    return deterministic_tree_automaton_state_algebra(request.automaton)
 
 
 def compute_accepted_tree_count(
@@ -542,8 +553,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Return the exact number of distinct accepted ranked trees of height "
             "at most h for every h from zero through max_height. Leaves have "
             "height zero. The operation requires a complete deterministic "
-            "bottom-up automaton; transition work, exact integer digits, and "
-            "aggregate output bytes are admitted before the recurrence runs."
+            "bottom-up automaton; transition work, per-count integer digits, and "
+            "the aggregate profile digit allocation are admitted before recurrence."
         ),
         request_type=AcceptedTreeHeightProfileRequest,
         result_type=AcceptedTreeHeightProfileResult,
@@ -705,6 +716,49 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {"nonterminal": 0, "symbol": 0, "children": []},
                             {"nonterminal": 0, "symbol": 1, "children": [0, 0]},
                         ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.deterministic.state_algebra.compute",
+        title="Construct the transition algebra of a deterministic tree automaton",
+        description=(
+            "Return the finite algebra on the complete automaton state set whose "
+            "operation tree_symbol_j is the transition function for ranked symbol "
+            "j. Carrier positions preserve every state, including unreachable "
+            "states; symbol order and arity are retained. The result excludes the "
+            "accepting-state subset, and table bounds are checked before construction."
+        ),
+        request_type=TreeAutomatonStateAlgebraRequest,
+        result_type=FiniteAlgebra,
+        run=compute_tree_automaton_state_algebra,
+        tags=("tree-automata", "universal-algebra", "exact"),
+        discovery_terms=(
+            "tree automaton state algebra",
+            "finite algebra of tree transitions",
+        ),
+        examples=(
+            OperationExample(
+                name="ranked_symbol_operations",
+                description=(
+                    "The input is complete: it has exactly one transition for each "
+                    "ranked symbol and child-state tuple. Interpret its symbols as "
+                    "operations on the full automaton state set."
+                ),
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 2],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 1},
+                            {"symbol": 1, "child_states": [0, 0], "target_state": 0},
+                            {"symbol": 1, "child_states": [0, 1], "target_state": 1},
+                            {"symbol": 1, "child_states": [1, 0], "target_state": 1},
+                            {"symbol": 1, "child_states": [1, 1], "target_state": 0},
+                        ],
+                        "final_states": [1],
                     }
                 },
             ),

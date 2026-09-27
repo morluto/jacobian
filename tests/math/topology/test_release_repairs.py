@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,6 +15,7 @@ from jacobian.math.topology._models import (
     SimplicialComplexRequest,
     canonical_complex,
 )
+from jacobian.math.topology._simplicial_kernel import canonicalize
 from jacobian.math.topology.cellular_sheaves._models import (
     FiniteCellularSheaf,
     SheafField,
@@ -49,7 +51,6 @@ from jacobian.math.topology.edge_paths._models import (
 )
 from jacobian.math.topology.edge_paths.presentation_maps import direct_relator_match
 from jacobian.math.topology.release import (
-    CliqueRequest,
     FacePosetRequest,
     HomologyManifoldRequest,
     OrientabilityRequest,
@@ -60,6 +61,10 @@ from jacobian.math.topology.release import (
 )
 from jacobian.math.topology.simplicial_sets.maps import normalized_chains
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
+
+
+def _q(value: int) -> CanonicalRational:
+    return CanonicalRational(num=value, den=1)
 
 
 def test_standard_simplex_normalized_prefix_has_square_zero_boundary() -> None:
@@ -77,33 +82,16 @@ def test_face_poset_and_clique_reconstruct_small_triangle() -> None:
     )
     poset = face_poset(request)
     assert poset.order_complex.closure_size == 25
-    clique = clique_complex(
-        CliqueRequest(
-            complex=SimplicialComplexRequest.model_validate(
-                {"vertices": ["a", "b", "c"], "facets": [["a", "b", "c"]]}
-            )
-        )
-    )
+    clique = clique_complex(canonicalize(("a", "b", "c"), (("a", "b", "c"),)).complex)
     assert clique.clique_facets == (("a", "b", "c"),)
 
 
 def test_clique_complex_expands_graph_beyond_source_dimension() -> None:
-    graph = CliqueRequest(
-        complex=SimplicialComplexRequest.model_validate(
-            {
-                "vertices": ["a", "b", "c", "d"],
-                "facets": [
-                    ["a", "b"],
-                    ["a", "c"],
-                    ["a", "d"],
-                    ["b", "c"],
-                    ["b", "d"],
-                    ["c", "d"],
-                ],
-            }
-        )
-    )
-    result = clique_complex(graph)
+    source = canonicalize(
+        ("a", "b", "c", "d"),
+        (("a", "b"), ("a", "c"), ("a", "d"), ("b", "c"), ("b", "d"), ("c", "d")),
+    ).complex
+    result = clique_complex(source)
     assert result.source.dimension == 1
     assert result.clique_facets == (("a", "b", "c", "d"),)
     assert result.clique_complex.dimension == 3
@@ -209,7 +197,7 @@ def _rank_one_interval_sheaf() -> FiniteCellularSheaf:
                 target=target,
                 row_basis=("x",),
                 column_basis=("x",),
-                entries=(("1",),),
+                entries=((_q(1),),),
                 cover_path=(source, target),
             )
             for source, target in covers[:1]
@@ -230,7 +218,7 @@ def test_sheaf_morphism_requires_a_proved_prime_field() -> None:
             target=("a", "b"),
             row_basis=("x",),
             column_basis=("x",),
-            entries=(("1",),),
+            entries=((1,),),
             cover_path=(source, ("a", "b")),
         )
         for source in (("a",), ("b",))
@@ -244,7 +232,7 @@ def test_sheaf_morphism_requires_a_proved_prime_field() -> None:
         stalks=stalks,
         cover_restrictions=restrictions,
     )
-    components = tuple((face, (("1",),)) for face in sheaf.canonical_face_order)
+    components = tuple((face, ((1,),)) for face in sheaf.canonical_face_order)
     with pytest.raises(OperationDomainValidationError, match="prime"):
         morphism(sheaf, sheaf, components)
     # Neither a serialized carrier nor a native bypass carries trusted field
@@ -269,7 +257,7 @@ def test_sheaf_morphism_uses_modular_arithmetic_and_tuple_axes() -> None:
             target=("a", "b"),
             row_basis=("x",),
             column_basis=("x",),
-            entries=(("2",),),
+            entries=((0,),),
             cover_path=(source, ("a", "b")),
         )
         for source in (("a",), ("b",))
@@ -282,10 +270,10 @@ def test_sheaf_morphism_uses_modular_arithmetic_and_tuple_axes() -> None:
         cover_restrictions=restrictions,
         comparable_pairs=2,
     )
-    components = tuple((face, (("2",),)) for face in sheaf.canonical_face_order)
+    components = tuple((face, ((0,),)) for face in sheaf.canonical_face_order)
     result = morphism(sheaf, sheaf, components)
     assert result.natural is True
-    assert all(matrix == (("0",),) for _key, matrix in result.components)
+    assert all(matrix == ((0,),) for _key, matrix in result.components)
 
 
 def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
@@ -322,15 +310,15 @@ def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
                 target=("a", "b"),
                 row_basis=("x",),
                 column_basis=("x",),
-                entries=(("0",),),
+                entries=((_q(0),),),
                 cover_path=(vertex, ("a", "b")),
             )
             for vertex in (("a",), ("b",))
         ),
     )
     components = (
-        (("a",), (("0",),)),
-        (("b",), (("0",),)),
+        (("a",), ((_q(0),),)),
+        (("b",), ((_q(0),),)),
         (("a", "b"), ((),)),
     )
 
@@ -341,8 +329,10 @@ def test_sheaf_morphism_preserves_width_through_zero_stalk() -> None:
 
 def test_sheaf_morphism_rejects_incomplete_forged_diagram() -> None:
     sheaf = _rank_one_interval_sheaf()
-    components = (("a", (("1",),)), ("b", (("1",),)), ("a.b", (("1",),)))
-    with pytest.raises(OperationDomainValidationError, match="every canonical"):
+    components = (("a", ((_q(1),),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
+    with pytest.raises(
+        OperationDomainValidationError, match="does not define a cellular sheaf"
+    ):
         morphism(sheaf, sheaf, components)
 
 
@@ -363,16 +353,16 @@ def test_sheaf_morphism_translates_malformed_scalar_to_owner_error() -> None:
                 target=("a", "b"),
                 row_basis=("x",),
                 column_basis=("x",),
-                entries=(("1",),),
+                entries=((_q(1),),),
                 cover_path=(source, ("a", "b")),
             )
             for source in (("a",), ("b",))
         ),
     )
-    components = (("a", (("bad",),)), ("b", (("1",),)), ("a.b", (("1",),)))
+    components = (("a", (("bad",),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
     with pytest.raises(OperationDomainValidationError, match="exact scalars"):
         morphism(sheaf, sheaf, components)
-    malformed: Any = (("a", ((None,),)), ("b", (("1",),)), ("a.b", (("1",),)))
+    malformed: Any = (("a", ((None,),)), ("b", ((_q(1),),)), ("a.b", ((_q(1),),)))
     with pytest.raises(OperationDomainValidationError, match="exact scalars"):
         morphism(sheaf, sheaf, malformed)
 
@@ -522,11 +512,13 @@ def test_filtered_chain_map_rejects_non_exhaustive_filtration() -> None:
     ):
         filtered_map(
             FilteredChainMapRequest(
-                source=complex_,
+                chain_map=ChainMapValue(
+                    source=complex_,
+                    target=complex_,
+                    map_matrices=(((1,),), ((1,),)),
+                ),
                 source_filtration=filtration,
-                target=complex_,
                 target_filtration=filtration,
-                maps=(((1,),), ((1,),)),
             )
         )
 

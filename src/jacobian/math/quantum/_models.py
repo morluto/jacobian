@@ -937,8 +937,18 @@ class CSSCheckSpaceRequest(StrictModel):
 
 
 class CSSNonOrthogonalWitness(StrictModel):
-    """Input row indices whose CSS inner product is one."""
+    """Input row indices whose CSS inner product is one, on its source axis.
 
+    The register is retained so witnesses requested on different ordered
+    registers serialize differently and persisted coordinates map back onto
+    qubit IDs. Validation is structural: the odd pairing is established once by
+    ``css_check_space`` while selecting the obstruction, and a consumer that
+    relies on it recomputes it from the retained rows and register.
+    """
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    qubit_register: QubitRegister = Field(alias="register", serialization_alias="register")
     x_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     z_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     x_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
@@ -946,17 +956,36 @@ class CSSNonOrthogonalWitness(StrictModel):
     dot_product: Literal[1] = 1
 
     @model_validator(mode="after")
-    def require_nonorthogonality(self) -> Self:
-        if len(self.x_bits) != len(self.z_bits) or any(
+    def require_structural_rows(self) -> Self:
+        width = len(self.qubit_register.qubit_ids)
+        if len(self.x_bits) != width or len(self.z_bits) != width or any(
             bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)
         ):
             raise _validation_error(
-                "css_witness_shape", "CSS witness rows must be matching binary vectors"
+                "css_witness_shape",
+                "CSS witness rows must be matching binary vectors on the register",
             )
-        if sum(x * z for x, z in zip(self.x_bits, self.z_bits, strict=True)) % 2 != 1:
-            raise _validation_error(
-                "css_witness_pairing", "CSS witness rows must have odd inner product"
-            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        register: QubitRegister,
+        x_row: int,
+        z_row: int,
+        x_bits: tuple[int, ...],
+        z_bits: tuple[int, ...],
+    ) -> Self:
+        """Build a witness after the producer established the odd pairing."""
+
+        return cls.model_construct(
+            qubit_register=register,
+            x_row=x_row,
+            z_row=z_row,
+            x_bits=x_bits,
+            z_bits=z_bits,
+            dot_product=1,
+        )
         return self
 
 

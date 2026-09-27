@@ -12,6 +12,7 @@ from jacobian._models import StrictModel
 from jacobian.math.topology.chain_complexes.values import (
     ChainCoefficient,
     ChainComplexValue,
+    ChainMapValue,
 )
 
 MAX_FILTER_LEVELS = 8
@@ -232,6 +233,40 @@ class SpectralPageStatus(StrEnum):
     STABILIZED = "STABILIZED"
     ACTIVE = "ACTIVE"
     TRUNCATED = "TRUNCATED"
+
+
+
+class FilteredChainComplexRequest(StrictModel):
+    """Request wrapper binding one filtered chain complex to its carrier."""
+
+    complex: ChainComplexValue
+    filtration: tuple[FiltrationLevel, ...] = Field(
+        min_length=1,
+        max_length=MAX_FILTER_LEVELS,
+        description=(
+            "Increasing filtration levels from bottom to top; the final level "
+            "must span every chain group."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_request_shape(self) -> Self:
+        # Reuse the established value contract so the request and the value
+        # admit exactly the same structural filtration.
+        FilteredChainComplex(complex=self.complex, filtration=self.filtration)
+        return self
+
+
+class FilteredChainMapRequest(StrictModel):
+    """Request wrapper binding one filtered chain map to its two filtrations."""
+
+    chain_map: ChainMapValue
+    source_filtration: tuple[FiltrationLevel, ...] = Field(
+        min_length=1, max_length=MAX_FILTER_LEVELS
+    )
+    target_filtration: tuple[FiltrationLevel, ...] = Field(
+        min_length=1, max_length=MAX_FILTER_LEVELS
+    )
 
 
 class SpectralPageRequest(StrictModel):
@@ -475,6 +510,8 @@ class SpectralPageResult(StrictModel):
 
 
 __all__ = [
+    "FilteredChainComplexRequest",
+    "FilteredChainMapRequest",
     "MAX_FILTER_AMBIENT_DIMENSION",
     "MAX_FILTER_LEVELS",
     "MAX_FILTER_VECTORS_PER_GROUP",

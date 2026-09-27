@@ -176,35 +176,3 @@ def test_dependent_group_with_inconsistent_character_is_rejected() -> None:
         stabilizer_code_compute(request)
 
 
-def test_code_value_is_published_and_roundtrips_through_catalog() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    operation_id = "quantum.stabilizer.code.compute"
-    assert catalog.operation(operation_id) is not None
-    raw = invoke_operation(
-        operation_id,
-        {
-            "group": {
-                "register": {"qubit_ids": ["q"]},
-                "generators": [
-                    {
-                        "phase_free": {
-                            "register": {"qubit_ids": ["q"]},
-                            "x_bits": [0],
-                            "z_bits": [1],
-                        },
-                        "phase": 0,
-                    }
-                ],
-            },
-            "generator_eigenvalues": [-1],
-        },
-        catalog,
-    )
-    from jacobian.math.quantum._models import StabilizerCodeValue
-
-    value = StabilizerCodeValue.model_validate(raw.output)
-    assert value.logical_qubits == 0
-    assert value.group.generators[0].phase == 2

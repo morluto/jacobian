@@ -44,7 +44,6 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
     ModularCharacterQExpansion,
     ModularCharacterSpaceInclusion,
     ModularCharacterTransportedForm,
-    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_transport import (
     modular_character_coordinates_equal_in_common_space,
@@ -98,7 +97,6 @@ __all__ = [
     "ModularCharacterQExpansion",
     "ModularCharacterSpaceInclusion",
     "ModularCharacterTransportedForm",
-    "ModularCharacterUPrimeRequest",
     "ModularFormAtkinLehnerTarget",
     "ModularFormBasis",
     "ModularFormChangeOfBasisFrame",

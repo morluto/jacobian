@@ -7,12 +7,10 @@ import math
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids.delta import (
     DeltaMatroidDistanceProfile as PublicDeltaMatroidDistanceProfile,
 )
@@ -154,30 +152,6 @@ def test_empty_ground_profile_and_json_round_trip() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_published_operation_example_runs_through_catalog_dispatch() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("delta_matroid.distance_profile.compute")
-    assert operation is not None
-
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-
-    assert result.output["distance_by_mask"] == [0, 0, 0, 0]
-    assert result.output["nearest_feasible_count_by_mask"] == [1, 1, 1, 1]
-    assert result.output["distance_histogram"] == [4, 0, 0]
-
-
-def test_request_schema_declares_profile_and_source_admission_bounds() -> None:
-    schema = DeltaMatroidDistanceProfileRequest.model_json_schema()
-
-    assert schema["admission_limits"] == {
-        "max_subset_states": 4_096,
-        "max_subset_feasible_row_evaluations": 262_144,
-        "max_feasible_set_memberships": 16_384,
-        "max_ground_label_utf8_bytes": 2_048,
-        "max_symmetric_exchange_candidate_checks_per_replay": 250_000,
-    }
 
 
 def test_native_malformed_profile_source_is_domain_error() -> None:

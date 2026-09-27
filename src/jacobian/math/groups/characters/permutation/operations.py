@@ -9,7 +9,7 @@ from pydantic import ConfigDict, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -193,7 +193,7 @@ class PermutationCharacterRequest(StrictModel):
                             "groups.characters.permutation.action_generator_shape",
                             "action generators must match the admitted domain size",
                         )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_admitted_action(self) -> PermutationCharacterRequest:

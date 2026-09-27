@@ -3,7 +3,7 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology.chain_complexes._filtered_models import (
-    FilteredChainComplexRequest,
+    FilteredChainComplex,
 )
 from jacobian.math.topology.chain_complexes.filtered_extensions import *
 
@@ -51,7 +51,7 @@ TOOLS = (
             "an incoming chain whose boundary relates it to the retained global "
             "homology representative."
         ),
-        request_type=FilteredChainComplexRequest,
+        request_type=FilteredChainComplex,
         result_type=FilteredHomologyResult,
         run=_homology_filtration,
         tags=("homological", "filtered", "homology", "exact"),

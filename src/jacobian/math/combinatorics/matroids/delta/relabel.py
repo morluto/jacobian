@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from typing import Self
 
 from pydantic import ConfigDict, Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -122,46 +121,11 @@ class DeltaMatroidRelabelRequest(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def preflight_source_bounds(cls, data: object) -> object:
-        if not isinstance(data, Mapping):
-            return data
-        target_ground = data.get("target_ground")
-        if (
-            isinstance(target_ground, (list, tuple))
-            and len(target_ground) > MAX_DELTA_RELABEL_GROUND
-        ):
-            raise _error(
-                "ground_limit",
-                f"relabeling supports at most {MAX_DELTA_RELABEL_GROUND} ground elements",
-            )
+    def canonicalize_wire_containers(cls, data: object) -> object:
+        """Accept strict-JSON arrays for the nested source and axis carriers."""
 
-        source = data.get("delta_matroid")
-        if not isinstance(source, Mapping):
-            return data
-
-        ground = source.get("ground")
-        if isinstance(ground, (list, tuple)) and len(ground) > MAX_DELTA_RELABEL_GROUND:
-            raise _error(
-                "ground_limit",
-                f"relabeling supports at most {MAX_DELTA_RELABEL_GROUND} ground elements",
-            )
-
-        rows = source.get("feasible")
-        if isinstance(rows, (list, tuple)):
-            if len(rows) > MAX_DELTA_MEMBERSHIPS + 1:
-                raise _error(
-                    "source_membership_limit",
-                    "source feasible-row count exceeds the relabel admission envelope",
-                )
-            memberships = 0
-            for row in rows:
-                if isinstance(row, (list, tuple)):
-                    memberships += len(row)
-                    if memberships > MAX_DELTA_MEMBERSHIPS:
-                        raise _error(
-                            "source_membership_limit",
-                            "source feasible-set memberships exceed the relabel admission envelope",
-                        )
+        if isinstance(data, dict):
+            return canonicalize_json_containers(data)
         return data
 
     @model_validator(mode="after")
@@ -188,13 +152,9 @@ class DeltaMatroidRelabelRequest(StrictModel):
         label_sizes = tuple(_bounded_utf8_length(label) for label in self.target_ground)
         if any(size is None for size in label_sizes):
             raise _error("ground_utf8", "target labels must be UTF-8 representable")
-        if (
-            sum(size for size in label_sizes if size is not None)
-            > MAX_DELTA_LABEL_BYTES
-        ):
-            raise _error(
-                "ground_bytes", "target labels exceed the admitted UTF-8 byte bound"
-            )
+        # The aggregate UTF-8 byte ceiling is a native admission bound, not a
+        # structural shape rule, so it is charged at the operation boundary and
+        # keeps its resource classification across the wire.
         return self
 
 
@@ -272,15 +232,6 @@ def relabel(
         )
     except Exception as exc:
         if isinstance(exc, ValidationError) and any(
-            error["type"] == "delta_matroid.relabel_ground_limit"
-            for error in exc.errors()
-        ):
-            raise OperationDomainValidationError(
-                location=("target_ground",),
-                code="delta_matroid.relabel_ground_limit",
-                message="target ground exceeds the relabelling limit",
-            ) from exc
-        if isinstance(exc, ValidationError) and any(
             error["type"] == "delta_matroid.relabel_ground_bytes"
             for error in exc.errors()
         ):
@@ -294,6 +245,15 @@ def relabel(
             code="delta_matroid.relabel_request",
             message="relabeling request is malformed",
         ) from exc
+    label_sizes = tuple(_bounded_utf8_length(label) for label in request.target_ground)
+    if any(size is not None for size in label_sizes) and sum(
+        size for size in label_sizes if size is not None
+    ) > MAX_DELTA_LABEL_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("target_ground",),
+            code="delta_matroid.relabel_target_bytes",
+            message="target labels exceed the admitted UTF-8 byte bound",
+        )
     try:
         system = FiniteFeasibleSetSystem(
             ground=request.delta_matroid.ground,

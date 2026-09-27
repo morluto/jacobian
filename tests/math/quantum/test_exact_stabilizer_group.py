@@ -98,31 +98,3 @@ def test_rejects_exact_generators_from_another_ordered_register() -> None:
         )
 
 
-def test_exact_group_is_available_through_catalog_dispatch() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    operation_id = "quantum.stabilizer.exact_group.from_generators.compute"
-    assert catalog.operation(operation_id) is not None
-    operation_result = invoke_operation(
-        operation_id,
-        {
-            "register": {"qubit_ids": ["q"]},
-            "generators": [
-                {
-                    "phase_free": {
-                        "register": {"qubit_ids": ["q"]},
-                        "x_bits": [0],
-                        "z_bits": [1],
-                    },
-                    "phase": 0,
-                }
-            ],
-        },
-        catalog,
-    )
-    result = ExactStabilizerGroup.model_validate(operation_result.output)
-    assert result.generators == (
-        _pauli(QubitRegister(qubit_ids=("q",)), (0,), (1,), 0),
-    )

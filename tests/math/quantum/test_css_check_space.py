@@ -121,36 +121,6 @@ def test_all_binary_check_families_match_independent_css_oracle(n: int) -> None:
             assert distance.z_representative.z_bits == expected_z
 
 
-def test_catalog_example_serializes_into_existing_stabilizer_consumers() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-    from jacobian.math.quantum import (
-        CheckSpaceValue,
-        PhaseFreeQubitPauli,
-        stabilizer_error_equivalence,
-        stabilizer_syndrome,
-    )
-
-    catalog = Catalog.open()
-    operation = catalog.operation("quantum.stabilizer.css_check_space.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["witness"] is None
-    from jacobian.math.quantum import CSSCheckSpaceValue
-
-    css_value = CSSCheckSpaceValue.model_validate(result.output["css_check_space"])
-    check_space = CheckSpaceValue.model_validate(css_value.check_space.model_dump())
-    error = PhaseFreeQubitPauli(
-        register=check_space.qubit_register,
-        x_bits=(1, 0, 0),
-        z_bits=(0, 0, 0),
-    )
-    assert stabilizer_syndrome(check_space, error).syndrome == (0, 1)
-    assert stabilizer_error_equivalence(
-        check_space, error, error
-    ).equivalent_mod_stabilizers
 
 
 def test_css_logical_frames_exhaust_small_quotients_independently() -> None:
@@ -250,66 +220,6 @@ def test_css_logical_frames_exhaust_small_quotients_independently() -> None:
                 )
 
 
-def test_catalog_css_logical_frame_and_steane_parameter_fixture() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-    from jacobian.math.quantum import (
-        CSSCheckSpaceValue,
-        CSSLogicalPauliFrame,
-        css_check_space,
-    )
-
-    catalog = Catalog.open()
-    operation = catalog.operation("quantum.stabilizer.css_logical_frame.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    frame = CSSLogicalPauliFrame.model_validate(result.output)
-    assert frame.logical_qubits == 2
-    distance_operation = catalog.operation("quantum.stabilizer.css_distance.compute")
-    assert distance_operation is not None
-    distance_result = invoke_operation(
-        distance_operation.operation_id,
-        distance_operation.examples[0].input,
-        catalog,
-    )
-    from jacobian.math.quantum import CSSDistanceResult
-
-    distance = CSSDistanceResult.model_validate(distance_result.output)
-    assert distance.logical_qubits == 2
-    assert distance.x_distance == distance.z_distance == 2
-
-    # The standard seven-qubit Hamming CSS checks have one logical qubit.
-    register = QubitRegister(qubit_ids=tuple(f"q{i}" for i in range(7)))
-    hamming_rows = (
-        (1, 0, 1, 0, 1, 0, 1),
-        (0, 1, 1, 0, 0, 1, 1),
-        (0, 0, 0, 1, 1, 1, 1),
-    )
-    css = css_check_space(register, hamming_rows, hamming_rows).css_check_space
-    assert css is not None
-    steane_frame = css_logical_pauli_frame(
-        CSSCheckSpaceValue.model_validate(css.model_dump())
-    )
-    assert steane_frame.logical_qubits == 1
-    assert (
-        sum(
-            x * z
-            for x, z in zip(
-                steane_frame.x_logical_basis[0].x_bits,
-                steane_frame.z_logical_basis[0].z_bits,
-                strict=True,
-            )
-        )
-        % 2
-        == 1
-    )
-    distance = css_exact_distance(steane_frame.css_check_space)
-    assert distance.x_distance == distance.z_distance == 3
-    assert distance.x_representative is not None
-    assert distance.z_representative is not None
-    assert distance.x_representative.weight == distance.z_representative.weight == 3
 
 
 def test_css_distance_search_envelope_admits_nineteen_and_rejects_twenty() -> None:

@@ -5,7 +5,6 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidRankMultiplier,
     MatroidWeightedIntersectionOptimizationResult,
     MatroidWeightedIntersectionRankCertificateResult,
-    MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.graphic import graphic_matroid
@@ -37,7 +36,6 @@ __all__ = [
     "MatroidWeightFunction",
     "MatroidWeightedIntersectionOptimizationResult",
     "MatroidWeightedIntersectionRankCertificateResult",
-    "MatroidWeightedIntersectionResult",
     "graphic_matroid",
     "matroid_closure",
     "matroid_common_basis",

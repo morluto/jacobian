@@ -8,8 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.automata.transducers import (
-    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     invert_rational,

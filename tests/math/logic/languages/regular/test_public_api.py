@@ -12,7 +12,6 @@ def test_exact_public_api_symbols() -> None:
         "NFA",
         "AutomatonTransition",
         "DFATransition",
-        "FiniteAlphabet",
         "FiniteLabeledAutomaton",
         "NFATransition",
         "SymbolParikhCell",

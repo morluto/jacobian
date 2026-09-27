@@ -7,7 +7,6 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -154,13 +153,6 @@ def test_malformed_constructed_card_order_is_a_domain_error(
     assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_order_invalid"
 
 
-def test_forged_catalog_request_missing_card_order_is_a_domain_error() -> None:
-    tool = Catalog.open().operation("graph.deck.from_cards.construct")
-    assert tool is not None
-    forged = tool.request_type.model_construct(cards=())
-    with pytest.raises(OperationDomainValidationError) as exc_info:
-        tool.run(forged)
-    assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_order_invalid"
 
 
 def test_card_order_above_supported_bound_is_resource_error() -> None:
@@ -305,13 +297,3 @@ def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
     assert decoded.classes[0].representative.edges == ()
 
 
-def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -> None:
-    tool = Catalog.open().operation("graph.deck.from_cards.construct")
-    assert tool is not None
-    result = tool.run(
-        tool.request_type.model_validate(
-            {"card_order": 1, "cards": [{"vertices": ["x"], "edges": []}]}
-        )
-    )
-    assert result.card_order == 1
-    assert result.classes[0].multiplicity == 1

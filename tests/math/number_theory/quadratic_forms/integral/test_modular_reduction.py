@@ -12,11 +12,13 @@ from jacobian.math.number_theory.quadratic_forms.integral._models import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral.modular import (
     ModularCoordinateVector,
-    ModularEvaluationRequest,
     ModularQuadraticCrossTerm,
     ModularQuadraticPolynomial,
     evaluate_modular_form,
     reduce_integral_form_modulus,
+)
+from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
+    ModularEvaluationRequest,
 )
 
 

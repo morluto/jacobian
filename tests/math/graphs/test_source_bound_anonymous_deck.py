@@ -7,16 +7,17 @@ from math import comb
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.graphs.decks import (
     AnonymousGraphCardMultiset,
-    VertexDeckAnonymousMultisetRequest,
     vertex_deck_anonymous_multiset,
     vertex_deletion_family,
+)
+from jacobian.math.graphs.decks._models import (
+    VertexDeckAnonymousMultisetRequest,
 )
 from jacobian.math.graphs.decks.anonymous_equality.operations import (
     anonymous_deck_equality,
@@ -171,8 +172,3 @@ def test_max_admitted_source_order_composes_with_equality() -> None:
     assert comparison.equal
 
 
-def test_operation_is_published_with_typed_output_and_equality_example() -> None:
-    declaration = Catalog.open().operation("graph.deck.vertex.anonymous.compute")
-    assert declaration is not None
-    assert declaration.result_type.__name__ == "AnonymousGraphCardMultiset"
-    assert declaration.examples

@@ -57,7 +57,6 @@ __all__ = [
     "RealNumberFieldEmbedding",
     "SimpleNumberFieldElement",
     "SimpleNumberFieldEmbedding",
-    "SimpleNumberFieldEmbeddingRequest",
     "SimpleNumberFieldEmbeddingResult",
     "SimpleNumberFieldPresentation",
     "SimpleNumberFieldRealEmbeddingBinding",

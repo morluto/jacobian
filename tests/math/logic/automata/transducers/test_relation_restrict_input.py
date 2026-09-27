@@ -6,8 +6,8 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.automata.transducers import (
-    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     restrict_rational_input,

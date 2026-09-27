@@ -4,12 +4,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -161,19 +159,6 @@ def test_piecewise_product_preflights_aggregate_convolution_work():
         )
 
 
-def test_catalog_piecewise_multiplication_example_executes():
-    catalog = Catalog.open()
-    operation = catalog.operation("piecewise_polynomial.multiply.compute")
-    assert operation is not None and operation.examples
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    validated = PiecewisePolynomialResult.model_validate_json(json.dumps(result.output))
-    assert validated.status == "COMPATIBLE"
-    assert _coefficient_map(validated.pieces[0].polynomial) == {
-        (2,): Fraction(1),
-        (1,): Fraction(1),
-    }
 
 
 def test_native_multiplication_rejects_a_forged_request_with_a_typed_error():

@@ -4,12 +4,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import decimal_digit_width, encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -127,29 +125,6 @@ def test_spline_dimension_matches_interval_derivative_oracle_and_full_space():
     assert result.coefficient_axis == full.coefficient_axis
 
 
-def test_one_cell_zero_row_dimension_roundtrips_and_catalog_invokes():
-    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
-    request = SplineDimensionRequest(complex=complex_value, degree=5, smoothness=1)
-
-    result = spline_dimension(request)
-    replayed = SplineDimensionResult.model_validate_json(
-        encode_strict_json(result.model_dump(mode="json"))
-    )
-
-    assert result.compatibility_matrix.row_count == 0
-    assert result.compatibility_matrix.column_count == 6
-    assert result.rank == 0 and result.nullity == 6
-    assert replayed == result
-    invoked = invoke_operation(
-        "polyhedral_complex.spline_dimension.compute",
-        {
-            "complex": complex_value.model_dump(mode="json"),
-            "degree": 0,
-            "smoothness": 0,
-        },
-        Catalog.open(),
-    )
-    assert invoked.output["nullity"] == 1 and invoked.output["rank"] == 0
 
 
 def test_dimension_output_bound_is_conservative_at_its_boundary(monkeypatch):

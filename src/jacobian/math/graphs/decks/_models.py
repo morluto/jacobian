@@ -10,7 +10,7 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.graphs.patterns._models import (
     MAX_INDUCED_PATTERN_TOTAL_WORK_UNITS,
 )
@@ -431,7 +431,7 @@ class VertexDeckAnonymousMultisetRequest(StrictModel):
                 "anonymous_source_order",
                 "source order exceeds the cheap structural envelope of 11 vertices",
             )
-        return value
+        return canonicalize_json_containers(value)
 
 
 class EdgeDeckRequest(StrictModel):

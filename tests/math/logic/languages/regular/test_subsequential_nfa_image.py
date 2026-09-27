@@ -12,6 +12,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubseqTransition,
     SubsequentialTransducer,
 )
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.regular import (
     nfa_membership,
     nfa_subsequential_image,

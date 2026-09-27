@@ -2905,6 +2905,19 @@ def dirichlet_character_primitive_gauss_norm(
                 primitive_character
             )
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        # A carrier whose claimed conductor disagrees with its modulus is a
+        # precise field-level contradiction, not a generic malformed value, so
+        # that relation keeps its own location and stable type.
+        if isinstance(exc, ValidationError) and any(
+            error.get("type")
+            == "dirichlet_character.primitive_character_modulus_mismatch"
+            for error in exc.errors()
+        ):
+            raise OperationDomainValidationError(
+                location=("primitive_character", "conductor"),
+                code="dirichlet_character.primitive_character_modulus_mismatch",
+                message="primitive character modulus must equal its claimed conductor",
+            ) from exc
         raise OperationDomainValidationError(
             location=("primitive_character",),
             code="dirichlet_character.primitive_character_invalid",

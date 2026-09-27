@@ -56,6 +56,27 @@ def test_global_equality_rejects_incomplete_constructed_coordinate_values() -> N
         modular_form_coordinates_equal(malformed, malformed)
 
 
+def test_global_equality_bounds_coordinate_axis_before_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    oversized = ModularFormCoordinates.model_construct(
+        space=_space(4),
+        basis_id=BASIS_ID,
+        coordinates=tuple(CanonicalRational(num=0, den=1) for _ in range(33)),
+    )
+
+    def dump_must_not_run(*args: object, **kwargs: object) -> None:
+        raise AssertionError("oversized coordinates were serialized before admission")
+
+    monkeypatch.setattr(ModularFormCoordinates, "model_dump", dump_must_not_run)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        modular_form_coordinates_equal(oversized, oversized)
+
+    assert error.value.errors()[0]["type"] == (
+        "modular_form.equality_coordinate_count_bound"
+    )
+
+
 def test_global_equality_admits_common_level_before_space_construction() -> None:
     left = ModularFormCoordinates(
         space=ModularFormSpace(level=9_973, weight=0, kind="M"),

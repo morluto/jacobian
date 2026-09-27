@@ -26,7 +26,6 @@ from jacobian.math.groups.root_systems._models import (
     RootPosetResult,
     RootToCorootResult,
     WeightLatticeVector,
-    WeylBruhatIntervalRequest,
     WeylBruhatIntervalResult,
     WeylDimensionResult,
     WeylDominantRepresentativeResult,
@@ -38,6 +37,10 @@ from jacobian.math.groups.root_systems._models import (
     WeylPoincarePolynomialResult,
     WeylVectorActionResult,
     WeylWeightOrbitResult,
+)
+from jacobian.math.groups.root_systems._weight_character_models import (
+    IrreducibleWeightCharacter,
+    WeightMultiplicity,
 )
 from jacobian.math.groups.root_systems.operations import (
     cartan_datum,
@@ -75,6 +78,7 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_weight_orbit,
     weyl_word_act_on_root_vector,
 )
+from jacobian.math.groups.root_systems.weight_character import highest_weight_character
 from jacobian.math.groups.root_systems.weyl_dimension import weyl_dimension
 
 __all__ = [
@@ -86,6 +90,7 @@ __all__ = [
     "FiniteDynkinDiagram",
     "HighestCorootComponent",
     "HighestCorootsResult",
+    "IrreducibleWeightCharacter",
     "PositiveCorootsResult",
     "PositiveRootComponentProfile",
     "PositiveRootProfileEntry",
@@ -98,7 +103,7 @@ __all__ = [
     "RootPosetResult",
     "RootToCorootResult",
     "WeightLatticeVector",
-    "WeylBruhatIntervalRequest",
+    "WeightMultiplicity",
     "WeylBruhatIntervalResult",
     "WeylDimensionResult",
     "WeylDominantRepresentativeResult",
@@ -118,6 +123,7 @@ __all__ = [
     "coxeter_polynomial",
     "dynkin_diagram",
     "highest_coroots",
+    "highest_weight_character",
     "positive_coroots",
     "positive_root_profile",
     "positive_roots",

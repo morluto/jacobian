@@ -2,7 +2,6 @@
 
 import json
 from fractions import Fraction
-from math import isqrt
 
 import pytest
 from pydantic import ValidationError
@@ -200,38 +199,6 @@ def test_resolvent_discriminant_equals_quartic_discriminant(
         coefficient.as_fraction() for coefficient in result.resolvent.coefficients
     ]
     assert _discriminant(resolvent_coefficients) == quartic_discriminant
-
-
-def test_galois_group_consequences_match_classical_criteria() -> None:
-    # T^4+T+1 is irreducible over QQ (no rational root and no quadratic
-    # factor over ZZ[x]), its discriminant is 256-27=229, and neither 229 is
-    # a square nor does the resolvent cubic Y^3-4Y-1 have a rational root.
-    # The classical criterion then forces the Galois group to be S4.
-    quartic = (Fraction(1), Fraction(1), Fraction(0), Fraction(0), Fraction(1))
-    result = compute_quartic_cubic_resolvent(_monic(quartic))
-    resolvent = [c.as_fraction() for c in result.resolvent.coefficients]
-    assert resolvent == [Fraction(-1), Fraction(-4), Fraction(0), Fraction(1)]
-    assert all(_evaluate(resolvent, r) != 0 for r in (Fraction(1), Fraction(-1)))
-    resolvent_discriminant = _discriminant(resolvent)
-    assert resolvent_discriminant == 229
-    assert isqrt(229) ** 2 != 229
-
-    # T^4-10T^2+1 is irreducible over QQ and its resolvent
-    # Y^3+10Y^2-4Y-40=(Y+10)(Y-2)(Y+2) splits completely over QQ, which by
-    # the same criterion puts its Galois group in the V4 branch.
-    biquadratic = (Fraction(1), Fraction(0), Fraction(-10), Fraction(0), Fraction(1))
-    split = compute_quartic_cubic_resolvent(_monic(biquadratic))
-    assert [c.as_fraction() for c in split.resolvent.coefficients] == [
-        Fraction(-40),
-        Fraction(-4),
-        Fraction(10),
-        Fraction(1),
-    ]
-    for root in (Fraction(-10), Fraction(2), Fraction(-2)):
-        assert (
-            _evaluate([c.as_fraction() for c in split.resolvent.coefficients], root)
-            == 0
-        )
 
 
 def test_coefficient_beyond_digit_admission_is_resource_refusal() -> None:

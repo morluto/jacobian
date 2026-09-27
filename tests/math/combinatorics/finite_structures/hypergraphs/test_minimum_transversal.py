@@ -154,7 +154,7 @@ class TestMinimumTransversal:
         assert result.cardinality == 21
         assert result.transversal == tuple(vertices)
 
-    def test_search_work_bound_exceeded(self) -> None:
+    def test_forced_singletons_are_admitted_without_residual_search(self) -> None:
         # 22 forced singletons are presolved with no residual search.
         vertices = [f"v{i}" for i in range(22)]
         result = _transversal(

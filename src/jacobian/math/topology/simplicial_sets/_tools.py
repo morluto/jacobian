@@ -16,7 +16,13 @@ from jacobian.math.topology.simplicial_sets.coproduct_tools import (
 from jacobian.math.topology.simplicial_sets.degeneracy_tools import (
     TOOLS as DEGENERACY_TOOLS,
 )
+from jacobian.math.topology.simplicial_sets.degenerate_submodule_tools import (
+    TOOLS as DEGENERATE_SUBMODULE_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.image_tools import TOOLS as IMAGE_TOOLS
+from jacobian.math.topology.simplicial_sets.map_preimage_tools import (
+    TOOLS as MAP_PREIMAGE_TOOLS,
+)
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialHomologyMapValue,
     TruncatedSimplicialMap,
@@ -83,7 +89,9 @@ TOOLS = (
     *PRODUCT_TOOLS,
     *COPRODUCT_TOOLS,
     *DEGENERACY_TOOLS,
+    *DEGENERATE_SUBMODULE_TOOLS,
     *IMAGE_TOOLS,
+    *MAP_PREIMAGE_TOOLS,
     *MAP_TOOLS,
     *TRUNCATE_TOOLS,
     *QUOTIENT_TOOLS,

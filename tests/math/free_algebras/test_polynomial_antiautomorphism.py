@@ -9,7 +9,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.free_algebras import operations
 from jacobian.math.free_algebras._models import (
     FreeAlgebraPolynomial,
@@ -240,7 +243,7 @@ def test_full_alphabet_long_monomial_admitted_and_malformed_labels_rejected() ->
     malformed = FreeAlgebraPolynomial.model_construct(
         alphabet=("x",), terms=(malformed_term,)
     )
-    with pytest.raises(OperationResourceAdmissionError):
+    with pytest.raises(OperationDomainValidationError, match="not canonical"):
         reverse_polynomial_antiautomorphism(malformed)
 
     oversized = FreeAlgebraPolynomial.model_construct(

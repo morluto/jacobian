@@ -12,7 +12,6 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeContribution,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
-    FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
     GaugeEdge,
     GaugeLattice,
@@ -323,17 +322,10 @@ def _resolve_path(
 
 
 def finite_group_gauge_holonomy(
-    request: FiniteGroupGaugeHolonomyRequest,
+    field: FiniteGroupGaugeField,
+    path: OrientedGaugePath,
 ) -> FiniteGroupGaugeHolonomyResult:
     """Compute left-to-right path product in the field's exact table parent."""
-    if not isinstance(request, FiniteGroupGaugeHolonomyRequest):
-        _reject(
-            "request",
-            "lattice_gauge.finite_group.request_type",
-            "expected a finite-group gauge holonomy request",
-        )
-    field = getattr(request, "field", None)
-    path = getattr(request, "path", None)
     if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
         path, OrientedGaugePath
     ):

@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.groups import finite_group_table
 from jacobian.math.groups._table_models import (
     FiniteGroupTable,
     FiniteGroupTableElement,
@@ -21,6 +22,13 @@ S3 = (
     (4, 3, 1, 2, 5, 0),
     (5, 2, 3, 1, 0, 4),
 )
+
+
+def test_native_table_constructor_takes_values_without_a_catalog_request() -> None:
+    group = finite_group_table(S3, 0)
+    assert group.multiplication == S3
+    assert group.identity == 0
+    assert group.inverse == (0, 1, 2, 3, 5, 4)
 
 
 def test_construct_nonabelian_s3_and_retain_parent_bound_elements() -> None:

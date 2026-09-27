@@ -19,9 +19,14 @@ from jacobian.math.groups._models import (
     PermutationGroup,
     SubgroupEntry,
 )
+from jacobian.math.groups._table_models import (
+    MAX_FINITE_TABLE_GROUP_ORDER,
+    FiniteGroupTable,
+)
 
 __all__ = [
     "element_order",
+    "finite_group_table",
     "group_conjugacy_classes",
     "group_orbit",
     "group_order",
@@ -34,6 +39,72 @@ __all__ = [
     "verify_group_stabilizer",
     "verify_subgroup_lattice",
 ]
+
+
+def finite_group_table(
+    multiplication: tuple[tuple[int, ...], ...], identity: int
+) -> FiniteGroupTable:
+    """Validate an indexed Cayley table and return its canonical group value."""
+    if (
+        type(multiplication) is not tuple
+        or not 1 <= len(multiplication) <= MAX_FINITE_TABLE_GROUP_ORDER
+        or type(identity) is not int
+        or not 0 <= identity < len(multiplication)
+        or any(
+            type(row) is not tuple
+            or len(row) != len(multiplication)
+            or any(type(value) is not int or not 0 <= value < len(multiplication) for value in row)
+            for row in multiplication
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("multiplication",),
+            code="finite_group.table.invalid_input",
+            message="table must be a bounded square tuple of valid element indices",
+        )
+    order = len(multiplication)
+    if any(
+        multiplication[identity][i] != i or multiplication[i][identity] != i
+        for i in range(order)
+    ):
+        raise OperationDomainValidationError(
+            location=("identity",),
+            code="finite_group.table.identity_law",
+            message="the proposed identity must be two-sided",
+        )
+    inverses: list[int] = []
+    for i in range(order):
+        inverse = next(
+            (
+                j
+                for j in range(order)
+                if multiplication[i][j] == identity
+                and multiplication[j][i] == identity
+            ),
+            None,
+        )
+        if inverse is None:
+            raise OperationDomainValidationError(
+                location=("multiplication",),
+                code="finite_group.table.inverse_law",
+                message="every element must have a two-sided inverse",
+            )
+        inverses.append(inverse)
+    for a in range(order):
+        for b in range(order):
+            ab = multiplication[a][b]
+            for c in range(order):
+                if multiplication[ab][c] != multiplication[a][multiplication[b][c]]:
+                    raise OperationDomainValidationError(
+                        location=("multiplication",),
+                        code="finite_group.table.associativity",
+                        message="multiplication table must be associative",
+                    )
+    return FiniteGroupTable.model_construct(
+        multiplication=multiplication,
+        identity=identity,
+        inverse=tuple(inverses),
+    )
 
 
 def _backend_group(group: PermutationGroup) -> Any:

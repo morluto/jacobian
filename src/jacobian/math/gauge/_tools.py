@@ -44,7 +44,7 @@ def _run_holonomy(request: HolonomyRequest) -> HolonomyResult:
 def _run_finite_group_holonomy(
     request: FiniteGroupGaugeHolonomyRequest,
 ) -> FiniteGroupGaugeHolonomyResult:
-    return finite_group_gauge_holonomy(request)
+    return finite_group_gauge_holonomy(request.field, request.path)
 
 
 def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformResult:

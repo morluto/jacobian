@@ -14,15 +14,22 @@ from jacobian.math.gauge import (
     GaugeLattice,
     GaugePathStep,
     OrientedGaugePath,
-    finite_group_gauge_holonomy,
 )
 from jacobian.math.gauge import finite_group as finite_group_kernel
+from jacobian.math.gauge import (
+    finite_group_gauge_holonomy as native_finite_group_gauge_holonomy,
+)
 from jacobian.math.gauge._models import FiniteGroupGaugeHolonomyRequest
 from jacobian.math.groups._table_models import (
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
 )
 from jacobian.math.groups._tools import construct_finite_group_table
+
+
+def finite_group_gauge_holonomy(request):
+    """Exercise a decoded wire envelope through the request-free kernel."""
+    return native_finite_group_gauge_holonomy(request.field, request.path)
 
 
 def _s3():
@@ -108,6 +115,7 @@ def test_noncommutative_path_order_and_serialization():
     opposite = group.multiplication[index[(1, 0, 2)]][index[(1, 2, 0)]]
     assert expected != opposite
     assert result.holonomy.index == expected
+    assert native_finite_group_gauge_holonomy(field, path) == result
     decoded = FiniteGroupGaugeHolonomyRequest.model_validate(
         FiniteGroupGaugeHolonomyRequest.model_dump(
             FiniteGroupGaugeHolonomyRequest(field=field, path=path)

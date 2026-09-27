@@ -7,6 +7,7 @@ from jacobian.math.groups._table_models import (
 )
 from jacobian.math.groups.operations import (
     element_order,
+    finite_group_table,
     group_conjugacy_classes,
     group_orbit,
     group_order,
@@ -25,6 +26,7 @@ __all__ = [
     "FiniteGroupTableElement",
     "PermutationGroup",
     "element_order",
+    "finite_group_table",
     "group_conjugacy_classes",
     "group_orbit",
     "group_order",

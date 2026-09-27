@@ -673,9 +673,7 @@ class ReachableDeadMarkingsResult(StrictModel):
     net: PetriNet
     initial_marking: Marking
     max_states: int = Field(ge=1, le=MAX_REACHABILITY_STATES)
-    dead_markings: tuple[Marking, ...] = Field(
-        max_length=MAX_REACHABILITY_STATES
-    )
+    dead_markings: tuple[Marking, ...] = Field(max_length=MAX_REACHABILITY_STATES)
     truncated: bool
 
     @model_validator(mode="after")

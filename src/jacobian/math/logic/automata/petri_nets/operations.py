@@ -1016,7 +1016,9 @@ def _explore_reachability(
     max_states: int,
     *,
     collect_edges: bool = True,
-) -> tuple[list[tuple[int, ...]], list[tuple[int, int, int]], bool, list[tuple[int, ...]]]:
+) -> tuple[
+    list[tuple[int, ...]], list[tuple[int, int, int]], bool, list[tuple[int, ...]]
+]:
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
@@ -1115,9 +1117,7 @@ def reachable_dead_markings(
     _, _, truncated, dead_states = _explore_reachability(
         net, initial_marking, max_states, collect_edges=False
     )
-    dead = tuple(
-        Marking(tokens=tokens, net=net) for tokens in sorted(dead_states)
-    )
+    dead = tuple(Marking(tokens=tokens, net=net) for tokens in sorted(dead_states))
     return ReachableDeadMarkingsResult._from_kernel(
         net=net,
         initial_marking=initial_marking,

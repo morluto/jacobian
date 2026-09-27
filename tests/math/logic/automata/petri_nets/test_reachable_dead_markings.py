@@ -64,9 +64,7 @@ def test_zero_transition_output_bound_uses_the_single_effective_state() -> None:
         pre=((),) * 64,
         post=((),) * 64,
     )
-    result = reachable_dead_markings(
-        net, Marking(tokens=(0,) * 64), max_states=100_000
-    )
+    result = reachable_dead_markings(net, Marking(tokens=(0,) * 64), max_states=100_000)
 
     assert result.dead_markings == (Marking(tokens=(0,) * 64, net=net),)
     assert result.truncated is False
@@ -75,9 +73,7 @@ def test_zero_transition_output_bound_uses_the_single_effective_state() -> None:
 def test_reachability_records_deadness_during_the_original_bfs(
     monkeypatch,
 ) -> None:
-    net = PetriNet(
-        place_count=1, transition_count=1, pre=((1,),), post=((0,),)
-    )
+    net = PetriNet(place_count=1, transition_count=1, pre=((1,),), post=((0,),))
     calls = 0
     original = petri_operations._enabled_transition_indices
 

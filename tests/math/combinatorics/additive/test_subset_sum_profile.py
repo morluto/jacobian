@@ -196,9 +196,7 @@ def test_oversized_json_list_is_rejected_before_nested_item_parsing() -> None:
     with pytest.raises(ValidationError) as error:
         SubsetSumProfileRequest.model_validate_json(json.dumps(payload))
 
-    assert (
-        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound" in error.value.errors()[0]["msg"]
-    )
+    assert error.value.errors()[0]["type"] == "additive_combinatorics.bound_raw_source"
 
 
 def test_oversized_tuple_container_is_rejected_before_nested_item_parsing() -> None:
@@ -207,9 +205,7 @@ def test_oversized_tuple_container_is_rejected_before_nested_item_parsing() -> N
     with pytest.raises(ValidationError) as error:
         SubsetSumProfileRequest.model_validate_json(json.dumps(payload))
 
-    assert (
-        f"{MAX_SUBSET_SUM_ITEMS:,}-item profile bound" in error.value.errors()[0]["msg"]
-    )
+    assert error.value.errors()[0]["type"] == "additive_combinatorics.bound_raw_source"
 
 
 def test_expensive_admissible_items_are_rejected_by_the_raw_preflight_bound() -> None:

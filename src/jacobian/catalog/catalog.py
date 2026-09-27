@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
+from functools import cache
 from typing import Any
 
 from jacobian._models import StrictModel
@@ -68,9 +69,13 @@ class Catalog:
             for operation_id, operation in self._operations.items()
         }
         self._search_index = OperationSearchIndex(tuple(self._operations.values()))
+        self._snapshot: OperationCatalogSnapshot | None = None
 
     @classmethod
+    @cache
     def open(cls) -> Catalog:
+        """Return the compiled view of the immutable built-in declarations."""
+
         return cls(BUILTIN_TOOLS)
 
     def operation(self, operation_id: str) -> MathTool[Any, Any] | None:
@@ -111,12 +116,16 @@ class Catalog:
         )
 
     def snapshot(self) -> OperationCatalogSnapshot:
-        operations = tuple(
-            _descriptor(operation) for operation in self._operations.values()
-        )
-        return OperationCatalogSnapshot(
-            operations=tuple(sorted(operations, key=lambda item: item.operation_id)),
-        )
+        if self._snapshot is None:
+            operations = tuple(
+                _descriptor(operation) for operation in self._operations.values()
+            )
+            self._snapshot = OperationCatalogSnapshot(
+                operations=tuple(
+                    sorted(operations, key=lambda item: item.operation_id)
+                ),
+            )
+        return self._snapshot.model_copy(deep=True)
 
 
 def _index_operations(

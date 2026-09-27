@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import ValidationError, model_validator
 
 from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
@@ -109,7 +109,7 @@ def _checked_carrier(
     return checked.simplicial_set
 
 
-def _preflight(request: SimplicialMapPreimageRequest) -> None:
+def _preflight(request: SimplicialMapPreimageRequest) -> tuple[TruncatedSimplicialMap, TruncatedSimplicialMap]:
     value = request.simplicial_map
     target_inclusion = request.target_subset.inclusion
     # Native callers can bypass Pydantic with model_construct/_from_kernel.
@@ -124,12 +124,17 @@ def _preflight(request: SimplicialMapPreimageRequest) -> None:
     )
     # Rebuild the map envelopes against admitted carriers before estimates walk
     # their rows; this also rechecks row counts, lengths, and index ranges.
-    checked_map = TruncatedSimplicialMap(
-        source=source, target=target, maps=value.maps
-    )
-    checked_inclusion = TruncatedSimplicialMap(
-        source=selected_target, target=inclusion_target, maps=target_inclusion.maps
-    )
+    try:
+        checked_map = TruncatedSimplicialMap(source=source, target=target, maps=value.maps)
+        checked_inclusion = TruncatedSimplicialMap(
+            source=selected_target, target=inclusion_target, maps=target_inclusion.maps
+        )
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("simplicial_map",),
+            code="simplicial_map.preimage_map_invalid",
+            message="map rows do not match their admitted finite carrier axes",
+        ) from exc
     if inclusion_target != target:
         raise OperationDomainValidationError(
             location=("target_subset", "inclusion", "target"),
@@ -193,6 +198,7 @@ def _preflight(request: SimplicialMapPreimageRequest) -> None:
             code="simplicial_map.preimage_output_budget",
             message="the simplicial-map preimage result exceeds the admitted cell bound",
         )
+    return checked_map, checked_inclusion
 
 
 def simplicial_map_preimage(
@@ -205,20 +211,9 @@ def simplicial_map_preimage(
     selected subobject make these families closed under every visible face and
     degeneracy; the returned map is the original map restricted to them.
     """
-    _preflight(request)
-    value = request.simplicial_map
-    source = _checked_carrier(value.source, location="simplicial_map.source")
-    target = _checked_carrier(value.target, location="simplicial_map.target")
-    subset = _checked_carrier(
-        request.target_subset.inclusion.source,
-        location="target_subset.inclusion.source",
-    )
-    checked_map = TruncatedSimplicialMap(source=source, target=target, maps=value.maps)
-    checked_inclusion = TruncatedSimplicialMap(
-        source=subset,
-        target=target,
-        maps=request.target_subset.inclusion.maps,
-    )
+    checked_map, checked_inclusion = _preflight(request)
+    source = checked_map.source
+    subset = checked_inclusion.source
     _require_naturality(checked_map, location="simplicial_map")
     _require_naturality(checked_inclusion, location="target_subset.inclusion")
 

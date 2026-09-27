@@ -25,7 +25,6 @@ from jacobian.math.topology.simplicial_sets.degeneracy import (
     degeneracy_profile,
 )
 from jacobian.math.topology.simplicial_sets.degenerate_submodule import (
-    DegenerateSubmoduleRequest,
     DegenerateSubmoduleResult,
     degenerate_submodule,
 )
@@ -39,9 +38,13 @@ from jacobian.math.topology.simplicial_sets.map_preimage import (
 )
 from jacobian.math.topology.simplicial_sets.maps import (
     NormalizedHomologyResult,
+    SimplicialHomologyMapValue,
     TruncatedSimplicialMap,
+    compose_simplicial_homology_maps,
     compose_simplicial_maps,
     identity_simplicial_map,
+    induced_normalized_chain_map,
+    induced_normalized_homology_map,
     normalized_chains,
     normalized_homology,
     simplicial_map,
@@ -50,6 +53,11 @@ from jacobian.math.topology.simplicial_sets.operations import from_tables
 from jacobian.math.topology.simplicial_sets.product import simplicial_set_product
 from jacobian.math.topology.simplicial_sets.product_models import (
     SimplicialSetProductResult,
+)
+from jacobian.math.topology.simplicial_sets.quotient import simplicial_set_quotient
+from jacobian.math.topology.simplicial_sets.quotient_models import (
+    SimplicialSetQuotientRequest,
+    SimplicialSetQuotientResult,
 )
 from jacobian.math.topology.simplicial_sets.standard import (
     simplex_boundary,
@@ -63,25 +71,30 @@ from jacobian.math.topology.simplicial_sets.truncate import truncate_simplicial_
 __all__ = [
     "ComplexFaceSimplexIndex",
     "DegeneracyProfileResult",
-    "DegenerateSubmoduleRequest",
     "DegenerateSubmoduleResult",
     "FiniteTruncatedSimplicialSet",
     "NormalizedHomologyResult",
     "SimplicialComplexPrefixResult",
+    "SimplicialHomologyMapValue",
     "SimplicialIdentityObstruction",
     "SimplicialMapImageResult",
     "SimplicialMapPreimageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
+    "SimplicialSetQuotientRequest",
+    "SimplicialSetQuotientResult",
     "SimplicialSetTablesResult",
     "SimplicialSubsetPrefix",
     "TruncatedSimplicialMap",
     "UnnormalizedChainsResult",
+    "compose_simplicial_homology_maps",
     "compose_simplicial_maps",
     "degeneracy_profile",
     "degenerate_submodule",
     "from_tables",
     "identity_simplicial_map",
+    "induced_normalized_chain_map",
+    "induced_normalized_homology_map",
     "normalized_chains",
     "normalized_homology",
     "simplex_boundary",
@@ -92,6 +105,7 @@ __all__ = [
     "simplicial_set_coproduct",
     "simplicial_set_from_complex",
     "simplicial_set_product",
+    "simplicial_set_quotient",
     "simplicial_subset",
     "standard_simplex",
     "truncate_simplicial_set",

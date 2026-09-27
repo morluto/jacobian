@@ -3,11 +3,18 @@ from fractions import Fraction
 
 import pytest
 
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.algebra.trigonometric_rational.operations import (
     TrigonometricRationalSource,
     normalize_trigonometric_rational,
 )
+
+
+def test_operation_is_published_in_the_catalog() -> None:
+    operation = Catalog.open().operation("algebra.trigonometric_rational.normalize")
+
+    assert operation is not None
 
 
 def test_pythagorean_identity_normalizes_to_one() -> None:
@@ -319,22 +326,6 @@ def test_reduced_quotient_support_is_bounded_before_gcd() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="support"):
         normalize_trigonometric_rational(request)
-
-
-def test_univariate_lattice_stride_admits_sin_4096_over_sin() -> None:
-    request = TrigonometricRationalSource.model_validate(
-        {
-            "variables": ["x"],
-            "expression": {
-                "kind": "DIVIDE",
-                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
-                "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
-            },
-        }
-    )
-    result = normalize_trigonometric_rational(request)
-    assert len(result.numerator.terms) == 4096
-    assert len(result.denominator.terms) == 1
 
 
 def _scaled_sine(scale: int, coefficient: int = 1) -> dict[str, object]:
@@ -710,6 +701,43 @@ def test_locus_union_retains_the_larger_zero_set() -> None:
     assert set(combined) == set(larger)
 
 
+def test_high_degree_univariate_nondivisor_uses_exact_modular_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cheap exact specialization rejects a sparse degree-6000 nondivisor.
+
+    ``2 + sin(3000*x)`` is not divisible by ``sin(x)``: after multiplying by
+    the Laurent unit ``z**3000``, its value at ``z=1`` is exactly 2, while
+    ``sin(x)`` vanishes there. The modular remainder is a fast sufficient
+    rejection; a zero modular remainder would still require an exact check.
+    """
+    import sympy
+
+    from jacobian.math.algebra.trigonometric_rational.operations import _divides
+
+    def no_dense_gcd(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("univariate divisibility must not compute a full GCD")
+
+    monkeypatch.setattr(sympy, "cancel", no_dense_gcd)
+    sine: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
+        (1,): (Fraction(0), Fraction(1)),
+        (-1,): (Fraction(0), Fraction(-1)),
+    }
+    shared_locus: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
+        (0,): (Fraction(2), Fraction(0)),
+        (3000,): (Fraction(0), Fraction(1)),
+        (-3000,): (Fraction(0), Fraction(-1)),
+    }
+    higher_sine: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
+        (6,): (Fraction(0), Fraction(1)),
+        (-6,): (Fraction(0), Fraction(-1)),
+    }
+
+    assert not _divides(sine, shared_locus)
+    assert not _divides(shared_locus, sine)
+    assert _divides(sine, higher_sine)
+
+
 def test_locus_divisibility_uses_the_laurent_ring() -> None:
     """sin(x) divides sin(3000x) in the Laurent ring, so sin(3000x) is the locus.
 
@@ -782,7 +810,19 @@ def test_shared_locus_factor_is_charged_once() -> None:
         }
     )
     result = normalize_trigonometric_rational(request)
-    assert len(result.denominator_nonzero.terms) == 6
+    # Independent Laurent multiplication gives this six-term union locus,
+    # normalized by its leading coefficient.
+    assert {
+        term.exponents: term.coefficient.as_fractions()
+        for term in result.denominator_nonzero.terms
+    } == {
+        (3002,): (Fraction(1), Fraction()),
+        (2998,): (Fraction(-1), Fraction()),
+        (2,): (Fraction(), Fraction(4)),
+        (-2,): (Fraction(), Fraction(-4)),
+        (-2998,): (Fraction(-1), Fraction()),
+        (-3002,): (Fraction(1), Fraction()),
+    }
 
 
 def test_worker_cancels_a_laurent_common_factor_in_the_fallback() -> None:

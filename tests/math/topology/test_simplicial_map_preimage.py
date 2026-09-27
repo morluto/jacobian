@@ -20,21 +20,13 @@ from jacobian.math.topology.simplicial_sets.map_preimage import (
 from jacobian.math.topology.simplicial_sets.maps import (
     SimplicialMapCompositionRequest,
 )
-from jacobian.math.topology.simplicial_sets.subset_models import (
-    SimplicialSubsetRequest,
-)
 
 
 def _subset(
     source: FiniteTruncatedSimplicialSet,
     degree_indices: tuple[tuple[int, ...], ...],
 ) -> SimplicialSubsetPrefix:
-    return simplicial_subset(
-        SimplicialSubsetRequest(
-            simplicial_set=source,
-            degree_indices=degree_indices,
-        )
-    )
+    return simplicial_subset(source, degree_indices)
 
 
 def _identity(source: FiniteTruncatedSimplicialSet) -> TruncatedSimplicialMap:

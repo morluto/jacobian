@@ -23,6 +23,8 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
+# Retained as the byte-named private admission lane used by composed operations.
+MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES = MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS
 _CHAIN_RESULT_STRUCTURAL_CELLS = 4_096
 
 
@@ -74,26 +76,43 @@ def _estimate_output_cells(
     return _CHAIN_RESULT_STRUCTURAL_CELLS + label_chars * 2 + 12 * cells
 
 
-def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
+def _estimate_output_bytes(
+    source: FiniteTruncatedSimplicialSet, sizes: tuple[int, ...]
+) -> int:
+    return _estimate_output_cells(source, sizes)
+
+
+def _preflight(
+    source: FiniteTruncatedSimplicialSet,
+    *,
+    additional_matrix_cells: int = 0,
+    additional_output_bytes: int = 0,
+    output_name: str = "unnormalized chain",
+    output_error_code: str = "simplicial_set.unnormalized_chain_output_budget_exceeded",
+) -> int:
     sizes = tuple(len(level) for level in source.sets)
     cells = sum(sizes[n - 1] * sizes[n] for n in range(1, len(sizes)))
-    if cells > MAX_OPERATION_MATRIX_CELLS:
+    total_cells = cells + additional_matrix_cells
+    if total_cells > MAX_OPERATION_MATRIX_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.unnormalized_chain_matrix_budget_exceeded",
             message=(
-                f"unnormalized boundary matrices require {cells} cells, exceeding "
+                f"{output_name} matrices require {total_cells} cells, exceeding "
                 f"the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound"
             ),
         )
-    estimate = _estimate_output_cells(source, sizes)
-    if estimate > MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS:
+    estimate = _estimate_output_bytes(source, sizes) + additional_output_bytes
+    output_limit = min(
+        MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES, MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS
+    )
+    if estimate > output_limit:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
-            code="simplicial_set.unnormalized_chain_output_budget_exceeded",
+            code=output_error_code,
             message=(
                 f"estimated chain result size {estimate} cells exceeds the "
-                f"{MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS}-cell output bound"
+                f"{output_limit}-cell output bound"
             ),
         )
     if source.total_simplices > MAX_TOTAL_SIMPLICES:
@@ -105,37 +124,26 @@ def _preflight(source: FiniteTruncatedSimplicialSet) -> int:
     return cells
 
 
-def unnormalized_chains(
-    request: UnnormalizedChainsRequest,
-) -> UnnormalizedChainsResult:
-    require_prime_field_admission(request.coefficient_ring, request.prime)
-    source = request.simplicial_set
-    _preflight(source)
-    # Serialized source values do not carry trusted producer provenance. Since
-    # d^2=0 depends on simplicial identities, re-establish those caller claims
-    # once before constructing the chain value.
-    checked = from_tables(
-        source.max_degree,
-        source.sets,
-        source.face_maps,
-        source.degeneracy_maps,
-    )
+def _checked_simplicial_set(
+    source: FiniteTruncatedSimplicialSet,
+) -> FiniteTruncatedSimplicialSet:
+    checked = from_tables(source.max_degree, source.sets, source.face_maps, source.degeneracy_maps)
     if checked.status != "SIMPLICIAL_SET" or checked.simplicial_set is None:
         obstruction = checked.obstruction
         raise OperationDomainValidationError(
             location=("simplicial_set",),
             code="simplicial_set.unnormalized_source_invalid",
-            message=(
-                "source tables fail a visible simplicial identity"
-                if obstruction is None
-                else (
-                    f"source fails {obstruction.left_description} = "
-                    f"{obstruction.right_description} at degree "
-                    f"{obstruction.degree}, simplex {obstruction.row}"
-                )
-            ),
+            message=("source tables fail a visible simplicial identity" if obstruction is None else (
+                f"source fails {obstruction.left_description} = {obstruction.right_description} "
+                f"at degree {obstruction.degree}, simplex {obstruction.row}"
+            )),
         )
+    return checked.simplicial_set
 
+
+def _unnormalized_chains_from_checked_source(
+    request: UnnormalizedChainsRequest, source: FiniteTruncatedSimplicialSet
+) -> UnnormalizedChainsResult:
     sizes = tuple(len(level) for level in source.sets)
     matrices: list[tuple[tuple[ChainCoefficient, ...], ...]] = []
     for degree in range(1, source.max_degree + 1):
@@ -146,23 +154,27 @@ def unnormalized_chains(
                 matrix[row][column] += sign
         if request.coefficient_ring is CoefficientRing.PRIME_FIELD:
             prime = request.prime
-            if prime is None:  # guarded by model validation and primality admission
+            if prime is None:
                 raise RuntimeError("GF_p coefficients require a prime modulus")
             matrix = [[entry % prime for entry in row] for row in matrix]
         matrices.append(tuple(tuple(entry for entry in row) for row in matrix))
-    value = ChainComplexValue(
-        coefficient_ring=request.coefficient_ring,
-        prime=request.prime,
-        degree_min=0,
-        degree_max=source.max_degree,
-        basis_sizes=sizes,
-        differential_matrices=tuple(matrices),
-    )
-    return UnnormalizedChainsResult(
-        simplicial_set=checked.simplicial_set,
-        simplex_bases=checked.simplicial_set.sets,
-        chain_complex=value,
-    )
+    value = ChainComplexValue(coefficient_ring=request.coefficient_ring, prime=request.prime,
+        degree_min=0, degree_max=source.max_degree, basis_sizes=sizes,
+        differential_matrices=tuple(matrices))
+    return UnnormalizedChainsResult(simplicial_set=source, simplex_bases=source.sets, chain_complex=value)
+
+
+def unnormalized_chains(
+    request: UnnormalizedChainsRequest,
+) -> UnnormalizedChainsResult:
+    require_prime_field_admission(request.coefficient_ring, request.prime)
+    source = request.simplicial_set
+    _preflight(source)
+    # Serialized source values do not carry trusted producer provenance. Since
+    # d^2=0 depends on simplicial identities, re-establish those caller claims
+    # once before constructing the chain value.
+    checked = _checked_simplicial_set(source)
+    return _unnormalized_chains_from_checked_source(request, checked)
 
 
 __all__ = [

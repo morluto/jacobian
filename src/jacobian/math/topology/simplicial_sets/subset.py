@@ -21,7 +21,6 @@ from jacobian.math.topology.simplicial_sets.operations import (
 )
 from jacobian.math.topology.simplicial_sets.subset_models import (
     SimplicialSubsetPrefix,
-    SimplicialSubsetRequest,
 )
 
 MAX_SUBSET_CHECK_WORK = 100_000
@@ -84,15 +83,13 @@ def _output_cell_bound(
 
 
 def _preflight_request(
-    request: SimplicialSubsetRequest,
+    ambient: FiniteTruncatedSimplicialSet,
+    degree_indices: tuple[tuple[int, ...], ...],
 ) -> tuple[
     FiniteTruncatedSimplicialSet,
     tuple[tuple[int, ...], ...],
     tuple[int, ...],
 ]:
-    if type(request) is not SimplicialSubsetRequest:
-        _invalid("request_type", "request must be a typed simplicial subset request")
-    ambient = request.simplicial_set
     if type(ambient) is not FiniteTruncatedSimplicialSet:
         _invalid("source_type", "source must be a finite truncated simplicial set")
     sizes = admit_tables(
@@ -101,7 +98,6 @@ def _preflight_request(
         ambient.face_maps,
         ambient.degeneracy_maps,
     )
-    degree_indices = request.degree_indices
     if (
         type(degree_indices) is not tuple
         or len(degree_indices) != ambient.max_degree + 1
@@ -181,11 +177,12 @@ def _preflight_request(
 
 
 def simplicial_subset(
-    request: SimplicialSubsetRequest,
+    ambient: FiniteTruncatedSimplicialSet,
+    degree_indices: tuple[tuple[int, ...], ...],
 ) -> SimplicialSubsetPrefix:
     """Build the selected degreewise family when it is closed under all maps."""
 
-    ambient, degree_indices, sizes = _preflight_request(request)
+    ambient, degree_indices, sizes = _preflight_request(ambient, degree_indices)
     checked = _from_admitted_tables(
         ambient.max_degree,
         ambient.sets,

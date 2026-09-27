@@ -9,13 +9,10 @@ from jacobian.math.topology.simplicial_sets.map_preimage import (
 from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
 from jacobian.math.topology.simplicial_sets.standard import standard_simplex
 from jacobian.math.topology.simplicial_sets.subset import simplicial_subset
-from jacobian.math.topology.simplicial_sets.subset_models import (
-    SimplicialSubsetRequest,
-)
 
 _DELTA_ONE = standard_simplex(1, 1)
 _DELTA_ONE_SUBSET = simplicial_subset(
-    SimplicialSubsetRequest(simplicial_set=_DELTA_ONE, degree_indices=((0,), (0,)))
+    _DELTA_ONE, ((0,), (0,))
 )
 _IDENTITY = TruncatedSimplicialMap(
     source=_DELTA_ONE,

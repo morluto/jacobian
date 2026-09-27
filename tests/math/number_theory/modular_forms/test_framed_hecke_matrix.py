@@ -1,18 +1,25 @@
 from fractions import Fraction
 
+import pytest
+
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.number_theory.modular_forms import (
     ModularFormCoordinates,
     ModularFormSpace,
     modular_form_basis_frame,
+    modular_form_basis_q_expansions,
     modular_form_coordinates_hecke,
     modular_form_coordinates_to_frame,
     modular_form_hecke_matrix_in_frame,
+    sturm_bound,
 )
+from jacobian.math.number_theory.modular_forms import basis as basis_module
 from jacobian.math.number_theory.modular_forms._models import (
     ModularFormBasisFrameRequest,
 )
 from jacobian.math.number_theory.modular_forms.values import (
+    ModularFormChangeOfBasisFrame,
     ModularFormFramedHeckeMatrix,
 )
 
@@ -21,7 +28,7 @@ def _rat(value: int) -> CanonicalRational:
     return CanonicalRational(num=value, den=1)
 
 
-def _frame():
+def _frame() -> ModularFormChangeOfBasisFrame:
     space = ModularFormSpace(level=1, weight=12, kind="M")
     return modular_form_basis_frame(
         ModularFormBasisFrameRequest(
@@ -35,7 +42,7 @@ def _frame():
     )
 
 
-def test_framed_hecke_matrix_is_exact_conjugate_and_matches_coordinate_action():
+def test_framed_hecke_matrix_is_exact_conjugate_and_matches_coordinate_action() -> None:
     frame = _frame()
 
     result = modular_form_hecke_matrix_in_frame(frame, 2)
@@ -66,7 +73,36 @@ def test_framed_hecke_matrix_is_exact_conjugate_and_matches_coordinate_action():
         ) == tuple(entries[row][column] for row in range(2))
 
 
-def test_zero_dimensional_cusp_space_has_empty_framed_hecke_matrix():
+def test_pari_frame_admits_both_basis_jobs_before_launching_either(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space = ModularFormSpace(level=11, weight=4, kind="M")
+    canonical = modular_form_basis_q_expansions(space, sturm_bound(space).bound + 1)
+    labels = tuple(element.label for element in canonical.elements)
+    frame = modular_form_basis_frame(
+        ModularFormBasisFrameRequest(
+            space=space,
+            source_basis_id=canonical.basis_id,
+            source_labels=labels,
+            labels=tuple(f"c{index}" for index in range(len(labels))),
+            entries=tuple(
+                tuple(_rat(int(row == column)) for column in range(len(labels)))
+                for row in range(len(labels))
+            ),
+        )
+    )
+
+    def backend_must_not_run(*args: object, **kwargs: object) -> None:
+        pytest.fail("aggregate admission must precede either PARI basis worker")
+
+    monkeypatch.setattr(
+        basis_module, "pari_gamma0_rational_basis", backend_must_not_run
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="shared work envelope"):
+        modular_form_hecke_matrix_in_frame(frame, 3)
+
+
+def test_zero_dimensional_cusp_space_has_empty_framed_hecke_matrix() -> None:
     space = ModularFormSpace(level=1, weight=4, kind="S")
     frame = modular_form_basis_frame(
         ModularFormBasisFrameRequest(
@@ -80,4 +116,5 @@ def test_zero_dimensional_cusp_space_has_empty_framed_hecke_matrix():
 
     result = modular_form_hecke_matrix_in_frame(frame, 1)
 
-    assert result.entries == result.row_labels == result.column_labels == ()
+    assert result.entries == ()
+    assert result.row_labels == result.column_labels == ()

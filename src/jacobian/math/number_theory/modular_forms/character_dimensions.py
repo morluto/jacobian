@@ -40,8 +40,6 @@ def _root_in_field(
     embedded_exponent = Fraction(value.exponent * field.order, value.order)
     if embedded_exponent.denominator != 1:
         raise ValueError("character root is outside the declared coefficient field")
-    # Map ζ_value.order to ζ_field.order ** embedded_exponent, then reduce
-    # in the declared field rather than relabelling the source power.
     exponent = embedded_exponent.numerator
     power = [Fraction(0)] * (exponent + 1)
     power[exponent] = Fraction(1)
@@ -130,9 +128,7 @@ def _nu_infinity(level: int, conductor: int) -> int:
 
 
 def _integral_rational_part(value: RationalCyclotomicElement) -> int:
-    rational = tuple(
-        Fraction(int(item.num), int(item.den)) for item in value.coefficients_ascending
-    )
+    rational = tuple(item.as_fraction() for item in value.coefficients_ascending)
     if any(rational[1:]) or rational[0].denominator != 1:
         raise RuntimeError("Cohen--Oesterle dimension expression is not integral")
     return rational[0].numerator

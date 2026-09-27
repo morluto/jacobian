@@ -7,6 +7,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.modular_forms import (
     ModularFormCoordinates,
     ModularFormSpace,
+    basis,
     modular_form_coordinates_q_expansion,
     modular_form_coordinates_transport,
 )
@@ -30,10 +31,11 @@ def test_transport_level_one_e4_to_gamma0_two_matches_independent_divisor_sum() 
 
     assert transported.space == target
     assert transported.basis_id == "gamma0-two-weight-2-4-monomials-v1"
-    assert tuple(value.as_fraction() for value in transported.coordinates) == (
-        Fraction(0),
-        Fraction(1),
-    )
+    transported_values = []
+    for value in transported.coordinates:
+        assert isinstance(value, CanonicalRational)
+        transported_values.append(value.as_fraction())
+    assert transported_values == [Fraction(0), Fraction(1)]
 
     expansion = modular_form_coordinates_q_expansion(transported, 8)
     # E4 = 1 + 240 * sum_{n>=1} sigma_3(n) q^n, evaluated independently.
@@ -41,12 +43,31 @@ def test_transport_level_one_e4_to_gamma0_two_matches_independent_divisor_sum() 
         Fraction(240 * sum(d**3 for d in range(1, n + 1) if n % d == 0))
         for n in range(1, 8)
     ]
-    assert [
-        value.as_fraction() for value in expansion.q_expansion.coefficients
-    ] == expected
+    coefficients = []
+    for value in expansion.q_expansion.coefficients:
+        assert isinstance(value, CanonicalRational)
+        coefficients.append(value.as_fraction())
+    assert coefficients == expected
 
     same = ModularFormCoordinates.model_validate_json(transported.model_dump_json())
     assert same == transported
+
+
+def test_identical_pari_space_transport_preserves_coordinates_without_backend(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    space = ModularFormSpace(level=5, weight=4, kind="M")
+    form = _coordinates(5, 4, "M", "gamma0-rational-gamma0-sturm-rref-v1", (3, -1, 2))
+    calls: list[object] = []
+    materialize = basis._materialize_pari_basis
+
+    def counting(plan: basis._BasisPlan) -> basis._BasisPlan:
+        calls.append(plan)
+        return materialize(plan)
+
+    monkeypatch.setattr(basis, "_materialize_pari_basis", counting)
+    assert modular_form_coordinates_transport(form, space) is form
+    assert calls == []
 
 
 def test_transport_cusp_form_into_ambient_space_preserves_the_form() -> None:

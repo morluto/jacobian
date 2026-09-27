@@ -1124,6 +1124,7 @@ def test_extremality_height_work_grades_admission_by_coordinate_height() -> None
         ),
     )
     assert triangle.vertices[1].coordinates[0].num == 10**threshold_digits - 1
+    require_full_dimensional_extreme_vertices(triangle)
 
     def unexpected_conversion(polytope: object) -> None:
         raise AssertionError("exact conversion ran before the height-work gate")

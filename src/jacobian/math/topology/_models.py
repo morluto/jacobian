@@ -564,6 +564,18 @@ class ChainComplexResult(StrictModel):
                     "boundary coefficient is outside its coefficient ring",
                 )
         _validate_chain_convention_augmentation(self.convention, self.augmentation)
+        if self.augmentation is not None:
+            degree_zero_size = len(self.simplex_bases[0].simplices)
+            if (
+                self.augmentation.source_dimension != 0
+                or self.augmentation.target_dimension != -1
+                or self.augmentation.rows != 1
+                or self.augmentation.columns != degree_zero_size
+            ):
+                raise _validation_error(
+                    "topology.require_coherent_chain_contract_8",
+                    "augmentation shape must match the degree-zero basis",
+                )
         expected_ledger = tuple(range(1, len(self.simplex_bases)))
         if tuple(item.upper_dimension for item in self.boundary_squared_zero) != (
             expected_ledger

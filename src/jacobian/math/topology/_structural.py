@@ -460,7 +460,6 @@ class StarResult(StrictModel):
                 "star_complex vertices must match star_facets",
             )
         try:
-            require_complex_admission(self.complex)
             _require_simplex_in_complex(self.complex, self.simplex)
         except (
             OperationDomainValidationError,

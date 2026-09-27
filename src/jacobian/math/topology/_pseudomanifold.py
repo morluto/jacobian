@@ -57,7 +57,7 @@ def pseudomanifold_decision(facets: tuple[Simplex, ...]) -> _PseudomanifoldDecis
                 num_facets,
             )
 
-    is_closed = bool(incidence) and all(count == 2 for count in incidence.values())
+    is_closed = all(count == 2 for count in incidence.values())
     return _PseudomanifoldDecision(
         True,
         is_closed,

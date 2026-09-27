@@ -138,9 +138,11 @@ class TestStar:
         result = StarResult(
             complex=_complex(CIRCLE),
             simplex=("a",),
-            star_facets=(("a", "b"),),
+            star_facets=(("a", "b"), ("a", "c")),
             star_is_empty=False,
-            star_complex=canonical_complex(("a", "b"), (("a", "b"),)),
+            star_complex=canonical_complex(
+                ("a", "b", "c"), (("a", "b"), ("a", "c"))
+            ),
         )
         assert StarResult.model_validate(result.model_dump()) == result
 
@@ -558,6 +560,15 @@ class TestPseudomanifold:
         assert not result.is_closed
         assert result.dimension == 0
         assert result.obstruction == "pseudomanifold with boundary"
+
+    def test_empty_complex_is_closed_pseudomanifold(self) -> None:
+        result = compute_pseudomanifold_decision(
+            PseudomanifoldRequest(complex=_complex({"vertices": [], "facets": []}))
+        )
+        assert result.is_pseudomanifold
+        assert result.is_closed
+        assert result.dimension == -1
+        assert result.obstruction is None
 
     def test_two_points_are_closed_zero_dimensional_pseudomanifold(self) -> None:
         two_points = {"vertices": ["a", "b"], "facets": [["a"], ["b"]]}

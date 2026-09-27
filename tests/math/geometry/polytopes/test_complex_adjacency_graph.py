@@ -17,6 +17,9 @@ from jacobian.math.geometry.polytopes._models import (
     RationalPolytopeVertex,
     RationalVPolytope,
 )
+from jacobian.math.geometry.polytopes.complexes.adjacency import (
+    _models as adjacency_models,
+)
 from jacobian.math.geometry.polytopes.complexes.adjacency._models import (
     PolytopalComplexAdjacencyGraph,
 )
@@ -92,6 +95,31 @@ def test_adjacency_uses_shared_facets_and_not_vertex_contacts() -> None:
     assert (
         SimpleUndirectedGraph.model_validate_json(result.graph.model_dump_json())
         == result.graph
+    )
+
+
+def test_adjacency_trusted_projection_skips_redundant_exact_geometry_checks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cells = (
+        _cell(((0, 0), (1, 0), (0, 1))),
+        _cell(((1, 0), (1, 1), (0, 1))),
+    )
+
+    def reject_repeated_solve(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("trusted closure geometry was checked a second time")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            adjacency_models, "_validate_cell_geometry", reject_repeated_solve
+        )
+        patch.setattr(adjacency_models, "_validate_facet_edge", reject_repeated_solve)
+        result = polytopal_complex_adjacency_graph(cells)
+
+    # Caller-authored serialized results still receive full exact validation.
+    assert (
+        PolytopalComplexAdjacencyGraph.model_validate_json(result.model_dump_json())
+        == result
     )
 
 

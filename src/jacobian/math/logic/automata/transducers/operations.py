@@ -6,6 +6,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal, cast
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
@@ -36,6 +38,7 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.finite_alphabet import _reject_lone_surrogate_symbol
 from jacobian.math.logic.languages.words.values import WordMorphism
 
 
@@ -434,6 +437,15 @@ def identity_transducer(
             "alphabet identity exceeds its carrier bound",
             "alphabet_id",
         )
+    if alphabet_id is not None:
+        try:
+            _reject_lone_surrogate_symbol(alphabet_id)
+        except PydanticCustomError:
+            _reject(
+                "alphabet_id_not_unicode_scalar",
+                "alphabet identity must contain only Unicode scalar values",
+                "alphabet_id",
+            )
 
     # The identity machine's size is fixed by admitted cardinalities: one
     # state, one transition per input symbol (at most MAX_FST_ALPHABET of

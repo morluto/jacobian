@@ -151,7 +151,11 @@ def polytopal_complex_adjacency_graph(
         for cell in complex_value.maximal_cells
     )
     edges = tuple((row.left_cell_id, row.right_cell_id) for row in facet_edges)
-    return PolytopalComplexAdjacencyGraph(
+    # The canonical closure above has already established every geometric
+    # invariant carried by this projection. Avoid repeating the exact hull,
+    # rank, and support-plane solves in the public model validator. Values
+    # decoded from caller-authored data still pass through that validator.
+    return PolytopalComplexAdjacencyGraph.model_construct(
         space=complex_value.space,
         dimension=complex_value.dimension,
         cells=result_cells,

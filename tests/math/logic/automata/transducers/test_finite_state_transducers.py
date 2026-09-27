@@ -237,6 +237,13 @@ class TestFiniteAlphabetCarrier:
         with pytest.raises(OperationDomainValidationError):
             identity_transducer(2, alphabet=forged)
 
+    def test_identity_rejects_lone_surrogate_alphabet_id(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as error:
+            identity_transducer(1, alphabet_id="\ud800")
+        assert error.value.errors()[0]["type"] == (
+            "finite_state_transducer.alphabet_id_not_unicode_scalar"
+        )
+
 
 class TestSubsequentialRun:
     @staticmethod

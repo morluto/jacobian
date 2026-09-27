@@ -110,3 +110,15 @@ def test_identity_morphism_reports_identity_owned_domain_errors():
         "topology.cellular_sheaf.morphism_identity.parent_diagram_not_admitted"
     )
     assert forged_error.value.errors()[0]["loc"] == ("sheaf",)
+
+    malformed_stalk = SheafStalk.model_construct(
+        simplex=("a",), basis=("duplicate", "duplicate")
+    )
+    malformed = sheaf.model_copy(
+        update={"stalks": (malformed_stalk, *sheaf.stalks[1:])}
+    )
+    with pytest.raises(OperationDomainValidationError) as malformed_error:
+        identity_morphism(malformed)
+    assert malformed_error.value.errors()[0]["type"] == (
+        "topology.cellular_sheaf.morphism_identity.stalks_not_admitted"
+    )

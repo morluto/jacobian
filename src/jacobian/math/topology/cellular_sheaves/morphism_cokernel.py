@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Self
 
 from pydantic import model_validator
@@ -18,13 +19,17 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _ExactField,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
+    MAX_SHEAF_ENTRY_DIGITS,
     MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
     MAX_SHEAF_MORPHISM_WORK,
+    MAX_SHEAF_SIMPLICES,
+    MAX_SHEAF_STALK_RANK,
     FiniteCellularSheaf,
     SheafRestriction,
     SheafScalar,
     SheafStalk,
     _require_field_scalars,
+    sheaf_scalar_digits,
     sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
@@ -90,7 +95,9 @@ class SheafMorphismCokernelResult(StrictModel):
             if len(matrix) != quotient_ranks[cell] or any(
                 len(row) != target_ranks[cell] for row in matrix
             ):
-                raise ValueError("projection matrices must match target and quotient axes")
+                raise ValueError(
+                    "projection matrices must match target and quotient axes"
+                )
         if tuple(lift.simplex for lift in self.stalk_lifts) != cells:
             raise ValueError("quotient lifts must retain canonical simplex axes")
         for lift in self.stalk_lifts:
@@ -185,10 +192,22 @@ def _quotient_coordinates(
     return pivot_rows, tuple(projection), tuple(lift)
 
 
-def cokernel_of_morphism(
-    value: SheafMorphismResult,
-) -> SheafMorphismCokernelResult:
-    """Compute the pointwise quotient sheaf and its target projection."""
+@dataclass(frozen=True, slots=True)
+class _AdmittedCokernelMorphism:
+    source: FiniteCellularSheaf
+    target: FiniteCellularSheaf
+    field: _ExactField
+    target_cover: dict[tuple[tuple[str, ...], tuple[str, ...]], SheafRestriction]
+    input_digits: int
+    morphism_work: int
+    cells: tuple[tuple[str, ...], ...]
+    source_stalks: dict[tuple[str, ...], SheafStalk]
+    target_stalks: dict[tuple[str, ...], SheafStalk]
+    components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]]
+    canonical_components: list[Component]
+
+
+def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMorphism:
     if not isinstance(value, SheafMorphismResult):
         raise _domain("morphism_type", "morphism must be a cellular sheaf morphism")
     source, target = value.source, value.target
@@ -204,14 +223,25 @@ def cokernel_of_morphism(
         or source.prime != target.prime
     ):
         raise _domain("parent_mismatch", "morphisms require one complex and field")
-    if not isinstance(value.components, tuple) or any(
-        not isinstance(component, tuple)
-        or len(component) != 2
-        or not isinstance(component[1], (tuple, list))
-        or any(not isinstance(row, (tuple, list)) for row in component[1])
-        for component in value.components
+    if (
+        not isinstance(value.components, tuple)
+        or len(value.components) > MAX_SHEAF_SIMPLICES
     ):
         raise _domain("component_structure", "components must be simplex-matrix pairs")
+    for component in value.components:
+        if (
+            not isinstance(component, tuple)
+            or len(component) != 2
+            or not isinstance(component[1], (tuple, list))
+            or len(component[1]) > MAX_SHEAF_STALK_RANK
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) > MAX_SHEAF_STALK_RANK
+                for row in component[1]
+            )
+        ):
+            raise _domain(
+                "component_structure", "components must be bounded simplex-matrix pairs"
+            )
     try:
         _readmit_parent_sheaf(source, role="source")
         _readmit_parent_sheaf(target, role="target")
@@ -221,16 +251,23 @@ def cokernel_of_morphism(
             "parent restrictions must equal the reconstructed functor diagram",
         ) from exc
     cells = source.canonical_face_order
-    if tuple(stalk.simplex for stalk in source.stalks) != cells or tuple(
-        stalk.simplex for stalk in target.stalks
-    ) != cells:
-        raise _domain("parent_stalk_axes", "parent stalks must match canonical simplex axes")
+    if (
+        tuple(stalk.simplex for stalk in source.stalks) != cells
+        or tuple(stalk.simplex for stalk in target.stalks) != cells
+    ):
+        raise _domain(
+            "parent_stalk_axes", "parent stalks must match canonical simplex axes"
+        )
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )
-    keys = tuple(_resolve_component_key(key, cells) for key, _matrix in value.components)
+    keys = tuple(
+        _resolve_component_key(key, cells) for key, _matrix in value.components
+    )
     if keys != cells:
-        raise _domain("component_axis", "one component per simplex in canonical order is required")
+        raise _domain(
+            "component_axis", "one component per simplex in canonical order is required"
+        )
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
     components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}
@@ -243,6 +280,37 @@ def cokernel_of_morphism(
             raise _domain("component_shape", "components must match the stalk axes")
         components[cell] = matrix
         canonical_components.append((cell, field.render(matrix)))
+    return _AdmittedCokernelMorphism(
+        source,
+        target,
+        field,
+        target_cover,
+        input_digits,
+        morphism_work,
+        cells,
+        source_stalks,
+        target_stalks,
+        components,
+        canonical_components,
+    )
+
+
+def cokernel_of_morphism(
+    value: SheafMorphismResult,
+) -> SheafMorphismCokernelResult:
+    """Compute the pointwise quotient sheaf and its target projection."""
+    admitted = _admit_cokernel_morphism(value)
+    source = admitted.source
+    target = admitted.target
+    field = admitted.field
+    target_cover = admitted.target_cover
+    input_digits = admitted.input_digits
+    morphism_work = admitted.morphism_work
+    cells = admitted.cells
+    source_stalks = admitted.source_stalks
+    target_stalks = admitted.target_stalks
+    components = admitted.components
+    canonical_components = admitted.canonical_components
 
     target_restrictions = {
         (item.source, item.target): item
@@ -272,7 +340,9 @@ def cokernel_of_morphism(
         (source, target), input_digits=input_digits
     )
     if work + reconstruction_work > MAX_SHEAF_MORPHISM_WORK:
-        raise _resource("work_bound", "cokernel and parent reconstruction exceed work bounds")
+        raise _resource(
+            "work_bound", "cokernel and parent reconstruction exceed work bounds"
+        )
     output_cells = (
         restriction_cells
         + sum(len(stalk.basis) ** 2 for stalk in target.stalks)
@@ -290,12 +360,16 @@ def cokernel_of_morphism(
         + sheaf_scalar_json_bound(output_cells, output_digits)
         > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
     ):
-        raise _resource("output_bound", "cokernel quotient maps exceed the output envelope")
+        raise _resource(
+            "output_bound", "cokernel quotient maps exceed the output envelope"
+        )
 
     for item in source.cover_restrictions:
         source_map = tuple(tuple(field.parse(x) for x in row) for row in item.entries)
         target_item = target_cover[(item.source, item.target)]
-        target_map = tuple(tuple(field.parse(x) for x in row) for row in target_item.entries)
+        target_map = tuple(
+            tuple(field.parse(x) for x in row) for row in target_item.entries
+        )
         left = _mul(
             [list(row) for row in components[item.target]],
             [list(row) for row in source_map],
@@ -309,7 +383,9 @@ def cokernel_of_morphism(
             output_width=len(source_stalks[item.source].basis),
         )
         if left != right:
-            raise _domain("morphism_not_natural", "cokernel requires a natural morphism")
+            raise _domain(
+                "morphism_not_natural", "cokernel requires a natural morphism"
+            )
     checked = SheafMorphismResult(
         source=source,
         target=target,
@@ -345,7 +421,9 @@ def cokernel_of_morphism(
             output_width=len(source_stalks[cell].basis),
         )
         if any(value != 0 for row in annihilated for value in row):
-            raise ArithmeticError("cokernel projection does not annihilate the morphism")
+            raise ArithmeticError(
+                "cokernel projection does not annihilate the morphism"
+            )
         projection_components.append((cell, field.render(quotient_projection)))
 
     def induced(item: SheafRestriction) -> SheafRestriction:
@@ -385,10 +463,30 @@ def cokernel_of_morphism(
         prime=source.prime,
         stalks=tuple(quotient_stalks),
         cover_restrictions=tuple(induced(item) for item in target.cover_restrictions),
-        derived_restrictions=tuple(induced(item) for item in target.derived_restrictions),
+        derived_restrictions=tuple(
+            induced(item) for item in target.derived_restrictions
+        ),
         diamonds=target.diamonds,
         comparable_pairs=target.comparable_pairs,
     )
+    if any(
+        sheaf_scalar_digits(scalar) > MAX_SHEAF_ENTRY_DIGITS
+        for restriction in (
+            *quotient.cover_restrictions,
+            *quotient.derived_restrictions,
+        )
+        for row in restriction.entries
+        for scalar in row
+    ) or any(
+        sheaf_scalar_digits(scalar) > MAX_SHEAF_ENTRY_DIGITS
+        for _cell, matrix in projection_components
+        for row in matrix
+        for scalar in row
+    ):
+        raise _resource(
+            "scalar_growth_bound",
+            "cokernel values exceed the scalar envelope used by sheaf and morphism consumers",
+        )
     projection_map = SheafMorphismResult(
         source=target,
         target=quotient,

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from fractions import Fraction
 
+from pydantic import ValidationError
+
 from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -15,6 +17,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
     FiniteCellularSheaf,
     SheafField,
+    SheafStalk,
     sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
@@ -43,6 +46,22 @@ def identity_morphism(sheaf: FiniteCellularSheaf) -> SheafMorphismResult:
             location=("sheaf",),
             code="topology.cellular_sheaf.morphism_identity.parent_type_invalid",
             message="identity source must be a finite cellular sheaf",
+        )
+    try:
+        checked_stalks = tuple(
+            SheafStalk.model_validate(stalk.model_dump()) for stalk in sheaf.stalks
+        )
+    except (AttributeError, TypeError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("sheaf", "stalks"),
+            code="topology.cellular_sheaf.morphism_identity.stalks_not_admitted",
+            message="identity source stalks must satisfy the canonical stalk contract",
+        ) from error
+    if checked_stalks != sheaf.stalks:
+        raise OperationDomainValidationError(
+            location=("sheaf", "stalks"),
+            code="topology.cellular_sheaf.morphism_identity.stalks_not_admitted",
+            message="identity source stalks must satisfy the canonical stalk contract",
         )
     try:
         _readmit_parent_sheaf(sheaf, role="identity source")

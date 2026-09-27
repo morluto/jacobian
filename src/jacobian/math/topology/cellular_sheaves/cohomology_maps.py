@@ -18,15 +18,16 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COHOMOLOGY_CELLS,
-    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_ENTRY_DIGITS,
+    MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK,
     MAX_SHEAF_MORPHISM_WORK,
     SheafCohomologyGroup,
     SheafCohomologyResult,
     SheafField,
     SheafScalar,
     _require_field_scalars,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafCochainMapResult,
@@ -130,20 +131,17 @@ class SheafCohomologyMapResult(StrictModel):
             for group in (*source_groups, *target_groups)
             for vector in group.cocycle_representatives
         ) + sum(len(row) for matrix in self.components for row in matrix)
-        if (
-            len(morphism.model_dump_json())
-            + sheaf_scalar_json_bound(scalar_count)
-            + 256 * (len(source_groups) + len(target_groups))
-            > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
-        ):
-            raise ValueError("cohomology map coordinates exceed their output bound")
+        if sheaf_scalar_digit_work(scalar_count) > MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK:
+            raise ValueError(
+                "cohomology map coordinates exceed their output digit work bound"
+            )
         if any(
-            sheaf_scalar_digits(value) > 64
+            sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
             for group in (*source_groups, *target_groups)
             for vector in group.cocycle_representatives
             for value in vector
         ) or any(
-            sheaf_scalar_digits(value) > 64
+            sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
             for matrix in self.components
             for row in matrix
             for value in row
@@ -180,12 +178,6 @@ def _mat_vec(
     return result
 
 
-def _scalar_digits(value: Scalar) -> int:
-    if isinstance(value, Fraction):
-        return max(len(str(abs(value.numerator))), len(str(value.denominator)))
-    return len(str(abs(value)))
-
-
 def _rational_growth_components(value: SheafScalar | Scalar) -> tuple[int, int]:
     """Return numerator digits and a log bound for a rational denominator."""
     if isinstance(value, CanonicalRational):
@@ -196,27 +188,6 @@ def _rational_growth_components(value: SheafScalar | Scalar) -> tuple[int, int]:
         numerator, denominator = int(value), 1
     denominator_exponent = 0 if denominator == 1 else len(str(denominator - 1))
     return len(str(abs(numerator))), denominator_exponent
-
-
-def _max_image_sum_terms(
-    field: _ExactField,
-    matrix: tuple[tuple[SheafScalar, ...], ...],
-    representatives: tuple[tuple[SheafScalar, ...], ...],
-) -> int:
-    """Bound nonzero products contributing to any image coordinate."""
-    maximum = 0
-    parsed_matrix = tuple(tuple(field.parse(value) for value in row) for row in matrix)
-    parsed_representatives = tuple(
-        tuple(field.parse(value) for value in vector) for vector in representatives
-    )
-    for row in parsed_matrix:
-        for vector in parsed_representatives:
-            terms = sum(
-                left != 0 and right != 0
-                for left, right in zip(row, vector, strict=True)
-            )
-            maximum = max(maximum, terms)
-    return maximum
 
 
 def _admit_quotient_reduction(
@@ -273,15 +244,27 @@ def _admit_quotient_reduction(
         for group in (*source.groups, *target.groups)
         for vector in group.cocycle_representatives
     )
-    output_chars = (
-        len(induced_cochains.morphism.model_dump_json())
-        + sheaf_scalar_json_bound(representative_values + output_cells)
-        + 256 * (len(source.groups) + len(target.groups))
-    )
-    if output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+    # The result model publishes these representatives as ordinary sheaf
+    # scalars, whose canonical contract is the entry digit cap. Admit before
+    # computing quotient coordinates so construction cannot leak a Pydantic
+    # validation failure after expensive exact work.
+    if field.field is SheafField.RATIONAL and any(
+        sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
+        for group in (*source.groups, *target.groups)
+        for vector in group.cocycle_representatives
+        for value in vector
+    ):
+        raise _resource(
+            "representative_growth_bound",
+            "cohomology representative exceeds the exact result scalar digit limit",
+        )
+    if (
+        sheaf_scalar_digit_work(representative_values + output_cells)
+        > MAX_SHEAF_MORPHISM_RESULT_DIGIT_WORK
+    ):
         raise _resource(
             "output_bound",
-            "cohomology-map matrices exceed their serialized output bound",
+            "cohomology-map scalar coordinates exceed their output digit work bound",
         )
 
     images_by_degree: list[tuple[tuple[Scalar, ...], ...]] = []
@@ -302,36 +285,18 @@ def _admit_quotient_reduction(
             images_by_degree.append(())
             continue
         source_matrix = induced_cochains.components[degree]
-        if field.field is SheafField.RATIONAL and quotient_rank:
-            max_terms = _max_image_sum_terms(
-                field, source_matrix, source_group.cocycle_representatives
-            )
-            max_map_digits = max(
-                (sheaf_scalar_digits(value) for row in source_matrix for value in row),
-                default=1,
-            )
-            max_source_digits = max(
-                (
-                    _scalar_digits(value)
-                    for vector in source_vectors
-                    for value in vector
-                ),
-                default=1,
-            )
-            image_digits_bound = max_terms * (max_map_digits + max_source_digits) + (
-                len(str(max_terms - 1)) if max_terms > 1 else 0
-            )
-            if image_digits_bound > 64:
-                raise _resource(
-                    "scalar_growth_bound",
-                    "the pre-admitted cochain-image digit bound "
-                    f"{image_digits_bound} exceeds the 64-digit limit",
-                )
         images = tuple(
             tuple(_mat_vec(field, source_matrix, vector)) for vector in source_vectors
         )
         images_by_degree.append(images)
         if field.field is not SheafField.RATIONAL or quotient_rank == 0:
+            continue
+        # A one-dimensional quotient has a single pivot, so the cheap exact
+        # reduction below already yields the final coordinate directly; admit
+        # it and let the exact result-coordinate check enforce the digit cap.
+        # Wider quotients use the determinant bound to keep that reduction
+        # from expanding past the published scalar contract.
+        if quotient_rank == 1:
             continue
         rational_values: list[SheafScalar | Scalar] = [
             value for vector in images for value in vector
@@ -439,6 +404,20 @@ def cohomology_map(value: SheafMorphismResult) -> SheafCohomologyMapResult:
                 )
             )
         matrices.append(tuple(rows_of_map))
+
+    # The result model publishes these coordinates as ordinary sheaf scalars
+    # bounded by the entry digit cap. Reject here with a typed resource error
+    # so an exact but oversized result cannot leak a construction failure.
+    if any(
+        sheaf_scalar_digits(value) > MAX_SHEAF_ENTRY_DIGITS
+        for matrix in matrices
+        for row in matrix
+        for value in row
+    ):
+        raise _resource(
+            "scalar_growth_bound",
+            "the exact induced-map coordinates exceed the 64-digit result limit",
+        )
 
     return SheafCohomologyMapResult(
         morphism=induced_cochains.morphism,

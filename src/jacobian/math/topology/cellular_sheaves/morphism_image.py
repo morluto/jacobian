@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Self
 
-from pydantic import model_validator
+from pydantic import BaseModel, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.cellular_sheaves._kernel import (
     Scalar,
     _admit_field,
+    _canonical_chain,
     _cochain_rref,
     _ExactField,
 )
@@ -32,7 +33,6 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismResult,
     _admit_component_matrix,
     _admit_morphism_resources,
-    _admit_section_plan,
     _mul,
     _resolve_component_key,
 )
@@ -70,32 +70,26 @@ class SheafMorphismImageResult(StrictModel):
         if self.factor.source != source or self.factor.target != self.image:
             raise ValueError("factor must map the source onto the image sheaf")
         cells = source.canonical_face_order
+        if target.complex != source.complex:
+            raise ValueError("morphism source and target must use the same complex")
         if tuple(stalk.simplex for stalk in self.image.stalks) != cells:
             raise ValueError("image stalks must retain the canonical simplex axes")
         source_ranks = {stalk.simplex: len(stalk.basis) for stalk in source.stalks}
         target_ranks = {stalk.simplex: len(stalk.basis) for stalk in target.stalks}
         image_ranks = {stalk.simplex: len(stalk.basis) for stalk in self.image.stalks}
-        for map_ in (self.inclusion, self.factor):
+        _require_image_diagram_axes(self.image, source, target)
+        for map_ in (self.morphism, self.inclusion, self.factor):
             if not map_.natural or map_.obstruction is not None:
-                raise ValueError("image factorization maps must be natural")
-            if tuple(key for key, _matrix in map_.components) != cells:
-                raise ValueError(
-                    "image factorization components must retain simplex axes"
-                )
-        for cell, matrix in self.inclusion.components:
-            if not isinstance(cell, tuple):
-                raise ValueError("image inclusion components need simplex tuple axes")
-            if len(matrix) != target_ranks[cell] or any(
-                len(row) != image_ranks[cell] for row in matrix
-            ):
-                raise ValueError("image inclusion matrices must match the stalk axes")
-        for cell, matrix in self.factor.components:
-            if not isinstance(cell, tuple):
-                raise ValueError("image factor components need simplex tuple axes")
-            if len(matrix) != image_ranks[cell] or any(
-                len(row) != source_ranks[cell] for row in matrix
-            ):
-                raise ValueError("image factor matrices must match the stalk axes")
+                raise ValueError("image factorization morphisms must be natural")
+        _require_component_axes(
+            self.morphism.components, cells, target_ranks, source_ranks, "morphism"
+        )
+        _require_component_axes(
+            self.inclusion.components, cells, target_ranks, image_ranks, "inclusion"
+        )
+        _require_component_axes(
+            self.factor.components, cells, image_ranks, source_ranks, "factor"
+        )
         return self
 
     @classmethod
@@ -127,6 +121,147 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
         code=f"topology.cellular_sheaf.morphism_image.{code}",
         message=message,
     )
+
+
+def _unvalidated_payload(value: object) -> object:
+    """Expose nested model fields as raw containers for trust-boundary revalidation."""
+    if isinstance(value, BaseModel):
+        return {key: _unvalidated_payload(item) for key, item in value.__dict__.items()}
+    if isinstance(value, tuple):
+        return tuple(_unvalidated_payload(item) for item in value)
+    if isinstance(value, list):
+        return [_unvalidated_payload(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _unvalidated_payload(item) for key, item in value.items()}
+    return value
+
+
+def _require_image_diagram_axes(
+    image: FiniteCellularSheaf,
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+) -> None:
+    cells = source.canonical_face_order
+    expected_cover_axes = tuple(sorted(
+        (earlier, later, (earlier, later))
+        for earlier in cells
+        for later in cells
+        if len(later) == len(earlier) + 1 and set(earlier) < set(later)
+    ))
+    expected_derived_axes = tuple(sorted(
+        (earlier, later, tuple(_canonical_chain(earlier, later)))
+        for earlier in cells
+        for later in cells
+        if set(earlier) < set(later) and len(later) > len(earlier) + 1
+    ))
+    for kind in ("cover_restrictions", "derived_restrictions"):
+        expected_axes = (
+            expected_cover_axes if kind == "cover_restrictions" else expected_derived_axes
+        )
+        image_axes = tuple(
+            (item.source, item.target, item.cover_path)
+            for item in getattr(image, kind)
+        )
+        source_axes = tuple(
+            (item.source, item.target, item.cover_path)
+            for item in getattr(source, kind)
+        )
+        target_axes = tuple(
+            (item.source, item.target, item.cover_path)
+            for item in getattr(target, kind)
+        )
+        if (
+            image_axes != expected_axes
+            or source_axes != expected_axes
+            or target_axes != expected_axes
+        ):
+            raise ValueError(f"image {kind} must retain the complete parent diagram axes")
+    for kind in ("diamonds", "comparable_pairs"):
+        value = getattr(image, kind)
+        if value != getattr(source, kind) or value != getattr(
+            target, kind
+        ):
+            raise ValueError(f"image must retain parent {kind} accounting")
+
+
+def _require_component_shapes(
+    components: tuple[Component, ...],
+    cells: tuple[tuple[str, ...], ...],
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+) -> None:
+    source_ranks = {stalk.simplex: len(stalk.basis) for stalk in source.stalks}
+    target_ranks = {stalk.simplex: len(stalk.basis) for stalk in target.stalks}
+    for cell, matrix in zip(cells, components, strict=True):
+        raw = matrix[1]
+        if len(raw) != target_ranks[cell] or any(
+            len(row) != source_ranks[cell] for row in raw
+        ):
+            raise _domain(
+                "component_shape", "morphism components must match their stalk axes"
+            )
+
+
+def _induced_restriction_work(
+    item: SheafRestriction,
+    source_ranks: dict[tuple[str, ...], int],
+    target_ranks: dict[tuple[str, ...], int],
+) -> int:
+    """Bound restriction multiplication and the induced image-coordinate solve."""
+    lower, upper = item.source, item.target
+    lower_target_rank = target_ranks[lower]
+    upper_target_rank = target_ranks[upper]
+    lower_image_rank = min(source_ranks[lower], lower_target_rank)
+    upper_image_rank = min(source_ranks[upper], upper_target_rank)
+    multiply = upper_target_rank * lower_target_rank * lower_image_rank
+    solve = 2 * upper_target_rank**2 * (lower_image_rank + upper_image_rank)
+    return max(1, multiply) + max(1, solve)
+
+
+def _require_component_axes(
+    components: tuple[Component, ...],
+    cells: tuple[tuple[str, ...], ...],
+    row_ranks: dict[tuple[str, ...], int],
+    column_ranks: dict[tuple[str, ...], int],
+    label: str,
+) -> None:
+    if tuple(key for key, _matrix in components) != cells:
+        raise ValueError(f"{label} components must retain canonical simplex axes")
+    for cell, matrix in components:
+        if not isinstance(cell, tuple):
+            raise ValueError(f"{label} components need simplex tuple axes")
+        if len(matrix) != row_ranks[cell] or any(
+            len(row) != column_ranks[cell] for row in matrix
+        ):
+            raise ValueError(f"{label} matrices must match the stalk axes")
+
+
+def _canonical_component_cells(
+    components: tuple[Component, ...], cells: tuple[tuple[str, ...], ...]
+) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(components, tuple) or len(components) != len(cells):
+        raise _domain(
+            "component_axis",
+            "one morphism component per simplex in canonical order is required",
+        )
+    if any(
+        not isinstance(component, tuple)
+        or len(component) != 2
+        or not isinstance(component[0], (str, tuple))
+        or not isinstance(component[1], (tuple, list))
+        or any(not isinstance(row, (tuple, list)) for row in component[1])
+        for component in components
+    ):
+        raise _domain(
+            "component_structure", "morphism components must be (simplex, matrix) pairs"
+        )
+    keys = tuple(_resolve_component_key(key, cells) for key, _matrix in components)
+    if keys != cells:
+        raise _domain(
+            "component_axis",
+            "one morphism component per simplex in canonical order is required",
+        )
+    return keys
 
 
 def _independent_columns(
@@ -170,7 +305,23 @@ def _solve_matrix(
 
 def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     """Compute the image sheaf and exact factorization ``F -> im(phi) -> G``."""
+    if not isinstance(value, SheafMorphismResult):
+        raise _domain("morphism_type", "input must be a typed sheaf morphism")
+    if not isinstance(value.source, FiniteCellularSheaf) or not isinstance(
+        value.target, FiniteCellularSheaf
+    ):
+        raise _domain(
+            "parent_type", "morphism parents must be typed finite cellular sheaves"
+        )
     source, target = value.source, value.target
+    try:
+        source = FiniteCellularSheaf.model_validate(_unvalidated_payload(source))
+        target = FiniteCellularSheaf.model_validate(_unvalidated_payload(target))
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise _domain(
+            "parent_structure",
+            "morphism parents must contain structurally valid cellular sheaf data",
+        ) from error
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (
@@ -182,47 +333,30 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
             "parent_mismatch",
             "sheaf morphisms require one complex and coefficient field",
         )
-    _admit_section_plan(source)
-    _admit_section_plan(target)
-    if not isinstance(value.components, tuple) or any(
-        not isinstance(component, tuple)
-        or len(component) != 2
-        or not isinstance(component[1], (tuple, list))
-        for component in value.components
-    ):
-        raise _domain(
-            "component_structure", "morphism components must be (simplex, matrix) pairs"
-        )
+    cells = source.canonical_face_order
+    _canonical_component_cells(value.components, cells)
+    _require_component_shapes(value.components, cells, source, target)
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )
-    cells = source.canonical_face_order
-    keys = tuple(
-        _resolve_component_key(key, cells) for key, _matrix in value.components
-    )
-    if keys != cells:
-        raise _domain(
-            "component_axis",
-            "one morphism component per simplex in canonical order is required",
-        )
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
+    source_ranks = {cell: len(stalk.basis) for cell, stalk in source_stalks.items()}
+    target_ranks = {cell: len(stalk.basis) for cell, stalk in target_stalks.items()}
     components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}
     canonical_components: list[Component] = []
     for cell, (_key, raw) in zip(cells, value.components, strict=True):
         matrix = _admit_component_matrix(raw, field, ("components", ".".join(cell)))
-        if len(matrix) != len(target_stalks[cell].basis) or any(
-            len(row) != len(source_stalks[cell].basis) for row in matrix
-        ):
-            raise _domain(
-                "component_shape", "morphism components must match their stalk axes"
-            )
         components[cell] = matrix
         canonical_components.append((cell, field.render(matrix)))
 
-    restrictions = {
+    target_restrictions = {
         (item.source, item.target): item
         for item in (*target.cover_restrictions, *target.derived_restrictions)
+    }
+    restrictions = {
+        (item.source, item.target): item
+        for item in (*source.cover_restrictions, *source.derived_restrictions)
     }
     # A uniform conservative bound covers local RREF plus every induced map solve.
     work = morphism_work
@@ -231,13 +365,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         source_rank = len(source_stalks[cell].basis)
         work += max(1, target_rank**2 * (target_rank + source_rank))
     for item in restrictions.values():
-        left, right = (
-            len(target_stalks[item.source].basis),
-            len(target_stalks[item.target].basis),
-        )
-        induced_rank_bound = min(left, right, MAX_SHEAF_STALK_RANK)
-        work += max(1, right * induced_rank_bound * left)
-        work += max(1, 2 * right**2 * (2 * induced_rank_bound))
+        work += _induced_restriction_work(item, source_ranks, target_ranks)
     reconstruction_work, reconstruction_chars = _parent_reconstruction_bounds(
         (source, target), input_digits=input_digits
     )
@@ -269,7 +397,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     else:
         output_digits = max(input_digits, len(str(source.prime)))
     if (
-        4 * len(value.model_dump_json())
+        4 * len(value.model_dump_json(exclude={"obstruction"}))
         + reconstruction_chars
         + sheaf_scalar_json_bound(output_cells, output_digits)
         > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
@@ -338,9 +466,11 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         factor_matrix = _solve_matrix(field, basis, matrix)
         factors.append((cell, field.render(factor_matrix)))
 
-    def induced(item: SheafRestriction) -> SheafRestriction:
+    def induced(
+        item: SheafRestriction, target_item: SheafRestriction
+    ) -> SheafRestriction:
         target_matrix = tuple(
-            tuple(field.parse(x) for x in row) for row in item.entries
+            tuple(field.parse(x) for x in row) for row in target_item.entries
         )
         source_basis = bases[item.source]
         image = _mul(
@@ -368,9 +498,13 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         coefficient_field=source.coefficient_field,
         prime=source.prime,
         stalks=tuple(image_stalks),
-        cover_restrictions=tuple(induced(item) for item in source.cover_restrictions),
+        cover_restrictions=tuple(
+            induced(item, target_restrictions[(item.source, item.target)])
+            for item in source.cover_restrictions
+        ),
         derived_restrictions=tuple(
-            induced(item) for item in source.derived_restrictions
+            induced(item, target_restrictions[(item.source, item.target)])
+            for item in source.derived_restrictions
         ),
         diamonds=source.diamonds,
         comparable_pairs=source.comparable_pairs,

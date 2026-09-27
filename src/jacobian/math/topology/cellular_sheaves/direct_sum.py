@@ -11,13 +11,14 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.topology._models import Simplex
 from jacobian.math.topology.cellular_sheaves._kernel import _admit_field, _ExactField
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COVER_MAPS,
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_ENTRY_DIGITS,
     MAX_SHEAF_RESTRICTION_CELLS,
-    MAX_SHEAF_RESTRICTION_OUTPUT_CHARS,
+    MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK,
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     MAX_SHEAF_TOTAL_STALK_RANK,
@@ -26,9 +27,13 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafScalar,
     SheafStalk,
     _require_field_scalars,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
+
+RestrictionKey = tuple[Simplex, Simplex]
+RestrictionMap = dict[RestrictionKey, SheafRestriction]
+StalkMap = dict[Simplex, SheafStalk]
 
 
 class SheafDirectSumRequest(StrictModel):
@@ -111,7 +116,9 @@ def _domain(code: str, message: str) -> OperationDomainValidationError:
     )
 
 
-def _admit_diagram(sheaf: FiniteCellularSheaf, field: _ExactField) -> tuple[dict, dict]:
+def _admit_diagram(
+    sheaf: FiniteCellularSheaf, field: _ExactField
+) -> tuple[StalkMap, RestrictionMap]:
     cells = sheaf.canonical_face_order
     if len(cells) > MAX_SHEAF_SIMPLICES:
         raise _resource(
@@ -246,18 +253,13 @@ def direct_sum(  # noqa: C901
             "matrix_cells_bound",
             "direct-sum restriction matrices exceed their cell bound",
         )
-    estimated_chars = (
-        len(left.model_dump_json())
-        + len(right.model_dump_json())
-        + sheaf_scalar_json_bound(output_matrix_cells)
-        + summed_rank * summed_rank * 3
-        + 256 * len(cells)
-        + 1024 * len(left_maps)
+    result_digit_work = sheaf_scalar_digit_work(
+        output_matrix_cells, MAX_SHEAF_ENTRY_DIGITS
     )
-    if estimated_chars > MAX_SHEAF_RESTRICTION_OUTPUT_CHARS:
+    if result_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
         raise _resource(
-            "output_bound",
-            "direct-sum result is predicted to exceed the result-size bound",
+            "result_digit_work_bound",
+            "direct-sum restriction scalars exceed their digit-work bound",
         )
 
     sum_stalks: list[SheafStalk] = []
@@ -287,7 +289,16 @@ def direct_sum(  # noqa: C901
             SheafDirectSumStalkInclusion(simplex=simplex, left=lmat, right=rmat)
         )
 
-    def sum_maps(mapping_left: dict, mapping_right: dict, pairs: tuple) -> tuple:
+    def sum_maps(
+        mapping_left: RestrictionMap,
+        mapping_right: RestrictionMap,
+        pairs: tuple[RestrictionKey, ...],
+    ) -> tuple[
+        tuple[
+            Simplex, Simplex, tuple[tuple[SheafScalar, ...], ...], tuple[Simplex, ...]
+        ],
+        ...,
+    ]:
         out = []
         for source, target in pairs:
             ml = mapping_left[(source, target)]

@@ -6,7 +6,10 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
@@ -84,8 +87,7 @@ def test_cokernel_projection_and_induced_restrictions_match_matrix_oracle():
 
     assert tuple(len(stalk.basis) for stalk in result.cokernel.stalks) == (1, 1, 1)
     assert all(
-        matrix == ((_q(0), _q(1)),)
-        for _cell, matrix in result.projection.components
+        matrix == ((_q(0), _q(1)),) for _cell, matrix in result.projection.components
     )
     # Independent quotient check: q*phi=0, q(e_2)=1 and identity restrictions
     # induce the identity map on each one-dimensional quotient stalk.
@@ -112,9 +114,10 @@ def test_cokernel_projection_and_induced_restrictions_match_matrix_oracle():
         restriction.entries == ((_q(1),),)
         for restriction in result.cokernel.cover_restrictions
     )
-    assert SheafMorphismCokernelResult.model_validate_json(
-        result.model_dump_json()
-    ) == result
+    assert (
+        SheafMorphismCokernelResult.model_validate_json(result.model_dump_json())
+        == result
+    )
     tool = next(
         item
         for item in BUILTIN_TOOLS
@@ -145,14 +148,19 @@ def test_surjective_map_has_zero_quotient_axes_and_roundtrips():
     )
     result = cokernel_of_morphism(original)
     assert all(stalk.basis == () for stalk in result.cokernel.stalks)
-    assert all(restriction.entries == () for restriction in result.cokernel.cover_restrictions)
+    assert all(
+        restriction.entries == () for restriction in result.cokernel.cover_restrictions
+    )
     assert all(matrix == () for _, matrix in result.projection.components)
-    assert SheafMorphismCokernelResult.model_validate_json(result.model_dump_json()) == result
+    assert (
+        SheafMorphismCokernelResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_malformed_native_morphism_and_parent_axes_fail_at_operation_boundary():
     parent = _point_sheaf(1)
-    valid = morphism(parent, parent, ((('a',), ((_q(1),),)),))
+    valid = morphism(parent, parent, ((("a",), ((_q(1),),)),))
 
     malformed_parent = FiniteCellularSheaf.model_construct(
         complex=parent.complex,
@@ -183,6 +191,45 @@ def test_malformed_native_morphism_and_parent_axes_fail_at_operation_boundary():
     )
     with pytest.raises(OperationDomainValidationError, match="parents"):
         cokernel_of_morphism(invalid_carrier)
+
+    malformed_rows = SheafMorphismResult.model_construct(
+        source=parent,
+        target=parent,
+        components=((("a",), (("not-a-scalar",),)),),
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        cokernel_of_morphism(malformed_rows)
+
+    too_many_components = SheafMorphismResult.model_construct(
+        source=parent,
+        target=parent,
+        components=tuple((("a",), ()) for _ in range(65)),
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        cokernel_of_morphism(too_many_components)
+
+
+def test_cokernel_refuses_projection_scalars_outside_consumer_envelope():
+    source = _point_sheaf(1)
+    target = _point_sheaf(2)
+    numerator = 10**63 - 1
+    component = (
+        (
+            ("a",),
+            (
+                (CanonicalRational.from_fraction(Fraction(1, 10**63)),),
+                (CanonicalRational.from_fraction(Fraction(numerator, 10**63 + 1)),),
+            ),
+        ),
+    )
+    original = morphism(source, target, component)
+
+    with pytest.raises(OperationResourceAdmissionError, match="scalar envelope"):
+        cokernel_of_morphism(original)
 
 
 def test_prime_field_cokernel_uses_the_declared_field():

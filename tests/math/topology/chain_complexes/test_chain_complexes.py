@@ -1,6 +1,7 @@
 """Tests for chain complex operations (#1824)."""
 
 import json
+import tracemalloc
 from fractions import Fraction
 from typing import Any, NoReturn, cast
 from unittest.mock import patch
@@ -703,6 +704,34 @@ class TestIntegralHomology:
         with pytest.raises(ValidationError) as exc_info:
             ComputeHomologyRequest.model_validate({"complex": payload})
         assert exc_info.value.errors()[0]["type"] == error_type
+
+    def test_raw_integral_homology_rejects_large_int_without_decimal_expansion(
+        self,
+    ) -> None:
+        # A cheaply constructed oversized integer (1 << N) must hit the
+        # canonical model's bit-length digit guard.  Materializing its
+        # ~30-million-digit decimal expansion via FLINT before rejecting the
+        # inadmissible request amplifies time and memory at validation.
+        payload = {
+            "complex": {
+                "coefficient_ring": "ZZ",
+                "degree_min": 0,
+                "degree_max": 1,
+                "basis_sizes": [1, 1],
+                "differential_matrices": [[[1 << 100_000_000]]],
+            }
+        }
+        tracemalloc.start()
+        try:
+            with pytest.raises(ValidationError) as exc_info:
+                ComputeHomologyRequest.model_validate(payload)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert exc_info.value.errors()[0]["type"] == (
+            "chain_complex.homology_raw_coefficient_digits_exceeded"
+        )
+        assert peak < 4 * 1024 * 1024
 
     def test_raw_integral_homology_digit_and_axis_boundaries_validate(self) -> None:
         matrix = [[0] * 32 for _ in range(32)]

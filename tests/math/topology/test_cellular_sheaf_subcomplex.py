@@ -7,7 +7,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
@@ -21,6 +20,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
     SheafSubcomplexRequest,
 )
+from jacobian.math.topology.cellular_sheaves._tools import TOOLS as SHEAF_TOOLS
 
 
 def _q(value: str | int) -> CanonicalRational:
@@ -105,8 +105,11 @@ def test_nonincluded_face_is_rejected() -> None:
 
 
 def test_catalog_publishes_subcomplex_restriction() -> None:
-    tool = Catalog.open().operation("cellular_sheaf.subcomplex.restrict")
-    assert tool is not None
+    tool = next(
+        item
+        for item in SHEAF_TOOLS
+        if item.operation_id == "cellular_sheaf.subcomplex.restrict"
+    )
     assert tool.request_type is SheafSubcomplexRequest
     request = SheafSubcomplexRequest(
         sheaf=_triangle_sheaf(),

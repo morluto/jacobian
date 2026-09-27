@@ -18,11 +18,9 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafSectionRestriction,
     SheafSectionSpace,
     SheafStalk,
-    SheafSubcomplexRequest,
     SheafSubcomplexResult,
 )
 from jacobian.math.topology.cellular_sheaves.direct_sum import (
-    SheafDirectSumRequest,
     SheafDirectSumResult,
     SheafDirectSumStalkInclusion,
     direct_sum,
@@ -42,7 +40,6 @@ from jacobian.math.topology.cellular_sheaves.extensions import (
     sections,
 )
 from jacobian.math.topology.cellular_sheaves.hodge import (
-    SheafHodgeRequest,
     SheafHodgeResult,
     hodge_laplacians,
 )
@@ -52,10 +49,7 @@ from jacobian.math.topology.cellular_sheaves.morphism_cokernel import (
     SheafMorphismCokernelResult,
     cokernel_of_morphism,
 )
-from jacobian.math.topology.cellular_sheaves.morphism_identity import (
-    SheafMorphismIdentityRequest,
-    identity_morphism,
-)
+from jacobian.math.topology.cellular_sheaves.morphism_identity import identity_morphism
 from jacobian.math.topology.cellular_sheaves.morphism_image import (
     SheafMorphismImageRequest,
     SheafMorphismImageResult,
@@ -83,16 +77,13 @@ __all__ = [
     "SheafCohomologyGroup",
     "SheafCohomologyResult",
     "SheafCokernelStalkLift",
-    "SheafDirectSumRequest",
     "SheafDirectSumResult",
     "SheafDirectSumStalkInclusion",
     "SheafField",
-    "SheafHodgeRequest",
     "SheafHodgeResult",
     "SheafMorphismCokernelRequest",
     "SheafMorphismCokernelResult",
     "SheafMorphismComposeRequest",
-    "SheafMorphismIdentityRequest",
     "SheafMorphismImageRequest",
     "SheafMorphismImageResult",
     "SheafMorphismKernelRequest",
@@ -109,7 +100,6 @@ __all__ = [
     "SheafSectionRestrictionRequest",
     "SheafSectionSpace",
     "SheafStalk",
-    "SheafSubcomplexRequest",
     "SheafSubcomplexResult",
     "cochain_map",
     "cokernel_of_morphism",

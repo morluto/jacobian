@@ -264,12 +264,30 @@ def test_inclusion_rejects_nondividing_parent() -> None:
         for t in TOOLS
         if t.operation_id == "matrix.cyclic.cyclotomic_inclusion.compute"
     )
-    with pytest.raises(OperationDomainValidationError):
+    with pytest.raises(OperationDomainValidationError) as error:
         tool.run(
             CyclotomicFieldInclusionRequest.model_validate(
                 {"source": {"order": 4}, "target": {"order": 6}}
             )
         )
+    assert error.value.errors()[0]["loc"] == ("target",)
+
+
+def test_composition_and_element_parent_errors_point_to_real_fields() -> None:
+    first = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    second = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=4), RationalCyclotomicField(order=8)
+    )
+    with pytest.raises(OperationDomainValidationError) as composition_error:
+        compose_cyclotomic_field_inclusions(first, second)
+    assert composition_error.value.errors()[0]["loc"] == ("second", "source")
+
+    wrong_parent_element = _element(4, (1, 1))
+    with pytest.raises(OperationDomainValidationError) as element_error:
+        apply_cyclotomic_field_inclusion(first, wrong_parent_element)
+    assert element_error.value.errors()[0]["loc"] == ("element", "field")
 
 
 def test_native_integer_generator_image_coordinates_obey_height_bound() -> None:

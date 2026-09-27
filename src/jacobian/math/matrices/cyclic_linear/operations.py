@@ -54,9 +54,17 @@ _ADMISSION_CHECK_INTERVAL = 256
 class CyclicRankKernelAdmissionError(OperationResourceAdmissionError):
     """A proved owner-local resource rejection before exact elimination."""
 
-    def __init__(self, reason: str, message: str) -> None:
+    def __init__(
+        self,
+        reason: str,
+        message: str,
+        *,
+        location: tuple[str, ...] = ("symbol",),
+    ) -> None:
         self.reason = reason
-        super().__init__(location=(), code=f"matrix.cyclic.{reason}", message=message)
+        super().__init__(
+            location=location, code=f"matrix.cyclic.{reason}", message=message
+        )
 
 
 def _inclusion_poly(order: int, target_order: int) -> tuple[Fraction, ...]:
@@ -78,14 +86,14 @@ def _standard_inclusion(
 ) -> CyclotomicFieldInclusion:
     if target.order % source.order:
         raise OperationDomainValidationError(
-            location=("source", "target"),
+            location=("target",),
             code="matrix.cyclic.inclusion_parent",
             message="the source cyclotomic order must divide the target order",
         )
     work = source.degree * target.degree * target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
         raise OperationResourceAdmissionError(
-            location=("source", "target"),
+            location=("target",),
             code="matrix.cyclic.field_work_bound",
             message="cyclotomic inclusion exceeds the field-work envelope",
         )
@@ -111,7 +119,9 @@ def _require_standard_inclusion_image(
     work = inclusion.source.degree * inclusion.target.degree * inclusion.target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
         raise CyclicRankKernelAdmissionError(
-            "field_work_bound", "cyclotomic inclusion exceeds the field-work envelope"
+            "field_work_bound",
+            "cyclotomic inclusion exceeds the field-work envelope",
+            location=location,
         )
     expected = _inclusion_poly(inclusion.source.order, inclusion.target.order)
     supplied = tuple(value.as_fraction() for value in inclusion.generator_image)
@@ -141,12 +151,19 @@ def cyclotomic_field_inclusion(
         )
     try:
         source = RationalCyclotomicField.model_validate(source.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="matrix.cyclic.inclusion_parent_invalid",
+            message="source must satisfy its canonical field contract",
+        ) from error
+    try:
         target = RationalCyclotomicField.model_validate(target.model_dump())
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
-            location=("source", "target"),
+            location=("target",),
             code="matrix.cyclic.inclusion_parent_invalid",
-            message="source and target must satisfy their canonical field contracts",
+            message="target must satisfy its canonical field contract",
         ) from error
     return _standard_inclusion(source, target)
 
@@ -168,16 +185,23 @@ def compose_cyclotomic_field_inclusions(
         )
     try:
         first = CyclotomicFieldInclusion.model_validate(first.model_dump())
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("first",),
+            code="matrix.cyclic.inclusion_invalid",
+            message="the first inclusion must satisfy its canonical value contract",
+        ) from error
+    try:
         second = CyclotomicFieldInclusion.model_validate(second.model_dump())
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
-            location=("first", "second"),
+            location=("second",),
             code="matrix.cyclic.inclusion_invalid",
-            message="inclusions must satisfy their canonical value contracts",
+            message="the second inclusion must satisfy its canonical value contract",
         ) from error
     if first.target != second.source:
         raise OperationDomainValidationError(
-            location=("first", "second"),
+            location=("second", "source"),
             code="matrix.cyclic.inclusion_parent",
             message="the first target must equal the second source field",
         )
@@ -206,13 +230,13 @@ def apply_cyclotomic_field_inclusion(
         element = RationalCyclotomicElement.model_validate(element.model_dump())
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
-            location=("inclusion", "element"),
+            location=("element", "field"),
             code="matrix.cyclic.element_map_invalid",
             message="inclusion and element must satisfy their canonical contracts",
         ) from error
     if element.field != inclusion.source:
         raise OperationDomainValidationError(
-            location=("inclusion", "element"),
+            location=("element", "field"),
             code="matrix.cyclic.inclusion_parent",
             message="the element parent must equal the inclusion source field",
         )

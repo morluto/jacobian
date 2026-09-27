@@ -212,20 +212,16 @@ def test_abutment_preflights_complete_retained_output_cells() -> None:
         degree_max=32,
         basis_sizes=sizes,
         differential_matrices=tuple(
-            tuple(tuple(0 for _ in range(10)) for _ in range(10))
-            for _ in range(58)
+            tuple(tuple(0 for _ in range(10)) for _ in range(10)) for _ in range(58)
         ),
     )
     spanning_vectors = tuple(
-        tuple(int(row == column) for column in range(10))
-        for row in range(10)
+        tuple(int(row == column) for column in range(10)) for row in range(10)
     )
     vectors = spanning_vectors + (spanning_vectors[0],) * 54
     filtration = tuple(
         FiltrationLevel(
-            subspaces=tuple(
-                FilteredSubspace(vectors=vectors) for _ in range(59)
-            ),
+            subspaces=tuple(FilteredSubspace(vectors=vectors) for _ in range(59)),
         )
         for _ in range(8)
     )
@@ -234,7 +230,5 @@ def test_abutment_preflights_complete_retained_output_cells() -> None:
         OperationResourceAdmissionError,
         match="complete abutment result retains up to",
     ) as error:
-        abutment(
-            SpectralAbutmentRequest(complex=complex_value, filtration=filtration)
-        )
+        abutment(SpectralAbutmentRequest(complex=complex_value, filtration=filtration))
     assert error.value.errors()[0]["type"] == "spectral_sequence.abutment_output_bound"

@@ -540,15 +540,15 @@ def require_complete_character_group(
             code="dirichlet_character.group.invalid_group",
             message="character group has malformed authored fields",
         )
-    generator_orders = cast(tuple[object, ...], structural_fields[0])
-    generators = cast(tuple[object, ...], structural_fields[1])
+    declared_orders = cast(tuple[object, ...], structural_fields[0])
+    declared_generators = cast(tuple[object, ...], structural_fields[1])
     invariant_factors = cast(tuple[object, ...], structural_fields[2])
     unit_coordinates = cast(tuple[object, ...], structural_fields[3])
     if (
         type(getattr(group, "character_count", None)) is not int
         or type(getattr(group, "exponent", None)) is not int
-        or any(type(value) is not int or value <= 0 for value in generator_orders)
-        or any(type(value) is not int for value in generators)
+        or any(type(value) is not int or value <= 0 for value in declared_orders)
+        or any(type(value) is not int for value in declared_generators)
         or any(type(value) is not int or value <= 0 for value in invariant_factors)
         or len(unit_coordinates) != len(expected_units)
         or any(
@@ -567,36 +567,55 @@ def require_complete_character_group(
             code="dirichlet_character.group.character_count_mismatch",
             message="character count must equal phi(modulus)",
         )
-    expected_blocks = _canonical_blocks(group.modulus)
-    expected_orders = tuple(block[2] for block in expected_blocks)
-    if tuple(group.generator_orders) != expected_orders:
+    orders = cast(tuple[int, ...], declared_orders)
+    generators = cast(tuple[int, ...], declared_generators)
+    if math.prod(orders) != group.character_count:
         raise OperationDomainValidationError(
             location=("group", "generator_orders"),
-            code="dirichlet_character.group.generator_order_mismatch",
-            message="generator orders must match the canonical prime-power blocks",
+            code="dirichlet_character.group.generator_order_product",
+            message="generator orders must multiply to the unit-group size",
         )
-    expected_generators = tuple(
-        _crt_lift(group.modulus, block_modulus, generator)
-        for block_modulus, generator, _ in expected_blocks
-    )
-    if tuple(group.generators) != expected_generators:
-        raise OperationDomainValidationError(
-            location=("group", "generators"),
-            code="dirichlet_character.group.generator_mismatch",
-            message="generators must be the canonical CRT lifts of block generators",
-        )
-    if tuple(group.invariant_factors) != _invariant_factors(expected_orders):
+    for generator, order in zip(generators, orders, strict=True):
+        if (
+            math.gcd(generator, modulus) != 1
+            or pow(generator, order, modulus) != 1 % modulus
+            or _multiplicative_order(generator, order, modulus) != order
+        ):
+            raise OperationDomainValidationError(
+                location=("group", "generators"),
+                code="dirichlet_character.group.generator_order",
+                message=(
+                    "each generator must be a unit with its declared exact "
+                    "multiplicative order"
+                ),
+            )
+    if tuple(group.invariant_factors) != _invariant_factors(orders):
         raise OperationDomainValidationError(
             location=("group", "invariant_factors"),
             code="dirichlet_character.group.invariant_factor_mismatch",
-            message="invariant factors must be the canonical divisibility chain",
+            message=(
+                "invariant factors must be the divisibility chain of the "
+                "supplied coordinate axes"
+            ),
         )
-    expected_exponent = math.lcm(*expected_orders) if expected_orders else 1
+    expected_exponent = math.lcm(*orders) if orders else 1
     if group.exponent != expected_exponent:
         raise OperationDomainValidationError(
             location=("group", "exponent"),
             code="dirichlet_character.group.exponent_mismatch",
             message="the common exponent must be the least common multiple of orders",
+        )
+    expected_coordinates = set(product(*(range(order) for order in orders)))
+    if (
+        len(expected_coordinates) != len(expected_units)
+        or set(unit_coordinates) != expected_coordinates
+    ):
+        raise OperationDomainValidationError(
+            location=("group", "unit_coordinates"),
+            code="dirichlet_character.group.coordinate_bijection",
+            message=(
+                "unit coordinates must cover the full coordinate product exactly once"
+            ),
         )
     _require_generator_coordinate_round_trip(group)
     return group
@@ -618,7 +637,7 @@ def _require_generator_coordinate_round_trip(group: DirichletCharacterGroup) -> 
             raise OperationDomainValidationError(
                 location=("group", "unit_coordinates"),
                 code="dirichlet_character.group.coordinate_mismatch",
-                message="generator coordinates must rebuild every unit residue",
+                message="generator coordinates must reconstruct every unit residue",
             )
 
 

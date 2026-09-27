@@ -90,13 +90,15 @@ class ConwayPolynomialRequest(StrictModel):
 
 
 class ConwayPolynomialResult(StrictModel):
-    """Knot Conway polynomial bound to its exact Alexander and diagram source."""
+    """Conway polynomial with the Laurent unit relating it to its Alexander value."""
 
     alexander: AlexanderPolynomialResult
     polynomial: RationalLaurentPolynomial
-    normalization: Literal["Delta(t)=nabla(t^(1/2)-t^(-1/2)); Delta(1)=1"] = (
-        "Delta(t)=nabla(t^(1/2)-t^(-1/2)); Delta(1)=1"
-    )
+    alexander_unit_sign: Literal[-1, 1]
+    alexander_unit_power: StrictInt
+    normalization: Literal[
+        "sign*t^power*Alexander(t)=Conway(t^(1/2)-t^(-1/2)); Alexander(1)=1"
+    ] = "sign*t^power*Alexander(t)=Conway(t^(1/2)-t^(-1/2)); Alexander(1)=1"
 
     @model_validator(mode="after")
     def require_conway_polynomial_context(self) -> Self:
@@ -104,6 +106,11 @@ class ConwayPolynomialResult(StrictModel):
             raise _validation_error(
                 "conway_polynomial_variable",
                 "Conway polynomial must use the canonical variable z",
+            )
+        if abs(self.alexander_unit_power) > MAX_CONWAY_CENTERED_DEGREE:
+            raise _validation_error(
+                "conway_alexander_unit_power",
+                "Alexander centering power exceeds the admitted Conway degree",
             )
         coefficients: dict[int, int] = {}
         for term in self.polynomial.terms:
@@ -418,7 +425,9 @@ class BraidArtinActionResult(StrictModel):
                 "the action must provide one image for each braid strand generator",
             )
         for image in self.generator_images:
-            if any(letter.generator >= self.word.strand_count for letter in image.letters):
+            if any(
+                letter.generator >= self.word.strand_count for letter in image.letters
+            ):
                 raise _validation_error(
                     "artin_action_generator_index",
                     "every image letter must name a generator on the retained axis",

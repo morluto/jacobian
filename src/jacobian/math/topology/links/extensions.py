@@ -922,7 +922,9 @@ def _conway_from_alexander(
     ``t^k + t^-k`` is converted by an exact integer recurrence. The normalization
     ``Delta(1)=1`` fixes the sign and gives ``nabla(0)=1``.
     """
-    centered_terms, degree = _center_normalized_alexander(alexander)
+    centered_terms, degree, unit_power, unit_sign = _center_normalized_alexander(
+        alexander
+    )
     _admit_conway_expansion(alexander, centered_terms, degree)
     conway_terms = _expand_conway_coefficients(centered_terms, degree)
     polynomial = RationalLaurentPolynomial(
@@ -935,12 +937,17 @@ def _conway_from_alexander(
             for exponent, coefficient in sorted(conway_terms.items(), reverse=True)
         ),
     )
-    return ConwayPolynomialResult(alexander=alexander, polynomial=polynomial)
+    return ConwayPolynomialResult(
+        alexander=alexander,
+        polynomial=polynomial,
+        alexander_unit_sign=unit_sign,
+        alexander_unit_power=unit_power,
+    )
 
 
 def _center_normalized_alexander(
     alexander: AlexanderPolynomialResult,
-) -> tuple[dict[int, int], int]:
+) -> tuple[dict[int, int], int, int, Literal[-1, 1]]:
     source_terms: dict[int, int] = {}
     for term in alexander.polynomial.terms:
         coefficient = term.coefficient.as_fraction()
@@ -976,11 +983,13 @@ def _center_normalized_alexander(
         raise RuntimeError(
             "knot Alexander polynomial must evaluate to plus or minus one at 1"
         )
+    unit_sign: Literal[-1, 1] = 1
     if augmentation == -1:
+        unit_sign = -1
         centered_terms = {
             exponent: -coefficient for exponent, coefficient in centered_terms.items()
         }
-    return centered_terms, degree
+    return centered_terms, degree, -center, unit_sign
 
 
 def _admit_conway_expansion(

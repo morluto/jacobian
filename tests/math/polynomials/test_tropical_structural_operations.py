@@ -71,6 +71,20 @@ def test_finite_power_sum_retains_source_and_cutoff_after_wire_round_trip() -> N
     )
     assert result.source_matrix == source
     assert result.max_power == 2
+    assert result.matrix.entries == (
+        (
+            _scalar(CanonicalRational.from_integer_ratio(0, 1)),
+            _scalar(CanonicalRational.from_integer_ratio(1, 1)),
+        ),
+        (
+            _scalar(CanonicalRational.from_integer_ratio(2, 1)),
+            _scalar(CanonicalRational.from_integer_ratio(0, 1)),
+        ),
+    )
+    assert result.winning_lengths == (
+        ((0, 1, 2), (1, 2)),
+        ((1, 2), (0,)),
+    )
     restored = type(result).model_validate_json(result.model_dump_json())
     assert restored.source_matrix == source
     assert restored.matrix == result.matrix
@@ -110,10 +124,12 @@ def test_polynomial_add_and_evaluate_admit_untouched_coefficients() -> None:
         axis=("x",),
         entries=(_scalar(CanonicalRational.from_integer_ratio(0, 1)),),
     )
-    with pytest.raises(OperationResourceAdmissionError):
+    with pytest.raises(OperationResourceAdmissionError) as add_error:
         tropical_polynomial_add(polynomial, empty)
-    with pytest.raises(OperationResourceAdmissionError):
+    assert add_error.value.errors()[0]["type"] == "tropical.scalar_output_budget"
+    with pytest.raises(OperationResourceAdmissionError) as evaluate_error:
         tropical_polynomial_evaluate(polynomial, point)
+    assert evaluate_error.value.errors()[0]["type"] == "tropical.scalar_output_budget"
 
 
 def test_polynomial_product_admits_exponent_output_before_model_construction() -> None:
@@ -128,8 +144,9 @@ def test_polynomial_product_admits_exponent_output_before_model_construction() -
             ),
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError):
+    with pytest.raises(OperationResourceAdmissionError) as error:
         tropical_polynomial_multiply(left, left)
+    assert error.value.errors()[0]["type"] == "tropical.exponent_output_bound"
 
 
 def test_assignment_profile_keeps_all_ties_at_infinity() -> None:

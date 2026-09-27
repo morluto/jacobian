@@ -2,6 +2,7 @@
 
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialResult,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidLetter,
     BraidPermutationResult,
@@ -37,6 +38,7 @@ from jacobian.math.topology.links._models import (
     OrientedLinkDiagram,
 )
 from jacobian.math.topology.links.extensions import (
+    braid_artin_action,
     braid_closure,
     braid_inverse,
     braid_multiply,
@@ -61,6 +63,7 @@ from jacobian.math.topology.links.operations import (
 
 __all__ = [
     "AlexanderPolynomialResult",
+    "BraidArtinActionResult",
     "BraidClosureResult",
     "BraidLetter",
     "BraidPermutationResult",
@@ -92,6 +95,7 @@ __all__ = [
     "WirtingerArc",
     "WirtingerCrossingRelator",
     "WirtingerPresentationResult",
+    "braid_artin_action",
     "braid_closure",
     "braid_inverse",
     "braid_multiply",

@@ -56,6 +56,14 @@ def test_trefoil_matches_independent_seifert_matrix_determinant() -> None:
     assert _terms(result) == {2: 1, 0: 1}
     assert result.alexander.polynomial.variables == ("t",)
     assert result.alexander.diagram == diagram
+    assert result.alexander_unit_sign == 1
+    assert result.alexander_unit_power == -1
+    centered = {
+        term.exponents[0] + result.alexander_unit_power: result.alexander_unit_sign
+        * term.coefficient.num
+        for term in result.alexander.polynomial.terms
+    }
+    assert centered == {1: 1, 0: -1, -1: 1}
     assert (
         ConwayPolynomialResult.model_validate_json(result.model_dump_json()) == result
     )
@@ -66,6 +74,8 @@ def test_figure_eight_matches_independent_seifert_matrix_determinant() -> None:
 
     # For V=[[1,0],[-1,-1]], det(uV-u^-1 V^T)=1-(u-u^-1)^2.
     assert _terms(result) == {2: -1, 0: 1}
+    assert result.alexander_unit_sign == -1
+    assert result.alexander_unit_power == -1
 
 
 def test_unknot_and_mirror_normalizations() -> None:

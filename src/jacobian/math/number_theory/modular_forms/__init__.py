@@ -46,6 +46,7 @@ from jacobian.math.number_theory.modular_forms.character_basis_models import (
 )
 from jacobian.math.number_theory.modular_forms.character_degeneracy import (
     modular_character_coordinates_v_degeneracy,
+    require_modular_character_v_degeneracy_image,
 )
 from jacobian.math.number_theory.modular_forms.character_degeneracy_models import (
     ModularCharacterVDegeneracyImage,
@@ -160,6 +161,7 @@ __all__ = [
     "modular_form_operator_image_q_expansion",
     "modular_form_space_inclusion",
     "named_q_expansion",
+    "require_modular_character_v_degeneracy_image",
     "space_dimension",
     "sturm_bound",
 ]

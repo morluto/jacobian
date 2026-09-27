@@ -8,6 +8,10 @@ from pydantic import Field, StrictInt, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear._models import RationalCyclotomicField
 from jacobian.math.number_theory.characters.values import DirichletCharacter
 from jacobian.math.number_theory.modular_forms.values import (
@@ -117,7 +121,10 @@ class ModularCharacterVDegeneracyImage(StrictModel):
 
         try:
             expected = modular_form_character_space_inclusion(source, target)
-        except Exception as error:
+        except (
+            OperationDomainValidationError,
+            OperationResourceAdmissionError,
+        ) as error:
             raise PydanticCustomError(
                 "modular_forms.character_v_image_inclusion",
                 "V_d target character must be the exact inflation of the source character",

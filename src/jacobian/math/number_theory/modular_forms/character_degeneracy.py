@@ -180,3 +180,40 @@ def modular_character_coordinates_v_degeneracy(
             space=target_space, coefficients=coefficients
         ),
     )
+
+
+def require_modular_character_v_degeneracy_image(
+    image: ModularCharacterVDegeneracyImage,
+) -> ModularCharacterVDegeneracyImage:
+    """Admit and check an authored V_d image before relying on its coefficients."""
+    if type(image) is not ModularCharacterVDegeneracyImage:
+        raise OperationDomainValidationError(
+            location=("image",),
+            code="modular_form.character_v_image_type",
+            message="a canonical character V-degeneracy image is required",
+        )
+    try:
+        image = ModularCharacterVDegeneracyImage.model_validate(image.model_dump())
+    except (ValidationError, AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("image",),
+            code="modular_form.character_v_image_shape",
+            message="the character V-degeneracy image is structurally invalid",
+        ) from error
+    admitted = _admit_character_form(image.source_form)
+    source_space, field, _, _ = admitted
+    basis = _character_basis_from_admission(source_space, field, admitted[3])
+    source_expansion = _character_form_prefix(image.source_form, admitted, basis)
+    expected_coefficients = tuple(
+        source_expansion.coefficients[index // image.d]
+        if index % image.d == 0
+        else _zero(field)
+        for index in range(2 * image.d + 1)
+    )
+    if image.q_expansion.coefficients != expected_coefficients:
+        raise OperationDomainValidationError(
+            location=("image", "q_expansion", "coefficients"),
+            code="modular_form.character_v_image_coefficients",
+            message="V_d expansion coefficients must equal the source coefficients at divisible indices",
+        )
+    return image

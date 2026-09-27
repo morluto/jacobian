@@ -789,7 +789,10 @@ def _compare_stable_component(
             correction = _linear_combination(
                 lower_chain_basis, correction_coordinates, len(chain), prime
             )
-            chain = [(value + delta) % prime for value, delta in zip(chain, correction, strict=True)]
+            chain = [
+                (value + delta) % prime
+                for value, delta in zip(chain, correction, strict=True)
+            ]
             if any(_mat_vec(outgoing, chain, prime)):
                 raise RuntimeError("stable-page lower-filtration correction failed")
         coordinates = _coordinates(full_cycle_basis, chain, prime)

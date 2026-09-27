@@ -415,8 +415,7 @@ def _summed_enclosure(
             return 0, 0
         common_exponent = min(value.exponent for value in nonzero)
         total = sum(
-            value.mantissa << (value.exponent - common_exponent)
-            for value in nonzero
+            value.mantissa << (value.exponent - common_exponent) for value in nonzero
         )
         return total, common_exponent
 

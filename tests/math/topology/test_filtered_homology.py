@@ -154,8 +154,7 @@ def test_filtered_homology_keeps_the_retained_output_cell_cap() -> None:
         degree_max=29,
         basis_sizes=sizes,
         differential_matrices=tuple(
-            tuple(tuple(0 for _ in range(10)) for _ in range(10))
-            for _ in range(58)
+            tuple(tuple(0 for _ in range(10)) for _ in range(10)) for _ in range(58)
         ),
     )
     vectors = tuple(

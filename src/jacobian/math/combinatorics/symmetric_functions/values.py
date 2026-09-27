@@ -83,6 +83,55 @@ class IntegerPartition(StrictModel):
         return self
 
 
+class TableauContentTerm(StrictModel):
+    """Multiplicity of one exact positive entry in a tableau content."""
+
+    entry: TableauEntry
+    multiplicity: StrictInt = Field(ge=1, le=MAX_PARTITION_SIZE)
+
+
+class TableauContent(StrictModel):
+    """A canonical sparse content map ``entry -> positive multiplicity``.
+
+    Terms are strictly ordered by their exact entry labels. Missing labels have
+    multiplicity zero; labels are never sorted, compressed, or inferred from
+    their position in this sparse sequence. The total multiplicity is at most
+    the canonical tableau cell limit.
+    """
+
+    terms: tuple[TableauContentTerm, ...] = Field(
+        max_length=MAX_PARTITION_SIZE,
+        description=(
+            "Sparse content terms ordered by strictly increasing entry label; "
+            "each listed multiplicity is positive, omitted labels have count "
+            "zero, and the total multiplicity is at most "
+            f"{MAX_PARTITION_SIZE}."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_content(self) -> Self:
+        if any(
+            left.entry >= right.entry
+            for left, right in zip(self.terms, self.terms[1:], strict=False)
+        ):
+            raise _validation_error(
+                "tableau_content_not_canonical",
+                "tableau content entries must be strictly increasing and unique",
+            )
+        if sum(term.multiplicity for term in self.terms) > MAX_PARTITION_SIZE:
+            raise _validation_error(
+                "tableau_content_size_exceeded",
+                "tableau content exceeds the canonical cell limit",
+            )
+        return self
+
+    @property
+    def size(self) -> int:
+        """Return the total multiplicity."""
+        return sum(term.multiplicity for term in self.terms)
+
+
 def _shape(rows: tuple[TableauRow, ...]) -> IntegerPartition:
     return IntegerPartition(parts=tuple(len(row) for row in rows))
 
@@ -240,6 +289,8 @@ __all__ = [
     "SemistandardYoungTableau",
     "StandardYoungTableau",
     "TableauCandidate",
+    "TableauContent",
+    "TableauContentTerm",
     "TableauEntry",
     "TableauRow",
     "require_semistandard",

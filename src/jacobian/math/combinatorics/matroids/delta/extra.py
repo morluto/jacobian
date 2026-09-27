@@ -141,15 +141,15 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
         if type(delta) is not dict:
             return value
         ground = delta.get("ground")
-        if type(ground) not in (tuple, list):
-            return value
-        if len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
+        if type(ground) in (tuple, list) and len(ground) > MAX_TWIST_POLYNOMIAL_GROUND:
             raise PydanticCustomError(
                 "delta_matroid.twist_polynomial_work",
                 "complete twist polynomial exceeds its subset-state envelope",
             )
-        if all(type(label) is str for label in ground) and sum(map(len, ground)) > (
-            MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
+        if (
+            type(ground) in (tuple, list)
+            and all(type(label) is str for label in ground)
+            and sum(map(len, ground)) > MAX_TWIST_POLYNOMIAL_LABEL_CODEPOINTS
         ):
             raise PydanticCustomError(
                 "delta_matroid.twist_polynomial_labels",
@@ -165,9 +165,8 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
             )
         remaining = MAX_DELTA_MEMBERSHIPS
         for row in feasible:
-            if type(row) not in (tuple, list):
-                return value
-            remaining -= len(row)
+            if type(row) in (tuple, list):
+                remaining -= len(row)
             if remaining < 0:
                 raise PydanticCustomError(
                     "delta_matroid.memberships_exceeded",

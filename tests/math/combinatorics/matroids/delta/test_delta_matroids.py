@@ -785,6 +785,19 @@ def test_twist_polynomial_request_preflights_raw_feasible_memberships() -> None:
     assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
 
 
+def test_twist_polynomial_request_checks_rows_when_ground_is_malformed() -> None:
+    raw_request = {
+        "delta_matroid": {
+            "feasible": [[]] * 16_386,
+        }
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidTwistPolynomialRequest.model_validate(raw_request)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
+
+
 @pytest.mark.parametrize("oversized_rows", (False, True))
 def test_twist_polynomial_preflights_forged_feasible_family_before_copy(
     monkeypatch: pytest.MonkeyPatch, oversized_rows: bool

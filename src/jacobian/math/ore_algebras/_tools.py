@@ -137,7 +137,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="sinh_taylor_prefix",
                 description=(
                     "Generate the first six Taylor coefficients from "
-                    "y''-y=0, y(0)=0, y'(0)=1."
+                    "y''-y=0, y(0)=0, y'(0)=1. The differential "
+                    "coefficients must lie in QQ[x]."
                 ),
                 input={
                     "series": {

@@ -25,7 +25,7 @@ MAX_DIFFERENTIAL_ORDER = 16
 MAX_DIFFERENTIAL_TERMS = 32
 MAX_DIFFERENTIAL_VARIABLE = "x"
 MAX_DIFFERENTIAL_ADDITIVE_WORK_CELLS = 100_000_000
-MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_DIFFERENTIAL_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 MAX_DFINITE_PREFIX_COUNT = 100_000
 MAX_DFINITE_PREFIX_WORK_UNITS = 100_000_000
 MAX_DFINITE_PREFIX_OUTPUT_BYTES = 12 * 1024 * 1024
@@ -33,14 +33,13 @@ MAX_DFINITE_PREFIX_SCALAR_BITS = 131_072
 MAX_SHIFT_PREFIX_INDEX = 100_000
 MAX_SHIFT_PREFIX_EVALUATION_CELLS = 2_000_000
 MAX_SHIFT_PREFIX_WORK_UNITS = 100_000_000
-MAX_SHIFT_PREFIX_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_SHIFT_PREFIX_OUTPUT_WEIGHT = 8 * 1024 * 1024
 MAX_SHIFT_ADDITIVE_WORK_CELLS = 4_096
-MAX_SHIFT_ADDITIVE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 MAX_SHIFT_POWER_EXPONENT = 16
 MAX_SHIFT_POWER_WORK_CELLS = 4_096
 MAX_RECURRENCE_PREFIX_STEPS = 512
 MAX_RECURRENCE_PREFIX_INDEX = 100_000
-MAX_RECURRENCE_PREFIX_OUTPUT_BYTES = 2 * 1024 * 1024
 MAX_RECURRENCE_PREFIX_WORK_CELLS = 1_000_000
 
 
@@ -124,46 +123,19 @@ class DFinitePowerSeries(StrictModel):
                 "differential_initial_data",
                 "initial_derivatives must contain exactly order(operator) values",
             )
-        leading = next(
-            term.coefficient
-            for term in self.operator.terms
-            if term.order == self.operator.order
-        )
-        for term in self.operator.terms:
-            denominator_at_zero = sum(
-                (
-                    coefficient.coefficient.as_fraction()
-                    for coefficient in term.coefficient.denominator.terms
-                    if coefficient.exponents == (0,)
-                ),
-                start=0,
-            )
-            if denominator_at_zero == 0:
-                raise _validation_error(
-                    "differential_coefficient_pole",
-                    "every differential coefficient must be regular at x=0",
-                )
-        leading_at_zero = sum(
-            (
-                coefficient.coefficient.as_fraction()
-                for coefficient in leading.numerator.terms
-                if coefficient.exponents == (0,)
-            ),
-            start=0,
-        ) / sum(
-            (
-                coefficient.coefficient.as_fraction()
-                for coefficient in leading.denominator.terms
-                if coefficient.exponents == (0,)
-            ),
-            start=0,
-        )
-        if leading_at_zero == 0:
-            raise _validation_error(
-                "differential_singular_center",
-                "the leading differential coefficient must be nonzero at x=0",
-            )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        operator: DifferentialOreOperator,
+        initial_derivatives: FiniteRationalSequence,
+    ) -> Self:
+        return cls.model_construct(
+            operator=operator,
+            initial_derivatives=initial_derivatives,
+            center=0,
+        )
 
 
 class DFinitePowerSeriesRequest(StrictModel):
@@ -561,7 +533,7 @@ class PolynomialRecurrencePrefixRequest(StrictModel):
                 "initial_value_count",
                 "initial_values must contain exactly order(operator) consecutive values",
             )
-        if abs(self.start_index + self.steps + order) > MAX_RECURRENCE_PREFIX_INDEX:
+        if abs(self.start_index + self.steps + order - 1) > MAX_RECURRENCE_PREFIX_INDEX:
             raise _validation_error(
                 "index_range",
                 "the generated recurrence interval exceeds its index envelope",
@@ -576,6 +548,35 @@ class PolynomialRecurrencePrefix(StrictModel):
     start_index: StrictInt
     recurrence_indices: tuple[StrictInt, ...]
     values: FiniteRationalSequence
+
+    @model_validator(mode="after")
+    def require_prefix_structure(self) -> Self:
+        order = self.operator.order
+        if (
+            not self.operator.terms
+            or order < 1
+            or any(
+                not _is_polynomial_coefficient(term.coefficient)
+                for term in self.operator.terms
+            )
+        ):
+            raise _validation_error(
+                "polynomial_recurrence_shape",
+                "prefix values require a positive-order polynomial recurrence operator",
+            )
+        if self.recurrence_indices != tuple(
+            range(self.start_index, self.start_index + len(self.recurrence_indices))
+        ):
+            raise _validation_error(
+                "recurrence_indices",
+                "recurrence indices must be consecutive from start_index",
+            )
+        if len(self.values.values) != order + len(self.recurrence_indices):
+            raise _validation_error(
+                "prefix_value_count",
+                "prefix values must cover the initial values and recurrence interval",
+            )
+        return self
 
     @classmethod
     def _from_kernel(

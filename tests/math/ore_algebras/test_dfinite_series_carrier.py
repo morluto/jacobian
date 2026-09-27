@@ -22,7 +22,12 @@ from jacobian.math.ore_algebras.operations import (
 from jacobian.math.polynomials.values import RationalFunction
 
 
-def _rf(terms: list[tuple[int, int]], *, variable: str = "x") -> RationalFunction:
+def _rf(
+    terms: list[tuple[Fraction | int, int]],
+    *,
+    variable: str = "x",
+    denominator: tuple[tuple[int, int], ...] = ((1, 0),),
+) -> RationalFunction:
     return RationalFunction.model_validate(
         {
             "domain": "QQ",
@@ -30,14 +35,23 @@ def _rf(terms: list[tuple[int, int]], *, variable: str = "x") -> RationalFunctio
             "numerator": {
                 "terms": [
                     {
-                        "coefficient": {"num": coefficient, "den": 1},
+                        "coefficient": {
+                            "num": Fraction(coefficient).numerator,
+                            "den": Fraction(coefficient).denominator,
+                        },
                         "exponents": [degree],
                     }
                     for coefficient, degree in terms
                 ]
             },
             "denominator": {
-                "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [0]}]
+                "terms": [
+                    {
+                        "coefficient": {"num": coefficient, "den": 1},
+                        "exponents": [degree],
+                    }
+                    for coefficient, degree in denominator
+                ]
             },
         }
     )
@@ -140,10 +154,55 @@ def test_coefficient_pole_at_center_is_rejected() -> None:
     with pytest.raises(OperationDomainValidationError, match="ordinary center"):
         differential_series_construct(
             DifferentialOreOperator.model_validate(
-                {"terms": [{"order": 1, "coefficient": pole.model_dump()}]}
+                {
+                    "terms": [
+                        {"order": 0, "coefficient": pole.model_dump()},
+                        {"order": 1, "coefficient": _rf([(1, 0)]).model_dump()},
+                    ]
+                }
             ),
             {"values": [0]},
         )
+
+
+def test_rational_unit_with_common_pole_preserves_ordinary_point() -> None:
+    pole = RationalFunction.model_validate(
+        {
+            "domain": "QQ",
+            "variables": ["x"],
+            "numerator": {
+                "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [0]}]
+            },
+            "denominator": {
+                "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [1]}]
+            },
+        }
+    )
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": 0, "coefficient": pole.model_dump()},
+                {"order": 1, "coefficient": pole.model_dump()},
+            ]
+        }
+    )
+    carrier = differential_series_construct(operator, {"values": [1]})
+    assert carrier.operator == operator
+
+
+def test_series_value_decoding_does_not_repeat_ordinary_point_admission() -> None:
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": 0, "coefficient": _rf([(1, 0)]).model_dump()},
+                {"order": 1, "coefficient": _rf([(1, 1)]).model_dump()},
+            ]
+        }
+    )
+    value = DFinitePowerSeries.model_validate(
+        {"operator": operator, "initial_derivatives": {"values": [0]}}
+    )
+    assert DFinitePowerSeries.model_validate_json(value.model_dump_json()) == value
 
 
 def test_order_zero_operator_represents_the_zero_formal_series() -> None:
@@ -218,6 +277,28 @@ def test_order_zero_and_empty_prefix_have_exact_sequence_semantics() -> None:
     assert differential_series_generate_prefix(carrier, 0).values == ()
 
 
+def test_polynomial_coefficient_precondition_applies_to_degenerate_prefixes() -> None:
+    rational_coefficient = _rf([(1, 0)], denominator=((1, 1), (-1, 0)))
+    for order, count in ((1, 0), (0, 3)):
+        series = differential_series_construct(
+            DifferentialOreOperator.model_validate(
+                {
+                    "terms": [
+                        {
+                            "order": order,
+                            "coefficient": rational_coefficient.model_dump(),
+                        }
+                    ]
+                }
+            ),
+            {"values": [1] * order},
+        )
+        with pytest.raises(
+            OperationDomainValidationError, match="polynomial coefficients"
+        ):
+            differential_series_generate_prefix(series, count)
+
+
 def test_rational_coefficient_outside_current_prefix_domain_is_rejected() -> None:
     coefficient = RationalFunction.model_validate(
         {
@@ -271,6 +352,41 @@ def test_prefix_admission_runs_before_coefficient_scaling() -> None:
         differential_series_generate_prefix(carrier, 100_000)
 
 
+def test_initial_only_prefix_skips_unneeded_operator_scale_admission() -> None:
+    polynomial_terms = [(1, degree) for degree in reversed(range(64))]
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {"order": order, "coefficient": _rf(polynomial_terms).model_dump()}
+                for order in range(8)
+            ]
+        }
+    )
+    carrier = differential_series_construct(operator, {"values": [0] * 7})
+    result = differential_series_generate_prefix(carrier, 1)
+    assert [value.as_fraction() for value in result.values] == [Fraction(0)]
+
+
+def test_recurrence_admission_uses_the_actual_common_denominator() -> None:
+    operator = DifferentialOreOperator.model_validate(
+        {
+            "terms": [
+                {
+                    "order": 0,
+                    "coefficient": _rf([(Fraction(1, 2), 0)]).model_dump(),
+                },
+                {"order": 1, "coefficient": _rf([(1, 0)]).model_dump()},
+            ]
+        }
+    )
+    carrier = differential_series_construct(operator, {"values": [1]})
+    result = differential_series_generate_prefix(carrier, 2)
+    assert [value.as_fraction() for value in result.values] == [
+        Fraction(1),
+        Fraction(-1, 2),
+    ]
+
+
 def test_prefix_count_respects_existing_finite_sequence_length() -> None:
     carrier = differential_series_construct(
         _sinh_operator(), FiniteRationalSequence.model_validate({"values": [0, 1]})
@@ -285,3 +401,10 @@ def test_zero_operator_cannot_define_a_dfinite_series() -> None:
             DifferentialOreOperator.model_validate({"terms": []}),
             {"values": []},
         )
+
+
+def test_incomplete_initial_derivatives_are_rejected_before_kernel_construction() -> (
+    None
+):
+    with pytest.raises(OperationDomainValidationError, match="exactly order"):
+        differential_series_construct(_sinh_operator(), {"values": [0]})

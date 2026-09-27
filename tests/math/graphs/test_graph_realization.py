@@ -125,9 +125,13 @@ class TestIsGraphical:
                 {"sequence": {"degrees": [-1, 2, 2, 1]}}
             )
 
-    def test_contract_rejects_empty_sequence(self) -> None:
-        with pytest.raises(ValidationError):
-            DegreeSequenceRequest.model_validate({"sequence": {"degrees": []}})
+    def test_order_zero_sequence_is_graphical(self) -> None:
+        request = DegreeSequenceRequest.model_validate(
+            {"sequence": {"degrees": []}}
+        )
+        result = degree_sequence_profile(request.sequence)
+        assert result.sequence.degrees == ()
+        assert result.is_graphical is True
 
     def test_contract_rejects_degree_exceeding_bound(self) -> None:
         with pytest.raises(ValidationError):

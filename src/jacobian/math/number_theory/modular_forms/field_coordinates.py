@@ -252,7 +252,10 @@ def modular_form_field_coordinates_equal(
         if form.space.coefficient_domain != _FIELD:
             _unsupported("field-coordinate equality requires Q(zeta_6) coordinates")
         rational_space = _rational_space(form.space)
-        plan = _admit_basis(rational_space, 1, materialize_pari=False)
+        precision = (
+            sturm_bound(rational_space).bound + 1 if rational_space.level > 4 else 1
+        )
+        plan = _admit_basis(rational_space, precision, materialize_pari=False)
         if (
             form.space != left.space
             or form.basis_id != plan.basis_id

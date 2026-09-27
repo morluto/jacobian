@@ -210,8 +210,7 @@ def test_cohomology_map_admits_quotient_work_before_reductions() -> None:
     assert sheaf_result.sheaf is not None
     sheaf = sheaf_result.sheaf
     identity = tuple(
-        tuple(_q(1 if row == column else 0) for column in range(4))
-        for row in range(4)
+        tuple(_q(1 if row == column else 0) for column in range(4)) for row in range(4)
     )
     components = tuple((face, identity) for face in sheaf.canonical_face_order)
 

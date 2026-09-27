@@ -205,6 +205,7 @@ class DeltaMatroidRelabelling(StrictModel):
     relabelled: FiniteDeltaMatroid
     target_to_source: tuple[StrictInt, ...]
     source_to_target: tuple[StrictInt, ...]
+    ground_map: tuple[tuple[str, str], ...]
 
     @model_validator(mode="after")
     def require_inverse_axis_maps(self) -> Self:
@@ -225,6 +226,23 @@ class DeltaMatroidRelabelling(StrictModel):
             for target in range(n)
         ):
             raise _error("result_inverse", "result axis maps must be inverses")
+        expected_ground_map = tuple(
+            (self.relabelled.ground[target], self.source.ground[source])
+            for target, source in enumerate(self.target_to_source)
+        )
+        if self.ground_map != expected_ground_map:
+            raise _error("result_ground_map", "ground labels must follow axis map")
+        source_to_target = self.source_to_target
+        expected_feasible = tuple(
+            sorted(
+                tuple(sorted(source_to_target[index] for index in row))
+                for row in self.source.feasible
+            )
+        )
+        if self.relabelled.feasible != expected_feasible:
+            raise _error(
+                "result_feasible", "relabelled feasible family must follow axis map"
+            )
         return self
 
 
@@ -386,6 +404,10 @@ def relabel(
         relabelled=result_value,
         target_to_source=request.target_to_source,
         source_to_target=source_to_target,
+        ground_map=tuple(
+            (request.target_ground[target], source.ground[source_index])
+            for target, source_index in enumerate(request.target_to_source)
+        ),
     )
 
 

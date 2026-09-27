@@ -5,6 +5,14 @@ from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     binary_matrix_twist,
     dual,
     minor,
+from jacobian.math.combinatorics.matroids.delta.extra import (
+    DeltaMatroidFeasibleSizeProfile,
+    DeltaMatroidTwistWidthProfile,
+)
+    feasible_size_profile,
+    loop_complement,
+    twist_polynomial,
+    twist_width_profile,
 )
 from jacobian.math.combinatorics.matroids.delta.interlace import (
     DistanceInterlaceResult,
@@ -12,6 +20,8 @@ from jacobian.math.combinatorics.matroids.delta.interlace import (
 )
 from jacobian.math.combinatorics.matroids.delta.operations import (
     distance_profile,
+    direct_sum,
+    distance,
     from_feasible_sets,
     lower_matroid,
     twist,
@@ -31,14 +41,22 @@ __all__ = [
     "FiniteDeltaMatroid",
     "binary",
     "binary_matrix_twist",
+    "DeltaMatroidFeasibleSizeProfile",
+    "DeltaMatroidTwistWidthProfile",
+    "direct_sum",
+    "distance",
     "distance_interlace_polynomial",
     "distance_profile",
     "dual",
+    "feasible_size_profile",
     "from_feasible_sets",
+    "loop_complement",
     "lower_matroid",
     "minor",
     "relabel",
     "twist",
+    "twist_polynomial",
+    "twist_width_profile",
     "upper_matroid",
     "verify_from_feasible_sets",
     "width",

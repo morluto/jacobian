@@ -27,6 +27,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
     _TRANSPORT_STURM_BASIS_ENVELOPE,
     CHARACTER_BASIS_ID,
     _character_basis_from_admission,
+    _character_order,
     _character_sturm_precision,
     _domain,
     _require_basis_space,
@@ -173,6 +174,8 @@ def _admit_transport(
 ) -> _AdmittedTransport:
     inclusion = _require_inflation_map(inclusion)
     form = _canonical_transport_form(form)
+    if _character_order(inclusion.source_space) != 6:
+        _domain("character transport is bounded only for order-six characters")
     if form.space != inclusion.source_space:
         _domain("source form parent must equal the explicit inclusion source")
     source_space = inclusion.source_space
@@ -244,13 +247,17 @@ def _admit_transport(
         default=1,
     )
     source_basis_digits = _TRANSPORT_STURM_BASIS_ENVELOPE[
-        (source_space.level, target_precision)
+        (_character_order(source_space), source_space.level, target_precision)
     ][1]
     target_basis_digits = (
         0
         if inclusion.target_space.level in (13, 78)
         else _TRANSPORT_STURM_BASIS_ENVELOPE[
-            (inclusion.target_space.level, target_precision)
+            (
+                _character_order(inclusion.target_space),
+                inclusion.target_space.level,
+                target_precision,
+            )
         ][1]
     )
     source_expansion_digits = _linear_combination_digit_bound(

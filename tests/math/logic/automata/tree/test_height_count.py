@@ -13,12 +13,13 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.tree import (
-    AcceptedTreeHeightProfileRequest,
     BottomUpTreeAutomaton,
     CompleteDeterministicBottomUpTreeAutomaton,
     TreeAutomatonTransition,
     accepted_tree_height_profile,
 )
+from jacobian.math.logic.automata.tree import operations as tree_operations
+from jacobian.math.logic.automata.tree._models import AcceptedTreeHeightProfileRequest
 from jacobian.math.logic.automata.tree._tools import (
     compute_accepted_tree_height_profile,
 )
@@ -160,6 +161,15 @@ def test_integer_growth_is_admitted_before_recurrence() -> None:
     )
     with pytest.raises(OperationResourceAdmissionError, match="all-trees upper bound"):
         accepted_tree_height_profile(automaton, 19)
+
+
+def test_aggregate_profile_digit_allocation_is_admitted_before_recurrence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tree_operations, "MAX_TREE_COUNT_PROFILE_DIGITS", 1)
+
+    with pytest.raises(OperationResourceAdmissionError, match="aggregate exact-digit"):
+        accepted_tree_height_profile(_fixture(), 1)
 
 
 def test_out_of_range_height_is_a_resource_refusal() -> None:

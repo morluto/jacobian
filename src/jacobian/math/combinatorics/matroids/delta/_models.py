@@ -8,7 +8,7 @@ from typing import Literal, Self
 from pydantic import ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS,
@@ -88,9 +88,23 @@ class DeltaMatroidTwistRequest(StrictModel):
 
 
 class DeltaMatroidTwistResult(DeltaMatroidTwistRequest):
-    """The exact feasible family obtained by symmetric-difference twist."""
+    """The source, twist subset, and exact target feasible family."""
 
     twisted: FiniteDeltaMatroid
+
+    @model_validator(mode="after")
+    def require_same_ground_axis(self) -> Self:
+        if self.twisted.ground != self.delta_matroid.ground:
+            raise _validation_error(
+                "twist_ground_axis",
+                "twisted delta-matroid must preserve the source ground axis",
+            )
+        if len(self.twisted.feasible) != len(self.delta_matroid.feasible):
+            raise _validation_error(
+                "twist_family_cardinality",
+                "twisting must preserve the number of feasible sets",
+            )
+        return self
 
     @classmethod
     def _from_kernel(
@@ -190,6 +204,30 @@ class DeltaMatroidDistanceProfileRequest(StrictModel):
                                     "source feasible family exceeds the membership envelope",
                                 )
         return data
+class DeltaMatroidDistanceRequest(StrictModel):
+    """Distance from one ground subset to the complete feasible family."""
+    delta_matroid: FiniteDeltaMatroid
+    subset: tuple[int, ...] = Field(description="Sorted distinct ground indices")
+    @model_validator(mode="after")
+    def canonical_subset(self) -> Self:
+        require_twist_subset(self.delta_matroid, self.subset)
+        return self
+class DeltaMatroidDistanceResult(DeltaMatroidDistanceRequest):
+    """Exact Hamming distance and a deterministic nearest feasible set."""
+    distance: int = Field(ge=0)
+    nearest_feasible: tuple[int, ...]
+    def _from_kernel(
+        cls,
+        delta_matroid: FiniteDeltaMatroid,
+        subset: tuple[int, ...],
+        distance: int,
+        nearest_feasible: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            delta_matroid=delta_matroid,
+            subset=subset,
+            distance=distance,
+            nearest_feasible=nearest_feasible,
 
 
 def _preflight_extremal_input(data: object) -> object:
@@ -269,7 +307,7 @@ class _DeltaMatroidExtremalRequest(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def preflight_source(cls, data: object) -> object:
-        return _preflight_extremal_input(data)
+        return canonicalize_json_containers(_preflight_extremal_input(data))
 
 
 class DeltaMatroidLowerMatroidRequest(_DeltaMatroidExtremalRequest):
@@ -365,6 +403,8 @@ class DeltaMatroidRecognitionResult(StrictModel):
 
 __all__ = [
     "DeltaMatroidDistanceProfileRequest",
+    "DeltaMatroidDistanceRequest",
+    "DeltaMatroidDistanceResult",
     "DeltaMatroidFromFeasibleSetsRequest",
     "DeltaMatroidLowerMatroidRequest",
     "DeltaMatroidRecognitionResult",

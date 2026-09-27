@@ -82,3 +82,20 @@ def test_relabel_request_preflights_source_memberships() -> None:
     assert error.value.errors()[0]["type"] == (
         "delta_matroid.relabel_source_membership_limit"
     )
+def test_result_binding_rejects_wrong_ground_or_feasible_transport() -> None:
+    from pydantic import ValidationError
+    from jacobian.math.combinatorics.matroids.delta.relabel import (
+        DeltaMatroidRelabelling,
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,)))
+    valid = relabel(source, ("B", "A"), (1, 0))
+    with pytest.raises(ValidationError):
+        DeltaMatroidRelabelling.model_validate(
+            {
+                **valid.model_dump(),
+                "relabelled": {
+                    **valid.relabelled.model_dump(),
+                    "ground": ["A", "B"],
+                },
+            }
+        )
+                    "feasible": [[], [0]],

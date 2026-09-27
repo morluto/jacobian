@@ -75,7 +75,6 @@ class Catalog:
     @cache
     def open(cls) -> Catalog:
         """Return the compiled view of the immutable built-in declarations."""
-
         return cls(BUILTIN_TOOLS)
 
     def operation(self, operation_id: str) -> MathTool[Any, Any] | None:

@@ -23,6 +23,14 @@ The polynomial expression normalizer is available natively as
 same function runs. It never parses or evaluates caller-authored source
 strings.
 
+Finite-dimensional Lie algebras expose exact operations from
+`jacobian.math.lie_algebras`. The adjoint representation, Killing form,
+derived and lower-central series, centralizers, and generated subalgebras and
+ideals use the algebra's ordered basis and exact structure constants. The
+upper central series returns subspaces on that basis, beginning with zero; it
+reaches the whole algebra exactly when the algebra is nilpotent and otherwise
+stops at its first stable proper term.
+
 Each public `jacobian.math.<domain>` module declares its supported names in
 `__all__`; that is the authoritative native API. Functions accept domain values
 or a maintained backend type when it already carries the complete mathematical
@@ -195,7 +203,11 @@ decoding does not accept numbers for these fields.
 Finite based chain complexes and filtered chain data use Python `int` and
 `fractions.Fraction` coefficients. Their JSON representation uses canonical
 integer strings and reduced rational strings such as `"-3/7"`; read those
-wire values with `model_validate_json()`. Differential matrices, chain maps,
+wire values with `model_validate_json()`. A `ChainMapValue` binds its
+degreewise matrices to exact source and target `ChainComplexValue` endpoints;
+optional basis labels bind named axes. Its shape and coefficient grammar are
+structural, while consumers that rely on the chain-map equation replay that
+relation at their own admitted boundary. Differential matrices, chain maps,
 mapping cones, tensor products, filtered subspaces, and producer results retain
 the same native coefficient types in Python.
 

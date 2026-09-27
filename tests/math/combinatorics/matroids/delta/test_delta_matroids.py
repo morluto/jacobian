@@ -7,6 +7,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.combinatorics.greedoids import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids import delta as delta_matroids
 from jacobian.math.combinatorics.matroids.delta import FiniteDeltaMatroid
@@ -15,6 +19,7 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidFromFeasibleSetsRequest,
     DeltaMatroidRecognitionResult,
     DeltaMatroidTwistRequest,
+    DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
 )
 from jacobian.math.combinatorics.matroids.delta._tools import (
@@ -26,8 +31,13 @@ from jacobian.math.combinatorics.matroids.delta._tools import (
 from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryMatrixResult,
     BinarySymmetricMatrix,
+    DeltaMatroidTwistPolynomialRequest,
 )
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
+from jacobian.math.combinatorics.matroids.delta.extra_ops import (
+    binary,
+    loop_complement,
+    twist_polynomial,
+)
 from jacobian.math.combinatorics.matroids.delta.relabel import (
     MAX_DELTA_RELABEL_GROUND,
     MAX_DELTA_RELABEL_OUTPUT_CELLS,
@@ -52,9 +62,61 @@ def test_binary_identity_matrix_constructs_canonical_delta_matroid() -> None:
     assert result.delta_matroid.feasible == ((), (0,), (0, 1), (1,))
 
 
+def _gf2_nonsingular_by_row_reduction(matrix: tuple[tuple[int, ...], ...]) -> bool:
+    """Independent small-matrix oracle for principal-minor nonsingularity."""
+
+    rows = [list(row) for row in matrix]
+    rank = 0
+    for column in range(len(rows)):
+        pivot = next((row for row in range(rank, len(rows)) if rows[row][column]), None)
+        if pivot is None:
+            continue
+        rows[rank], rows[pivot] = rows[pivot], rows[rank]
+        for row in range(rank + 1, len(rows)):
+            if rows[row][column]:
+                rows[row] = [
+                    left ^ right
+                    for left, right in zip(rows[row], rows[rank], strict=True)
+                ]
+        rank += 1
+    return rank == len(rows)
+
+
+def test_binary_principal_minors_match_independent_gf2_oracle_through_order_four() -> (
+    None
+):
+    """Exercise all symmetric matrices through order four (1,099 matrices)."""
+
+    for order in range(5):
+        upper_positions = tuple(
+            (row, column) for row in range(order) for column in range(row, order)
+        )
+        for matrix_mask in range(1 << len(upper_positions)):
+            rows = [[0] * order for _ in range(order)]
+            for bit, (row, column) in enumerate(upper_positions):
+                value = matrix_mask >> bit & 1
+                rows[row][column] = rows[column][row] = value
+            matrix = tuple(tuple(row) for row in rows)
+            result = binary(
+                BinarySymmetricMatrix(
+                    ground=tuple(f"e{i}" for i in range(order)), entries=matrix
+                )
+            )
+            expected = []
+            for subset_mask in range(1 << order):
+                indices = tuple(i for i in range(order) if subset_mask >> i & 1)
+                principal = tuple(tuple(matrix[i][j] for j in indices) for i in indices)
+                if _gf2_nonsingular_by_row_reduction(principal):
+                    expected.append(indices)
+            assert result.delta_matroid.feasible == tuple(sorted(expected))
+            assert result.matrix.entries == matrix
+
+
 def test_catalog_contains_only_audited_agent_outcome() -> None:
     assert {tool.operation_id for tool in TOOLS} == {
+        "delta_matroid.direct_sum.compute",
         "delta_matroid.from_feasible_sets.compute",
+        "delta_matroid.distance.compute",
         "delta_matroid.twist.compute",
         "delta_matroid.width.compute",
         "delta_matroid.distance_profile.compute",
@@ -62,6 +124,10 @@ def test_catalog_contains_only_audited_agent_outcome() -> None:
         "delta_matroid.dual.compute",
         "delta_matroid.minor.compute",
         "delta_matroid.from_binary_matrix.compute",
+        "delta_matroid.twist_polynomial.compute",
+        "delta_matroid.binary_loop_complement.compute",
+        "delta_matroid.twist_width_profile.compute",
+        "delta_matroid.feasible_size_profile.compute",
         "delta_matroid.relabel.compute",
         "delta_matroid.distance_interlace_polynomial.compute",
     }
@@ -225,7 +291,20 @@ def test_twist_request_publishes_admission_limits() -> None:
     request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
     result = _twist(request)
 
-    assert result == FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1)))
+    assert result.delta_matroid == source
+    assert result.subset == (0,)
+    assert result.twisted == FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1))
+    )
+    assert (
+        DeltaMatroidTwistResult.model_validate_json(result.model_dump_json()) == result
+    )
+    assert len(result.twisted.feasible) == len(source.feasible)
+    assert sum(map(len, result.twisted.feasible)) <= 16_384
+    twist_tool = next(
+        tool for tool in TOOLS if tool.operation_id == "delta_matroid.twist.compute"
+    )
+    assert twist_tool.result_type is DeltaMatroidTwistResult
     assert (
         DeltaMatroidTwistRequest.model_validate_json(request.model_dump_json())
         == request
@@ -515,11 +594,13 @@ def test_dense_twist_composes_with_width_and_inverse_twist() -> None:
     )
     subset = tuple(range(33))
     result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=subset))
-    restored = FiniteDeltaMatroid.model_validate_json(result.model_dump_json())
+    restored = DeltaMatroidTwistResult.model_validate_json(
+        result.model_dump_json()
+    ).twisted
     assert sum(map(len, restored.feasible)) == 1089
     assert _width(DeltaMatroidWidthRequest(delta_matroid=restored)).width == 1
     assert (
-        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset))
+        _twist(DeltaMatroidTwistRequest(delta_matroid=restored, subset=subset)).twisted
         == source
     )
 
@@ -549,9 +630,92 @@ def test_native_transforms_accept_canonical_mathematical_values() -> None:
 
     source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
     result = twist(source, (0,))
-    assert result == _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    bound = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    assert result == bound.twisted
     assert width(result) == _width(DeltaMatroidWidthRequest(delta_matroid=result)).width
     assert twist(result, (0,)) == source
+
+
+def test_twist_result_binds_exact_source_axis_and_row_bijection() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("left", "middle", "right"),
+        feasible=((), (0,), (0, 1), (0, 1, 2), (0, 2), (1,), (1, 2), (2,)),
+    )
+    subset = (0, 2)
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=subset))
+
+    assert result.delta_matroid.ground == result.twisted.ground == source.ground
+    assert set(result.twisted.feasible) == {
+        tuple(sorted(set(row) ^ set(subset))) for row in source.feasible
+    }
+    assert len(result.twisted.feasible) == len(source.feasible)
+
+
+def test_twist_result_composition_uses_symmetric_difference() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("a", "b", "c"), feasible=((), (0,), (0, 1), (1,))
+    )
+    first = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0, 2)))
+    second = _twist(
+        DeltaMatroidTwistRequest(delta_matroid=first.twisted, subset=(1, 2))
+    )
+    direct = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0, 1)))
+
+    assert second.twisted == direct.twisted
+
+
+def test_empty_twist_result_roundtrips_and_is_identity() -> None:
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source))
+
+    assert result.subset == ()
+    assert result.twisted == source
+    assert (
+        DeltaMatroidTwistResult.model_validate_json(result.model_dump_json()) == result
+    )
+
+
+def test_twist_result_json_rejects_a_different_ground_axis() -> None:
+    import json
+
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source))
+    payload = json.loads(result.model_dump_json())
+    payload["twisted"]["ground"] = ["different"]
+
+    with pytest.raises(ValueError, match="twisted delta-matroid must preserve"):
+        DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
+
+
+def test_twist_result_json_rejects_changed_feasible_family_cardinality() -> None:
+    import json
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    result = _twist(DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,)))
+    payload = json.loads(result.model_dump_json())
+    payload["twisted"]["feasible"] = [[], [0]]
+
+    with pytest.raises(ValueError, match="twisting must preserve the number"):
+        DeltaMatroidTwistResult.model_validate_json(json.dumps(payload))
+
+
+def test_twist_result_membership_admission_has_exact_boundary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta._tools as tools_module
+    import jacobian.math.combinatorics.matroids.delta.operations as operations_module
+    from jacobian.catalog.models import OperationResourceAdmissionError
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (1,)))
+    request = DeltaMatroidTwistRequest(delta_matroid=source, subset=(0,))
+    # The twisted family has rows {0}, {}, and {0, 1}: exactly three
+    # memberships. Admission must accept that boundary and reject one below it.
+    monkeypatch.setattr(operations_module, "MAX_DELTA_MEMBERSHIPS", 3)
+    assert tools_module._twist(request).twisted.feasible == ((), (0,), (0, 1))
+
+    monkeypatch.setattr(operations_module, "MAX_DELTA_MEMBERSHIPS", 2)
+    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+        tools_module._twist(request)
 
 
 def test_even_subset_width_uses_linear_admission() -> None:
@@ -568,6 +732,83 @@ def test_even_subset_width_uses_linear_admission() -> None:
         ),
     )
     assert width(source) == 8
+
+
+def test_feasible_size_profile_is_complete_ascending_histogram() -> None:
+    from jacobian.math.combinatorics.matroids.delta import feasible_size_profile
+
+    source = FiniteDeltaMatroid(
+        ground=("a", "b", "c"),
+        feasible=((), (0,), (0, 1), (1,)),
+    )
+
+    profile = feasible_size_profile(source)
+
+    assert profile.ground == source.ground
+    assert profile.counts_by_size == (1, 2, 1, 0)
+    assert sum(profile.counts_by_size) == len(source.feasible)
+
+
+def test_feasible_size_profile_preflights_output_before_exchange(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics.matroids.delta import (
+        extra_ops,
+        feasible_size_profile,
+    )
+
+    def fail_if_replayed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("exchange validation ran before output admission")
+
+    monkeypatch.setattr(extra_ops, "_check", fail_if_replayed)
+    monkeypatch.setattr(extra_ops, "MAX_FEASIBLE_SIZE_PROFILE_ENTRIES", 2)
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
+        feasible_size_profile(source)
+
+
+def test_feasible_size_profile_preflights_memberships_before_revalidation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.combinatorics.matroids.delta import (
+        extra_ops,
+        feasible_size_profile,
+    )
+
+    ground = tuple(f"e{index}" for index in range(14))
+    feasible = tuple(
+        sorted(
+            tuple(element for element in range(14) if mask & (1 << element))
+            for mask in range(1 << 14)
+        )
+    )
+    source = FiniteDeltaMatroid(ground=ground, feasible=feasible)
+
+    def fail_if_revalidated(_value: object) -> FiniteDeltaMatroid:
+        raise AssertionError("profile copied the oversized family before admission")
+
+    monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_revalidated)
+    with pytest.raises(OperationResourceAdmissionError, match="work envelope"):
+        feasible_size_profile(source)
+
+
+def test_feasible_size_profile_does_not_replay_delta_exchange(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.combinatorics.matroids.delta import (
+        extra_ops,
+        feasible_size_profile,
+    )
+
+    def fail_if_replayed(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("the profile does not depend on symmetric exchange")
+
+    monkeypatch.setattr(extra_ops, "_check", fail_if_replayed)
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+
+    assert feasible_size_profile(source).counts_by_size == (1, 2, 1)
 
 
 def test_width_ignores_recognition_label_envelope() -> None:
@@ -637,6 +878,48 @@ def test_binary_result_decoding_does_not_replay_principal_minors(
     assert BinaryMatrixResult.model_validate_json(result.model_dump_json()) == result
 
 
+def test_binary_loop_complement_matches_independent_feasible_family_toggle() -> None:
+    """Diagonal toggles agree with the delta-matroid loop-complement axiom."""
+    for order in range(4):
+        upper = tuple((i, j) for i in range(order) for j in range(i, order))
+        for matrix_mask in range(1 << len(upper)):
+            rows = [[0] * order for _ in range(order)]
+            for bit, (i, j) in enumerate(upper):
+                rows[i][j] = rows[j][i] = matrix_mask >> bit & 1
+            entries = tuple(tuple(row) for row in rows)
+            source = BinarySymmetricMatrix(
+                ground=tuple(f"e{i}" for i in range(order)), entries=entries
+            )
+            original = set(binary(source).delta_matroid.feasible)
+            for subset_mask in range(1 << order):
+                subset = tuple(i for i in range(order) if subset_mask >> i & 1)
+                expected = set(original)
+                for element in subset:
+                    for feasible in tuple(expected):
+                        if element not in feasible:
+                            toggled = tuple(sorted((*feasible, element)))
+                            if toggled in expected:
+                                expected.remove(toggled)
+                            else:
+                                expected.add(toggled)
+                result = loop_complement(source, subset)
+                assert result.source == source
+                assert result.result.matrix.ground == source.ground
+                assert result.result.delta_matroid.feasible == tuple(sorted(expected))
+
+
+def test_binary_loop_complement_rejects_noncanonical_subset() -> None:
+    from pydantic import ValidationError
+
+    from jacobian.math.combinatorics.matroids.delta.extra import (
+        BinaryLoopComplementRequest,
+    )
+
+    matrix = BinarySymmetricMatrix(ground=("a", "b"), entries=((0, 0), (0, 0)))
+    with pytest.raises(ValidationError):
+        BinaryLoopComplementRequest(matrix=matrix, subset=(1, 0))
+
+
 def test_extra_operation_rejects_forged_non_delta_source() -> None:
     from jacobian.catalog.models import OperationDomainValidationError
     from jacobian.math.combinatorics.matroids.delta._tools import _run_dual
@@ -646,3 +929,351 @@ def test_extra_operation_rejects_forged_non_delta_source() -> None:
     )
     with pytest.raises(OperationDomainValidationError):
         _run_dual(type("Request", (), {"delta_matroid": forged})())
+
+
+def _satisfies_symmetric_exchange(feasible: set[frozenset[int]]) -> bool:
+    for left in feasible:
+        for right in feasible:
+            difference = left ^ right
+            for element in difference:
+                if not any(
+                    (left ^ {element, candidate}) in feasible
+                    for candidate in difference
+                ):
+                    return False
+    return True
+
+
+def _oracle_twist_polynomial(n: int, feasible: set[frozenset[int]]) -> tuple[int, ...]:
+    coefficients = [0] * (n + 1)
+    for twist_mask in range(1 << n):
+        twist = frozenset(i for i in range(n) if twist_mask >> i & 1)
+        sizes = tuple(len(row ^ twist) for row in feasible)
+        coefficients[max(sizes) - min(sizes)] += 1
+    return tuple(coefficients)
+
+
+def _descending_nonzero_polynomial(histogram: tuple[int, ...]) -> tuple[int, ...]:
+    descending = tuple(reversed(histogram))
+    while len(descending) > 1 and descending[0] == 0:
+        descending = descending[1:]
+    return descending
+
+
+def test_twist_polynomial_matches_independent_exhaustive_small_oracle() -> None:
+    # Enumerate every nonempty feasible family through a three-element ground
+    # and independently apply symmetric exchange and the twist definition.
+    for n in range(4):
+        subsets = tuple(
+            frozenset(i for i in range(n) if subset_mask >> i & 1)
+            for subset_mask in range(1 << n)
+        )
+        for family_mask in range(1, 1 << len(subsets)):
+            feasible = {
+                subset
+                for index, subset in enumerate(subsets)
+                if family_mask >> index & 1
+            }
+            if not _satisfies_symmetric_exchange(feasible):
+                continue
+            source = FiniteDeltaMatroid(
+                ground=tuple(f"e{i}" for i in range(n)),
+                feasible=tuple(sorted(tuple(sorted(row)) for row in feasible)),
+            )
+            result = twist_polynomial(source)
+            expected_histogram = _oracle_twist_polynomial(n, feasible)
+            assert result.coefficients_by_width == expected_histogram
+            assert result.polynomial.coefficients == _descending_nonzero_polynomial(
+                expected_histogram
+            )
+            assert result.ground == source.ground
+            assert sum(result.coefficients_by_width) == 1 << n
+
+
+def test_twist_polynomial_empty_axis_binary_composition_and_json_roundtrip() -> None:
+    empty = FiniteDeltaMatroid(ground=(), feasible=((),))
+    assert twist_polynomial(empty).coefficients_by_width == (1,)
+
+    matrix_result = binary(
+        BinarySymmetricMatrix(ground=("a", "b"), entries=((1, 0), (0, 1)))
+    )
+    # The identity presentation has every subset feasible, so all four twists
+    # have width two and the polynomial is 4*z^2.
+    result = twist_polynomial(matrix_result.delta_matroid)
+    assert result.coefficients_by_width == (0, 0, 4)
+    assert result.polynomial.coefficients == (4, 0, 0)
+    assert type(result.model_validate_json(result.model_dump_json())) is type(result)
+
+    request = DeltaMatroidTwistPolynomialRequest(delta_matroid=empty)
+    assert (
+        DeltaMatroidTwistPolynomialRequest.model_validate_json(
+            request.model_dump_json()
+        )
+        == request
+    )
+    schema = DeltaMatroidTwistPolynomialRequest.model_json_schema()
+    assert schema["admission_limits"]["max_twist_masks"] == 4_096
+    assert schema["admission_limits"]["max_mask_feasible_set_evaluations"] == 262_144
+    assert schema["admission_limits"]["max_ground_elements"] == 12
+    assert schema["admission_limits"]["max_ground_label_codepoints"] == 1_000_000
+    assert schema["admission_limits"]["max_histogram_entries"] == 13
+    assert schema["admission_limits"]["max_polynomial_coefficient_digits"] == 4
+    assert schema["admission_limits"]["max_source_memberships"] == 16_384
+    assert schema["admission_limits"]["max_source_feasible_rows"] == 16_385
+    assert "max_encoded_output_bytes" not in schema["admission_limits"]
+
+    tool = next(
+        item
+        for item in TOOLS
+        if item.operation_id == "delta_matroid.twist_polynomial.compute"
+    )
+    example_request = tool.request_type.model_validate(tool.examples[0].input)
+    assert tool.run(example_request).coefficients_by_width == (0, 0, 4)
+
+
+def test_twist_polynomial_rejects_before_expanding_too_many_masks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta.extra_ops as extra_ops
+
+    too_wide = FiniteDeltaMatroid.model_construct(
+        ground=tuple(f"e{i}" for i in range(13)), feasible=((),)
+    )
+
+    def fail_if_source_validation_runs(_value: object) -> None:
+        raise AssertionError("oversized axis must reject before full source validation")
+
+    monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_source_validation_runs)
+    with pytest.raises(OperationResourceAdmissionError):
+        twist_polynomial(too_wide)
+
+
+def test_twist_polynomial_request_preflights_raw_nested_ground() -> None:
+    raw_request = {
+        "delta_matroid": {
+            "ground": ["same-label"] * 100_000,
+            "feasible": [[]],
+        }
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidTwistPolynomialRequest.model_validate(raw_request)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_work"
+
+
+def test_twist_polynomial_request_rejects_boolean_membership_indices() -> None:
+    with pytest.raises(ValidationError, match="integer indices"):
+        DeltaMatroidTwistPolynomialRequest.model_validate(
+            {"delta_matroid": {"ground": ["a", "b"], "feasible": [[], [True]]}}
+        )
+
+
+def test_twist_polynomial_request_preflights_raw_feasible_memberships() -> None:
+    raw_request = {
+        "delta_matroid": {
+            "ground": ["a"],
+            "feasible": [[0]] * 16_385,
+        }
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidTwistPolynomialRequest.model_validate(raw_request)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
+
+
+def test_twist_polynomial_request_checks_rows_when_ground_is_malformed() -> None:
+    raw_request = {
+        "delta_matroid": {
+            "feasible": [[]] * 16_386,
+        }
+    }
+
+    with pytest.raises(ValidationError) as error:
+        DeltaMatroidTwistPolynomialRequest.model_validate(raw_request)
+
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
+
+
+@pytest.mark.parametrize("oversized_rows", (False, True))
+def test_twist_polynomial_preflights_forged_feasible_family_before_copy(
+    monkeypatch: pytest.MonkeyPatch, oversized_rows: bool
+) -> None:
+    import jacobian.math.combinatorics.matroids.delta.extra_ops as extra_ops
+
+    feasible = ((),) * 16_386 if oversized_rows else ((0,) * 16_385,)
+    source = FiniteDeltaMatroid.model_construct(ground=("a",), feasible=feasible)
+
+    def fail_if_source_is_copied(_value: object) -> None:
+        raise AssertionError(
+            "oversized feasible family must reject before revalidation"
+        )
+
+    monkeypatch.setattr(extra_ops, "_admit_delta", fail_if_source_is_copied)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        twist_polynomial(source)
+    assert error.value.errors()[0]["type"] == "delta_matroid.memberships_exceeded"
+
+
+def test_twist_polynomial_accepts_ground_and_state_cardinality_boundary() -> None:
+    source = FiniteDeltaMatroid(
+        ground=tuple(f"e{i}" for i in range(12)), feasible=((),)
+    )
+    result = twist_polynomial(source)
+    assert result.coefficients_by_width == (4_096, *(0 for _ in range(12)))
+    assert result.polynomial.coefficients == (4_096,)
+
+
+def test_twist_polynomial_ignores_recognition_label_envelope() -> None:
+    # Labels do not enter the mask sweep, so the recognition operation's
+    # 2,048-byte cap must not narrow this operation's advertised domain.
+    label = "a" * 2_049
+    source = FiniteDeltaMatroid(ground=(label,), feasible=((),))
+
+    result = twist_polynomial(source)
+
+    assert result.ground == (label,)
+    assert result.coefficients_by_width == (2, 0)
+    assert result.polynomial.coefficients == (2,)
+
+
+def test_twist_polynomial_result_rejects_duplicate_ground_labels() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((), (0,), (0, 1), (1,)))
+    result = twist_polynomial(source)
+    payload = result.model_dump(mode="json")
+    payload["ground"] = ["a", "a"]
+
+    with pytest.raises(ValidationError, match="ground labels must be unique"):
+        type(result).model_validate_json(json.dumps(payload))
+
+
+def test_twist_polynomial_result_rejects_inconsistent_wire_claims() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    source = FiniteDeltaMatroid(ground=("a",), feasible=((), (0,)))
+    result = twist_polynomial(source)
+
+    mismatched_polynomial = result.model_dump(mode="json")
+    mismatched_polynomial["coefficients_by_width"] = [1, 1]
+    with pytest.raises(ValidationError, match="canonical width histogram"):
+        type(result).model_validate_json(json.dumps(mismatched_polynomial))
+
+    nontotal_histogram = result.model_dump(mode="json")
+    nontotal_histogram["coefficients_by_width"] = [0, 1]
+    nontotal_histogram["polynomial"]["coefficients"] = ["1"]
+    with pytest.raises(ValidationError, match="number of ground subsets"):
+        type(result).model_validate_json(json.dumps(nontotal_histogram))
+
+
+@pytest.mark.parametrize("histogram", ([True, True], ["1", "1"], [1.0, 1.0]))
+def test_twist_polynomial_result_requires_strict_wire_histogram(
+    histogram: list[object],
+) -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["coefficients_by_width"] = histogram
+    payload["polynomial"]["coefficients"] = ["1", "1"]
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == "int_type"
+
+
+def test_twist_polynomial_result_rejects_oversized_authored_axes() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["ground"] = [f"e{i}" for i in range(13)]
+    payload["coefficients_by_width"] = [8_192] + [0] * 13
+    payload["polynomial"]["coefficients"] = ["8192"]
+
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert {issue["loc"] for issue in error.value.errors()} >= {
+        ("ground",),
+        ("coefficients_by_width",),
+    }
+
+
+@pytest.mark.parametrize(
+    "coefficients",
+    (["1"] + ["0"] * 13, ["9" * 1_000]),
+)
+def test_twist_polynomial_result_preflights_nested_polynomial_claim(
+    coefficients: list[str],
+) -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["polynomial"]["coefficients"] = coefficients
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == (
+        "delta_matroid.twist_polynomial_polynomial_bound"
+    )
+
+
+def test_twist_polynomial_result_rejects_overbudget_authored_label() -> None:
+    import json
+
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="json")
+    payload["ground"] = ["a" * 1_000_001]
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate_json(json.dumps(payload))
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_labels"
+
+
+def test_twist_polynomial_result_rejects_non_utf8_ground() -> None:
+    from pydantic import ValidationError
+
+    result = twist_polynomial(FiniteDeltaMatroid(ground=("a",), feasible=((),)))
+    payload = result.model_dump(mode="python")
+    payload["ground"] = ("\ud800",)
+    with pytest.raises(ValidationError) as error:
+        type(result).model_validate(payload)
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_utf8"
+
+
+def test_twist_polynomial_admits_own_native_label_budget_boundary() -> None:
+    label = "a" * 1_000_000
+    source = FiniteDeltaMatroid(ground=(label,), feasible=((),))
+
+    result = twist_polynomial(source)
+
+    assert result.coefficients_by_width == (2, 0)
+    assert result.ground[0] is label
+
+
+def test_twist_polynomial_rejects_label_growth_before_source_copy() -> None:
+    source = FiniteDeltaMatroid(ground=("a" * 1_000_001,), feasible=((),))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        twist_polynomial(source)
+    assert error.value.errors()[0]["type"] == "delta_matroid.twist_polynomial_labels"
+
+
+def test_twist_polynomial_rejects_non_utf8_label_as_malformed_source() -> None:
+    source = FiniteDeltaMatroid(ground=("\ud800",), feasible=((),))
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        twist_polynomial(source)
+    assert error.value.errors()[0]["type"] == "delta_matroid.labels_not_utf8"

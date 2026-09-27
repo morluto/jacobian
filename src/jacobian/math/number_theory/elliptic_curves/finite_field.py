@@ -10,12 +10,11 @@ from __future__ import annotations
 from math import isqrt
 from typing import Literal, Self
 
-import rfc8785
 from pydantic import Field, ValidationError, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -486,6 +485,15 @@ class FiniteFieldCurveBaseChangeResult(StrictModel):
     curve: FiniteFieldShortWeierstrassCurve
     point: FiniteFieldEllipticPoint | None = None
 
+    @model_validator(mode="after")
+    def require_point_on_retained_curve(self) -> Self:
+        if self.point is not None and self.point.curve != self.curve:
+            raise _validation_error(
+                "base_change_point_curve_mismatch",
+                "a transported point must retain the transported curve",
+            )
+        return self
+
 
 class FiniteFieldPointRequest(StrictModel):
     curve: FiniteFieldShortWeierstrassCurve
@@ -600,6 +608,11 @@ class FiniteFieldGroupStructureResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_generators(self) -> Self:
+        if len(self.group.invariant_factors) > 2:
+            raise _validation_error(
+                "group_invariant_rank",
+                "an elliptic-curve group has at most two invariant factors",
+            )
         if len(self.generators) != len(self.group.invariant_factors):
             raise _validation_error(
                 "group_generator_rank",
@@ -618,6 +631,7 @@ MAX_FROBENIUS_EXTENSION_INTEGER_DIGITS = 4096
 MAX_FROBENIUS_CHARACTER_SUM_WORK = 4_000_000
 MAX_ISOGENY_PAIR_CHARACTER_SUM_WORK = 8_000_000
 MAX_FINITE_FIELD_POINT_ENUMERATION_WORK = 20_000_000
+MAX_FINITE_FIELD_POINT_MATERIALIZATION_CELLS = 250_000
 MAX_FINITE_FIELD_TWIST_ORDER = 4096
 MAX_FINITE_FIELD_TWIST_WORK = 4_000_000
 MAX_FINITE_FIELD_ISOMORPHISM_ORDER = 4096
@@ -638,16 +652,16 @@ class FiniteFieldExtensionCount(StrictModel):
     """One exact power sum and point count over an extension field."""
 
     degree: int = Field(ge=1, le=MAX_FROBENIUS_EXTENSION_DEGREE)
-    frobenius_power_sum: int
-    cardinality: int = Field(ge=1)
+    frobenius_power_sum: ExactInteger
+    cardinality: ExactInteger = Field(ge=1)
 
 
 class FiniteFieldExtensionCountsResult(StrictModel):
     """Exact counts ``#E(F_(q^n))`` derived from the base Frobenius trace."""
 
     curve: FiniteFieldShortWeierstrassCurve
-    base_cardinality: int = Field(ge=1)
-    base_trace: int
+    base_cardinality: ExactInteger = Field(ge=1)
+    base_trace: ExactInteger
     counts: tuple[FiniteFieldExtensionCount, ...]
 
 
@@ -819,7 +833,7 @@ def _decode_field_element(
 def _admit_point_enumeration(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> int:
-    """Bound field arithmetic and serialized output before expansion."""
+    """Bound exact work and retained point cells before expansion."""
     field = curve.field
     q = int(field.characteristic**field.degree)
     # One square per field element and three products per x; each product uses
@@ -832,22 +846,16 @@ def _admit_point_enumeration(
             message="complete point enumeration exceeds its exact-work envelope",
         )
 
-    # Hasse gives #E(F_q) <= q + 1 + floor(2 sqrt(q)).  Every affine point
-    # repeats the curve and field in source-bound JSON, so size the worst case
-    # before materializing the point tuple.
+    # Hasse gives #E(F_q) <= q + 1 + floor(2 sqrt(q)). Count the point object,
+    # its two coordinate vectors, and tuple slots before materialization. Wire
+    # byte limits belong to result delivery, not native mathematical admission.
     max_points = q + 1 + isqrt(4 * q)
-    maximum = _element(field, (field.characteristic - 1,) * field.degree)
-    sample_point = FiniteFieldEllipticPoint.affine(curve, maximum, maximum)
-    point_bytes = len(rfc8785.dumps(sample_point.model_dump(mode="json")))
-    empty_result = FiniteFieldPointSet(curve=curve, points=()).model_dump(mode="json")
-    output_bytes = (
-        len(rfc8785.dumps(empty_result)) + max_points * point_bytes + max_points - 1
-    )
-    if output_bytes > CanonicalLimits().max_output_bytes:
+    materialization_cells = max_points * (2 * field.degree + 4)
+    if materialization_cells > MAX_FINITE_FIELD_POINT_MATERIALIZATION_CELLS:
         raise OperationResourceAdmissionError(
             location=("curve", "field"),
-            code="elliptic_curve.finite_field.enumeration_output_bound",
-            message="complete point set exceeds the canonical output-byte envelope",
+            code="elliptic_curve.finite_field.enumeration_materialization_bound",
+            message="complete point set exceeds the admitted materialization envelope",
         )
     return q
 
@@ -915,24 +923,6 @@ def _admit_group_structure_work(curve: FiniteFieldShortWeierstrassCurve) -> int:
             location=("curve", "field"),
             code="elliptic_curve.finite_field.group_structure_work_bound",
             message="group structure point-order and generator work exceeds its envelope",
-        )
-    max_element = _element(curve.field, (curve.field.characteristic - 1,) * degree)
-    max_point = FiniteFieldEllipticPoint.affine(curve, max_element, max_element)
-    sample = FiniteFieldGroupStructureResult.model_construct(
-        curve=curve,
-        group=AbelianPresentation(invariant_factors=(maximum_cardinality,)),
-        generators=(max_point,),
-    )
-    output_bound = (
-        len(rfc8785.dumps(sample.model_dump(mode="json")))
-        + len(rfc8785.dumps(max_point.model_dump(mode="json")))
-        + 128
-    )
-    if output_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("curve",),
-            code="elliptic_curve.finite_field.group_structure_output_bound",
-            message="group structure result exceeds the canonical output-byte envelope",
         )
     return q
 
@@ -1056,17 +1046,6 @@ def finite_field_isogeny_class(
             code="elliptic_curve.finite_field.isogeny_field_mismatch",
             message="isogeny comparison requires the same exact finite-field presentation",
         )
-    output_bound = (
-        len(rfc8785.dumps(first.model_dump(mode="json")))
-        + len(rfc8785.dumps(second.model_dump(mode="json")))
-        + 512
-    )
-    if output_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("first", "second"),
-            code="elliptic_curve.finite_field.isogeny_output_bound",
-            message="isogeny comparison result exceeds the canonical output-byte envelope",
-        )
     # Admit both full-field character sums before doing either one. The curves
     # share q and degree, so this bounds the complete pair request.
     q = _admit_extension_count_growth(first, 1)
@@ -1129,19 +1108,6 @@ def finite_field_isomorphism(
             location=("source", "field"),
             code="elliptic_curve.finite_field.isomorphism_work_bound",
             message="complete model-isomorphism search exceeds its exact-work envelope",
-        )
-    largest_element = _element(field, (field.characteristic - 1,) * field.degree)
-    output_bound = (
-        len(rfc8785.dumps(source.model_dump(mode="json")))
-        + len(rfc8785.dumps(target.model_dump(mode="json")))
-        + len(rfc8785.dumps(largest_element.model_dump(mode="json")))
-        + 256
-    )
-    if output_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("source", "target"),
-            code="elliptic_curve.finite_field.isomorphism_output_bound",
-            message="model-isomorphism result exceeds the canonical output-byte envelope",
         )
     zero = (0,) * field.degree
     source_a, source_b = (
@@ -1250,25 +1216,6 @@ def finite_field_quadratic_twist(
             location=("curve", "field"),
             code="elliptic_curve.finite_field.twist_work_bound",
             message="canonical quadratic twist search exceeds its exact work envelope",
-        )
-    source_shape = admitted.model_dump(mode="json")
-    source_bytes = len(rfc8785.dumps(source_shape))
-    source_coordinate_digits = sum(
-        len(str(value))
-        for coefficient in (coefficient_a, coefficient_b)
-        for value in coefficient.coordinates
-    )
-    output_bound = (
-        source_bytes
-        - source_coordinate_digits
-        + 2 * field.degree * len(str(field.characteristic - 1))
-        + 64
-    )
-    if output_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("curve",),
-            code="elliptic_curve.finite_field.twist_output_bound",
-            message="quadratic twist value exceeds the canonical output-byte envelope",
         )
 
     modulus = field.characteristic
@@ -1622,23 +1569,6 @@ def finite_field_point_order(
             code="elliptic_curve.finite_field.point_order_work_bound",
             message="point-order scalar checks exceed the admitted exact-work envelope",
         )
-    max_curve_json_bytes = len(rfc8785.dumps(curve.model_dump(mode="json")))
-    max_element = _element(
-        curve.field, (curve.field.characteristic - 1,) * curve.field.degree
-    )
-    max_point = FiniteFieldEllipticPoint.affine(curve, max_element, max_element)
-    max_point_json_bytes = len(rfc8785.dumps(max_point.model_dump(mode="json")))
-    output_bound = (
-        max_curve_json_bytes
-        + (MAX_POINT_ORDER_WITNESSES + 2) * max_point_json_bytes
-        + 512
-    )
-    if output_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("point",),
-            code="elliptic_curve.finite_field.point_order_output_bound",
-            message="point-order witnesses exceed the canonical output-byte envelope",
-        )
 
     cardinality = _cardinality_from_character_sum(curve, q)
     group_primes = _prime_divisors(cardinality.cardinality)
@@ -1729,53 +1659,24 @@ def finite_field_curve_base_change(
         return _embed_element(element, embedding, target_context=target_context)
 
     target_field = embedding.target
-    maximum = _element(
-        target_field, (target_field.characteristic - 1,) * target_field.degree
-    )
-    sample_curve = FiniteFieldShortWeierstrassCurve.model_construct(
-        field=target_field, coefficient_a=maximum, coefficient_b=maximum
-    )
-    sample_point = (
-        FiniteFieldEllipticPoint.model_construct(
-            curve=sample_curve, at_infinity=False, x=maximum, y=maximum
-        )
-        if point is not None and not point.at_infinity
-        else FiniteFieldEllipticPoint.infinity(sample_curve)
-        if point is not None
-        else None
-    )
-    sample = FiniteFieldCurveBaseChangeResult.model_construct(
-        curve=sample_curve, point=sample_point
-    )
-    if (
-        len(rfc8785.dumps(sample.model_dump(mode="json")))
-        > CanonicalLimits().max_output_bytes
-    ):
-        raise OperationResourceAdmissionError(
-            location=("embedding", "target"),
-            code="elliptic_curve.finite_field.base_change_output_bound",
-            message="transported curve and point exceed the canonical output-byte envelope",
-        )
-
     target_curve = FiniteFieldShortWeierstrassCurve.model_construct(
         field=target_field,
         coefficient_a=mapped(curve.coefficient_a),
         coefficient_b=mapped(curve.coefficient_b),
         model=curve.model,
     )
-    target_curve = _curve_admit(target_curve)
     target_point = None
     if point is not None:
         if point.at_infinity:
             target_point = FiniteFieldEllipticPoint.infinity(target_curve)
         else:
             assert point.x is not None and point.y is not None
-            target_point = FiniteFieldEllipticPoint.affine(
-                target_curve,
-                mapped(point.x),
-                mapped(point.y),
+            target_point = FiniteFieldEllipticPoint.model_construct(
+                curve=target_curve,
+                at_infinity=False,
+                x=mapped(point.x),
+                y=mapped(point.y),
             )
-            target_point = _point_admit_with_curve(target_curve, target_point)
     return FiniteFieldCurveBaseChangeResult(curve=target_curve, point=target_point)
 
 

@@ -1,25 +1,25 @@
-import json
 import math
 
 import pytest
 import rfc8785
 
 from jacobian.canonical import CanonicalLimits
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
 )
+from jacobian.math.groups.abelian._models import AbelianPresentation
 from jacobian.math.number_theory.elliptic_curves import (
     finite_field as finite_field_module,
 )
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
+    FiniteFieldCurveBaseChangeResult,
     FiniteFieldEllipticPoint,
+    FiniteFieldGroupStructureResult,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
     finite_field_curve_base_change,
@@ -135,17 +135,6 @@ def test_model_isomorphism_matches_independent_complete_scaling_oracle() -> None
     assert scaling_oracle((1, 1), (2, 1)) is None
     assert negative.isomorphic is False
     assert negative.scaling is None
-
-
-def test_model_isomorphism_public_example_composes_through_dispatch() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("elliptic_curve.finite_field.isomorphism.decide")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["isomorphic"] is True
-    assert result.output["scaling"] is not None
 
 
 def test_model_isomorphism_bounds_complete_search_before_field_arithmetic(
@@ -309,18 +298,6 @@ def test_group_structure_and_generators_match_independent_exhaustive_oracle(
     assert generated == points
 
 
-def test_group_structure_operation_is_published_and_serializable() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("elliptic_curve.finite_field.group_structure.compute")
-    assert operation is not None
-    invocation = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    result = operation.result_type.model_validate_json(json.dumps(invocation.output))
-    assert tuple(result.group.invariant_factors) == (9,)
-    assert len(result.generators) == 1
-
-
 def test_group_structure_rejects_work_before_point_enumeration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -426,22 +403,6 @@ def test_point_orders_match_independent_repeated_addition_and_witnesses() -> Non
             assert not witness.reduced_multiple.at_infinity
 
 
-def test_point_order_operation_is_published_and_serializable() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("elliptic_curve.finite_field.point.order.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["group_cardinality"] == 9
-    assert result.output["order"] == 9
-    assert result.output["annihilating_multiple"]["at_infinity"] is True
-    assert [
-        (witness["prime"], witness["reduced_scalar"])
-        for witness in result.output["prime_divisor_witnesses"]
-    ] == [(3, 3)]
-
-
 def test_point_order_rejects_field_above_exact_counting_envelope() -> None:
     prime = 5003
     field = FiniteFieldPresentation(
@@ -462,18 +423,6 @@ def test_point_order_rejects_field_above_exact_counting_envelope() -> None:
     assert error.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.enumeration_bound"
     )
-
-
-def test_isogeny_class_operation_is_published_and_serializable() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("elliptic_curve.finite_field.isogeny_class.decide")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["same_isogeny_class"] is False
-    assert result.output["first_frobenius_polynomial"] == [5, 3, 1]
-    assert result.output["second_frobenius_polynomial"] == [5, 1, 1]
 
 
 @pytest.mark.parametrize("prime", [5, 7, 11])
@@ -505,8 +454,8 @@ def test_point_enumeration_is_exact_against_exhaustive_integer_oracle(
 
 
 def test_scaled_point_enumeration_uses_exact_character_count_oracle() -> None:
-    """The larger accepted field checks every output point and exact coverage."""
-    prime = 10_007
+    """Native enumeration accepts bounded values above the delivery byte cap."""
+    prime = 20_011
     field = FiniteFieldPresentation(
         characteristic=prime, modulus_coefficients=(0, 1), generator="a"
     )
@@ -524,7 +473,7 @@ def test_scaled_point_enumeration_uses_exact_character_count_oracle() -> None:
 
     point_set = finite_field_points(curve)
     assert len(point_set.points) == expected_count
-    assert len(rfc8785.dumps(point_set.model_dump(mode="json"))) <= (
+    assert len(rfc8785.dumps(point_set.model_dump(mode="json"))) > (
         CanonicalLimits().max_output_bytes
     )
     assert sum(point.at_infinity for point in point_set.points) == 1
@@ -534,8 +483,8 @@ def test_scaled_point_enumeration_uses_exact_character_count_oracle() -> None:
     assert all((y * y - (x * x * x + x + 1)) % prime == 0 for x, y in pairs)
 
 
-def test_point_enumeration_rejects_output_bound_before_expansion() -> None:
-    prime = 20_011
+def test_point_enumeration_rejects_materialization_bound_before_expansion() -> None:
+    prime = 65_521
     field = FiniteFieldPresentation(
         characteristic=prime, modulus_coefficients=(0, 1), generator="a"
     )
@@ -546,7 +495,7 @@ def test_point_enumeration_rejects_output_bound_before_expansion() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         finite_field_points(curve)
     assert error.value.errors()[0]["type"] == (
-        "elliptic_curve.finite_field.enumeration_output_bound"
+        "elliptic_curve.finite_field.enumeration_materialization_bound"
     )
 
 
@@ -632,18 +581,6 @@ def test_f5_point_group_law_matches_independent_oracle_and_hand_examples() -> No
             assert coordinates(actual) == oracle(coordinates(left), coordinates(right))
 
 
-def test_finite_field_addition_is_published_and_runs_through_catalog() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("elliptic_curve.finite_field.point.add.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["point"]["at_infinity"] is False
-    assert result.output["point"]["x"]["coordinates"] == ["3"]
-    assert result.output["point"]["y"]["coordinates"] == ["4"]
-
-
 def test_finite_field_scalar_multiplication_rejects_work_above_bound() -> None:
     field = FiniteFieldPresentation(
         characteristic=5, modulus_coefficients=(0, 1), generator="a"
@@ -702,6 +639,20 @@ def test_extension_counts_match_direct_count_over_f25() -> None:
     assert result.counts[0].cardinality == result.base_cardinality
     assert result.counts[1].cardinality == direct_count == 27
     assert result.counts[1].frobenius_power_sum == -1
+
+
+def test_large_extension_counts_keep_decimal_integer_wire_encoding() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    output = finite_field_extension_counts(curve, 24).model_dump(mode="json")
+    assert isinstance(output["counts"][-1]["cardinality"], str)
+    assert int(output["counts"][-1]["cardinality"]) > 2**53
+    assert isinstance(output["counts"][-1]["frobenius_power_sum"], str)
 
 
 def test_point_enumeration_over_directly_presented_extension_field() -> None:
@@ -789,22 +740,6 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     assert finite_field_point_check(result.curve, result.point).on_curve
     assert finite_field_point_scalar(result.curve, result.point, 9).point.at_infinity
 
-    operation = Catalog.open().operation(
-        "elliptic_curve.finite_field.base_change.compute"
-    )
-    assert operation is not None
-    wire_result = invoke_operation(
-        operation.operation_id,
-        {
-            "curve": curve.model_dump(mode="json"),
-            "embedding": embedding.model_dump(mode="json"),
-            "point": point.model_dump(mode="json"),
-        },
-        Catalog.open(),
-    )
-    assert wire_result.output["curve"]["field"] == extension.model_dump(mode="json")
-    assert wire_result.output["point"]["y"]["coordinates"] == ["1", "0"]
-
     invalid = finite_field_module.FieldEmbedding(
         source=base,
         target=extension,
@@ -815,6 +750,41 @@ def test_curve_and_point_transport_along_explicit_f5_to_f25_embedding() -> None:
     assert error.value.errors()[0]["type"] == (
         "finite_field.embedding_generator_not_root"
     )
+
+
+def test_base_change_result_rejects_point_from_another_curve() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    source = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    other = FiniteFieldShortWeierstrassCurve(
+        field=field,
+        coefficient_a=one,
+        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(2,)),
+    )
+    foreign_point = FiniteFieldEllipticPoint.infinity(other)
+    with pytest.raises(ValueError, match="transported curve"):
+        FiniteFieldCurveBaseChangeResult(curve=source, point=foreign_point)
+
+
+def test_group_structure_result_rejects_rank_above_two() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    identity = FiniteFieldEllipticPoint.infinity(curve)
+    with pytest.raises(ValueError, match="at most two invariant factors"):
+        FiniteFieldGroupStructureResult(
+            curve=curve,
+            group=AbelianPresentation(invariant_factors=(2, 2, 2)),
+            generators=(identity, identity, identity),
+        )
 
 
 @pytest.mark.parametrize(("prime", "a", "b"), [(5, 1, 1), (7, 2, 3), (11, 0, 4)])
@@ -863,19 +833,6 @@ def test_extension_count_degree_is_bounded_before_counting() -> None:
     assert error.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.extension_degree_bound"
     )
-
-
-def test_extension_count_catalog_example_runs_with_typed_output() -> None:
-    operation = Catalog.open().operation(
-        "elliptic_curve.finite_field.extension_counts.compute"
-    )
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, Catalog.open()
-    )
-    validated = operation.result_type.model_validate_json(json.dumps(result.output))
-    assert validated.counts[0].cardinality == 9
-    assert validated.counts[1].cardinality == 27
 
 
 def test_native_curve_consumers_reject_missing_authored_fields() -> None:

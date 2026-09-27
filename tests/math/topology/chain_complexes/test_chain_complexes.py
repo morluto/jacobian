@@ -1729,7 +1729,7 @@ class TestSchemaVisibleCoefficientGrammar:
         description = ConstructChainComplexRequest.model_json_schema()["properties"][
             "differential_matrices"
         ]["description"]
-        assert "residues in [0,p)" in description
+        assert "residues in [0, p)" in description
         assert "JSON uses one" in description
 
     def test_chain_coefficient_schema_remains_a_canonical_json_string(self) -> None:

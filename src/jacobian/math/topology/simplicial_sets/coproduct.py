@@ -53,7 +53,12 @@ def _require_simplicial_factor(
             code="simplicial_set.coproduct_factor_invalid",
             message=f"{location} factor is not a simplicial set: {detail}",
         )
-    assert checked.simplicial_set is not None
+    if checked.simplicial_set is None:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="simplicial_set.coproduct_factor_missing",
+            message=f"{location} factor did not produce a validated simplicial set",
+        )
     return checked.simplicial_set
 
 

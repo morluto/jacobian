@@ -44,6 +44,19 @@ def _value_digits(value: RationalUnitQuaternion) -> int:
     )
 
 
+def _are_inverses(left: RationalUnitQuaternion, right: RationalUnitQuaternion) -> bool:
+    """Compare a unit quaternion with the conjugate of another exactly."""
+    left_coordinates = left.coordinates
+    right_coordinates = right.coordinates
+    return left_coordinates[0] == right_coordinates[0] and all(
+        left_coordinate.den == right_coordinate.den
+        and left_coordinate.num == -right_coordinate.num
+        for left_coordinate, right_coordinate in zip(
+            left_coordinates[1:], right_coordinates[1:], strict=True
+        )
+    )
+
+
 def _admit_aggregate_work(work: int, location: str) -> None:
     if work > MAX_SU2_GAUGE_AGGREGATE_WORK:
         raise OperationResourceAdmissionError(
@@ -65,6 +78,7 @@ def _admit_su2_path(
     edges = {edge.edge_id: edge for edge in field.lattice.edges}
     aggregate_work = 0
     accumulated_digits = 1
+    accumulated_is_single_traversal = False
     previous: tuple[str, bool] | None = None
     cursor: str | None = None
     start: str | None = None
@@ -86,14 +100,19 @@ def _admit_su2_path(
         cursor = head
         step_digits = _value_digits(labels[step.edge_id])
         traversal = (step.edge_id, step.forward)
-        if (
-            previous is not None
+        cancels_accumulator = (
+            accumulated_is_single_traversal
+            and previous is not None
             and previous[0] == step.edge_id
             and previous[1] != step.forward
-        ):
-            accumulated_digits = 1
+        )
         aggregate_work += 64 * accumulated_digits * step_digits
-        accumulated_digits += step_digits + 1
+        if cancels_accumulator:
+            accumulated_digits = 1
+            accumulated_is_single_traversal = False
+        else:
+            accumulated_is_single_traversal = accumulated_digits == 1
+            accumulated_digits += step_digits + 1
         previous = traversal
     _admit_aggregate_work(aggregate_work, "path")
     if not path.steps:
@@ -183,8 +202,11 @@ def _admit_field(field: object) -> SU2GaugeField:
     for entry in values:
         if not isinstance(entry, SU2GaugeEdgeValue):
             _reject("field_shape", "every edge value must be typed")
+        value = getattr(entry, "value", None)
+        if not isinstance(value, RationalUnitQuaternion):
+            _reject("field_shape", "every edge value must contain a quaternion")
         # The quaternion kernel re-admits the exact norm and rational coordinates.
-        inverse_rational_unit_quaternion(entry.value)
+        inverse_rational_unit_quaternion(value)
     return field
 
 
@@ -194,15 +216,19 @@ def su2_gauge_transform(
 ) -> SU2GaugeTransformResult:
     """Apply ``U'_(u->v) = g_u U_(u->v) g_v^-1`` edgewise."""
     field = _admit_field(field)
-    if (
-        not isinstance(vertex_values, tuple)
-        or len(vertex_values) > len(field.lattice.vertices)
-        or any(not isinstance(entry, SU2GaugeVertexValue) for entry in vertex_values)
+    if not isinstance(vertex_values, tuple) or len(vertex_values) > len(
+        field.lattice.vertices
     ):
         _reject("transform_vertices", "gauge frames are malformed")
     frames: dict[str, RationalUnitQuaternion] = {}
     for entry in vertex_values:
-        frames[entry.vertex] = entry.value
+        if not isinstance(entry, SU2GaugeVertexValue):
+            _reject("transform_vertices", "gauge frames are malformed")
+        vertex = getattr(entry, "vertex", None)
+        value = getattr(entry, "value", None)
+        if not _valid_label(vertex) or not isinstance(value, RationalUnitQuaternion):
+            _reject("transform_vertices", "gauge frames are malformed")
+        frames[vertex] = value
     vertices = field.lattice.vertices
     if set(frames) != set(vertices) or len(frames) != len(vertex_values):
         _reject("transform_vertices", "gauge frames must cover every lattice vertex")
@@ -217,8 +243,18 @@ def su2_gauge_transform(
         left_digits = _value_digits(frames[edge.tail])
         link_digits = _value_digits(source_by_id[edge.edge_id])
         right_digits = _value_digits(frames[edge.head])
-        aggregate_work += 64 * left_digits * link_digits
-        aggregate_work += 64 * (left_digits + link_digits + 1) * right_digits
+        first_work = 64 * left_digits * link_digits
+        aggregate_work += first_work
+        # Account for exact cancellation in the first product before estimating
+        # the second multiplication. Equality against the canonical inverse is
+        # a cheap structural check and avoids rejecting a small reduced result
+        # based on its large unreduced operands.
+        left_product_digits = (
+            1
+            if _are_inverses(frames[edge.tail], source_by_id[edge.edge_id])
+            else left_digits + link_digits + 1
+        )
+        aggregate_work += 64 * left_product_digits * right_digits
     _admit_aggregate_work(aggregate_work, "field")
     for edge in field.lattice.edges:
         left = multiply_rational_unit_quaternions(

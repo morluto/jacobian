@@ -7,7 +7,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.gauge._models import (
     GaugeEdge,
     GaugeLattice,
@@ -254,6 +257,112 @@ def test_duplicate_frames_do_not_claim_full_vertex_coverage() -> None:
         su2_gauge_transform(field, frames)
     with pytest.raises(ValueError, match="transform_vertices"):
         SU2GaugeTransformRequest(field=field, vertex_values=frames)
+
+
+def test_path_work_charges_inverse_product_before_resetting_growth() -> None:
+    m = 4 * 10**255
+    value = q(
+        Fraction(m * m - 1, m * m + 1),
+        Fraction(2 * m, m * m + 1),
+        Fraction(0),
+        Fraction(0),
+    )
+    lattice = GaugeLattice(
+        vertices=("v",), edges=(GaugeEdge(edge_id="loop", tail="v", head="v"),)
+    )
+    field = SU2GaugeField(
+        lattice=lattice,
+        edge_values=(SU2GaugeEdgeValue(edge_id="loop", value=value),),
+    )
+    small_path = OrientedGaugePath(
+        steps=tuple(
+            GaugePathStep(edge_id="loop", forward=forward)
+            for forward in (True, False, True, False)
+        )
+    )
+    assert su2_path_holonomy(field, small_path).holonomy == q(*IDENTITY)
+    steps = tuple(
+        GaugePathStep(edge_id="loop", forward=forward)
+        for _ in range(128)
+        for forward in (True, False)
+    )
+    with pytest.raises(OperationResourceAdmissionError):
+        su2_path_holonomy(field, OrientedGaugePath(steps=steps))
+
+
+def test_transform_admission_accounts_for_first_product_cancellation() -> None:
+    m = 4 * 10**255
+    value = q(
+        Fraction(m * m - 1, m * m + 1),
+        Fraction(2 * m, m * m + 1),
+        Fraction(0),
+        Fraction(0),
+    )
+    inverse = q(*exact_inverse(coordinates_of(value)))
+    lattice = GaugeLattice(
+        vertices=("v",), edges=(GaugeEdge(edge_id="loop", tail="v", head="v"),)
+    )
+    field = SU2GaugeField(
+        lattice=lattice,
+        edge_values=(SU2GaugeEdgeValue(edge_id="loop", value=inverse),),
+    )
+    transformed = su2_gauge_transform(
+        field, (SU2GaugeVertexValue(vertex="v", value=value),)
+    )
+    assert transformed.transformed.edge_values[0].value == inverse
+
+
+def test_native_transform_rejects_constructed_bad_frame_labels_and_values() -> None:
+    field = _field()
+    malformed = (
+        SU2GaugeVertexValue.model_construct(vertex=[], value=q(*IDENTITY)),
+        SU2GaugeVertexValue.model_construct(vertex="v0"),
+    )
+    for entry in malformed:
+        with pytest.raises(OperationDomainValidationError):
+            su2_gauge_transform(
+                field,
+                (
+                    entry,
+                    *tuple(
+                        SU2GaugeVertexValue(vertex=vertex, value=q(*IDENTITY))
+                        for vertex in field.lattice.vertices[1:]
+                    ),
+                ),
+            )
+
+
+def test_native_field_rejects_constructed_edge_missing_quaternion() -> None:
+    field = _field()
+    malformed = SU2GaugeEdgeValue.model_construct(edge_id="e0")
+    field = SU2GaugeField.model_construct(
+        lattice=field.lattice, edge_values=(malformed, *field.edge_values[1:])
+    )
+    with pytest.raises(OperationDomainValidationError):
+        su2_path_holonomy(field, _forward_path())
+
+
+def test_native_transform_bounds_frames_before_scanning_them() -> None:
+    field = _field()
+    frames = tuple(
+        SU2GaugeVertexValue(vertex="v0", value=q(*IDENTITY)) for _ in range(65)
+    )
+    with pytest.raises(OperationDomainValidationError):
+        su2_gauge_transform(field, frames)
+
+
+def test_native_field_revalidates_edge_labels_from_constructed_values() -> None:
+    field = _field()
+    malformed_edge = GaugeEdge.model_construct(edge_id="e" * 65, tail="v0", head="v1")
+    lattice = GaugeLattice.model_construct(
+        vertices=field.lattice.vertices,
+        edges=(malformed_edge, *field.lattice.edges[1:]),
+    )
+    forged = SU2GaugeField.model_construct(
+        lattice=lattice, edge_values=field.edge_values
+    )
+    with pytest.raises(OperationDomainValidationError):
+        su2_path_holonomy(forged, _forward_path())
 
 
 def test_wilson_traces_are_native_helpers_not_catalog_operations() -> None:

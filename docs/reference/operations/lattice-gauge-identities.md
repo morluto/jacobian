@@ -29,8 +29,7 @@ parent. Backward traversal resolves through the parent's inverse map. A
 zero-step path returns the table identity at its named lattice vertex.
 
 The path convention is `h_0 = 1` and `h_i = h_{i-1} * U_i` in traversal
-order. This matters for noncommutative groups such as S3. Arbitrary table groups
-do not yet have a public vertex gauge transformation or Wilson character.
+order. This matters for noncommutative groups such as S3. Arbitrary table groups do not yet have a public vertex gauge transformation or Wilson character.
 
 `lattice_gauge.finite_group.complex.construct.compute` supplies the missing
 source-bound 2-cell carrier for that path operation. Each face stores an
@@ -58,6 +57,7 @@ gauge law `U_{u→v} ↦ g_u U_{u→v} g_v^{-1}`, each closed-face product is co
 at its starting vertex, so the identity/flatness predicate is gauge invariant
 ([Philipsen, *QCD on the Lattice*](https://link.springer.com/chapter/10.1007/978-3-030-38207-0_5)).
 Flatness applies only to faces present in the supplied finite complex.
+
 
 ## Identity cases
 

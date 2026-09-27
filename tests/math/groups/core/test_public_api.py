@@ -11,6 +11,7 @@ def test_native_group_api_exports_the_canonical_group_value() -> None:
         "FiniteGroupTableElement",
         "PermutationGroup",
         "element_order",
+        "finite_group_table",
         "group_conjugacy_classes",
         "group_orbit",
         "group_order",

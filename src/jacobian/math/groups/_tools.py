@@ -26,7 +26,6 @@ from jacobian.math.groups._models import (
     PermutationGroup,
 )
 from jacobian.math.groups._table_models import (
-    FiniteGroupTable,
     FiniteGroupTableElement,
     FiniteGroupTableRequest,
     FiniteGroupTableResult,
@@ -90,7 +89,7 @@ def compute_group_order(request: PermutationGroup) -> GroupOrderResult:
 def construct_finite_group_table(
     request: FiniteGroupTableRequest,
 ) -> FiniteGroupTableResult:
-    """Publish one validated indexed group table as a parent-bound value."""
+    """Decode the catalog request and adapt the native table value."""
     if not isinstance(request, FiniteGroupTableRequest):
         raise OperationDomainValidationError(
             location=("request",),
@@ -105,72 +104,10 @@ def construct_finite_group_table(
             code="finite_group.table.invalid_request",
             message="request must satisfy the finite-group table request bounds",
         ) from error
-    table = request.multiplication
-    identity = request.identity
-    order = len(table)
-    if any(len(row) != order for row in table):
-        raise OperationDomainValidationError(
-            location=("multiplication",),
-            code="finite_group.table.table_shape",
-            message="multiplication table must be square",
-        )
-    if any(value >= order for row in table for value in row):
-        raise OperationDomainValidationError(
-            location=("multiplication",),
-            code="finite_group.table.entry_range",
-            message="every table entry must index a group element",
-        )
-    if identity >= order:
-        raise OperationDomainValidationError(
-            location=("identity",),
-            code="finite_group.table.identity_range",
-            message="identity index must name a table element",
-        )
-    if any(table[identity][i] != i or table[i][identity] != i for i in range(order)):
-        raise OperationDomainValidationError(
-            location=("identity",),
-            code="finite_group.table.identity_law",
-            message="the proposed identity must be two-sided",
-        )
-    inverse_indices: list[int] = []
-    for i in range(order):
-        inverse_index = next(
-            (
-                j
-                for j in range(order)
-                if table[i][j] == identity and table[j][i] == identity
-            ),
-            None,
-        )
-        if inverse_index is None:
-            raise OperationDomainValidationError(
-                location=("multiplication",),
-                code="finite_group.table.inverse_law",
-                message="every element must have a two-sided inverse",
-            )
-        inverse_indices.append(inverse_index)
-    inverses = tuple(inverse_indices)
-    for a in range(order):
-        for b in range(order):
-            ab = table[a][b]
-            for c in range(order):
-                if table[ab][c] != table[a][table[b][c]]:
-                    raise OperationDomainValidationError(
-                        location=("multiplication",),
-                        code="finite_group.table.associativity",
-                        message="multiplication table must be associative",
-                    )
-    # This producer has checked the group laws already. Keep the canonical
-    # output construction structural; decoding a downstream caller's table
-    # requires that consumer to re-admit the laws it relies on.
-    group = FiniteGroupTable.model_construct(
-        multiplication=table,
-        identity=identity,
-        inverse=inverses,
-    )
+    group = native.finite_group_table(request.multiplication, request.identity)
     return FiniteGroupTableResult(
         group=group,
-        identity_element=FiniteGroupTableElement(group=group, index=identity),
+        identity_element=FiniteGroupTableElement(group=group, index=group.identity),
     )
 
 

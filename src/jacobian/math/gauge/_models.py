@@ -26,6 +26,10 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice_gauge.{reason}", message)
 
 
+MAX_GAUGE_FACES = 128
+MAX_GAUGE_TOTAL_FACE_STEPS = 4096
+
+
 def _json_arrays_to_tuples(value: object) -> object:
     """Decode only declared JSON array fields as tuples for strict round trips."""
     if not isinstance(value, dict):
@@ -166,6 +170,8 @@ def _raw_face_step_count(face: object) -> int:
     return len(steps)
 
 
+
+
 MAX_GAUGE_VERTICES = 64
 """Maximum vertices in one admitted gauge lattice."""
 
@@ -180,14 +186,6 @@ MIN_GAUGE_DEGREE = 1
 
 MAX_GAUGE_PATH_LENGTH = 256
 """Maximum oriented steps in one admitted lattice path."""
-
-MAX_GAUGE_FACES = 128
-"""Maximum oriented 2-cells in one admitted finite gauge complex."""
-
-MAX_GAUGE_TOTAL_FACE_STEPS = 4096
-"""Maximum aggregate attaching-walk steps in one gauge complex."""
-
-"""Maximum conservative serialized size of one finite gauge complex."""
 
 MAX_GAUGE_LABEL_LENGTH = 64
 """Maximum length of a vertex or edge identifier."""
@@ -810,16 +808,11 @@ class HolonomyResult(StrictModel):
 __all__ = [
     "MAX_GAUGE_DEGREE",
     "MAX_GAUGE_EDGES",
-    "MAX_GAUGE_FACES",
     "MAX_GAUGE_LABEL_LENGTH",
     "MAX_GAUGE_PATH_LENGTH",
-    "MAX_GAUGE_TOTAL_FACE_STEPS",
     "MAX_GAUGE_VERTICES",
     "MIN_GAUGE_DEGREE",
     "EdgeContribution",
-    "FiniteGroupGaugeComplex",
-    "FiniteGroupGaugeComplexRequest",
-    "FiniteGroupGaugeFace",
     "GaugeEdge",
     "GaugeField",
     "GaugeFieldEdgeLabel",

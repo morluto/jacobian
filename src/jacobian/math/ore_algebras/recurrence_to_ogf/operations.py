@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
-from math import comb
+from math import comb, gcd
 from typing import Any
 
 from jacobian._exact import CanonicalRational
@@ -93,8 +93,12 @@ def _digits_for_bit_bound(bits: int) -> int:
 
 
 def _denominator_factor_bits(values: list[Fraction]) -> int:
-    """Bound the common denominator by multiplying distinct factors once."""
-    return sum(denominator.bit_length() for denominator in {v.denominator for v in values})
+    """Return the bit length of the exact common denominator."""
+    denominator = 1
+    for value in values:
+        factor = value.denominator
+        denominator = denominator // gcd(denominator, factor) * factor
+    return denominator.bit_length()
 
 
 def _product_numerator_bits(left: Fraction, right: Fraction) -> int:
@@ -145,7 +149,7 @@ def _canonical_request(
 def _admit_transform(
     request: RecurrenceOGFEquationRequest,
     operator: ShiftOreOperator,
-) -> tuple[list[tuple[int, _Poly]], int, dict[tuple[int, int], Fraction]]:
+) -> tuple[list[tuple[int, _Poly]], int, _Poly]:
     """Bound output shape, coefficient height, work, and bytes before expansion."""
     polynomials: list[tuple[int, _Poly]] = []
     maximum_degree = 0
@@ -190,44 +194,38 @@ def _admit_transform(
             message="recurrence to OGF conversion exceeds its admitted exact-arithmetic work",
         )
     values = [value.as_fraction() for value in request.initial_coefficients.values]
-    active_initial_denominators: set[int] = set()
     numerator_bits = max(
         (abs(value.numerator).bit_length() for value in input_scalars), default=1
     )
     # Only nonzero boundary products are materialized. A large initial value
     # annihilated by q_i(-i), or canceled by its rational denominator, contributes
     # no output coefficient and must not consume the carrier's numerator budget.
-    boundary_product_bits = 1
-    boundary_degree = -1
-    boundary_evaluations: dict[tuple[int, int], Fraction] = {}
-    boundary_degree = -1
+    forcing: _Poly = {}
     for shift, polynomial in polynomials:
         for index in range(shift):
             evaluation = _evaluate_polynomial(polynomial, index - shift)
-            boundary_evaluations[(shift, index)] = evaluation
             if evaluation and values[index]:
-                boundary_degree = max(boundary_degree, operator.order - shift + index)
-                boundary_product_bits = max(
-                    boundary_product_bits,
-                    _product_numerator_bits(values[index], evaluation),
-                )
-                active_initial_denominators.add(values[index].denominator)
-    denominator_bits = _denominator_factor_bits(input_scalars) + sum(
-        denominator.bit_length() for denominator in active_initial_denominators
+                degree = operator.order - shift + index
+                forcing[degree] = forcing.get(degree, Fraction(0)) + values[index] * evaluation
+                if not forcing[degree]:
+                    del forcing[degree]
+    boundary_numerator_bits = max(
+        (abs(value.numerator).bit_length() for value in forcing.values()), default=1
     )
+    denominator_bits = _denominator_factor_bits(input_scalars + list(forcing.values()))
     # Evaluating a degree-d polynomial at integer points of magnitude at most r
     # adds at most d*ceil(log2(r+1)) bits. The shift order alone does not imply
     # coefficient growth (e.g. a_(n+r)=0 has unit coefficients throughout).
     evaluation_growth_bits = maximum_degree * operator.order.bit_length()
     growth_bits = (
-        max(numerator_bits, boundary_product_bits)
+        max(numerator_bits, boundary_numerator_bits)
         + denominator_bits
         + 32
         + 8 * maximum_degree
         + evaluation_growth_bits
     )
-    # Only nonzero boundary products contribute output monomials.
-    maximum_output_degree = max(maximum_output_degree, boundary_degree)
+    # Only nonzero accumulated boundary coefficients contribute output monomials.
+    maximum_output_degree = max(maximum_output_degree, max(forcing, default=-1))
     output_digits = _digits_for_bit_bound(growth_bits)
     if output_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
         raise OperationResourceAdmissionError(
@@ -246,15 +244,14 @@ def _admit_transform(
             code="ore_algebra.recurrence_ogf_output_bytes",
             message="the OGF differential equation exceeds its serialized output bound",
         )
-    return polynomials, maximum_degree, boundary_evaluations
+    return polynomials, maximum_degree, forcing
 
 
 def _expand_equation(
     polynomials: list[tuple[int, _Poly]],
-    initial_values: tuple[Fraction, ...],
     shift_order: int,
     maximum_degree: int,
-    boundary_evaluations: dict[tuple[int, int], Fraction],
+    admitted_forcing: _Poly,
 ) -> tuple[DifferentialOreOperator, RationalFunction]:
     """Expand q_i(Theta-i), where Theta=xD, plus its initial polynomial."""
     stirling: list[list[int]] = [[1]]
@@ -271,7 +268,7 @@ def _expand_equation(
         stirling.append(row)
 
     coefficients: dict[int, _Poly] = {}
-    forcing: _Poly = {}
+    forcing = dict(admitted_forcing)
     for shift, polynomial in polynomials:
         for theta_power, scalar in _shift_polynomial(polynomial, -shift).items():
             for derivative_order in range(theta_power + 1):
@@ -284,13 +281,6 @@ def _expand_equation(
                     )
                     if not target[degree]:
                         del target[degree]
-        for index in range(shift):
-            contribution = initial_values[index] * boundary_evaluations[(shift, index)]
-            if contribution:
-                degree = shift_order - shift + index
-                forcing[degree] = forcing.get(degree, Fraction(0)) + contribution
-                if not forcing[degree]:
-                    del forcing[degree]
 
     differential_operator = DifferentialOreOperator.model_validate(
         {
@@ -321,13 +311,12 @@ def polynomial_recurrence_to_ogf_equation(
     assert analytic convergence.
     """
     request, operator = _canonical_request(recurrence, initial_coefficients)
-    polynomials, maximum_degree, boundary_evaluations = _admit_transform(request, operator)
+    polynomials, maximum_degree, forcing = _admit_transform(request, operator)
     differential_operator, forcing = _expand_equation(
         polynomials,
-        tuple(value.as_fraction() for value in request.initial_coefficients.values),
         operator.order,
         maximum_degree,
-        boundary_evaluations,
+        forcing,
     )
     return RecurrenceOGFEquation._from_kernel(
         operator,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from fractions import Fraction
+from math import gcd
 from typing import Any
 
 from jacobian._exact import CanonicalRational
@@ -71,8 +72,12 @@ def _digits_for_bit_bound(bits: int) -> int:
 
 
 def _denominator_factor_bits(values: list[Fraction]) -> int:
-    """Bound a common denominator by multiplying distinct factors once."""
-    return sum(denominator.bit_length() for denominator in {v.denominator for v in values})
+    """Return the bit length of the exact common denominator."""
+    denominator = 1
+    for value in values:
+        factor = value.denominator
+        denominator = denominator // gcd(denominator, factor) * factor
+    return denominator.bit_length()
 
 
 def _canonical_recurrence(

@@ -146,6 +146,18 @@ def test_shared_coefficient_denominator_is_counted_once() -> None:
     assert result.differential_operator.terms
 
 
+def test_shared_factors_between_distinct_denominators_use_the_true_lcm() -> None:
+    p = 10**63
+    recurrence = _recurrence((0, [(0, 1), (16, 1)]))
+    first, second = recurrence["terms"][0]["coefficient"]["numerator"]["terms"]
+    first["coefficient"] = {"num": 1, "den": p}
+    second["coefficient"] = {"num": 1, "den": 2 * p}
+
+    result = polynomial_recurrence_to_egf_equation(recurrence)
+
+    assert result.differential_operator.terms
+
+
 def test_egf_transform_rejects_nonpolynomial_coefficients_and_high_order() -> None:
     rational = _rf([(0, 1)])
     rational["denominator"] = {

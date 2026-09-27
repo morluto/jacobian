@@ -143,6 +143,15 @@ def test_boundary_forcing_growth_is_rejected_before_encoding() -> None:
         )
 
 
+def test_large_boundary_products_cancel_before_coefficient_admission() -> None:
+    initial = 10**999
+    result = polynomial_recurrence_to_ogf_equation(
+        _recurrence((1, [(0, 1)]), (2, [(0, 2), (1, 1)])),
+        {"values": [initial, -initial]},
+    )
+    assert result.forcing.numerator.terms == ()
+
+
 def test_annihilated_initial_value_does_not_consume_output_growth_budget() -> None:
     # q(-1)=0, so the 1,000-digit initial value contributes nothing: xF'=0.
     result = polynomial_recurrence_to_ogf_equation(

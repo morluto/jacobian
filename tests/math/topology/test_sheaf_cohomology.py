@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
@@ -29,6 +31,10 @@ _INTERVAL = canonical_complex(("a", "b"), (("a", "b"),))
 _CIRCLE = canonical_complex(("a", "b", "c"), (("a", "b"), ("b", "c"), ("a", "c")))
 _TRIANGLE = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
 _POINT = canonical_complex(("a",), (("a",),))
+
+
+def _q(value: str | int) -> CanonicalRational:
+    return CanonicalRational.from_fraction(Fraction(value))
 
 
 def _tool():
@@ -67,7 +73,11 @@ def _constant_sheaf(
             SheafStalk(simplex=cell, basis=("x",)) for cell in _cells(complex_)
         ),
         cover_maps=tuple(
-            CoverRestrictionMatrix(source=source, target=target, entries=(("1",),))
+            CoverRestrictionMatrix(
+                source=source,
+                target=target,
+                entries=((1 if field is SheafField.PRIME_FIELD else _q(1),),),
+            )
             for source, target in _covers(complex_)
         ),
     )
@@ -96,7 +106,7 @@ def _parse_matrix(
     matrix: tuple[tuple[str, ...], ...], prime: int | None
 ) -> list[list[Fraction | int]]:
     if prime is None:
-        return [[Fraction(entry) for entry in row] for row in matrix]
+        return [[Fraction(entry.num, entry.den) for entry in row] for row in matrix]
     return [[int(entry) % prime for entry in row] for row in matrix]
 
 
@@ -333,7 +343,9 @@ class TestNativeCatalogParity:
     def test_published_examples_execute(self) -> None:
         tool = _tool()
         for example in tool.examples:
-            request = SheafCohomologyRequest.model_validate(example.input)
+            request = SheafCohomologyRequest.model_validate_json(
+                json.dumps(example.input)
+            )
             result = tool.run(request)
             assert isinstance(result, SheafCohomologyResult)
             assert _bettis(result) == [1, 0]
@@ -348,7 +360,7 @@ class TestSerialization:
     def test_forged_coboundary_shape_fails_validation(self) -> None:
         result = _native(_constant_sheaf(_INTERVAL))
         payload = result.model_dump(mode="json")
-        payload["coboundary_matrices"][0] = [["1", "1", "1"]]
+        payload["coboundary_matrices"][0] = [[_q("1"), _q("1"), _q("1")]]
         with pytest.raises(ValidationError):
             SheafCohomologyResult.model_validate(payload)
 
@@ -375,7 +387,9 @@ class TestConsumerComposition:
                 SheafStalk(simplex=cell, basis=("x",)) for cell in _cells(_CIRCLE)
             ),
             cover_maps=tuple(
-                CoverRestrictionMatrix(source=source, target=target, entries=(("1",),))
+                CoverRestrictionMatrix(
+                    source=source, target=target, entries=((_q("1"),),)
+                )
                 for source, target in _covers(_CIRCLE)
             ),
         )

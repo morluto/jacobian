@@ -14,6 +14,7 @@ that need more context than an operation card:
 - [Finite simplicial subset prefixes](simplicial-set-subsets.md)
 - [Set systems and sunflower hypergraphs](combinatorics/index.md)
 - [Geometry](geometry/index.md)
+- [Constant cellular sheaves](topology/cellular-sheaf-constant.md)
 - [Root-system coroots](groups/root-coroots.md)
 - [Root, coroot, weight, and coweight vectors](groups/root-weight-lattices.md)
 - [Positive-root length profiles](groups/root-length-profiles.md)

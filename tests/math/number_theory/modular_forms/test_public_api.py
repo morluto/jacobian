@@ -43,7 +43,6 @@ def test_exact_public_api_symbols() -> None:
         "modular_character_coordinates_q_expansion",
         "modular_character_coordinates_transport",
         "modular_character_coordinates_v_degeneracy",
-        "require_modular_character_v_degeneracy_image",
         "modular_character_hecke_matrix",
         "modular_form_atkin_lehner_target",
         "modular_form_basis_frame",
@@ -72,6 +71,7 @@ def test_exact_public_api_symbols() -> None:
         "modular_form_operator_image_q_expansion",
         "modular_form_space_inclusion",
         "named_q_expansion",
+        "require_modular_character_v_degeneracy_image",
         "space_dimension",
         "sturm_bound",
     )

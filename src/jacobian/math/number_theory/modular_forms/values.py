@@ -14,7 +14,10 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
-from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.characters.values import (
+    DirichletCharacter,
+    DirichletCharacterGroup,
+)
 from jacobian.math.number_theory.modular_forms.kernel import (
     NamedLevelOneModularForm,
     metadata,
@@ -309,6 +312,10 @@ class ModularCharacterInflationInclusion(StrictModel):
             or target.group != "GAMMA0"
             or not isinstance(source.character, DirichletCharacter)
             or not isinstance(target.character, DirichletCharacter)
+            or type(source.character.group) is not DirichletCharacterGroup
+            or type(target.character.group) is not DirichletCharacterGroup
+            or source.character.group.modulus != source.level
+            or target.character.group.modulus != target.level
             or type(source.level) is not int
             or type(target.level) is not int
             or source.level < 1

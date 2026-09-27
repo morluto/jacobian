@@ -159,6 +159,31 @@ def compute_modular_character_space_inclusion(
     )
 
 
+def _character_space_inclusion_example() -> dict[str, object]:
+    character = {
+        "group": {
+            "modulus": 3,
+            "unit_residues": [1, 2],
+            "character_count": 2,
+            "invariant_factors": [2],
+            "generators": [2],
+            "generator_orders": [2],
+            "unit_coordinates": [[0], [1]],
+            "exponent": 2,
+        },
+        "coordinates": [0],
+    }
+    space = {
+        "group": "GAMMA0",
+        "level": 3,
+        "weight": 2,
+        "kind": "S",
+        "character": character,
+        "coefficient_domain": "QQ",
+    }
+    return {"source_space": space, "target_space": dict(space)}
+
+
 def decide_coordinate_equality(
     request: ModularFormEqualityRequest,
 ) -> ModularFormEqualityResult:
@@ -335,6 +360,13 @@ TOOLS: MathTools = (
         result_type=ModularCharacterInflationInclusion,
         run=compute_modular_character_space_inclusion,
         tags=("modular-forms", "characters", "spaces", "inclusion", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_quadratic_character_space",
+                description="Construct the identity inclusion of a level-three character space.",
+                input=_character_space_inclusion_example(),
+            ),
+        ),
     ),
     MathTool(
         operation_id="modular_form.equal.check",

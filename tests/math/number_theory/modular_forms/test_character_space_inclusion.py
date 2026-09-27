@@ -189,6 +189,25 @@ def test_character_inclusion_rejects_nonpositive_authored_levels() -> None:
         require_modular_character_space_inclusion(forged)
 
 
+def test_character_inclusion_rejects_character_modulus_mismatch() -> None:
+    character = _character(character_group(3), (0,))
+    forged_space = ModularFormSpace.model_construct(
+        group="GAMMA0",
+        level=15,
+        weight=2,
+        kind="S",
+        character=character,
+        coefficient_domain="QQ",
+    )
+    forged = ModularCharacterInflationInclusion.model_construct(
+        map_kind="gamma0_character_inflation",
+        source_space=forged_space,
+        target_space=forged_space,
+    )
+    with pytest.raises(OperationDomainValidationError):
+        require_modular_character_space_inclusion(forged)
+
+
 def test_character_inclusion_rejects_incomplete_authored_group() -> None:
     canonical_group = character_group(3)
     incomplete_group = type(canonical_group).model_construct(

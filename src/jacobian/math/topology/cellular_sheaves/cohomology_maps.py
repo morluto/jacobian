@@ -338,10 +338,38 @@ def cohomology_map(value: SheafMorphismResult) -> SheafCohomologyMapResult:
     # the source diagrams. Serialized ``natural`` and cocycle claims are not
     # accepted as mathematical evidence by this consumer.
     induced_cochains = cochain_map(value)
+    dimensions = tuple(
+        (len(source_basis), len(target_basis))
+        for source_basis, target_basis in zip(
+            induced_cochains.source_bases, induced_cochains.target_bases, strict=True
+        )
+    )
+    field = _ExactField(
+        induced_cochains.morphism.source.coefficient_field,
+        induced_cochains.morphism.source.prime,
+    )
+    # Admit a conservative upper bound before either full cohomology reduction.
+    # Betti and cocycle ranks are bounded by their cochain dimensions; using
+    # those maxima prevents an oversized quotient from reaching elimination.
+    work_bound = 0
+    for degree, (source_dimension, target_dimension) in enumerate(dimensions):
+        previous_dimension = dimensions[degree - 1][1] if degree else 0
+        image_work = (
+            source_dimension
+            if target_dimension == 0
+            else target_dimension * source_dimension * source_dimension
+        )
+        work_bound += target_dimension**2 * (
+            previous_dimension + 2 * target_dimension + source_dimension
+        ) + image_work * (2 if field.field is SheafField.RATIONAL else 1)
+    if work_bound > MAX_SHEAF_COHOMOLOGY_MAP_WORK:
+        raise _resource(
+            "work_bound",
+            f"cohomology-map quotient reduction needs at most {work_bound} scalar steps, "
+            f"above the {MAX_SHEAF_COHOMOLOGY_MAP_WORK}-step bound",
+        )
     source = sheaf_cohomology(induced_cochains.morphism.source)
     target = sheaf_cohomology(induced_cochains.morphism.target)
-    sheaf = induced_cochains.morphism.source
-    field = _ExactField(sheaf.coefficient_field, sheaf.prime)
     images_by_degree = _admit_quotient_reduction(
         induced_cochains, source, target, field
     )

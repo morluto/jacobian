@@ -23,6 +23,7 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _cochain_nullspace,
     _cochain_rref,
     _ExactField,
+    require_canonical_sheaf_admission,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COVER_MAPS,
@@ -279,6 +280,46 @@ def _section_domain(code: str, message: str) -> OperationDomainValidationError:
         code=f"topology.cellular_sheaf.sections.{code}",
         message=message,
     )
+
+
+def _cochain_map_domain(code: str, message: str) -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("morphism",),
+        code=f"topology.cellular_sheaf.cochain_map.{code}",
+        message=message,
+    )
+
+
+def _cochain_map_resource(code: str, message: str) -> OperationResourceAdmissionError:
+    return OperationResourceAdmissionError(
+        location=("morphism",),
+        code=f"topology.cellular_sheaf.cochain_map.{code}",
+        message=message,
+    )
+
+
+def _admit_cochain_map_parent(parent: FiniteCellularSheaf) -> None:
+    face_count = sum(len(group.faces) for group in parent.complex.faces_by_dimension)
+    if face_count > MAX_SHEAF_SIMPLICES:
+        raise _cochain_map_resource(
+            "face_count_bound", "cochain-map parents exceed the simplex bound"
+        )
+    if len(parent.stalks) > MAX_SHEAF_SIMPLICES:
+        raise _cochain_map_resource(
+            "stalk_count_bound", "cochain-map parents exceed the stalk bound"
+        )
+    rank_total = 0
+    for stalk in parent.stalks:
+        rank = len(stalk.basis)
+        if rank > MAX_SHEAF_STALK_RANK:
+            raise _cochain_map_resource(
+                "stalk_rank_bound", "cochain-map stalk rank exceeds its bound"
+            )
+        rank_total += rank
+        if rank_total > MAX_SHEAF_TOTAL_STALK_RANK:
+            raise _cochain_map_resource(
+                "total_rank_bound", "cochain-map parent rank exceeds its bound"
+            )
 
 
 @dataclass(frozen=True)
@@ -749,7 +790,10 @@ def _scan_morphism_scalar_text(
                 total_input_digits += digits
                 max_digits = max(max_digits, digits)
     for parent in (source, target):
-        for restriction in (*parent.cover_restrictions, *parent.derived_restrictions):
+        # Naturality uses cover squares only. Derived restrictions have already
+        # been checked against their cover composites by canonical admission;
+        # they must not inherit the cover-square coefficient bound.
+        for restriction in parent.cover_restrictions:
             for row in restriction.entries:
                 for value in row:
                     if (
@@ -901,6 +945,8 @@ def morphism(
     # that its declared GF(p) modulus is prime.  Establish both fields before
     # inspecting carrier internals or performing arithmetic so malformed
     # caller-authored carriers cannot leak raw attribute/type errors.
+    source = require_canonical_sheaf_admission(source)
+    target = require_canonical_sheaf_admission(target)
     source_field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
     if (
@@ -995,20 +1041,31 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
     before assembling the direct-sum stalk maps in each cochain degree.
     """
     if not isinstance(morphism_value, SheafMorphismResult):
-        raise _section_domain(
+        raise _cochain_map_domain(
             "cochain_map_morphism_type",
             "the cochain map input must be a cellular-sheaf morphism result",
         )
+    # Inspect container sizes and ranks before model_dump reserializes nested
+    # caller-owned values. Native model_construct inputs can bypass validators.
+    try:
+        _admit_cochain_map_parent(morphism_value.source)
+        _admit_cochain_map_parent(morphism_value.target)
+    except OperationResourceAdmissionError:
+        raise
+    except (AttributeError, TypeError, ValueError) as error:
+        raise _cochain_map_domain(
+            "morphism_invalid", "the cellular-sheaf morphism is malformed"
+        ) from error
     try:
         morphism_value = SheafMorphismResult.model_validate(morphism_value.model_dump())
     except (AttributeError, TypeError, ValueError) as error:
-        raise _section_domain(
+        raise _cochain_map_domain(
             "cochain_map_morphism_invalid", "the cellular-sheaf morphism is malformed"
         ) from error
     source = morphism_value.source
     target = morphism_value.target
     if source.complex != target.complex:
-        raise _section_domain(
+        raise _cochain_map_domain(
             "cochain_map_parent_mismatch",
             "the induced cochain map requires the same source complex",
         )
@@ -1026,13 +1083,13 @@ def cochain_map(morphism_value: SheafMorphismResult) -> SheafCochainMapResult:
     )
     matrix_cells = sum(a * b for a, b in preflight_dimensions)
     if matrix_cells > MAX_SHEAF_SECTION_MATRIX_CELLS:
-        raise _section_resource(
+        raise _cochain_map_resource(
             "cochain_map_cells_bound",
             "the induced degreewise cochain matrices exceed their cell bound",
         )
     checked = morphism(source, target, morphism_value.components)
     if not checked.natural:
-        raise _section_domain(
+        raise _cochain_map_domain(
             "cochain_map_non_natural",
             "an induced cochain map requires a natural cellular-sheaf morphism",
         )

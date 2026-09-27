@@ -190,6 +190,35 @@ def test_induced_map_still_rejects_oversized_rational_quotients() -> None:
         cohomology_map(morphism(sheaf, sheaf, components))
 
 
+def test_cohomology_map_admits_quotient_work_before_reductions() -> None:
+    complex_ = canonical_complex(
+        tuple(f"v{index}" for index in range(64)),
+        tuple((f"v{index}",) for index in range(64)),
+    )
+    basis = tuple(f"x{index}" for index in range(4))
+    sheaf_result = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(
+            SheafStalk(simplex=face, basis=basis)
+            for group in complex_.faces_by_dimension
+            for face in group.faces
+        ),
+        (),
+    )
+    assert sheaf_result.sheaf is not None
+    sheaf = sheaf_result.sheaf
+    identity = tuple(
+        tuple(_q(1 if row == column else 0) for column in range(4))
+        for row in range(4)
+    )
+    components = tuple((face, identity) for face in sheaf.canonical_face_order)
+
+    with pytest.raises(OperationResourceAdmissionError, match="scalar steps"):
+        cohomology_map(morphism(sheaf, sheaf, components))
+
+
 def test_map_into_zero_stalks_preserves_empty_cohomology_axes() -> None:
     source = _circle_sheaf()
     target_result = from_cover_maps(

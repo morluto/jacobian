@@ -9,6 +9,9 @@ from jacobian.math.geometry.algebraic_curves._gaussian_realification import (
     UnivariateGaussianPolynomial,
     UnivariateGaussianPolynomialTerm,
 )
+from jacobian.math.geometry.algebraic_curves._models import (
+    PlaneCurveBlowupChartResult,
+)
 from jacobian.math.geometry.algebraic_curves._singularity_models import (
     ProjectivePlaneCurveSingularityBudget,
     ProjectivePlaneCurveSingularityProfile,
@@ -18,6 +21,7 @@ from jacobian.math.geometry.algebraic_curves.operations import (
     affine_curve_check,
     enclose_arclength,
     gaussian_realification,
+    plane_curve_blowup_chart,
     projective_closure,
     rational_conic_parametrization,
     singularity_profile,
@@ -33,6 +37,7 @@ __all__ = [
     "GaussianRealificationResult",
     "PlaneCurveArclengthBudget",
     "PlaneCurveArclengthResult",
+    "PlaneCurveBlowupChartResult",
     "ProjectivePlaneCurveSingularityBudget",
     "ProjectivePlaneCurveSingularityProfile",
     "UnivariateGaussianPolynomial",
@@ -41,6 +46,7 @@ __all__ = [
     "affine_curve_check",
     "enclose_arclength",
     "gaussian_realification",
+    "plane_curve_blowup_chart",
     "projective_closure",
     "rational_conic_parametrization",
     "singularity_profile",

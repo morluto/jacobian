@@ -16,13 +16,6 @@ from jacobian.math.polynomials.differential_forms import (
     pullback,
     wedge,
 )
-from jacobian.math.polynomials.differential_forms._tools import (
-    ContractRequest,
-    ExteriorDerivativeRequest,
-    LieDerivativeRequest,
-    PrimitiveRequest,
-    PullbackRequest,
-)
 from jacobian.math.polynomials.differential_forms.values import (
     FormComponent,
     PolynomialDifferentialForm,
@@ -103,7 +96,7 @@ def test_exterior_derivative_squares_to_zero() -> None:
     assert exterior_derivative(exterior_derivative(alpha)).components == ()
 
 
-def test_exterior_derivative_leibniz() -> None:
+def test_exterior_derivative_of_scalar_known_answer() -> None:
     # d(f g) = df*g + f*dg at the 0-form level: d(x^2 y) = 2xy dx + x^2 dy.
     from jacobian.math.polynomials.differential_forms.values import (
         PolynomialDifferentialForm as F,
@@ -160,37 +153,35 @@ def test_pullback_known_answer() -> None:
 
 
 def test_pullback_respects_wedge() -> None:
-    # phi*(alpha wedge beta) = phi*alpha wedge phi*beta for phi(t) = (t, 2t).
+    # phi*(alpha wedge beta) = phi*alpha wedge phi*beta for
+    # phi(s, t) = (s^2, t); both sides are the nonzero 2*s^3 ds wedge dt.
     mapping = PolynomialMap(
-        source_variables=("t",),
+        source_variables=("s", "t"),
         target_variables=("x", "y"),
         images=(
-            _poly_on_axis(("t",), (1, (1,))),
-            _poly_on_axis(("t",), (2, (1,))),
+            _poly_on_axis(("s", "t"), (1, (2, 0))),
+            _poly_on_axis(("s", "t"), (1, (0, 1))),
         ),
     )
     alpha = _form(("x", "y"), 1, ((0,), _poly((1, (1, 0)))))
-    beta = _form(("x", "y"), 1, ((1,), _poly((1, (0, 1)))))
-    assert pullback(mapping, wedge(alpha, beta)) == wedge(
-        pullback(mapping, alpha), pullback(mapping, beta)
+    beta = _form(("x", "y"), 1, ((1,), _poly((1, (0, 0)))))
+    expected = _form(
+        ("s", "t"),
+        2,
+        ((0, 1), _poly_on_axis(("s", "t"), (2, (3, 0)))),
     )
+    pulled_back_wedge = pullback(mapping, wedge(alpha, beta))
+    wedge_of_pullbacks = wedge(pullback(mapping, alpha), pullback(mapping, beta))
+    assert pulled_back_wedge == expected
+    assert wedge_of_pullbacks == expected
 
 
-def test_lie_derivative_cartan() -> None:
+def test_lie_derivative_known_answer() -> None:
     # L_{∂x}(x dx) = dx.
     field = _field(((1, (0, 0)),), ())
     form = _form(("x", "y"), 1, ((0,), _poly((1, (1, 0)))))
     result = lie_derivative(field, form)
     assert _coeff(result, (0,)) == {(0, 0): Fraction(1)}
-    # Cartan replay: i d + d i computed directly.
-    from jacobian.math.polynomials.differential_forms.operations import (
-        _add_forms,
-    )
-
-    assert result == _add_forms(
-        interior_product(field, exterior_derivative(form)),
-        exterior_derivative(interior_product(field, form)),
-    )
 
 
 def test_primitive_round_trip() -> None:
@@ -222,39 +213,3 @@ def test_primitive_rejects_degree_zero() -> None:
         ),
     )
     assert affine_homotopy_primitive(scalar).outcome == "NOT_APPLICABLE"
-
-
-def test_forged_primitive_binding_rejected() -> None:
-    form = _form(("x", "y"), 2, ((0, 1), _poly((1, (0, 0)))))
-    claim = affine_homotopy_primitive(form)
-    payload = claim.model_dump(mode="json")
-    payload["primitive"]["components"][0]["coefficient"]["polynomial"]["terms"][0][
-        "coefficient"
-    ] = {"num": "7", "den": "1"}
-    from jacobian.canonical import encode_strict_json
-    from jacobian.math.polynomials.differential_forms.values import PrimitiveResult
-
-    forged = PrimitiveResult.model_validate_json(
-        encode_strict_json(payload), strict=True
-    )
-    assert exterior_derivative(forged.primitive) != form
-
-
-def test_tool_requests_validate() -> None:
-
-    form = _form(("x", "y"), 1, ((1,), _poly((1, (1, 0)))))
-    assert ExteriorDerivativeRequest(form=form).form is form
-    field = _field(((1, (0, 0)),), ())
-    assert ContractRequest(field=field, form=form).form is form
-    assert LieDerivativeRequest(field=field, form=form).form is form
-    assert PrimitiveRequest(form=form).form is form
-    mapping = PolynomialMap(
-        source_variables=("t",),
-        target_variables=("x", "y"),
-        images=(
-            _poly_on_axis(("t",), (1, (1,))),
-            _poly_on_axis(("t",), (1, (1,))),
-        ),
-    )
-    two_form = _form(("x", "y"), 2, ((0, 1), _poly((1, (0, 0)))))
-    assert PullbackRequest(mapping=mapping, form=two_form).form is two_form

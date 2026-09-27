@@ -1,5 +1,7 @@
 # Combinatorics operations
 
+- [Integer partition candidate check](partition-check.md)
+
 [Documentation home](../../../index.md) · [Operation references](../index.md)
 
 These operations include exact algebraic combinatorics on partitions, tableaux,
@@ -11,4 +13,10 @@ hypergraphs.
 - [Disjoint Greene witnesses](greene-witnesses.md)
 - [Strict longest increasing subsequence](longest-increasing-subsequence.md)
 - [Permutation RSK and its inverse](permutation-rsk.md)
+- [Linear matroid optimization and graphic representations](linear-matroid-optimization.md)
+- [Maximum-cardinality weighted matroid intersection](maximum-cardinality-weighted-matroid-intersection.md)
 - [Complete sunflower hypergraphs](sunflower-hypergraphs.md)
+- [Littlewood–Richardson coefficients](littlewood-richardson-coefficients.md)
+- [Littlewood–Richardson tableaux](littlewood-richardson-coefficients.md#complete-tableau-enumeration)
+- [Semistandard Young tableau enumeration](semistandard-young-tableau-enumeration.md)
+- [Fixed-content semistandard tableau counts](kostka-numbers.md) — exact Kostka counts for a shape and sparse labeled content.

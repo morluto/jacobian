@@ -71,18 +71,26 @@ def test_prime_field_matrix_computations_have_one_operation_family() -> None:
     """Rank, RREF, and nullspace over GF(p) are owned by ``prime_field.matrix``.
 
     A second family exposing the same kernels under different IDs made
-    agents discover six competing operations for three computations.
+    agents discover six competing operations for three computations. Other
+    prime-field values, such as source-bound quotient spaces, are separate
+    mathematical capabilities and do not belong to this matrix-kernel family.
     """
     matrix_ids = sorted(
         tool.operation_id
         for tool in BUILTIN_TOOLS
-        if tool.operation_id.startswith("prime_field")
+        if tool.operation_id.startswith("prime_field.matrix.")
     )
     assert matrix_ids == [
         "prime_field.matrix.nullspace.compute",
         "prime_field.matrix.rank.compute",
         "prime_field.matrix.rref.compute",
     ]
+
+
+def test_root_to_coroot_is_registered_from_its_owner_manifest() -> None:
+    assert "root_system.root_to_coroot.compute" in {
+        tool.operation_id for tool in BUILTIN_TOOLS
+    }
 
 
 def test_linear_code_dual_and_syndrome_have_one_operation_family() -> None:
@@ -108,9 +116,6 @@ def test_finite_magma_countermodel_check_remains_native_only() -> None:
 
 def test_match_browse_and_inspect_results_stay_within_the_public_catalog() -> None:
     catalog = Catalog.open()
-    public_ids = {
-        descriptor.operation_id for descriptor in catalog.snapshot().operations
-    }
     search = catalog.match(
         OperationMatchRequest(need="finite field factorization", limit=5)
     )
@@ -119,11 +124,16 @@ def test_match_browse_and_inspect_results_stay_within_the_public_catalog() -> No
 
     assert search.matches
     assert len(search.matches) <= 5
-    assert {match.operation_id for match in search.matches} <= public_ids
+    assert all(
+        catalog.operation(match.operation_id) is not None for match in search.matches
+    )
     assert search.total_matches >= len(search.matches)
 
     assert len(browse.operations) <= 5
-    assert {operation.operation_id for operation in browse.operations} <= public_ids
+    assert all(
+        catalog.operation(operation.operation_id) is not None
+        for operation in browse.operations
+    )
     assert browse.total_operations == sum(
         1 for tool in BUILTIN_TOOLS if matches_namespace(tool, "graph")
     )

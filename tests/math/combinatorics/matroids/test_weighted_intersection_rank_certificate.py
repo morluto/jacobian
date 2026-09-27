@@ -272,6 +272,12 @@ def test_forged_dual_value_fails_after_serialization() -> None:
     assert not verify_weighted_intersection_rank_certificate(forged)
 
 
+def test_rank_certificate_verifier_returns_false_for_missing_fields() -> None:
+    malformed = MatroidWeightedIntersectionRankCertificateResult.model_construct()
+
+    assert not verify_weighted_intersection_rank_certificate(malformed)
+
+
 def test_nonoptimal_candidate_rejected_by_dual_objective_equality() -> None:
     first, second, weight_function, _, first_terms, second_terms = _rank_one_arguments()
     with pytest.raises(OperationDomainValidationError, match="dual objective"):

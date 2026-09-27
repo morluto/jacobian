@@ -121,6 +121,28 @@ def test_triangle_morphism_naturality_matches_independent_incidence_oracle() -> 
     assert not _independent_square_oracle(source, target, bad.components)
 
 
+def test_morphism_translates_parent_readmission_failures() -> None:
+    sheaf = _triangle_sheaf()
+    restriction = sheaf.derived_restrictions[0]
+    forged = sheaf.model_copy(
+        update={
+            "derived_restrictions": (
+                restriction.model_copy(update={"entries": ((_q(2),),)}),
+                *sheaf.derived_restrictions[1:],
+            )
+        }
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        morphism(
+            forged,
+            sheaf,
+            tuple((cell, ((_q(1),),)) for cell in sheaf.canonical_face_order),
+        )
+    assert error.value.errors()[0]["type"] == (
+        "cellular_sheaf.morphism.parent_diagram_not_admitted"
+    )
+
+
 def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> None:
     f, g, h = _triangle_sheaf(), _triangle_sheaf(), _triangle_sheaf()
     axis = f.canonical_face_order

@@ -981,8 +981,22 @@ def morphism(
         _readmit_parent_sheaf,
     )
 
-    _readmit_parent_sheaf(source, role="source")
-    _readmit_parent_sheaf(target, role="target")
+    try:
+        _readmit_parent_sheaf(source, role="source")
+    except OperationDomainValidationError as error:
+        raise OperationDomainValidationError(
+            location=("source",),
+            code="cellular_sheaf.morphism.parent_diagram_not_admitted",
+            message="source restrictions must equal the reconstructed functor diagram",
+        ) from error
+    try:
+        _readmit_parent_sheaf(target, role="target")
+    except OperationDomainValidationError as error:
+        raise OperationDomainValidationError(
+            location=("target",),
+            code="cellular_sheaf.morphism.parent_diagram_not_admitted",
+            message="target restrictions must equal the reconstructed functor diagram",
+        ) from error
     if (
         source.complex != target.complex
         or source.coefficient_field != target.coefficient_field

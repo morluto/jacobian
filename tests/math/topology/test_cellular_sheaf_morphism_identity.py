@@ -3,7 +3,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     SheafField,
@@ -122,3 +125,16 @@ def test_identity_morphism_reports_identity_owned_domain_errors():
     assert malformed_error.value.errors()[0]["type"] == (
         "topology.cellular_sheaf.morphism_identity.stalks_not_admitted"
     )
+
+    oversized_stalk = SheafStalk.model_construct(
+        simplex=("a",), basis=tuple(f"x{index}" for index in range(1000))
+    )
+    oversized = sheaf.model_copy(
+        update={"stalks": (oversized_stalk, *sheaf.stalks[1:])}
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="stalk-rank"):
+        identity_morphism(oversized)
+
+    too_many_stalks = sheaf.model_copy(update={"stalks": sheaf.stalks * 33})
+    with pytest.raises(OperationResourceAdmissionError, match="stalk count"):
+        identity_morphism(too_many_stalks)

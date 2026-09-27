@@ -204,7 +204,7 @@ class _AdmittedCokernelMorphism:
     source_stalks: dict[tuple[str, ...], SheafStalk]
     target_stalks: dict[tuple[str, ...], SheafStalk]
     components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]]
-    canonical_components: list[Component]
+    checked: SheafMorphismResult
 
 
 def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMorphism:
@@ -280,6 +280,18 @@ def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMor
             raise _domain("component_shape", "components must match the stalk axes")
         components[cell] = matrix
         canonical_components.append((cell, field.render(matrix)))
+    checked = SheafMorphismResult(
+        source=source,
+        target=target,
+        components=tuple(canonical_components),
+        natural=True,
+    )
+    checked = SheafMorphismResult(
+        source=source,
+        target=target,
+        components=tuple(canonical_components),
+        natural=True,
+    )
     return _AdmittedCokernelMorphism(
         source,
         target,
@@ -291,7 +303,7 @@ def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMor
         source_stalks,
         target_stalks,
         components,
-        canonical_components,
+        checked,
     )
 
 
@@ -310,7 +322,7 @@ def cokernel_of_morphism(
     source_stalks = admitted.source_stalks
     target_stalks = admitted.target_stalks
     components = admitted.components
-    canonical_components = admitted.canonical_components
+    checked = admitted.checked
 
     target_restrictions = {
         (item.source, item.target): item
@@ -355,7 +367,7 @@ def cokernel_of_morphism(
         else max(input_digits, len(str(source.prime)))
     )
     if (
-        4 * len(value.model_dump_json())
+        4 * len(checked.model_dump_json())
         + reconstruction_chars
         + sheaf_scalar_json_bound(output_cells, output_digits)
         > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
@@ -386,13 +398,6 @@ def cokernel_of_morphism(
             raise _domain(
                 "morphism_not_natural", "cokernel requires a natural morphism"
             )
-    checked = SheafMorphismResult(
-        source=source,
-        target=target,
-        components=tuple(canonical_components),
-        natural=True,
-    )
-
     quotient_ranks: dict[tuple[str, ...], int] = {}
     quotient_projections: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}
     quotient_lifts: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}

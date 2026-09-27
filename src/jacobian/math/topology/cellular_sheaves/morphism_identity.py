@@ -15,6 +15,8 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_MORPHISM_COMPONENT_CELLS,
     MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_SIMPLICES,
+    MAX_SHEAF_STALK_RANK,
     FiniteCellularSheaf,
     SheafField,
     SheafStalk,
@@ -47,6 +49,39 @@ def identity_morphism(sheaf: FiniteCellularSheaf) -> SheafMorphismResult:
             code="topology.cellular_sheaf.morphism_identity.parent_type_invalid",
             message="identity source must be a finite cellular sheaf",
         )
+    if not isinstance(sheaf.stalks, tuple):
+        raise OperationDomainValidationError(
+            location=("sheaf", "stalks"),
+            code="topology.cellular_sheaf.morphism_identity.stalks_not_admitted",
+            message="identity source stalks must be a bounded canonical tuple",
+        )
+    if len(sheaf.stalks) > MAX_SHEAF_SIMPLICES:
+        raise OperationResourceAdmissionError(
+            location=("sheaf", "stalks"),
+            code="topology.cellular_sheaf.morphism_identity.stalk_bound",
+            message="identity source exceeds the admitted stalk count",
+        )
+    for stalk in sheaf.stalks:
+        if (
+            type(stalk) is not SheafStalk
+            or not isinstance(stalk.basis, tuple)
+            or not isinstance(stalk.simplex, tuple)
+            or len(stalk.simplex) > MAX_SHEAF_SIMPLICES
+            or any(
+                not isinstance(label, str) or len(label) > 32 for label in stalk.simplex
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("sheaf", "stalks"),
+                code="topology.cellular_sheaf.morphism_identity.stalks_not_admitted",
+                message="identity source stalks must satisfy the canonical stalk contract",
+            )
+        if len(stalk.basis) > MAX_SHEAF_STALK_RANK:
+            raise OperationResourceAdmissionError(
+                location=("sheaf", "stalks"),
+                code="topology.cellular_sheaf.morphism_identity.stalk_rank_bound",
+                message="identity source exceeds the admitted stalk-rank bound",
+            )
     try:
         checked_stalks = tuple(
             SheafStalk.model_validate(stalk.model_dump()) for stalk in sheaf.stalks

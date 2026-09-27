@@ -192,6 +192,16 @@ def test_malformed_native_morphism_and_parent_axes_fail_at_operation_boundary():
     with pytest.raises(OperationDomainValidationError, match="parents"):
         cokernel_of_morphism(invalid_carrier)
 
+    untrusted_metadata = SheafMorphismResult.model_construct(
+        source=parent,
+        target=parent,
+        components=valid.components,
+        natural=False,
+        obstruction=object(),
+    )
+    checked = cokernel_of_morphism(untrusted_metadata)
+    assert checked.morphism.natural and checked.morphism.obstruction is None
+
     malformed_rows = SheafMorphismResult.model_construct(
         source=parent,
         target=parent,

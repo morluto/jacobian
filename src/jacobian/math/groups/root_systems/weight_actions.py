@@ -67,6 +67,7 @@ def _cartan_children_are_bounded(value: CartanMatrix) -> bool:
     return (
         isinstance(matrix, IntegerMatrix)
         and _integer_matrix_children_are_bounded(matrix)
+        and all(-3 <= entry <= 2 for row in matrix.entries for entry in row)
         and type(axis) is tuple
         and len(axis) == matrix.row_count
         and all(type(value) is int for value in axis)

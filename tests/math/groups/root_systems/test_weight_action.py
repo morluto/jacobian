@@ -120,6 +120,20 @@ def test_malformed_nested_weyl_action_is_a_domain_error(root_action):
         weyl_element_act_on_weight(invalid, weight)
 
 
+def test_huge_caller_constructed_cartan_entry_is_rejected_before_rendering():
+    huge = 1 << 1_000_000
+    matrix = IntegerMatrix.model_construct(
+        row_count=2, column_count=2, entries=((2, huge), (-1, 2))
+    )
+    invalid = WeylElement.model_construct(
+        matrix=CartanMatrix.model_construct(matrix=matrix, simple_root_axis=(0, 1)),
+        root_action=weyl_element_from_word(_A2, ()).root_action,
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        weyl_element_act_on_weight(invalid, weight_lattice_vector(_A2, (1, 0)))
+
+
 @pytest.mark.parametrize(
     "weight",
     (

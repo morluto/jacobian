@@ -224,6 +224,38 @@ def test_caller_constructed_vector_with_boolean_cartan_axis_is_rejected() -> Non
         weyl_element_act_on_root(weyl_element_from_word(_A2, ()), vector)
 
 
+@pytest.mark.parametrize(
+    "datum_field", ("cartan", "root_to_weight", "coroot_to_coweight")
+)
+def test_caller_constructed_vector_rejects_boolean_nested_datum_entries(datum_field):
+    datum = _datum(_A2)
+    matrix = IntegerMatrix.model_construct(
+        row_count=2, column_count=2, entries=((2, False), (-1, 2))
+    )
+    malformed_cartan = CartanMatrix.model_construct(
+        matrix=matrix, simple_root_axis=(0, 1)
+    )
+    fields = {
+        "cartan_matrix": malformed_cartan
+        if datum_field == "cartan"
+        else datum.cartan_matrix,
+        "symmetrizer": datum.symmetrizer,
+        "root_to_weight": matrix
+        if datum_field == "root_to_weight"
+        else datum.root_to_weight,
+        "coroot_to_coweight": matrix
+        if datum_field == "coroot_to_coweight"
+        else datum.coroot_to_coweight,
+    }
+    malformed_datum = FiniteCartanDatum.model_construct(**fields)
+    vector = RootLatticeVector.model_construct(
+        datum=malformed_datum, coordinates=(1, 0)
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        weyl_element_act_on_root(weyl_element_from_word(_A2, ()), vector)
+
+
 def test_caller_constructed_vector_with_wrong_axis_length_is_rejected() -> None:
     vector = RootLatticeVector.model_construct(datum=_datum(_A2), coordinates=(1,))
     request = WeylElementRootActionRequest.model_construct(

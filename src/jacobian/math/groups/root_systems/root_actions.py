@@ -161,6 +161,30 @@ def _canonical_vector(
     try:
         datum_rank = len(datum_cartan)
         symmetrizer = datum.symmetrizer
+        cartan_matrix = datum_cartan.matrix
+        root_to_weight = datum.root_to_weight
+        coroot_to_coweight = datum.coroot_to_coweight
+
+        def canonical_integer_matrix(value: object) -> bool:
+            if type(value) is not IntegerMatrix:
+                return False
+            rows = value.entries
+            return (
+                value.domain == "ZZ"
+                and type(value.row_count) is int
+                and type(value.column_count) is int
+                and value.row_count == datum_rank
+                and value.column_count == datum_rank
+                and type(rows) is tuple
+                and len(rows) == datum_rank
+                and all(
+                    type(row) is tuple
+                    and len(row) == datum_rank
+                    and all(type(entry) is int for entry in row)
+                    for row in rows
+                )
+            )
+
         if (
             not isinstance(symmetrizer, tuple)
             or any(
@@ -174,10 +198,12 @@ def _canonical_vector(
             or len(datum_cartan.simple_root_axis) != datum_rank
             or any(type(value) is not int for value in datum_cartan.simple_root_axis)
             or datum_cartan.simple_root_axis != tuple(range(datum_rank))
-            or type(datum_cartan.matrix) is not IntegerMatrix
-            or datum_cartan.matrix.domain != "ZZ"
-            or datum_cartan.matrix.row_count != datum_rank
-            or datum_cartan.matrix.column_count != datum_rank
+            or not canonical_integer_matrix(cartan_matrix)
+            or any(
+                not -3 <= entry <= 2 for row in cartan_matrix.entries for entry in row
+            )
+            or not canonical_integer_matrix(root_to_weight)
+            or not canonical_integer_matrix(coroot_to_coweight)
         ):
             raise ValueError("noncanonical Cartan matrix axis or shape")
     except (AttributeError, TypeError, ValueError) as error:

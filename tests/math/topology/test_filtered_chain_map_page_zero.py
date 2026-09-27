@@ -208,6 +208,40 @@ def test_page_zero_map_preflights_output_characters(
     )
 
 
+def test_page_zero_output_estimate_separates_large_map_coefficients() -> None:
+    from fractions import Fraction
+
+    rank = 5
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(rank,),
+        differential_matrices=(),
+    )
+    basis = tuple(
+        tuple(1 if row == column else 0 for column in range(rank))
+        for row in range(rank)
+    )
+    filtration = (FiltrationLevel(subspaces=(FilteredSubspace(vectors=basis),)),)
+    large = Fraction(10**4095)
+    diagonal = tuple(
+        tuple(large if row == column == 0 else (1 if row == column else 0) for column in range(rank))
+        for row in range(rank)
+    )
+    request = FilteredChainMapRequest(
+        source=complex_value,
+        source_filtration=filtration,
+        target=complex_value,
+        target_filtration=filtration,
+        maps=(diagonal,),
+    )
+
+    result = filtered_chain_map_page_zero(request)
+
+    assert result.maps[0][0][0][0] == large
+
+
 def test_page_zero_map_tool_has_the_native_result_contract() -> None:
     tool = next(
         item

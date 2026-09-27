@@ -886,13 +886,45 @@ def _admit_e0_map_request(request: FilteredChainMapRequest) -> tuple[Any, Any, A
         if len(request.source_filtration[level].subspaces) == degree_count
         and len(request.target_filtration[level].subspaces) == degree_count
     )
-    max_chars = max(
+    max_map_chars = max(
         (len(str(value)) for matrix in request.maps for row in matrix for value in row),
         default=1,
     )
-    output_chars_upper = (retained_cells + map_cells_upper) * (
-        96 * max_chars + 512
-    ) + level_count * degree_count * 128
+    max_filtration_chars = max(
+        (
+            len(str(value))
+            for complex_value, filtration in (
+                (request.source, request.source_filtration),
+                (request.target, request.target_filtration),
+            )
+            for matrix in complex_value.differential_matrices
+            for row in matrix
+            for value in row
+        ),
+        default=1,
+    )
+    max_filtration_chars = max(
+        max_filtration_chars,
+        max(
+            (
+                len(str(value))
+                for filtration in (
+                    request.source_filtration,
+                    request.target_filtration,
+                )
+                for level in filtration
+                for subspace in level.subspaces
+                for vector in subspace.vectors
+                for value in vector
+            ),
+            default=1,
+        ),
+    )
+    output_chars_upper = (
+        retained_cells * (96 * max_filtration_chars + 512)
+        + map_cells_upper * (96 * max(max_map_chars, max_filtration_chars) + 512)
+        + level_count * degree_count * 128
+    )
     if output_chars_upper > MAX_FILTERED_HOMOLOGY_RESULT_CHARS:
         raise OperationResourceAdmissionError(
             location=("maps",),
@@ -1183,13 +1215,6 @@ def filtered_chain_map_page(
     coordinate_solves = sum(
         max(1, rank) ** 4 for rank in (*source.basis_sizes, *target.basis_sizes)
     )
-    work_bound = levels * (cubic * (3 * request.page + 3) + coordinate_solves)
-    if work_bound > MAX_FILTERED_HOMOLOGY_WORK:
-        raise OperationResourceAdmissionError(
-            location=("page",),
-            code="filtered_chain_map.page_work_exceeded",
-            message="the conservative representative-transport work bound exceeds the admitted page-map work",
-        )
     map_cells = levels * sum(
         source.basis_sizes[index] * target.basis_sizes[index]
         for index in range(degree_count)
@@ -1223,6 +1248,25 @@ def filtered_chain_map_page(
     input_scalars.extend(
         value for matrix in authored.maps for row in matrix for value in row
     )
+    max_input_scalar_chars = max(
+        (len(str(value)) for value in input_scalars), default=1
+    )
+    max_rank = max((*source.basis_sizes, *target.basis_sizes), default=1)
+    coefficient_work = (
+        len(input_scalars)
+        * max_rank**2
+        * max(1, (max_input_scalar_chars + 31) // 32)
+    )
+    work_bound = (
+        levels * (cubic * (3 * request.page + 3) + coordinate_solves)
+        + coefficient_work
+    )
+    if work_bound > MAX_FILTERED_HOMOLOGY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("page",),
+            code="filtered_chain_map.page_work_exceeded",
+            message="the representative-transport work estimate exceeds the admitted page-map work",
+        )
     map_scalar_chars = sum(
         len(str(value)) for matrix in authored.maps for row in matrix for value in row
     )
@@ -1248,7 +1292,6 @@ def filtered_chain_map_page(
         (len(str(value)) for value in page_scalars), default=1
     )
     page_scalar_chars_bound = 96 * max_page_scalar_chars + 512
-    max_rank = max((*source.basis_sizes, *target.basis_sizes), default=1)
     map_scalar_chars_bound = map_scalar_chars + page_scalar_chars_bound * max(
         1, max_rank**2
     )

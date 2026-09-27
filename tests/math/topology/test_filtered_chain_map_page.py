@@ -3,8 +3,13 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import MathTool, OperationDomainValidationError
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import invoke_operation
+from jacobian.math.topology.chain_complexes import filtered_extensions
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredSubspace,
     FiltrationLevel,
@@ -13,6 +18,7 @@ from jacobian.math.topology.chain_complexes.filtered_extensions import (
     FilteredChainMapPageRequest,
     FilteredChainMapPageResult,
     FilteredChainMapRequest,
+    FilteredChainMapResult,
     filtered_chain_map_compose,
     filtered_chain_map_page,
     filtered_map,
@@ -65,6 +71,56 @@ def _map(scale: int):
             maps=(((scale,),), ((scale,),)),
         )
     )
+
+
+def test_page_map_prices_scalar_height_and_vector_count_before_elimination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    rank = 32
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(rank,),
+        differential_matrices=(),
+    )
+    large = 10**4095
+    filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(
+                    vectors=tuple(
+                        tuple(large if row == column else 0 for column in range(rank))
+                        for row in range(rank)
+                    )
+                ),
+            )
+        ),
+    )
+    identity = tuple(
+        tuple(1 if row == column else 0 for column in range(rank))
+        for row in range(rank)
+    )
+    authored = FilteredChainMapResult.model_construct(
+        source=complex_value,
+        target=complex_value,
+        source_filtration=filtration,
+        target_filtration=filtration,
+        maps=(identity,),
+        filtration_preserving=True,
+        chain_map=True,
+    )
+    request = FilteredChainMapPageRequest(map=authored, page=1)
+    monkeypatch.setattr(
+        filtered_extensions,
+        "_admit_filtered_semantics",
+        lambda *_args: pytest.fail("exact filtration elimination began before admission"),
+    )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        filtered_chain_map_page(request)
+
+    assert error.value.errors()[0]["type"] == "filtered_chain_map.page_work_exceeded"
 
 
 def test_e1_page_map_transports_representatives_and_commutes_with_d1() -> None:

@@ -284,7 +284,7 @@ def test_composition_and_element_parent_errors_point_to_real_fields() -> None:
         compose_cyclotomic_field_inclusions(first, second)
     assert composition_error.value.errors()[0]["loc"] == ("second", "source")
 
-    wrong_parent_element = _element(4, (1, 1))
+    wrong_parent_element = _element(4, (1, 1), (0, 1))
     with pytest.raises(OperationDomainValidationError) as element_error:
         apply_cyclotomic_field_inclusion(first, wrong_parent_element)
     assert element_error.value.errors()[0]["loc"] == ("element", "field")
@@ -294,7 +294,7 @@ def test_invalid_map_operands_report_their_own_paths() -> None:
     inclusion = cyclotomic_field_inclusion(
         RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
     )
-    element = _element(3, (1, 1))
+    element = _element(3, (1, 1), (0, 1))
     forged_inclusion = inclusion.model_copy(update={"generator_image": ()})
     with pytest.raises(OperationDomainValidationError) as inclusion_error:
         apply_cyclotomic_field_inclusion(forged_inclusion, element)

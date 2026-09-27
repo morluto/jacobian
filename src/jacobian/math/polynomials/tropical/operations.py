@@ -356,6 +356,8 @@ def _preflight_scalar_product(left: TropicalScalar, right: TropicalScalar) -> No
 
 
 def _sum_fractions_checked(left: Fraction, right: Fraction) -> Fraction:
+    if left == -right:
+        return Fraction(0)
     result = CanonicalRational.from_fraction(left)
     other = CanonicalRational.from_fraction(right)
     _check_fraction_sum_growth(result, other)

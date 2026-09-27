@@ -294,6 +294,42 @@ def test_minor_assignment_result_rejects_false_source_profile() -> None:
         MatrixMinorAssignmentsResult.model_validate(payload)
 
 
+def test_minor_assignment_result_rejects_duplicate_permutation_witnesses() -> None:
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="ZZ")
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=("r",),
+        column_axis=("c",),
+        entries=((_scalar_for(semiring, 0),),),
+    )
+    (profile,) = tropical_matrix_minor_assignment_profiles(matrix, (1,))
+    payload = MatrixMinorAssignmentsResult(
+        matrix=matrix, sizes=(1,), minors=(profile,)
+    ).model_dump(mode="python")
+    payload["minors"][0]["permutations"] = [[0], [0]]
+
+    with pytest.raises(ValidationError):
+        MatrixMinorAssignmentsResult.model_validate(payload)
+
+
+def test_minor_assignment_result_bounds_permutation_witness_list() -> None:
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="ZZ")
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=("r",),
+        column_axis=("c",),
+        entries=((_scalar_for(semiring, 0),),),
+    )
+    (profile,) = tropical_matrix_minor_assignment_profiles(matrix, (1,))
+    payload = MatrixMinorAssignmentsResult(
+        matrix=matrix, sizes=(1,), minors=(profile,)
+    ).model_dump(mode="python")
+    payload["minors"][0]["permutations"] = [[0]] * 40_321
+
+    with pytest.raises(ValidationError):
+        MatrixMinorAssignmentsResult.model_validate(payload)
+
+
 def test_minor_assignment_native_boundary_classifies_unhashable_sizes() -> None:
     with pytest.raises(OperationDomainValidationError):
         tropical_matrix_minor_assignment_profiles(_matrix(), ([1],))  # type: ignore[arg-type]
@@ -336,6 +372,29 @@ def test_minor_assignment_profiles_reject_noncanonical_native_axes() -> None:
     matrix = _matrix().model_copy(update={"row_axis": ("r", "r")})
     with pytest.raises(OperationDomainValidationError):
         tropical_matrix_minor_assignment_profiles(matrix, (1,))
+
+    for axis in (("", "s"), ([], "s")):
+        malformed = _matrix().model_copy(update={"row_axis": axis})
+        with pytest.raises(OperationDomainValidationError):
+            tropical_matrix_minor_assignment_profiles(malformed, (1,))
+
+
+def test_minor_assignment_profiles_keep_bounded_sums_that_cancel() -> None:
+    semiring = TropicalSemiring(convention="MIN_PLUS", base="ZZ")
+    huge = 10**8191
+    matrix = TropicalMatrix(
+        semiring=semiring,
+        row_axis=("r0", "r1"),
+        column_axis=("c0", "c1"),
+        entries=(
+            (_scalar_for(semiring, huge), _scalar_for(semiring, huge)),
+            (_scalar_for(semiring, -huge), _scalar_for(semiring, -huge)),
+        ),
+    )
+
+    profiles = tropical_matrix_minor_assignment_profiles(matrix, (2,))
+
+    assert profiles[0].value.value == CanonicalRational.from_integer_ratio(0, 1)
 
 
 def test_minor_assignment_profiles_admit_factorial_work_before_enumeration() -> None:

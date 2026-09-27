@@ -723,7 +723,7 @@ class TropicalMinorAssignment(StrictModel):
     row_indices: tuple[int, ...]
     column_indices: tuple[int, ...]
     value: TropicalScalar
-    permutations: tuple[tuple[int, ...], ...]
+    permutations: tuple[tuple[int, ...], ...] = Field(min_length=1, max_length=40_320)
 
 
 class MatrixMinorAssignmentsResult(StrictModel):
@@ -765,6 +765,15 @@ class MatrixMinorAssignmentsResult(StrictModel):
             raise _validation_error(
                 "minor_profile_coverage", "profiles must cover every selected minor"
             )
+        if any(type(profile.permutations) is not tuple for profile in self.minors):
+            raise _validation_error(
+                "minor_profile_shape", "profile permutations must be canonical tuples"
+            )
+        if sum(len(profile.permutations) for profile in self.minors) > 40_320:
+            raise _validation_error(
+                "minor_profile_permutations",
+                "retained permutation witnesses exceed 40,320",
+            )
         for (row_indices, column_indices), profile in zip(
             expected, self.minors, strict=True
         ):
@@ -780,8 +789,11 @@ class MatrixMinorAssignmentsResult(StrictModel):
             if (
                 profile.value.semiring != self.matrix.semiring
                 or not profile.permutations
+                or profile.permutations != tuple(sorted(set(profile.permutations)))
                 or any(
-                    len(permutation) != size or set(permutation) != set(range(size))
+                    type(permutation) is not tuple
+                    or len(permutation) != size
+                    or set(permutation) != set(range(size))
                     for permutation in profile.permutations
                 )
             ):

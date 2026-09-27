@@ -139,7 +139,7 @@ Tropical Geometry*, Chapter 5](https://janos.cs.technion.ac.il/COURSES/238900-13
 Permutation entries are positions in that profile's selected column indices.
 
 Each requested size is between one and eight. The operation admits no more
-than 256 minors, 25,000 candidate assignments, and the canonical 10 MiB output
+than 256 minors, 40,320 candidate assignments, and the canonical 10 MiB output
 limit before enumeration. It reports profiles only; it does not compute a
 tropical rank or compare alternate rank notions.
 

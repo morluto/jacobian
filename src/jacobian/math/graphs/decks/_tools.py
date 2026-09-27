@@ -4,18 +4,34 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.graphs.decks._models import (
+    MAX_KELLY_DECK_TOTAL_WORK,
     EdgeDeckRequest,
     EdgeDeletionFamily,
     UnlabelledDeck,
     UnlabelledDeckRequest,
+    UnlabelledVertexDeck,
+    UnlabelledVertexDeckRequest,
+    VertexDeckDegreeMultisetRequest,
+    VertexDeckEdgeCount,
+    VertexDeckEdgeCountRequest,
+    VertexDeckInducedSubgraphCount,
+    VertexDeckInducedSubgraphCountRequest,
     VertexDeckRequest,
+    VertexDeckSubgraphCount,
+    VertexDeckSubgraphCountRequest,
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
     edge_deletion_family,
     unlabelled_deck,
+    unlabelled_vertex_deck,
+    vertex_deck_degree_multiset,
+    vertex_deck_edge_count,
+    vertex_deck_induced_subgraph_count,
+    vertex_deck_subgraph_count,
     vertex_deletion_family,
 )
+from jacobian.math.graphs.realization._models import DegreeSequence
 
 
 def _run_vertex_deleted(request: VertexDeckRequest) -> VertexDeletionFamily:
@@ -36,6 +52,36 @@ def _run_edge_deleted(request: EdgeDeckRequest) -> EdgeDeletionFamily:
 
 def _run_unlabelled(request: UnlabelledDeckRequest) -> UnlabelledDeck:
     return unlabelled_deck(request.deck)
+
+
+def _run_unlabelled_vertex(
+    request: UnlabelledVertexDeckRequest,
+) -> UnlabelledVertexDeck:
+    return unlabelled_vertex_deck(request.deck)
+
+
+def _run_vertex_deck_induced_pattern_count(
+    request: VertexDeckInducedSubgraphCountRequest,
+) -> VertexDeckInducedSubgraphCount:
+    return vertex_deck_induced_subgraph_count(request.deck, request.pattern)
+
+
+def _run_vertex_deck_subgraph_count(
+    request: VertexDeckSubgraphCountRequest,
+) -> VertexDeckSubgraphCount:
+    return vertex_deck_subgraph_count(request.deck, request.pattern)
+
+
+def _run_vertex_deck_edge_count(
+    request: VertexDeckEdgeCountRequest,
+) -> VertexDeckEdgeCount:
+    return vertex_deck_edge_count(request.deck)
+
+
+def _run_vertex_deck_degree_multiset(
+    request: VertexDeckDegreeMultisetRequest,
+) -> DegreeSequence:
+    return vertex_deck_degree_multiset(request.deck)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -100,16 +146,32 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         operation_id="graph.deck.unlabelled.compute",
         title="Compute the unlabelled multiset quotient of an edge deck",
         description=(
-            "Group source edge-deletion cards by exact graph isomorphism and retain "
-            "each representative with its positive multiplicity and source card "
-            "indices; quotient work admits at most 10 source vertices and "
-            "2000000 comparison units."
+            "Group source edge-deletion cards by exact graph isomorphism, "
+            "canonicalizing each card to the least adjacency encoding across all "
+            "vertex permutations, and retain each representative with its "
+            "positive multiplicity and source card indices; deleted source edges "
+            "are recovered from the card indices on the source edge axis. Quotient "
+            "work admits at most 10 source vertices and 2000000 exact "
+            "permutation-canonicalization work units."
         ),
         request_type=UnlabelledDeckRequest,
         result_type=UnlabelledDeck,
         run=_run_unlabelled,
-        tags=("graph", "deck", "isomorphism", "multiset", "exact"),
-        discovery_terms=("unlabelled deck", "deck quotient", "deck multiplicities"),
+        tags=(
+            "graph",
+            "deck",
+            "edge-deletion",
+            "isomorphism",
+            "multiset",
+            "exact",
+        ),
+        discovery_terms=(
+            "unlabelled deck",
+            "unlabelled edge deck",
+            "deck quotient",
+            "deck multiplicities",
+            "edge deck multiplicities",
+        ),
         examples=(
             OperationExample(
                 name="path_edge_quotient",
@@ -141,6 +203,395 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             },
                         ],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.vertex.unlabelled.compute",
+        title="Compute the unlabelled multiset quotient of a vertex deck",
+        description=(
+            "Group complete source-bound vertex-deletion cards by exact graph "
+            "isomorphism, retaining a representative, exact multiplicity, and "
+            "source-card indices. Admits at most 10 source vertices and "
+            "2000000 exact permutation canonicalization work units."
+        ),
+        request_type=UnlabelledVertexDeckRequest,
+        result_type=UnlabelledVertexDeck,
+        run=_run_unlabelled_vertex,
+        tags=("graph", "deck", "isomorphism", "multiset", "exact"),
+        discovery_terms=("unlabelled vertex deck", "vertex deck multiplicities"),
+        examples=(
+            OperationExample(
+                name="path_vertex_quotient",
+                description="P3 has two isomorphic endpoint-deleted cards and one distinct middle-deleted card.",
+                input={
+                    "deck": {
+                        "source": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["b", "c"]],
+                        },
+                        "cards": [
+                            {
+                                "deleted_vertex": "a",
+                                "card": {"vertices": ["b", "c"], "edges": [["b", "c"]]},
+                                "retained_vertices": ["b", "c"],
+                                "retained_edge_count": 1,
+                                "deleted_edge_count": 1,
+                            },
+                            {
+                                "deleted_vertex": "b",
+                                "card": {"vertices": ["a", "c"], "edges": []},
+                                "retained_vertices": ["a", "c"],
+                                "retained_edge_count": 0,
+                                "deleted_edge_count": 2,
+                            },
+                            {
+                                "deleted_vertex": "c",
+                                "card": {"vertices": ["a", "b"], "edges": [["a", "b"]]},
+                                "retained_vertices": ["a", "b"],
+                                "retained_edge_count": 1,
+                                "deleted_edge_count": 1,
+                            },
+                        ],
+                        "edge_appearances": [1, 1],
+                        "vertex_appearances": [2, 2, 2],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.vertex.edge_count.compute",
+        title="Reconstruct edge count from a vertex deck",
+        description=(
+            "For a complete source-bound vertex deck of order n >= 3, calculate "
+            "the multiset of card edge counts and recover the source edge count "
+            "from sum_v |E(G-v)| = (n-2)|E(G)|. The operation validates the exact "
+            "card quotient and multiplicities, then checks divisibility before "
+            "returning the source count."
+        ),
+        request_type=VertexDeckEdgeCountRequest,
+        result_type=VertexDeckEdgeCount,
+        run=_run_vertex_deck_edge_count,
+        tags=("graph", "deck", "vertex-deletion", "reconstruction", "exact"),
+        discovery_terms=(
+            "reconstruct graph edge count from vertex deck",
+            "Kelly edge count identity",
+            "vertex deck card edge counts",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_edge_count",
+                description="Every vertex-deleted card of K3 has one edge, so the source has 3 edges.",
+                input={
+                    "deck": {
+                        "family": {
+                            "source": {
+                                "vertices": ["a", "b", "c"],
+                                "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                            },
+                            "cards": [
+                                {
+                                    "deleted_vertex": "a",
+                                    "card": {
+                                        "vertices": ["b", "c"],
+                                        "edges": [["b", "c"]],
+                                    },
+                                    "retained_vertices": ["b", "c"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 2,
+                                },
+                                {
+                                    "deleted_vertex": "b",
+                                    "card": {
+                                        "vertices": ["a", "c"],
+                                        "edges": [["a", "c"]],
+                                    },
+                                    "retained_vertices": ["a", "c"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 2,
+                                },
+                                {
+                                    "deleted_vertex": "c",
+                                    "card": {
+                                        "vertices": ["a", "b"],
+                                        "edges": [["a", "b"]],
+                                    },
+                                    "retained_vertices": ["a", "b"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 2,
+                                },
+                            ],
+                            "edge_appearances": [1, 1, 1],
+                            "vertex_appearances": [2, 2, 2],
+                        },
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["b", "c"],
+                                    "edges": [["b", "c"]],
+                                },
+                                "multiplicity": 3,
+                                "card_indices": [0, 1, 2],
+                            }
+                        ],
+                        "card_count": 3,
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.vertex.degree_multiset.compute",
+        title="Reconstruct the vertex degree multiset from a vertex deck",
+        description=(
+            "For a complete source-bound unlabelled vertex deck of order n >= 3, "
+            "derive the source edge count from the card edge-count identity and "
+            "return the descending multiset (m-|E(C)|) over cards C. Uses the "
+            "exact DegreeSequence value and admits/authenticates the bounded "
+            "deck quotient before trusting card multiplicities. It returns no "
+            "source-vertex labels or reconstructed graph."
+        ),
+        request_type=VertexDeckDegreeMultisetRequest,
+        result_type=DegreeSequence,
+        run=_run_vertex_deck_degree_multiset,
+        tags=("graph", "deck", "degree-sequence", "reconstruction", "exact"),
+        discovery_terms=(
+            "degree multiset from vertex deck",
+            "reconstruct graph degree sequence",
+            "Kelly degree sequence",
+        ),
+        examples=(
+            OperationExample(
+                name="empty_graph_on_three_vertices",
+                description=(
+                    "Three empty two-vertex cards recover the zero degree "
+                    "multiset, preserving all three repeated cards."
+                ),
+                input={
+                    "deck": {
+                        "family": {
+                            "source": {"vertices": ["a", "b", "c"], "edges": []},
+                            "cards": [
+                                {
+                                    "deleted_vertex": "a",
+                                    "card": {"vertices": ["b", "c"], "edges": []},
+                                    "retained_vertices": ["b", "c"],
+                                    "retained_edge_count": 0,
+                                    "deleted_edge_count": 0,
+                                },
+                                {
+                                    "deleted_vertex": "b",
+                                    "card": {"vertices": ["a", "c"], "edges": []},
+                                    "retained_vertices": ["a", "c"],
+                                    "retained_edge_count": 0,
+                                    "deleted_edge_count": 0,
+                                },
+                                {
+                                    "deleted_vertex": "c",
+                                    "card": {"vertices": ["a", "b"], "edges": []},
+                                    "retained_vertices": ["a", "b"],
+                                    "retained_edge_count": 0,
+                                    "deleted_edge_count": 0,
+                                },
+                            ],
+                            "edge_appearances": [],
+                            "vertex_appearances": [2, 2, 2],
+                        },
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["b", "c"],
+                                    "edges": [],
+                                },
+                                "multiplicity": 3,
+                                "card_indices": [0, 1, 2],
+                            }
+                        ],
+                        "card_count": 3,
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.vertex.induced_subgraph_count.compute",
+        title="Reconstruct an induced pattern count from a vertex deck",
+        description=(
+            "For a pattern H with h < n source vertices, count induced vertex "
+            "subsets isomorphic to H using Kelly's exact identity: the sum of "
+            "card counts is (n-h) times the source count. Each card pattern count "
+            "uses graph.induced_vertex_subset_pattern.count semantics (subsets, "
+            "not labelled embeddings). Requires a complete exact vertex deck; "
+            "preflights deck validation, canonicalization, all card-count work, "
+            f"the result's label echo allocation, and a "
+            f"{MAX_KELLY_DECK_TOTAL_WORK:,}-unit aggregate bound."
+        ),
+        request_type=VertexDeckInducedSubgraphCountRequest,
+        result_type=VertexDeckInducedSubgraphCount,
+        run=_run_vertex_deck_induced_pattern_count,
+        tags=("graph", "deck", "Kelly-lemma", "induced-subgraph", "count", "exact"),
+        discovery_terms=(
+            "Kelly lemma induced pattern count",
+            "reconstructible induced subgraph count",
+            "vertex-deck pattern count",
+        ),
+        examples=(
+            OperationExample(
+                name="single_vertex_count_from_path_deck",
+                description=(
+                    "Recover the number of one-vertex induced subsets in P3. "
+                    "Its three two-vertex cards contribute six total; divide "
+                    "by n-h=2 to obtain three."
+                ),
+                input={
+                    "deck": {
+                        "family": {
+                            "source": {
+                                "vertices": ["a", "b", "c"],
+                                "edges": [["a", "b"], ["b", "c"]],
+                            },
+                            "cards": [
+                                {
+                                    "deleted_vertex": "a",
+                                    "card": {
+                                        "vertices": ["b", "c"],
+                                        "edges": [["b", "c"]],
+                                    },
+                                    "retained_vertices": ["b", "c"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 1,
+                                },
+                                {
+                                    "deleted_vertex": "b",
+                                    "card": {"vertices": ["a", "c"], "edges": []},
+                                    "retained_vertices": ["a", "c"],
+                                    "retained_edge_count": 0,
+                                    "deleted_edge_count": 2,
+                                },
+                                {
+                                    "deleted_vertex": "c",
+                                    "card": {
+                                        "vertices": ["a", "b"],
+                                        "edges": [["a", "b"]],
+                                    },
+                                    "retained_vertices": ["a", "b"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 1,
+                                },
+                            ],
+                            "edge_appearances": [1, 1],
+                            "vertex_appearances": [2, 2, 2],
+                        },
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["b", "c"],
+                                    "edges": [["b", "c"]],
+                                },
+                                "multiplicity": 2,
+                                "card_indices": [0, 2],
+                            },
+                            {
+                                "representative": {"vertices": ["a", "c"], "edges": []},
+                                "multiplicity": 1,
+                                "card_indices": [1],
+                            },
+                        ],
+                        "card_count": 3,
+                    },
+                    "pattern": {"vertices": ["x"], "edges": []},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.vertex.subgraph_count.compute",
+        title="Reconstruct an ordinary subgraph count from a vertex deck",
+        description=(
+            "For a proper simple graph pattern H with h < n vertices, count "
+            "copies as vertex-subset and edge-subset pairs isomorphic to H; "
+            "extra source edges on those vertices are allowed. The result is "
+            "not an induced subset count and not an injective embedding count. "
+            "Kelly's identity sums exact per-card copy counts with deck-class "
+            "multiplicity and divides by n-h. Exact assignment, canonicalization, "
+            "family, and result echo allocation work are admitted first, within "
+            f"{MAX_KELLY_DECK_TOTAL_WORK:,} units."
+        ),
+        request_type=VertexDeckSubgraphCountRequest,
+        result_type=VertexDeckSubgraphCount,
+        run=_run_vertex_deck_subgraph_count,
+        tags=("graph", "deck", "Kelly-lemma", "subgraph-count", "exact"),
+        discovery_terms=(
+            "ordinary subgraph count from vertex deck",
+            "non-induced pattern copies",
+            "Kelly subgraph counting lemma",
+        ),
+        examples=(
+            OperationExample(
+                name="edge_copies_from_path_deck",
+                description=(
+                    "P3 has two ordinary edge copies. Its three vertex-deleted "
+                    "cards contain four edge copies total, so divide by n-h=2."
+                ),
+                input={
+                    "deck": {
+                        "family": {
+                            "source": {
+                                "vertices": ["a", "b", "c"],
+                                "edges": [["a", "b"], ["b", "c"]],
+                            },
+                            "cards": [
+                                {
+                                    "deleted_vertex": "a",
+                                    "card": {
+                                        "vertices": ["b", "c"],
+                                        "edges": [["b", "c"]],
+                                    },
+                                    "retained_vertices": ["b", "c"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 1,
+                                },
+                                {
+                                    "deleted_vertex": "b",
+                                    "card": {"vertices": ["a", "c"], "edges": []},
+                                    "retained_vertices": ["a", "c"],
+                                    "retained_edge_count": 0,
+                                    "deleted_edge_count": 2,
+                                },
+                                {
+                                    "deleted_vertex": "c",
+                                    "card": {
+                                        "vertices": ["a", "b"],
+                                        "edges": [["a", "b"]],
+                                    },
+                                    "retained_vertices": ["a", "b"],
+                                    "retained_edge_count": 1,
+                                    "deleted_edge_count": 1,
+                                },
+                            ],
+                            "edge_appearances": [1, 1],
+                            "vertex_appearances": [2, 2, 2],
+                        },
+                        "classes": [
+                            {
+                                "representative": {
+                                    "vertices": ["b", "c"],
+                                    "edges": [["b", "c"]],
+                                },
+                                "multiplicity": 2,
+                                "card_indices": [0, 2],
+                            },
+                            {
+                                "representative": {"vertices": ["a", "c"], "edges": []},
+                                "multiplicity": 1,
+                                "card_indices": [1],
+                            },
+                        ],
+                        "card_count": 3,
+                    },
+                    "pattern": {"vertices": ["x", "y"], "edges": [["x", "y"]]},
                 },
             ),
         ),

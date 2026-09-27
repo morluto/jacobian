@@ -1,11 +1,15 @@
 # Product blueprint
 
-Jacobian exposes stateless functions over typed mathematical values through two
-MCP verbs: find an operation and run one operation. The caller owns composition:
-decomposition, sequencing, retention of values, and stopping.
+Jacobian is a native mathematical library with an immutable catalog of published
+operations. MCP exposes that catalog through two verbs: find an operation and
+run one operation. Native callers can use domain functions without a catalog or
+server. The caller owns composition: decomposition, sequencing, retention of
+values, and stopping.
 
-The server owns typed operation contracts, strict request validation, resource
-bounds, immutable discovery, and the final MCP projection.
+Mathematical owners define values, operation semantics, admission, and typed
+outcomes. Publication makes selected capabilities discoverable; it does not
+create a second mathematical implementation. The server owns protocol delivery,
+authorization, and deployment policy around those library contracts.
 
 The operation path and ownership boundaries are defined in the
 [architecture](architecture.md). A domain kernel may use a maintained library

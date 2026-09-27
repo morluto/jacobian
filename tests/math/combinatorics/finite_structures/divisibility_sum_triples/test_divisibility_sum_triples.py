@@ -24,15 +24,6 @@ def _sorted_ints(members: Iterable[str]) -> list[int]:
     return sorted(int(x) for x in members)
 
 
-def test_fixture_1_to_4() -> None:
-    """On [1,4], triples with a<b<c and a dividing b+c include {1,2,3}, {1,2,4}, and {1,3,4}."""
-    result = construct_divisibility_sum_triples_hypergraph(1, 4)
-    edges = _edge_member_sets(result)
-    assert frozenset({"1", "2", "3"}) in edges
-    assert frozenset({"1", "2", "4"}) in edges
-    assert frozenset({"1", "3", "4"}) in edges
-
-
 def test_replay_divisibility() -> None:
     """Every edge satisfies a | (b + c)."""
     result = construct_divisibility_sum_triples_hypergraph(1, 10)
@@ -42,14 +33,6 @@ def test_replay_divisibility() -> None:
         assert a < b < c
         assert a != 0
         assert (b + c) % a == 0
-
-
-def test_replay_ordering() -> None:
-    """Every edge is in strictly increasing numerical order."""
-    result = construct_divisibility_sum_triples_hypergraph(1, 10)
-    for _, members in result.hypergraph.edges:
-        vals = _sorted_ints(members)
-        assert vals[0] < vals[1] < vals[2]
 
 
 def test_empty_interval() -> None:

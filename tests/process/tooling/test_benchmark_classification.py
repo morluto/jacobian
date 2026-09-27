@@ -9,6 +9,7 @@ from types import ModuleType, SimpleNamespace
 
 import pytest
 import tools.benchmark_plan.compiler as planner
+from benchmarks.tooling.validation_plan import host_validation_plan
 from tests.process.tooling.ci import ROOT
 
 _MISSING = object()
@@ -79,6 +80,48 @@ def test_task_documentation_does_not_select_oracle(
     assert plan.run_oracle is False
     assert plan.oracle_scope == "none"
     assert any("task documentation change" in reason for reason in plan.reasons)
+
+
+def test_evaluation_evidence_markdown_does_not_select_oracle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_plan(monkeypatch)
+
+    plan = planner.plan(
+        ["benchmarks/evidence/classical-matrix-groups-admission.md"],
+        base="a" * 40,
+        head="b" * 40,
+    )
+
+    assert plan.run_check is True
+    assert plan.run_oracle is False
+    assert plan.oracle_scope == "none"
+    assert any(
+        "evaluation evidence documentation change" in reason for reason in plan.reasons
+    )
+    host_plan = host_validation_plan(
+        ROOT,
+        ["benchmarks/evidence/classical-matrix-groups-admission.md"],
+        {},
+    )
+    assert host_plan.entries == ()
+    assert host_plan.reasons == ()
+
+
+def test_unclassified_evidence_path_still_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_plan(monkeypatch)
+
+    plan = planner.plan(
+        ["benchmarks/evidence/new-record.json"],
+        base="a" * 40,
+        head="b" * 40,
+    )
+
+    assert plan.run_oracle is True
+    assert plan.oracle_scope == "all"
+    assert any("fail-closed" in reason for reason in plan.reasons)
 
 
 @pytest.mark.parametrize(

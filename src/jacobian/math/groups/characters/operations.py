@@ -766,9 +766,7 @@ def _admit_character_partition(
             message="source group exceeds the complete class-partition envelope",
         )
     try:
-        expected = _conjugacy_classes_from_admitted(
-            backend, degree, order=source_order
-        )
+        expected = _conjugacy_classes_from_admitted(backend, degree, order=source_order)
     except OperationDomainValidationError as exc:
         raise OperationResourceAdmissionError(
             location=("partition", "source"),

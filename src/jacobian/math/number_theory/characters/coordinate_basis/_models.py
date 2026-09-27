@@ -100,9 +100,13 @@ class DirichletCharacterBasisChangeResult(StrictModel):
                 "source and transported characters must share the modulus and cyclotomic parent",
             )
 
-        def character_table(character: DirichletCharacter) -> tuple[CyclotomicValue | None, ...]:
+        def character_table(
+            character: DirichletCharacter,
+        ) -> tuple[CyclotomicValue | None, ...]:
             group = character.group
-            unit_rows = dict(zip(group.unit_residues, group.unit_coordinates, strict=True))
+            unit_rows = dict(
+                zip(group.unit_residues, group.unit_coordinates, strict=True)
+            )
             if tuple(group.unit_residues) != tuple(
                 residue for residue in range(modulus) if gcd(residue, modulus) == 1
             ):
@@ -116,12 +120,18 @@ class DirichletCharacterBasisChangeResult(StrictModel):
                 if row is None:
                     table.append(None)
                     continue
-                exponent = sum(
-                    coordinate * (group.exponent // order) * unit_coordinate
-                    for coordinate, order, unit_coordinate in zip(
-                        character.coordinates, group.generator_orders, row, strict=True
+                exponent = (
+                    sum(
+                        coordinate * (group.exponent // order) * unit_coordinate
+                        for coordinate, order, unit_coordinate in zip(
+                            character.coordinates,
+                            group.generator_orders,
+                            row,
+                            strict=True,
+                        )
                     )
-                ) % group.exponent
+                    % group.exponent
+                )
                 table.append(CyclotomicValue(order=group.exponent, exponent=exponent))
             return tuple(table)
 

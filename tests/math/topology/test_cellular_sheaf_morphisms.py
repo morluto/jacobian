@@ -63,9 +63,7 @@ def _triangle_sheaf(
                 target=coface,
                 entries=(
                     tuple(
-                        edge_scalar
-                        if all_cover_scalar or len(coface) == 2
-                        else _q("1")
+                        edge_scalar if all_cover_scalar or len(coface) == 2 else _q("1")
                         for _ in range(rank)
                     ),
                 )

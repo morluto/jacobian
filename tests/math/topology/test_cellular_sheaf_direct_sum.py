@@ -122,12 +122,15 @@ def test_direct_sum_admits_derived_coefficients_by_output_digit_work() -> None:
     ).sheaf
     assert source is not None
     result = direct_sum(source, source).direct_sum
-    assert max(
-        len(str(value.num))
-        for restriction in result.derived_restrictions
-        for row in restriction.entries
-        for value in row
-    ) > 64
+    assert (
+        max(
+            len(str(value.num))
+            for restriction in result.derived_restrictions
+            for row in restriction.entries
+            for value in row
+        )
+        > 64
+    )
 
 
 def test_direct_sum_rejects_different_field_or_complex() -> None:

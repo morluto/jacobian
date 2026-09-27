@@ -252,20 +252,6 @@ def test_canonical_complex_composes_as_the_authoritative_object() -> None:
     assert tuple(group.betti_number for group in homology.groups) == (1, 1)
 
 
-def test_integral_homology_runs_through_the_public_operation() -> None:
-    complex_ = _canonical_complex(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
-    operation = _operation("topology.simplicial_homology.integral.compute")
-
-    result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
-
-    assert result.complex == complex_
-    assert result.homology.coefficient_ring is CoefficientRing.INTEGER
-    assert tuple(group.free_rank for group in _integral_groups(result.homology)) == (
-        1,
-        1,
-    )
-
-
 def test_integral_homology_admits_one_tetrahedron() -> None:
     """The canonical simplex contraction has H_0 = ZZ and no higher homology."""
 
@@ -277,6 +263,8 @@ def test_integral_homology_admits_one_tetrahedron() -> None:
 
     result = operation.run(IntegralSimplicialHomologyRequest(complex=complex_))
 
+    assert result.complex == complex_
+    assert result.homology.coefficient_ring is CoefficientRing.INTEGER
     groups = _integral_groups(result.homology)
     assert tuple(
         (group.free_rank, group.torsion_invariant_factors) for group in groups

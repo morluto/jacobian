@@ -16,12 +16,14 @@ from jacobian.canonical import format_canonical_integer
 
 MAX_GROUND_SET = 64
 MAX_SETS = 1_000
-# The optimum operation pairs two maintained backends: a bounded
-# scipy.optimize.milp (HiGHS) search produces the incumbent coloring, and the
-# minimality of any positive claimed optimum is re-established exactly by one
-# Z3 pseudo-boolean feasibility check at D-1 before OPTIMAL may carry it.
+# Above the tiny-instance scan budget, the optimum operation pairs two
+# maintained backends: a bounded scipy.optimize.milp (HiGHS) search produces
+# the incumbent coloring, and the minimality of any positive claimed optimum
+# is re-established exactly by one Z3 pseudo-boolean feasibility check at D-1.
 # Exhausted solver budgets are operational non-completion, not a result value.
 MAX_OPTIMUM_SOLVER_MILLISECONDS = 30_000
+MAX_OPTIMUM_EXACT_ENUMERATION_WORK = 100_000
+"""Work cap for the exact color scan used only on tiny instances."""
 # The node limit bounds HiGHS' branch-and-bound tree retention independently
 # of wall clock: an admitted hard 64-variable instance can otherwise expand
 # and retain an arbitrary portion of its ~2^64 search tree before the timer
@@ -374,9 +376,9 @@ class FiniteSetSystem(StrictModel):
                 "A finite ground set of size `ground_set_size` and up to "
                 f"{MAX_SETS} subsets given as strictly increasing index tuples. "
                 f"The optimum operation admits ground sets up to {MAX_GROUND_SET} "
-                "elements and pairs a bounded HiGHS MILP incumbent search with "
-                "an exact pseudo-boolean optimality proof; the combined solver "
-                "budget bounds each request."
+                "elements. Small instances use an admitted exact coloring scan; "
+                "larger instances use bounded HiGHS search with an exact "
+                "pseudo-boolean optimality proof."
             )
         }
     )
@@ -546,10 +548,10 @@ def _proven_optimal_result(
     optimal_coloring: tuple[int, ...],
     optimal_discrepancy: int,
 ) -> DiscrepancyOptimumResult:
-    """Build a proven-optimal result after one producing incumbent solve.
+    """Build a result after the owner kernel establishes its exact optimum.
 
-    Direct construction is permitted after the owner kernel has established
-    witness feasibility and the exact lower-bound proof.
+    The kernel may establish optimality by completing a bounded exact scan or
+    by combining a bounded incumbent search with an exact lower-bound proof.
     """
 
     return DiscrepancyOptimumResult._from_kernel(

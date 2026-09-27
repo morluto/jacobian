@@ -103,7 +103,7 @@ def _require_checked(
 
 
 def simplicial_map_image(
-    request: SimplicialMapImageRequest,
+    value: TruncatedSimplicialMap,
 ) -> SimplicialMapImageResult:
     """Return the finite-prefix image with exact simplicial epi-mono factors.
 
@@ -112,7 +112,6 @@ def simplicial_map_image(
     and degeneracies, so restriction gives a simplicial set and a factorization
     through it.
     """
-    value = request.simplicial_map
     _preflight(value)
     source = _require_checked(value.source, location="source")
     target = _require_checked(value.target, location="target")

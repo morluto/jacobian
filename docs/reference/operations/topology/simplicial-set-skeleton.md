@@ -12,10 +12,12 @@ preserved, and the empty simplicial set returns the empty skeleton.
 
 The implementation starts with every source simplex in degrees `<= k` and
 closes those sets under the visible degeneracy maps. The ascending degree pass
-is sufficient because every degeneracy raises degree by one. Face closure then
-follows from the simplicial identities, which the operation rechecks on the
-source and on the resulting prefix. The returned inclusion is checked against
-every visible face and degeneracy square.
+is sufficient because every degeneracy raises degree by one. The operation
+checks all visible simplicial identities on the supplied source. Degeneracy
+closure preserves those identities on the restricted tables, and the
+restriction indices intertwine each face and degeneracy map by construction;
+the derived skeleton and inclusion are built through trusted kernel constructors
+without replaying those consequences.
 
 The exact admission bounds the input identity scan, closure and inclusion scans,
 and the serialized result before constructing derived tables. It uses the

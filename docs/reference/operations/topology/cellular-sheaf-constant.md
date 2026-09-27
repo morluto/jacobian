@@ -17,8 +17,9 @@ empty complex is outside this operation's input representation.
 Admission bounds the complex to 64 nonempty simplices, the stalk dimension to
 8, the aggregate stalk rank to 512, cover restrictions to 512, derived
 restrictions to 2,048, and all restriction-matrix cells to 65,536. It also
-bounds the complete face-poset diamond checks, construction work, and estimated
-exact serialized output. The restriction maps have coefficients only 0 and 1,
+bounds the complete face-poset diamond checks and construction work. These
+structural limits bound native materialization; serialized byte ceilings belong
+to the delivery boundary. The restriction maps have coefficients only 0 and 1,
 so no coefficient-growth phase is needed.
 
 The result composes unchanged with `cellular_sheaf.sections.compute` and

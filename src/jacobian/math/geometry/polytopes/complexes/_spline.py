@@ -11,12 +11,7 @@ import sympy as sp
 from pydantic import BaseModel
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
-from jacobian.canonical import (
-    CanonicalizationError,
-    CanonicalLimits,
-    decimal_digit_width,
-    encode_strict_json,
-)
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -98,6 +93,28 @@ def _admit_request[RequestModel: BaseModel](
 
 def _poly_symbols(poly: RationalPolynomial) -> tuple[Any, ...]:
     return sp.symbols(" ".join(poly.variables), seq=True) if poly.variables else ()
+
+
+def _structured_digit_budget(value: Any) -> int:
+    """Bound retained structured values by scalar digits and container shape."""
+    if hasattr(value, "model_dump"):
+        value = value.model_dump(mode="python")
+    if value is None:
+        return 4
+    if isinstance(value, bool):
+        return 5
+    if isinstance(value, int):
+        return decimal_digit_width(abs(value)) + int(value < 0) + 2
+    if isinstance(value, str):
+        return 2 + 6 * len(value)
+    if isinstance(value, dict):
+        return 2 + sum(
+            _structured_digit_budget(str(key)) + 1 + _structured_digit_budget(item) + 1
+            for key, item in value.items()
+        )
+    if isinstance(value, (tuple, list)):
+        return 2 + sum(_structured_digit_budget(item) + 1 for item in value)
+    return 64
 
 
 def _to_poly(poly: RationalPolynomial, symbols: tuple[Any, ...]) -> Any:
@@ -750,16 +767,8 @@ def piecewise_polynomial_scalar_multiply(  # noqa: C901
                     message="a scaled coefficient may exceed the canonical rational digit envelope",
                 )
             output_digits += numerator_digits + denominator_digits
-    try:
-        input_bytes = len(encode_strict_json(function.model_dump(mode="json")))
-    except CanonicalizationError as exc:
-        raise OperationResourceAdmissionError(
-            location=("function",),
-            code="polytopal_complex.scalar_multiplication_output",
-            message="piecewise-polynomial output exceeds the canonical JSON envelope",
-        ) from exc
-    output_bound = output_digits + 64 * total_terms + input_bytes
-    if output_bound > CanonicalLimits().max_output_bytes:
+    output_bound = output_digits + 64 * total_terms + _structured_digit_budget(function)
+    if output_bound > MAX_SPLINE_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("function",),
             code="polytopal_complex.scalar_multiplication_output",
@@ -1273,9 +1282,10 @@ MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS = 32_768
 MAX_SPLINE_DIMENSION_OUTPUT_DIGITS = 10 * 1024 * 1024
 """Decimal-digit ceiling summed over stored rational cells of the matrix."""
 MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES = 512 * 1024 * 1024
-MAX_SPLINE_COORDINATE_OUTPUT_BYTES = CanonicalLimits().max_output_bytes
+MAX_SPLINE_COORDINATE_OUTPUT_DIGITS = 10 * 1024 * 1024
 MAX_SPLINE_REFINEMENT_MAP_WORK = 32_000_000
 MAX_SPLINE_REFINEMENT_RESULT_CELLS = 1_000_000
+MAX_SPLINE_REFINEMENT_OUTPUT_DIGITS = 10 * 1024 * 1024
 
 
 def _admit_spline(
@@ -1482,11 +1492,11 @@ def _admit_spline_coordinate_materialization(
     result_bound = (
         (len(constraint_rows) * width + width * width) * (2 * basis_scalar_digits + 32)
         + width * (coordinate_scalar_digits + 32)
-        + len(encode_strict_json(complex_value.model_dump(mode="json")))
+        + _structured_digit_budget(complex_value)
         + 512 * len(coefficient_axis)
         + 4096
     )
-    if result_bound > MAX_SPLINE_COORDINATE_OUTPUT_BYTES:
+    if result_bound > MAX_SPLINE_COORDINATE_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("degree",),
             code="polytopal_complex.spline_coordinates_output",
@@ -2103,39 +2113,23 @@ def spline_dimension_profile(
         )
     _admit_spline_profile_heights(complex_value, request.smoothness, tuple(shapes))
     # Finite differences of an n-term prefix have magnitude at most 2**n
-    # times the largest dimension. Encode that upper profile before ranking.
+    # times the largest dimension. Bound that upper profile before ranking.
     max_width = max((width for width, _ in shapes), default=0)
     maximum_difference = max_width
-    try:
-        difference_rows = []
-        for order in range(request.max_degree + 1):
-            difference_rows.append(
-                [maximum_difference] * (request.max_degree + 1 - order)
-            )
-            maximum_difference *= 2
-        output_bound = len(
-            encode_strict_json(
-                {
-                    "complex": complex_value.model_dump(mode="json"),
-                    "max_degree": request.max_degree,
-                    "smoothness": request.smoothness,
-                    "dimensions": [max_width] * (request.max_degree + 1),
-                    "forward_differences": difference_rows,
-                },
-                limits=CanonicalLimits(),
-            )
+    profile_values_bound = 512 + (request.max_degree + 1) * (
+        decimal_digit_width(max_width) + 3
+    )
+    for order in range(request.max_degree + 1):
+        profile_values_bound += (request.max_degree + 1 - order) * (
+            decimal_digit_width(maximum_difference) + 3
         )
-    except CanonicalizationError as exc:
+        maximum_difference *= 2
+    output_digit_bound = _structured_digit_budget(complex_value) + profile_values_bound
+    if output_digit_bound > MAX_SPLINE_DIMENSION_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="polytopal_complex.spline_profile_output",
-            message="finite spline profile exceeds the canonical output envelope",
-        ) from exc
-    if output_bound > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("max_degree",),
-            code="polytopal_complex.spline_profile_output",
-            message="finite spline profile exceeds its canonical output envelope",
+            message="finite spline profile exceeds its admitted output digit envelope",
         )
 
     # Construct and height-admit the entire prefix before the first FLINT rank.
@@ -2288,21 +2282,17 @@ def spline_refinement_map(
         default=1,
     )
     retained_scalar_digits = max(basis_scalar_digits, matrix_scalar_digits)
-    source_input_bytes = len(encode_strict_json(coarse_complex.model_dump(mode="json")))
-    refined_input_bytes = len(
-        encode_strict_json(_refined_complex.model_dump(mode="json"))
-    )
-    output_bytes_bound = (
+    output_digit_bound = (
         (source_cells_bound + target_cells_bound) * (retained_scalar_digits + 24)
-        + 3 * source_input_bytes
-        + 3 * refined_input_bytes
+        + 3 * _structured_digit_budget(coarse_complex)
+        + 3 * _structured_digit_budget(_refined_complex)
         + 4096 * (coarse_width + refined_width)
     )
-    if output_bytes_bound > CanonicalLimits().max_output_bytes:
+    if output_digit_bound > MAX_SPLINE_REFINEMENT_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("degree",),
             code="polytopal_complex.spline_refinement_map_output",
-            message="source, target, and refinement map exceed the canonical output envelope",
+            message="source, target, and refinement map exceed the admitted output digit envelope",
         )
     from jacobian.math.geometry.polytopes.complexes._refinement import (
         common_refinement_admitted,
@@ -2383,35 +2373,6 @@ def spline_refinement_map(
     else:
         target_rank = 0
     target_nullity = refined_width - target_rank
-
-    # The result retains one source nullspace and one refined compatibility
-    # matrix. Admit the encoded exact value before constructing the result.
-    result_payload = {
-        "coarse_complex": refinement.left.model_dump(mode="json"),
-        "refined_complex": refinement.right.model_dump(mode="json"),
-        "degree": request.degree,
-        "smoothness": request.smoothness,
-        "coarse_coefficient_axis": [
-            [cell_id, list(monomial)] for cell_id, monomial in coarse_axis
-        ],
-        "coarse_compatibility_matrix": source_matrix.model_dump(mode="json"),
-        "coarse_rank": source_space.rank,
-        "coarse_nullspace_basis": source_space.nullspace_basis.model_dump(mode="json"),
-        "refined_coefficient_axis": [
-            [cell_id, list(monomial)] for cell_id, monomial in refined_axis
-        ],
-        "refined_compatibility_matrix": target_matrix.model_dump(mode="json"),
-        "refined_rank": target_rank,
-        "refined_nullity": target_nullity,
-        "cell_lineage": [row.model_dump(mode="json") for row in lineage],
-    }
-    base_output_bytes = len(encode_strict_json(result_payload))
-    if base_output_bytes > CanonicalLimits().max_output_bytes:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_refinement_map_output",
-            message="source, target, and common-refinement values exceed the output envelope",
-        )
 
     source_cell_index = {
         cell.cell_id: position

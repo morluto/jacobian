@@ -314,7 +314,7 @@ def test_forged_continuity_status_does_not_establish_spline_membership():
 
 def test_coordinate_output_is_admitted_before_nullspace_materialization(monkeypatch):
     function = _two_interval_function(((0, 1),), ((0, 1),))
-    monkeypatch.setattr(spline_kernel, "MAX_SPLINE_COORDINATE_OUTPUT_BYTES", 1)
+    monkeypatch.setattr(spline_kernel, "MAX_SPLINE_COORDINATE_OUTPUT_DIGITS", 1)
 
     def unexpected_basis(*_args, **_kwargs):
         raise AssertionError("basis must not be materialized after output rejection")

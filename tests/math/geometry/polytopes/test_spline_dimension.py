@@ -282,6 +282,26 @@ def test_profile_admits_all_coefficient_growth_before_matrix_expansion(
     )
 
 
+def test_profile_output_digit_bound_precedes_matrix_expansion(monkeypatch):
+    complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
+
+    def reject_matrix_expansion(*_args, **_kwargs):
+        raise AssertionError(
+            "profile output must be admitted before matrix construction"
+        )
+
+    monkeypatch.setattr(spline_kernel, "MAX_SPLINE_DIMENSION_OUTPUT_DIGITS", 1)
+    monkeypatch.setattr(
+        spline_kernel, "_spline_constraint_rows", reject_matrix_expansion
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="output digit envelope"):
+        spline_dimension_profile(
+            SplineDimensionProfileRequest(
+                complex=complex_value, max_degree=0, smoothness=0
+            )
+        )
+
+
 def test_one_cell_zero_row_dimension_roundtrips_and_catalog_invokes():
     complex_value = polytopal_complex_closure((_interval(0, 1, "a"),))
     request = SplineDimensionRequest(complex=complex_value, degree=5, smoothness=1)

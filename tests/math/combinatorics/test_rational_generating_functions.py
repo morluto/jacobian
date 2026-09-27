@@ -174,12 +174,14 @@ def test_decimal_digit_bound_counts_power_of_ten_exactly() -> None:
         label="series coefficient",
         location=("coefficients", 0),
     )
-    with pytest.raises(OperationDomainValidationError, match=rf"{bound}-digit bound"):
+    with pytest.raises(OperationDomainValidationError) as exc_info:
         _require_bounded_fraction(
             Fraction(at),
             label="series coefficient",
             location=("coefficients", 0),
         )
+
+    assert exc_info.value.errors()[0]["type"] == "combinatorics.rational_bound"
 
 
 def test_denominator_degree_controls_the_recurrence_work_envelope() -> None:

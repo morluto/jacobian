@@ -1,4 +1,4 @@
-"""Native finite-frame API and wire/native parity tests."""
+"""Public native API contracts for finite frames."""
 
 from collections.abc import Callable
 
@@ -6,29 +6,23 @@ import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.frames import VectorFamily, coherence, frame_potential, gram
-from jacobian.math.topology.frames._tools import _coherence, _frame_potential, _gram
 from jacobian.math.topology.frames.values import MAX_VECTOR_CELLS
 
 
-def test_native_gram_and_potential_match_wire_adapters() -> None:
+def test_native_gram_and_potential_are_exact() -> None:
     family = VectorFamily(dimension=2, vectors=((1, 1), (1, 0), (0, 1)))
 
     assert gram(family).gram == ((2, 1, 1), (1, 1, 0), (1, 0, 1))
-    assert (
-        frame_potential(family).potential
-        == _frame_potential(
-            VectorFamily(dimension=family.dimension, vectors=family.vectors)
-        ).potential
-    )
+    assert frame_potential(family).potential == 10
 
 
-def test_native_coherence_matches_wire_adapter() -> None:
+def test_native_coherence_is_exact_and_has_a_canonical_maximizer() -> None:
     family = VectorFamily(dimension=2, vectors=((1, 1), (1, 0), (0, 1)))
 
-    native = coherence(family)
-    wire = _coherence(VectorFamily(dimension=family.dimension, vectors=family.vectors))
+    result = coherence(family)
 
-    assert native.model_dump() == wire.model_dump()
+    assert result.coherence_squared.as_integer_ratio() == (1, 2)
+    assert result.maximizing_pair == (0, 2)
 
 
 @pytest.mark.parametrize("operation", [coherence, frame_potential])
@@ -41,7 +35,7 @@ def test_native_frame_operations_keep_semantic_admission(
 
 
 @pytest.mark.parametrize("operation", [coherence, frame_potential])
-def test_frame_operations_reject_undercomplete_families_before_rank(
+def test_frame_operations_reject_undercomplete_families(
     operation: Callable[[VectorFamily], object],
 ) -> None:
     family = VectorFamily(
@@ -58,7 +52,7 @@ def test_frame_operations_reject_undercomplete_families_before_rank(
     assert error.value.errors()[0]["type"] == "frames.frame_does_not_span"
 
 
-def test_native_and_catalog_dense_gram_and_potential_are_exact() -> None:
+def test_native_dense_gram_and_potential_are_exact() -> None:
     family = VectorFamily(
         dimension=2,
         vectors=((1_000, 999), (999, 1_000)) * 2,
@@ -71,15 +65,11 @@ def test_native_and_catalog_dense_gram_and_potential_are_exact() -> None:
         (diagonal, off_diagonal, diagonal, off_diagonal),
         (off_diagonal, diagonal, off_diagonal, diagonal),
     )
-    assert (
-        _gram(VectorFamily(dimension=family.dimension, vectors=family.vectors))
-        == result
-    )
     assert frame_potential(family).potential == 8 * (diagonal**2 + off_diagonal**2)
 
 
 @pytest.mark.scale
-def test_native_and_catalog_gram_return_the_same_large_exact_matrix() -> None:
+def test_native_dense_frame_bounds_have_exact_gram_and_potential() -> None:
     dimension = 512
     basis = tuple(
         tuple(1_000 if row == column else 999 for column in range(dimension))
@@ -92,12 +82,14 @@ def test_native_and_catalog_gram_return_the_same_large_exact_matrix() -> None:
 
     assert len(vectors) == MAX_VECTOR_CELLS // dimension
     result = gram(family)
-    catalog_result = _gram(VectorFamily(dimension=len(vectors[0]), vectors=vectors))
-    assert catalog_result == result
     assert result.gram[0][0] == diagonal
     assert result.gram[0][1] == off_diagonal
     assert result.gram[0][dimension] == diagonal
     assert result.gram[1][dimension] == off_diagonal
+    expected_potential = (
+        4 * dimension * (diagonal**2 + (dimension - 1) * off_diagonal**2)
+    )
+    assert frame_potential(family).potential == expected_potential
 
 
 def test_empty_gram_retains_ambient_dimension() -> None:

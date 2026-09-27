@@ -18,6 +18,7 @@ from jacobian.math.combinatorics.matroids.intersection import (
     matroid_common_basis,
     matroid_intersection,
     replay_intersection_result,
+    verify_common_basis_result,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
@@ -40,6 +41,7 @@ def test_common_basis_presolves_large_rank_zero_grounds() -> None:
     assert result.status == "COMMON_BASIS"
     assert result.common_basis == ()
     assert result.rank_first == result.rank_second == 0
+    assert verify_common_basis_result(result)
 
 
 def test_intersection_presolves_large_rank_zero_grounds(
@@ -313,3 +315,16 @@ def test_forged_common_set_and_minmax_claims_require_explicit_replay() -> None:
 def test_intersection_native_rejects_non_carriers() -> None:
     with pytest.raises(OperationDomainValidationError):
         matroid_intersection(None, _zero_matroid(1))  # type: ignore[arg-type]
+
+
+def test_intersection_classifies_forged_ground_label_types() -> None:
+    valid = _zero_matroid(1)
+    forged = LinearMatroid.model_construct(
+        matrix=valid.matrix,
+        ground_labels=(1,),
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        matroid_intersection(forged, valid)
+
+    assert error.value.errors()[0]["type"] == "matroid.intersection.carrier"

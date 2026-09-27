@@ -163,18 +163,7 @@ def _run_loop_complement(
 def _run_direct_sum(
     request: DeltaMatroidDirectSumRequest,
 ) -> DeltaMatroidDirectSumResult:
-    try:
-        return direct_sum(request.left, request.right)
-    except DeltaMatroidAdmissionError as exc:
-        raise OperationResourceAdmissionError(
-            location=("left",), code=f"delta_matroid.{exc.reason}", message=str(exc)
-        ) from exc
-    except OperationResourceAdmissionError:
-        raise
-    except OperationDomainValidationError:
-        raise
-    except (TypeError, ValueError, IndexError) as exc:
-        raise _extra_domain(("left",), "delta_matroid.source_not_valid", exc) from exc
+    return direct_sum(request.left, request.right)
 
 
 def _run_twist_width_profile(

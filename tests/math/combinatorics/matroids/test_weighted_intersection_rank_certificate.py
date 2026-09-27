@@ -12,18 +12,15 @@ from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
-    MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
     verify_weighted_intersection_rank_certificate,
+    weighted_intersection_rank_certificate,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
     weighted_intersection_certificate as _weighted_intersection_certificate,
-)
-from jacobian.math.combinatorics.matroids.intersection import (
-    weighted_intersection_rank_certificate as _weighted_intersection_rank_certificate,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 from jacobian.math.matrices.finite_fields.linear_algebra import rank as field_rank
@@ -38,21 +35,6 @@ def weighted_intersection_certificate(request):
         request.first_split,
         request.second_split,
     )
-
-
-def weighted_intersection_rank_certificate(*arguments):
-    if len(arguments) == 1:
-        request = arguments[0]
-    else:
-        request = MatroidWeightedIntersectionRankCertificateRequest(
-            first=arguments[0],
-            second=arguments[1],
-            weight_function=arguments[2],
-            common_independent=arguments[3],
-            first_rank_terms=arguments[4],
-            second_rank_terms=arguments[5],
-        )
-    return _weighted_intersection_rank_certificate(request)
 
 
 def _matroid(

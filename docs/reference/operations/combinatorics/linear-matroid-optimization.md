@@ -191,7 +191,7 @@ separate certificate-checking operations when a caller supplies an authored
 optimality witness. The algorithm and its correctness argument are in
 [Schrijver and Korte–Vygen, §13.7](https://www.mathematik.uni-muenchen.de/~kpanagio/KombOpt/book.pdf).
 
-The request admits at most 256 ground elements, the existing 11-decimal-digit
+The request admits at most 256 ground elements, the existing 12-digit
 weight limit, and an 8 MiB source-bound result. Admission accounts for the
 exchange rank calls, selected-matrix copies and residue validation, one
 bounded source-prime check, every reachable-graph and slack scan, and the
@@ -212,13 +212,9 @@ bound are rejected before rank computation. This favors smaller grounds or
 low-row representations; the bound retains an exact finite envelope rather
 than a wall-clock timeout.
 
-This optimizer currently returns the exact candidate and objective without a
-replayable rank-dual witness. Its internal Frank split only proves optimality
-within each fixed cardinality and can fail the unrestricted split checker,
-including on disjoint loop/nonloop sources. The separate rank-dual checker
-accepts such witnesses, but this kernel does not construct them. Treat this
-optimizer as a prerequisite implementation, not completion of issue #1802's
-weighted-intersection acceptance. A follow-up needs a bounded dual-producing
-algorithm; the TDI and chain-support existence proof in [Goemans, Lecture
-12](https://math.mit.edu/~goemans/18438F09/lec12.pdf) does not by itself
-extract the multipliers.
+The result includes an integral split of the objective and a maximum-weight
+independent set for each source matroid. Their weights sum to the common-set
+optimum, giving a replayable optimality witness through
+`verify_weighted_intersection_result`. This computed witness is distinct from
+the sparse rank-multiplier witness accepted by the rank-dual checker, which
+continues to validate caller-supplied chains without searching for an optimum.

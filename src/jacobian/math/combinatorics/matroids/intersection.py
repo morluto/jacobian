@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Sequence
+from itertools import pairwise
 from math import ceil, log10
 
 from jacobian.catalog.models import (
@@ -10,7 +11,9 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.matroids._models import (
     MAX_GROUND_AXIS_CODEPOINTS,
+    MAX_GROUND_SIZE,
     MAX_SPLIT_WEIGHT_DIGITS,
+    MAX_WEIGHT_DIGITS,
     MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
     LinearMatroid,
     MatroidCommonBasisResult,
@@ -18,9 +21,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidIntersectionWitness,
     MatroidRankMultiplier,
     MatroidWeightedIntersectionCertificateRequest,
-    MatroidWeightedIntersectionOptimizationRequest,
     MatroidWeightedIntersectionOptimizationResult,
-    MatroidWeightedIntersectionRankCertificateRequest,
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
@@ -165,6 +166,14 @@ def _admit_matroid(value: object, location: tuple[str, ...]) -> LinearMatroid:
             message="intersection operands must be canonical linear matroids",
         )
     labels = value.ground_labels
+    if labels is not None and (
+        type(labels) is not tuple or any(type(label) is not str for label in labels)
+    ):
+        raise OperationDomainValidationError(
+            location=(*location, "ground_labels"),
+            code="matroid.intersection.carrier",
+            message="intersection ground labels must be a canonical string tuple",
+        )
     if (
         labels is not None
         and sum(len(label) for label in labels) > MAX_GROUND_AXIS_CODEPOINTS
@@ -794,7 +803,9 @@ def _weighted_exchange_slacks(
 
 
 def maximum_weight_matroid_intersection(
-    request: MatroidWeightedIntersectionOptimizationRequest,
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
 ) -> MatroidWeightedIntersectionOptimizationResult:
     """Compute one maximum-weight common independent set exactly.
 
@@ -802,25 +813,8 @@ def maximum_weight_matroid_intersection(
     The independently published supplied-certificate operations remain
     available to check authored split or rank-dual witnesses.
     """
-    if type(request) is not MatroidWeightedIntersectionOptimizationRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.optimize.request",
-            message="request must be a canonical weighted-intersection optimization request",
-        )
-    try:
-        request = MatroidWeightedIntersectionOptimizationRequest.model_validate(
-            request.model_dump(mode="python")
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.optimize.request",
-            message="weighted-intersection optimization request is not canonical",
-        ) from exc
-
     return _maximum_weight_matroid_intersection_from_values(
-        request.first, request.second, request.weight_function
+        first, second, weight_function
     )
 
 
@@ -846,7 +840,7 @@ def _maximum_weight_matroid_intersection_from_values(
             raise admission_error
         zero_weights = (0,) * first.ground_size
         first_split_values = weights if first_is_zero else zero_weights
-        second_split_values = weights if second_is_zero else zero_weights
+        second_split_values = zero_weights if first_is_zero else weights
         first_split = MatroidWeightFunction(
             ground_axis=first.ground_axis, values=first_split_values
         )
@@ -928,7 +922,23 @@ def _maximum_weight_matroid_intersection_from_values(
 def replay_common_basis_result(result: MatroidCommonBasisResult) -> None:
     """Check a serialized common-basis outcome and all retained source ranks."""
     first, second = _admit_pair(result.first, result.second)
-    _admit_work(first, second, source_rank_calls=2)
+    try:
+        _admit_work(first, second, source_rank_calls=2)
+    except OperationResourceAdmissionError as admission_error:
+        presolved = _rank_zero_intersection_presolve(first, second)
+        if presolved is None:
+            raise admission_error
+        rank_first, rank_second, intersection = presolved
+        expected = MatroidCommonBasisResult._from_kernel(
+            intersection=intersection,
+            rank_first=rank_first,
+            rank_second=rank_second,
+        )
+        if result != expected:
+            raise ValueError(
+                "rank-zero common-basis claims do not match their sources"
+            ) from None
+        return
     common = result.common_independent
     witness_subset = result.witness.subset
     if (
@@ -1222,8 +1232,80 @@ def _weighted_rank_dual_values_and_cover(
     return dual_value, coverage
 
 
+def _admit_weighted_rank_candidate(
+    candidate: object, ground_size: int
+) -> tuple[int, ...]:
+    if (
+        type(candidate) is not tuple
+        or any(type(index) is not int for index in candidate)
+        or candidate != tuple(sorted(set(candidate)))
+        or any(not 0 <= index < ground_size for index in candidate)
+    ):
+        raise OperationDomainValidationError(
+            location=("common_independent",),
+            code="matroid.weighted_intersection.rank_dual.common_set",
+            message="candidate indices must be sorted, distinct, and in range",
+        )
+    return candidate
+
+
+def _admit_weighted_rank_terms(
+    terms: object, ground_size: int, location: str
+) -> tuple[MatroidRankMultiplier, ...]:
+    if type(terms) is not tuple or len(terms) > MAX_GROUND_SIZE:
+        raise OperationResourceAdmissionError(
+            location=(location,),
+            code="matroid.weighted_intersection.rank_dual.term_count",
+            message="rank-multiplier families exceed the ground-size term bound",
+        )
+    try:
+        canonical_terms = []
+        for term in terms:
+            if type(term) is not MatroidRankMultiplier:
+                raise TypeError("not a canonical rank multiplier")
+            canonical_terms.append(
+                MatroidRankMultiplier.model_validate(
+                    term.model_dump(mode="python"), strict=True
+                )
+            )
+        canonical = tuple(canonical_terms)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="matroid.weighted_intersection.rank_dual.terms",
+            message="rank multipliers must be canonical typed values",
+        ) from exc
+    subsets = tuple(term.subset for term in canonical)
+    if (
+        subsets != tuple(sorted(set(subsets), key=lambda item: (len(item), item)))
+        or any(
+            not subset or any(not 0 <= index < ground_size for index in subset)
+            for subset in subsets
+        )
+        or any(not set(left).issubset(right) for left, right in pairwise(subsets))
+        or any(
+            term.multiplier >= max(1, ground_size) * 10**MAX_WEIGHT_DIGITS
+            for term in canonical
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="matroid.weighted_intersection.rank_dual.terms",
+            message=(
+                "rank multipliers must be bounded, ordered nested chains of "
+                "nonempty in-range subsets"
+            ),
+        )
+    return canonical
+
+
 def weighted_intersection_rank_certificate(
-    request: MatroidWeightedIntersectionRankCertificateRequest,
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+    common_independent: tuple[int, ...],
+    first_rank_terms: tuple[MatroidRankMultiplier, ...],
+    second_rank_terms: tuple[MatroidRankMultiplier, ...],
 ) -> MatroidWeightedIntersectionRankCertificateResult:
     """Check a sparse rank-inequality dual for a common independent set.
 
@@ -1233,30 +1315,15 @@ def weighted_intersection_rank_certificate(
     positive objective weights, and can be passed to the existing supplied
     weight-splitting checker.
     """
-    if type(request) is not MatroidWeightedIntersectionRankCertificateRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.rank_dual.request",
-            message="request must be a canonical weighted-intersection rank certificate",
-        )
-    try:
-        request = MatroidWeightedIntersectionRankCertificateRequest.model_validate(
-            request.model_dump(mode="python")
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.weighted_intersection.rank_dual.request",
-            message="weighted-intersection rank certificate request is not canonical",
-        ) from exc
-
-    first, second = _admit_pair(request.first, request.second)
+    first, second = _admit_pair(first, second)
     _admit_prime(first.matrix.prime)
-    objective, _ = _canonical_weight_function(first, request.weight_function)
+    objective, canonical_function = _canonical_weight_function(first, weight_function)
     n = first.ground_size
     w_plus = max(0, max(objective, default=0))
-    candidate = request.common_independent
-    terms = (request.first_rank_terms, request.second_rank_terms)
+    candidate = _admit_weighted_rank_candidate(common_independent, n)
+    first_terms = _admit_weighted_rank_terms(first_rank_terms, n, "first_rank_terms")
+    second_terms = _admit_weighted_rank_terms(second_rank_terms, n, "second_rank_terms")
+    terms = (first_terms, second_terms)
     sources = (first, second)
     rank_costs = tuple(
         sum(_rank_work(len(source.matrix.entries), len(term.subset)) for term in family)
@@ -1266,7 +1333,7 @@ def weighted_intersection_rank_certificate(
     rank_work = sum(rank_costs)
     cover_work = n * sum(len(family) for family in terms)
     split_values_first = [0] * n
-    for term in request.first_rank_terms:
+    for term in first_terms:
         for element in term.subset:
             split_values_first[element] += term.multiplier
     split_values_first = [
@@ -1327,7 +1394,12 @@ def weighted_intersection_rank_certificate(
             message="rank-dual objective must equal the feasible candidate weight",
         )
     return MatroidWeightedIntersectionRankCertificateResult._from_kernel(
-        request=request,
+        first=first,
+        second=second,
+        weight_function=canonical_function,
+        common_independent=candidate,
+        first_rank_terms=first_terms,
+        second_rank_terms=second_terms,
         total_weight=candidate_weight,
         first_split=first_split,
         second_split=second_split,
@@ -1339,15 +1411,17 @@ def verify_weighted_intersection_rank_certificate(
 ) -> bool:
     """Explicitly recompute a serialized rank-dual certificate."""
     try:
-        request = MatroidWeightedIntersectionRankCertificateRequest(
-            first=result.first,
-            second=result.second,
-            weight_function=result.weight_function,
-            common_independent=result.common_independent,
-            first_rank_terms=result.first_rank_terms,
-            second_rank_terms=result.second_rank_terms,
+        return (
+            weighted_intersection_rank_certificate(
+                result.first,
+                result.second,
+                result.weight_function,
+                result.common_independent,
+                result.first_rank_terms,
+                result.second_rank_terms,
+            )
+            == result
         )
-        return weighted_intersection_rank_certificate(request) == result
     except (
         OperationDomainValidationError,
         OperationResourceAdmissionError,

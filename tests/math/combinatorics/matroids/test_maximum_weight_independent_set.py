@@ -83,6 +83,22 @@ def test_negative_weights_do_not_force_a_basis() -> None:
     assert all_nonpositive.total_weight == all_nonpositive.rank == 0
 
 
+def test_axis_labels_are_charged_to_output_without_rejecting_small_certificates() -> (
+    None
+):
+    label = "x" * 2047
+    matroid = LinearMatroid(
+        matrix=PrimeFieldMatrix(prime=2, entries=((1,),), columns=1),
+        ground_labels=(label,),
+    )
+
+    result = maximum_weight_independent_set_result(matroid, _weights(matroid, (1,)))
+
+    assert result.independent_set == (0,)
+    assert result.total_weight == 1
+    assert verify_maximum_weight_independent_set(result)
+
+
 def test_loop_zero_ties_and_degenerate_ground() -> None:
     loop_matroid = _matroid(3, ((1, 0, 0), (0, 1, 0)))
     result = maximum_weight_independent_set_result(

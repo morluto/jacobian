@@ -25,34 +25,15 @@ from jacobian.math.combinatorics.matroids._models import (
     MaximumWeightIndependentSetRequest,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
-    maximum_weight_matroid_intersection as _maximum_weight_matroid_intersection,
-)
-from jacobian.math.combinatorics.matroids.intersection import (
+    maximum_weight_matroid_intersection,
     verify_weighted_intersection_rank_certificate,
     verify_weighted_intersection_result,
+    weighted_intersection_rank_certificate,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
     weighted_intersection_certificate as _weighted_intersection_certificate,
 )
-from jacobian.math.combinatorics.matroids.intersection import (
-    weighted_intersection_rank_certificate as _weighted_intersection_rank_certificate,
-)
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
-
-
-def weighted_intersection_rank_certificate(*arguments):
-    if len(arguments) == 1:
-        request = arguments[0]
-    else:
-        request = MatroidWeightedIntersectionRankCertificateRequest(
-            first=arguments[0],
-            second=arguments[1],
-            weight_function=arguments[2],
-            common_independent=arguments[3],
-            first_rank_terms=arguments[4],
-            second_rank_terms=arguments[5],
-        )
-    return _weighted_intersection_rank_certificate(request)
 
 
 def weighted_intersection_certificate(*arguments):
@@ -75,16 +56,6 @@ def weighted_intersection_certificate(*arguments):
         request.first_split,
         request.second_split,
     )
-
-
-def maximum_weight_matroid_intersection(*arguments):
-    if len(arguments) == 1:
-        request = arguments[0]
-    else:
-        request = MatroidWeightedIntersectionOptimizationRequest(
-            first=arguments[0], second=arguments[1], weight_function=arguments[2]
-        )
-    return _maximum_weight_matroid_intersection(request)
 
 
 def _matroid(
@@ -194,13 +165,25 @@ def test_weighted_optimizer_presolves_large_rank_zero_grounds() -> None:
     zero_rank = _matroid(tuple((0,) for _ in labels), labels)
 
     result = maximum_weight_matroid_intersection(
-        *_request(zero_rank, zero_rank, (0,) * len(labels))
+        *_request(zero_rank, zero_rank, (3,) * len(labels))
     )
 
     assert result.common_independent == ()
     assert result.total_weight == 0
     assert result.first_maximizer.independent_set == ()
     assert result.second_maximizer.independent_set == ()
+    assert (
+        tuple(
+            left + right
+            for left, right in zip(
+                result.first_maximizer.weight_function.values,
+                result.second_maximizer.weight_function.values,
+                strict=True,
+            )
+        )
+        == result.weight_function.values
+    )
+    assert verify_weighted_intersection_result(result)
 
 
 def test_weighted_intersection_matches_exhaustive_gf2_instances() -> None:

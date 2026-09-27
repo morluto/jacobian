@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, NoReturn
 
 from pydantic import ValidationError
 
@@ -48,6 +48,21 @@ __all__ = [
     "verify_from_feasible_sets",
     "width",
 ]
+
+
+def _raise_direct_sum_admission(
+    exc: DeltaMatroidAdmissionError, location: tuple[str, ...]
+) -> NoReturn:
+    error_type = (
+        OperationResourceAdmissionError
+        if exc.reason.endswith("_exceeded")
+        else OperationDomainValidationError
+    )
+    raise error_type(
+        location=location,
+        code=f"delta_matroid.{exc.reason}",
+        message=str(exc),
+    ) from exc
 
 
 def from_feasible_sets(
@@ -453,41 +468,66 @@ def direct_sum(
         MAX_DIRECT_SUM_GROUND,
     )
 
-    left = _admit_direct_sum_source(left, "left")
-    right = _admit_direct_sum_source(right, "right")
+    try:
+        left = _admit_direct_sum_source(left, "left")
+    except DeltaMatroidAdmissionError as exc:
+        _raise_direct_sum_admission(exc, ("left",))
+    try:
+        right = _admit_direct_sum_source(right, "right")
+    except DeltaMatroidAdmissionError as exc:
+        _raise_direct_sum_admission(exc, ("right",))
     left_system = FiniteFeasibleSetSystem(ground=left.ground, feasible=left.feasible)
     right_system = FiniteFeasibleSetSystem(ground=right.ground, feasible=right.feasible)
     # Admit source envelopes and verify caller-authored values before composing.
-    for source in (left_system, right_system):
-        require_delta_matroid_envelope(source)
-        require_delta_matroid_exchange_work(source)
-        if first_symmetric_exchange_obstruction(source) is not None:
-            raise ValueError("source feasible family is not a delta-matroid")
+    for name, source in (("left", left_system), ("right", right_system)):
+        try:
+            require_delta_matroid_envelope(source)
+            require_delta_matroid_exchange_work(source)
+            if first_symmetric_exchange_obstruction(source) is not None:
+                raise OperationDomainValidationError(
+                    location=(name,),
+                    code="delta_matroid.source_not_valid",
+                    message="direct-sum source is not a delta-matroid",
+                )
+        except DeltaMatroidAdmissionError as exc:
+            _raise_direct_sum_admission(exc, (name,))
 
     ground_size = len(left.ground) + len(right.ground)
     if ground_size > MAX_DIRECT_SUM_GROUND:
-        raise DeltaMatroidAdmissionError(
-            "direct_sum_ground_exceeded",
-            f"direct-sum ground exceeds {MAX_DIRECT_SUM_GROUND} elements",
+        _raise_direct_sum_admission(
+            DeltaMatroidAdmissionError(
+                "direct_sum_ground_exceeded",
+                f"direct-sum ground exceeds {MAX_DIRECT_SUM_GROUND} elements",
+            ),
+            ("left", "right"),
         )
     if set(left.ground).intersection(right.ground):
-        raise DeltaMatroidAdmissionError(
-            "direct_sum_ground_overlap",
-            "direct-sum ground labels must be disjoint",
+        _raise_direct_sum_admission(
+            DeltaMatroidAdmissionError(
+                "direct_sum_ground_overlap",
+                "direct-sum ground labels must be disjoint",
+            ),
+            ("left", "right", "ground"),
         )
     pairs = len(left.feasible) * len(right.feasible)
     if pairs > MAX_DIRECT_SUM_FEASIBLE_PAIRS:
-        raise DeltaMatroidAdmissionError(
-            "direct_sum_work_exceeded",
-            f"direct-sum feasible-pair work exceeds {MAX_DIRECT_SUM_FEASIBLE_PAIRS}",
+        _raise_direct_sum_admission(
+            DeltaMatroidAdmissionError(
+                "direct_sum_work_exceeded",
+                f"direct-sum feasible-pair work exceeds {MAX_DIRECT_SUM_FEASIBLE_PAIRS}",
+            ),
+            ("left", "right"),
         )
     membership_count = len(right.feasible) * sum(map(len, left.feasible)) + len(
         left.feasible
     ) * sum(map(len, right.feasible))
     if membership_count > MAX_DELTA_MEMBERSHIPS:
-        raise DeltaMatroidAdmissionError(
-            "memberships_exceeded",
-            "direct-sum feasible memberships exceed the delta-matroid envelope",
+        _raise_direct_sum_admission(
+            DeltaMatroidAdmissionError(
+                "memberships_exceeded",
+                "direct-sum feasible memberships exceed the delta-matroid envelope",
+            ),
+            ("left", "right"),
         )
     try:
         combined_label_bytes = sum(
@@ -502,9 +542,12 @@ def direct_sum(
     from jacobian.math.combinatorics.matroids.delta.values import MAX_DELTA_LABEL_BYTES
 
     if combined_label_bytes > MAX_DELTA_LABEL_BYTES:
-        raise DeltaMatroidAdmissionError(
-            "label_bytes_exceeded",
-            "direct-sum ground labels exceed the delta-matroid label envelope",
+        _raise_direct_sum_admission(
+            DeltaMatroidAdmissionError(
+                "label_bytes_exceeded",
+                "direct-sum ground labels exceed the delta-matroid label envelope",
+            ),
+            ("left", "right", "ground"),
         )
     # The pair and membership bounds above exactly bound the result family's
     # rows and index positions, so the direct sum materializes within the

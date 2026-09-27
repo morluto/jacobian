@@ -47,10 +47,16 @@ def test_direct_sum_empty_ground_is_identity_on_feasible_rows() -> None:
 
 
 def test_overlapping_labels_rejected_instead_of_silently_tagged() -> None:
+    from jacobian.catalog.models import OperationDomainValidationError
+
     left = FiniteDeltaMatroid(ground=("x",), feasible=((), (0,)))
     right = FiniteDeltaMatroid(ground=("x",), feasible=((), (0,)))
-    with pytest.raises(ValueError, match="disjoint"):
-        _run_direct_sum(DeltaMatroidDirectSumRequest(left=left, right=right))
+    with pytest.raises(OperationDomainValidationError, match="disjoint"):
+        direct_sum(left, right)
+    with pytest.raises(OperationDomainValidationError, match="disjoint"):
+        _run_direct_sum(
+            DeltaMatroidDirectSumRequest.model_construct(left=left, right=right)
+        )
 
 
 def test_catalog_path_returns_typed_result() -> None:

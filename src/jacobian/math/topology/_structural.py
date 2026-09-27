@@ -131,9 +131,9 @@ def join_maximal_facets(
     # The carrier stores only nonempty facets; an empty facet axis represents
     # the complex {∅}, whose join identity is the implicit singleton facet.
     if not facets_a:
-        return facets_b or ((),)
+        return _maximal_faces(facets_b) if facets_b else ((),)
     if not facets_b:
-        return facets_a
+        return _maximal_faces(facets_a)
     return _maximal_faces(
         tuple(sorted(set(facet_a) | set(facet_b)))
         for facet_a in facets_a

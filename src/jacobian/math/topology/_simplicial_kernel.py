@@ -450,7 +450,6 @@ def barycentric_subdivision(
     run_topology_admission(
         lambda: require_canonical_complex_admission(complex_), location=("complex",)
     )
-
     source_faces = tuple(
         face for dimension in complex_.faces_by_dimension for face in dimension.faces
     )
@@ -527,6 +526,12 @@ def shelling_check(
     run_topology_admission(
         lambda: require_canonical_complex_admission(complex_), location=("complex",)
     )
+    if not complex_.maximal_simplices:
+        raise OperationDomainValidationError(
+            location=("complex",),
+            code="topology.shelling_empty_complex",
+            message="shelling checks require at least one facet",
+        )
     if sorted(facet_order) != list(range(len(complex_.maximal_simplices))):
         raise OperationDomainValidationError(
             location=("facet_order",),

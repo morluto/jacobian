@@ -774,7 +774,7 @@ class ShellingCheckRequest(StrictModel):
 
     complex: SimplicialComplexRequest
     facet_order: tuple[int, ...] = Field(
-        min_length=1,
+        min_length=0,
         max_length=MAX_TOPOLOGY_FACETS,
     )
 

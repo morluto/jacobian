@@ -260,6 +260,14 @@ class TestJoin:
         assert both.join_complex.vertices == ()
         assert JoinResult.model_validate_json(both.model_dump_json()) == both
 
+    def test_empty_join_unit_canonicalizes_the_other_facet_presentation(self) -> None:
+        empty = SimplicialComplexRequest(vertices=(), facets=())
+        reversed_edge = SimplicialComplexRequest(
+            vertices=("a", "b"), facets=(("b", "a"),)
+        )
+        result = compute_join(JoinRequest(complex_a=empty, complex_b=reversed_edge))
+        assert result.join_facets == (("a", "b"),)
+
     def test_join_two_points(self) -> None:
         point_a = {"vertices": ["a"], "facets": [["a"]]}
         point_b = {"vertices": ["b"], "facets": [["b"]]}
@@ -564,6 +572,14 @@ class TestPseudomanifold:
 
 
 class TestShellingCheck:
+    def test_empty_complex_is_rejected_with_a_domain_error(self) -> None:
+        empty = SimplicialComplexRequest(vertices=(), facets=())
+        request = ShellingCheckRequest(complex=empty, facet_order=())
+        with pytest.raises(
+            OperationDomainValidationError, match="require at least one facet"
+        ):
+            compute_shelling_check(request)
+
     def test_valid_shelling_of_single_facet(self) -> None:
         result = compute_shelling_check(
             ShellingCheckRequest(complex=_complex(EDGE), facet_order=(0,))

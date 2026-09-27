@@ -9,7 +9,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetRequest,
 )
 from jacobian.math.graphs.decks.anonymous_vertex_edge_count.operations import (
     anonymous_vertex_deck_edge_count,
@@ -36,9 +35,7 @@ def _vertex_deck(graph: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
         edges = tuple(edge for edge in graph.edges if deleted not in edge)
         cards.append(SimpleUndirectedGraph(vertices=retained, edges=edges))
     return anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(
-            card_order=max(0, len(graph.vertices) - 1), cards=tuple(cards)
-        )
+        card_order=max(0, len(graph.vertices) - 1), cards=tuple(cards)
     )
 
 
@@ -90,4 +87,3 @@ def test_result_roundtrip_retains_the_anonymous_deck_context() -> None:
     assert restored == result
     assert restored.deck == deck
     assert anonymous_vertex_deck_edge_count(restored.deck).source_order == 4
-

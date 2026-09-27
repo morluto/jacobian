@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetRequest,
 )
 from jacobian.math.graphs.decks.anonymous_vertex_degree_multiset import (
     anonymous_vertex_deck_degree_multiset,
@@ -32,9 +31,7 @@ def _vertex_deck(graph: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
         edges = tuple(edge for edge in graph.edges if deleted not in edge)
         cards.append(SimpleUndirectedGraph(vertices=retained, edges=edges))
     return anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(
-            card_order=max(0, len(graph.vertices) - 1), cards=tuple(cards)
-        )
+        card_order=max(0, len(graph.vertices) - 1), cards=tuple(cards)
     )
 
 
@@ -65,9 +62,7 @@ def test_exhaustive_small_graphs_recover_canonical_degree_sequences() -> None:
 
 def test_divisible_but_nongraphical_degree_profile_is_rejected() -> None:
     cards = (_graph(3, 0), _graph(3, 0), _graph(3, 0b011), _graph(3, 0b011))
-    deck = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=3, cards=cards)
-    )
+    deck = anonymous_graph_card_multiset(card_order=3, cards=cards)
     with pytest.raises(OperationDomainValidationError, match="nongraphical"):
         anonymous_vertex_deck_degree_multiset(deck)
 

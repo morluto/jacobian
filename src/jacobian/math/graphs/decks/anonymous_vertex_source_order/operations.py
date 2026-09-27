@@ -12,7 +12,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.graphs.decks._models import (
     MAX_ANONYMOUS_CARD_CLASSES,
-    MAX_ANONYMOUS_CARD_RESULT_BYTES,
+    MAX_ANONYMOUS_CARD_RESULT_UNITS,
     MAX_UNLABELLED_DECK_VERTICES,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
@@ -22,7 +22,7 @@ from jacobian.math.graphs.decks.anonymous_vertex_source_order._models import (
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
-MAX_ANONYMOUS_VERTEX_SOURCE_ORDER_RESULT_BYTES = MAX_ANONYMOUS_CARD_RESULT_BYTES + 128
+MAX_ANONYMOUS_VERTEX_SOURCE_ORDER_RESULT_UNITS = MAX_ANONYMOUS_CARD_RESULT_UNITS + 128
 
 
 def anonymous_vertex_deck_source_order(
@@ -71,12 +71,12 @@ def anonymous_vertex_deck_source_order(
             message="a complete vertex deck cannot have more classes than cards",
         )
     pair_count = comb(card_order, 2)
-    input_bytes = len(classes) * (64 + 16 * pair_count)
-    output_bytes = input_bytes + 128
+    input_units = len(classes) * (64 + 16 * pair_count)
+    output_units = input_units + 128
     if (
         len(classes) > MAX_ANONYMOUS_CARD_CLASSES
-        or input_bytes > MAX_ANONYMOUS_CARD_RESULT_BYTES
-        or output_bytes > MAX_ANONYMOUS_VERTEX_SOURCE_ORDER_RESULT_BYTES
+        or input_units > MAX_ANONYMOUS_CARD_RESULT_UNITS
+        or output_units > MAX_ANONYMOUS_VERTEX_SOURCE_ORDER_RESULT_UNITS
     ):
         raise OperationResourceAdmissionError(
             location=("deck", "classes"),

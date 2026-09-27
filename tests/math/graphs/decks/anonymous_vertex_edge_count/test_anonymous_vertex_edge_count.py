@@ -8,7 +8,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
-    AnonymousGraphCardMultisetRequest,
 )
 from jacobian.math.graphs.decks.anonymous_vertex_edge_count import (
     AnonymousVertexDeckEdgeCount,
@@ -33,16 +32,12 @@ def _vertex_deck(graph: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
         edges = tuple(edge for edge in graph.edges if deleted not in edge)
         cards.append(SimpleUndirectedGraph(vertices=retained, edges=edges))
     return anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(
-            card_order=max(0, len(graph.vertices) - 1), cards=tuple(cards)
-        )
+        card_order=max(0, len(graph.vertices) - 1), cards=tuple(cards)
     )
 
 
 def test_exhaustive_small_graphs_recover_direct_source_edge_count() -> None:
-    empty_deck = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=0, cards=())
-    )
+    empty_deck = anonymous_graph_card_multiset(card_order=0, cards=())
     assert anonymous_vertex_deck_edge_count(empty_deck).source_edge_count == 0
     for order in range(1, 5):
         for mask in range(1 << (order * (order - 1) // 2)):
@@ -70,9 +65,7 @@ def test_order_two_vertex_deck_does_not_determine_source_edge_count() -> None:
 
 def test_nondivisible_card_edge_total_is_rejected() -> None:
     cards = (_graph(3, 1), _graph(3, 0), _graph(3, 0), _graph(3, 0))
-    deck = anonymous_graph_card_multiset(
-        AnonymousGraphCardMultisetRequest(card_order=3, cards=cards)
-    )
+    deck = anonymous_graph_card_multiset(card_order=3, cards=cards)
     with pytest.raises(OperationDomainValidationError, match="not divisible"):
         anonymous_vertex_deck_edge_count(deck)
 

@@ -312,6 +312,83 @@ def test_transform_admission_accounts_for_first_product_cancellation() -> None:
     assert transformed.transformed.edge_values[0].value == inverse
 
 
+def test_path_admission_recognizes_inverse_labels_on_distinct_edges() -> None:
+    m = 4 * 10**255
+    value = q(
+        Fraction(m * m - 1, m * m + 1),
+        Fraction(2 * m, m * m + 1),
+        Fraction(0),
+        Fraction(0),
+    )
+    inverse = q(*exact_inverse(coordinates_of(value)))
+    lattice = GaugeLattice(
+        vertices=("v",),
+        edges=(
+            GaugeEdge(edge_id="e1", tail="v", head="v"),
+            GaugeEdge(edge_id="e2", tail="v", head="v"),
+        ),
+    )
+    field = SU2GaugeField(
+        lattice=lattice,
+        edge_values=(
+            SU2GaugeEdgeValue(edge_id="e1", value=value),
+            SU2GaugeEdgeValue(edge_id="e2", value=inverse),
+        ),
+    )
+    path = OrientedGaugePath(
+        steps=tuple(
+            GaugePathStep(edge_id=edge_id, forward=True)
+            for edge_id in ("e1", "e2", "e1", "e2")
+        )
+    )
+    assert su2_path_holonomy(field, path).holonomy == q(*IDENTITY)
+
+
+def test_path_admission_reduces_nested_inverse_factor_pairs() -> None:
+    m = 4 * 10**255
+    value = q(
+        Fraction(m * m - 1, m * m + 1),
+        Fraction(2 * m, m * m + 1),
+        Fraction(0),
+        Fraction(0),
+    )
+    inverse = q(*exact_inverse(coordinates_of(value)))
+    imaginary_unit = q(Fraction(0), Fraction(1), Fraction(0), Fraction(0))
+    inverse_imaginary_unit = q(*exact_inverse(coordinates_of(imaginary_unit)))
+    edge_ids = ("e1", "e2", "e3", "e4")
+    lattice = GaugeLattice(
+        vertices=("v",),
+        edges=tuple(
+            GaugeEdge(edge_id=edge_id, tail="v", head="v") for edge_id in edge_ids
+        ),
+    )
+    field = SU2GaugeField(
+        lattice=lattice,
+        edge_values=tuple(
+            SU2GaugeEdgeValue(edge_id=edge_id, value=label)
+            for edge_id, label in zip(
+                edge_ids,
+                (value, imaginary_unit, inverse_imaginary_unit, inverse),
+                strict=True,
+            )
+        ),
+    )
+    path = OrientedGaugePath(
+        steps=tuple(
+            GaugePathStep(edge_id=edge_id, forward=True)
+            for _ in range(2)
+            for edge_id in edge_ids
+        )
+    )
+    assert su2_path_holonomy(field, path).holonomy == q(*IDENTITY)
+
+
+def test_native_path_rejects_missing_steps_with_a_domain_error() -> None:
+    path = OrientedGaugePath.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        su2_path_holonomy(_field(), path)
+
+
 def test_native_transform_rejects_constructed_bad_frame_labels_and_values() -> None:
     field = _field()
     malformed = (

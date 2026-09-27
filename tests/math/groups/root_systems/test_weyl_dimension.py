@@ -112,3 +112,16 @@ def test_result_roundtrip_and_catalog_declaration() -> None:
     assert len(declarations) == 1
     tool = declarations[0]
     assert tool.run(WeylDimensionRequest(matrix=G2, highest_weight=(1, 0))) == result
+
+
+def test_decoded_dimension_binds_pairings_and_the_complete_product() -> None:
+    result = weyl_dimension(A1, (1,))
+    forged = result.model_dump()
+    forged["dimension"] = 3
+    with pytest.raises(ValidationError, match="reduced product"):
+        WeylDimensionResult.model_validate(forged)
+
+    forged = result.model_dump()
+    forged["positive_root_factors"][0]["numerator_pairing"] = 3
+    with pytest.raises(ValidationError, match="derived from the retained weight"):
+        WeylDimensionResult.model_validate(forged)

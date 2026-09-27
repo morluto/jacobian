@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import gcd
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -1333,6 +1334,57 @@ class WeylDimensionResult(StrictModel):
             raise _validation_error(
                 "weyl_dimension_shape",
                 "the dominant weight and every root factor must use the Cartan weight axis",
+            )
+        if any(value.bit_length() > MAX_HIGHEST_WEIGHT_BITS for value in self.highest_weight):
+            raise _validation_error(
+                "weyl_dimension_weight_bound",
+                "highest-weight coordinates exceed the admitted bit bound",
+            )
+        numerator = 1
+        denominator = 1
+        roots: set[tuple[int, ...]] = set()
+        for factor in self.positive_root_factors:
+            root = factor.positive_root
+            coroot = factor.positive_coroot
+            if (
+                any(value < 0 or value > MAX_ROOT_COORDINATE for value in root)
+                or not any(root)
+                or any(value < 0 or value > MAX_ROOT_COORDINATE for value in coroot)
+                or not any(coroot)
+                or root in roots
+            ):
+                raise _validation_error(
+                    "weyl_dimension_root_profile",
+                    "positive-root factors must contain distinct bounded positive roots and coroots",
+                )
+            roots.add(root)
+            expected_numerator = sum(
+                (weight + 1) * coefficient
+                for weight, coefficient in zip(self.highest_weight, coroot, strict=True)
+            )
+            expected_denominator = sum(coroot)
+            if (
+                factor.numerator_pairing != expected_numerator
+                or factor.denominator_pairing != expected_denominator
+            ):
+                raise _validation_error(
+                    "weyl_dimension_pairing_binding",
+                    "factor pairings must be derived from the retained weight and positive coroot",
+                )
+            numerator *= expected_numerator
+            denominator *= expected_denominator
+            common = gcd(numerator, denominator)
+            numerator //= common
+            denominator //= common
+            if numerator.bit_length() > MAX_WEYL_DIMENSION_BITS:
+                raise _validation_error(
+                    "weyl_dimension_output_bound",
+                    "the positive-root product exceeds the admitted dimension bound",
+                )
+        if denominator != 1 or numerator != self.dimension:
+            raise _validation_error(
+                "weyl_dimension_product_binding",
+                "dimension must equal the reduced product of the positive-root pairings",
             )
         return self
 

@@ -50,7 +50,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {
                                 "representative": {
                                     "vertices": ["v00", "v01", "v02"],
-                                    "edges": [["v00", "v01"], ["v01", "v02"]],
+                                    "edges": [["v00", "v02"], ["v01", "v02"]],
                                 },
                                 "multiplicity": "1",
                             }
@@ -62,7 +62,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {
                                 "representative": {
                                     "vertices": ["v00", "v01", "v02"],
-                                    "edges": [["v00", "v01"], ["v01", "v02"]],
+                                    "edges": [["v00", "v02"], ["v01", "v02"]],
                                 },
                                 "multiplicity": "1",
                             }

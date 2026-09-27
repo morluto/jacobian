@@ -60,6 +60,7 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.anonymous_equality.operations import (
     MAX_ANONYMOUS_DECK_EQUALITY_WORK,
+    anonymous_deck_equality,
 )
 from jacobian.math.graphs.patterns._models import _require_bounded_request
 from jacobian.math.graphs.patterns.operations import (
@@ -71,6 +72,7 @@ from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, SimpleUndirectedG
 __all__ = [
     "anonymous_card_degree_profile",
     "anonymous_graph_card_multiset",
+    "anonymous_graph_card_multiset_equal",
     "edge_deck_isomorphism_profile",
     "edge_deletion_family",
     "unlabelled_deck",
@@ -248,6 +250,15 @@ def anonymous_graph_card_multiset(
         for key in sorted(counts)
     )
     return AnonymousGraphCardMultiset._from_kernel(card_order, classes)
+
+
+def anonymous_graph_card_multiset_equal(
+    left: AnonymousGraphCardMultiset,
+    right: AnonymousGraphCardMultiset,
+) -> bool:
+    """Compare two canonical anonymous card multisets by card isomorphism."""
+
+    return anonymous_deck_equality(left, right).equal
 
 
 def vertex_deck_anonymous_multiset(

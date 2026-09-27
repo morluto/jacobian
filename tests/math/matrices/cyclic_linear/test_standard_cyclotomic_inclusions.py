@@ -8,6 +8,7 @@ import pytest
 from pydantic import ValidationError
 from sympy import Poly, cyclotomic_poly, symbols
 
+import jacobian.math.matrices.cyclic_linear.operations as cyclic_operations
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
@@ -219,6 +220,25 @@ def test_mapped_coordinate_denominators_are_bounded_after_reduction() -> None:
         Fraction(0),
         Fraction(1, q),
         Fraction(0),
+    )
+
+
+def test_mapped_scalar_growth_is_admitted_before_coordinate_accumulation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(cyclic_operations, "MAX_CYCLIC_MAP_INTERMEDIATE_DIGITS", 500)
+    inclusion = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    p = 10**255 + 1
+    q = 10**255 + 3
+    element = _element(3, (1, p), (1, q))
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        apply_cyclotomic_field_inclusion(inclusion, element)
+
+    assert error.value.errors()[0]["type"] == (
+        "matrix.cyclic.element_intermediate_digits_bound"
     )
 
 

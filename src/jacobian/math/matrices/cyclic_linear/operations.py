@@ -46,6 +46,7 @@ type FieldCoordinates = tuple[Fraction, ...]
 type ComponentCoordinates = tuple[tuple[FieldCoordinates, ...], ...]
 
 _MAX_CYCLOTOMIC_SCALAR_MAGNITUDE = 10**MAX_CYCLIC_FIELD_ELEMENT_DIGITS - 1
+MAX_CYCLIC_MAP_INTERMEDIATE_DIGITS = 4_096
 _CYCLIC_PROFILE_WALL_SECONDS = 3_600.0
 _ADMISSION_CHECK_INTERVAL = 256
 
@@ -240,16 +241,48 @@ def apply_cyclotomic_field_inclusion(
         powers.append((powers[-1] * image) % modulus)
     # Bound exact target coordinates after signed accumulation so sparse
     # images and cancellations are not charged for unrelated contributions.
-    mapped_coordinates = tuple(
-        sum(
-            (
-                coefficient * _fraction(power.nth(index))
-                for coefficient, power in zip(coordinates, powers, strict=True)
-            ),
-            Fraction(0),
+    mapped_coordinates_list = []
+    for index in range(target_degree):
+        terms = tuple(
+            (coefficient, _fraction(power.nth(index)))
+            for coefficient, power in zip(coordinates, powers, strict=True)
+            if coefficient and power.nth(index)
         )
-        for index in range(target_degree)
-    )
+        if terms:
+            term_numerator_digits = tuple(
+                _decimal_digits(coefficient.numerator)
+                + _decimal_digits(power.numerator)
+                for coefficient, power in terms
+            )
+            term_denominator_digits = tuple(
+                _decimal_digits(coefficient.denominator)
+                + _decimal_digits(power.denominator)
+                for coefficient, power in terms
+            )
+            denominator_bound = sum(term_denominator_digits)
+            numerator_bound = (
+                max(term_numerator_digits)
+                + denominator_bound
+                + _decimal_digits(len(terms))
+            )
+            if max(denominator_bound, numerator_bound) > (
+                MAX_CYCLIC_MAP_INTERMEDIATE_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=("element",),
+                    code="matrix.cyclic.element_intermediate_digits_bound",
+                    message=(
+                        "mapped cyclotomic coordinate accumulation may exceed the "
+                        f"{MAX_CYCLIC_MAP_INTERMEDIATE_DIGITS}-digit intermediate bound"
+                    ),
+                )
+        mapped_coordinates_list.append(
+            sum(
+                (coefficient * power for coefficient, power in terms),
+                Fraction(0),
+            )
+        )
+    mapped_coordinates = tuple(mapped_coordinates_list)
     if any(
         max(_decimal_digits(value.numerator), _decimal_digits(value.denominator))
         > MAX_CYCLIC_FIELD_ELEMENT_DIGITS

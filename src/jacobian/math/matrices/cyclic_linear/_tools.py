@@ -111,7 +111,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Apply a typed standard QQ(zeta_n) -> QQ(zeta_m) inclusion to an "
             "exact power-basis element and return reduced target coordinates. "
-            "The element, map, degree, work, and exact output height are bounded."
+            "The element, map, degree, work, per-coordinate intermediate scalar "
+            "growth, and exact output height are bounded."
         ),
         request_type=CyclotomicElementMapRequest,
         result_type=RationalCyclotomicElement,

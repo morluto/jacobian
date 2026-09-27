@@ -80,6 +80,32 @@ def test_regular_degree_six_s3_partition_decomposes_in_its_class_order() -> None
     ) == (Fraction(4), Fraction(1), Fraction(0))
 
 
+def test_tensor_partition_computes_backend_order_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from sympy.combinatorics.perm_groups import (
+        PermutationGroup as SympyPermutationGroup,
+    )
+
+    partition = _s3_partition()
+    order_calls = 0
+    backend_order = SympyPermutationGroup.order
+
+    def counting_order(self: SympyPermutationGroup) -> object:
+        nonlocal order_calls
+        order_calls += 1
+        return backend_order(self)
+
+    monkeypatch.setattr(SympyPermutationGroup, "order", counting_order)
+    result = character_tensor_decomposition(
+        CharacterTensorDecompositionRequest(
+            partition=partition, left_row_index=2, right_row_index=2
+        )
+    )
+    assert result.multiplicities == (1, 1, 1)
+    assert order_calls == 1
+
+
 def test_sign_tensor_standard_is_standard() -> None:
     result = character_tensor_decomposition(
         CharacterTensorDecompositionRequest(

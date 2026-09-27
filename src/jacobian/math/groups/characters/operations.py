@@ -725,7 +725,12 @@ def _admit_partition_classes(
     return classes
 
 
-def _admit_character_partition(partition: object) -> GroupConjugacyClassesResult:
+def _admit_character_partition(
+    partition: object,
+    *,
+    admitted_backend: object | None = None,
+    admitted_order: int | None = None,
+) -> GroupConjugacyClassesResult:
     """Re-admit a complete group partition at this native owner boundary."""
     if not isinstance(partition, GroupConjugacyClassesResult):
         raise OperationDomainValidationError(
@@ -735,13 +740,19 @@ def _admit_character_partition(partition: object) -> GroupConjugacyClassesResult
         )
     source = getattr(partition, "source", None)
     classes = getattr(partition, "classes", None)
-    degree, generators = _admit_partition_source(source)
+    degree, _ = _admit_partition_source(source)
     source = cast(PermutationGroup, source)
     classes = _admit_partition_classes(classes, degree)
-    from jacobian.math.groups.operations import group_conjugacy_classes, group_order
+    from jacobian.math.groups.operations import (
+        _admitted_backend_group,
+        _conjugacy_classes_from_admitted,
+    )
 
     try:
-        source_order = group_order(source)
+        if admitted_backend is None or admitted_order is None:
+            backend, source_order = _admitted_backend_group(source)
+        else:
+            backend, source_order = admitted_backend, admitted_order
     except (TypeError, ValueError, AttributeError, KeyError, IndexError) as exc:
         raise OperationDomainValidationError(
             location=("partition", "source"),
@@ -755,8 +766,8 @@ def _admit_character_partition(partition: object) -> GroupConjugacyClassesResult
             message="source group exceeds the complete class-partition envelope",
         )
     try:
-        expected = group_conjugacy_classes(
-            degree, [list(generator) for generator in generators]
+        expected = _conjugacy_classes_from_admitted(
+            backend, degree, order=source_order
         )
     except OperationDomainValidationError as exc:
         raise OperationResourceAdmissionError(
@@ -1015,7 +1026,7 @@ def _admit_s3_tensor_partition(candidate: object) -> GroupConjugacyClassesResult
     from jacobian.math.groups.operations import _admitted_backend_group
 
     try:
-        _, source_order = _admitted_backend_group(candidate.source)
+        backend, source_order = _admitted_backend_group(candidate.source)
     except (TypeError, ValueError, AttributeError, KeyError, IndexError) as exc:
         raise OperationDomainValidationError(
             location=("partition", "source"),
@@ -1028,7 +1039,9 @@ def _admit_s3_tensor_partition(candidate: object) -> GroupConjugacyClassesResult
             code="groups.characters.tensor_group_unsupported",
             message="tensor decomposition currently supports only S3 groups",
         )
-    return _admit_character_partition(candidate)
+    return _admit_character_partition(
+        candidate, admitted_backend=backend, admitted_order=source_order
+    )
 
 
 def character_tensor_decomposition(

@@ -10,6 +10,7 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
+    RelationalQuotient,
     quotient_structure,
 )
 
@@ -54,6 +55,15 @@ def test_complete_relation_fibers_form_the_exact_quotient() -> None:
     assert result.quotient.carrier_size == 2
     assert result.quotient.relation_tables == tables == (((0, 1),),)
     assert result.model_validate_json(result.model_dump_json()) == result
+
+
+def test_decoded_quotient_requires_first_occurrence_labels() -> None:
+    source = FiniteRelationalStructure(carrier_size=4)
+    result = quotient_structure(source, (4, 4, -8, -8))
+    forged = result.model_dump()
+    forged["quotient_map"] = [1, 1, 0, 0]
+    with pytest.raises(ValueError, match="first-occurrence order"):
+        RelationalQuotient.model_validate(forged)
 
 
 def test_all_relation_symbols_and_nullary_truth_are_preserved() -> None:

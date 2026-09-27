@@ -49,6 +49,14 @@ def test_direct_product_uses_lexicographic_pairs_and_coordinatewise_relation() -
     assert restored == result
 
 
+def test_decoded_product_tables_are_bound_to_both_factors() -> None:
+    result = direct_product_structure(_structure(2, [[0, 1]]), _structure(2, [[0, 1]]))
+    forged = result.model_dump(mode="json")
+    forged["product"]["relation_tables"] = [[]]
+    with pytest.raises(ValueError, match="coordinatewise product"):
+        type(result).model_validate(forged)
+
+
 def test_product_preserves_nullary_truth_values_and_empty_carriers() -> None:
     true = FiniteRelationalStructure(
         carrier_size=1,

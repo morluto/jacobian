@@ -5,7 +5,8 @@ from __future__ import annotations
 from math import comb
 from typing import Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, StrictInt, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel
@@ -53,13 +54,43 @@ class DistanceInterlaceRequest(StrictModel):
 
 class DistanceInterlaceResult(StrictModel):
     source: FiniteDeltaMatroid
-    distance_counts: tuple[int, ...] = Field(
+    distance_counts: tuple[StrictInt, ...] = Field(
         min_length=1, max_length=MAX_DISTANCE_INTERLACE_TERMS
     )
     polynomial: IntegerPolynomial
     formula: Literal["SUM_SUBSETS_(X_MINUS_1)_TO_DISTANCE"] = (
         "SUM_SUBSETS_(X_MINUS_1)_TO_DISTANCE"
     )
+
+    @model_validator(mode="after")
+    def require_complete_histogram_and_polynomial(self) -> DistanceInterlaceResult:
+        degree = len(self.source.ground)
+        if len(self.distance_counts) != degree + 1:
+            raise PydanticCustomError(
+                "delta_matroid.distance_interlace_histogram_shape",
+                "distance histogram must have one entry for each distance 0..|E|",
+            )
+        if any(count < 0 for count in self.distance_counts) or sum(
+            self.distance_counts
+        ) != 1 << degree:
+            raise PydanticCustomError(
+                "delta_matroid.distance_interlace_histogram_total",
+                "distance counts must be nonnegative and cover every ground subset",
+            )
+        ascending = [0] * (degree + 1)
+        for distance, count in enumerate(self.distance_counts):
+            for power in range(distance + 1):
+                sign = -1 if (distance - power) % 2 else 1
+                ascending[power] += sign * count * comb(distance, power)
+        descending = tuple(reversed(ascending))
+        while len(descending) > 1 and descending[0] == 0:
+            descending = descending[1:]
+        if self.polynomial.coefficients != descending:
+            raise PydanticCustomError(
+                "delta_matroid.distance_interlace_polynomial_binding",
+                "polynomial must be the expansion determined by the distance histogram",
+            )
+        return self
 
 
 def distance_interlace_polynomial(

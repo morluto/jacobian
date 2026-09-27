@@ -107,3 +107,46 @@ def test_forged_oversized_instance_is_rejected_before_recursive_copy() -> None:
     with pytest.raises(OperationDomainValidationError) as error:
         csp_instance_to_source_structure(forged)
     assert error.value.errors()[0]["type"] == "relational.csp.instance_shape"
+
+
+def test_missing_nested_template_fields_use_typed_domain_error() -> None:
+    malformed_template = FiniteRelationalStructure.model_construct(
+        signature=(), relation_tables=()
+    )
+    forged = FiniteCspInstance.model_construct(
+        template=malformed_template, variable_count=0, constraints=()
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        csp_instance_to_source_structure(forged)
+    assert error.value.errors()[0]["type"] == "relational.csp.instance_shape"
+
+    malformed_symbol = FiniteRelationSymbol.model_construct(symbol_id="R")
+    malformed_template = FiniteRelationalStructure.model_construct(
+        carrier_size=1, signature=(malformed_symbol,), relation_tables=((),)
+    )
+    forged = FiniteCspInstance.model_construct(
+        template=malformed_template, variable_count=0, constraints=()
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        csp_instance_to_source_structure(forged)
+    assert error.value.errors()[0]["type"] == "relational.csp.instance_shape"
+
+
+def test_conversion_is_not_limited_by_unrelated_transport_row_cap() -> None:
+    symbol_count = 5
+    symbols = tuple(
+        FiniteRelationSymbol(symbol_id=f"R{index}", arity=4)
+        for index in range(symbol_count)
+    )
+    table = tuple(product(range(8), repeat=4))
+    instance = FiniteCspInstance(
+        template=FiniteRelationalStructure(
+            carrier_size=8,
+            signature=symbols,
+            relation_tables=(table,) * symbol_count,
+        ),
+        variable_count=0,
+        constraints=(),
+    )
+    converted = csp_instance_to_source_structure(instance)
+    assert converted.relation_tables == ((),) * symbol_count

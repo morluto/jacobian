@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import pytest
+
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
@@ -69,6 +72,11 @@ def test_full_substructure_can_use_and_preserve_identity_axis() -> None:
     result = induced_substructure(source, (0, 1, 2))
     assert result.inclusion == (0, 1, 2)
     assert result.substructure == source
+
+
+def test_oversized_native_inclusion_is_rejected_before_materialization() -> None:
+    with pytest.raises(OperationDomainValidationError, match="cannot exceed"):
+        induced_substructure(_cycle(), range(1_000_000_000))
 
 
 def test_admission_bounds_row_and_coordinate_work() -> None:

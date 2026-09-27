@@ -81,6 +81,20 @@ def test_result_serialization_keeps_symbol_transport() -> None:
     assert restored.source_symbol_indices == (0, 1)
 
 
+def test_decoded_reduct_preserves_source_order_and_mapped_tables() -> None:
+    result = reduct_structure(_source(), ("E", "P"))
+    forged = result.model_dump(mode="json")
+    forged["reduct"]["relation_tables"][0] = [[2, 1]]
+    with pytest.raises(ValidationError, match="mapped source table"):
+        RelationalReductResult.model_validate(forged)
+    forged = result.model_dump(mode="json")
+    forged["source_symbol_indices"] = [1, 0]
+    forged["reduct"]["signature"].reverse()
+    forged["reduct"]["relation_tables"].reverse()
+    with pytest.raises(ValidationError, match="source-signature order"):
+        RelationalReductResult.model_validate(forged)
+
+
 def test_reduct_admission_prices_rows_and_coordinates_before_construction() -> None:
     indices, work = admit_relational_reduct(_source(), ("E", "P"))
 
@@ -126,7 +140,7 @@ def test_reduct_catalog_example_is_wired() -> None:
     operation = next(
         tool
         for tool in TOOLS
-        if tool.operation_id == "relational_structure.reduct.compute"
+        if tool.operation_id == "relational.reduct.compute"
     )
     request = operation.request_type.model_validate(operation.examples[0].input)
     result = operation.run(request)

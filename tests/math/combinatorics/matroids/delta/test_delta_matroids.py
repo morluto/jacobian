@@ -13,6 +13,7 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidTwistRequest,
     DeltaMatroidWidthRequest,
 )
+from jacobian.math.combinatorics.matroids.delta.relabel import DeltaMatroidRelabelling
 from jacobian.math.combinatorics.matroids.delta._tools import (
     TOOLS,
     _from_feasible_sets,
@@ -82,6 +83,17 @@ def test_width_is_exact_and_preserves_source_binding() -> None:
     assert result.width == 2
     assert result.delta_matroid == source
     assert type(result.model_dump()["width"]) is int
+
+
+def test_decoded_relabelling_binds_feasible_family_to_axis_map() -> None:
+    source = FiniteDeltaMatroid(
+        ground=("a", "b"), feasible=((), (0,), (0, 1), (1,))
+    )
+    result = delta_matroids.relabel(source, ("b", "a"), (1, 0))
+    forged = result.model_dump(mode="json")
+    forged["relabelled"]["feasible"] = [[], [0], [1]]
+    with pytest.raises(ValueError, match="transported through the axis map"):
+        DeltaMatroidRelabelling.model_validate(forged)
 
 
 def test_complete_feasible_family_constructs_canonical_delta_matroid() -> None:

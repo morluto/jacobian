@@ -3,6 +3,7 @@ import math
 
 import pytest
 import rfc8785
+from pydantic import ValidationError
 
 from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
@@ -22,6 +23,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldExtensionCountsResult,
     FiniteFieldGroupStructureResult,
     FiniteFieldIsomorphismResult,
+    FiniteFieldPointOrderResult,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
     finite_field_discriminant,
@@ -448,6 +450,27 @@ def test_point_orders_match_independent_repeated_addition_and_witnesses() -> Non
         for witness in result.prime_divisor_witnesses:
             assert witness.reduced_scalar == result.order // witness.prime
             assert not witness.reduced_multiple.at_infinity
+
+
+def test_authored_point_order_rejects_cardinality_outside_hasse_interval() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    infinity = FiniteFieldEllipticPoint.infinity(curve)
+    huge = 10**30 + 1
+    with pytest.raises(ValidationError, match="Hasse interval"):
+        FiniteFieldPointOrderResult(
+            curve=curve,
+            point=infinity,
+            group_cardinality=huge,
+            order=huge,
+            annihilating_multiple=infinity,
+            prime_divisor_witnesses=(),
+        )
 
 
 def test_point_order_result_projects_through_canonical_output() -> None:

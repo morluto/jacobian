@@ -13,11 +13,11 @@ relation with the same symbol. Decoding checks the endpoint structures and map
 shape; it does not replay preservation. A consumer that relies on a supplied
 homomorphism claim checks it at its operation boundary.
 
-`relational_homomorphism.identity.compute` returns the canonical identity map
+`relational.homomorphism.identity.compute` returns the canonical identity map
 on one structure, including for an empty carrier. The result is directly
 usable as a composition input after serialization.
 
-`relational_homomorphism.compose.compute` takes `first: A -> B` and
+`relational.homomorphism.compose.compute` takes `first: A -> B` and
 `second: B -> C`, checks that the intermediate structures are exactly equal,
 then checks both supplied homomorphism claims over all source relation tuples.
 It returns `second ∘ first`. Each structure carrier has at most 64 labels; the

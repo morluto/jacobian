@@ -94,6 +94,15 @@ def test_composition_rejects_different_cartan_parents():
         weyl_element_compose(a2, b2)
 
 
+def test_native_composition_and_inverse_revalidate_authored_fields():
+    forged = WeylElement.model_construct()
+    valid = weyl_element_from_word(((2, -1), (-1, 2)), ())
+    with pytest.raises(OperationDomainValidationError, match="canonical bounded Weyl"):
+        weyl_element_compose(forged, valid)
+    with pytest.raises(OperationDomainValidationError, match="canonical bounded Weyl"):
+        weyl_element_inverse(forged)
+
+
 def test_requests_round_trip_element_contracts():
     element = weyl_element_from_word(((2, -1), (-1, 2)), (1,))
     assert WeylElementRequest.model_validate(

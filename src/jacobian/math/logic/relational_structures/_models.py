@@ -16,6 +16,7 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
     MAX_RELATIONAL_SYMBOLS,
+    MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
     RelationalHomomorphism,
     RelationSymbolId,
@@ -132,6 +133,13 @@ class RelationalReductRequest(StrictModel):
         return self
 
 
+class RelationalProductRequest(StrictModel):
+    """Form the direct product of two structures with identical signatures."""
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+
+
 class RelationalReductResult(StrictModel):
     """A reduct together with its exact relation-symbol inclusion map."""
 
@@ -161,6 +169,11 @@ class RelationalReductResult(StrictModel):
                 "reduct.symbol_map_injective",
                 "distinct reduct symbols must map to distinct source symbols",
             )
+        if tuple(sorted(self.source_symbol_indices)) != self.source_symbol_indices:
+            raise _validation_error(
+                "reduct.symbol_map_order",
+                "reduct symbols must retain source-signature order",
+            )
         if any(
             not 0 <= index < len(self.source.signature)
             for index in self.source_symbol_indices
@@ -176,6 +189,13 @@ class RelationalReductResult(StrictModel):
             raise _validation_error(
                 "reduct.signature_transport",
                 "the map must identify each reduct symbol with its source symbol",
+            )
+        if tuple(
+            self.source.relation_tables[index] for index in self.source_symbol_indices
+        ) != self.reduct.relation_tables:
+            raise _validation_error(
+                "reduct.table_transport",
+                "each reduct table must equal its mapped source table",
             )
         return self
 
@@ -193,6 +213,101 @@ class RelationalReductResult(StrictModel):
             source=source,
             reduct=reduct,
             source_symbol_indices=source_symbol_indices,
+        )
+
+
+class RelationalProductResult(StrictModel):
+    """A direct product with canonical coordinate projections."""
+
+    left: FiniteRelationalStructure
+    right: FiniteRelationalStructure
+    product: FiniteRelationalStructure
+    left_projection: tuple[StrictInt, ...]
+    right_projection: tuple[StrictInt, ...]
+
+    @model_validator(mode="after")
+    def require_canonical_product_axis(self) -> Self:
+        if self.left.signature != self.right.signature:
+            raise _validation_error(
+                "product_signature", "product factors need the same ranked signature"
+            )
+        if self.product.signature != self.left.signature:
+            raise _validation_error(
+                "product_signature", "product retains the factor signature"
+            )
+        size = self.left.carrier_size * self.right.carrier_size
+        if size > MAX_RELATIONAL_CARRIER or self.product.carrier_size != size:
+            raise _validation_error(
+                "product_carrier", "product carrier is the bounded Cartesian carrier"
+            )
+        expected_left = (
+            tuple(index // self.right.carrier_size for index in range(size))
+            if self.right.carrier_size
+            else ()
+        )
+        expected_right = (
+            tuple(index % self.right.carrier_size for index in range(size))
+            if self.right.carrier_size
+            else ()
+        )
+        if (
+            self.left_projection != expected_left
+            or self.right_projection != expected_right
+        ):
+            raise _validation_error(
+                "product_projections",
+                "projections must follow canonical lexicographic pair labels",
+            )
+        for left_table, right_table, product_table, symbol in zip(
+            self.left.relation_tables,
+            self.right.relation_tables,
+            self.product.relation_tables,
+            self.left.signature,
+            strict=True,
+        ):
+            row_count = len(left_table) * len(right_table)
+            if row_count > MAX_RELATIONAL_TABLE_ROWS:
+                raise _validation_error(
+                    "product_table_bound", "a product relation exceeds the table bound"
+                )
+            expected_rows = tuple(
+                sorted(
+                    {
+                        tuple(
+                            a * self.right.carrier_size + b
+                            for a, b in zip(left_row, right_row, strict=True)
+                        )
+                        for left_row in left_table
+                        for right_row in right_table
+                    }
+                )
+            )
+            if product_table != expected_rows:
+                raise _validation_error(
+                    "product_table_binding",
+                    "each product table must be the coordinatewise product "
+                    "of its factors",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        left: FiniteRelationalStructure,
+        right: FiniteRelationalStructure,
+        product: FiniteRelationalStructure,
+        left_projection: tuple[int, ...],
+        right_projection: tuple[int, ...],
+    ) -> Self:
+        """Construct the direct product already established by admission."""
+
+        return cls.model_construct(
+            left=left,
+            right=right,
+            product=product,
+            left_projection=left_projection,
+            right_projection=right_projection,
         )
 
 
@@ -1445,6 +1560,17 @@ class RelationalQuotient(StrictModel):
             raise _validation_error(
                 "quotient.map_surjective", "quotient map must be surjective"
             )
+        seen: set[int] = set()
+        next_label = 0
+        for label in self.quotient_map:
+            if label not in seen:
+                if label != next_label:
+                    raise _validation_error(
+                        "quotient.map_canonical",
+                        "quotient labels must follow first-occurrence order",
+                    )
+                seen.add(label)
+                next_label += 1
         return self
 
 

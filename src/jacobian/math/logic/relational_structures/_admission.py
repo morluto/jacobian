@@ -52,6 +52,7 @@ MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_INDUCED_SUBSTRUCTURE_WORK = 81_920
 MAX_RELATIONAL_REDUCT_WORK = 81_920
+MAX_RELATIONAL_PRODUCT_WORK = 1_048_576
 # A transformed structure reconstructs every complete relation table. This
 # exact schema-derived limit admits the maximum legal source plus the selected
 # binary table's coordinate swap without importing a transport byte ceiling.
@@ -534,6 +535,55 @@ def admit_relational_reduct(
     return indices, work
 
 
+def admit_relational_product(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> int:
+    """Bound the Cartesian carrier, relation tables, and coordinate writes."""
+
+    if left.signature != right.signature:
+        raise OperationDomainValidationError(
+            location=("right", "signature"),
+            code="relational.product.signature_mismatch",
+            message="direct product factors must have identical ranked signatures",
+        )
+    carrier_size = left.carrier_size * right.carrier_size
+    if carrier_size > MAX_RELATIONAL_CARRIER:
+        raise OperationResourceAdmissionError(
+            location=("product", "carrier_size"),
+            code="relational.product.carrier_bound",
+            message=(
+                f"Cartesian carrier has {carrier_size} labels, exceeding "
+                f"{MAX_RELATIONAL_CARRIER}"
+            ),
+        )
+    row_counts = tuple(
+        len(left_table) * len(right_table)
+        for left_table, right_table in zip(
+            left.relation_tables, right.relation_tables, strict=True
+        )
+    )
+    if any(rows > MAX_RELATIONAL_TABLE_ROWS for rows in row_counts):
+        raise OperationResourceAdmissionError(
+            location=("product", "relation_tables"),
+            code="relational.product.table_rows_bound",
+            message=f"a product relation exceeds {MAX_RELATIONAL_TABLE_ROWS} rows",
+        )
+    work = sum(
+        rows * (symbol.arity + 1)
+        for rows, symbol in zip(row_counts, left.signature, strict=True)
+    ) + 2 * carrier_size
+    if work > MAX_RELATIONAL_PRODUCT_WORK:
+        raise OperationResourceAdmissionError(
+            location=("product",),
+            code="relational.product.work_bound",
+            message=(
+                f"direct product needs {work} visits, exceeding "
+                f"{MAX_RELATIONAL_PRODUCT_WORK}"
+            ),
+        )
+    return work
+
+
 def admit_embedding_search(
     source: FiniteRelationalStructure,
     target: FiniteRelationalStructure,
@@ -699,6 +749,7 @@ __all__ = [
     "MAX_INDUCED_SUBSTRUCTURE_WORK",
     "MAX_POLYMORPHISM_COORDINATE_WORK",
     "MAX_POLYMORPHISM_RELATION_COMBINATIONS",
+    "MAX_RELATIONAL_PRODUCT_WORK",
     "MAX_RELATIONAL_TRANSPORT_TUPLES",
     "MAX_SEARCH_CANDIDATES",
     "MAX_SEARCH_TUPLE_REPLAYS",
@@ -709,6 +760,7 @@ __all__ = [
     "admit_homomorphism_search",
     "admit_induced_substructure",
     "admit_polymorphism_check",
+    "admit_relational_product",
     "candidate_space",
     "core_search_work",
     "embedding_reflection_cells",

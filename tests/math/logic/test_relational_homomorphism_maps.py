@@ -222,8 +222,8 @@ def test_composition_admits_both_relation_replays_before_checking_claims() -> No
 
 def test_public_identity_and_compose_examples_use_canonical_value_type() -> None:
     by_id = {tool.operation_id: tool for tool in TOOLS}
-    identity = by_id["relational_homomorphism.identity.compute"]
-    compose = by_id["relational_homomorphism.compose.compute"]
+    identity = by_id["relational.homomorphism.identity.compute"]
+    compose = by_id["relational.homomorphism.compose.compute"]
     assert identity.result_type is RelationalHomomorphism
     assert compose.result_type is RelationalHomomorphism
     identity_request = identity.request_type.model_validate(identity.examples[0].input)

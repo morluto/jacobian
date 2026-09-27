@@ -7,6 +7,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import BinarySymmetricMatr
 from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
 from jacobian.math.combinatorics.matroids.delta.interlace import (
     DistanceInterlaceRequest,
+    DistanceInterlaceResult,
     distance_interlace_polynomial,
 )
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
@@ -89,3 +90,16 @@ def test_distance_interlace_request_schema_uses_exact_source() -> None:
     )
     result = distance_interlace_polynomial(request.delta_matroid)
     assert result.source == request.delta_matroid
+
+
+def test_decoded_histogram_and_polynomial_are_bound_to_the_source() -> None:
+    source = FiniteDeltaMatroid(ground=("a", "b"), feasible=((),))
+    result = distance_interlace_polynomial(source)
+    forged = result.model_dump()
+    forged["distance_counts"] = (1, 0, 1)
+    with pytest.raises(ValueError, match="cover every ground subset"):
+        DistanceInterlaceResult.model_validate(forged)
+    forged["distance_counts"] = (1, 2, 1)
+    forged["polynomial"]["coefficients"] = (7, 0, 0)
+    with pytest.raises(ValueError, match="expansion determined by the distance histogram"):
+        DistanceInterlaceResult.model_validate(forged)

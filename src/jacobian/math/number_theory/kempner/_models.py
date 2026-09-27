@@ -32,7 +32,7 @@ class KempnerDecimalEnclosureRequest(StrictModel):
     """Enclose the same series using fixed-point bounds for each reciprocal."""
 
     digit_set: KempnerDigitSet
-    cutoff: KempnerSmallInteger = Field(ge=0)
+    cutoff: KempnerSmallInteger = Field(ge=0, le=999)
     precision: StrictInt = Field(ge=1, le=MAX_KEMPNER_DECIMAL_DIGITS)
 
 
@@ -44,7 +44,7 @@ class KempnerDecimalEnclosure(StrictModel):
     """
 
     digit_set: KempnerDigitSet
-    cutoff: KempnerSmallInteger = Field(ge=0)
+    cutoff: KempnerSmallInteger = Field(ge=0, le=999)
     precision: StrictInt = Field(ge=1, le=MAX_KEMPNER_DECIMAL_DIGITS)
     enclosure: ClosedRationalInterval
 

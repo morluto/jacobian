@@ -30,6 +30,8 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchResult,
     InducedSubstructureRequest,
     InducedSubstructureResult,
+    RelationalProductRequest,
+    RelationalProductResult,
     RelationalDisjointUnionRequest,
     RelationalDisjointUnionResult,
     RelationalHomomorphismCompositionRequest,
@@ -48,6 +50,7 @@ from jacobian.math.logic.relational_structures.operations import (
     compute_core,
     count_homomorphisms,
     csp_instance_to_source_structure,
+    direct_product_structure,
     disjoint_union_structure,
     enumerate_csp_solutions,
     enumerate_homomorphisms,
@@ -157,6 +160,10 @@ def _relational_reduct(request: RelationalReductRequest) -> RelationalReductResu
     return reduct_structure(request.source, request.symbol_ids)
 
 
+def _direct_product(request: RelationalProductRequest) -> RelationalProductResult:
+    return direct_product_structure(request.left, request.right)
+
+
 def _relational_disjoint_union(
     request: RelationalDisjointUnionRequest,
 ) -> RelationalDisjointUnionResult:
@@ -216,7 +223,33 @@ _EDGE_INTO_CYCLE_EXAMPLE = {
 
 TOOLS: MathTools = (
     MathTool(
-        operation_id="relational_homomorphism.identity.compute",
+        operation_id="relational.structure.direct_product.compute",
+        title="Form a direct product of finite relational structures",
+        description=(
+            "Form the direct product of finite structures over an identical "
+            "ranked signature. Pair (i, j) receives label i*|B|+j, and each "
+            "relation consists of coordinatewise pairs of factor rows. Carrier "
+            "and table expansion are admitted before construction."
+        ),
+        request_type=RelationalProductRequest,
+        result_type=RelationalProductResult,
+        run=_direct_product,
+        tags=("relational-structures", "direct-product", "exact"),
+        discovery_terms=(
+            "direct product of finite relational structures",
+            "relational structure Cartesian product",
+            "product structure projections",
+        ),
+        examples=(
+            OperationExample(
+                name="product_of_two_directed_edges",
+                description="Pair the endpoints of two directed edges coordinatewise.",
+                input={"left": _DIRECTED_EDGE_STRUCTURE, "right": _DIRECTED_EDGE_STRUCTURE},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relational.homomorphism.identity.compute",
         title="Construct a finite relational identity homomorphism",
         description=(
             "Return the identity map on one exact finite relational structure "
@@ -252,7 +285,7 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="relational_homomorphism.compose.compute",
+        operation_id="relational.homomorphism.compose.compute",
         title="Compose checked finite relational homomorphisms",
         description=(
             "Given first: A→B and second: B→C, return second∘first as a "
@@ -328,7 +361,7 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
-        operation_id="relational_structure.reduct.compute",
+        operation_id="relational.reduct.compute",
         title="Take a finite relational structure reduct",
         description=(
             "Retain an explicit subset of a finite relational signature in "

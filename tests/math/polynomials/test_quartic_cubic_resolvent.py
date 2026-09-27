@@ -164,6 +164,19 @@ def test_result_retains_revalidated_canonical_source() -> None:
     )
 
 
+def test_decoded_resolvent_is_bound_to_its_quartic_source() -> None:
+    quartic = _monic(
+        (Fraction(1), Fraction(0), Fraction(0), Fraction(0), Fraction(1))
+    )
+    result = compute_quartic_cubic_resolvent(quartic)
+    forged = result.model_dump()
+    forged["resolvent"] = _monic(
+        (Fraction(0), Fraction(0), Fraction(0), Fraction(1))
+    ).model_dump()
+    with pytest.raises(ValidationError, match="pair-product relation"):
+        QuarticCubicResolventResult.model_validate(forged)
+
+
 def test_resolvent_roots_are_the_three_pair_product_sums() -> None:
     roots = (Fraction(1, 2), Fraction(2), Fraction(-3), Fraction(4))
     pair_sums = (

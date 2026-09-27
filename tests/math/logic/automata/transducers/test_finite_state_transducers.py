@@ -122,6 +122,13 @@ class TestSubsequentialIdentityOperation:
             assert run.status == "OUTPUT"
             assert run.output == word
 
+    def test_empty_alphabet_identity_has_one_final_state_and_no_edges(self) -> None:
+        request = SubseqIdentityRequest(alphabet=FiniteAlphabet(symbols=()))
+        result = compute_identity(request)
+        assert result.state_count == 1
+        assert result.transitions == ()
+        assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
+
     def test_identity_operation_manifest_and_alphabet_bound(self) -> None:
         tool = next(
             item

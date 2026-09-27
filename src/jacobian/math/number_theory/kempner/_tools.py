@@ -2,18 +2,20 @@
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.number_theory.kempner._models import (
-    KempnerSeriesEnclosure,
-    KempnerSeriesEnclosureRequest,
+    KempnerDecimalEnclosure,
+    KempnerDecimalEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner.operations import (
-    enclose_kempner_series,
+    enclose_kempner_series_decimal,
 )
 
 
 def _run_enclosure(
-    request: KempnerSeriesEnclosureRequest,
-) -> KempnerSeriesEnclosure:
-    return enclose_kempner_series(request.digit_set, request.cutoff)
+    request: KempnerDecimalEnclosureRequest,
+) -> KempnerDecimalEnclosure:
+    return enclose_kempner_series_decimal(
+        request.digit_set, request.cutoff, request.precision
+    )
 
 
 TOOLS: MathTools = (
@@ -21,17 +23,17 @@ TOOLS: MathTools = (
         operation_id="number_theory.kempner_series.enclose",
         title="Enclose the reciprocal series of a Kempner digit family",
         description=(
-            "Return the exact rational partial reciprocal sum over positive "
-            "integers with at most D base-b digits from one proper digit "
-            "subset, plus the exact geometric tail bound "
-            "r*(s/b)^D/(1-s/b), as the source-bound interval "
-            "[partial, partial + tail]. An empty positive family (no nonzero "
-            "digit) yields [0, 0]. Admission preflights the finite numeral "
-            "count, exact-rational height, and result bytes before "
-            "enumeration; leading zeros never count as digits."
+            "Return a source-bound rational interval for the infinite "
+            "reciprocal series over positive integers with at most D base-b "
+            "digits from one proper digit subset. Precision q bounds each "
+            "finite reciprocal by its floor and ceiling at scale 10^q; the "
+            "exact geometric tail is added above. An empty positive family "
+            "(no nonzero digit) yields [0, 0]. Admission preflights the "
+            "finite numeral count, traversal work, and output height; leading "
+            "zeros never count as digits."
         ),
-        request_type=KempnerSeriesEnclosureRequest,
-        result_type=KempnerSeriesEnclosure,
+        request_type=KempnerDecimalEnclosureRequest,
+        result_type=KempnerDecimalEnclosure,
         run=_run_enclosure,
         tags=("number-theory", "kempner", "reciprocal-series", "enclosure", "exact"),
         discovery_terms=(
@@ -50,6 +52,7 @@ TOOLS: MathTools = (
                 input={
                     "digit_set": {"base": "10", "allowed_digits": ["1"]},
                     "cutoff": "2",
+                    "precision": 24,
                 },
             ),
         ),

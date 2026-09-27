@@ -23,6 +23,7 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_induced_substructure,
     admit_polymorphism_check,
     admit_relational_disjoint_union,
+    admit_relational_product,
     admit_relational_reduct,
 )
 from jacobian.math.logic.relational_structures._models import (
@@ -51,6 +52,7 @@ from jacobian.math.logic.relational_structures._models import (
     RelationalPolymorphismRelationProfile,
     RelationalPolymorphismStatus,
     RelationalPolymorphismWitness,
+    RelationalProductResult,
     RelationalQuotient,
     RelationalReductResult,
     SymbolTransportProfile,
@@ -95,8 +97,9 @@ def induced_substructure(
     """
 
     source = _admit_structure(source, "source")
-    inclusion = tuple(inclusion) if isinstance(inclusion, Sequence) else inclusion
     admit_induced_substructure(source, inclusion)
+    # Admission bounds the input length before copying caller-owned sequences.
+    inclusion = tuple(inclusion)
     source_to_induced = {
         source_label: induced_label
         for induced_label, source_label in enumerate(inclusion)
@@ -144,6 +147,51 @@ def reduct_structure(
         source=source,
         reduct=reduct,
         source_symbol_indices=indices,
+    )
+
+
+def direct_product_structure(
+    left: FiniteRelationalStructure, right: FiniteRelationalStructure
+) -> RelationalProductResult:
+    """Return the exact direct product on lexicographically labelled pairs."""
+    left = _admit_structure(left, "left")
+    right = _admit_structure(right, "right")
+    admit_relational_product(left, right)
+    right_size = right.carrier_size
+    product_tables = tuple(
+        tuple(
+            sorted(
+                {
+                    tuple(a * right_size + b for a, b in zip(lrow, rrow, strict=True))
+                    for lrow in left_table
+                    for rrow in right_table
+                }
+            )
+        )
+        for left_table, right_table in zip(
+            left.relation_tables, right.relation_tables, strict=True
+        )
+    )
+    product_size = left.carrier_size * right_size
+    product = FiniteRelationalStructure(
+        carrier_size=product_size,
+        signature=left.signature,
+        relation_tables=product_tables,
+    )
+    return RelationalProductResult._from_kernel(
+        left=left,
+        right=right,
+        product=product,
+        left_projection=(
+            tuple(index // right_size for index in range(product_size))
+            if right_size
+            else ()
+        ),
+        right_projection=(
+            tuple(index % right_size for index in range(product_size))
+            if right_size
+            else ()
+        ),
     )
 
 
@@ -765,32 +813,42 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
         or len(constraints) > MAX_CSP_CONSTRAINTS
     ):
         _raise_invalid_csp_instance()
+    try:
+        template_carrier_size = template.carrier_size
+        template_signature = template.signature
+        template_relation_tables = template.relation_tables
+    except (AttributeError, TypeError):
+        _raise_invalid_csp_instance()
     if (
-        type(template.carrier_size) is not int
-        or not 0 <= template.carrier_size <= MAX_RELATIONAL_CARRIER
-        or not isinstance(template.signature, tuple)
-        or len(template.signature) > MAX_RELATIONAL_SYMBOLS
-        or not isinstance(template.relation_tables, tuple)
-        or len(template.relation_tables) != len(template.signature)
+        type(template_carrier_size) is not int
+        or not 0 <= template_carrier_size <= MAX_RELATIONAL_CARRIER
+        or not isinstance(template_signature, tuple)
+        or len(template_signature) > MAX_RELATIONAL_SYMBOLS
+        or not isinstance(template_relation_tables, tuple)
+        or len(template_relation_tables) != len(template_signature)
     ):
         _raise_invalid_csp_instance()
-    template_rows = 0
     symbol_arities: dict[str, int] = {}
-    for symbol, table in zip(template.signature, template.relation_tables, strict=True):
+    for symbol, table in zip(template_signature, template_relation_tables, strict=True):
+        try:
+            symbol_id = symbol.symbol_id
+            arity = symbol.arity
+        except (AttributeError, TypeError):
+            _raise_invalid_csp_instance()
         if (
             type(symbol) is not FiniteRelationSymbol
-            or type(symbol.symbol_id) is not str
-            or type(symbol.arity) is not int
-            or not 0 <= symbol.arity <= MAX_RELATIONAL_ARITY
+            or type(symbol_id) is not str
+            or type(arity) is not int
+            or not 0 <= arity <= MAX_RELATIONAL_ARITY
             or not isinstance(table, tuple)
             or len(table) > MAX_RELATIONAL_TABLE_ROWS
         ):
             _raise_invalid_csp_instance()
-        symbol_arities[symbol.symbol_id] = symbol.arity
-        template_rows += len(table)
-        if template_rows > MAX_RELATIONAL_TRANSPORT_TUPLES:
-            _raise_invalid_csp_instance()
-        _preflight_relation_rows(table, symbol.arity, template.carrier_size)
+        symbol_arities[symbol_id] = arity
+        # Template relation rows are not copied by source-structure conversion.
+        # Their own per-table and tuple-shape bounds are checked when the
+        # canonical template is revalidated below; the homomorphism transport
+        # ceiling does not apply to this operation.
     scope_entries = 0
     for constraint in constraints:
         if type(constraint) is not FiniteCspConstraint:
@@ -815,20 +873,6 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
         if any(
             type(variable) is not int or not 0 <= variable < variable_count
             for variable in scope
-        ):
-            _raise_invalid_csp_instance()
-
-
-def _preflight_relation_rows(
-    table: tuple[object, ...], arity: int, carrier_size: int
-) -> None:
-    for row in table:
-        if (
-            not isinstance(row, tuple)
-            or len(row) != arity
-            or any(
-                type(value) is not int or not 0 <= value < carrier_size for value in row
-            )
         ):
             _raise_invalid_csp_instance()
 
@@ -1267,6 +1311,7 @@ __all__ = [
     "compute_core",
     "count_homomorphisms",
     "csp_instance_to_source_structure",
+    "direct_product_structure",
     "homomorphism_identity",
     "induced_substructure",
     "quotient_structure",

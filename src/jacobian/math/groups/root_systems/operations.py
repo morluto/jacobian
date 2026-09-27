@@ -1496,6 +1496,8 @@ def weyl_element_compose(first: WeylElement, then: WeylElement) -> WeylElement:
     """Compose elements in the declared order: apply ``first``, then ``then``."""
     from jacobian.math.matrices.values import IntegerMatrix
 
+    first = _validated_weyl_element(first, "first")
+    then = _validated_weyl_element(then, "then")
     if first.matrix != then.matrix:
         raise OperationDomainValidationError(
             location=("then", "matrix"),
@@ -1519,6 +1521,7 @@ def weyl_element_inverse(element: WeylElement) -> WeylElement:
     """Return the inverse of an admitted finite Weyl element."""
     from jacobian.math.matrices.values import IntegerMatrix
 
+    element = _validated_weyl_element(element, "element")
     action = _admit_weyl_element_value(element)
     inverse = _integer_inverse(action)
     rank = len(action)

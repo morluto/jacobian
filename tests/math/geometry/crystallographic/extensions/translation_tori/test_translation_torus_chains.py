@@ -1,5 +1,7 @@
 """Exact product-cell oracle for checked translation tori."""
 
+from fractions import Fraction
+
 import pytest
 from pydantic import ValidationError
 
@@ -174,10 +176,31 @@ def test_result_value_rejects_nonfundamental_source() -> None:
 def test_result_value_rejects_forged_circle_directions() -> None:
     result = translation_torus_quotient_chains(_checked_cube())
     payload = result.model_dump(mode="python")
-    payload["circle_directions"] = ((0, 0, 0),) * 3
+    payload["circle_directions"] = tuple(
+        tuple(CanonicalRational.from_fraction(Fraction(value)) for value in vector)
+        for vector in ((0, 0, 0), (0, 0, 0), (0, 0, 0))
+    )
 
     with pytest.raises(ValidationError):
         type(result).model_validate(payload)
+
+
+def test_result_value_rejects_a_source_with_nontrivial_holonomy() -> None:
+    result = translation_torus_quotient_chains(_checked_cube())
+    identity = ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    reflection = ((-1, 0, 0), (0, -1, 0), (0, 0, 1))
+    nontrivial_group = FiniteLatticeExtension(
+        multiplication_table=((0, 1), (1, 0)),
+        action_matrices=(identity, reflection),
+        factor_set=(((0, 0, 0), (0, 0, 0)), ((0, 0, 0), (0, 0, 0))),
+    )
+    source_payload = result.model_dump(mode="python")
+    source_payload["source"]["source"]["affine_realization"]["source"] = (
+        nontrivial_group.model_dump(mode="python")
+    )
+
+    with pytest.raises(ValidationError):
+        type(result).model_validate(source_payload)
 
 
 def test_result_value_rejects_nonzero_differential() -> None:

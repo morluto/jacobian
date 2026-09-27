@@ -35,7 +35,6 @@ from jacobian.math.polynomials.values import (
 
 _Poly = dict[int, Fraction]
 MAX_RECURRENCE_OGF_WORK_CELLS = 100_000
-MAX_RECURRENCE_OGF_OUTPUT_BYTES = 2 * 1024 * 1024
 
 
 def _decode_polynomial(value: SparseRationalPolynomial) -> _Poly:
@@ -181,12 +180,6 @@ def _admit_transform(
             code="ore_algebra.recurrence_ogf_differential_order",
             message="the recurrence coefficient degree exceeds the differential-operator order bound",
         )
-    if maximum_output_degree > MAX_SHIFT_COEFFICIENT_DEGREE:
-        raise OperationResourceAdmissionError(
-            location=("recurrence", "terms"),
-            code="ore_algebra.recurrence_ogf_polynomial_degree",
-            message="the cleared OGF equation exceeds the differential coefficient degree bound",
-        )
     if work > MAX_RECURRENCE_OGF_WORK_CELLS:
         raise OperationResourceAdmissionError(
             location=("recurrence",),
@@ -241,23 +234,18 @@ def _admit_transform(
     )
     # Only nonzero accumulated boundary coefficients contribute output monomials.
     maximum_output_degree = max(maximum_output_degree, max(forcing, default=-1))
+    if maximum_output_degree > MAX_SHIFT_COEFFICIENT_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("recurrence", "terms"),
+            code="ore_algebra.recurrence_ogf_polynomial_degree",
+            message="the cleared OGF equation exceeds the differential coefficient degree bound",
+        )
     output_digits = _digits_for_bit_bound(growth_bits)
     if output_digits > MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="ore_algebra.recurrence_ogf_coefficient_digits",
             message="the OGF differential equation may exceed the exact rational coefficient bound",
-        )
-    estimated_bytes = len(request.model_dump_json().encode("utf-8")) + 512
-    estimated_bytes += (maximum_degree + 1) * (
-        512 + (maximum_output_degree + 1) * (2 * output_digits + 256)
-    )
-    estimated_bytes += 512 + operator.order * (2 * output_digits + 256)
-    if estimated_bytes > MAX_RECURRENCE_OGF_OUTPUT_BYTES:
-        raise OperationResourceAdmissionError(
-            location=("result",),
-            code="ore_algebra.recurrence_ogf_output_bytes",
-            message="the OGF differential equation exceeds its serialized output bound",
         )
     return polynomials, maximum_degree, forcing
 

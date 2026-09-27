@@ -289,6 +289,13 @@ def test_ogf_transform_rejects_unsupported_differential_order_preflight() -> Non
         )
 
 
+def test_ogf_transform_bounds_degree_after_forcing_support() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient degree"):
+        polynomial_recurrence_to_ogf_equation(
+            _recurrence((80, [(0, 1)])), {"values": [0] * 79 + [1]}
+        )
+
+
 def test_ogf_denominator_admission_is_local_to_each_output_shift() -> None:
     primes = [int(sp.nextprime(10**63 + 1000 * index)) for index in range(17)]
     recurrence = _recurrence(*((shift, [(0, 1)]) for shift in range(17)))

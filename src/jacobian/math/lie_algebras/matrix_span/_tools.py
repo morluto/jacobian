@@ -26,7 +26,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "induced finite-dimensional Lie algebra over QQ and retain the exact "
             "matrix basis in matching order. Reject dependent or nonclosed input; "
             "this operation does not generate a larger subalgebra. Matrix order "
-            "and span dimension are at most 8, with admitted exact work and output."
+            "and span dimension are at most 8. Each matrix numerator and "
+            "denominator is limited to 64 decimal digits, with admitted exact "
+            "work and output."
         ),
         request_type=LieMatrixSpanRequest,
         result_type=LieMatrixSpanRealization,

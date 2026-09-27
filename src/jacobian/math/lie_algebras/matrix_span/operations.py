@@ -26,6 +26,15 @@ from jacobian.math.matrices.operations import rref_result
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 
 
+def _require_qq_matrix_domains(matrices: tuple[RationalMatrix, ...]) -> None:
+    if any(matrix.domain != "QQ" for matrix in matrices):
+        raise OperationDomainValidationError(
+            location=("matrices",),
+            code="lie_algebra.matrix_span_domain",
+            message="matrix span entries must use the QQ matrix domain",
+        )
+
+
 def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
     if not isinstance(request, LieMatrixSpanRequest):
         raise OperationDomainValidationError(
@@ -46,6 +55,7 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_shape",
             message="every span element must be a rational matrix",
         )
+    _require_qq_matrix_domains(matrices)
     order = getattr(matrices[0], "row_count", None)
     if type(order) is not int:
         raise OperationDomainValidationError(
@@ -98,19 +108,27 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
                         code="lie_algebra.matrix_span_rational",
                         message="matrix entries must be reduced canonical rationals",
                     )
-    input_numerator_growth = max(
-        decimal_digit_width(entry.num) - 1
+    max_numerator = max(
+        abs(entry.num)
         for matrix in matrices
         for row in matrix.entries
         for entry in row
     )
-    input_denominator_growth = max(
-        decimal_digit_width(entry.den) - 1
+    max_denominator = max(
+        entry.den
         for matrix in matrices
         for row in matrix.entries
         for entry in row
     )
-    input_digits = max(input_numerator_growth, input_denominator_growth) + 1
+    input_numerator_digits = decimal_digit_width(max_numerator)
+    input_denominator_digits = decimal_digit_width(max_denominator)
+    # Treat unit factors as zero growth; any non-unit factor can carry across a
+    # decimal boundary, including one-digit factors such as 7 and 8.
+    input_numerator_growth = (
+        0 if max_numerator <= 1 else input_numerator_digits
+    )
+    input_denominator_growth = 0 if max_denominator == 1 else input_denominator_digits
+    input_digits = max(input_numerator_digits, input_denominator_digits)
     if input_digits > 64:
         raise OperationResourceAdmissionError(
             location=("matrices",),

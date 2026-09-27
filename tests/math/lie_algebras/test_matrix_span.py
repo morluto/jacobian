@@ -11,6 +11,7 @@ from jacobian.math.lie_algebras.matrix_span._models import (
     LieMatrixSpanRequest,
 )
 from jacobian.math.lie_algebras.matrix_span.operations import (
+    _admit,
     lie_algebra_from_matrix_span,
 )
 from jacobian.math.matrices.values import RationalMatrix
@@ -146,3 +147,42 @@ def test_native_execution_rejects_forged_noncanonical_rationals(
     request = LieMatrixSpanRequest.model_construct(matrices=(matrix,))
     with pytest.raises(OperationDomainValidationError, match="reduced canonical"):
         lie_algebra_from_matrix_span(request)
+
+
+def test_single_digit_denominators_include_multiplicative_carry() -> None:
+    matrices = tuple(
+        RationalMatrix(entries=((CanonicalRational(num=1, den=denominator),),))
+        for denominator in (7, 8)
+    )
+    _, _, commutator_digits = _admit(LieMatrixSpanRequest(matrices=matrices))
+
+    assert commutator_digits >= 2
+
+
+def test_native_execution_rejects_forged_non_qq_matrix_domain() -> None:
+    matrix = RationalMatrix.model_construct(
+        domain="ZZ",
+        row_count=1,
+        column_count=1,
+        entries=((CanonicalRational(num=1, den=1),),),
+    )
+    request = LieMatrixSpanRequest.model_construct(matrices=(matrix,))
+
+    with pytest.raises(OperationDomainValidationError, match="QQ matrix domain"):
+        lie_algebra_from_matrix_span(request)
+
+
+def test_canonical_rational_scalar_ceiling_is_discoverable() -> None:
+    from jacobian.math.lie_algebras.matrix_span._tools import TOOLS
+
+    description = TOOLS[0].description
+    assert "64 decimal digits" in description
+
+
+def test_canonical_rational_component_width_is_measured_individually() -> None:
+    value = CanonicalRational(num=10**54, den=1)
+    matrix = RationalMatrix(entries=((value,),))
+
+    result = lie_algebra_from_matrix_span(LieMatrixSpanRequest(matrices=(matrix,)))
+
+    assert result.matrix_basis[0].entries[0][0] == value

@@ -42,11 +42,10 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
 from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     binary,
     dual,
-    minor,
-    twist_polynomial,
     feasible_size_profile,
     loop_complement,
     minor,
+    twist_polynomial,
     twist_width_profile,
 )
 from jacobian.math.combinatorics.matroids.delta.interlace import (

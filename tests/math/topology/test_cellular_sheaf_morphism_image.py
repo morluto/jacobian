@@ -138,6 +138,30 @@ def test_image_factorization_reconstructs_non_surjective_map() -> None:
     malformed["morphism"]["components"] = malformed["morphism"]["components"][:-1]
     with pytest.raises(ValueError, match="morphism components"):
         SheafMorphismImageResult.model_validate(malformed)
+    malformed = result.model_dump(mode="python")
+    components = list(malformed["morphism"]["components"])
+    cell = components[0][0]
+    components[0] = (cell, ((_q(1),),))
+    malformed["morphism"]["components"] = tuple(components)
+    with pytest.raises(ValueError, match="morphism matrices must match"):
+        SheafMorphismImageResult.model_validate(malformed)
+    malformed = result.model_dump(mode="python")
+    malformed["morphism"]["natural"] = False
+    with pytest.raises(ValueError, match="factorization morphisms must be natural"):
+        SheafMorphismImageResult.model_validate(malformed)
+
+    malformed = result.model_dump(mode="python")
+    malformed["image"]["cover_restrictions"] = malformed["image"][
+        "cover_restrictions"
+    ][:-1]
+    malformed["inclusion"]["source"]["cover_restrictions"] = malformed[
+        "image"
+    ]["cover_restrictions"]
+    malformed["factor"]["target"]["cover_restrictions"] = malformed["image"][
+        "cover_restrictions"
+    ]
+    with pytest.raises(ValueError, match="image cover_restrictions"):
+        SheafMorphismImageResult.model_validate(malformed)
     tool = next(
         item
         for item in BUILTIN_TOOLS
@@ -250,3 +274,13 @@ def test_image_rejects_non_natural_candidate_even_if_flag_claims_true() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="simplex, matrix"):
         image_of_morphism(malformed)
+
+    malformed_key = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=((('unknown',), ((_q(1),),)),),
+        natural=True,
+        obstruction=None,
+    )
+    with pytest.raises(OperationDomainValidationError, match="canonical order"):
+        image_of_morphism(malformed_key)

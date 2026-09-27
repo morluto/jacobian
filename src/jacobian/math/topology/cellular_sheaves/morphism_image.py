@@ -77,36 +77,19 @@ class SheafMorphismImageResult(StrictModel):
         source_ranks = {stalk.simplex: len(stalk.basis) for stalk in source.stalks}
         target_ranks = {stalk.simplex: len(stalk.basis) for stalk in target.stalks}
         image_ranks = {stalk.simplex: len(stalk.basis) for stalk in self.image.stalks}
-        if tuple(key for key, _matrix in self.morphism.components) != cells:
-            raise ValueError("morphism components must retain canonical simplex axes")
-        for cell, matrix in self.morphism.components:
-            if not isinstance(cell, tuple):
-                raise ValueError("morphism components need simplex tuple axes")
-            if len(matrix) != target_ranks[cell] or any(
-                len(row) != source_ranks[cell] for row in matrix
-            ):
-                raise ValueError("morphism matrices must match the stalk axes")
+        _require_image_diagram_axes(self.image, source, target)
         for map_ in (self.morphism, self.inclusion, self.factor):
             if not map_.natural or map_.obstruction is not None:
                 raise ValueError("image factorization morphisms must be natural")
-            if tuple(key for key, _matrix in map_.components) != cells:
-                raise ValueError(
-                    "image factorization components must retain simplex axes"
-                )
-        for cell, matrix in self.inclusion.components:
-            if not isinstance(cell, tuple):
-                raise ValueError("image inclusion components need simplex tuple axes")
-            if len(matrix) != target_ranks[cell] or any(
-                len(row) != image_ranks[cell] for row in matrix
-            ):
-                raise ValueError("image inclusion matrices must match the stalk axes")
-        for cell, matrix in self.factor.components:
-            if not isinstance(cell, tuple):
-                raise ValueError("image factor components need simplex tuple axes")
-            if len(matrix) != image_ranks[cell] or any(
-                len(row) != source_ranks[cell] for row in matrix
-            ):
-                raise ValueError("image factor matrices must match the stalk axes")
+        _require_component_axes(
+            self.morphism.components, cells, target_ranks, source_ranks, "morphism"
+        )
+        _require_component_axes(
+            self.inclusion.components, cells, target_ranks, image_ranks, "inclusion"
+        )
+        _require_component_axes(
+            self.factor.components, cells, image_ranks, source_ranks, "factor"
+        )
         return self
 
     @classmethod
@@ -138,6 +121,66 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
         code=f"topology.cellular_sheaf.morphism_image.{code}",
         message=message,
     )
+
+
+def _require_image_diagram_axes(
+    image: FiniteCellularSheaf,
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+) -> None:
+    for kind in ("cover_restrictions", "derived_restrictions"):
+        image_axes = tuple(
+            (item.source, item.target) for item in getattr(image, kind)
+        )
+        source_axes = tuple(
+            (item.source, item.target) for item in getattr(source, kind)
+        )
+        target_axes = tuple(
+            (item.source, item.target) for item in getattr(target, kind)
+        )
+        if image_axes != source_axes or image_axes != target_axes:
+            raise ValueError(f"image {kind} must retain the parent diagram axes")
+
+
+def _require_component_axes(
+    components: tuple[Component, ...],
+    cells: tuple[tuple[str, ...], ...],
+    row_ranks: dict[tuple[str, ...], int],
+    column_ranks: dict[tuple[str, ...], int],
+    label: str,
+) -> None:
+    if tuple(key for key, _matrix in components) != cells:
+        raise ValueError(f"{label} components must retain canonical simplex axes")
+    for cell, matrix in components:
+        if not isinstance(cell, tuple):
+            raise ValueError(f"{label} components need simplex tuple axes")
+        if len(matrix) != row_ranks[cell] or any(
+            len(row) != column_ranks[cell] for row in matrix
+        ):
+            raise ValueError(f"{label} matrices must match the stalk axes")
+
+
+def _canonical_component_cells(
+    components: tuple[Component, ...], cells: tuple[tuple[str, ...], ...]
+) -> tuple[tuple[str, ...], ...]:
+    if not isinstance(components, tuple) or any(
+        not isinstance(component, tuple)
+        or len(component) != 2
+        or not isinstance(component[0], (str, tuple))
+        or not isinstance(component[1], (tuple, list))
+        or any(not isinstance(row, (tuple, list)) for row in component[1])
+        for component in components
+    ):
+        raise _domain(
+            "component_structure", "morphism components must be (simplex, matrix) pairs"
+        )
+    keys = tuple(_resolve_component_key(key, cells) for key, _matrix in components)
+    if keys != cells:
+        raise _domain(
+            "component_axis",
+            "one morphism component per simplex in canonical order is required",
+        )
+    return keys
 
 
 def _independent_columns(
@@ -181,6 +224,8 @@ def _solve_matrix(
 
 def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     """Compute the image sheaf and exact factorization ``F -> im(phi) -> G``."""
+    if not isinstance(value, SheafMorphismResult):
+        raise _domain("morphism_type", "input must be a typed sheaf morphism")
     source, target = value.source, value.target
     field = _admit_field(source.coefficient_field, source.prime)
     _admit_field(target.coefficient_field, target.prime)
@@ -195,28 +240,11 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         )
     _admit_section_plan(source)
     _admit_section_plan(target)
-    if not isinstance(value.components, tuple) or any(
-        not isinstance(component, tuple)
-        or len(component) != 2
-        or not isinstance(component[1], (tuple, list))
-        or any(not isinstance(row, (tuple, list)) for row in component[1])
-        for component in value.components
-    ):
-        raise _domain(
-            "component_structure", "morphism components must be (simplex, matrix) pairs"
-        )
+    cells = source.canonical_face_order
+    _canonical_component_cells(value.components, cells)
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )
-    cells = source.canonical_face_order
-    keys = tuple(
-        _resolve_component_key(key, cells) for key, _matrix in value.components
-    )
-    if keys != cells:
-        raise _domain(
-            "component_axis",
-            "one morphism component per simplex in canonical order is required",
-        )
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
     components: dict[tuple[str, ...], tuple[tuple[Scalar, ...], ...]] = {}

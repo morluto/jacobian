@@ -7,9 +7,9 @@ from itertools import pairwise
 from math import gcd, isqrt, lcm
 from typing import Literal
 
-from pydantic import Field, StrictInt, model_validator
+from pydantic import Field, StrictInt, TypeAdapter, ValidationError, model_validator
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian._models import StrictModel
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
@@ -23,6 +23,9 @@ from jacobian.math.number_theory.algebraic_numbers.complex import (
 from jacobian.math.number_theory.algebraic_numbers.real import (
     MAX_REAL_ALGEBRAIC_COEFFICIENT_DIGITS,
     RealAlgebraicValue,
+)
+from jacobian.math.polynomials.local_series.arithmetic import (
+    _check as _check_laurent,
 )
 from jacobian.math.polynomials.local_series.values import (
     MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
@@ -40,6 +43,12 @@ MAX_LOCAL_POLYNOMIAL_ROWS = 256
 MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS = 8192
 MAX_NEWTON_POLYGON_Y_DEGREE = 32_768
 MAX_NEWTON_POLYGON_SCALAR_DIGITS = 256
+MAX_NEWTON_POLYGON_RESULT_DIGITS = (
+    MAX_LOCAL_POLYNOMIAL_ROWS * 64
+    + MAX_LOCAL_POLYNOMIAL_SERIES_SLOTS * (2 * MAX_NEWTON_POLYGON_SCALAR_DIGITS + 64)
+    + 1024
+)
+_VARIABLE_ADAPTER = TypeAdapter(PolynomialVariable)
 
 
 class LocalPolynomialCoefficient(StrictModel):
@@ -180,6 +189,12 @@ def newton_edge_characteristic_polynomial(
             location=("request",),
             code="local_series.newton_characteristic_request_type",
             message="request must select an edge of a local polynomial",
+        )
+    if not hasattr(request, "edge_index") or not hasattr(request, "polynomial"):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="local_series.newton_characteristic_request_shape",
+            message="request must contain polynomial and edge_index fields",
         )
     if type(request.edge_index) is not int or request.edge_index < 0:
         raise OperationDomainValidationError(
@@ -348,6 +363,174 @@ def newton_edge_characteristic_roots(
     )
 
 
+def _admit_parent(source: LocalPolynomialInSeries) -> None:
+    _require_parent_fields(source)
+    if not isinstance(source.coefficients, tuple):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients"),
+            code="local_series.newton_rows",
+            message="local polynomial coefficients must be a tuple",
+        )
+    if len(source.coefficients) > MAX_LOCAL_POLYNOMIAL_ROWS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "coefficients"),
+            code="local_series.newton_rows_bound",
+            message=f"local polynomial exceeds {MAX_LOCAL_POLYNOMIAL_ROWS} coefficient rows",
+        )
+    if type(source.variable) is not str:
+        raise OperationDomainValidationError(
+            location=("polynomial", "variable"),
+            code="local_series.newton_variable",
+            message="local polynomial variable must be a strict identifier",
+        )
+    try:
+        _VARIABLE_ADAPTER.validate_python(source.variable, strict=True)
+    except ValidationError as error:
+        raise OperationDomainValidationError(
+            location=("polynomial", "variable"),
+            code="local_series.newton_variable",
+            message="local polynomial variable must match the polynomial identifier grammar",
+        ) from error
+    if source.place not in ("FINITE", "INFINITY"):
+        raise OperationDomainValidationError(
+            location=("polynomial", "place"),
+            code="local_series.newton_place",
+            message="local polynomial expansion place must be FINITE or INFINITY",
+        )
+    if not isinstance(source.center, CanonicalRational):
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center must be a canonical rational",
+        )
+    # Native callers can bypass the Pydantic validator with model_construct(),
+    # so re-establish the center's reduced components, denominator
+    # positivity, and scalar bound before the hull consumes it, mirroring the
+    # nested Laurent and Puiseux window admission.
+    center_num = getattr(source.center, "num", None)
+    center_den = getattr(source.center, "den", None)
+    if type(center_num) is not int or type(center_den) is not int:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center components must be strict integers",
+        )
+    try:
+        center = source.center.as_fraction()
+    except (TypeError, ValueError, ZeroDivisionError) as error:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message="local polynomial center must be a valid canonical rational",
+        ) from error
+    if center_den <= 0 or (center_num, center_den) != (
+        center.numerator,
+        center.denominator,
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center",
+            message=(
+                "local polynomial center must be reduced with a positive denominator"
+            ),
+        )
+    try:
+        require_bounded_rational(
+            source.center,
+            max_digits=MAX_LOCAL_SERIES_COEFFICIENT_DIGITS,
+            label="local polynomial center",
+        )
+    except ValueError as error:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "center"),
+            code="local_series.newton_center_bound",
+            message=str(error),
+        ) from error
+    if source.place == "INFINITY" and center != 0:
+        raise OperationDomainValidationError(
+            location=("polynomial", "center"),
+            code="local_series.newton_infinity_center",
+            message="an infinity local polynomial has center zero",
+        )
+    # Native callers can bypass the Pydantic validator with model_construct(),
+    # so validate row values before reading degrees, then re-establish unique
+    # increasing ordering before the hull loop.
+    for index, row in enumerate(source.coefficients):
+        if not isinstance(row, LocalPolynomialCoefficient):
+            raise OperationDomainValidationError(
+                location=("polynomial", "coefficients", index),
+                code="local_series.newton_row_type",
+                message="local polynomial rows must be coefficient values",
+            )
+    degrees = tuple(row.y_degree for row in source.coefficients)
+    if degrees != tuple(sorted(set(degrees))):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients"),
+            code="local_series.newton_row_order",
+            message="local polynomial rows must have unique increasing y degrees",
+        )
+
+
+def _require_parent_fields(source: LocalPolynomialInSeries) -> None:
+    if not isinstance(source, LocalPolynomialInSeries):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="local_series.newton_parent_type",
+            message="polynomial must be a local polynomial value",
+        )
+    if any(
+        not hasattr(source, field)
+        for field in ("coefficients", "variable", "place", "center")
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="local_series.newton_parent_shape",
+            message="local polynomial is missing required parent fields",
+        )
+
+
+def _admit_row(
+    source: LocalPolynomialInSeries,
+    row_index: int,
+) -> None:
+    row = source.coefficients[row_index]
+    if (
+        type(row.y_degree) is not int
+        or not 0 <= row.y_degree <= MAX_NEWTON_POLYGON_Y_DEGREE
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients", row_index, "y_degree"),
+            code="local_series.newton_row_degree",
+            message="local polynomial row degree is outside its domain",
+        )
+    if row.series is None:
+        return
+    try:
+        _check_laurent(row.series)
+    except OperationResourceAdmissionError as error:
+        raise OperationResourceAdmissionError(
+            location=("polynomial", "coefficients", row_index, "series"),
+            code="local_series.newton_series_bound",
+            message=f"coefficient series exceeds its admitted envelope: {error}",
+        ) from error
+    except OperationDomainValidationError as error:
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients", row_index, "series"),
+            code="local_series.newton_series_parent",
+            message=f"coefficient series failed structural admission: {error}",
+        ) from error
+    if (row.series.variable, row.series.place, row.series.center) != (
+        source.variable,
+        source.place,
+        source.center,
+    ):
+        raise OperationDomainValidationError(
+            location=("polynomial", "coefficients", row_index, "series"),
+            code="local_series.newton_parent_mismatch",
+            message="all coefficient series must share the declared local parent",
+        )
+
+
 def _admit(
     source: LocalPolynomialInSeries,
 ) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
@@ -357,13 +540,9 @@ def _admit(
             code="local_series.newton_polynomial_type",
             message="polynomial must be a local polynomial in Laurent series",
         )
-    source = _validated_source(source)
-    if len(source.coefficients) > MAX_LOCAL_POLYNOMIAL_ROWS:
-        raise OperationResourceAdmissionError(
-            location=("polynomial", "coefficients"),
-            code="local_series.newton_rows_bound",
-            message=f"local polynomial exceeds {MAX_LOCAL_POLYNOMIAL_ROWS} coefficient rows",
-        )
+    _admit_parent(source)
+    for row_index in range(len(source.coefficients)):
+        _admit_row(source, row_index)
     slots = sum(
         len(row.series.coefficients)
         for row in source.coefficients
@@ -411,6 +590,30 @@ def _admit(
             )
         valuations.append((row.y_degree, valuation))
         points.append((row.y_degree, valuation))
+    center = source.center.as_fraction()
+    center_digits = max(
+        decimal_digit_width(center.numerator),
+        decimal_digit_width(center.denominator),
+    )
+    component_digits = sum(
+        max(
+            decimal_digit_width(value.numerator),
+            decimal_digit_width(value.denominator),
+        )
+        for row in source.coefficients
+        if row.series is not None
+        for coefficient in row.series.coefficients
+        for value in (coefficient.as_fraction(),)
+    )
+    result_digits = (
+        512 + len(source.coefficients) * 192 + component_digits * 2 + center_digits * 2
+    )
+    if result_digits > MAX_NEWTON_POLYGON_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("polynomial",),
+            code="local_series.newton_result_envelope",
+            message="local Newton polygon source and result exceed the admitted digit envelope",
+        )
     return valuations, points
 
 

@@ -150,9 +150,7 @@ def test_edge_characteristic_polynomial_transports_exact_leading_coefficients() 
 
 
 def test_edge_characteristic_returns_normalized_native_source() -> None:
-    canonical = _polynomial(
-        [(0, _series(1, (-1, 1))), (1, _series(0, (1, 1)))]
-    )
+    canonical = _polynomial([(0, _series(1, (-1, 1))), (1, _series(0, (1, 1)))])
     forged = LocalPolynomialInSeries.model_construct(
         variable=canonical.variable,
         place=canonical.place,
@@ -167,6 +165,15 @@ def test_edge_characteristic_returns_normalized_native_source() -> None:
     assert isinstance(result.source.coefficients, tuple)
     assert result.source == canonical
     assert isinstance(result.source.coefficients[0], LocalPolynomialCoefficient)
+
+
+def test_native_newton_admission_rejects_missing_parent_and_request_fields() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        local_polynomial_newton_polygon(LocalPolynomialInSeries.model_construct())
+    with pytest.raises(OperationDomainValidationError):
+        newton_edge_characteristic_polynomial(
+            NewtonEdgeCharacteristicRequest.model_construct()
+        )
 
 
 def test_edge_characteristic_rejects_nonexistent_edge() -> None:
@@ -209,7 +216,9 @@ def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
     if expected[0] == "real":
         assert len(result.roots) == 2
         assert all(isinstance(root.value, RealAlgebraicValue) for root in result.roots)
-        assert [(root.value.polynomial, root.value.real_root_index) for root in result.roots] == [
+        assert [
+            (root.value.polynomial, root.value.real_root_index) for root in result.roots
+        ] == [
             (expected[1], 0),
             (expected[1], 1),
         ]
@@ -217,8 +226,12 @@ def test_quadratic_newton_edge_roots_are_exact(constant, expected) -> None:
         assert all(root.value.polynomial == (1, 0, -2) for root in result.roots)
     elif expected[0] == "complex":
         assert len(result.roots) == 2
-        assert all(isinstance(root.value, ComplexAlgebraicValue) for root in result.roots)
-        assert [(root.value.polynomial, root.value.root_index) for root in result.roots] == [
+        assert all(
+            isinstance(root.value, ComplexAlgebraicValue) for root in result.roots
+        )
+        assert [
+            (root.value.polynomial, root.value.root_index) for root in result.roots
+        ] == [
             (expected[1], 0),
             (expected[1], 1),
         ]
@@ -243,7 +256,9 @@ def test_newton_edge_root_operation_rejects_degree_above_two() -> None:
         newton_edge_characteristic_roots(
             NewtonEdgeCharacteristicRequest(polynomial=source, edge_index=0)
         )
-    assert error.value.errors()[0]["type"] == "local_series.newton_edge_root_degree_bound"
+    assert (
+        error.value.errors()[0]["type"] == "local_series.newton_edge_root_degree_bound"
+    )
 
 
 def test_newton_edge_roots_cover_linear_and_repeated_rational_roots() -> None:

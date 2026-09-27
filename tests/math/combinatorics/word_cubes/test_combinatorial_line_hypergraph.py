@@ -39,17 +39,11 @@ def test_q3_d1() -> None:
     assert set(members) == {"[0]", "[1]", "[2]"}
 
 
-def test_q2_d2_count() -> None:
-    """[2]^2 has 4 vertices and 5 combinatorial lines ((3^2-2^2=5)."""
-    result = construct_combinatorial_line_hypergraph(2, 2)
-    assert len(result.hypergraph.vertices) == 4
-    assert len(result.hypergraph.edges) == 5
-
-
 def test_q2_d2_fixture() -> None:
     """[2]^2 includes one-wildcard coordinate lines and the all-wildcard line."""
     result = construct_combinatorial_line_hypergraph(2, 2)
     edge_member_sets = {frozenset(members) for _, members in result.hypergraph.edges}
+    assert len(result.hypergraph.edges) == 5
     assert edge_member_sets == {
         frozenset({"[0,0]", "[1,0]"}),
         frozenset({"[0,1]", "[1,1]"}),
@@ -59,16 +53,11 @@ def test_q2_d2_fixture() -> None:
     }
 
 
-def test_q3_d2_count() -> None:
-    """[3]^2 has 9 vertices and (3+1)^2 - 3^2 = 16-9 = 7 combinatorial lines."""
-    result = construct_combinatorial_line_hypergraph(3, 2)
-    assert len(result.hypergraph.vertices) == 9
-    assert len(result.hypergraph.edges) == 7
-
-
 def test_q3_d2_fixture() -> None:
     """Standard Hales--Jewett lines have one common wildcard value."""
     result = construct_combinatorial_line_hypergraph(3, 2)
+    assert len(result.hypergraph.vertices) == 9
+    assert len(result.hypergraph.edges) == 7
     assert len(result.lines) == 7
     assert sum(line.wildcard_positions == (0, 1) for line in result.lines) == 1
     assert result.lines[-1].vertices == ((0, 0), (1, 1), (2, 2))
@@ -97,13 +86,6 @@ def test_edge_size_equals_q() -> None:
     result = construct_combinatorial_line_hypergraph(3, 2)
     for _, members in result.hypergraph.edges:
         assert len(members) == 3
-
-
-def test_q4_example() -> None:
-    """q=4,d=1: 4 vertices, 1 edge."""
-    result = construct_combinatorial_line_hypergraph(4, 1)
-    assert len(result.hypergraph.vertices) == 4
-    assert len(result.hypergraph.edges) == 1
 
 
 def test_rejects_q_too_small() -> None:

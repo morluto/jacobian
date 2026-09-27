@@ -2,16 +2,32 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
+from math import factorial, isqrt, lcm, prod
 from typing import cast
 
 from pydantic import ValidationError
 
+from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.combinatorics.posets.core._models import (
+    ElementRank,
+    FinitePoset,
+    IncomparablePair,
+    OrderedPair,
+    _transitive_reduction,
+    canonical_poset_ranks,
+    finite_poset_digest,
+)
 from jacobian.math.groups.root_systems._cartan import (
     VALID_CARTAN_TYPE_RANKS,
     cartan_type_matrix,
     connected_components,
+    positive_symmetrizer,
 )
 from jacobian.math.groups.root_systems._cartan import (
     positive_roots as enumerate_positive_roots,
@@ -28,41 +44,398 @@ from jacobian.math.groups.root_systems._cartan import (
 from jacobian.math.groups.root_systems._cartan import (
     weyl_word_inversions as _weyl_word_inversions_kernel,
 )
+from jacobian.math.groups.root_systems._dynkin_models import (
+    MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS,
+    DynkinEdge,
+    FiniteDynkinDiagram,
+)
 from jacobian.math.groups.root_systems._models import (
+    MAX_BRUHAT_INTERVAL_ELEMENTS,
+    MAX_BRUHAT_INTERVAL_GROUP_ORDER,
+    MAX_BRUHAT_INTERVAL_OUTPUT_CELLS,
+    MAX_LATTICE_COORDINATE_BITS,
+    MAX_LATTICE_OUTPUT_COORDINATE_BITS,
+    MAX_LATTICE_VECTOR_OUTPUT_CELLS,
     MAX_POSITIVE_ROOTS,
     MAX_RANK,
     MAX_REFLECTION_REPRESENTABLE,
+    MAX_ROOT_COORDINATE,
+    MAX_ROOT_POSET_ROOTS,
+    MAX_WEIGHT_ORBIT_OUTPUT_DIGITS,
+    MAX_WEIGHT_ORBIT_SIZE,
+    MAX_WEYL_GROUP_ORDER,
     MAX_WEYL_WORD_LENGTH,
     CartanMatrix,
     CartanType,
     CartanTypeResult,
+    CorootLatticeVector,
+    CoweightLatticeVector,
     FiniteCartanDatum,
+    PositiveCorootsResult,
+    PositiveRootComponentProfile,
+    PositiveRootProfileEntry,
+    PositiveRootProfileResult,
     PositiveRootsResult,
     RootComponentData,
+    RootCorootPair,
+    RootLatticeVector,
+    RootLengthClass,
+    RootLengthComponentProfile,
+    RootLengthProfileResult,
+    RootPosetResult,
     RootSystemDataResult,
+    RootToCorootResult,
     SimpleReflectionResult,
     SimpleReflectionsResult,
+    WeightLatticeVector,
+    WeylBruhatIntervalResult,
     WeylDescentsResult,
+    WeylElement,
     WeylElementLengthResult,
+    WeylElementOrderResult,
+    WeylExponentComponent,
+    WeylExponentsResult,
     WeylGroupOrderResult,
     WeylLongestElementResult,
+    WeylParabolicResult,
+    WeylPoincarePolynomialResult,
+    WeylVectorActionResult,
+    WeylWeightOrbitResult,
+    _FiniteCartanLatticeVector,
 )
+from jacobian.math.polynomials._models import IntegerPolynomial
+from jacobian.math.polynomials.values import MAX_POLYNOMIAL_TERMS
 
 MAX_SIGNED_ROOT_ACTION_DEGREE = 2 * MAX_POSITIVE_ROOTS
+MAX_ROOT_POSET_PAIR_COMPARISONS = (
+    2 * (MAX_ROOT_POSET_ROOTS * (MAX_ROOT_POSET_ROOTS - 1) // 2) * MAX_RANK
+)
+MAX_ROOT_POSET_COVER_WORK = MAX_ROOT_POSET_ROOTS**3
+MAX_ROOT_POSET_OUTPUT_PAIRS = MAX_ROOT_POSET_ROOTS * (MAX_ROOT_POSET_ROOTS - 1) // 2
+MAX_ROOT_POSET_OUTPUT_CELLS = (
+    3 * MAX_RANK**2
+    + MAX_RANK
+    + MAX_ROOT_POSET_ROOTS * (MAX_RANK + 4)
+    + 3 * MAX_ROOT_POSET_OUTPUT_PAIRS
+)
+MAX_ROOT_PROFILE_WORK = 120_000
+MAX_ROOT_PROFILE_OUTPUT_CELLS = 64_000
+MAX_COXETER_POLYNOMIAL_WORK = 200_000
+MAX_COXETER_POLYNOMIAL_OUTPUT_CELLS = 4_096
+MAX_ROOT_TO_COROOT_WORK = 10_000
+MAX_ROOT_TO_COROOT_OUTPUT_CELLS = 1_024
+MAX_ROOT_LENGTH_PROFILE_WORK = 120_000
+MAX_ROOT_LENGTH_PROFILE_OUTPUT_CELLS = 64_000
+MAX_WEYL_ELEMENT_ORDER_WORK = 2_000_000
+MAX_WEYL_ELEMENT_ORDER_OUTPUT_CELLS = 8_192
+MAX_DYNKIN_DIAGRAM_WORK = 5_000
+
+
+def coxeter_polynomial(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> IntegerPolynomial:
+    """Return det(tI-c) for c=s_(r-1)...s_1 s_0 on simple roots.
+
+    The ordered product convention means the simple reflections are applied
+    left to right, matching ``weyl_word_act_on_root_vector``.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    work = rank * rank * (1 << rank) * (rank + 1)
+    # Every admitted finite Cartan entry has magnitude at most three. Bound
+    # entries through the product and all characteristic coefficients before
+    # any matrix or polynomial expansion.
+    product_entry_bound = (3 * rank) ** rank
+    coefficient_bound = (1 << rank) * factorial(rank) * product_entry_bound**rank
+    output_bytes_bound = (rank + 1) * (len(str(coefficient_bound)) + 2)
+    if (
+        work > MAX_COXETER_POLYNOMIAL_WORK
+        or output_bytes_bound > MAX_COXETER_POLYNOMIAL_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.coxeter_polynomial_bounds",
+            message="Coxeter product and characteristic polynomial exceed the admitted work or output bound",
+        )
+
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    coxeter = identity
+    for index in range(rank):
+        reflection = [list(row) for row in identity]
+        reflection[index] = [
+            int(index == column) - rows[index][column] for column in range(rank)
+        ]
+        coxeter = _integer_matrix_product(reflection, coxeter)
+
+    # Subset dynamic programming computes the determinant over ZZ[t]. Each
+    # state sums signed partial permutations with rows 0..k-1 assigned.
+    states: dict[int, list[int]] = {0: [1]}
+    for mask in range(1 << rank):
+        polynomial = states.get(mask)
+        if polynomial is None:
+            continue
+        row = mask.bit_count()
+        if row == rank:
+            continue
+        for column in range(rank):
+            bit = 1 << column
+            if mask & bit:
+                continue
+            # Entry of tI-c, in ascending coefficient order.
+            entry = [-coxeter[row][column]]
+            if row == column:
+                entry.append(1)
+            sign = -1 if (mask >> (column + 1)).bit_count() % 2 else 1
+            target = states.setdefault(mask | bit, [0] * (row + 2))
+            for left_degree, left_coefficient in enumerate(polynomial):
+                for right_degree, right_coefficient in enumerate(entry):
+                    target[left_degree + right_degree] += (
+                        sign * left_coefficient * right_coefficient
+                    )
+    ascending = states[(1 << rank) - 1]
+    descending = tuple(reversed(ascending))
+    return IntegerPolynomial(coefficients=descending)
+
+
+def _integer_matrix_product(
+    left: list[list[int]], right: tuple[tuple[int, ...], ...] | list[list[int]]
+) -> tuple[tuple[int, ...], ...]:
+    size = len(left)
+    return tuple(
+        tuple(sum(left[i][k] * right[k][j] for k in range(size)) for j in range(size))
+        for i in range(size)
+    )
 
 
 def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
     """Construct root/coroot/weight basis data for a finite Cartan matrix."""
+    cartan = _as_cartan(matrix)
+    _admit_cartan_finite_type(cartan.entries)
+    return _cartan_datum_from_admitted(cartan)
+
+
+def _admit_lattice_coordinates(
+    coordinates: tuple[int, ...], rank: int, *, output: bool = False
+) -> None:
+    max_bits = (
+        MAX_LATTICE_OUTPUT_COORDINATE_BITS if output else MAX_LATTICE_COORDINATE_BITS
+    )
+    if (
+        len(coordinates) != rank
+        or any(type(value) is not int for value in coordinates)
+        or any(abs(value).bit_length() > max_bits for value in coordinates)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("coordinates",),
+            code="root_system.lattice_coordinates_over_envelope",
+            message=f"lattice coordinates must match rank and fit within {max_bits} bits",
+        )
+    digit_bound = (max_bits * 30103) // 100_000 + 2
+    output_bytes_bound = rank * (digit_bound + 3) + MAX_RANK**2 * 16 + 1024
+    if output_bytes_bound > MAX_LATTICE_VECTOR_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("coordinates",),
+            code="root_system.lattice_output_over_envelope",
+            message="the exact lattice vector and retained datum exceed the output envelope",
+        )
+
+
+def _create_lattice_vector[LatticeVectorT: _FiniteCartanLatticeVector](
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+    result_type: type[LatticeVectorT],
+) -> LatticeVectorT:
+    cartan = _as_cartan(matrix)
+    _admit_cartan_finite_type(cartan.entries)
+    coords = tuple(coordinates)
+    _admit_lattice_coordinates(coords, len(cartan))
+    datum = _cartan_datum_from_admitted(cartan)
+    return result_type.model_construct(datum=datum, coordinates=coords)
+
+
+def root_lattice_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+) -> RootLatticeVector:
+    """Construct a root-lattice vector in simple-root coordinates."""
+    return _create_lattice_vector(matrix, coordinates, RootLatticeVector)
+
+
+def coroot_lattice_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+) -> CorootLatticeVector:
+    """Construct a coroot-lattice vector in simple-coroot coordinates."""
+    return _create_lattice_vector(matrix, coordinates, CorootLatticeVector)
+
+
+def weight_lattice_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+) -> WeightLatticeVector:
+    """Construct a weight-lattice vector in fundamental-weight coordinates."""
+    return _create_lattice_vector(matrix, coordinates, WeightLatticeVector)
+
+
+def coweight_lattice_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    coordinates: tuple[int, ...] | list[int],
+) -> CoweightLatticeVector:
+    """Construct a coweight-lattice vector in fundamental-coweight coordinates."""
+    return _create_lattice_vector(matrix, coordinates, CoweightLatticeVector)
+
+
+def _canonical_lattice_vector(
+    vector: _FiniteCartanLatticeVector,
+    expected_type: type[_FiniteCartanLatticeVector],
+    *,
+    output_bound: bool,
+) -> tuple[FiniteCartanDatum, tuple[int, ...]]:
+    if type(vector) is not expected_type:
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="root_system.lattice_vector_type",
+            message="the vector must have the exact lattice type required by this map",
+        )
+    try:
+        datum = vector.datum
+        cartan = _as_cartan(datum.cartan_matrix)
+        coordinates = tuple(vector.coordinates)
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="root_system.invalid_lattice_vector",
+            message="the lattice vector must retain a canonical finite Cartan datum",
+        ) from error
+    _admit_cartan_finite_type(cartan.entries)
+    _admit_lattice_coordinates(coordinates, len(cartan), output=output_bound)
+    canonical_datum = _cartan_datum_from_admitted(cartan)
+    if datum != canonical_datum:
+        raise OperationDomainValidationError(
+            location=("vector", "datum"),
+            code="root_system.lattice_vector_datum_mismatch",
+            message="the supplied lattice maps and symmetrizer must match the canonical Cartan datum",
+        )
+    return canonical_datum, coordinates
+
+
+def _lattice_inclusion[ResultVectorT: _FiniteCartanLatticeVector](
+    vector: _FiniteCartanLatticeVector,
+    expected_type: type[_FiniteCartanLatticeVector],
+    result_type: type[ResultVectorT],
+    *,
+    transpose: bool,
+) -> ResultVectorT:
+    if type(vector) is not expected_type:
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="root_system.lattice_vector_type",
+            message="the inclusion requires a vector in its stated source lattice",
+        )
+    datum, coordinates = _canonical_lattice_vector(
+        vector, expected_type, output_bound=False
+    )
+    rank = len(coordinates)
+    matrix = datum.cartan_matrix.entries
+    coefficient_bound = max(abs(value) for row in matrix for value in row)
+    predicted_bits = (
+        max((abs(value).bit_length() for value in coordinates), default=0)
+        + (rank * coefficient_bound - 1).bit_length()
+    )
+    if predicted_bits > MAX_LATTICE_OUTPUT_COORDINATE_BITS:
+        raise OperationResourceAdmissionError(
+            location=("vector", "coordinates"),
+            code="root_system.lattice_map_over_envelope",
+            message="the exact basis-map image exceeds the admitted coordinate bound",
+        )
+    if rank * rank > MAX_RANK**2:
+        raise OperationResourceAdmissionError(
+            location=("vector", "datum"),
+            code="root_system.lattice_map_work_over_envelope",
+            message="the exact lattice basis map exceeds the admitted work bound",
+        )
+    image = tuple(
+        sum(
+            (matrix[column][row] if transpose else matrix[row][column])
+            * coordinates[column]
+            for column in range(rank)
+        )
+        for row in range(rank)
+    )
+    _admit_lattice_coordinates(image, rank, output=True)
+    return result_type.model_construct(datum=datum, coordinates=image)
+
+
+def root_to_weight_lattice(
+    vector: RootLatticeVector,
+) -> WeightLatticeVector:
+    """Embed Q in P using the exact Cartan matrix in the datum's ordered bases."""
+    return _lattice_inclusion(
+        vector,
+        RootLatticeVector,
+        WeightLatticeVector,
+        transpose=False,
+    )
+
+
+def coroot_to_coweight_lattice(
+    vector: CorootLatticeVector,
+) -> CoweightLatticeVector:
+    """Embed Q^vee in P^vee using the transpose Cartan basis map."""
+    return _lattice_inclusion(
+        vector,
+        CorootLatticeVector,
+        CoweightLatticeVector,
+        transpose=True,
+    )
+
+
+def dynkin_diagram(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> FiniteDynkinDiagram:
+    """Return the exact directed/multiple-edge Dynkin graph of finite Cartan data."""
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    # The largest value has eight named nodes and 28 labeled edges. Reserve
+    # complete result space before scanning entries or constructing the datum.
+    work_bound = 8 * rank**3 + rank**2
+    output_bound = MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS
+    if work_bound > MAX_DYNKIN_DIAGRAM_WORK or output_bound > (
+        MAX_DYNKIN_DIAGRAM_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.dynkin_diagram_bounds",
+            message="Dynkin diagram exceeds its admitted work or output envelope",
+        )
+
+    edges = tuple(
+        DynkinEdge(
+            simple_root_indices=(left, right),
+            cartan_pairing=(rows[left][right], rows[right][left]),
+            edge_multiplicity=rows[left][right] * rows[right][left],
+        )
+        for left in range(rank)
+        for right in range(left + 1, rank)
+        if rows[left][right] != 0 or rows[right][left] != 0
+    )
+    return FiniteDynkinDiagram._from_kernel(_cartan_datum_from_admitted(cartan), edges)
+
+
+def _cartan_datum_from_admitted(cartan: CartanMatrix) -> FiniteCartanDatum:
+    """Build basis maps after the caller has admitted finite Cartan data."""
     from fractions import Fraction
     from math import gcd, lcm
 
     from jacobian._exact import CanonicalRational
-    from jacobian.math.groups.root_systems._cartan import positive_symmetrizer
     from jacobian.math.matrices.values import IntegerMatrix
 
-    cartan = _as_cartan(matrix)
     rows = cartan.entries
-    _admit_cartan_finite_type(rows)
+    rank = len(rows)
     rational = positive_symmetrizer(rows)
     denominator: int = 1
     for value in rational:
@@ -74,12 +447,10 @@ def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
     normalized: list[int] = [scaled_value // common for scaled_value in scaled]
     # alpha_j = sum_i A[i,j] omega_i; coroot_j = sum_i A[j,i] omega_i^vee.
     root_to_weight = tuple(
-        tuple(rows[row][column] for column in range(len(rows)))
-        for row in range(len(rows))
+        tuple(rows[row][column] for column in range(rank)) for row in range(rank)
     )
     coroot_to_coweight = tuple(
-        tuple(rows[column][row] for column in range(len(rows)))
-        for row in range(len(rows))
+        tuple(rows[column][row] for column in range(rank)) for row in range(rank)
     )
     return FiniteCartanDatum._from_kernel(
         cartan_matrix=cartan,
@@ -93,6 +464,104 @@ def cartan_datum(matrix: CartanMatrix) -> FiniteCartanDatum:
         coroot_to_coweight=IntegerMatrix(
             row_count=len(rows), column_count=len(rows), entries=coroot_to_coweight
         ),
+    )
+
+
+def _admit_root_poset_work(root_count: int, rank: int) -> None:
+    """Admit all pair comparisons, reduction work, and emitted poset cells."""
+    pair_comparisons = 2 * (root_count * (root_count - 1) // 2) * rank
+    cover_work = root_count**3
+    output_pairs = root_count * (root_count - 1) // 2
+    output_cells = root_count * (rank + 4) + 3 * output_pairs
+    if (
+        not 1 <= root_count <= MAX_ROOT_POSET_ROOTS
+        or pair_comparisons > MAX_ROOT_POSET_PAIR_COMPARISONS
+        or cover_work > MAX_ROOT_POSET_COVER_WORK
+        or output_pairs > MAX_ROOT_POSET_OUTPUT_PAIRS
+        or output_cells > MAX_ROOT_POSET_OUTPUT_CELLS
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="root_system.root_poset_bounds",
+            message=(
+                "the positive-root family and its complete root poset must fit "
+                f"the {MAX_ROOT_POSET_ROOTS}-root admission envelope"
+            ),
+        )
+
+
+def root_poset(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> RootPosetResult:
+    """Return the complete positive-root poset in its Cartan coordinate basis."""
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    roots = enumerate_positive_roots(rows)
+    rank = len(rows)
+    _admit_root_poset_work(len(roots), rank)
+
+    elements = tuple(f"root_{index:02d}" for index in range(len(roots)))
+    strict: set[tuple[str, str]] = set()
+    incomparable_pairs: list[IncomparablePair] = []
+    for left_index, left in enumerate(roots):
+        for right_index in range(left_index + 1, len(roots)):
+            right = roots[right_index]
+            left_below = all(a <= b for a, b in zip(left, right, strict=True))
+            right_below = all(a <= b for a, b in zip(right, left, strict=True))
+            left_label = elements[left_index]
+            right_label = elements[right_index]
+            if left_below:
+                strict.add((left_label, right_label))
+            elif right_below:
+                strict.add((right_label, left_label))
+            else:
+                incomparable_pairs.append(
+                    IncomparablePair(left=left_label, right=right_label)
+                )
+
+    covers = _transitive_reduction(elements, strict)
+    strict_pairs = tuple(
+        OrderedPair(lower=lower, upper=upper) for lower, upper in sorted(strict)
+    )
+    cover_pairs = tuple(
+        OrderedPair(lower=lower, upper=upper) for lower, upper in sorted(covers)
+    )
+    incomparable = tuple(incomparable_pairs)
+    minimal = tuple(
+        element
+        for element in elements
+        if not any(upper == element for _, upper in strict)
+    )
+    maximal = tuple(
+        element
+        for element in elements
+        if not any(lower == element for lower, _ in strict)
+    )
+    ranks = canonical_poset_ranks(elements, covers)
+    digest = finite_poset_digest(
+        elements=elements,
+        strict_order_pairs=strict_pairs,
+        cover_relations=cover_pairs,
+        incomparable_pairs=incomparable,
+        minimal_elements=minimal,
+        maximal_elements=maximal,
+        graded=ranks is not None,
+        ranks=ranks,
+    )
+    poset = FinitePoset(
+        elements=elements,
+        strict_order_pairs=strict_pairs,
+        cover_relations=cover_pairs,
+        incomparable_pairs=incomparable,
+        minimal_elements=minimal,
+        maximal_elements=maximal,
+        graded=ranks is not None,
+        ranks=ranks,
+        poset_digest=digest,
+    )
+    return RootPosetResult._from_kernel(
+        _cartan_datum_from_admitted(cartan), roots, poset
     )
 
 
@@ -282,6 +751,432 @@ def positive_roots(
     return PositiveRootsResult._from_kernel(cartan, all_positive)
 
 
+def positive_root_profile(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> PositiveRootProfileResult:
+    """Return exact heights, supports, and componentwise highest roots.
+
+    Positive roots use the existing canonical lexicographic coordinate order.
+    Each component's highest root is selected as the unique positive root that
+    dominates every positive root of that component in simple-root order.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    # The root closure itself is bounded by the owner's complete-root limit.
+    # This upper bound covers each candidate-vs-root coordinate comparison,
+    # profile construction, all component index lists, and JSON framing.
+    profile_work_bound = MAX_POSITIVE_ROOTS**2 * rank + MAX_POSITIVE_ROOTS * rank
+    output_byte_bound = (
+        4_096
+        + MAX_POSITIVE_ROOTS * (128 + 24 * rank)
+        + rank * (128 + 4 * MAX_POSITIVE_ROOTS + 4 * rank)
+    )
+    if profile_work_bound > MAX_ROOT_PROFILE_WORK or output_byte_bound > (
+        MAX_ROOT_PROFILE_OUTPUT_CELLS
+    ):
+        raise OperationDomainValidationError(
+            location=("matrix",),
+            code="root_system.root_profile_bounds",
+            message="positive-root profile exceeds its admitted work or output envelope",
+        )
+
+    roots = enumerate_positive_roots(rows)
+    components = connected_components(rows)
+    simple_index_to_component = {
+        index: component_index
+        for component_index, indices in enumerate(components)
+        for index in indices
+    }
+    root_supports = tuple(
+        tuple(index for index, coefficient in enumerate(root) if coefficient)
+        for root in roots
+    )
+    root_component_indices: list[int] = []
+    component_root_indices: list[list[int]] = [[] for _ in components]
+    for root_index, support in enumerate(root_supports):
+        component_ids = {simple_index_to_component[index] for index in support}
+        if len(component_ids) != 1:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        component_index = next(iter(component_ids))
+        root_component_indices.append(component_index)
+        component_root_indices[component_index].append(root_index)
+
+    component_profiles: list[PositiveRootComponentProfile] = []
+    for component_index, indices in enumerate(components):
+        root_indices = tuple(component_root_indices[component_index])
+        candidates = tuple(
+            candidate_index
+            for candidate_index in root_indices
+            if all(
+                all(
+                    roots[other_index][coordinate] <= roots[candidate_index][coordinate]
+                    for coordinate in range(rank)
+                )
+                for other_index in root_indices
+            )
+        )
+        if len(candidates) != 1:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        component_profiles.append(
+            PositiveRootComponentProfile(
+                simple_root_indices=indices,
+                positive_root_indices=root_indices,
+                highest_root_index=candidates[0],
+            )
+        )
+
+    root_profiles = tuple(
+        PositiveRootProfileEntry(
+            root_coefficients=root,
+            height=sum(root),
+            support_simple_root_indices=support,
+            component_index=root_component_indices[root_index],
+        )
+        for root_index, (root, support) in enumerate(
+            zip(roots, root_supports, strict=True)
+        )
+    )
+    return PositiveRootProfileResult(
+        datum=_cartan_datum_from_admitted(cartan),
+        positive_roots=root_profiles,
+        components=tuple(component_profiles),
+    )
+
+
+def _admit_weyl_exponent_work(rows: tuple[tuple[int, ...], ...]) -> None:
+    rank = len(rows)
+    work_bound = MAX_POSITIVE_ROOTS * (rank + MAX_RANK * MAX_ROOT_COORDINATE)
+    output_bytes_bound = 4_096 + rank * (128 + 12 * rank)
+    if work_bound > MAX_ROOT_PROFILE_WORK or output_bytes_bound > (
+        MAX_ROOT_PROFILE_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.weyl_exponents_bounds",
+            message="Weyl exponents exceed the admitted work or output envelope",
+        )
+
+
+def _weyl_exponent_data(
+    rows: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[tuple[int, ...], tuple[int, ...]], ...]:
+    """Compute component axes and exponents after finite-type admission."""
+    rank = len(rows)
+    roots = enumerate_positive_roots(rows)
+    components = []
+    for indices in connected_components(rows):
+        component_roots = tuple(
+            root for root in roots if any(root[index] for index in indices)
+        )
+        if any(
+            any(root[index] for index in range(rank) if index not in indices)
+            for root in component_roots
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        max_height = max(sum(root) for root in component_roots)
+        height_counts = [0] * (max_height + 2)
+        for root in component_roots:
+            height_counts[sum(root)] += 1
+        exponent_multiplicities = tuple(
+            height_counts[height] - height_counts[height + 1]
+            for height in range(1, max_height + 1)
+        )
+        exponents = tuple(
+            height
+            for height, multiplicity in enumerate(exponent_multiplicities, start=1)
+            for _ in range(multiplicity)
+        )
+        if len(exponents) != len(indices) or any(
+            multiplicity < 0 for multiplicity in exponent_multiplicities
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        components.append((indices, exponents))
+    return tuple(components)
+
+
+def weyl_exponents(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> WeylExponentsResult:
+    """Return the Weyl exponents, retaining the factorization of the datum.
+
+    For an irreducible finite crystallographic root system, the number of
+    positive roots of height ``k`` equals the number of exponents at least
+    ``k``. Successive differences of these height counts recover the exponent
+    multiset without enumerating Weyl-group elements.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    _admit_weyl_exponent_work(rows)
+    components = tuple(
+        WeylExponentComponent(simple_root_indices=indices, exponents=exponents)
+        for indices, exponents in _weyl_exponent_data(rows)
+    )
+    return WeylExponentsResult(
+        datum=_cartan_datum_from_admitted(cartan), components=tuple(components)
+    )
+
+
+def weyl_poincare_polynomial(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> WeylPoincarePolynomialResult:
+    """Return ``sum_w q^length(w)`` for the finite Weyl group.
+
+    The exact factorization ``product_i [m_i+1]_q`` is computed from the
+    positive-root height distribution, so the operation never enumerates the
+    group. Dense coefficients use the shared descending-degree ``ZZ[q]``
+    polynomial carrier.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    _admit_weyl_exponent_work(rows)
+    degree_bound = MAX_POSITIVE_ROOTS
+    term_bound = degree_bound + 1
+    work_bound = (degree_bound + 1) * (degree_bound + MAX_RANK)
+    output_bytes_bound = 512 + term_bound * (len(str(MAX_WEYL_GROUP_ORDER)) + 4)
+    if (
+        degree_bound >= MAX_POLYNOMIAL_TERMS
+        or work_bound > 50_000
+        or output_bytes_bound > MAX_COXETER_POLYNOMIAL_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.weyl_poincare_bounds",
+            message="Weyl Poincare polynomial exceeds the admitted work or output envelope",
+        )
+
+    component_data = _weyl_exponent_data(rows)
+    exponents = tuple(
+        exponent
+        for _indices, component_exponents in component_data
+        for exponent in component_exponents
+    )
+    polynomial = [1]
+    for exponent in exponents:
+        product = [0] * (len(polynomial) + exponent)
+        for degree, coefficient in enumerate(polynomial):
+            for shift in range(exponent + 1):
+                product[degree + shift] += coefficient
+        polynomial = product
+    if (
+        not exponents
+        or len(polynomial) - 1 != sum(exponents)
+        or any(
+            coefficient <= 0 or coefficient > MAX_WEYL_GROUP_ORDER
+            for coefficient in polynomial
+        )
+    ):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return WeylPoincarePolynomialResult(
+        matrix=cartan,
+        polynomial=IntegerPolynomial(coefficients=tuple(reversed(polynomial))),
+    )
+
+
+def positive_coroots(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> PositiveCorootsResult:
+    """Compute positive coroot coordinates and exact root lengths.
+
+    Coroot coordinates use the simple-coroot basis matching the ordered
+    simple-root basis of the source Cartan datum. If ``D A`` is the exact
+    symmetrized Cartan matrix and ``c`` is a root coordinate vector, then
+    ``(alpha, alpha) = c^T D A c`` and the coefficient of ``alpha_i^vee`` in
+    ``alpha^vee`` is ``2 d_i c_i / (alpha, alpha)``.
+    """
+    datum = cartan_datum(_as_cartan(matrix))
+    return _positive_coroots_from_admitted(datum)
+
+
+def root_length_profile(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+) -> RootLengthProfileResult:
+    """Group positive roots by exact squared length within each factor.
+
+    Each irreducible component uses the existing symmetrizer normalization
+    whose first simple root has squared length 2. Length ratios are local to
+    that component, since independent components have no canonical relative
+    scale.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    # Bound the full root closure, quadratic-form evaluations, grouping, and
+    # largest possible serialization before enumerating roots.
+    work_bound = MAX_POSITIVE_ROOTS * (rank * rank + rank + 4)
+    output_bound = (
+        4_096
+        + MAX_POSITIVE_ROOTS * (128 + 24 * rank)
+        + rank * (128 + 4 * MAX_POSITIVE_ROOTS)
+    )
+    if work_bound > MAX_ROOT_LENGTH_PROFILE_WORK or output_bound > (
+        MAX_ROOT_LENGTH_PROFILE_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.root_length_profile_bounds",
+            message="root-length profile exceeds its admitted work or output envelope",
+        )
+
+    roots = enumerate_positive_roots(rows)
+    symmetrizer = positive_symmetrizer(rows)
+    bilinear = tuple(
+        tuple(symmetrizer[i] * rows[i][j] for j in range(rank)) for i in range(rank)
+    )
+    squared_lengths = {
+        root: sum(
+            (
+                Fraction(root[i]) * bilinear[i][j] * root[j]
+                for i in range(rank)
+                for j in range(rank)
+            ),
+            start=Fraction(0),
+        )
+        for root in roots
+    }
+    components: list[RootLengthComponentProfile] = []
+    for simple_indices in connected_components(rows):
+        component_roots = tuple(
+            root for root in roots if any(root[index] for index in simple_indices)
+        )
+        lengths = sorted({squared_lengths[root] for root in component_roots})
+        if not lengths or len(lengths) > 2:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        short_length = lengths[0]
+        groups = tuple(
+            RootLengthClass(
+                squared_length=CanonicalRational.from_fraction(length),
+                squared_length_ratio_to_short=CanonicalRational.from_fraction(
+                    length / short_length
+                ),
+                roots=tuple(
+                    root for root in component_roots if squared_lengths[root] == length
+                ),
+            )
+            for length in lengths
+        )
+        components.append(
+            RootLengthComponentProfile(
+                simple_root_indices=simple_indices,
+                length_classes=groups,
+            )
+        )
+    return RootLengthProfileResult(
+        datum=_cartan_datum_from_admitted(cartan),
+        positive_roots=roots,
+        components=tuple(components),
+    )
+
+
+def _positive_coroots_from_admitted(
+    datum: FiniteCartanDatum,
+) -> PositiveCorootsResult:
+    """Build coroot data after finite-type admission and datum construction."""
+    rows = datum.cartan_matrix.entries
+    positive = enumerate_positive_roots(rows)
+    symmetrizer = tuple(value.as_fraction() for value in datum.symmetrizer)
+    bilinear = tuple(
+        tuple(symmetrizer[row] * rows[row][column] for column in range(len(rows)))
+        for row in range(len(rows))
+    )
+    pairs = [
+        _positive_root_coroot_pair(root, symmetrizer, bilinear) for root in positive
+    ]
+    return PositiveCorootsResult._from_kernel(datum, tuple(pairs))
+
+
+def _positive_root_coroot_pair(
+    root: tuple[int, ...],
+    symmetrizer: tuple[Fraction, ...],
+    bilinear: tuple[tuple[Fraction, ...], ...],
+) -> RootCorootPair:
+    """Map one known positive root using the datum's exact bilinear form."""
+
+    rank = len(root)
+    squared_length = sum(
+        (
+            Fraction(root[i]) * bilinear[i][j] * root[j]
+            for i in range(rank)
+            for j in range(rank)
+        ),
+        start=Fraction(0),
+    )
+    if squared_length <= 0:
+        raise RuntimeError("finite root has nonpositive squared length")
+    coroot_coordinates = tuple(
+        Fraction(2) * symmetrizer[index] * coefficient / squared_length
+        for index, coefficient in enumerate(root)
+    )
+    if any(value.denominator != 1 or value < 0 for value in coroot_coordinates):
+        raise RuntimeError("finite root produced nonintegral coroot coordinates")
+    return RootCorootPair._from_kernel(
+        root,
+        tuple(int(value) for value in coroot_coordinates),
+        CanonicalRational.from_fraction(squared_length),
+    )
+
+
+def root_to_coroot(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    root_coefficients: tuple[int, ...] | list[int],
+) -> RootToCorootResult:
+    """Convert one positive root to its exact coroot in the same datum."""
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    if (
+        not isinstance(root_coefficients, (tuple, list))
+        or len(root_coefficients) != rank
+        or not any(root_coefficients)
+        or any(
+            type(coefficient) is not int
+            or coefficient < 0
+            or coefficient > MAX_ROOT_COORDINATE
+            for coefficient in root_coefficients
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("root_coefficients",),
+            code="root_system.root_coroot_input_shape",
+            message="input must be a nonzero bounded positive-root vector on the Cartan axis",
+        )
+    root = tuple(root_coefficients)
+    # Root closure has at most 120 candidates at the admitted rank. Bound the
+    # scan and result framing before constructing that family.
+    work_bound = MAX_POSITIVE_ROOTS * rank + rank * rank * rank
+    output_bytes_bound = 256 + 64 * rank
+    if (
+        work_bound > MAX_ROOT_TO_COROOT_WORK
+        or output_bytes_bound > MAX_ROOT_TO_COROOT_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.root_to_coroot_bounds",
+            message="root-to-coroot conversion exceeds its admitted work or output bound",
+        )
+    positive = enumerate_positive_roots(rows)
+    if root not in positive:
+        raise OperationDomainValidationError(
+            location=("root_coefficients",),
+            code="root_system.root_not_positive_root",
+            message="root coefficients must name a positive root of the supplied datum",
+        )
+    datum = _cartan_datum_from_admitted(cartan)
+    symmetrizer = tuple(value.as_fraction() for value in datum.symmetrizer)
+    bilinear = tuple(
+        tuple(symmetrizer[row] * rows[row][column] for column in range(rank))
+        for row in range(rank)
+    )
+    pair = _positive_root_coroot_pair(root, symmetrizer, bilinear)
+    return RootToCorootResult._from_kernel(datum, pair)
+
+
 def _apply_reflection(
     cartan: list[list[int]], vector: list[int], simple_idx: int
 ) -> list[int]:
@@ -412,6 +1307,776 @@ def weyl_element_length(
     )
 
 
+def weyl_element_order(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    word: tuple[int, ...] | list[int],
+) -> WeylElementOrderResult:
+    """Return the exact order of a Weyl word via its faithful signed-root action."""
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    admitted_word = _admit_weyl_word(word, len(rows))
+    rank = len(rows)
+    signed_root_count = MAX_SIGNED_ROOT_ACTION_DEGREE
+    work_bound = (
+        MAX_POSITIVE_ROOTS * rank * rank
+        + signed_root_count * len(admitted_word) * rank
+        + signed_root_count * 4
+    )
+    output_bound = MAX_WEYL_ELEMENT_ORDER_OUTPUT_CELLS
+    if work_bound > MAX_WEYL_ELEMENT_ORDER_WORK or output_bound > (
+        MAX_WEYL_ELEMENT_ORDER_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("word",),
+            code="root_system.weyl_element_order_bounds",
+            message="Weyl element order exceeds its admitted work or output envelope",
+        )
+
+    signed_roots = _signed_roots(rows)
+    root_index = {root: index for index, root in enumerate(signed_roots)}
+    images: list[int] = []
+    for root in signed_roots:
+        image = root
+        for simple_index in admitted_word:
+            image = _simple_reflection_kernel(image, simple_index, rows)
+        image_index = root_index.get(image)
+        if image_index is None:
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+        images.append(image_index)
+
+    if len(set(images)) != len(images):
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    # A Weyl transformation fixing every root fixes the simple-root basis,
+    # hence the action on the complete signed-root set is faithful. Its order
+    # is the lcm of the cycle lengths of this exact permutation.
+    visited = bytearray(len(images))
+    element_order = 1
+    for start in range(len(images)):
+        if visited[start]:
+            continue
+        length = 0
+        index = start
+        while not visited[index]:
+            visited[index] = 1
+            length += 1
+            index = images[index]
+        element_order = lcm(element_order, length)
+    return WeylElementOrderResult._from_kernel(cartan, admitted_word, element_order)
+
+
+def weyl_element_from_word(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    word: tuple[int, ...] | list[int],
+) -> WeylElement:
+    """Construct the canonical root-lattice action represented by a word."""
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    admitted_word = _admit_weyl_word(word, len(rows))
+    rank = len(rows)
+    action = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    for index in admitted_word:
+        reflection = _reflection_matrix(rows, index, transpose=False)
+        action = _integer_matrix_product([list(row) for row in reflection], action)
+    return WeylElement.model_construct(
+        matrix=cartan,
+        root_action=IntegerMatrix(row_count=rank, column_count=rank, entries=action),
+    )
+
+
+def _integer_inverse(
+    matrix: tuple[tuple[int, ...], ...],
+) -> tuple[tuple[int, ...], ...]:
+    """Invert an admitted unimodular integer matrix exactly."""
+    from fractions import Fraction
+
+    rank = len(matrix)
+    work = [
+        [Fraction(value) for value in row]
+        + [Fraction(int(i == j)) for j in range(rank)]
+        for i, row in enumerate(matrix)
+    ]
+    for column in range(rank):
+        pivot = next((row for row in range(column, rank) if work[row][column]), None)
+        if pivot is None:
+            raise OperationDomainValidationError(
+                location=("element", "root_action"),
+                code="root_system.noninvertible_weyl_action",
+                message="a Weyl action matrix must be invertible",
+            )
+        work[column], work[pivot] = work[pivot], work[column]
+        scale = work[column][column]
+        work[column] = [value / scale for value in work[column]]
+        for row in range(rank):
+            if row != column and work[row][column]:
+                scale = work[row][column]
+                work[row] = [
+                    a - scale * b for a, b in zip(work[row], work[column], strict=True)
+                ]
+    inverse = tuple(tuple(value for value in row[rank:]) for row in work)
+    if any(value.denominator != 1 for row in inverse for value in row):
+        raise OperationDomainValidationError(
+            location=("element", "root_action"),
+            code="root_system.nonintegral_weyl_inverse",
+            message="a Weyl action matrix must have an integral inverse",
+        )
+    return tuple(tuple(int(value) for value in row) for row in inverse)
+
+
+def _admit_weyl_element_value(
+    element: WeylElement, location: str = "element"
+) -> tuple[tuple[int, ...], ...]:
+    """Check a caller-supplied action matrix belongs to this finite Weyl group."""
+    from jacobian.math.groups.root_systems._cartan import positive_roots
+
+    rows = element.matrix.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    action = element.root_action.entries
+    if (
+        element.root_action.row_count != rank
+        or element.root_action.column_count != rank
+        or any(abs(value) > MAX_ROOT_COORDINATE for row in action for value in row)
+    ):
+        raise OperationDomainValidationError(
+            location=(location, "root_action"),
+            code="root_system.invalid_weyl_action_shape",
+            message="root action must be a bounded square integer matrix on the Cartan axis",
+        )
+    roots = positive_roots(rows)
+    root_set = set(roots) | {tuple(-value for value in root) for root in roots}
+    for root in roots:
+        image = tuple(
+            sum(action[i][j] * root[j] for j in range(rank)) for i in range(rank)
+        )
+        if image not in root_set:
+            raise OperationDomainValidationError(
+                location=(location, "root_action"),
+                code="root_system.action_not_root_automorphism",
+                message="root action must permute the root system",
+            )
+    # Root-system automorphisms include diagram symmetries. Repeated left
+    # descents must reach identity to establish membership in the Weyl subgroup.
+    reduced = action
+    for _ in range(len(roots) + 1):
+        if reduced == tuple(
+            tuple(int(i == j) for j in range(rank)) for i in range(rank)
+        ):
+            return action
+        inverse = _integer_inverse(reduced)
+        descent = next(
+            (
+                index
+                for index in range(rank)
+                if all(
+                    value <= 0 for value in (inverse[row][index] for row in range(rank))
+                )
+                and any(
+                    value < 0 for value in (inverse[row][index] for row in range(rank))
+                )
+            ),
+            None,
+        )
+        if descent is None:
+            break
+        reflection = _reflection_matrix(rows, descent, transpose=False)
+        reduced = _integer_matrix_product([list(row) for row in reflection], reduced)
+    raise OperationDomainValidationError(
+        location=(location, "root_action"),
+        code="root_system.action_not_weyl_element",
+        message="root action is not generated by the simple reflections",
+    )
+
+
+def weyl_element_compose(first: WeylElement, then: WeylElement) -> WeylElement:
+    """Compose elements in the declared order: apply ``first``, then ``then``."""
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    if first.matrix != then.matrix:
+        raise OperationDomainValidationError(
+            location=("then", "matrix"),
+            code="root_system.weyl_parent_mismatch",
+            message="Weyl elements must use the same ordered Cartan parent",
+        )
+    left = _admit_weyl_element_value(first)
+    right = _admit_weyl_element_value(then)
+    rank = len(left)
+    result = tuple(
+        tuple(sum(right[i][k] * left[k][j] for k in range(rank)) for j in range(rank))
+        for i in range(rank)
+    )
+    return WeylElement.model_construct(
+        matrix=first.matrix,
+        root_action=IntegerMatrix(row_count=rank, column_count=rank, entries=result),
+    )
+
+
+def weyl_element_inverse(element: WeylElement) -> WeylElement:
+    """Return the inverse of an admitted finite Weyl element."""
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    action = _admit_weyl_element_value(element)
+    inverse = _integer_inverse(action)
+    rank = len(action)
+    return WeylElement.model_construct(
+        matrix=element.matrix,
+        root_action=IntegerMatrix(row_count=rank, column_count=rank, entries=inverse),
+    )
+
+
+MAX_BRUHAT_INTERVAL_WORK = 40_000_000
+
+
+def _validated_weyl_element(element: WeylElement, location: str) -> WeylElement:
+    """Revalidate a nested native Weyl value before trusting its claims."""
+    try:
+        # Reject oversized/noncanonical raw nested values before recursive dumping.
+        from jacobian.math.matrices.values import IntegerMatrix
+
+        matrix = element.matrix
+        action = element.root_action
+        if not isinstance(matrix, CartanMatrix) or not isinstance(
+            action, IntegerMatrix
+        ):
+            raise TypeError("non-canonical nested Weyl value")
+        rank = len(matrix.entries)
+        if rank > MAX_RANK or action.row_count != rank or action.column_count != rank:
+            raise ValueError("Weyl endpoint has an invalid bounded shape")
+        if (
+            not isinstance(action.entries, (tuple, list))
+            or len(action.entries) != rank
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) != rank
+                for row in action.entries
+            )
+        ):
+            raise ValueError("Weyl endpoint has an invalid bounded matrix")
+        cartan_matrix = getattr(matrix, "matrix", None)
+        cartan_entries = getattr(cartan_matrix, "entries", None)
+        if (
+            not isinstance(cartan_entries, (tuple, list))
+            or len(cartan_entries) > MAX_RANK
+            or any(
+                not isinstance(row, (tuple, list)) or len(row) > MAX_RANK
+                for row in cartan_entries
+            )
+        ):
+            raise ValueError("Cartan endpoint has an invalid bounded matrix")
+        return WeylElement.model_validate(element.model_dump(mode="python"))
+    except (ValidationError, TypeError, ValueError, AttributeError, KeyError) as error:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code="root_system.invalid_weyl_element",
+            message="endpoint must be a canonical bounded Weyl element value",
+        ) from error
+
+
+def _subword_actions(
+    upper_word: tuple[int, ...],
+    reflections: tuple[tuple[tuple[int, ...], ...], ...],
+    identity: tuple[tuple[int, ...], ...],
+    shortest_lengths: dict[tuple[tuple[int, ...], ...], int],
+) -> set[tuple[tuple[int, ...], ...]]:
+    """Return actions represented by reduced subwords of a fixed reduced word."""
+    rank = len(identity)
+    subwords = {(identity, 0)}
+    for index in upper_word:
+        reflection = reflections[index]
+        subwords |= {
+            (
+                tuple(
+                    tuple(
+                        sum(reflection[i][k] * action[k][j] for k in range(rank))
+                        for j in range(rank)
+                    )
+                    for i in range(rank)
+                ),
+                length + 1,
+            )
+            for action, length in subwords
+        }
+    return {action for action, length in subwords if shortest_lengths[action] == length}
+
+
+def _enumerate_small_weyl_group(
+    rows: tuple[tuple[int, ...], ...], expected_order: int
+) -> tuple[tuple[tuple[tuple[int, ...], ...], tuple[int, ...]], ...]:
+    """Enumerate an admitted small group with one shortest word per action."""
+    rank = len(rows)
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    reflections = tuple(
+        _reflection_matrix(rows, index, transpose=False) for index in range(rank)
+    )
+    words: dict[tuple[tuple[int, ...], ...], tuple[int, ...]] = {identity: ()}
+    pending = [identity]
+    for current in pending:
+        current_word = words[current]
+        for index, reflection in enumerate(reflections):
+            # Appending an index to the applied-left-to-right word prepends
+            # this reflection to its action matrix.
+            image = tuple(
+                tuple(
+                    sum(reflection[i][k] * current[k][j] for k in range(rank))
+                    for j in range(rank)
+                )
+                for i in range(rank)
+            )
+            if image not in words:
+                if len(words) >= expected_order:
+                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                words[image] = (*current_word, index)
+                pending.append(image)
+    if len(words) != expected_order:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return tuple(sorted(words.items()))
+
+
+def weyl_bruhat_interval(
+    lower: WeylElement, upper: WeylElement
+) -> WeylBruhatIntervalResult:
+    """Return the complete strong Bruhat interval between two Weyl elements.
+
+    The subword characterization of Bruhat order is applied to shortest words
+    from an admitted complete enumeration of the small ambient group. An
+    incomparable endpoint pair yields the empty interval; equal endpoints
+    yield a singleton.
+    """
+    from jacobian.math.matrices.values import IntegerMatrix
+
+    lower_value = _validated_weyl_element(lower, "lower")
+    upper_value = _validated_weyl_element(upper, "upper")
+    cartan = _as_cartan(lower_value.matrix)
+    upper_cartan = _as_cartan(upper_value.matrix)
+    if cartan != upper_cartan:
+        raise OperationDomainValidationError(
+            location=("upper", "matrix"),
+            code="root_system.weyl_parent_mismatch",
+            message="Bruhat endpoints must use the same ordered Cartan parent",
+        )
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+
+    # Exponents determine the ambient group order before any group-element
+    # enumeration. Root expansion here is bounded by the finite-type contract.
+    _admit_weyl_exponent_work(rows)
+    exponent_components = _weyl_exponent_data(rows)
+    group_order = prod(
+        exponent + 1
+        for _indices, exponents in exponent_components
+        for exponent in exponents
+    )
+    positive_root_count = sum(
+        exponent
+        for _indices, exponents in exponent_components
+        for exponent in exponents
+    )
+    if not 1 <= group_order <= MAX_BRUHAT_INTERVAL_GROUP_ORDER:
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.bruhat_interval_group_bound",
+            message=(
+                "complete Bruhat intervals are admitted only when the ambient "
+                f"Weyl group has order at most {MAX_BRUHAT_INTERVAL_GROUP_ORDER}"
+            ),
+        )
+
+    rank = len(rows)
+    work_bound = (
+        group_order * rank**4
+        + group_order**2 * positive_root_count**2 * rank**3
+        + 2 * positive_root_count * rank**3
+        + group_order**2
+        + group_order**3
+    )
+    output_bound = 1_024 + group_order * (rank * rank * 20 + 256) + group_order**2 * 32
+    if (
+        group_order > MAX_BRUHAT_INTERVAL_ELEMENTS
+        or work_bound > MAX_BRUHAT_INTERVAL_WORK
+        or output_bound > MAX_BRUHAT_INTERVAL_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("matrix",),
+            code="root_system.bruhat_interval_bounds",
+            message="complete Weyl-group enumeration or interval output exceeds its admitted bound",
+        )
+
+    lower_action = _admit_weyl_element_value(lower_value, "lower")
+    upper_action = _admit_weyl_element_value(upper_value, "upper")
+    group = _enumerate_small_weyl_group(rows, group_order)
+    words = dict(group)
+    if lower_action not in words or upper_action not in words:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    lower_word = words[lower_action]
+    reflections = tuple(
+        _reflection_matrix(rows, index, transpose=False) for index in range(rank)
+    )
+    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
+    word_lengths = {action: len(word) for action, word in group}
+    below = {
+        action: _subword_actions(word, reflections, identity, word_lengths)
+        for action, word in group
+    }
+    actions = tuple(
+        sorted(
+            action
+            for action, _word in group
+            if lower_action in below[action] and action in below[upper_action]
+        )
+    )
+    if len(actions) > MAX_BRUHAT_INTERVAL_ELEMENTS:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    labels = tuple(f"w{index:03d}" for index in range(len(actions)))
+    label_for = dict(zip(actions, labels, strict=True))
+    strict = {
+        (label_for[first], label_for[second])
+        for first in actions
+        for second in actions
+        if len(words[first]) < len(words[second]) and first in below[second]
+    }
+    cover_pairs = _transitive_reduction(labels, strict)
+    incomparable = {
+        (labels[i], labels[j])
+        for i in range(len(labels))
+        for j in range(i + 1, len(labels))
+        if (labels[i], labels[j]) not in strict and (labels[j], labels[i]) not in strict
+    }
+    minimal = tuple(
+        label for label in labels if not any(hi == label for _lo, hi in strict)
+    )
+    maximal = tuple(
+        label for label in labels if not any(lo == label for lo, _hi in strict)
+    )
+    ranks = tuple(
+        ElementRank(element=label, rank=len(words[action]) - len(lower_word))
+        for label, action in zip(labels, actions, strict=True)
+    )
+    strict_pairs = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted(strict))
+    covers = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted(cover_pairs))
+    incomparables = tuple(
+        IncomparablePair(left=lo, right=hi) for lo, hi in sorted(incomparable)
+    )
+    poset = FinitePoset(
+        elements=labels,
+        strict_order_pairs=strict_pairs,
+        cover_relations=covers,
+        incomparable_pairs=incomparables,
+        minimal_elements=minimal,
+        maximal_elements=maximal,
+        graded=True,
+        ranks=ranks,
+        poset_digest=finite_poset_digest(
+            elements=labels,
+            strict_order_pairs=strict_pairs,
+            cover_relations=covers,
+            incomparable_pairs=incomparables,
+            minimal_elements=minimal,
+            maximal_elements=maximal,
+            graded=True,
+            ranks=ranks,
+        ),
+    )
+    elements = tuple(
+        WeylElement.model_construct(
+            matrix=cartan,
+            root_action=IntegerMatrix(
+                row_count=rank, column_count=rank, entries=action
+            ),
+        )
+        for action in actions
+    )
+    return WeylBruhatIntervalResult(
+        matrix=cartan,
+        lower=lower_value,
+        upper=upper_value,
+        elements=elements,
+        poset=poset,
+    )
+
+
+def weyl_word_act_on_root_vector(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    word: tuple[int, ...] | list[int],
+    vector: tuple[int, ...] | list[int],
+) -> WeylVectorActionResult:
+    """Apply a bounded simple-reflection word to a root-lattice vector.
+
+    Words are applied left to right, matching ``weyl_element_length``. In
+    every finite crystallographic system admitted here, each simple root is
+    sent to a root whose simple-root coefficients have absolute value at most
+    six (the E8 maximum). Thus every prefix image has coordinates bounded by
+    ``6 * rank * max(abs(vector))``. This conservative result bound is checked
+    before applying any reflection.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    admitted_word = _admit_weyl_word(word, rank)
+    if isinstance(vector, list):
+        vector = tuple(vector)
+    if (
+        not isinstance(vector, tuple)
+        or len(vector) != rank
+        or any(
+            type(coordinate) is not int
+            or abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+            for coordinate in vector
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="root_system.invalid_root_vector",
+            message=(
+                "vector must have one representable integer coordinate per simple root"
+            ),
+        )
+    if not admitted_word:
+        return WeylVectorActionResult._from_kernel(
+            cartan, admitted_word, vector, vector
+        )
+    max_coordinate = max(map(abs, vector), default=0)
+    result_bound = MAX_ROOT_COORDINATE * rank * max_coordinate
+    if result_bound > MAX_REFLECTION_REPRESENTABLE:
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="root_system.weyl_vector_output_bound",
+            message=(
+                "the root-lattice image is not guaranteed to fit the "
+                "interoperable coordinate bound"
+            ),
+        )
+    image = list(vector)
+    cartan_rows = [list(row) for row in rows]
+    for simple_index in admitted_word:
+        image = _apply_reflection(cartan_rows, image, simple_index)
+    return WeylVectorActionResult._from_kernel(
+        cartan, admitted_word, vector, tuple(image)
+    )
+
+
+def _weight_reflect(
+    weight: tuple[int, ...], index: int, rows: tuple[tuple[int, ...], ...]
+) -> tuple[int, ...]:
+    """Apply s_i in fundamental-weight coordinates."""
+    pairing = weight[index]
+    return tuple(
+        weight[target] - pairing * rows[target][index] for target in range(len(rows))
+    )
+
+
+def _fraction_inverse(
+    matrix: tuple[tuple[Fraction, ...], ...],
+) -> tuple[tuple[Fraction, ...], ...]:
+    """Invert a small nonsingular rational matrix by exact elimination."""
+    size = len(matrix)
+    work = [
+        list(row) + [Fraction(int(i == j)) for j in range(size)]
+        for i, row in enumerate(matrix)
+    ]
+    for column in range(size):
+        pivot = next((row for row in range(column, size) if work[row][column]), None)
+        if pivot is None:
+            raise RuntimeError("finite weight Gram matrix is singular")
+        work[column], work[pivot] = work[pivot], work[column]
+        scale = work[column][column]
+        work[column] = [value / scale for value in work[column]]
+        for row in range(size):
+            if row == column:
+                continue
+            scale = work[row][column]
+            if scale:
+                work[row] = [
+                    left - scale * right
+                    for left, right in zip(work[row], work[column], strict=True)
+                ]
+    return tuple(tuple(row[size:]) for row in work)
+
+
+def _weight_coordinate_bounds(
+    rows: tuple[tuple[int, ...], ...], weight: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Bound every Weyl image coordinate using its invariant exact norm."""
+    rank = len(rows)
+    symmetrizer = positive_symmetrizer(rows)
+    inverse_cartan = _fraction_inverse(
+        tuple(tuple(Fraction(value) for value in row) for row in rows)
+    )
+    # In fundamental-weight coordinates G = A^{-T} D; this is the exact
+    # invariant positive-definite inner product induced by the root form D A.
+    gram = tuple(
+        tuple(
+            inverse_cartan[column][row] * symmetrizer[column] for column in range(rank)
+        )
+        for row in range(rank)
+    )
+    inverse_gram = _fraction_inverse(gram)
+    norm_squared = sum(
+        Fraction(weight[row]) * gram[row][column] * weight[column]
+        for row in range(rank)
+        for column in range(rank)
+    )
+    limit_squared = MAX_REFLECTION_REPRESENTABLE**2
+    bounds: list[int] = []
+    for index in range(rank):
+        coordinate_bound_squared = norm_squared * inverse_gram[index][index]
+        if coordinate_bound_squared > limit_squared:
+            raise OperationDomainValidationError(
+                location=("weight",),
+                code="root_system.weight_orbit_coordinate_bound",
+                message="some Weyl image coordinate may exceed the interoperable integer bound",
+            )
+        # floor(sqrt(p/q)) using integer arithmetic only.
+        numerator = coordinate_bound_squared.numerator
+        denominator = coordinate_bound_squared.denominator
+        bound = isqrt(numerator // denominator)
+        bounds.append(bound)
+    return tuple(bounds)
+
+
+def _dominant_weight(
+    rows: tuple[tuple[int, ...], ...], weight: tuple[int, ...]
+) -> tuple[int, ...]:
+    """Reflect a weight into the closed dominant chamber under a fixed cap."""
+    dominant = weight
+    normalization_steps = 0
+    while True:
+        negative = next(
+            (index for index, value in enumerate(dominant) if value < 0), None
+        )
+        if negative is None:
+            return dominant
+        if normalization_steps >= MAX_WEIGHT_ORBIT_SIZE:
+            raise OperationDomainValidationError(
+                location=("weight",),
+                code="root_system.weight_orbit_size_bound",
+                message=f"the complete weight orbit exceeds {MAX_WEIGHT_ORBIT_SIZE} values",
+            )
+        dominant = _weight_reflect(dominant, negative, rows)
+        normalization_steps += 1
+
+
+def _stabilizer_order(
+    rows: tuple[tuple[int, ...], ...], dominant: tuple[int, ...]
+) -> int:
+    """Return the Weyl order of the zero-pairing parabolic subgroup."""
+    indices = tuple(index for index, value in enumerate(dominant) if value == 0)
+    if not indices:
+        return 1
+    parabolic = tuple(tuple(rows[row][column] for column in indices) for row in indices)
+    return _weyl_group_order(parabolic)
+
+
+def _enumerate_weight_orbit(
+    rows: tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...],
+    coordinate_bounds: tuple[int, ...],
+    expected_size: int,
+) -> tuple[tuple[int, ...], ...]:
+    """Enumerate all weight images after exact size and coordinate admission."""
+    rank = len(rows)
+    seen = {weight}
+    pending = [weight]
+    for current in pending:
+        for index in range(rank):
+            image = _weight_reflect(current, index, rows)
+            if any(
+                abs(value) > coordinate_bounds[coordinate_index]
+                for coordinate_index, value in enumerate(image)
+            ):
+                raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+            if image not in seen:
+                seen.add(image)
+                if len(seen) > expected_size:
+                    raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+                pending.append(image)
+    if len(seen) != expected_size:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return tuple(sorted(seen))
+
+
+def weyl_weight_orbit(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    weight: tuple[int, ...] | list[int],
+) -> WeylWeightOrbitResult:
+    """Return a complete finite Weyl orbit in fundamental-weight coordinates.
+
+    The fundamental-weight coordinates are the pairings with the ordered
+    simple coroots. Exact norm and orbit-stabilizer bounds are computed before
+    orbit expansion; at most ``MAX_WEIGHT_ORBIT_SIZE`` values are admitted.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    rank = len(rows)
+    if isinstance(weight, list):
+        weight = tuple(weight)
+    if (
+        not isinstance(weight, tuple)
+        or len(weight) != rank
+        or any(
+            type(coordinate) is not int
+            or abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+            for coordinate in weight
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.invalid_integral_weight",
+            message="weight must have one bounded integer fundamental-weight coordinate per simple coroot",
+        )
+
+    # The norm gives a representation-safe coordinate bound for every orbit
+    # element before any reflection or output construction.
+    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
+    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.weight_orbit_coordinate_bound",
+            message="some Weyl image coordinate may exceed the interoperable integer bound",
+        )
+
+    group_order = _weyl_group_order(rows)
+    if not 1 <= group_order <= MAX_WEYL_GROUP_ORDER:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+
+    # Move to the dominant chamber using strictly increasing pairing with
+    # rho^vee. The finite 4096-step cap is admitted before this normalization;
+    # exceeding it proves the orbit itself cannot fit the public orbit cap.
+    dominant = _dominant_weight(rows, weight)
+
+    # For dominant lambda, its stabilizer is the parabolic subgroup generated
+    # by the zero simple-coroot pairings. Orbit-stabilizer gives the exact
+    # cardinality before enumeration.
+    stabilizer_order = _stabilizer_order(rows, dominant)
+    if group_order % stabilizer_order:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    orbit_size = group_order // stabilizer_order
+    if not 1 <= orbit_size <= MAX_WEIGHT_ORBIT_SIZE:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.weight_orbit_size_bound",
+            message=f"the complete weight orbit has {orbit_size} values; maximum is {MAX_WEIGHT_ORBIT_SIZE}",
+        )
+    # Each value stores rank bounded safe integers, whose decimal form has a
+    # fixed digit width, so the admitted output digit volume precedes the BFS.
+    coordinate_digit_bound = 18
+    max_output_digits = (orbit_size + 1) * rank * coordinate_digit_bound
+    if max_output_digits > MAX_WEIGHT_ORBIT_OUTPUT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("weight",),
+            code="root_system.weight_orbit_output_bound",
+            message="the complete weight orbit exceeds the admitted output size",
+        )
+
+    orbit = _enumerate_weight_orbit(rows, weight, coordinate_bounds, orbit_size)
+    return WeylWeightOrbitResult._from_kernel(cartan, weight, orbit)
+
+
 def weyl_element_descents(
     matrix: CartanMatrix | tuple[tuple[int, ...], ...],
     word: tuple[int, ...] | list[int],
@@ -464,6 +2129,69 @@ def weyl_group_order(
     rows = cartan.entries
     _admit_cartan_finite_type(rows)
     return WeylGroupOrderResult._from_kernel(cartan, _weyl_group_order(rows))
+
+
+def weyl_parabolic(
+    matrix: CartanMatrix | tuple[tuple[int, ...], ...],
+    simple_root_indices: tuple[int, ...] | list[int],
+) -> WeylParabolicResult:
+    """Return standard-parabolic data embedded in the parent Cartan datum.
+
+    The subgroup is generated by the selected simple reflections. Its order is
+    the product of ``m + 1`` over the exponents of the induced principal
+    Cartan submatrix, with the empty subset representing the trivial group.
+    """
+    cartan = _as_cartan(matrix)
+    rows = cartan.entries
+    _admit_cartan_finite_type(rows)
+    if isinstance(simple_root_indices, list):
+        simple_root_indices = tuple(simple_root_indices)
+    rank = len(rows)
+    if (
+        not isinstance(simple_root_indices, tuple)
+        or len(simple_root_indices) > rank
+        or any(
+            type(index) is not int or not 0 <= index < rank
+            for index in simple_root_indices
+        )
+        or tuple(sorted(set(simple_root_indices))) != simple_root_indices
+    ):
+        raise OperationDomainValidationError(
+            location=("simple_root_indices",),
+            code="root_system.parabolic_simple_indices",
+            message="simple_root_indices must be a strictly increasing subset of the Cartan axis",
+        )
+
+    parabolic = tuple(
+        tuple(rows[row][column] for column in simple_root_indices)
+        for row in simple_root_indices
+    )
+    output_bytes_bound = 256 + len(simple_root_indices) ** 2 * 12
+    if output_bytes_bound > 4_096:
+        raise OperationResourceAdmissionError(
+            location=("simple_root_indices",),
+            code="root_system.parabolic_output_bounds",
+            message="standard parabolic data exceed the admitted output envelope",
+        )
+    if parabolic:
+        _admit_cartan_finite_type(parabolic)
+        _admit_weyl_exponent_work(parabolic)
+        component_data = _weyl_exponent_data(parabolic)
+        group_order = prod(
+            exponent + 1
+            for _indices, exponents in component_data
+            for exponent in exponents
+        )
+    else:
+        group_order = 1
+    if not 1 <= group_order <= MAX_WEYL_GROUP_ORDER:
+        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
+    return WeylParabolicResult(
+        matrix=cartan,
+        simple_root_indices=simple_root_indices,
+        parabolic_cartan_matrix=parabolic,
+        group_order=group_order,
+    )
 
 
 def _reflection_matrix(
@@ -566,12 +2294,21 @@ def simple_reflections(
 
 __all__ = [
     "cartan_matrix_from_type",
+    "coroot_lattice_vector",
+    "coroot_to_coweight_lattice",
+    "coweight_lattice_vector",
+    "positive_coroots",
+    "positive_root_profile",
     "positive_roots",
+    "root_lattice_vector",
     "root_system_data",
+    "root_to_weight_lattice",
     "simple_reflection",
     "simple_reflections",
+    "weight_lattice_vector",
     "weyl_element_descents",
     "weyl_element_length",
     "weyl_group_order",
     "weyl_longest_element",
+    "weyl_word_act_on_root_vector",
 ]

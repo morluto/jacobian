@@ -68,7 +68,10 @@ def test_smooth_branch_returns_validated_canonical_source_for_native_input() -> 
     assert isinstance(result.source.coefficients, tuple)
     assert result.source == canonical
     assert result.source.coefficients[0].series is not None
-    assert result.source.coefficients[0].series.coefficients == (_rational(-2), _rational(-17))
+    assert result.source.coefficients[0].series.coefficients == (
+        _rational(-2),
+        _rational(-17),
+    )
 
 
 def test_smooth_branch_revalidates_native_root_before_arithmetic() -> None:

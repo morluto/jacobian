@@ -98,6 +98,32 @@ def test_puiseux_residue_rejects_windows_that_do_not_determine_minus_one() -> No
         residue_puiseux(source)
 
 
+def test_native_admission_rejects_incomplete_and_malformed_windows() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        add_puiseux(TruncatedPuiseuxWindow.model_construct(), window(()))
+    forged = TruncatedPuiseuxWindow.model_construct(
+        variable="t",
+        center=q(0),
+        valuation_lower=q(0),
+        precision=q(1),
+        ramification_index=1,
+        terms=[],
+    )
+    with pytest.raises(OperationDomainValidationError):
+        add_puiseux(forged, window(()))
+
+
+def test_sum_and_unit_product_preserve_maximal_admitted_coefficient() -> None:
+    coefficient = 10**4096 - 1
+    source = window(((Fraction(0), coefficient),), precision=Fraction(1))
+    empty = window((), precision=Fraction(1))
+    unit = window(((Fraction(0), 1),), precision=Fraction(1))
+
+    assert coefficients(add_puiseux(source, empty))[Fraction(0)] == coefficient
+    assert coefficients(subtract_puiseux(source, source)) == {}
+    assert coefficients(multiply_puiseux(source, unit))[Fraction(0)] == coefficient
+
+
 def test_add_combines_different_ramification_lattices_exactly() -> None:
     half = window(((Fraction(1, 2), 2),))
     third = window(((Fraction(1, 3), 5),))

@@ -55,6 +55,10 @@ def test_edge_partition_operations_share_first_page(query: str) -> None:
             "verify an edge clique partition covers every graph edge exactly once",
             _CHECK,
         ),
+        (
+            "check supplied edge clique partition certificate",
+            _CHECK,
+        ),
         ("check a graph vertex coloring chromatic number certificate", _COLORING),
         (
             "check vertex chromatic number using nonnegative fractional clique "

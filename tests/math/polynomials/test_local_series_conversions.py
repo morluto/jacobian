@@ -105,6 +105,9 @@ def test_conversion_requires_origin_parent_and_power_series_envelopes() -> None:
     with pytest.raises(OperationResourceAdmissionError):
         from_power_series(too_wide)
 
+    with pytest.raises(OperationDomainValidationError):
+        from_power_series(TruncatedSeries.model_construct())
+
 
 def test_conversion_operations_are_published_and_examples_execute() -> None:
     operations = {

@@ -133,8 +133,10 @@ class ModularFormEqualityRequest(StrictModel):
 
 
 class ModularFormEqualityResult(StrictModel):
-    """Exact equality result for two represented modular forms."""
+    """Exact equality decision bound to its two represented operands."""
 
+    left: ModularFormCoordinates
+    right: ModularFormCoordinates
     equal: StrictBool
 
 

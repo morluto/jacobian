@@ -139,6 +139,13 @@ class TestSubsequentialIdentityOperation:
             "finite_state_transducer.identity_alphabet_bound_exceeded"
         )
 
+    def test_identity_rejects_lone_surrogate_with_operation_error(self) -> None:
+        with pytest.raises(OperationDomainValidationError) as error:
+            identity_transducer(1, alphabet_id="\ud800")
+        assert error.value.errors()[0]["type"] == (
+            "finite_state_transducer.alphabet_id_not_unicode_scalar"
+        )
+
 
 class TestWordMorphismTransducerConversion:
     def test_conversion_matches_independent_morphism_evaluator(self) -> None:

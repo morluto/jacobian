@@ -6,6 +6,8 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal, cast
 
+from pydantic_core import PydanticCustomError
+
 from jacobian._execution import BackendFailureReason, OperationBackendError
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
@@ -428,7 +430,14 @@ def identity_transducer(
                 "alphabet",
             )
     if alphabet_id is not None and type(alphabet_id) is str:
-        _reject_lone_surrogate_symbol(alphabet_id)
+        try:
+            _reject_lone_surrogate_symbol(alphabet_id)
+        except PydanticCustomError as exc:
+            _reject(
+                "alphabet_id_not_unicode_scalar",
+                str(exc),
+                "alphabet_id",
+            )
     if alphabet_id is not None and (
         type(alphabet_id) is not str or len(alphabet_id) > MAX_FST_ALPHABET_ID_LENGTH
     ):

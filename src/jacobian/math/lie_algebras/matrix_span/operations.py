@@ -35,6 +35,41 @@ def _require_qq_matrix_domains(matrices: tuple[RationalMatrix, ...]) -> None:
         )
 
 
+def _shared_denominator_growth(
+    matrices: tuple[RationalMatrix, ...],
+) -> tuple[int, int, bool]:
+    """Bound the integer basis obtained by clearing the shared denominator."""
+    entries = tuple(
+        entry for matrix in matrices for row in matrix.entries for entry in row
+    )
+    common_denominator = 1
+    for entry in entries:
+        common_denominator = (
+            common_denominator // gcd(common_denominator, entry.den) * entry.den
+        )
+
+    def numerator_digits(entry) -> int:
+        factor = common_denominator // entry.den
+        numerator = abs(entry.num)
+        if numerator == 0:
+            return 1
+        if numerator == 1:
+            return decimal_digit_width(factor)
+        if factor == 1:
+            return decimal_digit_width(numerator)
+        return decimal_digit_width(numerator) + decimal_digit_width(factor)
+
+    only_unit_entries = all(
+        entry.num == 0 or (abs(entry.num) == 1 and common_denominator // entry.den == 1)
+        for entry in entries
+    )
+    return (
+        decimal_digit_width(common_denominator),
+        max((numerator_digits(entry) for entry in entries), default=1),
+        only_unit_entries,
+    )
+
+
 def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
     if not isinstance(request, LieMatrixSpanRequest):
         raise OperationDomainValidationError(
@@ -122,12 +157,6 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
     )
     input_numerator_digits = decimal_digit_width(max_numerator)
     input_denominator_digits = decimal_digit_width(max_denominator)
-    # Treat unit factors as zero growth; any non-unit factor can carry across a
-    # decimal boundary, including one-digit factors such as 7 and 8.
-    input_numerator_growth = (
-        0 if max_numerator <= 1 else input_numerator_digits
-    )
-    input_denominator_growth = 0 if max_denominator == 1 else input_denominator_digits
     input_digits = max(input_numerator_digits, input_denominator_digits)
     if input_digits > 64:
         raise OperationResourceAdmissionError(
@@ -135,6 +164,16 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             code="lie_algebra.matrix_span_input_height",
             message="input matrix entries are limited to 64 decimal digits",
         )
+    # Clear the common denominator of the basis before bounding determinants.
+    # Using each entry's denominator independently charges the same shared
+    # factor once per product and can reject tiny rational copies of sl2.
+    (
+        common_denominator_digits,
+        input_numerator_growth,
+        only_unit_entries,
+    ) = _shared_denominator_growth(matrices)
+    input_numerator_growth = 0 if only_unit_entries else input_numerator_growth
+    input_denominator_growth = 0
     pairs = dimension * (dimension - 1) // 2
     # Bound rational products and sums before matrix expansion. Each
     # commutator entry sums 2*order products; unrelated product denominators
@@ -188,7 +227,7 @@ def _admit(request: LieMatrixSpanRequest) -> tuple[int, int, int]:
             replacement_numerator_digits + determinant_denominator_digits,
             replacement_denominator_digits + determinant_numerator_digits,
         )
-        + 1
+        + common_denominator_digits
         if pairs
         else 1
     )

@@ -72,6 +72,26 @@ def test_sl2_matrix_span_constructs_induced_bracket_and_roundtrips() -> None:
     assert LieMatrixSpanRealization.model_validate(result.model_dump()) == result
 
 
+def test_shared_basis_denominator_is_cleared_before_growth_admission() -> None:
+    matrices = tuple(
+        RationalMatrix(
+            entries=tuple(
+                tuple(
+                    CanonicalRational.from_fraction(Fraction(value, 2))
+                    for value in row
+                )
+                for row in matrix
+            )
+        )
+        for matrix in (E, F, H)
+    )
+    result = lie_algebra_from_matrix_span(LieMatrixSpanRequest(matrices=matrices))
+
+    assert [
+        item.coefficient.as_fraction() for item in result.algebra.structure_constants
+    ] == [Fraction(1, 2), Fraction(-1), Fraction(1)]
+
+
 def test_standard_m2_matrix_units_fit_the_four_dimensional_boundary() -> None:
     units = (
         ((1, 0), (0, 0)),

@@ -37,7 +37,7 @@ class MonomialBettiKernelResult:
     lattice_homology: tuple[LcmLatticeHomologyData, ...]
     multigraded_betti: tuple[MultigradedBettiData, ...]
     graded_betti: tuple[GradedBettiData, ...]
-    regularity: int
+    regularity: int | None
     has_linear_resolution: bool
 
 
@@ -114,6 +114,16 @@ def compute_monomial_betti_kernel(
 ) -> MonomialBettiKernelResult:
     """Compute one complete source-bound Betti profile without replay."""
 
+    if len(ideal.generators) == 1 and not ideal.generators[0].polynomial.terms:
+        # The zero ideal is the zero QQ[x]-module: its free resolution has no
+        # terms, hence its Betti profiles are empty and its regularity undefined.
+        return MonomialBettiKernelResult(
+            lattice_homology=(),
+            multigraded_betti=(),
+            graded_betti=(),
+            regularity=None,
+            has_linear_resolution=False,
+        )
     generators = tuple(
         generator.polynomial.terms[0].exponents for generator in ideal.generators
     )

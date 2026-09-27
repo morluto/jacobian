@@ -48,7 +48,6 @@ from jacobian.math.topology.simplicial_sets.product_models import (
 )
 from jacobian.math.topology.simplicial_sets.quotient import simplicial_set_quotient
 from jacobian.math.topology.simplicial_sets.quotient_models import (
-    SimplicialSetQuotientRequest,
     SimplicialSetQuotientResult,
 )
 from jacobian.math.topology.simplicial_sets.standard import (
@@ -71,7 +70,6 @@ __all__ = [
     "SimplicialMapImageResult",
     "SimplicialSetCoproductResult",
     "SimplicialSetProductResult",
-    "SimplicialSetQuotientRequest",
     "SimplicialSetQuotientResult",
     "SimplicialSetTablesResult",
     "SimplicialSubsetPrefix",

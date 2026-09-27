@@ -118,6 +118,15 @@ def test_request_rejects_boolean_degree() -> None:
         SimplicialSetSkeletonRequest(simplicial_set=standard_simplex(0, 0), k=True)
 
 
+def test_native_admission_rejects_boolean_simplex_summary() -> None:
+    source = standard_simplex(0, 0).model_copy(update={"total_simplices": True})
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        simplicial_set_skeleton(source, 0)
+
+    assert error.value.errors()[0]["loc"] == ("simplicial_set", "total_simplices")
+
+
 def test_skeleton_is_published_in_the_immutable_operation_manifest() -> None:
     tool = next(
         item

@@ -134,7 +134,11 @@ def simplicial_set_skeleton(
         source.face_maps,
         source.degeneracy_maps,
     )
-    if source.total_simplices != sum(sizes):
+    admitted_total = sum(sizes)
+    if (
+        type(source.total_simplices) is not int
+        or source.total_simplices != admitted_total
+    ):
         raise OperationDomainValidationError(
             location=("simplicial_set", "total_simplices"),
             code="simplicial_set.total_simplex_count_mismatch",

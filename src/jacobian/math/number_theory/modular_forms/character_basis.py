@@ -850,9 +850,7 @@ def _admit_general_character_coordinates(
     if type(form) is not ModularFormCoordinates:
         _domain("U_p requires canonical modular-form coordinates")
     try:
-        form = ModularFormCoordinates.model_validate(
-            form.model_dump(warnings=False)
-        )
+        form = ModularFormCoordinates.model_validate(form.model_dump(warnings=False))
     except (AttributeError, TypeError, ValueError) as error:
         raise OperationDomainValidationError(
             location=("form",),
@@ -957,9 +955,7 @@ def modular_character_coordinates_u_prime(
     # valid products, while the linear result estimate alone misses a kernel
     # refusal after basis expansion.
     degree = field.degree
-    product_digits = (
-        product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
-    )
+    product_digits = product_operand_digits * (2 * degree + 2) + len(str(degree)) + 2
     # The finite U_p matrices have integer power-basis coordinates. For
     # Phi_6(x)=x^2-x+1, multiplication by (b0,b1) has coefficient bounds
     # [[|b0|, |b1|], [|b1|, |b0|+|b1|]], so each input scalar contributes at
@@ -979,9 +975,7 @@ def modular_character_coordinates_u_prime(
         if input_scalar_count
         else 1
     )
-    addition_digits = (
-        accumulated_digits * (2 * degree + 2) + len(str(degree)) + 2
-    )
+    addition_digits = accumulated_digits * (2 * degree + 2) + len(str(degree)) + 2
     if (
         product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or addition_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS

@@ -146,9 +146,7 @@ def test_u_prime_matches_independent_q_prefix_action_and_target_coordinates(
         assert result.space == space
         assert result.basis_id == _GENERIC_BASIS
         assert (
-            TypeAdapter(ModularFormCoordinates).validate_json(
-                result.model_dump_json()
-            )
+            TypeAdapter(ModularFormCoordinates).validate_json(result.model_dump_json())
             == result
         )
         result_columns.append(tuple(_numerators(value) for value in result.coordinates))
@@ -199,9 +197,7 @@ def test_u_prime_accepts_seven_digit_coordinate_without_compounding_growth() -> 
             {"num": 0, "den": 1},
         ),
     )
-    form = form.model_copy(
-        update={"coordinates": (large_scalar, _zero(_FIELD))}
-    )
+    form = form.model_copy(update={"coordinates": (large_scalar, _zero(_FIELD))})
 
     result = modular_character_coordinates_u_prime(form, 2)
 

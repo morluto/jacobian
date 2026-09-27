@@ -5,7 +5,10 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.dispatch import parse_operation_input
 from jacobian.math.polynomials.tropical._models import (
     PolynomialSubstituteRequest,
@@ -14,6 +17,7 @@ from jacobian.math.polynomials.tropical._tools import (
     TOOLS,
     compute_polynomial_substitute,
 )
+from jacobian.math.polynomials.tropical.operations import tropical_polynomial_substitute
 from jacobian.math.polynomials.tropical.values import (
     TropicalPolynomial,
     TropicalPolynomialTerm,
@@ -48,6 +52,35 @@ def _polynomial(
             for exponents, coefficient in terms
         ),
     )
+
+
+def test_native_substitution_rejects_forged_semiring_parent() -> None:
+    source = _polynomial(("x",), (((1,), 1),))
+    forged = source.semiring.model_copy(update={"convention": "BOGUS"})
+    source = source.model_copy(update={"semiring": forged})
+    image = _polynomial(("t",), (((1,), 2),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        tropical_polynomial_substitute(source, ("t",), (image,))
+    assert "declared convention and base" in str(error.value)
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"exponents": [1]},
+        {"coefficient": object()},
+    ],
+)
+def test_native_substitution_rejects_forged_term_fields(
+    updates: dict[str, object],
+) -> None:
+    source = _polynomial(("x",), (((1,), 1),))
+    forged_term = source.terms[0].model_copy(update=updates)
+    source = source.model_copy(update={"terms": (forged_term,)})
+    image = _polynomial(("t",), (((1,), 2),))
+    with pytest.raises(OperationDomainValidationError) as error:
+        tropical_polynomial_substitute(source, ("t",), (image,))
+    assert error.value.errors()[0]["type"] == "tropical.polynomial_shape"
 
 
 def _direct_oracle(
@@ -192,6 +225,71 @@ def test_constant_polynomial_can_change_target_axis_without_images() -> None:
     )
 
 
+def test_annihilated_monomial_skips_image_digit_scans(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.tropical.operations as operations
+
+    source = _polynomial(("x", "y"), (((1, 1), 0),))
+    preceding = _polynomial(("t",), (((0,), 1),))
+    zero = _polynomial(("t",), ())
+
+    def unexpected_digit_scan(_value: int) -> int:
+        raise AssertionError("annihilated image coefficients must not be scanned")
+
+    monkeypatch.setattr(operations, "_digits", unexpected_digit_scan)
+    result = compute_polynomial_substitute(
+        PolynomialSubstituteRequest(
+            polynomial=source,
+            target_variables=("t",),
+            images=(preceding, zero),
+        )
+    ).result
+    assert result.terms == ()
+
+
+def test_annihilated_monomial_does_not_charge_later_image_coefficients() -> None:
+    source = _polynomial(("x", "y"), (((1, 1024), 0),))
+    zero = _polynomial(("t",), ())
+    large = _polynomial(("t",), (((0,), 10**100),))
+    result = compute_polynomial_substitute(
+        PolynomialSubstituteRequest(
+            polynomial=source,
+            target_variables=("t",),
+            images=(zero, large),
+        )
+    ).result
+    assert result.terms == ()
+
+
+def test_substitution_rejects_forged_duplicate_source_axis() -> None:
+    source = _polynomial(("x", "y"), (((1, 0), 0),)).model_copy(
+        update={"variables": ("x", "x")}
+    )
+    zero = _polynomial(("t",), ())
+    with pytest.raises(Exception, match=r"tropical\.polynomial_axis"):
+        compute_polynomial_substitute(
+            PolynomialSubstituteRequest(
+                polynomial=source,
+                target_variables=("t",),
+                images=(zero, zero),
+            )
+        )
+
+
+def test_scalar_dual_rejects_unknown_forged_kind() -> None:
+    from jacobian.math.polynomials.tropical.operations import tropical_scalar_dual
+
+    scalar = TropicalScalar(
+        semiring=TropicalSemiring(convention="MAX_PLUS", base="QQ"),
+        kind="NEGATIVE_INFINITY",
+        value=None,
+    ).model_copy(update={"kind": "BOGUS"})
+    with pytest.raises(OperationDomainValidationError) as error:
+        tropical_scalar_dual(scalar)
+    assert error.value.errors()[0]["type"] == "tropical.scalar_shape"
+
+
 def test_substitution_accepts_full_exponent_boundary() -> None:
     source = _polynomial(("x",), (((1024,), 0),))
     image = _polynomial(("t",), (((1,), 0),))
@@ -221,6 +319,20 @@ def test_substitution_rejects_exponent_growth_before_coefficients() -> None:
     assert error.value.errors()[0]["type"] == "tropical.substitution_exponent_bound"
 
 
+def test_annihilating_later_image_precedes_support_expansion() -> None:
+    from jacobian.math.polynomials.tropical.operations import (
+        tropical_polynomial_substitute,
+    )
+
+    source = _polynomial(("x", "y"), (((512, 1), 0),))
+    growing = _polynomial(("t",), (((0,), 0), ((1,), 0)))
+    zero = _polynomial(("t",), ())
+
+    result = tropical_polynomial_substitute(source, ("t",), (growing, zero))
+
+    assert result.terms == ()
+
+
 def test_substitution_rejects_inflated_support_before_coefficient_expansion() -> None:
     source = _polynomial(("x",), (((512,), 0),))
     image = _polynomial(("t",), (((0,), 0), ((1,), 0)))
@@ -247,3 +359,13 @@ def test_substitution_is_published_with_an_executable_example() -> None:
     result = operation.run(request)
     assert result.result.variables == ("t",)
     assert tuple(term.exponents for term in result.result.terms) == ((0,), (1,))
+
+
+def test_later_zero_image_skips_preceding_coefficient_expansion() -> None:
+    source = _polynomial(("x", "y"), (((1024, 1), 0),))
+    wide_image = _polynomial(("u",), (((0,), 0), ((1,), 1), ((2,), 2), ((3,), 3)))
+    zero_image = TropicalPolynomial(
+        semiring=source.semiring, variables=("u",), terms=()
+    )
+    result = tropical_polynomial_substitute(source, ("u",), (wide_image, zero_image))
+    assert result.terms == ()

@@ -5,12 +5,14 @@ from __future__ import annotations
 from fractions import Fraction
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials.tropical import TropicalScalar, TropicalSemiring
 from jacobian.math.polynomials.tropical._models import (
     ScalarDualRequest,
     ScalarDualResult,
 )
 from jacobian.math.polynomials.tropical._tools import TOOLS, compute_scalar_dual
+from jacobian.math.polynomials.tropical.operations import tropical_scalar_dual
 
 
 def _finite(convention: str, base: str, value: Fraction) -> TropicalScalar:
@@ -92,3 +94,15 @@ def test_manifest_operation_serializes_both_parent_identities() -> None:
     assert restored.source_semiring.convention == "MIN_PLUS"
     assert restored.target_semiring.convention == "MAX_PLUS"
     assert restored.result.value == CanonicalRational.from_fraction(Fraction(-11, 5))
+
+
+def test_dual_rejects_forged_unknown_semiring_convention() -> None:
+    source = _infinity("MAX_PLUS", "QQ")
+    forged_parent = source.semiring.model_copy(update={"convention": "BOGUS"})
+    forged = source.model_copy(update={"semiring": forged_parent})
+    try:
+        tropical_scalar_dual(forged)
+    except OperationDomainValidationError:
+        pass
+    else:
+        raise AssertionError("forged semiring convention was accepted")

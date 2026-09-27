@@ -12,7 +12,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import Simplex
-from jacobian.math.topology.cellular_sheaves._kernel import _admit_field, _ExactField
+from jacobian.math.topology.cellular_sheaves._kernel import (
+    _admit_field,
+    _ExactField,
+    require_canonical_sheaf_admission,
+)
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COVER_MAPS,
     MAX_SHEAF_DERIVED_RESTRICTIONS,
@@ -180,7 +184,10 @@ def _admit_diagram(
         scalar_cells += len(restriction.row_basis) * len(restriction.column_basis)
         for row in restriction.entries:
             for scalar in row:
-                if sheaf_scalar_digits(scalar) > MAX_SHEAF_ENTRY_DIGITS:
+                if (
+                    pair in covers
+                    and sheaf_scalar_digits(scalar) > MAX_SHEAF_ENTRY_DIGITS
+                ):
                     raise _resource(
                         "scalar_bound",
                         "an input restriction scalar exceeds its digit bound",
@@ -203,6 +210,8 @@ def direct_sum(  # noqa: C901
     left: FiniteCellularSheaf, right: FiniteCellularSheaf
 ) -> SheafDirectSumResult:
     """Construct the pointwise direct sum, retaining exact stalk injections."""
+    left = require_canonical_sheaf_admission(left)
+    right = require_canonical_sheaf_admission(right)
     if left.complex != right.complex:
         raise _domain(
             "complex_mismatch", "direct summands must use the same simplicial complex"
@@ -228,8 +237,10 @@ def direct_sum(  # noqa: C901
         raise _resource(
             "total_rank_bound", "the direct sum exceeds the total stalk rank bound"
         )
-    cover_count = len(left.cover_restrictions) + len(right.cover_restrictions)
-    derived_count = len(left.derived_restrictions) + len(right.derived_restrictions)
+    # Both parents use the same complex, so their direct sum has one map for
+    # each comparable-cell pair, regardless of how many parent maps there are.
+    cover_count = len(left.cover_restrictions)
+    derived_count = len(left.derived_restrictions)
     if (
         cover_count > MAX_SHEAF_COVER_MAPS
         or derived_count > MAX_SHEAF_DERIVED_RESTRICTIONS
@@ -253,9 +264,17 @@ def direct_sum(  # noqa: C901
             "matrix_cells_bound",
             "direct-sum restriction matrices exceed their cell bound",
         )
-    result_digit_work = sheaf_scalar_digit_work(
-        output_matrix_cells, MAX_SHEAF_ENTRY_DIGITS
+    max_input_digits = max(
+        (
+            sheaf_scalar_digits(value)
+            for maps in (left_maps, right_maps)
+            for restriction in maps.values()
+            for row in restriction.entries
+            for value in row
+        ),
+        default=1,
     )
+    result_digit_work = sheaf_scalar_digit_work(output_matrix_cells, max_input_digits)
     if result_digit_work > MAX_SHEAF_RESTRICTION_RESULT_DIGIT_WORK:
         raise _resource(
             "result_digit_work_bound",

@@ -83,8 +83,11 @@ def test_shortest_lexicographically_least_word_and_replayable_traces() -> None:
 def test_alphabet_mismatch_is_a_domain_error() -> None:
     binary = dfa(((0, 0, 0), (0, 1, 0)), (), alphabet_size=2)
     unary = dfa(((0, 0, 0),), (), alphabet_size=1)
-    with pytest.raises(OperationDomainValidationError, match="same ordered alphabet"):
+    with pytest.raises(ValueError, match="matching alphabet sizes and parents"):
         compute_equivalence(EquivalenceRequest(left=binary, right=unary))
+    other_parent = binary.model_copy(update={"alphabet_id": "other", "alphabet": None})
+    with pytest.raises(OperationDomainValidationError, match="same ordered alphabet"):
+        operations.dfa_equivalence(binary, other_parent)
 
 
 def test_empty_alphabet_has_only_the_empty_word() -> None:

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shlex
+import shutil
 from pathlib import Path
 
 import pytest
@@ -11,110 +12,138 @@ from tools.command_runner import ToolCommandStatus, run_operator_command
 ROOT = Path(__file__).parents[2]
 
 
-def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    all_ci = makefile.split(
-        "test-full: ## Every local semantic pytest lane; not hosted CI, coverage, or docs.",
-        1,
-    )[1].split("test-stress:", 1)[0]
+def _operator_executable(name: str) -> str:
+    executable = shutil.which(name)
+    if executable is None:
+        raise RuntimeError(f"{name} is required for Make command tests")
+    return str(Path(executable).resolve(strict=True))
 
-    assert "$(MAKE) test-math" in all_ci
-    assert "$(MAKE) test-property" in all_ci
-    assert "$(MAKE) _test-exhaustive" in all_ci
-    assert "$(MAKE) _test-scale" in all_ci
-    assert "$(MAKE) test-catalog-examples" in all_ci
-    assert "$(VALIDATION_LOCK) run --target test-full" in all_ci
-    assert all_ci.index("$(MAKE) test-math") < all_ci.index("$(MAKE) _test-exhaustive")
+
+def _make_dry_run(*arguments: str) -> str:
+    result = run_operator_command(
+        "make",
+        (
+            "--no-print-directory",
+            "--dry-run",
+            f"UV_RUN={_operator_executable('uv')} run --locked",
+            # GNU Make executes recursive recipe lines even during a dry run. Use an
+            # absolute executable because run_operator_command deliberately omits PATH.
+            f"VALIDATION_LOCK={_operator_executable('echo')} tools/with_validation_lock.py",
+            *arguments,
+        ),
+        cwd=ROOT,
+        timeout_seconds=15,
+        stdout_limit_bytes=4 * 1024 * 1024,
+        stderr_limit_bytes=1024 * 1024,
+    )
+    assert result.status is ToolCommandStatus.EXITED
+    assert result.exit_code == 0, result.stderr.decode(errors="replace")
+    return result.stdout.decode()
+
+
+def test_exhaustive_local_reproduction_includes_exhaustive_marker_lane() -> None:
+    output = _make_dry_run("_test-full")
+
+    for target in (
+        "test-math",
+        "test-property",
+        "_test-exhaustive",
+        "_test-scale",
+        "test-catalog-examples",
+    ):
+        assert target in output
+    assert output.index("test-math") < output.index("_test-exhaustive")
+
+
+def test_full_reproduction_uses_validation_lock() -> None:
+    output = _make_dry_run("test-full")
+
+    assert "tools/with_validation_lock.py run --target test-full" in output
 
 
 def test_full_catalog_examples_split_singular_backend_ownership() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    examples = makefile.split("test-catalog-examples:", 1)[1].split("test-focused:", 1)[
-        0
-    ]
+    output = _make_dry_run("test-catalog-examples")
 
-    assert "tests/integration/catalog/test_builtin_examples.py" in examples
-    assert "not singular_catalog_example" in examples
+    assert "tests/integration/catalog/test_builtin_examples.py" in output
+    assert "not singular_catalog_example" in output
 
 
 def test_focused_math_lane_skips_validation_lock() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    math = makefile.split("test-math:", 1)[1].split("test-catalog:", 1)[0]
-    exhaustive = makefile.split("test-exhaustive:", 1)[1].split("test-ordering:", 1)[0]
-    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
+    output = _make_dry_run(
+        "test-math",
+        "MATH_WORKERS=0",
+        "TESTS=tests/math/logic/test_tools.py",
+    )
 
-    assert "VALIDATION_LOCK" not in math
-    assert "$(VALIDATION_LOCK) run --target test-exhaustive" in exhaustive
-    assert "$(MAKE) _test-exhaustive" in exhaustive
-    assert "$(VALIDATION_LOCK) run --target harbor-check-all" in harbor
-    assert "$(VALIDATION_LOCK) run --target harbor-host-validation" in harbor
-    assert "$(VALIDATION_LOCK) run --target harbor-oracle-all" in harbor
-    assert "harbor-check-all -- $(MAKE) _harbor-check-all" in harbor
-    assert "_harbor-check-all: harbor-check _harbor-host-validation" in harbor
-    assert "_harbor-oracle-all: _harbor-check-all" in harbor
+    assert "tools/with_validation_lock.py" not in output
+    assert "pytest -n 0" in output
+    assert "tests/math/logic/test_tools.py" in output
+
+
+def test_exhaustive_and_harbor_broad_commands_use_validation_lock() -> None:
+    for target in (
+        "test-exhaustive",
+        "harbor-check-all",
+        "harbor-host-validation",
+        "harbor-oracle-all",
+    ):
+        output = _make_dry_run(target)
+        assert f"tools/with_validation_lock.py run --target {target}" in output
 
 
 def test_scoped_handoff_requires_explicit_static_paths() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    contracts = (ROOT / "tools" / "command_contract.py").read_text(encoding="utf-8")
+    output = _make_dry_run(
+        "handoff-scoped",
+        "LANE=tooling",
+        "TESTS=tests/tooling/test_make_commands.py",
+        "PATHS=tests/tooling/test_make_commands.py",
+    )
 
-    assert "handoff-scoped: lint-scoped typecheck-scoped test-focused" in makefile
-    assert "ruff check $(PATHS)" in makefile
-    assert "ruff format --check $(PATHS)" in makefile
-    assert "mypy $(PATHS)" in makefile
-    assert 'name="handoff-scoped"' in contracts
+    assert "ruff check tests/tooling/test_make_commands.py" in output
+    assert "ruff format --check tests/tooling/test_make_commands.py" in output
+    assert "mypy tests/tooling/test_make_commands.py" in output
+    assert 'make test-tooling TESTS="tests/tooling/test_make_commands.py"' in output
 
 
 def test_affected_validation_is_a_public_planner_backed_default() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    contracts = (ROOT / "tools" / "command_contract.py").read_text(encoding="utf-8")
+    affected = _make_dry_run("affected", "AFFECTED_BASE=origin/main")
+    plan = _make_dry_run("affected-plan", "AFFECTED_BASE=origin/main")
 
-    assert "affected: ## Final-tree validation:" in makefile
-    assert "affected-plan: ## Show the CI-planned" in makefile
-    assert 'python tools/affected_validation.py --base "$(AFFECTED_BASE)"' in makefile
-    assert 'name="affected"' in contracts
-    assert 'name="affected-plan"' in contracts
+    assert 'python tools/affected_validation.py --base "origin/main"' in affected
+    assert 'python tools/affected_validation.py --base "origin/main" --dry-run' in plan
 
 
 def test_timing_report_is_a_public_read_only_diagnostic() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    contracts = (ROOT / "tools" / "command_contract.py").read_text(encoding="utf-8")
+    output = _make_dry_run("test-timings", "JUNIT=pytest.xml", "TIMING=timing.json")
 
-    assert "test-timings: ## Summarize pytest JUnit timing evidence" in makefile
-    assert "tools/test_timing_report.py" in makefile
-    assert 'name="test-timings"' in contracts
+    assert 'tools/test_timing_report.py --junit "pytest.xml"' in output
+    assert '--timing "timing.json"' in output
 
 
 def test_broad_commands_share_the_nonblocking_validation_lease() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-
-    assert "ALLOW_PARALLEL_VALIDATION ?= 0" in makefile
-    assert (
-        "validation-status: ## Show whether this worktree holds a broad-validation lock."
-        in makefile
-    )
-    assert "$(VALIDATION_LOCK) run --target check -- $(MAKE) _check" in makefile
-    assert "$(VALIDATION_LOCK) run --target check-all -- $(MAKE) _check-all" in makefile
+    for target in ("check", "check-all"):
+        output = _make_dry_run(target)
+        assert f"tools/with_validation_lock.py run --target {target}" in output
 
 
-def test_lanes_use_their_declared_worker_and_fixture_affinity() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    math = makefile.split("test-math:", 1)[1].split("test-catalog:", 1)[0]
-    catalog = makefile.split("test-catalog:", 1)[1].split("test-dispatch:", 1)[0]
-    dispatch = makefile.split("test-dispatch:", 1)[1].split("test-cli:", 1)[0]
-    cli = makefile.split("test-cli:", 1)[1].split("test-tooling:", 1)[0]
-    tooling = makefile.split("test-tooling:", 1)[1].split("test-integration:", 1)[0]
-    integration = makefile.split("test-integration:", 1)[1].split("test-fast:", 1)[0]
-    scale = makefile.split("_test-scale:", 1)[1].split("test-exhaustive:", 1)[0]
-    exhaustive = makefile.split("_test-exhaustive:", 1)[1].split("test-property:", 1)[0]
+@pytest.mark.parametrize(
+    ("target", "workers", "timeout", "root"),
+    [
+        ("test-catalog", 2, 30, "tests/catalog"),
+        ("test-dispatch", 2, 120, "tests/dispatch"),
+        ("test-cli", 2, 30, "tests/cli"),
+        ("test-tooling", 2, 30, "tests/tooling"),
+        ("test-integration", 1, 120, "tests/integration"),
+    ],
+)
+def test_owner_lanes_keep_worker_bounds_and_collection_roots(
+    target: str, workers: int, timeout: int, root: str
+) -> None:
+    output = _make_dry_run(target)
 
-    assert "pytest -n 2 --dist worksteal" in catalog
-    assert "pytest -n 1 --dist worksteal" in integration
-    for ordinary_lane in (math, catalog, dispatch, cli, tooling, integration):
-        assert '-m "$(ORDINARY_MARKER_EXPRESSION)"' in ordinary_lane
-    assert "SCALE_WORKERS ?= 2" in makefile
-    assert "pytest -n $(SCALE_WORKERS) --dist worksteal" in scale
-    assert "pytest -n 2 --dist worksteal" in exhaustive
+    assert f"pytest -n {workers} --dist worksteal --timeout={timeout}" in output
+    assert root in output
+    assert '-m "not property and not exhaustive and not scale"' in output
 
 
 @pytest.mark.parametrize("workers", [0, 1, 2, 4])
@@ -165,31 +194,51 @@ def test_math_worker_control_preserves_focused_selection(
     ]
 
 
-def test_semantic_marker_lanes_are_excluded_from_ordinary_math() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    math = makefile.split("test-math:", 1)[1].split("test-catalog:", 1)[0]
-    scale = makefile.split("test-scale:", 1)[1].split("test-ordering:", 1)[0]
+def test_scale_lane_is_marker_selected_and_validation_locked() -> None:
+    output = _make_dry_run("_test-scale")
 
-    assert (
-        "ORDINARY_MARKER_EXPRESSION := not property and not exhaustive and not scale"
-        in makefile
+    assert "-m scale" in output
+
+
+def test_scale_public_command_uses_validation_lock() -> None:
+    output = _make_dry_run("test-scale")
+
+    assert "tools/with_validation_lock.py run --target test-scale" in output
+
+
+def test_harbor_plan_forwards_explicit_changed_paths(tmp_path: Path) -> None:
+    import sys
+
+    from tools.command_runner import ToolCommandStatus, run_operator_command
+
+    shim = tmp_path / "harbor-plan-shim.py"
+    shim.write_text(
+        "import pathlib, sys\n"
+        "args = sys.argv[1:]\n"
+        "print('ARGS:', ' '.join(args))\n"
+        "paths = pathlib.Path(args[args.index('--paths-file') + 1])\n"
+        "print('CHANGED_PATHS:', paths.read_text(encoding='utf-8').strip())\n"
+        "pathlib.Path(args[args.index('--output') + 1]).write_text('{}', encoding='utf-8')\n",
+        encoding="utf-8",
     )
-    assert '-m "$(ORDINARY_MARKER_EXPRESSION)"' in math
-    assert "-m scale" in scale
-    assert "$(VALIDATION_LOCK) run --target test-scale" in scale
+    result = run_operator_command(
+        "make",
+        (
+            "--no-print-directory",
+            "UV_RUN=" + str(shutil.which("uv")) + " run --locked",
+            "harbor-plan",
+            "PATHS=Makefile",
+            f"HARBOR_PYTHON={sys.executable} {shim}",
+        ),
+        cwd=ROOT,
+        timeout_seconds=15,
+        stdout_limit_bytes=4 * 1024 * 1024,
+        stderr_limit_bytes=1024 * 1024,
+    )
+    assert result.status is ToolCommandStatus.EXITED
+    assert result.exit_code == 0, result.stderr.decode(errors="replace")
+    output = result.stdout.decode()
 
-
-def test_paths_file_stays_on_harbor_planning() -> None:
-    makefile = (ROOT / "Makefile").read_text(encoding="utf-8")
-    harbor = (ROOT / "make" / "harbor.mk").read_text(encoding="utf-8")
-    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-
-    assert "PATHS_FILE" not in makefile
-    assert "PATHS_FILE :=" not in harbor
-    assert "$(shell mktemp)" not in harbor
-    assert "tr '\\n' ' '" not in harbor
-    assert '--paths-file "$$tmp_dir/changed-paths.txt"' in harbor
-    assert '--output "$$tmp_dir/plan.json"' in harbor
-    assert "validate-benchmark-plan" not in harbor
-    assert "emit-plan-receipt" not in harbor
-    assert "PATHS_FILE" not in workflow
+    assert "CHANGED_PATHS: Makefile" in output
+    assert ".github/scripts/plan-benchmarks" in output
+    assert "--paths-file" in output

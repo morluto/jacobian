@@ -18,7 +18,6 @@ from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
     SheafCochainCoordinate,
-    SheafCochainMapRequest,
     SheafCochainMapResult,
     SheafField,
     SheafMorphismResult,
@@ -31,6 +30,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
+    SheafCochainMapRequest,
     SheafMorphismComposeRequest,
     SheafMorphismRequest,
     cochain_map,
@@ -42,7 +42,11 @@ def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _triangle_sheaf(edge_scalar: CanonicalRational | None = None, rank: int = 1):
+def _triangle_sheaf(
+    edge_scalar: CanonicalRational | None = None,
+    rank: int = 1,
+    all_cover_scalar: bool = False,
+):
     if edge_scalar is None:
         edge_scalar = _q(1)
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
@@ -67,7 +71,7 @@ def _triangle_sheaf(edge_scalar: CanonicalRational | None = None, rank: int = 1)
                 target=coface,
                 entries=(
                     tuple(
-                        edge_scalar if len(coface) == 2 else _q("1")
+                        edge_scalar if all_cover_scalar or len(coface) == 2 else _q("1")
                         for _ in range(rank)
                     ),
                 )
@@ -119,6 +123,29 @@ def test_triangle_morphism_naturality_matches_independent_incidence_oracle() -> 
     bad = morphism(source, target, corrupted)
     assert not bad.natural
     assert not _independent_square_oracle(source, target, bad.components)
+
+
+def test_morphism_revalidates_authored_parent_diamonds() -> None:
+    valid = _triangle_sheaf()
+    covers = tuple(
+        restriction.model_copy(update={"entries": ((_q("2"),),)})
+        if restriction.source == ("a",) and restriction.target == ("a", "b")
+        else restriction
+        for restriction in valid.cover_restrictions
+    )
+    forged = valid.model_copy(update={"cover_restrictions": covers})
+    identity = tuple((cell, ((_q("1"),),)) for cell in forged.canonical_face_order)
+    with pytest.raises(
+        OperationDomainValidationError, match="does not define a cellular sheaf"
+    ):
+        morphism(forged, forged, identity)
+
+
+def test_morphism_bounds_only_cover_coefficients_not_derived_composites() -> None:
+    sheaf = _triangle_sheaf(_q(10**40), all_cover_scalar=True)
+    identity = tuple((cell, ((_q(1),),)) for cell in sheaf.canonical_face_order)
+    result = morphism(sheaf, sheaf, identity)
+    assert result.natural
 
 
 def test_serialized_morphisms_compose_pointwise_and_remain_source_bound() -> None:
@@ -199,19 +226,6 @@ def test_natural_morphism_induces_axis_bound_cochain_matrices() -> None:
         if tool.operation_id == "cellular_sheaf.morphism.cochain_map"
     )
     assert tool.run(request) == result
-
-
-def test_cochain_map_rejects_malformed_native_morphism_before_dereference() -> None:
-    with pytest.raises(OperationDomainValidationError):
-        cochain_map(object())  # type: ignore[arg-type]
-    malformed = SheafMorphismResult.model_construct()
-    with pytest.raises(OperationDomainValidationError):
-        cochain_map(malformed)
-
-
-def test_rational_json_bound_accounts_for_both_decimal_components() -> None:
-    # Rational wire scalars serialize numerator and denominator separately.
-    assert sheaf_scalar_json_bound(1, 64) >= 2 * 64 + 20
 
 
 def test_cochain_map_consumer_rechecks_serialized_naturality_claim() -> None:
@@ -341,6 +355,36 @@ def test_cochain_map_json_rejects_overrank_parent_before_axis_expansion() -> Non
     with pytest.raises(ValidationError):
         SheafCochainMapResult.model_validate_json(forged_result.model_dump_json())
 
+    with pytest.raises(OperationResourceAdmissionError, match="stalk rank"):
+        cochain_map(forged_morphism)
+
+
+def test_cochain_map_admits_face_count_before_zero_rank_axes() -> None:
+    vertices = tuple(f"v{index}" for index in range(7))
+    complex_ = canonical_complex(vertices, (vertices,))
+    # Bypass model validation to reproduce a native oversized parent without
+    # allocating any stalk coordinates or matrix cells.
+    parent = FiniteCellularSheaf.model_construct(
+        complex=complex_,
+        coefficient_field=SheafField.RATIONAL,
+        prime=None,
+        stalks=(),
+        cover_restrictions=(),
+        derived_restrictions=(),
+        diamonds=0,
+        comparable_pairs=0,
+    )
+    forged = SheafMorphismResult.model_construct(
+        source=parent,
+        target=parent,
+        components=(),
+        natural=True,
+        obstruction=None,
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="simplex bound"):
+        cochain_map(forged)
+
 
 def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:
     sheaf = _triangle_sheaf()
@@ -352,3 +396,16 @@ def test_component_scalar_digit_bound_precedes_scalar_parsing() -> None:
         assert "64 digits" in str(error)
     else:
         raise AssertionError("an over-bound component scalar was admitted")
+
+
+def test_cochain_map_rejects_malformed_native_morphism_before_dereference() -> None:
+    with pytest.raises(OperationDomainValidationError):
+        cochain_map(object())  # type: ignore[arg-type]
+    malformed = SheafMorphismResult.model_construct()
+    with pytest.raises(OperationDomainValidationError):
+        cochain_map(malformed)
+
+
+def test_rational_json_bound_accounts_for_both_decimal_components() -> None:
+    # Rational wire scalars serialize numerator and denominator separately.
+    assert sheaf_scalar_json_bound(1, 64) >= 2 * 64 + 20

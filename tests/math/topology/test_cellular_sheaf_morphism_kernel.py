@@ -173,8 +173,17 @@ def test_kernel_rechecks_parent_derived_restrictions(forged_role: str) -> None:
         target = forged_parent
 
     components = tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order)
-    candidate = morphism(source, target, components)
-    assert candidate.natural
+    # ``morphism`` now re-derives the parent functor diagram during admission,
+    # so it rejects this forged derived restriction before the kernel runs.
+    # Build the typed carrier through the trusted producer path instead, so the
+    # kernel's own recheck is what rejects the forged parent.
+    candidate = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=components,
+        natural=True,
+        obstruction=None,
+    )
     assert valid_source != source if forged_role == "source" else valid_target != target
     decoded = SheafMorphismResult.model_validate_json(candidate.model_dump_json())
     assert decoded.source == source

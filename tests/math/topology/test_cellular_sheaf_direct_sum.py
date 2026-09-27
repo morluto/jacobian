@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from importlib import import_module
 from itertools import product
 
 import pytest
@@ -99,6 +100,39 @@ def test_direct_sum_preserves_rational_exact_maps_and_serialization() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_direct_sum_admits_derived_coefficients_by_output_digit_work() -> None:
+    complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
+    cells = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    covers = tuple(
+        CoverRestrictionMatrix(
+            source=face,
+            target=coface,
+            entries=((_q(10**40),),),
+        )
+        for coface in cells
+        for face in cells
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+    source = from_cover_maps(
+        complex_,
+        SheafField.RATIONAL,
+        None,
+        tuple(SheafStalk(simplex=cell, basis=("x",)) for cell in cells),
+        covers,
+    ).sheaf
+    assert source is not None
+    result = direct_sum(source, source).direct_sum
+    assert (
+        max(
+            len(str(value.num))
+            for restriction in result.derived_restrictions
+            for row in restriction.entries
+            for value in row
+        )
+        > 64
+    )
+
+
 def test_direct_sum_rejects_different_field_or_complex() -> None:
     with pytest.raises(
         OperationDomainValidationError, match="same exact coefficient field"
@@ -127,6 +161,37 @@ def test_direct_sum_doubles_a_stalk_past_public_rank_bound_before_expansion() ->
     assert source is not None
     with pytest.raises(OperationResourceAdmissionError, match="direct-sum stalk"):
         direct_sum(source, source)
+
+
+def test_direct_sum_counts_each_shared_complex_map_once(monkeypatch) -> None:
+    direct_sum_module = import_module(
+        "jacobian.math.topology.cellular_sheaves.direct_sum"
+    )
+    vertices = tuple("abcdef")
+    complex_ = canonical_complex(vertices, (vertices,))
+    cells = tuple(face for group in complex_.faces_by_dimension for face in group.faces)
+    covers = tuple(
+        (face, coface)
+        for coface in cells
+        for face in cells
+        if len(coface) == len(face) + 1 and set(face) < set(coface)
+    )
+    source = from_cover_maps(
+        complex_,
+        SheafField.PRIME_FIELD,
+        2,
+        tuple(SheafStalk(simplex=cell, basis=("e",)) for cell in cells),
+        tuple(
+            CoverRestrictionMatrix(source=face, target=coface, entries=((1,),))
+            for face, coface in covers
+        ),
+    ).sheaf
+    assert source is not None
+    monkeypatch.setattr(direct_sum_module, "MAX_SHEAF_COVER_MAPS", 186)
+    monkeypatch.setattr(direct_sum_module, "MAX_SHEAF_DERIVED_RESTRICTIONS", 416)
+    result = direct_sum(source, source)
+    assert len(result.direct_sum.cover_restrictions) == 186
+    assert len(result.direct_sum.derived_restrictions) == 416
 
 
 def test_direct_sum_catalog_contract_and_example() -> None:

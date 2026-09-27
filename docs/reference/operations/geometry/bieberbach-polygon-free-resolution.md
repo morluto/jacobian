@@ -8,10 +8,11 @@ group-labelled boundary entries. The helper remains outside the public
 operation catalog because its output packages data already retained by that
 carrier with the trivial-module augmentation.
 
-The value records free **left** modules over the integral group ring of the
+The value records free **right** modules over the integral group ring of the
 represented crystallographic extension in degrees 0, 1, and 2. A sparse
 incidence entry `(c, g)` means `c * (g · e_target)` in the boundary of
-`e_source`; the deck element acts on the left of the target basis cell. The
+`e_source`; the deck element acts on the right of the target basis cell, so
+these are free right `ZΓ`-modules. The
 augmentation sends each degree-zero orbit generator to 1 in the trivial module
 `Z`. Applying it to the group-ring boundaries gives the retained integral
 quotient chain complex, which composes with `chain_complex.homology_groups`.

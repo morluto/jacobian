@@ -28,9 +28,9 @@ class BieberbachResolutionAugmentationEntry(StrictModel):
 class BieberbachPolygonFreeResolution(StrictModel):
     """The cellular free ZGamma resolution from a checked flat polygon.
 
-    The chain groups are free left ``ZGamma``-modules. An incidence entry with
-    coefficient ``c`` and deck element ``g`` means ``c * (g · e_target)`` in
-    the boundary of ``e_source``; ``g`` acts on the left of the target basis
+    The chain groups are free right ``ZGamma``-modules. An incidence entry with
+    coefficient ``c`` and deck element ``g`` means ``c * (e_target · g)`` in
+    the boundary of ``e_source``; ``g`` acts on the right of the target basis
     cell. The universal cover is the contractible Euclidean plane, so these
     cellular modules, followed by the displayed augmentation, form a free
     resolution. ``augmented_chain_complex`` is the result after tensoring with
@@ -48,16 +48,16 @@ class BieberbachPolygonFreeResolution(StrictModel):
         min_length=1,
         max_length=256,
         description=(
-            "Left ZGamma-module boundary entries: c and g encode "
-            "c * (g acting on the left of the target basis cell)."
+            "Right ZGamma-module boundary entries: c and g encode "
+            "c * (target basis cell acted on by g on the right)."
         ),
     )
     boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
         min_length=1,
         max_length=128,
         description=(
-            "Left ZGamma-module boundary entries: c and g encode "
-            "c * (g acting on the left of the target basis cell)."
+            "Right ZGamma-module boundary entries: c and g encode "
+            "c * (target basis cell acted on by g on the right)."
         ),
     )
     augmented_chain_complex: ChainComplexValue

@@ -160,7 +160,7 @@ def test_free_resolution_remains_a_native_projection_not_a_catalog_operation() -
     )
     assert polygon_free_resolution(source).source == source
     schema = BieberbachPolygonFreeResolution.model_json_schema()
-    assert "left of the target basis cell" in schema["properties"][
+    assert "right)." in schema["properties"][
         "boundary_1_to_0"
     ]["description"]
 

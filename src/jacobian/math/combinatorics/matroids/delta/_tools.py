@@ -346,7 +346,7 @@ TOOLS: MathTools = (  # noqa: RUF005
             "ground indices. Source and output families are admitted at 16,384 "
             "memberships, 2,048 UTF-8 label bytes, and 250,000 symmetric-exchange "
             "candidate checks. Return the source, canonical subset, and twisted "
-            "target together; the compact JSON result is bounded to 1,000,000 bytes."
+            "target together; output cardinality follows the admitted source family."
         ),
         request_type=DeltaMatroidTwistRequest,
         result_type=DeltaMatroidTwistResult,

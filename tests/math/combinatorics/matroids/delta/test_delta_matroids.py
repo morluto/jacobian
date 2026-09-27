@@ -16,7 +16,6 @@ from jacobian.math.combinatorics.matroids.delta._models import (
     DeltaMatroidTwistRequest,
     DeltaMatroidTwistResult,
     DeltaMatroidWidthRequest,
-    twist_result_serialized_bytes,
 )
 from jacobian.math.combinatorics.matroids.delta._tools import (
     TOOLS,
@@ -271,7 +270,6 @@ def test_twist_request_publishes_admission_limits() -> None:
     assert limits["max_feasible_set_memberships"] == 16_384
     assert limits["max_ground_label_utf8_bytes"] == 2_048
     assert limits["max_symmetric_exchange_candidate_checks_per_replay"] == 250_000
-    assert limits["max_source_bound_result_compact_json_bytes"] == 1_000_000
     description = schema["properties"]["delta_matroid"]["description"]
     assert "16384" in description.replace(",", "")
     assert "2048" in description.replace(",", "")
@@ -288,9 +286,8 @@ def test_twist_request_publishes_admission_limits() -> None:
     assert (
         DeltaMatroidTwistResult.model_validate_json(result.model_dump_json()) == result
     )
-    assert twist_result_serialized_bytes(source, (0,), result.twisted) == len(
-        result.model_dump_json().encode("utf-8")
-    )
+    assert len(result.twisted.feasible) == len(source.feasible)
+    assert sum(map(len, result.twisted.feasible)) <= 16_384
     twist_tool = next(
         tool for tool in TOOLS if tool.operation_id == "delta_matroid.twist.compute"
     )

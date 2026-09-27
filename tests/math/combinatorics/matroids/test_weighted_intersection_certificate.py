@@ -339,7 +339,7 @@ def test_aggregate_work_rejects_before_any_greedy_rank_expansion(
     monkeypatch.setattr(
         intersection, "_maximum_weight_independent_set_admitted", unexpected
     )
-    with pytest.raises(OperationResourceAdmissionError, match="work or result output"):
+    with pytest.raises(OperationResourceAdmissionError, match="work envelope"):
         weighted_intersection_certificate(
             MatroidWeightedIntersectionCertificateRequest(
                 first=matroid,

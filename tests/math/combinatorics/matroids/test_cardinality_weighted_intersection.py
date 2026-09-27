@@ -7,7 +7,6 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.combinatorics.matroids._models import (
     LinearMatroid,
-    MatroidWeightedIntersectionOptimizationRequest,
     MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.cardinality_weighted_intersection import (
@@ -87,27 +86,24 @@ def test_lexicographic_optimum_matches_exhaustive_subset_oracle() -> None:
         ),
     )
     for first, second, weights in fixtures:
-        request = MatroidWeightedIntersectionOptimizationRequest(
-            first=first,
-            second=second,
-            weight_function=MatroidWeightFunction(
-                ground_axis=first.ground_axis, values=weights
-            ),
+        result = maximum_cardinality_weighted_matroid_intersection(
+            first,
+            second,
+            MatroidWeightFunction(ground_axis=first.ground_axis, values=weights),
         )
-        result = maximum_cardinality_weighted_matroid_intersection(request)
         assert (result.cardinality, result.total_weight) == _oracle(
             first, second, weights
         )
 
 
 def test_malformed_constructed_request_raises_domain_error() -> None:
-    request = MatroidWeightedIntersectionOptimizationRequest.model_construct(
-        first=None,
-        second=None,
-        weight_function=None,
-    )
+    malformed = LinearMatroid.model_construct(matrix=None, ground_labels=None)
     with pytest.raises(OperationDomainValidationError):
-        maximum_cardinality_weighted_matroid_intersection(request)
+        maximum_cardinality_weighted_matroid_intersection(
+            malformed,
+            malformed,
+            MatroidWeightFunction.model_construct(ground_axis=(), values=()),
+        )
 
 
 def test_negative_weight_cannot_reduce_cardinality_and_result_round_trips() -> None:
@@ -116,13 +112,9 @@ def test_negative_weight_cannot_reduce_cardinality_and_result_round_trips() -> N
     second = _matroid(((1, 1, 0), (0, 1, 1)), labels)
     weights = (-10, -3, 5)
     result = maximum_cardinality_weighted_matroid_intersection(
-        MatroidWeightedIntersectionOptimizationRequest(
-            first=first,
-            second=second,
-            weight_function=MatroidWeightFunction(
-                ground_axis=first.ground_axis, values=weights
-            ),
-        )
+        first,
+        second,
+        MatroidWeightFunction(ground_axis=first.ground_axis, values=weights),
     )
     assert result.cardinality == 2
     assert result.total_weight == 2

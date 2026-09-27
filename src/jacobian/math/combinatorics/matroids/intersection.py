@@ -50,9 +50,7 @@ MAX_INTERSECTION_GROUND = 256
 # are charged separately.  This is deliberately an admission bound, not a
 # timeout: every admitted request has a finite exact completion envelope.
 MAX_INTERSECTION_WORK = 50_000_000
-MAX_INTERSECTION_OUTPUT_BYTES = 8 * 1024 * 1024
 MAX_WEIGHTED_INTERSECTION_WORK = 50_000_000
-MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES = 8 * 1024 * 1024
 
 
 def _weighted_intersection_optimization_admission(
@@ -144,22 +142,16 @@ def _weighted_intersection_optimization_admission(
                 f"{MAX_SPLIT_WEIGHT_DIGITS}-digit split envelope"
             ),
         )
-    split_bound = [witness_bound] * n
-    output_bytes = _weighted_intersection_output_bound_bytes(
-        first, second, objective, split_bound, split_bound, n
-    )
     if (
         rank_work + arithmetic_work + prime_validation_work
         > MAX_WEIGHTED_INTERSECTION_WORK
-        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("first", "second", "weight_function"),
             code="matroid.weighted_intersection.optimize.work_bound",
             message=(
-                "weighted intersection rank work, exact integer arithmetic, "
-                f"or result output exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit "
-                f"work or {MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                "weighted intersection rank work or exact integer arithmetic "
+                f"exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
             ),
         )
 
@@ -170,6 +162,19 @@ def _admit_matroid(value: object, location: tuple[str, ...]) -> LinearMatroid:
             location=location,
             code="matroid.intersection.carrier",
             message="intersection operands must be canonical linear matroids",
+        )
+    labels = value.ground_labels
+    if (
+        labels is not None
+        and sum(len(label) for label in labels) > MAX_GROUND_AXIS_CODEPOINTS
+    ):
+        raise OperationResourceAdmissionError(
+            location=(*location, "ground_labels"),
+            code="matroid.intersection.ground_axis_bound",
+            message=(
+                "retained linear-matroid ground axis exceeds the "
+                f"{MAX_GROUND_AXIS_CODEPOINTS}-codepoint allocation bound"
+            ),
         )
     try:
         # Revalidate model_construct-created values before indexing their
@@ -204,18 +209,13 @@ def _admit_work(
     # Four ranks produce the min-max witness and check both common-set
     # feasibility claims. Common-basis requests add both full-source ranks.
     final_rank_work = (4 + source_rank_calls) * rank_cost
-    output_bytes = _intersection_output_bound_bytes(first, second)
-    if (
-        exchange_rank_work + final_rank_work > MAX_INTERSECTION_WORK
-        or output_bytes > MAX_INTERSECTION_OUTPUT_BYTES
-    ):
+    if exchange_rank_work + final_rank_work > MAX_INTERSECTION_WORK:
         raise OperationResourceAdmissionError(
             location=("first", "second"),
             code="matroid.intersection.work_bound",
             message=(
-                "intersection rank work or retained result output exceeds the "
-                f"{MAX_INTERSECTION_WORK}-unit work or "
-                f"{MAX_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                "intersection rank work exceeds the "
+                f"{MAX_INTERSECTION_WORK}-unit work envelope"
             ),
         )
 
@@ -246,77 +246,12 @@ def _rank_zero_intersection_result(
     )
 
 
-def _intersection_output_bound_bytes(
-    first: LinearMatroid, second: LinearMatroid
-) -> int:
-    """Conservatively bound the JSON size of source-bound intersection output."""
-
-    def source_bytes(matroid: LinearMatroid) -> int:
-        rows = len(matroid.matrix.entries)
-        columns = matroid.ground_size
-        # Residues have at most ten decimal digits. The extra per cell covers
-        # separators; row/field/container syntax is covered by the fixed slack.
-        matrix_bytes = rows * columns * 11 + rows * 4 + 256
-        labels = matroid.ground_axis
-        # JSON may escape controls as six characters and non-BMP scalars as
-        # UTF-16 surrogate pairs. Charge the larger twelve-byte bound per
-        # Python code point, plus quotes and separators.
-        axis_bytes = sum(12 * len(label) + 3 for label in labels)
-        return matrix_bytes + axis_bytes
-
-    n = first.ground_size
-    # Both retained source matrices/axes, two O(n) index tuples and scalar
-    # fields. Indexes need at most three decimal digits at the admitted axis.
-    return source_bytes(first) + source_bytes(second) + 24 * n + 1024
-
-
 def _independent(m: LinearMatroid, subset: Sequence[int]) -> bool:
     return len(subset) == pf_rank(_selected_columns_matrix(m, list(subset)))
 
 
 def _rank(m: LinearMatroid, indices: Sequence[int]) -> int:
     return pf_rank(_selected_columns_matrix(m, list(indices))) if indices else 0
-
-
-def _weighted_intersection_output_bound_bytes(
-    first: LinearMatroid,
-    second: LinearMatroid,
-    objective: Sequence[int],
-    first_split: Sequence[int],
-    second_split: Sequence[int],
-    candidate_size: int,
-) -> int:
-    """Conservative JSON-size bound for the retained source-bound result."""
-
-    def axis_bound(matroid: LinearMatroid) -> int:
-        # json escapes at most six ASCII characters per control character and
-        # twelve for a non-BMP scalar represented as a UTF-16 surrogate pair.
-        return sum(12 * len(label) + 3 for label in matroid.ground_axis)
-
-    def source_bound(matroid: LinearMatroid) -> int:
-        rows = len(matroid.matrix.entries)
-        columns = matroid.ground_size
-        # Each residue has at most 10 decimal digits; 16 also covers commas.
-        return 16 * rows * columns + 4 * rows + 256 + axis_bound(matroid)
-
-    def weights_bound(matroid: LinearMatroid, values: Sequence[int]) -> int:
-        return (
-            axis_bound(matroid)
-            + sum(len(str(abs(value))) + 1 for value in values)
-            + 128
-        )
-
-    def maximum_result_bound(matroid: LinearMatroid, values: Sequence[int]) -> int:
-        n = matroid.ground_size
-        return source_bound(matroid) + weights_bound(matroid, values) + 10 * n + 256
-
-    return (
-        maximum_result_bound(first, first_split)
-        + maximum_result_bound(second, second_split)
-        + weights_bound(first, objective)
-        + 4 * candidate_size
-        + 512
-    )
 
 
 def replay_intersection_result(result: MatroidIntersectionResult) -> None:
@@ -342,11 +277,7 @@ def replay_intersection_result(result: MatroidIntersectionResult) -> None:
         n = first.ground_size
         rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
         rank_cost = rows * n * min(rows, n)
-        if (
-            6 * rank_cost > MAX_INTERSECTION_WORK
-            or _intersection_output_bound_bytes(first, second)
-            > MAX_INTERSECTION_OUTPUT_BYTES
-        ):
+        if 6 * rank_cost > MAX_INTERSECTION_WORK:
             raise admission_error
         first_rank = pf_rank(first.matrix)
         second_rank = pf_rank(second.matrix)
@@ -511,11 +442,7 @@ def matroid_intersection(
         rows = max(len(first.matrix.entries), len(second.matrix.entries), 1)
         rank_cost = rows * n * min(rows, n)
         rank_zero_work = 6 * rank_cost
-        if (
-            rank_zero_work > MAX_INTERSECTION_WORK
-            or _intersection_output_bound_bytes(first, second)
-            > MAX_INTERSECTION_OUTPUT_BYTES
-        ):
+        if rank_zero_work > MAX_INTERSECTION_WORK:
             raise admission_error
         first_rank = pf_rank(first.matrix)
         second_rank = pf_rank(second.matrix)
@@ -868,10 +795,19 @@ def maximum_weight_matroid_intersection(
             message="weighted-intersection optimization request is not canonical",
         ) from exc
 
-    first, second = _admit_pair(request.first, request.second)
-    weights, canonical_function = _canonical_weight_function(
-        first, request.weight_function
+    return _maximum_weight_matroid_intersection_from_values(
+        request.first, request.second, request.weight_function
     )
+
+
+def _maximum_weight_matroid_intersection_from_values(
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
+) -> MatroidWeightedIntersectionOptimizationResult:
+    """Native-value kernel shared by the wire adapter and composable operations."""
+    first, second = _admit_pair(first, second)
+    weights, canonical_function = _canonical_weight_function(first, weight_function)
     _weighted_intersection_optimization_admission(first, second, weights)
     _admit_prime(first.matrix.prime)
     selected = _weighted_matroid_intersection_admitted(first, second, weights)
@@ -1083,29 +1019,19 @@ def weighted_intersection_certificate(
         )
     )
     total_work = first_work + second_work + first_rank_work + second_rank_work
-    output_bytes = _weighted_intersection_output_bound_bytes(
-        first,
-        second,
-        objective,
-        first_split_values,
-        second_split_values,
-        candidate_size,
-    )
     if (
         first_work > MAX_CLOSURE_RANK_WORK
         or second_work > MAX_CLOSURE_RANK_WORK
         or first_output > 16 * 256
         or second_output > 16 * 256
         or total_work > MAX_WEIGHTED_INTERSECTION_WORK
-        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("first", "second", "weights"),
             code="matroid.weighted_intersection.work_bound",
             message=(
-                "weighted-intersection certificate rank work or result output "
-                f"exceeds the {MAX_WEIGHTED_INTERSECTION_WORK}-unit work or "
-                f"{MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                "weighted-intersection certificate rank work exceeds the "
+                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
             ),
         )
     # Both split phases and feasibility probes are admitted together before
@@ -1291,31 +1217,17 @@ def weighted_intersection_rank_certificate(
         ground_axis=second.ground_axis,
         values=tuple(split_values_second),
     )
-    output_bytes = (
-        _weighted_intersection_output_bound_bytes(
-            first,
-            second,
-            objective,
-            split_values_first,
-            split_values_second,
-            len(candidate),
-        )
-        + 8 * sum(len(term.subset) for family in terms for term in family)
-        + 64 * sum(len(family) for family in terms)
-    )
     total_work = rank_work + cover_work
     if (
         rank_work > MAX_WEIGHTED_INTERSECTION_WORK
         or total_work > MAX_WEIGHTED_INTERSECTION_WORK
-        or output_bytes > MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES
     ):
         raise OperationResourceAdmissionError(
             location=("first", "second", "rank_terms"),
             code="matroid.weighted_intersection.rank_dual.work_bound",
             message=(
-                "rank-dual certificate rank work or result output exceeds the "
-                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work or "
-                f"{MAX_WEIGHTED_INTERSECTION_OUTPUT_BYTES}-byte output envelope"
+                "rank-dual certificate rank work exceeds the "
+                f"{MAX_WEIGHTED_INTERSECTION_WORK}-unit work envelope"
             ),
         )
 

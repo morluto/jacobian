@@ -1,17 +1,15 @@
-"""Exact lexicographic matroid intersection optimization."""
+"""Lexicographic maximum-cardinality then maximum-weight intersection."""
 
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.matroids._models import (
     MAX_WEIGHT_DIGITS,
-    MatroidWeightedIntersectionOptimizationRequest,
+    LinearMatroid,
     MatroidWeightedIntersectionOptimizationResult,
     MatroidWeightFunction,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
-    maximum_weight_matroid_intersection,
+    _admit_pair,
+    _maximum_weight_matroid_intersection_from_values,
 )
 from jacobian.math.combinatorics.matroids.operations import _canonical_weight_function
 
@@ -19,37 +17,20 @@ from ._models import MatroidCardinalityWeightedIntersectionResult
 
 
 def maximum_cardinality_weighted_matroid_intersection(
-    request: MatroidWeightedIntersectionOptimizationRequest,
+    first: LinearMatroid,
+    second: LinearMatroid,
+    weight_function: MatroidWeightFunction,
 ) -> MatroidCardinalityWeightedIntersectionResult:
-    """Maximize common-set cardinality first and original total weight second.
+    """Maximize common-set cardinality first, then original total weight.
 
     A cardinality bonus ``2*n*W + 1``, where ``W=max(abs(w_e))``, makes every
     one-element cardinality gain outweigh the largest possible original-weight
-    loss. The existing exact weighted-intersection solver then optimizes the
-    scalarized objective and supplies its ordinary split witness.
+    loss. The exact weighted-intersection kernel then optimizes the scalarized
+    objective and supplies its ordinary split witness.
     """
-    if type(request) is not MatroidWeightedIntersectionOptimizationRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.cardinality_weighted_intersection.request",
-            message=(
-                "request must be a canonical weighted-intersection optimization request"
-            ),
-        )
-    try:
-        request = MatroidWeightedIntersectionOptimizationRequest.model_validate(
-            request.model_dump(mode="python")
-        )
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="matroid.cardinality_weighted_intersection.request",
-            message="request must satisfy the weighted-intersection request schema",
-        ) from exc
-    n = request.first.ground_size
-    weights, original_function = _canonical_weight_function(
-        request.first, request.weight_function
-    )
+    first, second = _admit_pair(first, second)
+    weights, original_function = _canonical_weight_function(first, weight_function)
+    n = first.ground_size
     maximum_absolute_weight = max((abs(value) for value in weights), default=0)
     bonus = 2 * n * maximum_absolute_weight + 1
     shifted_values = tuple(value + bonus for value in weights)
@@ -63,16 +44,15 @@ def maximum_cardinality_weighted_matroid_intersection(
             ),
         )
 
-    shifted_request = MatroidWeightedIntersectionOptimizationRequest(
-        first=request.first,
-        second=request.second,
-        weight_function=MatroidWeightFunction(
-            ground_axis=original_function.ground_axis,
-            values=shifted_values,
-        ),
-    )
     optimized: MatroidWeightedIntersectionOptimizationResult = (
-        maximum_weight_matroid_intersection(shifted_request)
+        _maximum_weight_matroid_intersection_from_values(
+            first,
+            second,
+            MatroidWeightFunction(
+                ground_axis=original_function.ground_axis,
+                values=shifted_values,
+            ),
+        )
     )
     selected = optimized.common_independent
     return MatroidCardinalityWeightedIntersectionResult.model_construct(

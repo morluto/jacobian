@@ -349,7 +349,7 @@ def test_256_element_request_is_accepted_inside_rank_work_envelope() -> None:
     assert result.common_independent == candidate
 
 
-def test_output_size_rejects_long_repeated_labels_before_rank_kernel(
+def test_axis_allocation_rejects_long_repeated_labels_before_rank_kernel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.combinatorics.matroids.intersection as intersection
@@ -358,7 +358,7 @@ def test_output_size_rejects_long_repeated_labels_before_rank_kernel(
     source = _matroid(((1,),), labels)
 
     def unexpected(*args: object, **kwargs: object) -> int:
-        raise AssertionError("rank kernel ran before output-size admission")
+        raise AssertionError("rank kernel ran before allocation admission")
 
     monkeypatch.setattr(intersection, "_weighted_rank", unexpected)
     with pytest.raises(OperationResourceAdmissionError) as error:
@@ -371,9 +371,7 @@ def test_output_size_rejects_long_repeated_labels_before_rank_kernel(
             (),
         )
 
-    assert error.value.errors()[0]["type"] == (
-        "matroid.weighted_intersection.rank_dual.work_bound"
-    )
+    assert error.value.errors()[0]["type"] == "matroid.intersection.ground_axis_bound"
 
 
 def _subset_rank(matroid: LinearMatroid, subset: tuple[int, ...]) -> int:

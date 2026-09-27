@@ -10,6 +10,15 @@ from jacobian.math.combinatorics.matroids._models import (
 from ._models import MatroidCardinalityWeightedIntersectionResult
 from .operations import maximum_cardinality_weighted_matroid_intersection
 
+
+def _run(
+    request: MatroidWeightedIntersectionOptimizationRequest,
+) -> MatroidCardinalityWeightedIntersectionResult:
+    return maximum_cardinality_weighted_matroid_intersection(
+        request.first, request.second, request.weight_function
+    )
+
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="matroid.intersection.maximum_cardinality_weighted.compute",
@@ -22,7 +31,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=MatroidWeightedIntersectionOptimizationRequest,
         result_type=MatroidCardinalityWeightedIntersectionResult,
-        run=maximum_cardinality_weighted_matroid_intersection,
+        run=_run,
         tags=(
             "matroid",
             "intersection",

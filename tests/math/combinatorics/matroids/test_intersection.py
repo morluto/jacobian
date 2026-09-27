@@ -153,12 +153,12 @@ def test_intersection_rejects_large_retained_axis_before_rank(
     )
 
     def unexpected_rank(*args: object, **kwargs: object) -> int:
-        raise AssertionError("rank oracle ran before output admission")
+        raise AssertionError("rank oracle ran before allocation admission")
 
     monkeypatch.setattr(intersection, "pf_rank", unexpected_rank)
     with pytest.raises(OperationResourceAdmissionError) as error:
         matroid_intersection(large_axis, large_axis)
-    assert error.value.errors()[0]["type"] == "matroid.intersection.work_bound"
+    assert error.value.errors()[0]["type"] == "matroid.intersection.ground_axis_bound"
 
 
 def test_intersection_admits_the_last_axis_codepoint_boundary(

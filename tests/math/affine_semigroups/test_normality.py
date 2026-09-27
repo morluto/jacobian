@@ -162,6 +162,24 @@ def test_normality_admits_large_sloped_generator_subdivision() -> None:
     assert result.hole is None
 
 
+def test_normality_prices_actual_large_sloped_hilbert_candidates() -> None:
+    vectors = ((-100, -99), (-93, -98), (-56, -59), (-19, -20), (-1, -1))
+    configuration = AffineConfiguration(
+        row_labels=("x", "y"),
+        generator_labels=tuple(f"g{index}" for index in range(len(vectors))),
+        entries=tuple(tuple(vector[row] for vector in vectors) for row in range(2)),
+    )
+    semigroup = PositiveAffineSemigroup(
+        configuration=configuration,
+        grading=(CanonicalRational(num=1, den=1), CanonicalRational(num=-7, den=1)),
+    )
+
+    result = normality(semigroup)
+
+    assert result.normal
+    assert result.hole is None
+
+
 def test_normality_tool_preserves_structured_domain_error() -> None:
     tool = next(
         tool
@@ -211,16 +229,14 @@ def test_normality_bounds_all_membership_candidates_before_search(
         normality(_semigroup(((2, 0), (0, 2), (2, 2))))
 
 
-def test_normality_admits_combined_work_before_hilbert_expansion(
+def test_normality_admits_actual_candidate_work_before_search(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.affine_semigroups.semigroup as semigroup_module
 
     monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 0)
     monkeypatch.setattr(
-        semigroup_module,
-        "_hilbert_basis_admitted",
-        lambda *_args: pytest.fail("Hilbert normalization expanded before admission"),
+        semigroup_module, "_fiber_has_member", lambda *_args: pytest.fail("membership started")
     )
     with pytest.raises(OperationResourceAdmissionError, match="normality membership"):
         normality(_semigroup(((2, 0), (0, 2), (2, 2))))
@@ -235,9 +251,7 @@ def test_preflight_prices_full_axis_for_possible_hole_replay(
     # possible witness replay against all ten source columns pushes it above.
     monkeypatch.setattr(semigroup_module, "MAX_AFFINE_NORMALITY_WORK", 190)
     monkeypatch.setattr(
-        semigroup_module,
-        "_hilbert_basis_admitted",
-        lambda *_args: pytest.fail("normalization started before work admission"),
+        semigroup_module, "_fiber_has_member", lambda *_args: pytest.fail("membership started")
     )
     vectors = ((1, 0),) * 5 + ((0, 1),) * 5
     with pytest.raises(OperationResourceAdmissionError, match="normality membership"):

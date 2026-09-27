@@ -10,7 +10,7 @@ carrier with the trivial-module augmentation.
 
 The value records free **right** modules over the integral group ring of the
 represented crystallographic extension in degrees 0, 1, and 2. A sparse
-incidence entry `(c, g)` means `c * (g · e_target)` in the boundary of
+incidence entry `(c, g)` means `c * (e_target · g)` in the boundary of
 `e_source`; the deck element acts on the right of the target basis cell, so
 these are free right `ZΓ`-modules. The
 augmentation sends each degree-zero orbit generator to 1 in the trivial module

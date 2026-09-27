@@ -14,6 +14,7 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.cellular_sheaves._kernel import (
     Scalar,
     _admit_field,
+    _canonical_chain,
     _cochain_rref,
     _ExactField,
 )
@@ -128,7 +129,23 @@ def _require_image_diagram_axes(
     source: FiniteCellularSheaf,
     target: FiniteCellularSheaf,
 ) -> None:
+    cells = source.canonical_face_order
+    expected_cover_axes = tuple(sorted(
+        (earlier, later, (earlier, later))
+        for earlier in cells
+        for later in cells
+        if len(later) == len(earlier) + 1 and set(earlier) < set(later)
+    ))
+    expected_derived_axes = tuple(sorted(
+        (earlier, later, tuple(_canonical_chain(earlier, later)))
+        for earlier in cells
+        for later in cells
+        if set(earlier) < set(later) and len(later) > len(earlier) + 1
+    ))
     for kind in ("cover_restrictions", "derived_restrictions"):
+        expected_axes = (
+            expected_cover_axes if kind == "cover_restrictions" else expected_derived_axes
+        )
         image_axes = tuple(
             (item.source, item.target, item.cover_path)
             for item in getattr(image, kind)
@@ -141,8 +158,12 @@ def _require_image_diagram_axes(
             (item.source, item.target, item.cover_path)
             for item in getattr(target, kind)
         )
-        if image_axes != source_axes or image_axes != target_axes:
-            raise ValueError(f"image {kind} must retain the parent diagram axes")
+        if (
+            image_axes != expected_axes
+            or source_axes != expected_axes
+            or target_axes != expected_axes
+        ):
+            raise ValueError(f"image {kind} must retain the complete parent diagram axes")
     for kind in ("diamonds", "comparable_pairs"):
         value = getattr(image, kind)
         if value != getattr(source, kind) or value != getattr(
@@ -206,7 +227,12 @@ def _require_component_axes(
 def _canonical_component_cells(
     components: tuple[Component, ...], cells: tuple[tuple[str, ...], ...]
 ) -> tuple[tuple[str, ...], ...]:
-    if not isinstance(components, tuple) or any(
+    if not isinstance(components, tuple) or len(components) != len(cells):
+        raise _domain(
+            "component_axis",
+            "one morphism component per simplex in canonical order is required",
+        )
+    if any(
         not isinstance(component, tuple)
         or len(component) != 2
         or not isinstance(component[0], (str, tuple))

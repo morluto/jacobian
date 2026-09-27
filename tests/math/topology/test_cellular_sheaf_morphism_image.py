@@ -360,6 +360,57 @@ def test_image_decoder_binds_cover_paths_across_the_factorization() -> None:
         SheafMorphismImageResult.model_validate(payload)
 
 
+def test_image_decoder_rejects_matching_but_incomplete_parent_diagrams() -> None:
+    source, target = _sheaf(rank=1), _sheaf(rank=1)
+    original = morphism(
+        source,
+        target,
+        tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order),
+    )
+    payload = image_of_morphism(original).model_dump(mode="python")
+
+    def remove_restrictions(value):
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                if key == "cover_restrictions" and nested:
+                    value[key] = nested[1:]
+                else:
+                    remove_restrictions(nested)
+        elif isinstance(value, list):
+            for nested in value:
+                remove_restrictions(nested)
+
+    remove_restrictions(payload)
+    with pytest.raises(ValueError, match="complete parent diagram"):
+        SheafMorphismImageResult.model_validate(payload)
+
+
+def test_image_rejects_excess_component_count_before_resolving_axes(monkeypatch) -> None:
+    from jacobian.math.topology.cellular_sheaves import morphism_image
+
+    source, target = _sheaf(rank=1), _sheaf(rank=1)
+    valid = morphism(
+        source,
+        target,
+        tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order),
+    )
+    malformed = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=valid.components * 100,
+        natural=True,
+        obstruction=None,
+    )
+    monkeypatch.setattr(
+        morphism_image,
+        "_resolve_component_key",
+        lambda *_args: pytest.fail("oversized components were traversed"),
+    )
+
+    with pytest.raises(OperationDomainValidationError, match="one morphism component"):
+        image_of_morphism(malformed)
+
+
 def test_image_rejects_oversized_component_before_resource_scan(monkeypatch) -> None:
     from jacobian.math.topology.cellular_sheaves import morphism_image
 

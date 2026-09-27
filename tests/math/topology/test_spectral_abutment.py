@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredSubspace,
     FiltrationLevel,
@@ -167,3 +168,73 @@ def test_stable_page_representative_is_corrected_by_lower_filtration() -> None:
     assert result.status == "STABILIZED"
     assert result.comparisons[1][1].page_dimension == 1
     assert result.comparisons[1][1].homology_graded_dimension == 1
+
+
+def test_stable_page_representative_lift_preserves_rational_arithmetic() -> None:
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        prime=None,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 2),
+        differential_matrices=(((1, 1),),),
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((0, 1),)),
+            ),
+        ),
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((1, 0), (0, 1))),
+            ),
+        ),
+    )
+
+    result = abutment(
+        SpectralAbutmentRequest(complex=complex_value, filtration=filtration)
+    )
+
+    assert result.status == "STABILIZED"
+    assert result.comparisons[1][1].page_dimension == 1
+    assert result.comparisons[1][1].homology_graded_dimension == 1
+
+
+def test_abutment_preflights_complete_retained_output_cells() -> None:
+    sizes = (10,) * 59
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=2,
+        degree_min=-26,
+        degree_max=32,
+        basis_sizes=sizes,
+        differential_matrices=tuple(
+            tuple(tuple(0 for _ in range(10)) for _ in range(10))
+            for _ in range(58)
+        ),
+    )
+    spanning_vectors = tuple(
+        tuple(int(row == column) for column in range(10))
+        for row in range(10)
+    )
+    vectors = spanning_vectors + (spanning_vectors[0],) * 54
+    filtration = tuple(
+        FiltrationLevel(
+            subspaces=tuple(
+                FilteredSubspace(vectors=vectors) for _ in range(59)
+            ),
+        )
+        for _ in range(8)
+    )
+
+    with pytest.raises(
+        OperationResourceAdmissionError,
+        match="complete abutment result retains up to",
+    ) as error:
+        abutment(
+            SpectralAbutmentRequest(complex=complex_value, filtration=filtration)
+        )
+    assert error.value.errors()[0]["type"] == "spectral_sequence.abutment_output_bound"

@@ -19,6 +19,9 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
     Vector,
 )
 from jacobian.math.topology.chain_complexes._filtered_operations import (
+    _add as _scalar_add,
+)
+from jacobian.math.topology.chain_complexes._filtered_operations import (
     _admit_filtered_semantics,
     _admit_filtered_structure,
     _coordinates,
@@ -34,6 +37,12 @@ from jacobian.math.topology.chain_complexes._filtered_operations import (
     _transpose,
     admit_filtered,
     spectral_page,
+)
+from jacobian.math.topology.chain_complexes._filtered_operations import (
+    _mul as _scalar_mul,
+)
+from jacobian.math.topology.chain_complexes._filtered_operations import (
+    _neg as _scalar_neg,
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
@@ -321,12 +330,15 @@ def _filtered_cycle_basis(
 
 
 def _linear_combination(
-    basis: list[list[Any]], coordinates: list[Any], ambient_dimension: int, prime: int
+    basis: list[list[Any]],
+    coordinates: list[Any],
+    ambient_dimension: int,
+    prime: int | None,
 ) -> list[Any]:
     result = [_parse_entry(0, prime) for _ in range(ambient_dimension)]
     for coefficient, vector in zip(coordinates, basis, strict=True):
         result = [
-            (value + coefficient * entry) % prime
+            _scalar_add(value, _scalar_mul(coefficient, entry, prime), prime)
             for value, entry in zip(result, vector, strict=True)
         ]
     return result
@@ -777,7 +789,7 @@ def _compare_stable_component(
             ]
             correction_coordinates = _solve(
                 _transpose(lower_images),
-                [(-value) % prime for value in differential],
+                [_scalar_neg(value, prime) for value in differential],
                 prime,
             )
             if correction_coordinates is None:
@@ -790,7 +802,7 @@ def _compare_stable_component(
                 lower_chain_basis, correction_coordinates, len(chain), prime
             )
             chain = [
-                (value + delta) % prime
+                _scalar_add(value, delta, prime)
                 for value, delta in zip(chain, correction, strict=True)
             ]
             if any(_mat_vec(outgoing, chain, prime)):
@@ -839,19 +851,47 @@ def _compare_stable_component(
     )
 
 
+def _abutment_retained_cells(
+    sizes: tuple[int, ...], filtration: tuple[FiltrationLevel, ...]
+) -> int:
+    """Conservatively count scalar cells retained by the abutment result."""
+    levels = len(filtration)
+    degree_square_cells = sum(size * size for size in sizes)
+    chain_cells = sum(
+        sizes[index] * sizes[index + 1] for index in range(len(sizes) - 1)
+    )
+    filtration_cells = sum(
+        len(subspace.vectors) * sizes[degree]
+        for level in filtration
+        for degree, subspace in enumerate(level.subspaces)
+    )
+    # The result retains the input complex and filtration in its page, page
+    # representatives, homology cycle/boundary/quotient bases, and both the
+    # graded bases and comparison matrices. Page differentials and their
+    # square-zero ledger are bounded for every admitted page and level.
+    return (
+        2 * chain_cells
+        + filtration_cells
+        + levels * degree_square_cells
+        + 3 * degree_square_cells
+        + 2 * levels * degree_square_cells
+        + 3 * levels * MAX_SPECTRAL_PAGE * degree_square_cells
+    )
+
+
 def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
     # The comparison is part of the abutment postcondition: a stable page is
     # only identified with the associated graded of homology after the exact
     # representative map has been shown to be an isomorphism.
     sizes = request.complex.basis_sizes
     levels = len(request.filtration)
-    comparison_cells = levels * sum(size * size for size in sizes)
-    if comparison_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
+    output_cells = _abutment_retained_cells(sizes, request.filtration)
+    if output_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("filtration",),
-            code="spectral_sequence.abutment_comparison_bound",
+            code="spectral_sequence.abutment_output_bound",
             message=(
-                f"the abutment comparison needs {comparison_cells} matrix cells, "
+                f"the complete abutment result retains up to {output_cells} scalar cells, "
                 "above the admitted exact-result envelope"
             ),
         )
@@ -873,16 +913,6 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
             ),
         )
     _admit_filtered_structure(request.complex, request.filtration)
-    output_cells = comparison_cells
-    if output_cells > MAX_FILTERED_HOMOLOGY_RESULT_CELLS:
-        raise OperationResourceAdmissionError(
-            location=("filtration",),
-            code="spectral_sequence.abutment_output_bound",
-            message=(
-                f"the exact abutment comparison needs {output_cells} cells, "
-                f"above {MAX_FILTERED_HOMOLOGY_RESULT_CELLS}"
-            ),
-        )
     admitted = _admit_filtered_semantics(request.complex, request.filtration)
     profile = pages_through(
         SpectralPagesRequest(complex=request.complex, filtration=request.filtration)

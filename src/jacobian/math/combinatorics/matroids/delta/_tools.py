@@ -32,8 +32,8 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     width,
 )
 from jacobian.math.combinatorics.matroids.delta.relabel import (
-    DeltaMatroidRelabelRequest,
     DeltaMatroidRelabelling,
+    DeltaMatroidRelabelRequest,
     relabel,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
@@ -117,6 +117,14 @@ def _run_binary(request: BinaryMatrixRequest) -> BinaryMatrixResult:
         raise _extra_domain(("matrix",), "delta_matroid.binary_invalid", exc) from exc
 
 
+def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
+    return relabel(
+        request.delta_matroid,
+        request.target_ground,
+        request.target_to_source,
+    )
+
+
 def _width(request: DeltaMatroidWidthRequest) -> DeltaMatroidWidthResult:
     try:
         return DeltaMatroidWidthResult._from_kernel(
@@ -140,12 +148,6 @@ def _distance_interlace(
     request: DistanceInterlaceRequest,
 ) -> DistanceInterlaceResult:
     return distance_interlace_polynomial(request.delta_matroid)
-
-
-def _run_relabel(request: DeltaMatroidRelabelRequest) -> DeltaMatroidRelabelling:
-    return relabel(
-        request.delta_matroid, request.target_ground, request.target_to_source
-    )
 
 
 TOOLS: MathTools = (  # noqa: RUF005

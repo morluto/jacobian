@@ -66,30 +66,18 @@ class DistanceInterlaceResult(StrictModel):
     def require_complete_histogram_and_polynomial(self) -> DistanceInterlaceResult:
         degree = len(self.source.ground)
         if len(self.distance_counts) != degree + 1:
-            raise PydanticCustomError(
-                "delta_matroid.distance_interlace_histogram_shape",
-                "distance histogram must have one entry for each distance 0..|E|",
-            )
-        if any(count < 0 for count in self.distance_counts) or sum(
-            self.distance_counts
-        ) != 1 << degree:
-            raise PydanticCustomError(
-                "delta_matroid.distance_interlace_histogram_total",
-                "distance counts must be nonnegative and cover every ground subset",
-            )
+            raise PydanticCustomError("delta_matroid.distance_interlace_histogram_shape", "distance histogram must have one entry for each distance 0..|E|")
+        if any(count < 0 for count in self.distance_counts) or sum(self.distance_counts) != 1 << degree:
+            raise PydanticCustomError("delta_matroid.distance_interlace_histogram_total", "distance counts must be nonnegative and cover every ground subset")
         ascending = [0] * (degree + 1)
         for distance, count in enumerate(self.distance_counts):
             for power in range(distance + 1):
-                sign = -1 if (distance - power) % 2 else 1
-                ascending[power] += sign * count * comb(distance, power)
+                ascending[power] += (-1 if (distance - power) % 2 else 1) * count * comb(distance, power)
         descending = tuple(reversed(ascending))
         while len(descending) > 1 and descending[0] == 0:
             descending = descending[1:]
         if self.polynomial.coefficients != descending:
-            raise PydanticCustomError(
-                "delta_matroid.distance_interlace_polynomial_binding",
-                "polynomial must be the expansion determined by the distance histogram",
-            )
+            raise PydanticCustomError("delta_matroid.distance_interlace_polynomial_binding", "polynomial must be the expansion determined by the distance histogram")
         return self
 
 

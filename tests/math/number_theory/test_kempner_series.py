@@ -21,9 +21,8 @@ from jacobian.math.number_theory.kempner import (
 )
 from jacobian.math.number_theory.kempner._models import (
     MAX_KEMPNER_SERIES_NUMERALS,
-    KempnerDecimalEnclosure,
-    KempnerDecimalEnclosureRequest,
     KempnerSeriesEnclosure,
+    KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner._tools import TOOLS
 from jacobian.math.number_theory.kempner.operations import (
@@ -165,22 +164,17 @@ def test_agrees_with_direct_family_enumeration() -> None:
 
 def test_native_and_catalog_results_agree() -> None:
     digit_set = KempnerDigitSet(base=10, allowed_digits=(1,))
-    native = enclose_kempner_series_decimal(digit_set, 2, 24)
+    native = enclose_kempner_series(digit_set, 2)
     tool = next(
         tool
         for tool in TOOLS
         if tool.operation_id == "number_theory.kempner_series.enclose"
     )
-    catalog = tool.run(
-        KempnerDecimalEnclosureRequest(
-            digit_set=digit_set, cutoff=2, precision=24
-        )
-    )
+    catalog = tool.run(KempnerSeriesEnclosureRequest(digit_set=digit_set, cutoff=2))
 
     assert catalog == native
     assert (
-        KempnerDecimalEnclosure.model_validate_json(catalog.model_dump_json())
-        == catalog
+        KempnerSeriesEnclosure.model_validate_json(catalog.model_dump_json()) == catalog
     )
 
 
@@ -190,15 +184,14 @@ def test_dense_catalog_operation_round_trips_exact_interval() -> None:
         for tool in TOOLS
         if tool.operation_id == "number_theory.kempner_series.enclose"
     )
-    request = KempnerDecimalEnclosureRequest(
+    request = KempnerSeriesEnclosureRequest(
         digit_set=KempnerDigitSet(base=10, allowed_digits=(1,)),
         cutoff=2,
-        precision=24,
     )
     result = tool.run(request)
-    assert isinstance(result, KempnerDecimalEnclosure)
+    assert isinstance(result, KempnerSeriesEnclosure)
     assert (
-        KempnerDecimalEnclosure.model_validate_json(result.model_dump_json()) == result
+        KempnerSeriesEnclosure.model_validate_json(result.model_dump_json()) == result
     )
 
 

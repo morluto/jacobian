@@ -34,6 +34,7 @@ MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH = 2 * MAX_FREE_ALGEBRA_WORD_LENGTH
 # carry this many letters.
 MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH = MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
 MAX_FREE_WORD_POWER_EXPONENT = 64
+MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT = 64
 # Prefix/suffix/factor families are bounded over canonical word values, since
 # those non-growing consumers admit producers through the full 64-letter range.
 MAX_FREE_WORD_SPLITS = MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH + 1
@@ -65,6 +66,7 @@ MAX_FREE_ALGEBRA_ADDITION_TERMS = 2 * MAX_FREE_ALGEBRA_OPERAND_TERMS
 # canonical result's allocation, not any transport serialization.
 MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS = 150_000
 MAX_FREE_ALGEBRA_RESULT_TERMS = 4_096
+MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS = 1_500_000
 MAX_FREE_ALGEBRA_TERM_PAIRS = MAX_FREE_ALGEBRA_OPERAND_TERMS**2
 MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS = 64
 MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS = 65_536
@@ -93,6 +95,13 @@ MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS = (
 )
 MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES = 16_384
 MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS = 150_000
+MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES = 2_000_000
+# Truncated quotient multiplication is dense in its basis-pair axis and can
+# have a full basis expansion at each pair. Keep its exact table bounded
+# independently from the much larger quotient prefix word-profile envelope.
+MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS = 65_536
+MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK = 8_000_000
+MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES = 2_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -532,8 +541,10 @@ class FreeAlgebraPolynomial(StrictModel):
 class TermPairMultiplicationLedger(StrictModel):
     """Bounded accounting for one distributive noncommutative product."""
 
-    left_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_OPERAND_TERMS)
-    right_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_OPERAND_TERMS)
+    # Power operations use the same kernel for admitted intermediate values,
+    # whose support can exceed the public product's 64-term operand limit.
+    left_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
+    right_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
     term_pair_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_TERM_PAIRS)
     distinct_product_word_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
     collected_pair_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_TERM_PAIRS)
@@ -568,6 +579,13 @@ class FreeAlgebraPolynomialAddRequest(StrictModel):
 
     left: FreeAlgebraPolynomial
     right: FreeAlgebraPolynomial
+
+
+class FreeAlgebraPolynomialPowerRequest(StrictModel):
+    """A bounded nonnegative power of one canonical free-algebra polynomial."""
+
+    polynomial: FreeAlgebraPolynomial
+    exponent: int = Field(ge=0, le=MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT)
 
 
 class FreeAlgebraPolynomialProductResult(StrictModel):
@@ -649,8 +667,18 @@ class FreeAlgebraPolynomialHomomorphism(StrictModel):
 
 
 class FreeAlgebraPolynomialSubstitutionRequest(StrictModel):
-    substitution: FreeAlgebraPolynomialHomomorphism
-    polynomial: FreeAlgebraPolynomial
+    substitution: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "Map source generators to target polynomials. Each image is limited "
+            "to 64 terms whose words contain at most 32 letters."
+        )
+    )
+    polynomial: FreeAlgebraPolynomial = Field(
+        description=(
+            "Source polynomial limited at execution to 64 terms whose words "
+            "contain at most 32 letters."
+        )
+    )
 
     @model_validator(mode="after")
     def require_source_alphabet(self) -> Self:
@@ -658,6 +686,32 @@ class FreeAlgebraPolynomialSubstitutionRequest(StrictModel):
             raise _validation_error(
                 "polynomial_substitution_source_alphabet",
                 "polynomial must use the substitution source alphabet",
+            )
+        return self
+
+
+class FreeAlgebraPolynomialHomomorphismCompositionRequest(StrictModel):
+    """Maps ``f:A→B`` and ``g:B→C`` in the order used by ``g ∘ f``."""
+
+    f: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The first map f:A→B, applied before g. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+    g: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The second map g:B→C, applied after f. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_matching_intermediate_alphabet(self) -> Self:
+        if self.f.target_alphabet != self.g.source_alphabet:
+            raise _validation_error(
+                "homomorphism_composition_alphabet",
+                "f target alphabet must equal g source alphabet in the same order",
             )
         return self
 
@@ -727,6 +781,13 @@ class GroebnerShirshovResult(StrictModel):
 
 class FreeAlgebraQuotientProfileRequest(StrictModel):
     """Request the bounded graded quotient word-basis profile."""
+
+    ideal: FreeAlgebraIdeal
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+
+
+class TruncatedFreeAlgebraQuotientRequest(StrictModel):
+    """Build the finite quotient with all words above a degree killed."""
 
     ideal: FreeAlgebraIdeal
     degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
@@ -833,6 +894,133 @@ class FreeAlgebraQuotientProfileResult(StrictModel):
                     "quotient_profile_reducible_word",
                     "normal-word basis elements must avoid every leading-word factor",
                 )
+        return self
+
+
+class TruncatedFreeAlgebraQuotient(StrictModel):
+    """Exact unital algebra ``QQ<X>/(I + words of degree > D)``.
+
+    ``basis_words`` are the canonical normal words through degree D.
+    ``multiplication[i][j]`` is the exact reduced representative of the
+    product of basis words i and j, or zero when its degree exceeds D.
+    This is a finite-dimensional truncated quotient value, not a claim that
+    the untruncated presented quotient is finite-dimensional.
+    """
+
+    ideal: FreeAlgebraIdeal
+    completion: GroebnerShirshovResult
+    degree: int = Field(ge=0, le=MAX_FREE_ALGEBRA_WORD_LENGTH)
+    basis_words: tuple[tuple[FreeAlgebraLetter, ...], ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES
+    )
+    multiplication: tuple[tuple[FreeAlgebraPolynomial, ...], ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES
+    )
+    unit: FreeAlgebraPolynomial
+
+    @model_validator(mode="after")
+    def require_completion_context(self) -> Self:
+        if (
+            self.completion.ideal != self.ideal
+            or self.completion.degree != self.degree
+            or self.completion.status != "COMPLETE_THROUGH_DEGREE"
+        ):
+            raise _validation_error(
+                "truncated_quotient_completion",
+                "the retained completion must match the source ideal and degree",
+            )
+        return self
+
+    @model_validator(mode="after")
+    def require_truncated_quotient_axes(self) -> Self:
+        if self.ideal.side != "two-sided":
+            raise _validation_error(
+                "truncated_quotient_side",
+                "a truncated quotient requires a two-sided ideal",
+            )
+        if self.unit.alphabet != self.ideal.alphabet:
+            raise _validation_error(
+                "truncated_quotient_unit_alphabet",
+                "unit must retain the ideal alphabet",
+            )
+        if any(
+            len({len(term.word) for term in generator.terms}) > 1
+            for generator in self.ideal.generators
+        ):
+            raise _validation_error(
+                "truncated_quotient_homogeneity",
+                "the quotient ideal must be generated by homogeneous polynomials",
+            )
+        keys = tuple(
+            canonical_word_key(self.ideal.alphabet, word) for word in self.basis_words
+        )
+        if keys != tuple(sorted(set(keys))) or any(
+            len(word) > self.degree
+            or any(letter not in self.ideal.alphabet for letter in word)
+            for word in self.basis_words
+        ):
+            raise _validation_error(
+                "truncated_quotient_basis",
+                "basis words must be canonical normal words through degree D",
+            )
+        dimension = len(self.basis_words)
+        if len(self.multiplication) != dimension or any(
+            len(row) != dimension for row in self.multiplication
+        ):
+            raise _validation_error(
+                "truncated_quotient_table_axis",
+                "multiplication table must be square on the basis axis",
+            )
+        basis = set(self.basis_words)
+        contains_unit_relation = any(
+            any(not term.word for term in generator.terms)
+            for generator in self.ideal.generators
+        )
+        if contains_unit_relation != (dimension == 0):
+            raise _validation_error(
+                "truncated_quotient_zero_algebra",
+                "the basis is empty exactly when the ideal contains a nonzero scalar",
+            )
+        if any(
+            value.alphabet != self.ideal.alphabet
+            or any(term.word not in basis for term in value.terms)
+            for row in self.multiplication
+            for value in row
+        ):
+            raise _validation_error(
+                "truncated_quotient_table_support",
+                "products must be canonical coordinates in the quotient basis",
+            )
+        for left_index, left_word in enumerate(self.basis_words):
+            for right_index, right_word in enumerate(self.basis_words):
+                expected_degree = len(left_word) + len(right_word)
+                product = self.multiplication[left_index][right_index]
+                if expected_degree > self.degree:
+                    if product.terms:
+                        raise _validation_error(
+                            "truncated_quotient_cutoff",
+                            "products above degree D must be zero in the truncated algebra",
+                        )
+                elif any(len(term.word) != expected_degree for term in product.terms):
+                    raise _validation_error(
+                        "truncated_quotient_grading",
+                        "basis products must retain their homogeneous degree",
+                    )
+        unit_word_index = self.basis_words.index(()) if () in basis else None
+        if dimension == 0 and self.unit.terms:
+            raise _validation_error(
+                "truncated_quotient_unit", "the zero quotient has zero unit coordinates"
+            )
+        if dimension > 0 and (
+            unit_word_index is None
+            or len(self.unit.terms) != 1
+            or self.unit.terms[0].word != ()
+            or self.unit.terms[0].coefficient.as_fraction() != 1
+        ):
+            raise _validation_error(
+                "truncated_quotient_unit",
+                "a nonzero quotient unit is the canonical empty-word basis vector",
+            )
         return self
 
 
@@ -970,11 +1158,16 @@ __all__ = [
     "MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS",
     "MAX_FREE_ALGEBRA_LETTER_LENGTH",
     "MAX_FREE_ALGEBRA_OPERAND_TERMS",
+    "MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT",
+    "MAX_FREE_ALGEBRA_PRODUCT_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES",
     "MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_RESULT_TERMS",
     "MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH",
     "MAX_FREE_ALGEBRA_TERM_PAIRS",
+    "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES",
+    "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS",
+    "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK",
     "MAX_FREE_ALGEBRA_WORD_LENGTH",
     "MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH",
     "MAX_FREE_WORD_FACTOR_DISTINCT",
@@ -990,6 +1183,7 @@ __all__ = [
     "FreeAlgebraLetter",
     "FreeAlgebraPolynomial",
     "FreeAlgebraPolynomialAddRequest",
+    "FreeAlgebraPolynomialPowerRequest",
     "FreeAlgebraPolynomialProductRequest",
     "FreeAlgebraPolynomialProductResult",
     "FreeAlgebraQuotientDegreeComponent",
@@ -1023,6 +1217,8 @@ __all__ = [
     "NCPolynomial",
     "RightIdealPresentation",
     "TermPairMultiplicationLedger",
+    "TruncatedFreeAlgebraQuotient",
+    "TruncatedFreeAlgebraQuotientRequest",
     "TwoSidedIdealPresentation",
     "canonical_word_key",
 ]

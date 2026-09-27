@@ -7,14 +7,22 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.graphs.decks._models import (
+    UnlabelledVertexDeckClass,
+    UnlabelledVertexDeckRequest,
+    VertexDeckInducedSubgraphCountRequest,
     VertexDeckRequest,
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks._tools import TOOLS, _run_vertex_deleted
 from jacobian.math.graphs.decks.operations import (
+    unlabelled_vertex_deck,
     verify_vertex_deletion_family,
+    vertex_deck_induced_subgraph_count,
     vertex_deletion_family,
 )
 from jacobian.math.graphs.values import SimpleUndirectedGraph
@@ -197,3 +205,215 @@ def test_oversized_source_rejected_before_expansion() -> None:
     graph = _graph(vertices, ())
     with pytest.raises(OperationResourceAdmissionError):
         vertex_deletion_family(graph)
+
+
+def test_vertex_deck_multiset_matches_exhaustive_permutation_oracle() -> None:
+    """Every labeled source graph through order four matches NetworkX VF2."""
+    from itertools import combinations
+
+    import networkx as nx
+
+    def as_networkx(graph: SimpleUndirectedGraph) -> nx.Graph:
+        result = nx.Graph()
+        result.add_nodes_from(graph.vertices)
+        result.add_edges_from(graph.edges)
+        return result
+
+    for order in range(5):
+        vertices = tuple(f"v{i}" for i in range(order))
+        possible_edges = tuple(combinations(vertices, 2))
+        for mask in range(1 << len(possible_edges)):
+            edges = tuple(
+                edge for bit, edge in enumerate(possible_edges) if mask & (1 << bit)
+            )
+            source = SimpleUndirectedGraph(vertices=vertices, edges=edges)
+            family = vertex_deletion_family(source)
+            deck = unlabelled_vertex_deck(family)
+            expected: list[list[int]] = []
+            expected_representatives: list[nx.Graph] = []
+            for index, card in enumerate(family.cards):
+                graph_card = as_networkx(card.card)
+                for class_index, representative in enumerate(expected_representatives):
+                    if nx.is_isomorphic(graph_card, representative):
+                        expected[class_index].append(index)
+                        break
+                else:
+                    expected_representatives.append(graph_card)
+                    expected.append([index])
+            assert deck.card_count == order
+            assert [list(item.card_indices) for item in deck.classes] == expected
+            assert all(
+                item.multiplicity == len(item.card_indices) for item in deck.classes
+            )
+            assert sum(item.multiplicity for item in deck.classes) == order
+
+
+def test_vertex_unlabelled_catalog_example_and_serialized_composition() -> None:
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "graph.deck.vertex.unlabelled.compute"
+    )
+    request = UnlabelledVertexDeckRequest.model_validate(tool.examples[0].input)
+    result = tool.run(request)
+    assert [item.multiplicity for item in result.classes] == [2, 1]
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert decoded == result
+
+
+def test_vertex_unlabelled_consumer_rejects_forged_family() -> None:
+    family = vertex_deletion_family(_path_3())
+    forged = VertexDeletionFamily.model_construct(
+        source=family.source,
+        cards=family.cards[:-1],
+        edge_appearances=family.edge_appearances,
+        vertex_appearances=family.vertex_appearances,
+    )
+    with pytest.raises(OperationDomainValidationError, match="complete source family"):
+        unlabelled_vertex_deck(forged)
+
+
+def test_vertex_unlabelled_exact_work_boundary() -> None:
+    accepted = SimpleUndirectedGraph(
+        vertices=tuple(f"v{i}" for i in range(8)), edges=()
+    )
+    result = unlabelled_vertex_deck(vertex_deletion_family(accepted))
+    assert result.classes[0].multiplicity == 8
+
+    rejected = SimpleUndirectedGraph(
+        vertices=tuple(f"v{i}" for i in range(9)), edges=()
+    )
+    family = vertex_deletion_family(rejected)
+    with pytest.raises(OperationResourceAdmissionError, match="permutation work"):
+        unlabelled_vertex_deck(family)
+
+
+def test_kelly_induced_count_matches_exhaustive_direct_graph_oracle() -> None:
+    """Every host through order four and every proper pattern match direct subsets."""
+    from itertools import combinations
+
+    import networkx as nx
+
+    def graph_from_mask(prefix: str, order: int, mask: int) -> SimpleUndirectedGraph:
+        vertices = tuple(f"{prefix}{index}" for index in range(order))
+        possible_edges = tuple(combinations(vertices, 2))
+        return SimpleUndirectedGraph(
+            vertices=vertices,
+            edges=tuple(
+                edge for bit, edge in enumerate(possible_edges) if mask & (1 << bit)
+            ),
+        )
+
+    def networkx_graph(graph: SimpleUndirectedGraph) -> nx.Graph:
+        result = nx.Graph()
+        result.add_nodes_from(graph.vertices)
+        result.add_edges_from(graph.edges)
+        return result
+
+    def direct_induced_count(
+        host: SimpleUndirectedGraph, pattern: SimpleUndirectedGraph
+    ) -> int:
+        host_nx = networkx_graph(host)
+        pattern_nx = networkx_graph(pattern)
+        return sum(
+            nx.is_isomorphic(host_nx.subgraph(subset), pattern_nx)
+            for subset in combinations(host.vertices, len(pattern.vertices))
+        )
+
+    for source_order in range(1, 5):
+        source_edge_count = source_order * (source_order - 1) // 2
+        for source_mask in range(1 << source_edge_count):
+            source = graph_from_mask("g", source_order, source_mask)
+            family = vertex_deletion_family(source)
+            deck = unlabelled_vertex_deck(family)
+            for pattern_order in range(source_order):
+                pattern_edge_count = pattern_order * (pattern_order - 1) // 2
+                for pattern_mask in range(1 << pattern_edge_count):
+                    pattern = graph_from_mask("p", pattern_order, pattern_mask)
+                    result = vertex_deck_induced_subgraph_count(deck, pattern)
+                    expected = direct_induced_count(source, pattern)
+                    assert result.occurrence_count == expected
+                    assert result.overcount_divisor == source_order - pattern_order
+                    assert result.weighted_card_total == sum(
+                        direct_induced_count(card.card, pattern)
+                        for card in family.cards
+                    )
+
+
+def test_kelly_operation_example_and_proper_order_boundary() -> None:
+    from jacobian.math.graphs.decks._tools import TOOLS as DECK_TOOLS
+
+    tool = next(
+        tool
+        for tool in DECK_TOOLS
+        if tool.operation_id == "graph.deck.vertex.induced_subgraph_count.compute"
+    )
+    request = VertexDeckInducedSubgraphCountRequest.model_validate(
+        tool.examples[0].input
+    )
+    result = tool.run(request)
+    assert result.occurrence_count == 3
+    assert result.weighted_card_total == 6
+    assert result.overcount_divisor == 2
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+    deck = unlabelled_vertex_deck(
+        vertex_deletion_family(
+            SimpleUndirectedGraph(vertices=("a", "b"), edges=(("a", "b"),))
+        )
+    )
+    with pytest.raises(ValidationError, match="strictly smaller"):
+        VertexDeckInducedSubgraphCountRequest(
+            deck=deck,
+            pattern=SimpleUndirectedGraph(vertices=("x", "y"), edges=(("x", "y"),)),
+        )
+
+
+def test_kelly_induced_count_rejects_oversized_label_echo_before_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Unbounded vertex labels must not expand into an oversized deck echo."""
+    import jacobian.math.graphs.decks.operations as operations
+
+    big = "x" * 200_000
+    source = _graph((big, "b", "c"), (("b", "c"), ("b", big), ("c", big)))
+    deck = unlabelled_vertex_deck(vertex_deletion_family(source))
+    pattern = _graph(("p",), ())
+
+    def fail(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("result expansion ran before the echo admission gate")
+
+    monkeypatch.setattr(operations, "unlabelled_vertex_deck", fail)
+    with pytest.raises(OperationResourceAdmissionError) as exc_info:
+        vertex_deck_induced_subgraph_count(deck, pattern)
+    assert (
+        exc_info.value.errors()[0]["type"] == "graph_deck.kelly_result_allocation_bound"
+    )
+
+
+def test_kelly_induced_count_admits_bounded_label_echo() -> None:
+    big = "x" * 2_000
+    source = _graph((big, "b", "c"), (("b", "c"), ("b", big), ("c", big)))
+    deck = unlabelled_vertex_deck(vertex_deletion_family(source))
+    result = vertex_deck_induced_subgraph_count(deck, _graph(("p",), ()))
+    assert result.occurrence_count == 3
+    assert result.overcount_divisor == 2
+
+
+def test_kelly_count_rejects_forged_deck_class_multiplicity() -> None:
+    source = _path_3()
+    deck = unlabelled_vertex_deck(vertex_deletion_family(source))
+    first = deck.classes[0]
+    forged_first = UnlabelledVertexDeckClass.model_construct(
+        representative=first.representative,
+        multiplicity=1,
+        card_indices=(first.card_indices[0],),
+    )
+    forged = type(deck).model_construct(
+        family=deck.family,
+        classes=(forged_first, *deck.classes[1:]),
+        card_count=deck.card_count,
+    )
+    pattern = SimpleUndirectedGraph(vertices=("x",), edges=())
+    with pytest.raises(OperationDomainValidationError, match="exact multiset quotient"):
+        vertex_deck_induced_subgraph_count(forged, pattern)

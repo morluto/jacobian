@@ -1243,6 +1243,28 @@ def _fiber_has_member(
     return visit(0, target_grade)
 
 
+def _missing_normalization_generator_hole(
+    source: PositiveAffineSemigroup, candidates: tuple[tuple[int, ...], ...]
+) -> AffineSemigroupNormality | None:
+    """Return the first missing normalization Hilbert generator as a hole."""
+    if len(candidates) > MAX_AFFINE_NORMALITY_CANDIDATES:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.normality_candidate_bound",
+            message="normalization Hilbert basis exceeds the normality candidate bound",
+        )
+    if not candidates:
+        return None
+    target = candidates[0]
+    if _cone_member(source.configuration, target) is None or not _lattice_member(
+        source.configuration, target
+    ):
+        raise ArithmeticError(
+            "normalization output failed its cone or generated-lattice invariant"
+        )
+    return AffineSemigroupNormality(semigroup=source, normal=False, hole=target)
+
+
 def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     """Decide normality for a full-rank, positive two-dimensional semigroup.
 
@@ -1285,12 +1307,11 @@ def normality(semigroup: PositiveAffineSemigroup) -> AffineSemigroupNormality:
     candidates = tuple(
         target for target in normalized.generators if target not in source_vectors
     )
-    if len(candidates) > MAX_AFFINE_NORMALITY_CANDIDATES:
-        raise OperationResourceAdmissionError(
-            location=("semigroup",),
-            code="affine_semigroup.normality_candidate_bound",
-            message="normalization Hilbert basis exceeds the normality candidate bound",
-        )
+    # A normalization Hilbert generator is indecomposable in the normalization
+    # semigroup. A missing one is already an exact hole; no fiber search needed.
+    missing_hole = _missing_normalization_generator_hole(source, candidates)
+    if missing_hole is not None:
+        return missing_hole
 
     # An integral covector formed from the two extreme rays is strictly
     # positive on every generator. It bounds coefficients without using the

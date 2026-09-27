@@ -145,9 +145,7 @@ def test_composition_admits_both_coordinate_projections_before_either_runs(
     def projection_must_not_run(*args, **kwargs):
         pytest.fail("coordinate projection ran before combined work admission")
 
-    monkeypatch.setattr(
-        simplicial_maps, "_admit_homology_projection", record_admission
-    )
+    monkeypatch.setattr(simplicial_maps, "_admit_homology_projection", record_admission)
     monkeypatch.setattr(
         simplicial_maps, "_map_homology_generator", projection_must_not_run
     )
@@ -205,12 +203,8 @@ def test_composition_admits_each_distinct_carrier_with_shared_chain_axes(
             maps=tuple(tuple(range(len(level))) for level in source.sets),
         )
 
-    first = induced_normalized_homology_map(
-        map_between(first_carrier, second_carrier)
-    )
-    second = induced_normalized_homology_map(
-        map_between(second_carrier, third_carrier)
-    )
+    first = induced_normalized_homology_map(map_between(first_carrier, second_carrier))
+    second = induced_normalized_homology_map(map_between(second_carrier, third_carrier))
     chain_complex = normalized_chains(first_carrier).chain_complex
     one_endpoint_work = simplicial_maps.admit_integral_homology(
         chain_complex

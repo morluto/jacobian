@@ -69,7 +69,7 @@ def test_global_equality_admits_common_level_before_space_construction() -> None
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
         modular_form_coordinates_equal(left, right)
-    assert error.value.code == "modular_form.equality_common_level_bound"
+    assert error.value.errors()[0]["type"] == "modular_form.equality_common_level_bound"
 
 
 def _coordinate_values(*values: tuple[int, int]) -> tuple[CanonicalRational, ...]:

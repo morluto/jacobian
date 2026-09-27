@@ -72,7 +72,8 @@ def test_identical_pari_space_transport_preserves_coordinates_without_backend(
         return materialize(plan)
 
     monkeypatch.setattr(basis, "_materialize_pari_basis", counting)
-    assert modular_form_coordinates_transport(form, space) is form
+    inclusion = modular_form_space_inclusion(space, space)
+    assert modular_form_coordinates_transport(form, inclusion) is form
     assert calls == []
 
 

@@ -35,6 +35,10 @@ from jacobian.math.function_fields._models import (
     FunctionFieldRiemannRochMembershipRequest,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
+    FunctionFieldTraceRequest,
+    FunctionFieldTraceResult,
+    FunctionFieldUniformizerRequest,
+    FunctionFieldUniformizerResult,
     HyperellipticAffinePlaceValuationRequest,
     HyperellipticAffinePlaceValuationResult,
     HyperellipticInfinityPlaceValuationRequest,
@@ -56,10 +60,12 @@ from jacobian.math.function_fields.operations import (
     function_field_element_add,
     function_field_element_inverse,
     function_field_element_multiply,
+    function_field_element_trace,
     function_field_genus,
     function_field_hyperelliptic_affine_valuation,
     function_field_hyperelliptic_infinity_valuation,
     function_field_place_residue,
+    function_field_place_uniformizer,
     function_field_place_valuation,
     function_field_principal_divisor,
     function_field_rational_places_degree_bounded,
@@ -84,6 +90,16 @@ def _run_element_inverse(
     request: FunctionFieldElementInverseRequest,
 ) -> FiniteFunctionFieldElement:
     return function_field_element_inverse(request.element)
+
+
+def _run_element_trace(request: FunctionFieldTraceRequest) -> FunctionFieldTraceResult:
+    return function_field_element_trace(request.element)
+
+
+def _run_place_uniformizer(
+    request: FunctionFieldUniformizerRequest,
+) -> FunctionFieldUniformizerResult:
+    return function_field_place_uniformizer(request.place)
 
 
 def _rational_function(
@@ -571,6 +587,42 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="function_field.place.uniformizer.compute",
+        title="Compute a place uniformizer",
+        description=(
+            "Return an exact element of valuation one at a finite or infinite "
+            "place of the rational function field GF(p)(x)."
+        ),
+        request_type=FunctionFieldUniformizerRequest,
+        result_type=FunctionFieldUniformizerResult,
+        run=_run_place_uniformizer,
+        tags=("function-field", "place", "uniformizer", "exact"),
+        examples=(
+            OperationExample(
+                name="uniformizer_at_x_zero",
+                description="The polynomial x has valuation one at the finite place (x).",
+                input={
+                    "place": {
+                        "field": _RATIONAL_FIELD,
+                        "kind": "FINITE",
+                        "prime_polynomial": {
+                            "characteristic": 5,
+                            "coefficients": [0, 1],
+                        },
+                        "degree": 1,
+                    }
+                },
+            ),
+            OperationExample(
+                name="uniformizer_at_infinity",
+                description="The rational function 1/x has valuation one at infinity.",
+                input={
+                    "place": {"field": _RATIONAL_FIELD, "kind": "INFINITE", "degree": 1}
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="function_field.hyperelliptic_affine_place.valuation.compute",
         title="Compute a rational affine hyperelliptic valuation",
         description=(
@@ -599,7 +651,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         "residue_field": {
                             "characteristic": "5",
                             "modulus_coefficients": ["0", "1"],
-                            "generator": "z",
+                            "generator": "a",
                         },
                     },
                     "element": {
@@ -933,6 +985,37 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="elliptic_model_over_gf5",
                 description="Enumerate rational affine places on y^2=x^3-x over GF(5).",
                 input={"field": _GF5_HYPERELLIPTIC_FIELD},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.element.trace.compute",
+        title="Compute the relative trace of a function-field element",
+        description=(
+            "Compute the exact field trace from a presented finite separable "
+            "extension GF(p)(x)[y]/(f) to GF(p)(x), retaining the source field "
+            "and element alongside the rational-function result. The trace is "
+            "computed from Newton sums of the monic defining polynomial; "
+            "coefficient degree, intermediate work, and output size are "
+            "admitted before exact rational-function expansion."
+        ),
+        request_type=FunctionFieldTraceRequest,
+        result_type=FunctionFieldTraceResult,
+        run=_run_element_trace,
+        tags=("algebra", "function-field", "trace", "exact"),
+        discovery_terms=(
+            "function field trace",
+            "relative trace to GF(p)(x)",
+            "trace of algebraic function",
+        ),
+        examples=(
+            OperationExample(
+                name="trace_of_generator_in_characteristic_two",
+                description=(
+                    "In GF(2)(x)[y]/(y^2+y+x), the two conjugates of y are "
+                    "y and y+1, so their sum and the field trace are 1."
+                ),
+                input={"element": _GF2_Y},
             ),
         ),
     ),

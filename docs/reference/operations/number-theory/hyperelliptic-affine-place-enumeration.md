@@ -13,10 +13,10 @@ not a complete place enumeration for the global function field. The operation
 scans each `x` in `GF(p)`, evaluates `f(x)`, and returns the one or two square
 roots in `GF(p)` (or none). Its work is bounded by `p` times the polynomial
 length. Before constructing places, admission also reserves work for at most
-`2p` result records, repeated field/residue validation, linear canonical-order
-validation, and a conservative serialized-result byte estimate. The output cap
-is independently `2p` places (514 at the maximum admitted `p=257`) and 2 MB of
-serialized JSON.
+`2p` result records, repeated field/residue validation, and linear
+canonical-order validation. Intrinsic cardinality is limited to `2p` places
+(514 at the maximum admitted `p=257`); delivery adapters own any encoded-byte
+limits.
 
 The affine/projective distinction follows the standard hyperelliptic model:
 for odd degree, the smooth projective curve also has a rational point at

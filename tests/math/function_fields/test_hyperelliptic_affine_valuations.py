@@ -56,7 +56,7 @@ def _place(x: int, y: int) -> HyperellipticAffinePlace:
         y=y,
         local_parameter="y" if y == 0 else "x_minus_x0",
         residue_field=FiniteFieldPresentation(
-            characteristic=5, modulus_coefficients=(0, 1), generator="z"
+            characteristic=5, modulus_coefficients=(0, 1), generator="a"
         ),
     )
 
@@ -159,7 +159,7 @@ def test_unramified_local_series_finds_higher_order_cancellation():
         y=1,
         local_parameter="x_minus_x0",
         residue_field=FiniteFieldPresentation(
-            characteristic=5, modulus_coefficients=(0, 1), generator="z"
+            characteristic=5, modulus_coefficients=(0, 1), generator="a"
         ),
     )
     y_minus_one = FiniteFunctionFieldElement(

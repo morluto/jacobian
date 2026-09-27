@@ -6,7 +6,7 @@ from fractions import Fraction
 from itertools import chain
 from typing import Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
 from jacobian.catalog.models import (
@@ -1408,7 +1408,14 @@ def _rectangular_product(
 def _coefficient_size(value: int | Fraction) -> tuple[int, int]:
     """Return decimal numerator and denominator digit counts without expansion."""
     fraction = value if isinstance(value, Fraction) else Fraction(value)
-    return len(str(abs(fraction.numerator))), len(str(fraction.denominator))
+    numerator, denominator = abs(fraction.numerator), fraction.denominator
+    if max(numerator.bit_length(), denominator.bit_length()) > 13_608:
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.coefficient_exceeded",
+            message="an input map coefficient exceeds the exact chain-map digit limit",
+        )
+    return len(str(numerator)), len(str(denominator))
 
 
 def _parse_bounded_map(
@@ -1439,15 +1446,24 @@ def _parse_bounded_map(
                 "each map must have target-by-source chain axes",
             )
         cells += rows * columns
+    if cells > MAX_CHAIN_MAP_CELLS:
+        raise OperationResourceAdmissionError(
+            location=(label, "maps"),
+            code="filtered_chain_map.input_envelope_exceeded",
+            message="the degreewise map exceeds its admitted cell envelope",
+        )
+    for degree, matrix in enumerate(request.maps):
         parsed_matrix = []
         for row in matrix:
             parsed_row = []
             for value in row:
-                if prime is not None and type(value) is not int:
+                if prime is not None and (
+                    type(value) is not int or not 0 <= value < prime
+                ):
                     raise _fail(
                         (label, "maps", degree),
                         "filtered_chain_map.entry_invalid",
-                        "finite-field map entries must be integers",
+                        "finite-field map entries must be canonical residues",
                     )
                 numerator_digits, denominator_digits = _coefficient_size(value)
                 if (
@@ -1460,7 +1476,11 @@ def _parse_bounded_map(
                         message="an input map coefficient exceeds the exact "
                         "chain-map coefficient digit limit",
                     )
-                chars += numerator_digits + denominator_digits + 1
+                chars += numerator_digits + (
+                    denominator_digits + 1
+                    if isinstance(value, Fraction) and value.denominator != 1
+                    else 0
+                )
                 parsed_row.append(_parse_entry(value, prime))
             parsed_matrix.append(parsed_row)
         parsed.append(parsed_matrix)
@@ -1603,25 +1623,58 @@ def filtered_chain_map_compose(
     request: FilteredChainMapCompositionRequest,
 ) -> FilteredChainMapResult:
     """Compose exact filtration-preserving chain maps in application order."""
-    first_request = FilteredChainMapRequest(
-        source=request.first.source,
-        source_filtration=request.first.source_filtration,
-        target=request.first.target,
-        target_filtration=request.first.target_filtration,
-        maps=request.first.maps,
-    )
-    second_request = FilteredChainMapRequest(
-        source=request.second.source,
-        source_filtration=request.second.source_filtration,
-        target=request.second.target,
-        target_filtration=request.second.target_filtration,
-        maps=request.second.maps,
-    )
+    if not isinstance(request, FilteredChainMapCompositionRequest):
+        raise _fail(
+            ("request",),
+            "filtered_chain_map.composition_request_invalid",
+            "request must be a filtered chain map composition value",
+        )
+    if not isinstance(request.first, FilteredChainMapResult) or not isinstance(
+        request.second, FilteredChainMapResult
+    ):
+        raise _fail(
+            ("request",),
+            "filtered_chain_map.composition_input_invalid",
+            "both composition components must be filtered chain map results",
+        )
+    try:
+        first_request = FilteredChainMapRequest(
+            source=request.first.source,
+            source_filtration=request.first.source_filtration,
+            target=request.first.target,
+            target_filtration=request.first.target_filtration,
+            maps=request.first.maps,
+        )
+        second_request = FilteredChainMapRequest(
+            source=request.second.source,
+            source_filtration=request.second.source_filtration,
+            target=request.second.target,
+            target_filtration=request.second.target_filtration,
+            maps=request.second.maps,
+        )
+    except (TypeError, ValueError, ValidationError) as exc:
+        raise _fail(
+            ("request",),
+            "filtered_chain_map.composition_input_invalid",
+            "both composition components must have valid filtered map axes",
+        ) from exc
     prime, parsed_first, parsed_second = _composition_preflight(
         first_request, second_request
     )
     _check_filtered_chain_map_axes(first_request)
     _check_filtered_chain_map_axes(second_request)
+    semantic_profiles = (
+        (first_request.source, first_request.source_filtration),
+        (first_request.target, first_request.target_filtration),
+        (second_request.source, second_request.source_filtration),
+        (second_request.target, second_request.target_filtration),
+    )
+    if not _admit_composition_semantic_work(semantic_profiles):
+        raise OperationResourceAdmissionError(
+            location=("maps",),
+            code="filtered_chain_map.composition_work_exceeded",
+            message="filtered semantic admission exceeds its exact work envelope",
+        )
     first_source = _admit_filtered_semantics(
         first_request.source, first_request.source_filtration
     )
@@ -1686,6 +1739,35 @@ def filtered_chain_map_compose(
         filtration_preserving=True,
         chain_map=True,
     )
+
+
+def _admit_composition_semantic_work(
+    profiles: tuple[tuple[ChainComplexValue, tuple[FiltrationLevel, ...]], ...],
+) -> bool:
+    """Bound all exact filtration revalidation before its elimination work."""
+    semantic_work = 0
+    for complex_value, filtration in profiles:
+        _admit_filtered_structure(complex_value, filtration)
+        heights = [1]
+        for matrix in complex_value.differential_matrices:
+            for row in matrix:
+                for value in row:
+                    heights.extend(_coefficient_size(value))
+        for level in filtration:
+            for subspace in level.subspaces:
+                for vector in subspace.vectors:
+                    for value in vector:
+                        heights.extend(_coefficient_size(value))
+        coefficient_digits = max(heights)
+        for degree, dimension in enumerate(complex_value.basis_sizes):
+            vectors = sum(len(level.subspaces[degree].vectors) for level in filtration)
+            semantic_work += (
+                len(filtration)
+                * dimension**2
+                * (dimension + 3 * max(1, vectors))
+                * coefficient_digits
+            )
+    return semantic_work <= MAX_FILTERED_HOMOLOGY_WORK
 
 
 def pages_through(request: SpectralPagesRequest) -> SpectralPagesResult:

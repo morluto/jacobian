@@ -1676,6 +1676,9 @@ class TestNativeSurface:
         }
         assert "request" not in construct_chain_complex_native.__annotations__
         assert "request" in construct_chain_complex.__annotations__
+        assert not hasattr(chain_complexes_package, "filtered_chain_map_page")
+        assert not hasattr(chain_complexes_package, "FilteredChainMapPageRequest")
+        assert not hasattr(chain_complexes_package, "FilteredChainMapPageResult")
 
 
 class TestMappingConeCanonicalValue:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
+from jacobian.math.topology.chain_complexes import filtered_extensions
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredSubspace,
     FiltrationLevel,
@@ -223,6 +224,131 @@ def test_composition_rejects_malformed_component_axes_before_indexing() -> None:
         filtered_chain_map_compose(malformed)
 
 
+def test_composition_rejects_non_result_components_at_native_boundary() -> None:
+    malformed = FilteredChainMapCompositionRequest.model_construct(
+        first={"source": None}, second=filtered_map(_map(1))
+    )
+    with pytest.raises(ValueError, match="components must be filtered chain map results"):
+        filtered_chain_map_compose(malformed)
+
+
+def test_composition_counts_integer_input_characters_without_fraction_overhead() -> None:
+    from fractions import Fraction
+
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(4,),
+        differential_matrices=(),
+    )
+    identity = ((1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1))
+    filtration = (FiltrationLevel(subspaces=(FilteredSubspace(vectors=identity),)),)
+    unit = FilteredChainMapRequest(
+        source=complex_value,
+        target=complex_value,
+        source_filtration=filtration,
+        target_filtration=filtration,
+        maps=(identity,),
+    )
+    large = 10**4095
+    large_map = unit.model_copy(
+        update={
+            "maps": (
+                tuple(
+                    tuple(large if row == column else 0 for column in range(4))
+                    for row in range(4)
+                ),
+            )
+        }
+    )
+    result = filtered_chain_map_compose(_composition(unit, large_map))
+    assert result.maps == (
+        tuple(tuple(Fraction(value) for value in row) for row in large_map.maps[0]),
+    )
+
+
+def test_composition_preflights_semantic_work_before_exact_admission() -> None:
+    large = 10**3000
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=0,
+        basis_sizes=(32,),
+        differential_matrices=(),
+    )
+    basis = tuple(
+        tuple(large if i == j else 0 for j in range(32)) for i in range(32)
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(FilteredSubspace(vectors=basis + basis),),
+        ),
+    )
+    identity = tuple(
+        tuple(1 if i == j else 0 for j in range(32)) for i in range(32)
+    )
+    component = FilteredChainMapResult(
+        source=complex_value,
+        target=complex_value,
+        source_filtration=filtration,
+        target_filtration=filtration,
+        maps=(identity,),
+        filtration_preserving=True,
+        chain_map=True,
+    )
+    with pytest.raises(OperationResourceAdmissionError, match="semantic admission"):
+        filtered_chain_map_compose(
+            FilteredChainMapCompositionRequest(first=component, second=component)
+        )
+
+
+def test_composition_rejects_oversized_map_shape_before_parsing_entries(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=4,
+        basis_sizes=(32,) * 5,
+        differential_matrices=tuple(
+            tuple((0,) * 32 for _ in range(32)) for _ in range(4)
+        ),
+    )
+    identity = tuple(
+        tuple(1 if i == j else 0 for j in range(32)) for i in range(32)
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=tuple(
+                    tuple(1 if i == j else 0 for j in range(32))
+                    for i in range(32)
+                ))
+                for _ in range(5)
+            ),
+        ),
+    )
+    component = FilteredChainMapResult.model_construct(
+        source=complex_value,
+        target=complex_value,
+        source_filtration=filtration,
+        target_filtration=filtration,
+        maps=(identity,) * 5,
+        filtration_preserving=True,
+        chain_map=True,
+    )
+
+    def parsing_was_not_reached(*args: object, **kwargs: object) -> object:
+        raise AssertionError("map coefficients must not be parsed before shape admission")
+
+    monkeypatch.setattr(filtered_extensions, "_parse_entry", parsing_was_not_reached)
+    with pytest.raises(OperationResourceAdmissionError, match="cell envelope"):
+        filtered_chain_map_compose(
+            FilteredChainMapCompositionRequest(first=component, second=component)
+        )
+
+
 def test_composition_rejects_rational_coefficient_in_finite_field_map() -> None:
     from fractions import Fraction
 
@@ -243,5 +369,5 @@ def test_composition_rejects_rational_coefficient_in_finite_field_map() -> None:
     request = FilteredChainMapCompositionRequest(first=forged, second=filtered_map(
         FilteredChainMapRequest(source=finite, target=finite, source_filtration=filtration,
                                 target_filtration=filtration, maps=(((1,),),))))
-    with pytest.raises(ValueError, match="finite-field map entries must be integers"):
+    with pytest.raises(ValueError, match="finite-field map entries must be canonical residues"):
         filtered_chain_map_compose(request)

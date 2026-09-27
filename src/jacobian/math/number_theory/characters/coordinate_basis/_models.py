@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from math import gcd
 from typing import Annotated
 
 from pydantic import Field, StrictInt, model_validator
@@ -87,6 +88,54 @@ class DirichletCharacterBasisChangeResult(StrictModel):
             raise _validation_error(
                 "result_table_shape",
                 "the result table must cover residues 0 through modulus minus one",
+            )
+        source = self.source_character
+        transported = self.transported_character
+        if (
+            transported.group.modulus != modulus
+            or transported.group.exponent != source.group.exponent
+        ):
+            raise _validation_error(
+                "result_character_parent",
+                "source and transported characters must share the modulus and cyclotomic parent",
+            )
+
+        def character_table(character: DirichletCharacter) -> tuple[CyclotomicValue | None, ...]:
+            group = character.group
+            unit_rows = dict(zip(group.unit_residues, group.unit_coordinates, strict=True))
+            if tuple(group.unit_residues) != tuple(
+                residue for residue in range(modulus) if gcd(residue, modulus) == 1
+            ):
+                raise _validation_error(
+                    "result_character_units",
+                    "character groups must retain the complete canonical unit residues",
+                )
+            table: list[CyclotomicValue | None] = []
+            for residue in range(modulus):
+                row = unit_rows.get(residue)
+                if row is None:
+                    table.append(None)
+                    continue
+                exponent = sum(
+                    coordinate * (group.exponent // order) * unit_coordinate
+                    for coordinate, order, unit_coordinate in zip(
+                        character.coordinates, group.generator_orders, row, strict=True
+                    )
+                ) % group.exponent
+                table.append(CyclotomicValue(order=group.exponent, exponent=exponent))
+            return tuple(table)
+
+        source_values = character_table(source)
+        transported_values = character_table(transported)
+        if source_values != transported_values:
+            raise _validation_error(
+                "result_character_binding",
+                "transported character must agree with the source on every residue",
+            )
+        if self.values != source_values:
+            raise _validation_error(
+                "result_value_binding",
+                "the value table must equal the complete residue table of the retained character",
             )
         return self
 

@@ -97,6 +97,21 @@ def test_basis_transport_preserves_independently_evaluated_residue_values() -> N
     assert result.model_validate_json(result.model_dump_json()) == result
 
 
+def test_decoded_result_binds_character_equivalence_and_complete_value_table() -> None:
+    result = change_dirichlet_character_coordinate_basis(
+        _request().character, _request().coordinate_isomorphism
+    )
+    forged_character = result.model_dump()
+    forged_character["transported_character"]["coordinates"] = (0, 0)
+    with pytest.raises(ValidationError, match="agree with the source"):
+        DirichletCharacterBasisChangeResult.model_validate(forged_character)
+
+    forged_values = result.model_dump()
+    forged_values["values"] = (CyclotomicValue(order=2, exponent=0).model_dump(),) * 8
+    with pytest.raises(ValidationError, match="complete residue table"):
+        DirichletCharacterBasisChangeResult.model_validate(forged_values)
+
+
 def test_public_operation_executes_complete_transport_example() -> None:
     tool = next(
         tool

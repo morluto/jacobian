@@ -2,6 +2,7 @@
 
 import json
 from fractions import Fraction
+from math import comb
 
 import pytest
 
@@ -16,6 +17,7 @@ from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
     ModuleDifferential,
+    ModuleKoszulComplex,
     ModuleKoszulRequest,
     ModuleKoszulTopHomologyRequest,
 )
@@ -157,8 +159,28 @@ def test_top_homology_admits_top_only_case_beyond_full_complex_cap():
         action=(((q(1),) + (q(0),) * 7, *((q(0),) * 8 for _ in range(7))),),
     )
     sequence = ((q(0),),) * 6
-    complex_value = module_koszul_complex(
-        ModuleKoszulRequest(algebra=algebra, module=module, sequence=sequence)
+    full_request = ModuleKoszulRequest(
+        algebra=algebra, module=module, sequence=sequence
+    )
+    with pytest.raises(OperationResourceAdmissionError) as full_complex_error:
+        module_koszul_complex(full_request)
+    assert full_complex_error.value.errors()[0]["type"] == "koszul.module.budget"
+
+    basis_sizes = tuple(8 * comb(6, degree) for degree in range(7))
+    complex_value = ModuleKoszulComplex.model_construct(
+        algebra=algebra,
+        module=module,
+        sequence=sequence,
+        basis_sizes=basis_sizes,
+        differentials=tuple(
+            ModuleDifferential(
+                row_count=basis_sizes[degree - 1],
+                column_count=basis_sizes[degree],
+                entries=(),
+            )
+            for degree in range(1, 7)
+        ),
+        square_zero=True,
     )
     assert complex_value.differentials[-1].row_count == 48
     assert complex_value.differentials[-1].entries == ()
@@ -191,6 +213,34 @@ def test_top_homology_rejects_square_zero_but_noncanonical_source_differential()
     with pytest.raises(OperationDomainValidationError) as error:
         module_koszul_top_homology(ModuleKoszulTopHomologyRequest(complex=forged))
     assert error.value.errors()[0]["type"] == "koszul.module.source_complex_mismatch"
+
+
+def test_top_homology_rejects_forged_axes_before_admission_buffers():
+    _algebra, module = dual_numbers_regular_module()
+    valid = module_koszul_complex(
+        ModuleKoszulRequest(
+            algebra=module.algebra,
+            module=module,
+            sequence=((q(0), q(1)),),
+        )
+    )
+    forged = type(valid).model_construct(
+        algebra=valid.algebra,
+        module=valid.module,
+        sequence=valid.sequence,
+        basis_sizes=valid.basis_sizes,
+        differentials=(
+            ModuleDifferential(row_count=10**9, column_count=2, entries=()),
+        ),
+        square_zero=True,
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        module_koszul_top_homology(
+            ModuleKoszulTopHomologyRequest.model_construct(complex=forged)
+        )
+
+    assert error.value.errors()[0]["type"] == "koszul.module.top_homology_request_shape"
 
 
 def test_top_homology_rejects_oversized_coefficients_before_algebra_replay(

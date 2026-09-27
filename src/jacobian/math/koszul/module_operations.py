@@ -359,6 +359,12 @@ def module_koszul_complex(
 ) -> ModuleKoszulComplex:
     value = _as_request(request)
     _admit(value.module, value.sequence)
+    if len(value.module.basis) * (1 << len(value.sequence)) > 256:
+        raise OperationResourceAdmissionError(
+            location=("sequence",),
+            code="koszul.module.budget",
+            message="finite-module Koszul complex exceeds its admitted envelope",
+        )
     return _build_module_koszul_complex(value)
 
 
@@ -705,6 +711,13 @@ def module_koszul_homology(
         ) from exc
     value = _admit_complex(value)
     _require_square_zero(value)
+    return _module_koszul_homology_admitted(value)
+
+
+def _module_koszul_homology_admitted(
+    value: ModuleKoszulComplex,
+) -> ModuleKoszulHomology:
+    """Compute homology after a consumer has admitted the canonical complex."""
     cycles: list[int] = []
     boundaries: list[int] = []
     dimensions: list[int] = []
@@ -880,11 +893,43 @@ def module_koszul_top_homology(
             message="the top-homology request is not canonical",
         ) from exc
 
+    # Validate axis sizes before the estimator allocates row-sized buffers.
+    # A forged differential may have a huge declared row count while carrying
+    # no entries, so sparse payload size alone is not a safe allocation bound.
+    sequence_length = len(value.sequence)
+    module_dimension = len(value.module.basis)
+    if sequence_length > 6:
+        raise OperationResourceAdmissionError(
+            location=("complex", "sequence"),
+            code="koszul.module.budget",
+            message="finite-module Koszul complex exceeds its admitted envelope",
+        )
+    expected_sizes = tuple(
+        module_dimension * comb(sequence_length, degree)
+        for degree in range(sequence_length + 1)
+    )
+    if value.basis_sizes != expected_sizes:
+        raise OperationDomainValidationError(
+            location=("complex", "basis_sizes"),
+            code="koszul.module.result_shape",
+            message="complex basis sizes must be the canonical Koszul dimensions",
+        )
+    if sequence_length and (
+        value.differentials[-1].row_count != expected_sizes[-2]
+        or value.differentials[-1].column_count != expected_sizes[-1]
+    ):
+        raise OperationDomainValidationError(
+            location=("complex", "differentials"),
+            code="koszul.module.result_shape",
+            message="top differential axes must match the canonical Koszul dimensions",
+        )
+
     # The top-kernel contract needs no elimination in lower degrees. Admit the
-    # retained input and this one matrix before rebuilding or densifying it.
+    # retained input and this one matrix only after its allocation dimensions
+    # have been tied to the canonical module and sequence.
     _admit_top_homology(value)
-    # The top-only envelope is already checked above. Revalidate the source
-    # shape and induced module action without applying the full-chain size cap.
+    # Revalidate the source shape and induced module action without applying
+    # the full-chain construction cap.
     try:
         value = ModuleKoszulComplex.model_validate(value.model_dump())
     except Exception as exc:
@@ -893,15 +938,6 @@ def module_koszul_top_homology(
             code="koszul.module.complex_shape",
             message="the supplied module Koszul complex is not canonical",
         ) from exc
-    if any(
-        size != len(value.module.basis) * comb(len(value.sequence), degree)
-        for degree, size in enumerate(value.basis_sizes)
-    ):
-        raise OperationDomainValidationError(
-            location=("complex", "basis_sizes"),
-            code="koszul.module.result_shape",
-            message="complex basis sizes must be the canonical Koszul dimensions",
-        )
     _admit(value.module, value.sequence)
     source_request = ModuleKoszulRequest(
         algebra=value.algebra, module=value.module, sequence=value.sequence

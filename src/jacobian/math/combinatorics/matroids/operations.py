@@ -274,6 +274,20 @@ def maximum_weight_basis_result(
     that the selection is a basis and that no valid single-element exchange
     strictly improves the total weight.
     """
+    if not isinstance(matroid, LinearMatroid):
+        raise OperationDomainValidationError(
+            location=("matroid",),
+            code="matroid.carrier",
+            message="matroid must be a LinearMatroid",
+        )
+    try:
+        matroid = LinearMatroid.model_validate(matroid.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("matroid",),
+            code="matroid.carrier",
+            message="matroid carrier is malformed",
+        ) from exc
     require_bounded_retained_axis(
         matroid,
         location=("matroid", "weights"),

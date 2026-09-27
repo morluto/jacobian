@@ -20,7 +20,9 @@ from jacobian.math.combinatorics.matroids.delta.operations import (
     direct_sum,
     distance,
     from_feasible_sets,
+    lower_matroid,
     twist,
+    upper_matroid,
     verify_from_feasible_sets,
     width,
 )
@@ -40,10 +42,12 @@ __all__ = [
     "feasible_size_profile",
     "from_feasible_sets",
     "loop_complement",
+    "lower_matroid",
     "minor",
     "relabel",
     "twist",
     "twist_width_profile",
+    "upper_matroid",
     "verify_from_feasible_sets",
     "width",
 ]

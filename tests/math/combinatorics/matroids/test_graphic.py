@@ -11,13 +11,21 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.matroids import (
     LinearMatroid,
     MatroidWeightFunction,
-    graphic_matroid,
     matroid_rank,
     maximum_weight_basis_result,
+)
+from jacobian.math.combinatorics.matroids import (
+    graphic_matroid as _graphic_matroid,
 )
 from jacobian.math.combinatorics.matroids._models import GraphicMatroidRequest
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+
+
+def graphic_matroid(graph):
+    if isinstance(graph, GraphicMatroidRequest):
+        graph = graph.graph
+    return _graphic_matroid(graph)
 
 
 def _graph(
@@ -62,7 +70,7 @@ def _restrict_ground_set(
 
 def test_triangle_incidence_matroid_has_cycle_relation_and_ground_axis() -> None:
     graph = _graph(("c", "b", "a"), (("b", "c"), ("a", "c"), ("a", "b")))
-    matroid = graphic_matroid(GraphicMatroidRequest(graph=graph))
+    matroid = graphic_matroid(graph)
 
     assert matroid.matrix.prime == 2
     assert matroid.ground_labels == ('["a","b"]', '["a","c"]', '["b","c"]')
@@ -91,7 +99,7 @@ def test_graph_input_order_does_not_change_canonical_representation() -> None:
 
 def test_binary_matroid_composes_with_keyed_maximum_weight_basis() -> None:
     graph = _graph(("a", "b", "c"), (("a", "b"), ("a", "c"), ("b", "c")))
-    matroid = graphic_matroid(GraphicMatroidRequest(graph=graph))
+    matroid = graphic_matroid(graph)
     weights = MatroidWeightFunction(
         ground_axis=matroid.ground_axis,
         values=(5, 2, 3),
@@ -132,7 +140,7 @@ def test_edge_cap_is_rejected_before_incidence_matrix_expansion(
 
     monkeypatch.setattr(graphic.PrimeFieldMatrix, "_from_admitted", forbidden)
     with pytest.raises(OperationResourceAdmissionError, match="at most 256"):
-        graphic_matroid(GraphicMatroidRequest(graph=graph))
+        graphic_matroid(graph)
 
 
 def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
@@ -153,7 +161,7 @@ def test_retained_axis_bound_rejects_before_incidence_matrix_expansion(
     with pytest.raises(
         OperationResourceAdmissionError, match="codepoint allocation bound"
     ):
-        graphic_matroid(GraphicMatroidRequest(graph=graph))
+        graphic_matroid(graph)
 
 
 def test_retained_axis_at_the_codepoint_boundary_is_admitted() -> None:
@@ -164,6 +172,6 @@ def test_retained_axis_at_the_codepoint_boundary_is_admitted() -> None:
     # JSON pair syntax contributes eight codepoints beyond the label text.
     long_vertex = "y" * (MAX_GROUND_AXIS_CODEPOINTS - 8)
     graph = _graph(("a", long_vertex), (("a", long_vertex),))
-    matroid = graphic_matroid(GraphicMatroidRequest(graph=graph))
+    matroid = graphic_matroid(graph)
     assert matroid.ground_size == 1
     assert json.loads(matroid.ground_axis[0]) == ["a", long_vertex]

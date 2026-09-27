@@ -16,7 +16,9 @@ from jacobian.math.combinatorics.matroids._models import (
 )
 from jacobian.math.combinatorics.matroids.intersection import (
     verify_weighted_intersection_result,
-    weighted_intersection_certificate,
+)
+from jacobian.math.combinatorics.matroids.intersection import (
+    weighted_intersection_certificate as _weighted_intersection_certificate,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
@@ -27,6 +29,17 @@ def _matroid(
     return LinearMatroid(
         matrix=PrimeFieldMatrix(prime=2, entries=rows, columns=len(labels)),
         ground_labels=labels,
+    )
+
+
+def weighted_intersection_certificate(request):
+    return _weighted_intersection_certificate(
+        request.first,
+        request.second,
+        request.weight_function,
+        request.common_independent,
+        request.first_split,
+        request.second_split,
     )
 
 

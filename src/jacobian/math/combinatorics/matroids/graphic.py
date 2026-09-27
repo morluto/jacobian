@@ -36,6 +36,14 @@ def graphic_matroid(request: SimpleUndirectedGraph) -> LinearMatroid:
     graph = request
     if not isinstance(graph, SimpleUndirectedGraph):
         _reject(("graph",), "matroid.graphic.graph_type", "graph must be canonical")
+    try:
+        graph = SimpleUndirectedGraph.model_validate(graph.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise OperationDomainValidationError(
+            location=("graph",),
+            code="matroid.graphic.invalid_graph",
+            message="graph must satisfy the canonical simple-graph contract",
+        ) from exc
     if len(graph.vertices) > MAX_SIMPLE_GRAPH_VERTICES:
         _refuse(
             ("graph", "vertices"),
@@ -49,14 +57,7 @@ def graphic_matroid(request: SimpleUndirectedGraph) -> LinearMatroid:
             f"linear-matroid ground set admits at most {MAX_GROUND_SIZE} graph edges",
         )
 
-    try:
-        source = SimpleUndirectedGraph.model_validate(graph.model_dump(mode="python"))
-    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
-        raise OperationDomainValidationError(
-            location=("graph",),
-            code="matroid.graphic.invalid_graph",
-            message="graph must satisfy the canonical simple-graph contract",
-        ) from exc
+    source = graph
 
     vertices = tuple(sorted(source.vertices))
     edges = tuple(sorted(source.edges))

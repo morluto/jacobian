@@ -9,6 +9,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.matroids._models import (
+    MAX_GROUND_AXIS_CODEPOINTS,
     MAX_SPLIT_WEIGHT_DIGITS,
     MAX_WEIGHTED_INTERSECTION_OPT_DUAL_DIGITS,
     LinearMatroid,
@@ -23,6 +24,7 @@ from jacobian.math.combinatorics.matroids._models import (
     MatroidWeightedIntersectionRankCertificateResult,
     MatroidWeightedIntersectionResult,
     MatroidWeightFunction,
+    ground_axis_codepoints,
 )
 from jacobian.math.combinatorics.matroids.operations import (
     MAX_CLOSURE_RANK_WORK,
@@ -966,6 +968,18 @@ def weighted_intersection_certificate(
         ) from exc
 
     first, second = _admit_pair(request.first, request.second)
+    if any(
+        ground_axis_codepoints(matroid) > MAX_GROUND_AXIS_CODEPOINTS
+        for matroid in (first, second)
+    ):
+        raise OperationResourceAdmissionError(
+            location=("first", "second"),
+            code="matroid.weighted_intersection.work_bound",
+            message=(
+                "retained linear-matroid ground axis exceeds the "
+                f"{MAX_GROUND_AXIS_CODEPOINTS}-codepoint allocation bound"
+            ),
+        )
     objective, _ = _canonical_weight_function(first, request.weight_function)
     first_split, first_split_function = _canonical_weight_function(
         first, request.first_split, max_digits=MAX_SPLIT_WEIGHT_DIGITS
@@ -1076,7 +1090,17 @@ def verify_weighted_intersection_result(
             first_split=result.first_maximizer.weight_function,
             second_split=result.second_maximizer.weight_function,
         )
-        return weighted_intersection_certificate(request) == result
+        return (
+            weighted_intersection_certificate(
+                request.first,
+                request.second,
+                request.weight_function,
+                request.common_independent,
+                request.first_split,
+                request.second_split,
+            )
+            == result
+        )
     except (
         OperationDomainValidationError,
         OperationResourceAdmissionError,
@@ -1164,6 +1188,7 @@ def weighted_intersection_rank_certificate(
         ) from exc
 
     first, second = _admit_pair(request.first, request.second)
+    _admit_prime(first.matrix.prime)
     objective, _ = _canonical_weight_function(first, request.weight_function)
     n = first.ground_size
     w_plus = max(0, max(objective, default=0))

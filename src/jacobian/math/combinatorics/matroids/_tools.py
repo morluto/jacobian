@@ -82,24 +82,13 @@ def _run_weighted_intersection_certificate(
 def _run_weighted_intersection_rank_certificate(
     request: MatroidWeightedIntersectionRankCertificateRequest,
 ) -> MatroidWeightedIntersectionRankCertificateResult:
-    return weighted_intersection_rank_certificate(
-        request.first,
-        request.second,
-        request.weight_function,
-        request.common_independent,
-        request.first_rank_terms,
-        request.second_rank_terms,
-    )
+    return weighted_intersection_rank_certificate(request)
 
 
 def _run_weighted_intersection_optimization(
     request: MatroidWeightedIntersectionOptimizationRequest,
 ) -> MatroidWeightedIntersectionOptimizationResult:
-    return maximum_weight_matroid_intersection(
-        request.first,
-        request.second,
-        request.weight_function,
-    )
+    return maximum_weight_matroid_intersection(request)
 
 
 _CLOSURE_EXAMPLE: dict[str, Any] = {

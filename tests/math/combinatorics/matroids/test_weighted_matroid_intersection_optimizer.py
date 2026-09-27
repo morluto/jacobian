@@ -25,13 +25,66 @@ from jacobian.math.combinatorics.matroids._models import (
     MaximumWeightIndependentSetRequest,
 )
 from jacobian.math.combinatorics.matroids.intersection import (
-    maximum_weight_matroid_intersection,
+    maximum_weight_matroid_intersection as _maximum_weight_matroid_intersection,
+)
+from jacobian.math.combinatorics.matroids.intersection import (
     verify_weighted_intersection_rank_certificate,
     verify_weighted_intersection_result,
-    weighted_intersection_certificate,
-    weighted_intersection_rank_certificate,
+)
+from jacobian.math.combinatorics.matroids.intersection import (
+    weighted_intersection_certificate as _weighted_intersection_certificate,
+)
+from jacobian.math.combinatorics.matroids.intersection import (
+    weighted_intersection_rank_certificate as _weighted_intersection_rank_certificate,
 )
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
+
+
+def weighted_intersection_rank_certificate(*arguments):
+    if len(arguments) == 1:
+        request = arguments[0]
+    else:
+        request = MatroidWeightedIntersectionRankCertificateRequest(
+            first=arguments[0],
+            second=arguments[1],
+            weight_function=arguments[2],
+            common_independent=arguments[3],
+            first_rank_terms=arguments[4],
+            second_rank_terms=arguments[5],
+        )
+    return _weighted_intersection_rank_certificate(request)
+
+
+def weighted_intersection_certificate(*arguments):
+    if len(arguments) == 1:
+        request = arguments[0]
+    else:
+        request = MatroidWeightedIntersectionCertificateRequest(
+            first=arguments[0],
+            second=arguments[1],
+            weight_function=arguments[2],
+            common_independent=arguments[3],
+            first_split=arguments[4],
+            second_split=arguments[5],
+        )
+    return _weighted_intersection_certificate(
+        request.first,
+        request.second,
+        request.weight_function,
+        request.common_independent,
+        request.first_split,
+        request.second_split,
+    )
+
+
+def maximum_weight_matroid_intersection(*arguments):
+    if len(arguments) == 1:
+        request = arguments[0]
+    else:
+        request = MatroidWeightedIntersectionOptimizationRequest(
+            first=arguments[0], second=arguments[1], weight_function=arguments[2]
+        )
+    return _maximum_weight_matroid_intersection(request)
 
 
 def _matroid(

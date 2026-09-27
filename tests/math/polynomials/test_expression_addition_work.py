@@ -8,6 +8,8 @@ estimate charged each operand's support once and omitted those repeated copies.
 
 from __future__ import annotations
 
+from itertools import product
+from math import factorial, prod
 from typing import Any
 
 import pytest
@@ -127,7 +129,21 @@ def test_nested_scalar_additions_stay_exactly_decidable() -> None:
             expression=request.expression,
         )
     )
-    assert result.polynomial.polynomial.terms
+    expected = [
+        (
+            exponents,
+            factorial(12) // prod(factorial(power) for power in exponents),
+        )
+        for exponents in sorted(
+            (row for row in product(range(13), repeat=4) if sum(row) == 12),
+            reverse=True,
+        )
+    ]
+    expected.append(((0, 0, 0, 0), 64))
+    assert tuple(
+        (term.exponents, term.coefficient.as_fraction())
+        for term in result.polynomial.polynomial.terms
+    ) == tuple(expected)
 
 
 def test_addition_work_bound_rejects_an_over_budget_clone_chain() -> None:

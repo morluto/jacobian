@@ -13,6 +13,7 @@ from jacobian.math.graphs.values import SimpleUndirectedGraph
 from jacobian.math.matrices.finite_fields.linear_algebra import PrimeFieldMatrix
 
 MAX_GROUND_SIZE = 256
+MAX_GROUND_AXIS_CODEPOINTS = 65_536
 """Schema-visible cap on the ground-set cardinality (matrix columns)."""
 
 MAX_REPRESENTATION_ROWS = 256
@@ -29,6 +30,11 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 MAX_WEIGHT_DIGITS = 12
+MAX_INDEPENDENT_SET_OUTPUT_UNITS = (
+    3 * MAX_GROUND_SIZE
+    + MAX_WEIGHT_DIGITS * MAX_GROUND_SIZE
+    + 2 * MAX_GROUND_AXIS_CODEPOINTS
+)
 """Admission cap on caller-supplied objective weights."""
 
 MAX_SPLIT_WEIGHT_DIGITS = MAX_WEIGHT_DIGITS + 3
@@ -137,6 +143,11 @@ class LinearMatroid(StrictModel):
     @property
     def ground_axis(self) -> tuple[str, ...]:
         return self.ground_labels or tuple(str(i) for i in range(self.matrix.columns))
+
+
+def ground_axis_codepoints(matroid: LinearMatroid) -> int:
+    """Return the retained ground-axis label size in Unicode codepoints."""
+    return sum(len(label) for label in matroid.ground_axis)
 
 
 class MatroidWeightFunction(StrictModel):

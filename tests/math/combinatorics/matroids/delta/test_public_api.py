@@ -19,10 +19,12 @@ def test_public_api_is_small_and_canonical() -> None:
         "feasible_size_profile",
         "from_feasible_sets",
         "loop_complement",
+        "lower_matroid",
         "minor",
         "relabel",
         "twist",
         "twist_width_profile",
+        "upper_matroid",
         "verify_from_feasible_sets",
         "width",
     ]

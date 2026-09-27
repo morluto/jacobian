@@ -32,8 +32,10 @@ from jacobian.math.combinatorics.matroids.operations import (
     verify_maximum_weight_basis,
     verify_maximum_weight_independent_set,
 )
+from jacobian.math.combinatorics.matroids.values import FiniteBasisMatroid
 
 __all__ = [
+    "FiniteBasisMatroid",
     "GraphicMatroidRequest",
     "LinearMatroid",
     "MatroidRankMultiplier",

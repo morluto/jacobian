@@ -15,7 +15,10 @@ from jacobian.math.graphs.decks.anonymous_equality._tools import TOOLS
 from jacobian.math.graphs.decks.anonymous_equality.operations import (
     anonymous_deck_equality,
 )
-from jacobian.math.graphs.decks.operations import anonymous_graph_card_multiset
+from jacobian.math.graphs.decks.operations import (
+    anonymous_graph_card_multiset,
+    anonymous_graph_card_multiset_equal,
+)
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 
@@ -56,6 +59,7 @@ def test_independent_card_relabelling_preserves_multiset_equality() -> None:
     left, right = _multiset(path, triangle), _multiset(relabelled_path, triangle)
     assert _independent_orbit_edges(path) == _independent_orbit_edges(relabelled_path)
     assert anonymous_deck_equality(left, right).equal
+    assert anonymous_graph_card_multiset_equal(left, right)
 
 
 def test_equality_checks_noncanonical_wire_representatives_by_isomorphism() -> None:

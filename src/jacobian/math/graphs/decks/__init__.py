@@ -30,6 +30,7 @@ from jacobian.math.graphs.decks._models import (
 from jacobian.math.graphs.decks.operations import (
     anonymous_card_degree_profile,
     anonymous_graph_card_multiset,
+    anonymous_graph_card_multiset_equal,
     edge_deck_isomorphism_profile,
     edge_deletion_family,
     unlabelled_deck,
@@ -73,6 +74,7 @@ __all__ = [
     "VertexDeletionFamily",
     "anonymous_card_degree_profile",
     "anonymous_graph_card_multiset",
+    "anonymous_graph_card_multiset_equal",
     "edge_deck_isomorphism_profile",
     "edge_deletion_family",
     "unlabelled_deck",

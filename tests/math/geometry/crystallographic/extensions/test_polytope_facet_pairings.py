@@ -104,13 +104,13 @@ def test_oversized_pairing_coordinates_are_resource_refusals():
                     CanonicalRational(num=value, den=1) for value in point
                 ),
             )
-            for index, point in enumerate(
-                ((0, 0), (0, 1), (10**32, 0), (10**32, 1))
-            )
+            for index, point in enumerate(((0, 0), (0, 1), (10**32, 0), (10**32, 1)))
         ),
     )
 
-    with pytest.raises(OperationResourceAdmissionError, match="facet-profile digit bound"):
+    with pytest.raises(
+        OperationResourceAdmissionError, match="facet-profile digit bound"
+    ):
         pair_crystallographic_polytope_facets(
             request.affine_realization,
             large_polytope,

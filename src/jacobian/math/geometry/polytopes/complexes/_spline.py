@@ -344,8 +344,7 @@ def piecewise_polynomial_from_maximal_pieces(
             cell_id for face in compatibility_faces for cell_id in face.maximal_cell_ids
         }
         polynomials = {
-            cell_id: _to_poly(by_id[cell_id], symbols)
-            for cell_id in needed_cell_ids
+            cell_id: _to_poly(by_id[cell_id], symbols) for cell_id in needed_cell_ids
         }
     else:
         symbols = ()

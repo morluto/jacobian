@@ -5,7 +5,7 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import combinations, product
 from math import comb
-from typing import Any, NoReturn, TypeVar
+from typing import Any, NoReturn
 
 import sympy as sp
 from pydantic import BaseModel
@@ -63,15 +63,12 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
-_RequestModel = TypeVar("_RequestModel", bound=BaseModel)
-
-
-def _admit_request(
+def _admit_request[RequestModel: BaseModel](
     request: object,
-    request_type: type[_RequestModel],
+    request_type: type[RequestModel],
     code: str,
     description: str,
-) -> _RequestModel:
+) -> RequestModel:
     """Revalidate native request carriers before reading their nested fields."""
     if not isinstance(request, request_type):
         _reject(code, description)

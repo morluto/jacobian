@@ -320,10 +320,16 @@ def test_native_transform_rejects_constructed_bad_frame_labels_and_values() -> N
     )
     for entry in malformed:
         with pytest.raises(OperationDomainValidationError):
-            su2_gauge_transform(field, (entry, *tuple(
-                SU2GaugeVertexValue(vertex=vertex, value=q(*IDENTITY))
-                for vertex in field.lattice.vertices[1:]
-            )))
+            su2_gauge_transform(
+                field,
+                (
+                    entry,
+                    *tuple(
+                        SU2GaugeVertexValue(vertex=vertex, value=q(*IDENTITY))
+                        for vertex in field.lattice.vertices[1:]
+                    ),
+                ),
+            )
 
 
 def test_native_field_rejects_constructed_edge_missing_quaternion() -> None:
@@ -347,9 +353,7 @@ def test_native_transform_bounds_frames_before_scanning_them() -> None:
 
 def test_native_field_revalidates_edge_labels_from_constructed_values() -> None:
     field = _field()
-    malformed_edge = GaugeEdge.model_construct(
-        edge_id="e" * 65, tail="v0", head="v1"
-    )
+    malformed_edge = GaugeEdge.model_construct(edge_id="e" * 65, tail="v0", head="v1")
     lattice = GaugeLattice.model_construct(
         vertices=field.lattice.vertices,
         edges=(malformed_edge, *field.lattice.edges[1:]),

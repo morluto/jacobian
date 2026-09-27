@@ -53,7 +53,10 @@ def finite_group_table(
         or any(
             type(row) is not tuple
             or len(row) != len(multiplication)
-            or any(type(value) is not int or not 0 <= value < len(multiplication) for value in row)
+            or any(
+                type(value) is not int or not 0 <= value < len(multiplication)
+                for value in row
+            )
             for row in multiplication
         )
     ):
@@ -78,8 +81,7 @@ def finite_group_table(
             (
                 j
                 for j in range(order)
-                if multiplication[i][j] == identity
-                and multiplication[j][i] == identity
+                if multiplication[i][j] == identity and multiplication[j][i] == identity
             ),
             None,
         )

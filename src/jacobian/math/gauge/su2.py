@@ -44,9 +44,7 @@ def _value_digits(value: RationalUnitQuaternion) -> int:
     )
 
 
-def _are_inverses(
-    left: RationalUnitQuaternion, right: RationalUnitQuaternion
-) -> bool:
+def _are_inverses(left: RationalUnitQuaternion, right: RationalUnitQuaternion) -> bool:
     """Compare a unit quaternion with the conjugate of another exactly."""
     left_coordinates = left.coordinates
     right_coordinates = right.coordinates
@@ -251,9 +249,11 @@ def su2_gauge_transform(
         # the second multiplication. Equality against the canonical inverse is
         # a cheap structural check and avoids rejecting a small reduced result
         # based on its large unreduced operands.
-        left_product_digits = 1 if _are_inverses(
-            frames[edge.tail], source_by_id[edge.edge_id]
-        ) else left_digits + link_digits + 1
+        left_product_digits = (
+            1
+            if _are_inverses(frames[edge.tail], source_by_id[edge.edge_id])
+            else left_digits + link_digits + 1
+        )
         aggregate_work += 64 * left_product_digits * right_digits
     _admit_aggregate_work(aggregate_work, "field")
     for edge in field.lattice.edges:

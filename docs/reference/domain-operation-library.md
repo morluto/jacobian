@@ -49,6 +49,10 @@ Legacy native-only helpers that have not yet been audited may violate this
 boundary; each such violation is migration debt. Audit and repair them before
 publishing them as public-operation implementations.
 
+The exact quadratic Galois slice includes splitting fields, their complete
+automorphism maps, and element-orbit projections; see the
+[number-theory operation reference](operations/number-theory/galois-element-orbits.md).
+
 Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
 against the declaration's request model, use canonical values where required,

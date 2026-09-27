@@ -66,7 +66,8 @@ Use the relevant sections; these links are not a prerequisite reading stack.
 | Backend adapter or child worker | [Backend contract](docs/reference/mathematical-backends.md) |
 | MCP projection or transport | [Tool reference](docs/reference/tools.md) |
 | Authentication, health, or deployment | [Remote deployment](docs/how-to/deploy-remote-mcp.md) |
-| Validation, docs, contributions, or evaluations | Relevant section of [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Validation and error assertions | [Testing strategy](docs/reference/testing-strategy.md) |
+| Docs, contributions, or evaluations | Relevant section of [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 For mathematical changes, establish independent correctness evidence, invariant
 ownership across the execution path, and useful accepted boundaries. The
@@ -86,8 +87,10 @@ runs exhaustive validation in a shared checkout.
 Before a first public-operation push, search open PRs for its ID. Identify any
 superseded contract in the PR description. After catalog-conflict resolution,
 run catalog conformance and compare the final diff with intended public symbols.
-Fetch immediately before pushing and inspect a changed head. Never push to a
-merged or closed PR head; use a follow-up branch.
+Fetch immediately before pushing and inspect a changed head. Respect repository
+branch protection; never use an available bypass to push directly to a protected
+branch. If direct push is rejected, use an authorized topic branch and PR. Never
+push to a merged or closed PR head; use a follow-up branch.
 
 Complete authorized implementation, relevant validation, and repairs caused by
 the change before handing back. Rerun only checks invalidated by later edits.

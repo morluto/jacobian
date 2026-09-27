@@ -55,6 +55,33 @@ def test_standard_inclusion_has_reduced_generator_image_and_maps_exactly() -> No
     )
 
 
+@pytest.mark.parametrize("operand", ("first", "second"))
+def test_composition_reports_forged_generator_image_operand(operand: str) -> None:
+    first = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    second = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=6), RationalCyclotomicField(order=12)
+    )
+    forged = first if operand == "first" else second
+    forged = forged.model_copy(
+        update={
+            "generator_image": tuple(
+                CanonicalRational(num=0, den=1) for _ in forged.generator_image
+            )
+        }
+    )
+    if operand == "first":
+        first = forged
+    else:
+        second = forged
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        compose_cyclotomic_field_inclusions(first, second)
+
+    assert error.value.errors()[0]["loc"] == (operand, "generator_image")
+
+
 @pytest.mark.parametrize(
     "source_order,target_order", [(1, 1), (1, 8), (2, 4), (3, 12), (5, 10), (8, 16)]
 )

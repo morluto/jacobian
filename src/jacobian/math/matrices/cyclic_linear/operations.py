@@ -104,6 +104,8 @@ def _standard_inclusion(
 
 def _require_standard_inclusion_image(
     inclusion: CyclotomicFieldInclusion,
+    *,
+    location: tuple[str, ...] = ("inclusion",),
 ) -> tuple[Fraction, ...]:
     work = inclusion.source.degree * inclusion.target.degree * inclusion.target.degree
     if work > MAX_CYCLIC_FIELD_WORK:
@@ -114,7 +116,7 @@ def _require_standard_inclusion_image(
     supplied = tuple(value.as_fraction() for value in inclusion.generator_image)
     if supplied != expected:
         raise OperationDomainValidationError(
-            location=("inclusion", "generator_image"),
+            location=(*location, "generator_image"),
             code="matrix.cyclic.inclusion_image",
             message="the supplied generator image is not the standard inclusion image",
         )
@@ -178,8 +180,8 @@ def compose_cyclotomic_field_inclusions(
             code="matrix.cyclic.inclusion_parent",
             message="the first target must equal the second source field",
         )
-    _require_standard_inclusion_image(first)
-    _require_standard_inclusion_image(second)
+    _require_standard_inclusion_image(first, location=("first",))
+    _require_standard_inclusion_image(second, location=("second",))
     return _standard_inclusion(first.source, second.target)
 
 

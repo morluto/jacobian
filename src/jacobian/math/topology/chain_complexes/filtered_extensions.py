@@ -14,7 +14,6 @@ from jacobian.catalog.models import (
 from jacobian.math.topology.chain_complexes._filtered_models import (
     MAX_FILTER_VECTORS_PER_GROUP,
     MAX_SPECTRAL_PAGE,
-    FilteredChainComplexRequest,
     FiltrationLevel,
     SpectralPageResult,
     Vector,
@@ -42,9 +41,8 @@ from jacobian.math.topology.chain_complexes.values import (
     CoefficientRing,
 )
 
-MAX_FILTERED_HOMOLOGY_PRIME = 2**31 - 1
+MAX_FILTERED_HOMOLOGY_PRIME = 1_000_003
 MAX_FILTERED_HOMOLOGY_RESULT_CELLS = 250_000
-MAX_FILTERED_HOMOLOGY_RESULT_CELLS = 20_000_000
 MAX_FILTERED_HOMOLOGY_WORK = 50_000_000
 
 
@@ -454,7 +452,7 @@ def _homology_image_subspace(
 
 
 def _homology_image_levels(
-    request: FilteredChainComplexRequest,
+    filtration: tuple[FiltrationLevel, ...],
     sizes: tuple[int, ...],
     filtration_bases: list[list[list[list[Any]]]],
     differentials: list[list[list[Any]]],
@@ -464,7 +462,7 @@ def _homology_image_levels(
 ) -> list[list[tuple[list[Any], list[Any], list[Any]]]]:
     image_data: list[list[tuple[list[Any], list[Any], list[Any]]]] = []
     image_coordinates: list[list[list[list[Any]]]] = []
-    for level_index, _level in enumerate(request.filtration):
+    for level_index, _level in enumerate(filtration):
         level_data = []
         level_coordinates = []
         for degree, dimension in enumerate(sizes):
@@ -485,7 +483,7 @@ def _homology_image_levels(
             level_coordinates.append(data[0])
         image_data.append(level_data)
         image_coordinates.append(level_coordinates)
-    for level_index in range(1, len(request.filtration)):
+    for level_index in range(1, len(filtration)):
         for degree in range(len(sizes)):
             if any(
                 not _in_span(image_coordinates[level_index][degree], vector, prime)
@@ -500,18 +498,12 @@ def _homology_image_levels(
 
 
 def filtered_homology_filtration(
-    request: FilteredChainComplexRequest,
+    complex_value: ChainComplexValue,
+    filtration: tuple[FiltrationLevel, ...],
 ) -> FilteredHomologyResult:
     """Return exact images of filtration levels in source-bound homology."""
-    if not isinstance(request, FilteredChainComplexRequest):
-        raise OperationDomainValidationError(
-            location=(),
-            code="filtered_homology.request_type_invalid",
-            message="filtered homology requires a canonical filtered-complex request",
-        )
-    _admit_homology_filtration(request.complex, request.filtration)
-    admitted = _admit_filtered_semantics(request.complex, request.filtration)
-    complex_value = request.complex
+    _admit_homology_filtration(complex_value, filtration)
+    admitted = _admit_filtered_semantics(complex_value, filtration)
     prime = complex_value.prime
     if prime is None:
         raise OperationDomainValidationError(
@@ -523,7 +515,7 @@ def filtered_homology_filtration(
     differentials = admitted.differentials
     cycles, boundaries, homology = _homology_bases(sizes, differentials, prime)
     image_data = _homology_image_levels(
-        request,
+        filtration,
         sizes,
         admitted.bases,
         differentials,
@@ -556,7 +548,7 @@ def filtered_homology_filtration(
     )
     return FilteredHomologyResult(
         complex=complex_value,
-        filtration=request.filtration,
+        filtration=filtration,
         homology=groups,
         image_filtration=levels,
     )
@@ -762,6 +754,7 @@ def _compare_stable_component(
     degree: int,
     boundaries: list[list[Any]],
     homology_basis: list[list[Any]],
+    lower_chain_basis: list[list[Any]],
 ) -> SpectralAbutmentComparison:
     """Construct and check the representative-induced map to one Gr H term."""
     prime = request.complex.prime
@@ -781,12 +774,28 @@ def _compare_stable_component(
     columns = []
     for representative in page_representatives:
         chain = [_parse_entry(value, prime) for value in representative]
-        if any(_mat_vec(outgoing, chain, prime)):
-            raise OperationDomainValidationError(
-                location=("page", level, degree),
-                code="spectral_sequence.abutment_page_representative_not_cycle",
-                message="a stable-page representative is not a homology cycle",
+        differential = _mat_vec(outgoing, chain, prime)
+        if any(differential):
+            lower_images = [
+                _mat_vec(outgoing, vector, prime) for vector in lower_chain_basis
+            ]
+            correction_coordinates = _solve(
+                _transpose(lower_images),
+                [(-value) % prime for value in differential],
+                prime,
             )
+            if correction_coordinates is None:
+                raise OperationDomainValidationError(
+                    location=("page", level, degree),
+                    code="spectral_sequence.abutment_page_representative_not_cycle",
+                    message="a stable-page representative cannot be lifted to a homology cycle",
+                )
+            correction = _linear_combination(
+                lower_chain_basis, correction_coordinates, len(chain), prime
+            )
+            chain = [(value + delta) % prime for value, delta in zip(chain, correction, strict=True)]
+            if any(_mat_vec(outgoing, chain, prime)):
+                raise RuntimeError("stable-page lower-filtration correction failed")
         coordinates = _coordinates(full_cycle_basis, chain, prime)
         homology_coordinates = coordinates[len(boundaries) :]
         try:
@@ -902,6 +911,7 @@ def abutment(request: SpectralAbutmentRequest) -> SpectralAbutmentResult:
                     degree,
                     boundaries,
                     homology_basis,
+                    admitted.bases[level - 1][degree] if level else [],
                 )
             )
         comparisons.append(tuple(degree_comparisons))

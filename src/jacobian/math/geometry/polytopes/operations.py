@@ -40,6 +40,7 @@ from jacobian.math.geometry.polytopes._models import (
     JoinResult,
     JoinVertexMap,
     PolytopeAdmissionError,
+    PolytopeAxisTransport,
     PolytopeEdge,
     PolytopeSupportResult,
     PolytopeVolumeResult,
@@ -1229,6 +1230,12 @@ def polytope_prism(polytope: RationalVPolytope, height_axis: str) -> PrismResult
     )
     return PrismResult._from_kernel(
         prism=prism,
+        height_axis=height_axis,
+        source_space=polytope.space,
+        source_axis_map=tuple(
+            PolytopeAxisTransport(source_axis=axis, target_axis=axis)
+            for axis in polytope.space.axes
+        ),
         bottom_vertex_map=bottom_map,
         top_vertex_map=top_map,
         source_affine_dimension=source_dim,
@@ -1427,6 +1434,17 @@ def polytope_join(
     )
     return JoinResult._from_kernel(
         join=join,
+        height_axis=height_axis,
+        left_space=left.space,
+        right_space=right.space,
+        left_axis_map=tuple(
+            PolytopeAxisTransport(source_axis=axis, target_axis=axis)
+            for axis in left_axes
+        ),
+        right_axis_map=tuple(
+            PolytopeAxisTransport(source_axis=axis, target_axis=axis)
+            for axis in right_axes
+        ),
         left_vertex_map=left_map,
         right_vertex_map=right_map,
         left_affine_dimension=left_dim,

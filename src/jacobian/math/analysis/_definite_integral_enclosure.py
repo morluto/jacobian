@@ -361,6 +361,29 @@ def _round_fraction_outward(
     return _exact_dyadic(mantissa, exponent)
 
 
+def _round_dyadic_outward(
+    mantissa_value: int,
+    value_exponent: int,
+    precision_bits: int,
+    *,
+    toward_positive: bool,
+) -> ExactDyadic:
+    """Round a dyadic directly, without expanding its power-of-two denominator."""
+    if mantissa_value == 0:
+        return ExactDyadic(mantissa=0, exponent=0)
+    exponent = mantissa_value.bit_length() - 1 + value_exponent - (precision_bits - 1)
+    shift = value_exponent - exponent
+    if shift >= 0:
+        numerator, denominator = mantissa_value << shift, 1
+    else:
+        numerator, denominator = mantissa_value, 1 << (-shift)
+    if toward_positive:
+        mantissa = -((-numerator) // denominator)
+    else:
+        mantissa = numerator // denominator
+    return _exact_dyadic(mantissa, exponent)
+
+
 def _interval_width(interval: ClosedRationalInterval) -> Fraction:
     return interval.upper.as_fraction() - interval.lower.as_fraction()
 
@@ -386,11 +409,36 @@ def _leaf_contribution(
 def _summed_enclosure(
     contributions: tuple[DyadicClosedInterval, ...], precision_bits: int
 ) -> DyadicClosedInterval:
-    lower = sum((_dyadic_fraction(value.lower) for value in contributions), Fraction())
-    upper = sum((_dyadic_fraction(value.upper) for value in contributions), Fraction())
+    def sum_endpoints(endpoints: tuple[ExactDyadic, ...]) -> tuple[int, int]:
+        nonzero = tuple(value for value in endpoints if value.mantissa)
+        if not nonzero:
+            return 0, 0
+        common_exponent = min(value.exponent for value in nonzero)
+        total = sum(
+            value.mantissa << (value.exponent - common_exponent)
+            for value in nonzero
+        )
+        return total, common_exponent
+
+    lower_mantissa, lower_exponent = sum_endpoints(
+        tuple(value.lower for value in contributions)
+    )
+    upper_mantissa, upper_exponent = sum_endpoints(
+        tuple(value.upper for value in contributions)
+    )
     return DyadicClosedInterval(
-        lower=_round_fraction_outward(lower, precision_bits, toward_positive=False),
-        upper=_round_fraction_outward(upper, precision_bits, toward_positive=True),
+        lower=_round_dyadic_outward(
+            lower_mantissa,
+            lower_exponent,
+            precision_bits,
+            toward_positive=False,
+        ),
+        upper=_round_dyadic_outward(
+            upper_mantissa,
+            upper_exponent,
+            precision_bits,
+            toward_positive=True,
+        ),
     )
 
 

@@ -16,5 +16,5 @@ cycle and the quotient-class equality.
 
 The returned objects are nested image subspaces. They do not choose a direct
 sum splitting of homology from associated-graded pieces. The initial public
-envelope admits `GF(p)` with `p <= 2^31 - 1`; rational-coefficient output
+envelope admits `GF(p)` with `p <= 1,000,003`; rational-coefficient output
 growth remains a separate admission problem.

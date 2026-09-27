@@ -134,3 +134,36 @@ def test_acyclic_complex_has_empty_graded_homology_comparison() -> None:
         for level in result.comparisons
         for comparison in level
     )
+
+
+def test_stable_page_representative_is_corrected_by_lower_filtration() -> None:
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=5,
+        degree_min=0,
+        degree_max=1,
+        basis_sizes=(1, 2),
+        differential_matrices=(((1, 1),),),
+    )
+    filtration = (
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((0, 1),)),
+            ),
+        ),
+        FiltrationLevel(
+            subspaces=(
+                FilteredSubspace(vectors=((1,),)),
+                FilteredSubspace(vectors=((1, 0), (0, 1))),
+            ),
+        ),
+    )
+
+    result = abutment(
+        SpectralAbutmentRequest(complex=complex_value, filtration=filtration)
+    )
+
+    assert result.status == "STABILIZED"
+    assert result.comparisons[1][1].page_dimension == 1
+    assert result.comparisons[1][1].homology_graded_dimension == 1

@@ -4,7 +4,7 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.models import MathTool
+from jacobian.catalog.models import MathTool, OperationResourceAdmissionError
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredChainComplexRequest,
     FilteredSubspace,
@@ -62,7 +62,8 @@ def _span(vectors: tuple[tuple[int, ...], ...]) -> set[tuple[int, ...]]:
 
 
 def test_diagonal_filtered_image_is_not_a_coordinate_splitting() -> None:
-    result = filtered_homology_filtration(_request())
+    request = _request()
+    result = filtered_homology_filtration(request.complex, request.filtration)
 
     h0 = result.homology[0]
     assert h0.cycle_basis == ((1, 0, 0), (0, 1, 0), (0, 0, 1))
@@ -86,7 +87,8 @@ def test_diagonal_filtered_image_is_not_a_coordinate_splitting() -> None:
 
 
 def test_image_and_boundary_witnesses_match_exhaustive_gf2_oracle() -> None:
-    result = filtered_homology_filtration(_request())
+    request = _request()
+    result = filtered_homology_filtration(request.complex, request.filtration)
     returned_coordinates = tuple(
         tuple(int(value) for value in vector)
         for vector in result.image_filtration[0].subspaces[0].basis_coordinates
@@ -138,4 +140,32 @@ def test_filtered_homology_rejects_rational_domain_until_growth_is_bounded() -> 
     request["complex"]["prime"] = None
     rational_request = FilteredChainComplexRequest.model_validate(request)
     with pytest.raises(ValueError, match=r"bounded GF\(p\)"):
-        filtered_homology_filtration(rational_request)
+        filtered_homology_filtration(
+            rational_request.complex, rational_request.filtration
+        )
+
+
+def test_filtered_homology_keeps_the_retained_output_cell_cap() -> None:
+    sizes = (10,) * 59
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.PRIME_FIELD,
+        prime=2,
+        degree_min=-29,
+        degree_max=29,
+        basis_sizes=sizes,
+        differential_matrices=tuple(
+            tuple(tuple(0 for _ in range(10)) for _ in range(10))
+            for _ in range(58)
+        ),
+    )
+    vectors = tuple(
+        tuple(1 if coordinate == index % 10 else 0 for coordinate in range(10))
+        for index in range(64)
+    )
+    spanning_subspace = FilteredSubspace(vectors=vectors)
+    filtration = tuple(
+        FiltrationLevel(subspaces=(spanning_subspace,) * 59) for _ in range(8)
+    )
+
+    with pytest.raises(OperationResourceAdmissionError, match="496488 cells"):
+        filtered_homology_filtration(complex_value, filtration)

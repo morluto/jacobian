@@ -21,7 +21,7 @@ def _abut(r: Any) -> Any:
 
 
 def _homology_filtration(r: Any) -> Any:
-    return filtered_homology_filtration(r)
+    return filtered_homology_filtration(r.complex, r.filtration)
 
 
 _C = {

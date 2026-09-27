@@ -864,8 +864,8 @@ def _preflight_csp_instance(instance: FiniteCspInstance) -> None:
             or len(scope) > MAX_RELATIONAL_ARITY
         ):
             _raise_invalid_csp_instance()
-        arity = symbol_arities.get(symbol_id)
-        if arity is None or len(scope) != arity:
+        constraint_arity = symbol_arities.get(symbol_id)
+        if constraint_arity is None or len(scope) != constraint_arity:
             _raise_invalid_csp_instance()
         scope_entries += len(scope)
         if scope_entries > MAX_CSP_SCOPE_ENTRIES:

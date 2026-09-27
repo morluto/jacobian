@@ -19,7 +19,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._models import StrictModel
-from jacobian.math.logic.languages.regular.values import DFA
 
 # The algebra's generator axis is interpretation-critical; a word's generator
 # order is part of its identity.  These bounds describe the shared value
@@ -889,69 +888,6 @@ class FreeAlgebraFactorAvoidanceRequest(StrictModel):
             raise _validation_error(
                 "factor_avoidance_input_size",
                 "forbidden-factor input exceeds its total letter bound",
-            )
-        return self
-
-
-class FreeAlgebraFactorAvoidanceDFA(StrictModel):
-    """A DFA for the exact language avoiding a finite family of factors.
-
-    Symbols in the nested DFA are generator ranks in ``alphabet`` order. The
-    pattern family is a canonical sorted set; this carrier makes no claim that
-    those patterns are complete leading words of an ideal presentation.
-    """
-
-    alphabet: tuple[FreeAlgebraLetter, ...] = Field(
-        max_length=MAX_FREE_ALGEBRA_GENERATORS
-    )
-    forbidden_factors: tuple[
-        Annotated[
-            tuple[FreeAlgebraLetter, ...],
-            Field(max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH),
-        ],
-        ...,
-    ] = Field(
-        max_length=MAX_FREE_ALGEBRA_FORBIDDEN_WORDS,
-        description="At most 32 factors, each at most 64 letters; aggregate at most 2,048 letters.",
-    )
-    dfa: DFA
-
-    @model_validator(mode="after")
-    def require_canonical_source_and_alphabet(self) -> Self:
-        _require_distinct_alphabet(self.alphabet)
-        if self.dfa.alphabet_size != len(self.alphabet):
-            raise _validation_error(
-                "factor_avoidance_dfa_alphabet",
-                "DFA symbols must correspond exactly to the declared generator alphabet",
-            )
-        if (
-            any(
-                len(word) > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
-                for word in self.forbidden_factors
-            )
-            or sum(map(len, self.forbidden_factors))
-            > MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS
-        ):
-            raise _validation_error(
-                "factor_avoidance_input_size",
-                "forbidden factors exceed their total word or letter bound",
-            )
-        if any(
-            letter not in self.alphabet
-            for word in self.forbidden_factors
-            for letter in word
-        ):
-            raise _validation_error(
-                "factor_avoidance_alphabet",
-                "every forbidden factor must use the declared alphabet",
-            )
-        keys = tuple(
-            canonical_word_key(self.alphabet, word) for word in self.forbidden_factors
-        )
-        if keys != tuple(sorted(set(keys))):
-            raise _validation_error(
-                "factor_avoidance_canonical_factors",
-                "forbidden factors must be distinct and canonically ordered",
             )
         return self
 

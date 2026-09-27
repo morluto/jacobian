@@ -3,15 +3,16 @@
 `free_algebra.factor_avoidance.dfa.compute` returns an exact total DFA for
 words over a finite ordered free-generator alphabet that avoid a supplied
 finite family of contiguous factors. DFA symbols are generator ranks in the
-declared alphabet order. The returned carrier retains that ordered alphabet
-and the sorted distinct source pattern family.
+declared alphabet order. The returned canonical DFA retains the ordered
+alphabet as names for its integer symbols, so regular-language operations can
+consume it directly.
 
 The construction tracks the longest suffix of the scanned word that is a
 proper prefix of a forbidden factor. A sink state records that a forbidden
 factor has occurred. The construction internally removes duplicate patterns
 and patterns containing another forbidden pattern because they do not change
-the language; the result preserves the canonical sorted distinct source
-family.
+the language; this source-family normalization does not alter the returned
+automaton's language.
 
 The operation admits at most 32 patterns, 2,048 supplied letters, 64 DFA
 states, 15,000,000 work units, and 150,000 output cells. It rejects a request

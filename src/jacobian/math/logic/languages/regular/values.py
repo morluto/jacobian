@@ -74,6 +74,14 @@ class DFA(StrictModel):
 
     state_count: int = Field(ge=1, le=MAX_DFA_STATES)
     alphabet_size: int = Field(ge=0, le=MAX_DFA_ALPHABET)
+    alphabet: tuple[str, ...] | None = Field(
+        default=None,
+        max_length=MAX_DFA_ALPHABET,
+        description=(
+            "Optional ordered names for the integer symbols; when present, "
+            "entry i names symbol i."
+        ),
+    )
     transitions: tuple[DFATransition, ...] = Field(
         min_length=0,
         max_length=MAX_DFA_TRANSITIONS,
@@ -86,6 +94,15 @@ class DFA(StrictModel):
 
     @model_validator(mode="after")
     def require_total_deterministic_dfa(self) -> Self:
+        if self.alphabet is not None and (
+            len(self.alphabet) != self.alphabet_size
+            or any(not name for name in self.alphabet)
+            or len(set(self.alphabet)) != len(self.alphabet)
+        ):
+            raise _validation_error(
+                "alphabet_names_invalid",
+                "named alphabet must uniquely name every integer symbol in order",
+            )
         if not 0 <= self.initial_state < self.state_count:
             raise _validation_error(
                 "initial_state_out_of_range",

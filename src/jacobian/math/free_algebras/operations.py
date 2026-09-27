@@ -60,7 +60,6 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_WORD_POWER_EXPONENT,
     MAX_FREE_WORD_SPLIT_LETTER_CELLS,
     MAX_FREE_WORD_SPLITS,
-    FreeAlgebraFactorAvoidanceDFA,
     FreeAlgebraFactorAvoidanceRequest,
     FreeAlgebraIdeal,
     FreeAlgebraIdealDegreeComponentResult,
@@ -1983,7 +1982,7 @@ def _factor_avoidance_transitions(
 def factor_avoidance_dfa(
     alphabet: tuple[str, ...],
     forbidden_factors: tuple[tuple[str, ...], ...],
-) -> FreeAlgebraFactorAvoidanceDFA:
+) -> DFA:
     """Build the total DFA for words avoiding a finite set of contiguous factors.
 
     States record the longest suffix of the scanned word that is a proper
@@ -2087,18 +2086,12 @@ def factor_avoidance_dfa(
     dfa = DFA(
         state_count=state_count,
         alphabet_size=alphabet_size,
+        alphabet=labels,
         transitions=tuple(transitions),
         initial_state=initial_state,
         accepting_states=accepting,
     )
-    named_factors = tuple(
-        tuple(labels[rank] for rank in word) for word in canonical_source_patterns
-    )
-    return FreeAlgebraFactorAvoidanceDFA(
-        alphabet=labels,
-        forbidden_factors=named_factors,
-        dfa=dfa,
-    )
+    return dfa
 
 
 __all__ = [

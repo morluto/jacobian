@@ -1,7 +1,6 @@
 """Free associative algebra word and noncommutative polynomial ownership."""
 
 from jacobian.math.free_algebras._models import (
-    FreeAlgebraFactorAvoidanceDFA,
     FreeAlgebraFactorAvoidanceRequest,
     FreeAlgebraIdeal,
     FreeAlgebraIdealDegreeComponentRequest,
@@ -47,7 +46,6 @@ from jacobian.math.free_algebras.operations import (
 )
 
 __all__ = [
-    "FreeAlgebraFactorAvoidanceDFA",
     "FreeAlgebraFactorAvoidanceRequest",
     "FreeAlgebraIdeal",
     "FreeAlgebraIdealDegreeComponentRequest",

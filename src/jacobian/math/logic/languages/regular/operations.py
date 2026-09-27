@@ -219,6 +219,7 @@ def dfa_complement(dfa: DFA) -> DFA:
     return DFA(
         state_count=dfa.state_count,
         alphabet_size=dfa.alphabet_size,
+        alphabet=dfa.alphabet,
         transitions=dfa.transitions,
         initial_state=dfa.initial_state,
         accepting_states=tuple(sorted(set(range(dfa.state_count)) - accepting)),
@@ -303,7 +304,11 @@ def _admit_dfa_equivalence(left: DFA, right: DFA) -> tuple[int, int]:
 
     source_work = _require_equivalence_dfa(left, "left")
     source_work += _require_equivalence_dfa(right, "right")
-    if left.alphabet_size != right.alphabet_size:
+    if left.alphabet_size != right.alphabet_size or (
+        left.alphabet is not None
+        and right.alphabet is not None
+        and left.alphabet != right.alphabet
+    ):
         raise OperationDomainValidationError(
             location=("right", "alphabet_size"),
             code="regular_language.equivalence.alphabet_mismatch",

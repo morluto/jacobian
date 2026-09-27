@@ -81,6 +81,15 @@ class EquivalenceResult(StrictModel):
                 "alphabet_mismatch",
                 "equivalence results must retain DFAs over one common alphabet",
             )
+        if (
+            self.left.alphabet is not None
+            and self.right.alphabet is not None
+            and self.left.alphabet != self.right.alphabet
+        ):
+            raise _validation_error(
+                "alphabet_mismatch",
+                "named DFAs must retain the same ordered alphabet",
+            )
         fields = (
             self.distinguishing_word,
             self.left_state_trace,

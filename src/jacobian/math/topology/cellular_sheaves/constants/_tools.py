@@ -13,7 +13,12 @@ from jacobian.math.topology.cellular_sheaves.constants.operations import (
 
 
 def _run(request: ConstantSheafRequest) -> FiniteCellularSheaf:
-    return constant_sheaf(request)
+    return constant_sheaf(
+        request.complex,
+        basis=request.basis,
+        coefficient_field=request.coefficient_field,
+        prime=request.prime,
+    )
 
 
 _INTERVAL = {

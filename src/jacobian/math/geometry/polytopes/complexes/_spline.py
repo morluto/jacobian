@@ -62,7 +62,9 @@ def _reject(code: str, message: str) -> NoReturn:
     )
 
 
-def _admit_request(request: Any, request_type: type, code: str, description: str) -> Any:
+def _admit_request(
+    request: Any, request_type: type, code: str, description: str
+) -> Any:
     """Revalidate native request carriers before reading their nested fields."""
     if not isinstance(request, request_type):
         _reject(code, description)

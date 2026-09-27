@@ -43,7 +43,9 @@ def _reject(code: str, message: str, *, location: tuple[str, ...] = ()) -> None:
     raise OperationDomainValidationError(location=location, code=code, message=message)
 
 
-def _validate_complex_carrier(value: object, side: str) -> PolytopalComplexClosureResult:
+def _validate_complex_carrier(
+    value: object, side: str
+) -> PolytopalComplexClosureResult:
     """Restore nested structure before the admission code reads carrier fields."""
     if not isinstance(value, PolytopalComplexClosureResult):
         _reject(

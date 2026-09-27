@@ -4,7 +4,6 @@ from typing import Any
 
 from jacobian.catalog.models import (
     MathTool,
-    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -17,7 +16,6 @@ from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
 )
 from jacobian.math.matrices.cyclic_linear.operations import (
-    CyclicRankKernelAdmissionError,
     apply_cyclotomic_field_inclusion,
     compose_cyclotomic_field_inclusions,
     cyclic_rational_rank_kernel_profile,
@@ -28,49 +26,21 @@ from jacobian.math.matrices.cyclic_linear.operations import (
 def _compute(
     request: CyclicRationalRankKernelProfileRequest,
 ) -> CyclicRationalRankKernelProfile:
-    try:
-        return cyclic_rational_rank_kernel_profile(request.symbol)
-    except CyclicRankKernelAdmissionError as error:
-        raise OperationDomainValidationError(
-            location=("symbol",),
-            code=f"matrix.cyclic.{error.reason}",
-            message=str(error),
-        ) from error
+    return cyclic_rational_rank_kernel_profile(request.symbol)
 
 
 def _inclusion(request: CyclotomicFieldInclusionRequest) -> CyclotomicFieldInclusion:
-    try:
-        return cyclotomic_field_inclusion(request.source, request.target)
-    except CyclicRankKernelAdmissionError as error:
-        raise OperationDomainValidationError(
-            location=("source",),
-            code=f"matrix.cyclic.{error.reason}",
-            message=str(error),
-        ) from error
+    return cyclotomic_field_inclusion(request.source, request.target)
 
 
 def _compose(
     request: CyclotomicFieldInclusionCompositionRequest,
 ) -> CyclotomicFieldInclusion:
-    try:
-        return compose_cyclotomic_field_inclusions(request.first, request.second)
-    except CyclicRankKernelAdmissionError as error:
-        raise OperationDomainValidationError(
-            location=("first",),
-            code=f"matrix.cyclic.{error.reason}",
-            message=str(error),
-        ) from error
+    return compose_cyclotomic_field_inclusions(request.first, request.second)
 
 
 def _map_element(request: CyclotomicElementMapRequest) -> RationalCyclotomicElement:
-    try:
-        return apply_cyclotomic_field_inclusion(request.inclusion, request.element)
-    except CyclicRankKernelAdmissionError as error:
-        raise OperationDomainValidationError(
-            location=("inclusion",),
-            code=f"matrix.cyclic.{error.reason}",
-            message=str(error),
-        ) from error
+    return apply_cyclotomic_field_inclusion(request.inclusion, request.element)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

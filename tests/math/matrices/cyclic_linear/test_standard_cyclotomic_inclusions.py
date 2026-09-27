@@ -10,7 +10,10 @@ from sympy import Poly, cyclotomic_poly, symbols
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.matrices.cyclic_linear import (
     CyclotomicFieldInclusion,
     RationalCyclotomicElement,
@@ -157,6 +160,55 @@ def test_sparse_constant_maps_at_height_boundary_under_nonidentity_inclusion() -
     assert mapped.field == inclusion.target
     assert mapped.coefficients_ascending[0].as_fraction() == 10**255
     assert all(value.as_fraction() == 0 for value in mapped.coefficients_ascending[1:])
+
+
+def test_target_coordinate_cancellation_is_kept_within_height_boundary() -> None:
+    inclusion = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    value = 9 * 10**255
+    element = _element(3, (value, 1), (value, 1))
+
+    mapped = apply_cyclotomic_field_inclusion(inclusion, element)
+
+    assert tuple(c.as_fraction() for c in mapped.coefficients_ascending) == (
+        Fraction(0),
+        Fraction(value),
+    )
+
+
+def test_mapped_coordinate_denominators_are_bounded_after_reduction() -> None:
+    inclusion = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=4), RationalCyclotomicField(order=8)
+    )
+    p = 10**255 + 1
+    q = 10**255 + 3
+    element = _element(4, (1, p), (1, q))
+
+    mapped = apply_cyclotomic_field_inclusion(inclusion, element)
+
+    assert tuple(c.as_fraction() for c in mapped.coefficients_ascending) == (
+        Fraction(1, p),
+        Fraction(0),
+        Fraction(1, q),
+        Fraction(0),
+    )
+
+
+def test_catalog_element_map_preserves_resource_admission_classification() -> None:
+    inclusion = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    value = 9 * 10**255
+    element = _element(3, (value, 1), (-value, 1))
+    tool = next(
+        t for t in TOOLS if t.operation_id == "matrix.cyclic.cyclotomic_element.map"
+    )
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        tool.run(CyclotomicElementMapRequest(inclusion=inclusion, element=element))
+
+    assert error.value.errors()[0]["type"] == "matrix.cyclic.element_height_bound"
 
 
 def test_inclusion_rejects_nondividing_parent() -> None:

@@ -117,16 +117,15 @@ def test_morphism_revalidates_authored_parent_diamonds() -> None:
     valid = _triangle_sheaf()
     covers = tuple(
         restriction.model_copy(update={"entries": ((_q("2"),),)})
-        if restriction.source == ("a",)
-        and restriction.target == ("a", "b")
+        if restriction.source == ("a",) and restriction.target == ("a", "b")
         else restriction
         for restriction in valid.cover_restrictions
     )
     forged = valid.model_copy(update={"cover_restrictions": covers})
-    identity = tuple(
-        (cell, ((_q("1"),),)) for cell in forged.canonical_face_order
-    )
-    with pytest.raises(OperationDomainValidationError, match="does not define a cellular sheaf"):
+    identity = tuple((cell, ((_q("1"),),)) for cell in forged.canonical_face_order)
+    with pytest.raises(
+        OperationDomainValidationError, match="does not define a cellular sheaf"
+    ):
         morphism(forged, forged, identity)
 
 

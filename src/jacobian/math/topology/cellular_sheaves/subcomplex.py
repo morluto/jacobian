@@ -49,9 +49,13 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
 def _admit_sources(
     sheaf: FiniteCellularSheaf, subcomplex: FiniteSimplicialComplex
 ) -> tuple[FiniteCellularSheaf, FiniteSimplicialComplex]:
-    if type(sheaf) is not FiniteCellularSheaf or type(subcomplex) is not FiniteSimplicialComplex:
+    if (
+        type(sheaf) is not FiniteCellularSheaf
+        or type(subcomplex) is not FiniteSimplicialComplex
+    ):
         raise _domain(
-            "request_type", "restriction requires a sheaf and canonical simplicial complex"
+            "request_type",
+            "restriction requires a sheaf and canonical simplicial complex",
         )
     try:
         admitted_sheaf = require_canonical_sheaf_admission(sheaf)
@@ -103,9 +107,7 @@ def restrict_to_subcomplex(
         stalk for stalk in sheaf.stalks if stalk.simplex in selected
     )
     if any(len(stalk.basis) > MAX_SHEAF_STALK_RANK for stalk in filtered_stalks):
-        raise _resource(
-            "stalk_rank_bound", "a retained stalk exceeds the rank bound"
-        )
+        raise _resource("stalk_rank_bound", "a retained stalk exceeds the rank bound")
     if sum(len(stalk.basis) for stalk in filtered_stalks) > MAX_SHEAF_TOTAL_STALK_RANK:
         raise _resource(
             "total_stalk_rank_bound", "retained stalks exceed the total rank bound"

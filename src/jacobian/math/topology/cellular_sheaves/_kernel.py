@@ -1033,7 +1033,9 @@ def require_canonical_sheaf_admission(
     """Rebuild an authored sheaf from covers and bind every derived map."""
     if type(sheaf) is not FiniteCellularSheaf:
         raise _domain(
-            "authored_sheaf_invalid", "a canonical finite cellular sheaf is required", ("sheaf",)
+            "authored_sheaf_invalid",
+            "a canonical finite cellular sheaf is required",
+            ("sheaf",),
         )
     try:
         admitted = FiniteCellularSheaf.model_validate(
@@ -1041,7 +1043,9 @@ def require_canonical_sheaf_admission(
         )
     except (AttributeError, TypeError, ValueError, ValidationError) as exc:
         raise _domain(
-            "authored_sheaf_invalid", "the authored sheaf violates its structural contract", ("sheaf",)
+            "authored_sheaf_invalid",
+            "the authored sheaf violates its structural contract",
+            ("sheaf",),
         ) from exc
     rebuilt = from_cover_maps(
         admitted.complex,
@@ -1076,11 +1080,10 @@ def require_canonical_sheaf_admission(
             for item in restrictions
         }
 
-    if (
-        restrictions_by_pair(admitted.cover_restrictions)
-        != restrictions_by_pair(canonical.cover_restrictions)
-        or restrictions_by_pair(admitted.derived_restrictions)
-        != restrictions_by_pair(canonical.derived_restrictions)
+    if restrictions_by_pair(admitted.cover_restrictions) != restrictions_by_pair(
+        canonical.cover_restrictions
+    ) or restrictions_by_pair(admitted.derived_restrictions) != restrictions_by_pair(
+        canonical.derived_restrictions
     ):
         raise _domain(
             "authored_sheaf_derived_map_mismatch",

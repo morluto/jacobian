@@ -150,8 +150,9 @@ def test_hodge_admission_ignores_unused_derived_composites() -> None:
         ),
     ).sheaf
     assert source is not None
-    assert max(
-        len(str(item.entries[0][0].num)) for item in source.derived_restrictions
-    ) > 64
+    assert (
+        max(len(str(item.entries[0][0].num)) for item in source.derived_restrictions)
+        > 64
+    )
     result = hodge_laplacians(source)
     assert result.laplacians

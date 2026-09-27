@@ -111,9 +111,7 @@ def test_authored_subcomplex_face_closure_is_admitted() -> None:
     sheaf = _triangle_sheaf()
     complex_ = canonical_complex(("a", "b", "c"), (("a", "b", "c"),))
     edge_group = complex_.faces_by_dimension[1]
-    incomplete_group = edge_group.model_copy(
-        update={"faces": edge_group.faces[:-1]}
-    )
+    incomplete_group = edge_group.model_copy(update={"faces": edge_group.faces[:-1]})
     incomplete = complex_.model_copy(
         update={
             "faces_by_dimension": (
@@ -148,11 +146,7 @@ def test_subcomplex_rejects_stalks_outside_the_rank_envelope() -> None:
         complex=complex_,
         coefficient_field=SheafField.RATIONAL,
         prime=None,
-        stalks=(
-            SheafStalk(
-                simplex=("a",), basis=tuple(f"b{i}" for i in range(9))
-            ),
-        ),
+        stalks=(SheafStalk(simplex=("a",), basis=tuple(f"b{i}" for i in range(9))),),
         cover_restrictions=(),
         derived_restrictions=(),
         diamonds=0,

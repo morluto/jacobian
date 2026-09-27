@@ -11,6 +11,9 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafSubcomplexRequest,
     SheafSubcomplexResult,
 )
+from jacobian.math.topology.cellular_sheaves.cohomology_map_tools import (
+    TOOLS as COHOMOLOGY_MAP_TOOLS,
+)
 from jacobian.math.topology.cellular_sheaves.extensions_tools import (
     TOOLS as EXTENSION_TOOLS,
 )
@@ -107,6 +110,7 @@ def _identity_cover_maps() -> list[dict[str, object]]:
 
 
 TOOLS: MathTools = (
+    *COHOMOLOGY_MAP_TOOLS,
     *EXTENSION_TOOLS,
     MathTool(
         operation_id="cellular_sheaf.subcomplex.restrict",

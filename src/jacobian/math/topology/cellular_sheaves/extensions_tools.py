@@ -39,6 +39,10 @@ def _compose_morphisms(r: Any) -> Any:
     return compose_morphisms(r.first, r.second)
 
 
+def _cochain_map(r: Any) -> Any:
+    return cochain_map(r.morphism)
+
+
 def _hodge(r: SheafHodgeRequest) -> SheafHodgeResult:
     return compute_hodge(r)
 
@@ -246,6 +250,41 @@ TOOLS = (
                         "natural": True,
                         "obstruction": None,
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="cellular_sheaf.morphism.cochain_map",
+        title="Induce a cellular cochain map",
+        description=(
+            "Construct the degreewise exact maps on cellular sheaf cochains "
+            "from a natural stalk morphism, retaining the simplex and stalk "
+            "coordinate axes."
+        ),
+        request_type=SheafCochainMapRequest,
+        result_type=SheafCochainMapResult,
+        run=_cochain_map,
+        tags=("topology", "cellular-sheaf", "morphism", "cochains", "exact"),
+        examples=(
+            OperationExample(
+                name="twice_interval_identity_on_cochains",
+                description=(
+                    "Induce multiplication by two on both cochain degrees of "
+                    "the constant rank-one sheaf on an interval."
+                ),
+                input={
+                    "morphism": {
+                        "source": _S,
+                        "target": _S,
+                        "components": [
+                            [["a"], [[{"num": "2", "den": "1"}]]],
+                            [["b"], [[{"num": "2", "den": "1"}]]],
+                            [["a", "b"], [[{"num": "2", "den": "1"}]]],
+                        ],
+                        "natural": True,
+                        "obstruction": None,
+                    }
                 },
             ),
         ),

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 
 import pytest
@@ -351,13 +350,6 @@ class TestNativeCatalogParity:
         assert tool.run(request) == _native(
             request.complex, request.filtration, request.page
         )
-
-    def test_published_examples_execute(self) -> None:
-        tool = _tool()
-        for example in tool.examples:
-            request = SpectralPageRequest.model_validate_json(json.dumps(example.input))
-            result = tool.run(request)
-            assert isinstance(result, SpectralPageResult)
 
 
 class TestSerialization:

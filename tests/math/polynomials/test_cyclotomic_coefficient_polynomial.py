@@ -143,7 +143,19 @@ def test_public_manifest_declares_composable_typed_coefficient_map() -> None:
     request = tool.request_type.model_validate_json(
         json.dumps(tool.examples[0].input), strict=True
     )
-    assert isinstance(tool.run(request), CyclotomicPolynomial)
+    result = tool.run(request)
+    assert isinstance(result, CyclotomicPolynomial)
+    assert result.field == RationalCyclotomicField(order=5)
+    assert result.variables == ("x",)
+    assert tuple(term.exponents for term in result.terms) == ((1,), (0,))
+    assert tuple(
+        term.coefficient.coefficients_ascending[0] for term in result.terms
+    ) == (CanonicalRational(num=2, den=1), CanonicalRational(num=3, den=1))
+    assert all(
+        coordinate.num == 0
+        for term in result.terms
+        for coordinate in term.coefficient.coefficients_ascending[1:]
+    )
 
 
 def test_embedding_admits_coordinate_growth_before_expansion() -> None:

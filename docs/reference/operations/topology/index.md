@@ -9,10 +9,11 @@ chain and homology maps. Recurrence and generating-series operations belong to
 combinatorics; their historical page is retained below for that mathematical
 reference.
 
-- [Cellular sheaf cohomology maps](cellular-sheaf-cohomology-maps.md)
-- [Recurrences and rational generating series](recurrences-and-generating-series.md)
-- [Normalized chains of a finite simplicial set](simplicial-set-normalized-chains.md)
-- [Image factorization of a finite simplicial map](simplicial-map-image.md)
-- [Normalized chain map induced by a finite simplicial map](simplicial-set-induced-chain-map.md)
-- [Induced map on normalized integral homology](simplicial-set-induced-homology-map.md)
-- [Finite simplicial set skeleton](simplicial-set-skeleton.md)
+ - [Cellular sheaf cohomology maps](cellular-sheaf-cohomology-maps.md)
+ - [Recurrences and rational generating series](recurrences-and-generating-series.md)
+ - [Finite-category nerve prefixes](finite-category-nerve.md)
+ - [Normalized chains of a finite simplicial set](simplicial-set-normalized-chains.md)
+ - [Image factorization of a finite simplicial map](simplicial-map-image.md)
+ - [Normalized chain map induced by a finite simplicial map](simplicial-set-induced-chain-map.md)
+ - [Induced map on normalized integral homology](simplicial-set-induced-homology-map.md)
+ - [Finite simplicial set skeleton](simplicial-set-skeleton.md)

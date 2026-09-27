@@ -95,12 +95,17 @@ def _require_bounded_form_structure(form: RationalQuadraticForm) -> None:
             )
         numerator = getattr(coefficient, "num", None)
         denominator = getattr(coefficient, "den", None)
+        component_bits = max(
+            abs(numerator).bit_length() if type(numerator) is int else 0,
+            denominator.bit_length() if type(denominator) is int else 0,
+        )
         if (
             type(numerator) is not int
             or type(denominator) is not int
             or denominator <= 0
-            or max(abs(numerator).bit_length(), denominator.bit_length())
-            > 3 * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+            or component_bits > 4 * MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
+            or max(len(str(abs(numerator))), len(str(denominator)))
+            > MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
         ):
             raise OperationDomainValidationError(
                 location=("form",),
@@ -462,8 +467,40 @@ def theta_representing_vectors(
     request: ThetaRepresentingVectorsRequest,
 ) -> ThetaRepresentingVectorsResult:
     """Return every integer vector at each selected value, in axis order."""
-    request = _revalidate_request(request, ThetaRepresentingVectorsRequest, "request")
-    form = request.form
+    if not isinstance(request, ThetaRepresentingVectorsRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.theta_invalid_request",
+            message="representation vectors require a canonical bounded request",
+        )
+    raw_form = getattr(request, "form", None)
+    raw_indices = getattr(request, "indices", None)
+    _require_bounded_form_structure(raw_form)
+    if (
+        type(raw_indices) is not tuple
+        or not 1 <= len(raw_indices) <= MAX_THETA_SELECTED_INDICES
+        or any(
+            type(index) is not int or not 0 <= index <= MAX_THETA_SELECTED_INDEX
+            for index in raw_indices
+        )
+        or tuple(sorted(set(raw_indices))) != raw_indices
+    ):
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="quadratic_form.theta_invalid_representation_indices",
+            message="representation indices must be bounded and strictly increasing",
+        )
+    try:
+        form = RationalQuadraticForm.model_validate(
+            raw_form.model_dump(mode="python"), strict=True
+        )
+        request = ThetaRepresentingVectorsRequest(form=form, indices=raw_indices)
+    except (AttributeError, TypeError, ValueError, ValidationError) as error:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.theta_invalid_request",
+            message="representation request must satisfy its canonical schema",
+        ) from error
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(

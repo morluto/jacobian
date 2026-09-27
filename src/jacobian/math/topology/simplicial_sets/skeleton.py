@@ -23,8 +23,7 @@ from jacobian.math.topology.simplicial_sets.operations import (
 )
 
 MAX_SKELETON_WORK = 100_000
-MAX_SKELETON_OUTPUT_BYTES = 1_000_000
-MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR = 12
+MAX_SKELETON_OUTPUT_CELLS = 10_000
 
 
 class SimplicialSetSkeletonRequest(StrictModel):
@@ -84,31 +83,23 @@ def _preflight(
     # Check identities once at the untrusted source boundary. Restriction and
     # inclusion are constructed from those admitted tables without replay.
     work = identity_rows + 2 * table_cells + degeneracy_cells
-    # Bound UTF-8/escaped labels, all table indices and their list framing
-    # without serializing the source merely to estimate its output size.
-    label_chars = sum(
-        len(label) * MAX_JSON_ASCII_CHARS_PER_LABEL_CHAR + 3
-        for level in source.sets
-        for label in level
-    )
     map_count = sum(degree + 1 for degree in range(1, source.max_degree + 1))
     map_count += sum(degree + 1 for degree in range(source.max_degree))
-    source_bytes_bound = 4096 + label_chars + 3 * table_cells + 3 * map_count
-    inclusion_bytes_bound = 1024 + 3 * total + 4 * (source.max_degree + 1)
-    # The full source appears once and the skeleton twice (result and map
-    # source). The inclusion adds one small index per skeleton simplex.
-    output_bound = 3 * source_bytes_bound + inclusion_bytes_bound
+    # Bound the in-memory collections created by closure, restriction,
+    # inclusion, and the returned skeleton by cardinality. Wire encoding owns
+    # its independent byte ceiling at the delivery boundary.
+    output_cells = 4 * total + 3 * table_cells + 3 * map_count
     if work > MAX_SKELETON_WORK:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.skeleton_work_budget_exceeded",
             message="the admitted face/degeneracy scan exceeds the skeleton work bound",
         )
-    if total > MAX_TOTAL_SIMPLICES or output_bound > MAX_SKELETON_OUTPUT_BYTES:
+    if total > MAX_TOTAL_SIMPLICES or output_cells > MAX_SKELETON_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),
             code="simplicial_set.skeleton_output_budget_exceeded",
-            message="the source-bound skeleton result exceeds its output bound",
+            message="the source-bound skeleton result exceeds its allocation bound",
         )
 
 

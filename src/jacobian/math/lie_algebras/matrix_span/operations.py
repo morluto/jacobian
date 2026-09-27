@@ -55,11 +55,25 @@ def _shared_denominator_growth(
         for row in matrix.entries
         for entry in row
     )
-    maximum_denominator_digits = max(
-        (decimal_digit_width(value) for value in matrix_denominators), default=1
+    coordinate_scale_digits = max(
+        (
+            max(
+                decimal_digit_width(abs(scale.numerator)),
+                decimal_digit_width(scale.denominator),
+            )
+            for left, right in combinations(range(len(matrices)), 2)
+            for target in range(len(matrices))
+            for scale in (
+                Fraction(
+                    matrix_denominators[target],
+                    matrix_denominators[left] * matrix_denominators[right],
+                ),
+            )
+        ),
+        default=1,
     )
     return (
-        2 * maximum_denominator_digits,
+        coordinate_scale_digits,
         max(numerator_widths, default=1),
         only_unit_entries,
     )

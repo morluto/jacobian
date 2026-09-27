@@ -253,6 +253,37 @@ def test_sl2_basis_with_independent_large_denominators_is_admitted() -> None:
     assert len(result.algebra.structure_constants) == 3
 
 
+def test_sl2_basis_with_a_shared_31_digit_denominator_is_admitted() -> None:
+    from fractions import Fraction
+
+    from jacobian.math.matrices.values import rational_matrix_from_fractions
+
+    denominator = 10**30 + 3
+    units = (
+        ((0, 1), (0, 0)),
+        ((0, 0), (1, 0)),
+        ((1, 0), (0, -1)),
+    )
+    matrices = tuple(
+        rational_matrix_from_fractions(
+            tuple(
+                tuple(Fraction(value, denominator) for value in row)
+                for row in matrix
+            )
+        )
+        for matrix in units
+    )
+
+    result = lie_algebra_from_matrix_span(matrices)
+
+    coefficients = tuple(
+        constant.coefficient.as_fraction()
+        for constant in result.algebra.structure_constants
+    )
+    assert Fraction(1, denominator) in coefficients
+    assert Fraction(-2, denominator) in coefficients
+
+
 def test_admitted_commutators_are_reused_during_construction(monkeypatch) -> None:
     import jacobian.math.lie_algebras.matrix_span.operations as operations
 

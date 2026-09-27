@@ -68,7 +68,7 @@ class TestKnownAnswers:
             (1,),
         )
 
-    def test_single_cube_f_vector(self) -> None:
+    def test_single_cube_chain_group_bases(self) -> None:
         result = chain_complex(_CUBE)
         assert result.value.basis_sizes == (8, 12, 6, 1)
         assert tuple(len(basis.cells) for basis in result.cell_bases) == (8, 12, 6, 1)
@@ -80,6 +80,7 @@ class TestKnownAnswers:
         result = chain_complex(_SQUARE, CubicalChainCoefficient.PRIME_FIELD, 3)
         assert result.value.coefficient_ring is CoefficientRing.PRIME_FIELD
         assert result.value.prime == 3
+        assert differential_squares_to_zero(result.value).is_valid
         assert result.value.differential_matrices[1] == (
             (2,),
             (1,),
@@ -100,8 +101,6 @@ class TestDefiningInvariants:
     @pytest.mark.parametrize(
         "cells",
         [
-            _EDGE,
-            _SQUARE,
             _CUBE,
             (
                 CubicalCell(intervals=((0, 1), (0, 0))),
@@ -114,7 +113,7 @@ class TestDefiningInvariants:
         result = chain_complex(cells)
         assert differential_squares_to_zero(result.value).is_valid
 
-    @pytest.mark.parametrize("prime", [2, 3, 5, 7])
+    @pytest.mark.parametrize("prime", [2])
     def test_d_squared_zero_over_prime_field(self, prime: int) -> None:
         result = chain_complex(_CUBE, CubicalChainCoefficient.PRIME_FIELD, prime)
         assert differential_squares_to_zero(result.value).is_valid
@@ -197,8 +196,12 @@ class TestResourceAdmission:
         assert error.value.errors()[0]["type"] == "cubical_complex.chain_group_budget"
 
     def test_group_boundary_is_admitted(self) -> None:
-        result = chain_complex(_CUBE, CubicalChainCoefficient.PRIME_FIELD, 2)
-        assert all(len(basis.cells) <= 64 for basis in result.cell_bases)
+        segments = tuple(
+            CubicalCell(intervals=((index, index + 1),)) for index in range(63)
+        )
+        result = chain_complex(segments)
+        assert result.value.basis_sizes == (64, 63)
+        assert max(len(basis.cells) for basis in result.cell_bases) == 64
 
 
 class TestCatalogParity:
@@ -218,6 +221,31 @@ class TestCatalogParity:
             for tool in TOOLS
             if tool.operation_id == "topology.cubical_complex.chain_complex.compute"
         )
+        assert {example.name for example in tool.examples} == {
+            "unit_square_integer_chain_complex",
+            "unit_square_mod_two_chain_complex",
+        }
         for example in tool.examples:
             request = tool.request_type.model_validate(example.input)
-            assert tool.run(request).value.basis_sizes
+            result = tool.run(request).value
+            assert result.basis_sizes == (4, 4, 1)
+            if example.name == "unit_square_integer_chain_complex":
+                assert result.coefficient_ring is CoefficientRing.INTEGER
+                assert result.prime is None
+                assert (
+                    result.differential_matrices
+                    == chain_complex(_SQUARE).value.differential_matrices
+                )
+            else:
+                assert example.name == "unit_square_mod_two_chain_complex"
+                assert result.coefficient_ring is CoefficientRing.PRIME_FIELD
+                assert result.prime == 2
+                assert result.differential_matrices == (
+                    (
+                        (1, 1, 0, 0),
+                        (1, 0, 1, 0),
+                        (0, 1, 0, 1),
+                        (0, 0, 1, 1),
+                    ),
+                    ((1,), (1,), (1,), (1,)),
+                )

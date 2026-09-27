@@ -804,8 +804,11 @@ def test_dense_hadamard_axis_exceeds_the_field_work_envelope() -> None:
         ),
     )
 
-    with pytest.raises(CyclicRankKernelAdmissionError, match="scalar-bit work"):
+    with pytest.raises(
+        CyclicRankKernelAdmissionError, match="scalar-bit work"
+    ) as error:
         cyclic_rational_rank_kernel_profile(source)
+    assert error.value.errors()[0]["loc"] == ("symbol",)
 
 
 def test_owner_checkpoint_observes_cancellation() -> None:

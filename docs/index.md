@@ -47,8 +47,12 @@ Native Python callers can use domain functions without a catalog or server.
   defects that adapters compensate for, with guard tests.
 - [Operation references](reference/operations/index.md) — external-boundary
   notes that are not captured by the live schema.
+- [Proper hypergeometric terms](reference/proper-hypergeometric-terms.md) —
+  exact factorial-ratio carriers and their support semantics.
 - [Schemas and value interoperability](reference/value-interoperability.md) —
   canonical ownership, explicit conversions, and serialized trust boundaries.
+- [Finite basis matroids](reference/finite-basis-matroids.md) — the bounded
+  complete-basis carrier and exact basis-exchange contract.
 - [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
   polynomial basis conversion on boxes, admission bounds, and evidence.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and

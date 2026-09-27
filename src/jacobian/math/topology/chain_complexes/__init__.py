@@ -9,6 +9,13 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
 from jacobian.math.topology.chain_complexes._filtered_operations import (
     associated_graded,
 )
+from jacobian.math.topology.chain_complexes.filtered_extensions import (
+    FilteredHomologyDegree,
+    FilteredHomologyLevel,
+    FilteredHomologyResult,
+    HomologyFiltrationImage,
+    filtered_homology_filtration,
+)
 from jacobian.math.topology.chain_complexes.operations import (
     chain_map_commutes,
     construct_chain_complex,
@@ -19,6 +26,7 @@ from jacobian.math.topology.chain_complexes.operations import (
 )
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
+    ChainMapValue,
     CoefficientRing,
     HomologyGroup,
     HomologyGroupValue,
@@ -35,10 +43,15 @@ from jacobian.math.topology.chain_complexes.values import (
 __all__ = [
     "AssociatedGradedResult",
     "ChainComplexValue",
+    "ChainMapValue",
     "CoefficientRing",
+    "FilteredHomologyDegree",
+    "FilteredHomologyLevel",
+    "FilteredHomologyResult",
     "FilteredSubspace",
     "FiltrationLevel",
     "GradedSquareLedgerEntry",
+    "HomologyFiltrationImage",
     "HomologyGroup",
     "HomologyGroupValue",
     "HomologyResult",
@@ -50,6 +63,7 @@ __all__ = [
     "chain_map_commutes",
     "construct_chain_complex",
     "differential_squares_to_zero",
+    "filtered_homology_filtration",
     "homology_groups",
     "mapping_cone",
     "tensor_product_complex",

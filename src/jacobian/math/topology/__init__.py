@@ -12,6 +12,7 @@ from jacobian.math.topology.operations import (
     shelling_check,
     simplicial_chain_complex_value,
 )
+from jacobian.math.topology.release import graph_clique_complex
 
 __all__ = [
     "FiniteSimplicialComplex",
@@ -19,6 +20,7 @@ __all__ = [
     "canonicalize",
     "chain_complex",
     "frames",
+    "graph_clique_complex",
     "homology",
     "integral_homology",
     "pseudomanifold",

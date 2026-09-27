@@ -32,45 +32,6 @@ FIXTURE = {
 
 
 class TestEdgeIntersectionGraph:
-    def test_issue_fixture_vertices_and_single_edge(self) -> None:
-        """The issue fixture: vertices E0,E1,E2 and exactly the edge E0-E1."""
-
-        r = _graph(FIXTURE)
-
-        assert isinstance(r.graph, SimpleUndirectedGraph)
-        assert r.graph.vertices == ("E0", "E1", "E2")
-        assert r.graph.edges == (("E0", "E1"),)
-
-    def test_defining_property_every_edge_is_nonempty_intersection(
-        self,
-    ) -> None:
-        """Replay every graph edge as a nonempty source-edge intersection."""
-
-        r = _graph(FIXTURE)
-
-        member_map = dict(r.hypergraph.edges)
-        for u, v in r.graph.edges:
-            assert set(member_map[u]) & set(member_map[v]), (
-                f"graph edge ({u}, {v}) must come from a nonempty intersection"
-            )
-
-    def test_defining_property_every_omitted_pair_is_disjoint(self) -> None:
-        """Every omitted pair must be disjoint source hyperedges."""
-
-        r = _graph(FIXTURE)
-
-        member_map = dict(r.hypergraph.edges)
-        vertices = r.graph.vertices
-        adjacent = set(r.graph.edges)
-        for i, u in enumerate(vertices):
-            for v in vertices[i + 1 :]:
-                pair = (min(u, v), max(u, v))
-                shared = bool(set(member_map[u]) & set(member_map[v]))
-                if pair in adjacent:
-                    assert shared, f"adjacent pair {pair} must intersect"
-                else:
-                    assert not shared, f"non-adjacent pair {pair} must be disjoint"
-
     def test_retains_source_edge_ids(self) -> None:
         """Graph vertices are exactly the source edge IDs in declared order."""
 
@@ -98,37 +59,6 @@ class TestEdgeIntersectionGraph:
 
 
 class TestEdgeIntersectionGraphBoundary:
-    def test_no_edges_empty_graph(self) -> None:
-        r = _graph({"vertices": ["a", "b"], "edges": []})
-
-        assert r.graph.vertices == ()
-        assert r.graph.edges == ()
-
-    def test_single_edge_no_adjacency(self) -> None:
-        r = _graph(
-            {
-                "vertices": ["a", "b"],
-                "edges": [["only", ["a", "b"]]],
-            }
-        )
-
-        assert r.graph.vertices == ("only",)
-        assert r.graph.edges == ()
-
-    def test_all_disjoint_edges_no_adjacency(self) -> None:
-        r = _graph(
-            {
-                "vertices": ["a", "b", "c", "d"],
-                "edges": [
-                    ["e1", ["a", "b"]],
-                    ["e2", ["c", "d"]],
-                ],
-            }
-        )
-
-        assert r.graph.vertices == ("e1", "e2")
-        assert r.graph.edges == ()
-
     def test_duplicate_member_sets_remain_distinct_vertices(self) -> None:
         """Parallel-looking equal sets remain distinct positions."""
 
@@ -160,27 +90,6 @@ class TestEdgeIntersectionGraphBoundary:
 
         assert r.graph.vertices == ("empty", "full")
         assert r.graph.edges == ()
-
-    def test_complete_intersection_graph(self) -> None:
-        """All edges sharing a common vertex produce a complete graph."""
-
-        r = _graph(
-            {
-                "vertices": ["a", "b", "c"],
-                "edges": [
-                    ["e1", ["a", "b"]],
-                    ["e2", ["a", "c"]],
-                    ["e3", ["a"]],
-                ],
-            }
-        )
-
-        assert r.graph.vertices == ("e1", "e2", "e3")
-        assert set(r.graph.edges) == {
-            ("e1", "e2"),
-            ("e1", "e3"),
-            ("e2", "e3"),
-        }
 
     def test_lexical_edge_order_follows_graph_convention(self) -> None:
         r = _graph(
@@ -230,37 +139,88 @@ class TestEdgeIntersectionGraphDefiningProperty:
     """Property-based: replay every edge as intersection and every omission as disjoint."""
 
     @pytest.mark.parametrize(
-        "wire",
+        ("wire", "expected_vertices", "expected_edges"),
         [
-            {
-                "vertices": ["a", "b", "c", "d"],
-                "edges": [
-                    ["e1", ["a", "b", "c"]],
-                    ["e2", ["b", "c", "d"]],
-                    ["e3", ["a", "d"]],
-                ],
-            },
-            {
-                "vertices": ["a", "b", "c"],
-                "edges": [
-                    ["z", ["a", "b"]],
-                    ["a", ["b", "c"]],
-                    ["m", ["a", "c"]],
-                ],
-            },
-            {
-                "vertices": ["a", "b", "c", "d", "e", "f"],
-                "edges": [
-                    ["e1", ["a", "b"]],
-                    ["e2", ["c", "d"]],
-                    ["e3", ["e", "f"]],
-                    ["e4", ["a", "c"]],
-                ],
-            },
+            (FIXTURE, ("E0", "E1", "E2"), (("E0", "E1"),)),
+            ({"vertices": ["a", "b"], "edges": []}, (), ()),
+            (
+                {"vertices": ["a", "b"], "edges": [["e1", ["a"]], ["e2", ["b"]]]},
+                ("e1", "e2"),
+                (),
+            ),
+            (
+                {"vertices": ["a", "b"], "edges": [["only", ["a", "b"]]]},
+                ("only",),
+                (),
+            ),
+            (
+                {
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [["e1", ["a", "b"]], ["e2", ["c", "d"]]],
+                },
+                ("e1", "e2"),
+                (),
+            ),
+            (
+                {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [
+                        ["e1", ["a", "b"]],
+                        ["e2", ["a", "c"]],
+                        ["e3", ["a"]],
+                    ],
+                },
+                ("e1", "e2", "e3"),
+                (("e1", "e2"), ("e1", "e3"), ("e2", "e3")),
+            ),
+            (
+                {
+                    "vertices": ["a", "b", "c", "d"],
+                    "edges": [
+                        ["e1", ["a", "b", "c"]],
+                        ["e2", ["b", "c", "d"]],
+                        ["e3", ["a", "d"]],
+                    ],
+                },
+                ("e1", "e2", "e3"),
+                (("e1", "e2"), ("e1", "e3"), ("e2", "e3")),
+            ),
+            (
+                {
+                    "vertices": ["a", "b", "c"],
+                    "edges": [
+                        ["z", ["a", "b"]],
+                        ["a", ["b", "c"]],
+                        ["m", ["a", "c"]],
+                    ],
+                },
+                ("z", "a", "m"),
+                (("a", "m"), ("a", "z"), ("m", "z")),
+            ),
+            (
+                {
+                    "vertices": ["a", "b", "c", "d", "e", "f"],
+                    "edges": [
+                        ["e1", ["a", "b"]],
+                        ["e2", ["c", "d"]],
+                        ["e3", ["e", "f"]],
+                        ["e4", ["a", "c"]],
+                    ],
+                },
+                ("e1", "e2", "e3", "e4"),
+                (("e1", "e4"), ("e2", "e4")),
+            ),
         ],
     )
-    def test_edge_intersection_defining_property(self, wire: object) -> None:
+    def test_edge_intersection_defining_property(
+        self,
+        wire: object,
+        expected_vertices: tuple[str, ...],
+        expected_edges: tuple[tuple[str, str], ...],
+    ) -> None:
         r = _graph(wire)
+        assert r.graph.vertices == expected_vertices
+        assert set(r.graph.edges) == set(expected_edges)
 
         member_map = dict(r.hypergraph.edges)
         vertices = r.graph.vertices

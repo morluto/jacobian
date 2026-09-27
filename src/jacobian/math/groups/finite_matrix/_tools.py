@@ -1,7 +1,14 @@
-"""Public declarations for bounded prime-field GL and SL operations."""
+"""Public declarations for bounded GL and SL operations."""
 
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.groups.finite_matrix._models import (
+    ExtensionFieldGeneralLinearGroup,
+    ExtensionFieldGeneralLinearProjectiveAction,
+    ExtensionFieldGeneralLinearProjectiveActionRequest,
+    ExtensionFieldLinearGroupRequest,
+    ExtensionFieldSpecialLinearGroup,
+    ExtensionFieldSpecialLinearProjectiveAction,
+    ExtensionFieldSpecialLinearProjectiveActionRequest,
     GeneralLinearNaturalActionRequest,
     PrimeFieldGeneralLinearGroup,
     PrimeFieldGeneralLinearNaturalAction,
@@ -9,6 +16,12 @@ from jacobian.math.groups.finite_matrix._models import (
     PrimeFieldSpecialLinearGroup,
     PrimeFieldSpecialLinearNaturalAction,
     SpecialLinearNaturalActionRequest,
+)
+from jacobian.math.groups.finite_matrix.extension_operations import (
+    construct_extension_general_linear_group,
+    construct_extension_special_linear_group,
+    extension_general_linear_projective_action,
+    extension_special_linear_projective_action,
 )
 from jacobian.math.groups.finite_matrix.operations import (
     construct_general_linear_group,
@@ -40,6 +53,34 @@ def _sl_action(
     request: SpecialLinearNaturalActionRequest,
 ) -> PrimeFieldSpecialLinearNaturalAction:
     return special_linear_nonzero_vector_action(request.group)
+
+
+def _construct_extension_gl(
+    request: ExtensionFieldLinearGroupRequest,
+) -> ExtensionFieldGeneralLinearGroup:
+    return construct_extension_general_linear_group(
+        request.presentation, request.vector_axis
+    )
+
+
+def _construct_extension_sl(
+    request: ExtensionFieldLinearGroupRequest,
+) -> ExtensionFieldSpecialLinearGroup:
+    return construct_extension_special_linear_group(
+        request.presentation, request.vector_axis
+    )
+
+
+def _extension_gl_action(
+    request: ExtensionFieldGeneralLinearProjectiveActionRequest,
+) -> ExtensionFieldGeneralLinearProjectiveAction:
+    return extension_general_linear_projective_action(request.group)
+
+
+def _extension_sl_action(
+    request: ExtensionFieldSpecialLinearProjectiveActionRequest,
+) -> ExtensionFieldSpecialLinearProjectiveAction:
+    return extension_special_linear_projective_action(request.group)
 
 
 _GL_2_2 = {
@@ -182,5 +223,180 @@ TOOLS: MathTools = (
         ),
     ),
 )
+
+
+_GF4: dict[str, object] = {
+    "characteristic": "2",
+    "modulus_coefficients": ["1", "1", "1"],
+    "generator": "a",
+}
+_GF4_AXIS: dict[str, object] = {"name": "v", "labels": ["x", "y"]}
+_GF4_ONE: dict[str, object] = {"presentation": _GF4, "coordinates": ["1", "0"]}
+_GF4_ALPHA: dict[str, object] = {"presentation": _GF4, "coordinates": ["0", "1"]}
+_GF4_ZERO: dict[str, object] = {"presentation": _GF4, "coordinates": ["0", "0"]}
+
+
+def _gf4_matrix(entries: list[list[dict[str, object]]]) -> dict[str, object]:
+    return {
+        "presentation": _GF4,
+        "row_axis": _GF4_AXIS,
+        "column_axis": _GF4_AXIS,
+        "entries": entries,
+    }
+
+
+_GF4_E12_ONE: dict[str, object] = _gf4_matrix(
+    [[_GF4_ONE, _GF4_ONE], [_GF4_ZERO, _GF4_ONE]]
+)
+_GF4_E21_ONE: dict[str, object] = _gf4_matrix(
+    [[_GF4_ONE, _GF4_ZERO], [_GF4_ONE, _GF4_ONE]]
+)
+_GF4_E12_ALPHA: dict[str, object] = _gf4_matrix(
+    [[_GF4_ONE, _GF4_ALPHA], [_GF4_ZERO, _GF4_ONE]]
+)
+_GF4_E21_ALPHA: dict[str, object] = _gf4_matrix(
+    [[_GF4_ONE, _GF4_ZERO], [_GF4_ALPHA, _GF4_ONE]]
+)
+_GF4_DIAGONAL_ALPHA: dict[str, object] = _gf4_matrix(
+    [[_GF4_ALPHA, _GF4_ZERO], [_GF4_ZERO, _GF4_ONE]]
+)
+_GL_2_4 = {
+    "presentation": _GF4,
+    "vector_axis": _GF4_AXIS,
+    "order": "180",
+    "generators": [
+        _GF4_E12_ONE,
+        _GF4_E21_ONE,
+        _GF4_E12_ALPHA,
+        _GF4_E21_ALPHA,
+        _GF4_DIAGONAL_ALPHA,
+    ],
+}
+_SL_2_4 = {
+    "presentation": _GF4,
+    "vector_axis": _GF4_AXIS,
+    "order": "60",
+    "generators": [
+        _GF4_E12_ONE,
+        _GF4_E21_ONE,
+        _GF4_E12_ALPHA,
+        _GF4_E21_ALPHA,
+    ],
+    "ambient_general_linear_order": "180",
+    "determinant_index": "3",
+}
+
+EXTENSION_TOOLS: MathTools = (
+    MathTool(
+        operation_id="finite_matrix_group.extension.general_linear.construct",
+        title="Construct a full general linear group over a presented extension field",
+        description=(
+            "Construct the complete GL(V) over one exact finite-field presentation "
+            "of degree at least two. The result retains the presentation, ordered "
+            "coordinate axis, exact group order, and a canonical complete generator "
+            "family; it is not an arbitrary generated subgroup."
+        ),
+        request_type=ExtensionFieldLinearGroupRequest,
+        result_type=ExtensionFieldGeneralLinearGroup,
+        run=_construct_extension_gl,
+        tags=(
+            "finite-matrix-group",
+            "general-linear-group",
+            "extension-field",
+            "exact",
+        ),
+        discovery_terms=(
+            "GL n q extension field",
+            "general linear group over finite extension field",
+        ),
+        examples=(
+            OperationExample(
+                name="general_linear_two_over_gf_four",
+                description="Construct GL(2,4) on a labelled power-basis coordinate axis.",
+                input={"presentation": _GF4, "vector_axis": _GF4_AXIS},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_matrix_group.extension.special_linear.construct",
+        title="Construct a full special linear group over a presented extension field",
+        description=(
+            "Construct the determinant-one subgroup SL(V) over one exact finite-field "
+            "presentation of degree at least two, retaining its exact order, index in "
+            "GL(V), and canonical elementary-matrix generators."
+        ),
+        request_type=ExtensionFieldLinearGroupRequest,
+        result_type=ExtensionFieldSpecialLinearGroup,
+        run=_construct_extension_sl,
+        tags=(
+            "finite-matrix-group",
+            "special-linear-group",
+            "extension-field",
+            "exact",
+        ),
+        discovery_terms=(
+            "SL n q extension field",
+            "special linear group over finite extension field",
+        ),
+        examples=(
+            OperationExample(
+                name="special_linear_two_over_gf_four",
+                description="Construct SL(2,4) and its exact index in GL(2,4).",
+                input={"presentation": _GF4, "vector_axis": _GF4_AXIS},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_matrix_group.extension.general_linear.projective_action.compute",
+        title="Compute the natural projective action of an extension-field GL group",
+        description=(
+            "Re-admit the canonical full GL(V) value and compute its action on all "
+            "projective points of the retained coordinate space. This is an action "
+            "of GL; scalar matrices may act trivially, so the result does not claim "
+            "to be a faithful PGL quotient. The complete point axis is capped at 50."
+        ),
+        request_type=ExtensionFieldGeneralLinearProjectiveActionRequest,
+        result_type=ExtensionFieldGeneralLinearProjectiveAction,
+        run=_extension_gl_action,
+        tags=("finite-matrix-group", "projective-action", "extension-field", "exact"),
+        discovery_terms=(
+            "GL projective point action",
+            "general linear action on projective space",
+        ),
+        examples=(
+            OperationExample(
+                name="gl_2_4_projective_point_action",
+                description="Compute the GL(2,4) action on the five points of PG(1,4).",
+                input={"group": _GL_2_4},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="finite_matrix_group.extension.special_linear.projective_action.compute",
+        title="Compute the natural projective action of an extension-field SL group",
+        description=(
+            "Re-admit the canonical full SL(V) value and compute its action on all "
+            "projective points of the retained coordinate space. The complete point "
+            "axis is capped at 50."
+        ),
+        request_type=ExtensionFieldSpecialLinearProjectiveActionRequest,
+        result_type=ExtensionFieldSpecialLinearProjectiveAction,
+        run=_extension_sl_action,
+        tags=("finite-matrix-group", "projective-action", "extension-field", "exact"),
+        discovery_terms=(
+            "SL projective point action",
+            "special linear action on projective space",
+        ),
+        examples=(
+            OperationExample(
+                name="sl_2_4_projective_point_action",
+                description="Compute the SL(2,4) action on the five points of PG(1,4).",
+                input={"group": _SL_2_4},
+            ),
+        ),
+    ),
+)
+
+TOOLS = (*TOOLS, *EXTENSION_TOOLS)
 
 __all__ = ["TOOLS"]

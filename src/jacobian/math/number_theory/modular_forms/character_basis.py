@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from fractions import Fraction
 from math import gcd
 from typing import Literal, NoReturn, cast
@@ -861,7 +862,10 @@ def _admit_general_character_coordinates(
     if space.kind != "S" or space.level == 13:
         _domain("U_p coordinates require an admitted level-26 or level-39 cusp space")
     dimensions = character_space_dimensions(
-        space.level, space.weight, space.character, field
+        space.level,
+        space.weight,
+        cast(DirichletCharacter, space.character),
+        field,
     )
     cusp_dimension = dimensions[0]
     if (
@@ -901,6 +905,7 @@ def modular_character_coordinates_u_prime(
     """
     admitted = _admit_general_character_coordinates(form)
     form, space, field, character_request, dimensions, input_digits = admitted
+    input_coordinates = cast(tuple[RationalCyclotomicElement, ...], form.coordinates)
     dimension = dimensions[0]
     if (
         type(prime) is not int
@@ -966,7 +971,7 @@ def modular_character_coordinates_u_prime(
     # multiplication kernel's larger internal admission bound.
     input_scalar_count = sum(
         coefficient.num != 0
-        for coordinate in form.coordinates
+        for coordinate in input_coordinates
         for coefficient in coordinate.coefficients_ascending
     )
     accumulated_digits = (
@@ -1059,7 +1064,7 @@ def modular_character_coordinates_u_prime(
     result_coordinates = tuple(
         _sum_cyclotomic(
             (
-                cyclotomic.multiply(columns[column][row], form.coordinates[column])
+                cyclotomic.multiply(columns[column][row], input_coordinates[column])
                 for column in range(dimension)
             ),
             field,
@@ -1100,7 +1105,7 @@ def _linear_combination_coefficient(
 
 
 def _sum_cyclotomic(
-    values, field: RationalCyclotomicField
+    values: Iterable[RationalCyclotomicElement], field: RationalCyclotomicField
 ) -> RationalCyclotomicElement:
     total = _coefficient(field, (Fraction(0),) * field.degree)
     for value in values:

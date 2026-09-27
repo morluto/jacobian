@@ -140,6 +140,30 @@ def _require_image_diagram_axes(
         )
         if image_axes != source_axes or image_axes != target_axes:
             raise ValueError(f"image {kind} must retain the parent diagram axes")
+    for kind in ("diamonds", "comparable_pairs"):
+        value = getattr(image, kind)
+        if value != getattr(source, kind) or value != getattr(
+            target, kind
+        ):
+            raise ValueError(f"image must retain parent {kind} accounting")
+
+
+def _require_component_shapes(
+    components: tuple[Component, ...],
+    cells: tuple[tuple[str, ...], ...],
+    source: FiniteCellularSheaf,
+    target: FiniteCellularSheaf,
+) -> None:
+    source_ranks = {stalk.simplex: len(stalk.basis) for stalk in source.stalks}
+    target_ranks = {stalk.simplex: len(stalk.basis) for stalk in target.stalks}
+    for cell, matrix in zip(cells, components, strict=True):
+        raw = matrix[1]
+        if len(raw) != target_ranks[cell] or any(
+            len(row) != source_ranks[cell] for row in raw
+        ):
+            raise _domain(
+                "component_shape", "morphism components must match their stalk axes"
+            )
 
 
 def _require_component_axes(
@@ -242,6 +266,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     _admit_section_plan(target)
     cells = source.canonical_face_order
     _canonical_component_cells(value.components, cells)
+    _require_component_shapes(value.components, cells, source, target)
     target_cover, input_digits, morphism_work = _admit_morphism_resources(
         source, target, value.components
     )
@@ -251,12 +276,6 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     canonical_components: list[Component] = []
     for cell, (_key, raw) in zip(cells, value.components, strict=True):
         matrix = _admit_component_matrix(raw, field, ("components", ".".join(cell)))
-        if len(matrix) != len(target_stalks[cell].basis) or any(
-            len(row) != len(source_stalks[cell].basis) for row in matrix
-        ):
-            raise _domain(
-                "component_shape", "morphism components must match their stalk axes"
-            )
         components[cell] = matrix
         canonical_components.append((cell, field.render(matrix)))
 

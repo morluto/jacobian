@@ -284,3 +284,49 @@ def test_image_rejects_non_natural_candidate_even_if_flag_claims_true() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="canonical order"):
         image_of_morphism(malformed_key)
+
+
+def test_image_decoder_retains_parent_diagram_accounting() -> None:
+    source, target = _sheaf(rank=1), _sheaf(rank=1)
+    original = morphism(
+        source,
+        target,
+        tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order),
+    )
+    payload = image_of_morphism(original).model_dump(mode="python")
+    for name in ("diamonds", "comparable_pairs"):
+        payload["image"][name] += 1
+        payload["inclusion"]["source"][name] += 1
+        payload["factor"]["target"][name] += 1
+    with pytest.raises(ValueError, match="parent"):
+        SheafMorphismImageResult.model_validate(payload)
+
+
+def test_image_rejects_oversized_component_before_resource_scan(monkeypatch) -> None:
+    from jacobian.math.topology.cellular_sheaves import morphism_image
+
+    source, target = _sheaf(rank=1), _sheaf(rank=1)
+    valid = morphism(
+        source,
+        target,
+        tuple((cell, ((_q(1),),)) for cell in source.canonical_face_order),
+    )
+    components = list(valid.components)
+    cell, _matrix = components[0]
+    components[0] = (cell, ((_q(1),), (_q(0),)))
+    malformed = SheafMorphismResult.model_construct(
+        source=source,
+        target=target,
+        components=tuple(components),
+        natural=True,
+        obstruction=None,
+    )
+
+    def resource_scan_must_not_run(*args, **kwargs):
+        raise AssertionError("resource scan ran before component shape validation")
+
+    monkeypatch.setattr(
+        morphism_image, "_admit_morphism_resources", resource_scan_must_not_run
+    )
+    with pytest.raises(OperationDomainValidationError, match="stalk axes"):
+        image_of_morphism(malformed)

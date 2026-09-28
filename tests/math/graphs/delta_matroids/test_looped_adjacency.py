@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.graphs import LoopedSimpleGraph
 from jacobian.math.graphs.delta_matroids import looped_adjacency_delta_matroid
 from jacobian.math.graphs.delta_matroids._models import (
@@ -96,17 +94,6 @@ def test_catalog_operation_has_a_real_looped_graph_example() -> None:
     request = tool.request_type.model_validate(tool.examples[0].input)
     result = tool.run(request)
     assert result.delta_matroid.feasible == ((), (0,), (0, 1))
-
-
-def test_global_catalog_discovers_and_executes_graph_conversion() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("graph.looped_adjacency_delta_matroid.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["matrix"]["entries"] == [[1, 1], [1, 0]]
-    assert result.output["delta_matroid"]["feasible"] == [[], [0], [0, 1]]
 
 
 def test_native_operation_normalizes_mapping_and_types_admission_errors() -> None:

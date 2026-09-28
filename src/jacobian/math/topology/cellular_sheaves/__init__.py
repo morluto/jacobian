@@ -5,6 +5,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     FiniteCellularSheaf,
     FromCoverMapsResult,
     SheafCoboundaryLedgerEntry,
+    SheafCochainComplex,
     SheafCochainCoordinate,
     SheafCohomologyGroup,
     SheafCohomologyResult,
@@ -42,6 +43,7 @@ from jacobian.math.topology.cellular_sheaves.hodge import (
 from jacobian.math.topology.cellular_sheaves.operations import (
     from_cover_maps,
     restrict_to_subcomplex,
+    sheaf_cochain_complex,
     sheaf_cohomology,
 )
 
@@ -50,6 +52,7 @@ __all__ = [
     "FiniteCellularSheaf",
     "FromCoverMapsResult",
     "SheafCoboundaryLedgerEntry",
+    "SheafCochainComplex",
     "SheafCochainCoordinate",
     "SheafCochainMapResult",
     "SheafCohomologyGroup",
@@ -79,5 +82,6 @@ __all__ = [
     "restrict_to_subcomplex",
     "restriction",
     "sections",
+    "sheaf_cochain_complex",
     "sheaf_cohomology",
 ]

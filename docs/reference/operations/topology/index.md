@@ -25,6 +25,7 @@ reference.
 - [Normalized chain map induced by a finite simplicial map](simplicial-set-induced-chain-map.md)
 - [Induced map on normalized integral homology](simplicial-set-induced-homology-map.md)
 - [Cellular sheaf cohomology maps](cellular-sheaf-cohomology-maps.md)
+- [Cellular sheaf cochain complexes](cellular-sheaf-cochain-complex.md)
 - [Finite-category nerve prefixes](finite-category-nerve.md)
 - [Finite simplicial set skeleton](simplicial-set-skeleton.md)
 - [Discrete Morse matching](discrete-morse-matching.md)

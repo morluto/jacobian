@@ -238,6 +238,12 @@ def free_reduce(
             code="edge_paths.free_reduce_generator_axis",
             message="generator_count must size a bounded presentation axis",
         )
+    if len(letters) > MAX_WORD:
+        raise OperationResourceAdmissionError(
+            location=("letters",),
+            code="topology.edge_path.word_budget",
+            message=f"the supplied word exceeds the {MAX_WORD}-letter source bound",
+        )
     if any(letter.generator >= generator_count for letter in letters):
         _reject(
             location=("letters",),
@@ -355,10 +361,67 @@ def _abelianization(
     )
 
 
+def _admit_presentation_axis(presentation: FiniteGroupPresentation) -> None:
+    """Re-establish the presentation's structural and resource invariants.
+
+    The native callable is itself an admission boundary: a constructed carrier
+    can carry a duplicated generator ID, a relator letter off its own axis, or
+    generator, relator, and word axes outside the exact integer Smith envelope
+    the abelianization runs in. Every one of those is re-established here
+    before ``_abelianization`` indexes a relation row or a relation matrix is
+    built, so an out-of-domain carrier cannot leak an ``IndexError`` or send
+    dimensions past the shared kernel's admitted shape.
+    """
+
+    if len(presentation.generators) > MAX_PRESENTATION_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("presentation", "generators"),
+            code="topology.fundamental_group.generator_budget",
+            message=(
+                f"the presentation declares {len(presentation.generators)} "
+                f"generators, above the {MAX_PRESENTATION_GENERATORS}-generator "
+                "presentation bound"
+            ),
+        )
+    if len(presentation.relators) > MAX_PRESENTATION_RELATORS:
+        raise OperationResourceAdmissionError(
+            location=("presentation", "relators"),
+            code="topology.fundamental_group.relator_budget",
+            message=(
+                f"the presentation declares {len(presentation.relators)} "
+                f"relators, above the {MAX_PRESENTATION_RELATORS}-relator "
+                "presentation bound"
+            ),
+        )
+    if any(len(relator.letters) > MAX_WORD for relator in presentation.relators):
+        raise OperationResourceAdmissionError(
+            location=("presentation", "relators"),
+            code="topology.fundamental_group.relator_length_budget",
+            message=f"a presentation relator exceeds the {MAX_WORD}-letter bound",
+        )
+    if len(set(presentation.generators)) != len(presentation.generators):
+        _reject(
+            location=("presentation", "generators"),
+            code="fundamental_group.generator_ids",
+            message="presentation generator IDs must be unique",
+        )
+    for index, relator in enumerate(presentation.relators):
+        if any(
+            letter.generator >= len(presentation.generators)
+            for letter in relator.letters
+        ):
+            _reject(
+                location=("presentation", "relators", index),
+                code="fundamental_group.relator_generator",
+                message="every relator letter must name a declared generator",
+            )
+
+
 def presentation_abelianization(
     presentation: FiniteGroupPresentation,
 ) -> PresentationAbelianizationResult:
     """Compute the exact integer abelianization of a finite presentation."""
+    _admit_presentation_axis(presentation)
     total_letters = sum(len(relator.letters) for relator in presentation.relators)
     maximum_letters = MAX_PRESENTATION_RELATORS * MAX_WORD
     if total_letters > maximum_letters:

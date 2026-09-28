@@ -191,6 +191,37 @@ def _edge_path_to_base_loop(
     return _map_edge_path(path, vertex_map, target_edge_words)
 
 
+# A cyclic rotation of a target triangle boundary rewrites at most two of its
+# three edges, so a witness conjugator is extended by at most this many target
+# edge words beyond the mapped source tree path.
+MAX_TRIANGLE_BOUNDARY_ROTATION_EDGES = 2
+
+
+def _target_boundary_rotation(
+    target_simplex: tuple[str, str, str],
+    first_image: str,
+    target_edge_words: dict[tuple[str, str], EdgeWordEntry],
+) -> tuple[WordLetter, ...]:
+    """Word for the target boundary prefix ending at a mapped triangle vertex.
+
+    A simplicial map may send the smallest vertex of a source triangle to a
+    nonminimal target vertex, and then the mapped boundary is a cyclic
+    conjugate of the canonical target relator rather than that relator or its
+    inverse. Parity alone cannot tell the two apart: every even permutation of
+    a triangle is a cyclic rotation. This is the reverse of the target boundary
+    path from the canonical relator's start vertex to the mapped first vertex,
+    which conjugates the canonical relator back onto that rotation. It is empty
+    when the mapped first vertex already starts the canonical relator.
+    """
+
+    index = target_simplex.index(first_image)
+    letters: list[WordLetter] = []
+    for position in range(index, 0, -1):
+        left, right = target_simplex[position - 1], target_simplex[position]
+        letters.extend(target_edge_words[(left, right)].backward.letters)
+    return tuple(letters)
+
+
 def _permutation_sign(values: tuple[str, ...]) -> int:
     inversions = sum(
         values[left] > values[right]
@@ -260,9 +291,15 @@ def induced_fundamental_group_map(
     conjugator_path_letters = sum(
         len(source_paths[entry.simplex[0]]) for entry in source.triangle_relators
     )
+    widest_target_edge_word = max(
+        (len(entry.forward.letters) for entry in target.edge_words), default=0
+    )
     estimated_letters = (
         generator_path_letters
         + 3 * conjugator_path_letters
+        + MAX_TRIANGLE_BOUNDARY_ROTATION_EDGES
+        * widest_target_edge_word
+        * len(source.triangle_relators)
         + MAX_PRESENTATION_RELATOR_LETTERS * MAX_WORD
         + 3 * len(source.triangle_relators)
     )
@@ -290,12 +327,10 @@ def induced_fundamental_group_map(
         mapped_triangle = tuple(
             vertex_map[vertex] for vertex in source_triangle.simplex
         )
-        conjugator = FiniteGroupWord(
-            letters=_map_edge_path(
-                source_paths[source_triangle.simplex[0]],
-                vertex_map,
-                target_edge_words,
-            )
+        source_path_letters = _map_edge_path(
+            source_paths[source_triangle.simplex[0]],
+            vertex_map,
+            target_edge_words,
         )
         if len(set(mapped_triangle)) < 3:
             relator_images.append(
@@ -303,14 +338,13 @@ def induced_fundamental_group_map(
                     source_relator_index=index,
                     target_relator_index=None,
                     target_orientation=None,
-                    conjugator=conjugator,
+                    conjugator=FiniteGroupWord(letters=source_path_letters),
                 )
             )
             continue
-        target_simplex = tuple(sorted(mapped_triangle))
-        target_index = target_relator_for_simplex.get(
-            (target_simplex[0], target_simplex[1], target_simplex[2])
-        )
+        ordered_target = sorted(mapped_triangle)
+        target_simplex = (ordered_target[0], ordered_target[1], ordered_target[2])
+        target_index = target_relator_for_simplex.get(target_simplex)
         if target_index is None:
             raise OperationDomainValidationError(
                 location=("map", "vertex_map"),
@@ -324,7 +358,18 @@ def induced_fundamental_group_map(
                 target_orientation=cast(
                     Literal[-1, 1], _permutation_sign(mapped_triangle)
                 ),
-                conjugator=conjugator,
+                conjugator=FiniteGroupWord(
+                    letters=_reduce(
+                        [
+                            *source_path_letters,
+                            *_target_boundary_rotation(
+                                target_simplex,
+                                mapped_triangle[0],
+                                target_edge_words,
+                            ),
+                        ]
+                    )
+                ),
             )
         )
 

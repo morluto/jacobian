@@ -9,7 +9,10 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
-from jacobian.math.finite_fields.values import FiniteFieldElement
+from jacobian.math.finite_fields.values import (
+    FiniteFieldElement,
+    FiniteFieldPresentation,
+)
 
 MAX_CHARACTERISTIC = 257
 MAX_EXTENSION_DEGREE = 6
@@ -46,6 +49,230 @@ DivisorDegree = Annotated[int, DecimalIntegerEncoding(max_digits=1240)]
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"function_field.{reason}", message)
+
+
+MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS = 256 + 2 * MAX_POLYNOMIAL_X_DEGREE + 1
+
+
+MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES = 4 * 1024 * 1024
+
+
+MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK = 5_000_000
+
+
+class FunctionFieldFiniteValuation(StrictModel):
+    """A finite integer valuation, including finite value zero."""
+
+    kind: Literal["FINITE"]
+    value: int
+
+
+class FunctionFieldPositiveInfinityValuation(StrictModel):
+    """The valuation of the zero field element; it carries no numeric value."""
+
+    kind: Literal["POSITIVE_INFINITY"]
+
+
+FunctionFieldValuation = Annotated[
+    FunctionFieldFiniteValuation | FunctionFieldPositiveInfinityValuation,
+    Field(discriminator="kind"),
+]
+
+
+class HyperellipticAffinePlace(StrictModel):
+    """A rational affine point on a supported odd-characteristic y^2=f(x) model."""
+
+    field: FiniteFunctionField
+    x: int = Field(ge=0)
+    y: int = Field(ge=0)
+    local_parameter: Literal["x_minus_x0", "y"]
+    residue_field: FiniteFieldPresentation
+
+    @model_validator(mode="after")
+    def require_canonical_point_shape(self) -> Self:
+        prime = self.field.characteristic
+        if self.x >= prime or self.y >= prime:
+            raise _validation_error(
+                "affine_point_coordinates",
+                "affine coordinates must be canonical residues of the characteristic",
+            )
+        if (
+            self.residue_field.characteristic != prime
+            or self.residue_field.modulus_coefficients != (0, 1)
+            or self.residue_field.generator != "a"
+        ):
+            raise _validation_error(
+                "affine_place_residue_parent",
+                "a rational affine point has residue parent GF(p) with modulus z",
+            )
+        if (self.y == 0) != (self.local_parameter == "y"):
+            raise _validation_error(
+                "affine_place_uniformizer",
+                "use y at a branch point and x-x0 when y is nonzero",
+            )
+        return self
+
+
+class HyperellipticAffinePlaceValuationRequest(StrictModel):
+    place: HyperellipticAffinePlace
+    element: FiniteFunctionFieldElement
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        from jacobian.math.function_fields.operations import _canonical_field
+
+        try:
+            place_field = FiniteFunctionField.model_validate(
+                self.place.field.model_dump()
+            )
+            element_field = FiniteFunctionField.model_validate(
+                self.element.field.model_dump()
+            )
+        except (TypeError, ValueError) as error:
+            raise _validation_error(
+                "affine_valuation_parent_malformed",
+                "the point and function element fields must be valid",
+            ) from error
+        if _canonical_field(place_field) != _canonical_field(element_field):
+            raise _validation_error(
+                "affine_valuation_parent_mismatch",
+                "the point and function element must share the exact function field",
+            )
+        return self
+
+
+class HyperellipticAffinePlaceValuationResult(StrictModel):
+    place: HyperellipticAffinePlace
+    element: FiniteFunctionFieldElement
+    valuation: FunctionFieldValuation
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "affine_valuation_parent_mismatch",
+                "the point and function element must retain the exact function field",
+            )
+        return self
+
+
+class HyperellipticInfinityPlace(StrictModel):
+    """The unique degree-one place at infinity on an odd-degree model."""
+
+    field: FiniteFunctionField
+    residue_field: FiniteFieldPresentation
+
+    @model_validator(mode="after")
+    def require_prime_constant_residue(self) -> Self:
+        prime = self.field.characteristic
+        if (
+            self.residue_field.characteristic != prime
+            or self.residue_field.modulus_coefficients != (0, 1)
+        ):
+            raise _validation_error(
+                "infinity_place_residue_parent",
+                "the odd-degree point at infinity is rational over GF(p)",
+            )
+        return self
+
+
+class HyperellipticInfinityPlaceValuationRequest(StrictModel):
+    place: HyperellipticInfinityPlace
+    element: FiniteFunctionFieldElement
+
+
+class HyperellipticInfinityPlaceValuationResult(StrictModel):
+    place: HyperellipticInfinityPlace
+    element: FiniteFunctionFieldElement
+    valuation: FunctionFieldValuation
+
+
+class FunctionFieldRiemannRochMembershipRequest(StrictModel):
+    """A function and finite divisor whose exact Riemann-Roch membership is asked."""
+
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        if self.element.field != self.divisor.field:
+            raise _validation_error(
+                "riemann_roch_membership_parent",
+                "element and divisor must belong to the same exact function field",
+            )
+        return self
+
+
+class FunctionFieldRiemannRochMembershipRow(StrictModel):
+    """One exact valuation inequality at a place in the complete support union."""
+
+    place: FunctionFieldPlace
+    element_valuation: int = Field(
+        strict=True, ge=-MAX_POLYNOMIAL_X_DEGREE, le=MAX_POLYNOMIAL_X_DEGREE
+    )
+    divisor_multiplicity: DivisorMultiplicity
+    sum: DivisorMultiplicity
+
+    @model_validator(mode="after")
+    def require_exact_sum(self) -> Self:
+        if self.sum != self.element_valuation + self.divisor_multiplicity:
+            raise _validation_error(
+                "riemann_roch_membership_sum",
+                "the returned sum must equal valuation plus divisor multiplicity",
+            )
+        if self.element_valuation == 0 and self.divisor_multiplicity == 0:
+            raise _validation_error(
+                "riemann_roch_membership_empty_row",
+                "profile rows must belong to the union of nonzero supports",
+            )
+        return self
+
+
+class FunctionFieldRiemannRochMembership(StrictModel):
+    """Exact membership in ``L(D)`` with the complete support inequalities."""
+
+    element: FiniteFunctionFieldElement
+    divisor: FunctionFieldDivisor
+    status: Literal["IN_SPACE", "NOT_IN_SPACE"]
+    profile: tuple[FunctionFieldRiemannRochMembershipRow, ...] = Field(
+        max_length=MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS
+    )
+
+    @model_validator(mode="after")
+    def require_complete_profile_shape(self) -> Self:
+        if self.element.field != self.divisor.field:
+            raise _validation_error(
+                "riemann_roch_membership_parent",
+                "element and divisor must retain one exact function field",
+            )
+        places = tuple(row.place.model_dump_json() for row in self.profile)
+        if len(set(places)) != len(places) or places != tuple(sorted(places)):
+            raise _validation_error(
+                "riemann_roch_membership_profile_order",
+                "membership profile places must be unique and canonically ordered",
+            )
+        if any(row.place.field != self.divisor.field for row in self.profile):
+            raise _validation_error(
+                "riemann_roch_membership_profile_parent",
+                "every profile place must belong to the divisor function field",
+            )
+        zero = all(
+            coordinate.numerator.is_zero() for coordinate in self.element.coordinates
+        )
+        if zero:
+            if self.status != "IN_SPACE" or self.profile:
+                raise _validation_error(
+                    "riemann_roch_membership_zero_branch",
+                    "zero belongs to every L(D) through its structural empty-profile branch",
+                )
+            return self
+        in_space = all(row.sum >= 0 for row in self.profile)
+        if (self.status == "IN_SPACE") != in_space:
+            raise _validation_error(
+                "riemann_roch_membership_status",
+                "membership status must agree with every returned valuation inequality",
+            )
+        return self
 
 
 class PrimeFieldPolynomial(StrictModel):
@@ -700,6 +927,9 @@ __all__ = [
     "MAX_NORM_WORK",
     "MAX_POLYNOMIAL_COEFFICIENTS",
     "MAX_POLYNOMIAL_X_DEGREE",
+    "MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK",
+    "MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES",
+    "MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS",
     "MAX_TRACE_WORK",
     "DivisorDegree",
     "DivisorMultiplicity",
@@ -718,17 +948,28 @@ __all__ = [
     "FunctionFieldElementInverseRequest",
     "FunctionFieldElementMultiplyRequest",
     "FunctionFieldElementMultiplyResult",
+    "FunctionFieldFiniteValuation",
     "FunctionFieldPlace",
     "FunctionFieldPlaceValuationRequest",
     "FunctionFieldPlaceValuationResult",
+    "FunctionFieldPositiveInfinityValuation",
     "FunctionFieldPrincipalDivisorRequest",
     "FunctionFieldPrincipalDivisorResult",
     "FunctionFieldProductTerm",
     "FunctionFieldReductionStep",
     "FunctionFieldResidueRequest",
     "FunctionFieldResidueResult",
+    "FunctionFieldRiemannRochMembership",
+    "FunctionFieldRiemannRochMembershipRequest",
+    "FunctionFieldRiemannRochMembershipRow",
     "FunctionFieldTraceRequest",
     "FunctionFieldTraceResult",
+    "HyperellipticAffinePlace",
+    "HyperellipticAffinePlaceValuationRequest",
+    "HyperellipticAffinePlaceValuationResult",
+    "HyperellipticInfinityPlace",
+    "HyperellipticInfinityPlaceValuationRequest",
+    "HyperellipticInfinityPlaceValuationResult",
     "PrimeFieldPolynomial",
     "PrimeFieldRationalFunction",
 ]

@@ -7,6 +7,10 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.logic.automata.tree._models import (
+    RegularTreeGrammarToAutomatonRequest,
+    RegularTreeGrammarToAutomatonResult,
+    TreeContextTransformationMonoidRequest,
+    TreeContextTransformationMonoidResult,
     AcceptedTreeCountRequest,
     AcceptedTreeCountResult,
     AcceptedTreeHeightProfileRequest,
@@ -17,8 +21,6 @@ from jacobian.math.logic.automata.tree._models import (
     RankedTreePositionsResult,
     RankedTreeSubtreeRequest,
     RankedTreeSubtreeResult,
-    RegularTreeGrammarToAutomatonRequest,
-    RegularTreeGrammarToAutomatonResult,
     TreeAutomatonBooleanProductRequest,
     TreeAutomatonBooleanProductResult,
     TreeAutomatonComplementRequest,
@@ -35,6 +37,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeContextPlugResult,
     TreeContextStateMapRequest,
     TreeContextStateMapResult,
+    TreeContextTransformationMonoidRequest,
+    TreeContextTransformationMonoidResult,
     TreeDeterminizeRequest,
     TreeDeterminizeResult,
     TreeRunRequest,
@@ -52,10 +56,11 @@ from jacobian.math.logic.automata.tree.operations import (
     map_tree_context_states,
     minimize_tree_automaton,
     plug_tree_context_operation,
+    regular_tree_grammar_to_automaton,
     ranked_tree_positions,
     ranked_tree_subtree,
     reachable_state_profile,
-    regular_tree_grammar_to_automaton,
+    tree_context_transformation_monoid,
     trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.state_algebra import (
@@ -143,8 +148,6 @@ def compute_regular_tree_grammar_to_automaton(
         grammar=request.grammar,
         automaton=regular_tree_grammar_to_automaton(request.grammar),
     )
-
-
 def compute_ranked_tree_positions(
     request: RankedTreePositionsRequest,
 ) -> RankedTreePositionsResult:
@@ -165,6 +168,24 @@ def compute_tree_automaton_boolean_product(
     )
 
 
+def compute_tree_context_plug(
+    request: TreeContextPlugRequest,
+) -> TreeContextPlugResult:
+    return plug_tree_context_operation(request.context, request.tree)
+
+
+def compute_tree_context_state_map(
+    request: TreeContextStateMapRequest,
+) -> TreeContextStateMapResult:
+    return map_tree_context_states(request.automaton, request.context)
+
+
+def compute_tree_context_transformation_monoid(
+    request: TreeContextTransformationMonoidRequest,
+) -> TreeContextTransformationMonoidResult:
+    return tree_context_transformation_monoid(
+        request.automaton, max_elements=request.max_elements
+    )
 def compute_tree_automaton_reachability(
     request: TreeAutomatonReachabilityRequest,
 ) -> ReachableStateProfile:
@@ -335,6 +356,46 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="tree_automaton.context.transformation_monoid.compute",
+        title="Compute the context-induced transformation monoid",
+        description=(
+            "Return every state map induced by a one-hole ranked-tree context, "
+            "its exact finite multiplication table, and one ranked context witness "
+            "per map. Requires a complete deterministic automaton. The requested "
+            "element cap, transition and reachable-state generator count, closure "
+            "work, multiplication work, witness size, and serialized table are "
+            "admitted before or during exact closure; exceeding a bound is a "
+            "resource refusal and never a partial monoid."
+        ),
+        request_type=TreeContextTransformationMonoidRequest,
+        result_type=TreeContextTransformationMonoidResult,
+        run=compute_tree_context_transformation_monoid,
+        tags=("tree-automata", "context", "transformation-monoid", "exact"),
+        discovery_terms=(
+            "tree automaton context monoid",
+            "context transformation monoid",
+        ),
+        examples=(
+            OperationExample(
+                name="unary_context_monoid",
+                description="Enumerate the maps induced by all unary chains, including the empty context.",
+                input={
+                    "automaton": {
+                        "state_count": 2,
+                        "arity": [0, 1],
+                        "transitions": [
+                            {"symbol": 0, "child_states": [], "target_state": 0},
+                            {"symbol": 1, "child_states": [0], "target_state": 1},
+                            {"symbol": 1, "child_states": [1], "target_state": 1},
+                        ],
+                        "final_states": [1],
+                    },
+                    "max_elements": 8,
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="tree_automaton.boolean_product.compute",
         title="Boolean product of deterministic tree automata",
         description=(
@@ -355,12 +416,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="intersect_complete_nullary_machines",
-                description=(
-                    "Build an intersection product of two complete one-state "
-                    "machines over one nullary symbol; Boolean products "
-                    "require complete deterministic inputs."
-                ),
+                name="intersect_partial_machines",
+                description="Build an intersection product over one nullary symbol.",
                 input={
                     "left": {
                         "state_count": 1,

@@ -81,9 +81,7 @@ def test_induced_state_map_matches_independent_direct_evaluation():
             {"symbol": 3, "hole_child": 0, "siblings": (RankedTree(symbol=0),)},
         ),
     )
-    actual = map_tree_context_states(
-        TreeContextStateMapRequest(automaton=machine, context=context)
-    ).state_map
+    actual = map_tree_context_states(machine, context).state_map
 
     table = {
         (row.symbol, row.child_states): row.target_state for row in machine.transitions
@@ -160,7 +158,7 @@ def test_native_operations_revalidate_forged_nested_values():
         automaton=machine, context=forged_context
     )
     with pytest.raises(OperationDomainValidationError):
-        map_tree_context_states(state_request)
+        map_tree_context_states(state_request.automaton, state_request.context)
 
 
 def test_context_json_admission_bounds_tree_growth_before_parsing():
@@ -215,7 +213,7 @@ def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
         serialization_must_not_run,
     )
     with pytest.raises(OperationResourceAdmissionError):
-        map_tree_context_states(request)
+        map_tree_context_states(request.automaton, request.context)
 
     sibling = RankedTree.model_construct(symbol=0, children=())
     for _ in range(128):

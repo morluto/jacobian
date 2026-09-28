@@ -46,6 +46,7 @@ that need more context than an operation card:
 - [Regular tree grammars](regular-tree-grammar.md)
 - [Deterministic tree-automaton state algebra](tree-automaton-state-algebra.md)
 - [One-hole ranked-tree contexts](ranked-tree-contexts.md)
+- [Tree context transformation monoid](tree-context-transformation-monoid.md)
 - [SAT and SMT](sat-smt/index.md)
 - [Exact quadratic forms](quadratic-forms.md)
 - [Integral quadratic forms](integral-quadratic-forms.md)

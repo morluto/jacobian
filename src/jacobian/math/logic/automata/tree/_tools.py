@@ -441,19 +441,24 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         examples=(
             OperationExample(
-                name="intersect_partial_machines",
-                description="Build an intersection product over one nullary symbol.",
+                name="intersect_complete_machines",
+                description=(
+                    "Intersect two complete machines over one nullary symbol. The "
+                    "left accepts the leaf and the right rejects it, so the "
+                    "product keeps the single common transition and accepts "
+                    "nothing."
+                ),
                 input={
                     "left": {
-                        "state_count": 1,
+                        "state_count": 2,
                         "arity": [0],
                         "transitions": [
-                            {"symbol": 0, "child_states": [], "target_state": 0}
+                            {"symbol": 0, "child_states": [], "target_state": 1}
                         ],
-                        "final_states": [0],
+                        "final_states": [1],
                     },
                     "right": {
-                        "state_count": 1,
+                        "state_count": 2,
                         "arity": [0],
                         "transitions": [
                             {"symbol": 0, "child_states": [], "target_state": 0}

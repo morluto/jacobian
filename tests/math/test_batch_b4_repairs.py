@@ -107,6 +107,9 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
             FreeAlgebraTerm(coefficient=_q(large), word=("a", "b")),
         ),
     )
+    # Degree-bounded GS admission requires homogeneous generators, so the
+    # second generator keeps the large-denominator coefficient at degree two
+    # to exercise the same coefficient-growth preflight.
     second = FreeAlgebraPolynomial(
         alphabet=("a", "b", "c"),
         terms=(
@@ -114,7 +117,7 @@ def test_groebner_shirshov_preflights_composition_coefficient_growth() -> None:
                 coefficient=CanonicalRational(num=1, den=large),
                 word=("b", "c"),
             ),
-            FreeAlgebraTerm(coefficient=_q(1), word=("b",)),
+            FreeAlgebraTerm(coefficient=_q(1), word=("a", "c")),
         ),
     )
     ideal = FreeAlgebraIdeal(

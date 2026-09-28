@@ -16,7 +16,11 @@ from jacobian.canonical import (
 
 _MAX_LEVEL = 10_000
 _MAX_WEIGHT = 120
-_MAX_PRECISION = 128
+# Character-valued global equality needs Gamma1(lcm) Sturm prefixes that may
+# exceed the public Gamma0 basis-prefix envelope. Its caller admits aggregate
+# basis work and output cells before entering this bounded worker, so the wider
+# scalar range here is bounded by that admission rather than by this lane.
+_MAX_PRECISION = 1024
 _MAX_DIMENSION = 32
 _MAX_COEFFICIENT_DIGITS = 512
 _MAX_CHARACTER_COEFFICIENT_DIGITS = 4

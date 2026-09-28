@@ -451,3 +451,44 @@ def verify_subgroup_lattice(claim: GroupSubgroupLatticeResult) -> bool:
         raise
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
+
+
+def _admitted_backend_group(group: PermutationGroup) -> tuple[Any, int]:
+    """Build the SymPy group once and return it with its exact Schreier-Sims order.
+
+    Callers that need both the backend group and its order (admission followed
+    by a trusted enumeration) reuse the same construction instead of rebuilding
+    the backend and replaying the order computation.
+    """
+    backend = _backend_group(group)
+    return backend, int(backend.order())
+
+
+def _conjugacy_classes_from_admitted(
+    group: Any, degree: int, *, order: int
+) -> list[list[list[int]]]:
+    """Enumerate the canonical conjugacy partition of an admitted backend group.
+
+    ``group`` and ``order`` must come from ``_admitted_backend_group`` for the
+    same source value, so the owner-local order bound is checked against the
+    already-computed order rather than replaying Schreier-Sims.
+    """
+    from jacobian.math.groups._models import MAX_CONJUGACY_CLASSES_GROUP_ORDER
+
+    if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+        raise OperationDomainValidationError(
+            location=("generators",),
+            code="group.order_bound",
+            message=(
+                f"group order {order} exceeds the bounded maximum "
+                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+                f"(would materialize |G|={order} elements)"
+            ),
+        )
+    classes = group.conjugacy_classes()
+    canonical = [
+        sorted(list(_full_permutation_form(permutation, degree)) for permutation in cls)
+        for cls in classes
+    ]
+    canonical.sort(key=lambda cls: tuple(cls[0]))
+    return canonical

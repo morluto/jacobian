@@ -13,6 +13,16 @@ from jacobian.math.polynomials.derivations._models import (
     LocallyNilpotentCertificate,
     PolynomialGaAction,
 )
+from jacobian.math.polynomials.derivations._stable_kernels import (
+    ga_fixed_subspace,
+    ga_stable_subrepresentation,
+)
+from jacobian.math.polynomials.derivations._stable_models import (
+    PolynomialGaFixedSubspace,
+    PolynomialGaFixedSubspaceRequest,
+    PolynomialGaStableSubrepresentation,
+    PolynomialGaStableSubrepresentationRequest,
+)
 from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightActionRequest,
     PolynomialWeightActionResult,
@@ -300,6 +310,144 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         [(1, [2, 0, 0]), (1, [1, 1, 1]), (1, [0, 2, 0])],
                     ),
                     "parameter": "t",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="algebraic_group.ga.fixed_subspace.compute",
+        title="Compute fixed polynomials in a finite Ga-subrepresentation",
+        description=(
+            "Given a serialized finite-dimensional Ga-stable polynomial span, "
+            "recheck its action matrix and return a deterministic exact basis "
+            "for the fixed subspace, with coordinates in the supplied basis. "
+            "Over QQ this is the kernel of the coefficient of t in the action "
+            "matrix. The supplied representation dimension is at most 32; "
+            "polynomial matrix reconstruction uses the stable-subrepresentation "
+            "operation's bounded admission."
+        ),
+        request_type=PolynomialGaFixedSubspaceRequest,
+        result_type=PolynomialGaFixedSubspace,
+        run=lambda request: ga_fixed_subspace(request.subrepresentation),
+        tags=("algebraic-group", "ga", "fixed-subspace", "invariants", "exact"),
+        discovery_terms=(
+            "Ga fixed polynomials",
+            "additive group invariants in a finite subrepresentation",
+            "kernel of infinitesimal representation",
+        ),
+        examples=(
+            OperationExample(
+                name="translation_fixes_constants",
+                description=(
+                    "For the translation action x -> x+t on the span (1,x), "
+                    "the fixed subspace is the constants, represented by "
+                    "coordinate vector (1,0)."
+                ),
+                input={
+                    "subrepresentation": {
+                        "action": {
+                            "source_variables": ["x"],
+                            "parameter": "t",
+                            "generator_images": [
+                                _poly(["x", "t"], [(1, [1, 0]), (1, [0, 1])])
+                            ],
+                        },
+                        "basis": [
+                            _poly(["x"], [(1, [0])]),
+                            _poly(["x"], [(1, [1])]),
+                        ],
+                        "action_matrix": [
+                            [
+                                _poly(["t"], [(1, [0])]),
+                                _poly(["t"], [(1, [1])]),
+                            ],
+                            [
+                                _poly(["t"], []),
+                                _poly(["t"], [(1, [0])]),
+                            ],
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="algebraic_group.ga.stable_subrepresentation.compute",
+        title="Check a supplied finite polynomial Ga-stable subspace",
+        description=(
+            "Given a checked additive-group action and an ordered linearly "
+            "independent finite list of QQ polynomials, compute the exact "
+            "QQ[t] action matrix on their span if every action image lies in "
+            "that span. This operation checks only the explicitly supplied "
+            "span; it does not search for all finite-dimensional "
+            "subrepresentations. Expansion work, degree, dimension, terms, "
+            "and coefficient growth are admitted before polynomial expansion."
+        ),
+        request_type=PolynomialGaStableSubrepresentationRequest,
+        result_type=PolynomialGaStableSubrepresentation,
+        run=lambda request: ga_stable_subrepresentation(request),
+        tags=("algebraic-group", "ga", "polynomial", "representation", "exact"),
+        discovery_terms=(
+            "finite-dimensional additive group subrepresentation",
+            "Ga-stable polynomial span",
+            "polynomial action matrix on a supplied basis",
+        ),
+        examples=(
+            OperationExample(
+                name="translation_on_linear_polynomials",
+                description=(
+                    "For x maps to x+t, the supplied ordered basis (1,x) is "
+                    "stable, with action matrix columns (1,0) and (t,1)."
+                ),
+                input={
+                    "action": {
+                        "source_variables": ["x"],
+                        "parameter": "t",
+                        "generator_images": [
+                            {
+                                "domain": "QQ",
+                                "variables": ["x", "t"],
+                                "polynomial": {
+                                    "terms": [
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [1, 0],
+                                        },
+                                        {
+                                            "coefficient": {"num": "1", "den": "1"},
+                                            "exponents": [0, 1],
+                                        },
+                                    ]
+                                },
+                            }
+                        ],
+                    },
+                    "basis": [
+                        {
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [0],
+                                    }
+                                ]
+                            },
+                        },
+                        {
+                            "domain": "QQ",
+                            "variables": ["x"],
+                            "polynomial": {
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "exponents": [1],
+                                    }
+                                ]
+                            },
+                        },
+                    ],
                 },
             ),
         ),

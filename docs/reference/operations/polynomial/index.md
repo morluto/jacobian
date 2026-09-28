@@ -111,6 +111,8 @@ to another polynomial operation.
 
 - [Exact cyclotomic polynomials](cyclotomic.md)
 - [Additive-group actions from locally nilpotent derivations](ga-actions-from-locally-nilpotent-derivations.md)
+- [Ga fixed subspaces](ga-fixed-subspace.md)
+- [Ga polynomial orbits](ga-polynomial-orbits.md)
 - [Diagonal multiplicative-group actions](diagonal-gm-weight-actions.md)
 - [Elementary-symmetric polynomial families](elementary-symmetric.md)
 - [Rational discrete antiderivatives](rational-discrete-antiderivative.md)

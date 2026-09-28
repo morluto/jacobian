@@ -2,11 +2,11 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.canonical import CanonicalLimits, encode_strict_json
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.derivations import _weight_operations
 from jacobian.math.polynomials.derivations._weight_models import (
+    MAX_GM_SUBREP_RESULT_DIGIT_WORK,
     PolynomialWeightAction,
     PolynomialWeightSubrepresentationRequest,
     PolynomialWeightSubrepresentationResult,
@@ -15,7 +15,7 @@ from jacobian.math.polynomials.derivations._weight_operations import (
     _admit_subrepresentation_support,
     _project_generators_by_weight,
     _rref_coefficient_digit_bound,
-    _subrepresentation_result_size_bound,
+    _subrepresentation_result_cell_bound,
     diagonal_weight_action,
     gm_generated_subrepresentation,
 )
@@ -167,7 +167,13 @@ def test_same_weight_generators_are_reduced_to_a_deterministic_basis() -> None:
     ]
 
 
-def test_output_admission_covers_all_serialized_result_fields() -> None:
+def test_output_admission_covers_every_retained_result_field() -> None:
+    """The bound counts the cells the result actually retains.
+
+    It is the sum of the variables, weights, generator terms, basis terms,
+    weight entries, coordinate components, and matrix entries, so it cannot
+    be met by an encoder that writes a smaller transport payload.
+    """
     result = gm_generated_subrepresentation(
         {
             "action": {"variables": ["x", "y"], "weights": [1, -1]},
@@ -177,12 +183,11 @@ def test_output_admission_covers_all_serialized_result_fields() -> None:
             "parameter": "lambda",
         }
     )
-    actual_size = len(encode_strict_json(result.model_dump(mode="json")))
     support, _ = _admit_subrepresentation_support(
         result.action, result.generators, result.parameter
     )
     projections = _project_generators_by_weight(result.action, result.generators)
-    admitted_bound = _subrepresentation_result_size_bound(
+    admitted_cells = _subrepresentation_result_cell_bound(
         result.action,
         result.generators,
         result.parameter,
@@ -190,10 +195,30 @@ def test_output_admission_covers_all_serialized_result_fields() -> None:
             len(support[weight]) * len(rows) for weight, rows in projections.items()
         ),
         dimension=sum(len(rows) for rows in projections.values()),
-        coefficient_digits=_rref_coefficient_digit_bound(projections, support),
     )
-    assert actual_size <= admitted_bound
-    assert admitted_bound <= CanonicalLimits().max_output_bytes
+    retained = (
+        len(result.action.variables)
+        + len(result.action.weights)
+        + sum(
+            len(generator.polynomial.terms) * (len(result.action.variables) + 2)
+            for generator in result.generators
+        )
+        + 2 * len(result.basis)
+        + sum(
+            len(polynomial.polynomial.terms) * (len(result.action.variables) + 2)
+            for polynomial in result.basis
+        )
+        + len(result.weights)
+        + 2 * sum(len(row) for row in result.generator_coordinates)
+        + 2 * len(result.matrix) ** 2
+        + len(result.matrix)
+        + len(result.parameter)
+    )
+    assert retained <= admitted_cells
+    assert (
+        admitted_cells * _rref_coefficient_digit_bound(projections, support)
+        <= MAX_GM_SUBREP_RESULT_DIGIT_WORK
+    )
 
 
 def test_output_preflight_boundary_and_pre_rref_rejection(
@@ -212,15 +237,15 @@ def test_output_preflight_boundary_and_pre_rref_rejection(
         len(support[weight]) * len(rows) for weight, rows in sources.items()
     )
     dimension = sum(len(rows) for rows in sources.values())
-    admitted_bound = _subrepresentation_result_size_bound(
+    admitted_cells = _subrepresentation_result_cell_bound(
         accepted_action,
         accepted_generators,
         parameter,
         basis_terms=basis_terms,
         dimension=dimension,
-        coefficient_digits=coefficient_digits,
     )
-    assert 8 * 1024 * 1024 < admitted_bound <= CanonicalLimits().max_output_bytes
+    admitted_digit_work = admitted_cells * coefficient_digits
+    assert 40_000_000 < admitted_digit_work <= MAX_GM_SUBREP_RESULT_DIGIT_WORK
     result = gm_generated_subrepresentation(
         {
             "action": accepted_action.model_dump(),
@@ -228,15 +253,15 @@ def test_output_preflight_boundary_and_pre_rref_rejection(
             "parameter": parameter,
         }
     )
-    actual_size = len(encode_strict_json(result.model_dump(mode="json")))
-    assert actual_size <= admitted_bound
+    assert len(result.basis) == dimension
+    assert len(result.matrix) == dimension
 
     rejected_action, rejected_generators = _sparse_same_weight_seeds(
         _prime_denominators(100_003, 16)
     )
 
     def fail_if_rref_runs(*_args: object, **_kwargs: object) -> None:
-        raise AssertionError("serialized-output admission must precede RREF")
+        raise AssertionError("result digit-work admission must precede RREF")
 
     monkeypatch.setattr(
         _weight_operations, "_weight_projection_rref", fail_if_rref_runs
@@ -251,7 +276,7 @@ def test_output_preflight_boundary_and_pre_rref_rejection(
                 "parameter": parameter,
             }
         )
-    assert error.value.errors()[0]["type"] == "gm_subrepresentation.output_budget"
+    assert error.value.errors()[0]["type"] == "gm_subrepresentation.result_digit_work"
 
 
 def test_empty_zero_and_duplicate_generators_have_canonical_degenerate_results() -> (

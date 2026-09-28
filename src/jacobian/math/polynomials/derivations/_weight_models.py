@@ -28,6 +28,13 @@ MAX_GM_SUBREP_DIMENSION = 256
 MAX_GM_SUBREP_BASIS_TERMS = 64
 MAX_GM_SUBREP_TOTAL_TERMS = 256
 MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS = 2_300
+# Maximum exact decimal digits the subrepresentation result may materialize.
+# The result's retained cells are already bounded by MAX_GM_SUBREP_GENERATORS,
+# MAX_GM_SUBREP_DIMENSION, MAX_GM_SUBREP_TOTAL_TERMS, and
+# MAX_WEIGHT_ACTION_VARIABLES; the coefficient width is bounded by
+# MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS. This bound admits the product of
+# those two facts, so admission never depends on an encoded transport size.
+MAX_GM_SUBREP_RESULT_DIGIT_WORK = 50_000_000
 
 
 class PolynomialWeightAction(StrictModel):

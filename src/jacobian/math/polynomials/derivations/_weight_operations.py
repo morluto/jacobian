@@ -12,10 +12,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, require_bounded_rational
 from jacobian.canonical import (
-    CanonicalLimits,
     decimal_digit_width,
-    encode_strict_json,
-    strict_json_object_size,
 )
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -27,6 +24,7 @@ from jacobian.math.polynomials.derivations._weight_models import (
     MAX_GM_INVARIANT_MONOMIALS,
     MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS,
     MAX_GM_SUBREP_DIMENSION,
+    MAX_GM_SUBREP_RESULT_DIGIT_WORK,
     MAX_GM_SUBREP_TOTAL_TERMS,
     MAX_WEIGHT_ACTION_DEGREE,
     MAX_WEIGHT_ACTION_TERMS,
@@ -419,98 +417,39 @@ def _admit_subrepresentation_support(
     )
 
 
-def _subrepresentation_result_size_bound(
+def _subrepresentation_result_cell_bound(
     action: PolynomialWeightAction,
     generators: tuple[RationalPolynomial, ...],
     parameter: PolynomialVariable,
     *,
     basis_terms: int,
     dimension: int,
-    coefficient_digits: int,
 ) -> int:
-    """Bound canonical result bytes from exact source and worst-case values."""
-    source_sizes = (
-        len(encode_strict_json(action.model_dump(mode="json"))),
-        len(
-            encode_strict_json(
-                [generator.model_dump(mode="json") for generator in generators]
-            )
-        ),
+    """Bound the exact cells the subrepresentation result retains.
+
+    One cell is one retained variable, weight, term exponent, rational
+    component, matrix entry, or parameter character. The coefficient width
+    of the result is governed separately by
+    ``MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS``, so a consumer's encoder
+    choice must not decide admission.
+    """
+    variables = len(action.variables)
+    generator_cells = sum(
+        len(generator.polynomial.terms) * (variables + 2) for generator in generators
     )
-    variables = list(action.variables)
-    empty_polynomial = len(
-        encode_strict_json(
-            {"domain": "QQ", "variables": variables, "polynomial": {"terms": []}}
-        )
-    )
-    maximum_term = len(
-        encode_strict_json(
-            {
-                "coefficient": {
-                    "num": "-" + "9" * coefficient_digits,
-                    "den": "9" * coefficient_digits,
-                },
-                "exponents": [MAX_WEIGHT_ACTION_DEGREE] * len(variables),
-            }
-        )
-    )
-    basis_size = (
-        2
-        + max(dimension - 1, 0)
-        + dimension * empty_polynomial
-        + basis_terms * (maximum_term + 1)
-    )
-    coordinate_value = len(encode_strict_json({"num": "-" + "9" * 8, "den": "9" * 8}))
-    coordinate_size = (
-        2
-        + max(len(generators) - 1, 0)
-        + len(generators)
-        * (2 + max(dimension - 1, 0) + dimension * (coordinate_value + 1))
-    )
-    weights_size = len(
-        encode_strict_json(
-            [-MAX_DIAGONAL_WEIGHT * MAX_WEIGHT_ACTION_DEGREE] * dimension
-        )
-    )
-    empty_matrix_entry = len(
-        encode_strict_json({"domain": "QQ", "variables": [parameter], "terms": []})
-    )
-    nonzero_matrix_entry = len(
-        encode_strict_json(
-            {
-                "domain": "QQ",
-                "variables": [parameter],
-                "terms": [
-                    {
-                        "coefficient": {"num": "1", "den": "1"},
-                        "exponents": [-MAX_DIAGONAL_WEIGHT * MAX_WEIGHT_ACTION_DEGREE],
-                    }
-                ],
-            }
-        )
-    )
-    matrix_size = (
-        2
-        + max(dimension - 1, 0)
-        + dimension
-        * (
-            2
-            + max(dimension - 1, 0)
-            + dimension * empty_matrix_entry
-            + max(dimension - 1, 0)
-            + nonzero_matrix_entry
-        )
-    )
-    return strict_json_object_size(
-        (
-            ("action", source_sizes[0]),
-            ("generators", source_sizes[1]),
-            ("basis", basis_size),
-            ("weights", weights_size),
-            ("generator_coordinates", coordinate_size),
-            ("parameter", len(encode_strict_json(parameter))),
-            ("matrix", matrix_size),
-        )
+    basis_cells = 2 * dimension + basis_terms * (variables + 2)
+    weight_cells = dimension
+    coordinate_cells = len(generators) * dimension * 2
+    matrix_cells = 2 * dimension**2 + dimension
+    return (
+        variables
+        + len(action.weights)
+        + generator_cells
+        + basis_cells
+        + weight_cells
+        + coordinate_cells
+        + matrix_cells
+        + len(parameter)
     )
 
 
@@ -575,19 +514,19 @@ def _weight_projection_rref(
                             row, pivot_rows[pivot], strict=True
                         )
                     ]
-            pivot = next((index for index, value in enumerate(row) if value), None)
-            if pivot is None:
+            next_pivot = next((index for index, value in enumerate(row) if value), None)
+            if next_pivot is None:
                 continue
-            scale = row[pivot]
+            scale = row[next_pivot]
             row = [value / scale for value in row]
             for existing_pivot, existing_row in tuple(pivot_rows.items()):
-                factor = existing_row[pivot]
+                factor = existing_row[next_pivot]
                 if factor:
                     pivot_rows[existing_pivot] = [
                         value - factor * pivot_value
                         for value, pivot_value in zip(existing_row, row, strict=True)
                     ]
-            pivot_rows[pivot] = row
+            pivot_rows[next_pivot] = row
         if pivot_rows:
             basis_by_weight[weight] = [
                 (pivot, tuple(pivot_rows[pivot])) for pivot in sorted(pivot_rows)
@@ -645,21 +584,22 @@ def gm_generated_subrepresentation(
         for weight, sources in sources_by_weight.items()
     )
     dimension_bound = sum(len(sources) for sources in sources_by_weight.values())
-    predicted_output_bytes = _subrepresentation_result_size_bound(
+    result_cells = _subrepresentation_result_cell_bound(
         action,
         generators,
         checked.parameter,
         basis_terms=basis_term_bound,
         dimension=dimension_bound,
-        coefficient_digits=coefficient_digits,
     )
-    if predicted_output_bytes > CanonicalLimits().max_output_bytes:
+    result_digit_work = result_cells * coefficient_digits
+    if result_digit_work > MAX_GM_SUBREP_RESULT_DIGIT_WORK:
         raise OperationResourceAdmissionError(
             location=("generators",),
-            code="gm_subrepresentation.output_budget",
+            code="gm_subrepresentation.result_digit_work",
             message=(
-                "the exact stable-basis and representation result exceeds the "
-                f"{CanonicalLimits().max_output_bytes}-byte canonical output envelope"
+                "the exact stable-basis and representation result would materialize "
+                f"{result_digit_work} decimal digits, exceeding the "
+                f"{MAX_GM_SUBREP_RESULT_DIGIT_WORK}-digit envelope"
             ),
         )
     basis_by_weight = _weight_projection_rref(projections, monomials_by_weight)
@@ -708,12 +648,12 @@ def gm_generated_subrepresentation(
 
     parameter = checked.parameter
     zero_entry = RationalLaurentPolynomial(variables=(parameter,), terms=())
-    matrix_rows = []
+    matrix_rows: list[tuple[RationalLaurentPolynomial, ...]] = []
     for row_index, _weight in enumerate(basis_weights):
-        row = []
+        matrix_row: list[RationalLaurentPolynomial] = []
         for column_index, column_weight in enumerate(basis_weights):
             if row_index == column_index:
-                row.append(
+                matrix_row.append(
                     RationalLaurentPolynomial(
                         variables=(parameter,),
                         terms=(
@@ -725,8 +665,8 @@ def gm_generated_subrepresentation(
                     )
                 )
             else:
-                row.append(zero_entry)
-        matrix_rows.append(tuple(row))
+                matrix_row.append(zero_entry)
+        matrix_rows.append(tuple(matrix_row))
 
     return PolynomialWeightSubrepresentationResult(
         action=action,

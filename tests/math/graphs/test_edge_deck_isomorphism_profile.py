@@ -50,9 +50,7 @@ def _assert_maps_are_isomorphisms(profile: EdgeDeckIsomorphismProfile) -> None:
 
 def test_path4_edge_cards_keep_multiplicity_and_exact_maps() -> None:
     family = edge_deletion_family(_path4())
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=family)
-    )
+    profile = edge_deck_isomorphism_profile(family)
 
     assert tuple(sorted(item.multiplicity for item in profile.classes)) == (1, 2)
     assert profile.class_indices[0] == profile.class_indices[2]
@@ -65,9 +63,7 @@ def test_path4_edge_cards_keep_multiplicity_and_exact_maps() -> None:
 
 
 def test_edge_profile_round_trip_checks_map_relations() -> None:
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(_path4()))
-    )
+    profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     assert (
         EdgeDeckIsomorphismProfile.model_validate_json(profile.model_dump_json())
         == profile
@@ -86,9 +82,7 @@ def test_edge_profile_round_trip_checks_map_relations() -> None:
     ],
 )
 def test_wire_profile_rejects_boolean_index_and_map_values(field, mutate) -> None:
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(_path4()))
-    )
+    profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     forged = profile.model_dump(mode="python")
     forged[field] = mutate(forged[field])
     with pytest.raises(ValidationError, match="exact integers"):
@@ -96,9 +90,7 @@ def test_wire_profile_rejects_boolean_index_and_map_values(field, mutate) -> Non
 
 
 def test_wire_profile_rejects_boolean_class_multiplicity() -> None:
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(_path4()))
-    )
+    profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     forged = profile.model_dump(mode="python")
     forged["classes"] = (
         {**forged["classes"][0], "multiplicity": True},
@@ -125,9 +117,7 @@ def test_edgeless_graph_retains_empty_edge_profile() -> None:
     family = edge_deletion_family(
         SimpleUndirectedGraph(vertices=("a", "b", "c"), edges=())
     )
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=family)
-    )
+    profile = edge_deck_isomorphism_profile(family)
     assert profile.family == family
     assert profile.classes == profile.class_indices == profile.vertex_maps == ()
 
@@ -146,13 +136,13 @@ def test_native_operation_admits_work_before_card_canonicalization(monkeypatch) 
         lambda *_: pytest.fail("permutation work must be admitted first"),
     )
     with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
-        edge_deck_isomorphism_profile(request)
+        edge_deck_isomorphism_profile(request.deck)
 
 
 def test_work_and_output_bounds_have_exact_boundaries(monkeypatch) -> None:
     family = edge_deletion_family(_path4())
     request = EdgeDeckIsomorphismProfileRequest.model_construct(deck=family)
-    _, exact_work, exact_bytes = deck_models._edge_iso_profile_resource_estimates(
+    _, exact_work, exact_cells = deck_models._edge_iso_profile_resource_estimates(
         4, 3, 3
     )
     monkeypatch.setattr(
@@ -160,27 +150,29 @@ def test_work_and_output_bounds_have_exact_boundaries(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         deck_operations,
-        "MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES",
-        exact_bytes,
+        "MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS",
+        exact_cells,
     )
-    assert edge_deck_isomorphism_profile(request).classes
+    assert edge_deck_isomorphism_profile(request.deck).classes
 
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work - 1
     )
     with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
-        edge_deck_isomorphism_profile(request)
+        edge_deck_isomorphism_profile(request.deck)
 
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work
     )
     monkeypatch.setattr(
         deck_operations,
-        "MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES",
-        exact_bytes - 1,
+        "MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS",
+        exact_cells - 1,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="serialized byte bound"):
-        edge_deck_isomorphism_profile(request)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="materialization-cell bound"
+    ):
+        edge_deck_isomorphism_profile(request.deck)
 
 
 def test_raw_tuple_preflight_rejects_order_before_nested_family_parsing() -> None:
@@ -242,9 +234,7 @@ def test_catalog_producer_does_not_replay_class_canonicalization(monkeypatch) ->
 def test_wire_output_shape_bound_precedes_nested_representative_canonicalization(
     monkeypatch,
 ) -> None:
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(_path4()))
-    )
+    profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     payload = profile.model_dump(mode="json")
     payload["classes"][0]["representative"]["edges"] *= 100
     monkeypatch.setattr(
@@ -259,9 +249,7 @@ def test_wire_output_shape_bound_precedes_nested_representative_canonicalization
 
 
 def test_wire_output_class_count_is_capped_before_row_preflight(monkeypatch) -> None:
-    profile = edge_deck_isomorphism_profile(
-        EdgeDeckIsomorphismProfileRequest(deck=edge_deletion_family(_path4()))
-    )
+    profile = edge_deck_isomorphism_profile(edge_deletion_family(_path4()))
     payload = profile.model_dump(mode="python")
     payload["classes"] = (*payload["classes"],) * 100
     monkeypatch.setattr(
@@ -281,4 +269,4 @@ def test_native_operation_rejects_boolean_retained_edge_count() -> None:
     forged = family.model_copy(update={"cards": (forged_card, *family.cards[1:])})
     request = EdgeDeckIsomorphismProfileRequest.model_construct(deck=forged)
     with pytest.raises(OperationDomainValidationError, match="canonical graph axes"):
-        edge_deck_isomorphism_profile(request)
+        edge_deck_isomorphism_profile(request.deck)

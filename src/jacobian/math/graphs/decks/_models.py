@@ -25,8 +25,8 @@ MAX_EDGE_DECK_EDGES = 130_000
 MAX_UNLABELLED_DECK_VERTICES = 10
 MAX_UNLABELLED_DECK_ISOMORPHISM_WORK = 2_000_000
 MAX_UNLABELLED_EDGE_RESULT_UNITS = 1_000_000
-MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
-MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES = 1_000_000
+MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS = 1_000_000
+MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS = 1_000_000
 MAX_ANONYMOUS_CARD_CANONICALIZATION_WORK = 2_000_000
 MAX_ANONYMOUS_CARD_RESULT_UNITS = 1_000_000
 MAX_ANONYMOUS_CARD_CLASSES = MAX_ANONYMOUS_CARD_RESULT_UNITS // 64
@@ -1050,7 +1050,7 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                         "a card exceeds the declared source-order shape bound",
                     )
         source_edges = len(edges) if type(edges) in (list, tuple) else pair_count
-        _, total_work, output_bytes = _vertex_iso_profile_resource_estimates(
+        _, total_work, output_cells = _vertex_iso_profile_resource_estimates(
             order, source_edges, order
         )
         if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
@@ -1058,10 +1058,10 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_work_bound",
                 "vertex-deck isomorphism mapping exceeds the shared work bound",
             )
-        if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+        if output_cells > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
             raise _validation_error(
                 "vertex_iso_profile_output_bound",
-                "vertex-deck isomorphism profile exceeds the serialized byte bound",
+                "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
         return _normalize_vertex_iso_profile_request(value)
 
@@ -1277,7 +1277,7 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                 "vertex_iso_profile_class_count",
                 "the isomorphism profile cannot have more classes than cards",
             )
-        _, work, output_bytes = _vertex_iso_profile_value_resource_estimates(
+        _, work, output_cells = _vertex_iso_profile_value_resource_estimates(
             order, edge_count, class_count
         )
         if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
@@ -1285,10 +1285,10 @@ def _admit_and_normalize_vertex_iso_profile_result(value: Any) -> Any:
                 "vertex_iso_profile_validation_work_bound",
                 "class representatives and card maps exceed the shared validation work bound",
             )
-        if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+        if output_cells > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
             raise _validation_error(
                 "vertex_iso_profile_output_bound",
-                "vertex-deck isomorphism profile exceeds its serialized byte bound",
+                "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
     return _normalize_vertex_iso_profile_result(value)
 
@@ -1371,15 +1371,17 @@ def _vertex_iso_profile_resource_estimates(
         source_order * factorial(card_order) * (1 + card_order + pair_count)
     )
     family_check_work = source_order * (source_edge_count + card_order + 1)
-    # Count worst-case JSON escaping for bounded 64-byte graph labels.
-    family_bytes = 512 + 384 * (source_order + source_order * card_order)
-    family_bytes += 800 * (source_edge_count + source_order * source_edge_count)
-    class_bytes = class_count * (512 + 32 * pair_count + 16 * card_order)
-    map_bytes = source_order * (128 + 16 * card_order)
+    # Count the retained value's own cells: one per label character, vertex
+    # entry, edge endpoint, class member, and per-vertex map position. An
+    # estimated encoded size would let a consumer's encoder choice, not the
+    # mathematics, decide admission.
+    family_cells = source_order * (card_order + 2 * source_edge_count)
+    class_cells = class_count * (1 + 32 * pair_count + 16 * card_order)
+    map_cells = source_order * card_order
     return (
         canonical_work,
         canonical_work + family_check_work,
-        (256 + family_bytes + class_bytes + map_bytes),
+        256 + family_cells + class_cells + map_cells,
     )
 
 
@@ -1392,13 +1394,13 @@ def _vertex_iso_profile_value_resource_estimates(
     per_class_canonical_work = factorial(card_order) * (1 + card_order + pair_count)
     family_check_work = source_order * (source_edge_count + card_order + 1)
     map_check_work = source_order * (source_edge_count + card_order)
-    _, _, output_bytes = _vertex_iso_profile_resource_estimates(
+    _, _, output_cells = _vertex_iso_profile_resource_estimates(
         source_order, source_edge_count, class_count
     )
     return (
         class_count * per_class_canonical_work,
         class_count * per_class_canonical_work + family_check_work + map_check_work,
-        output_bytes,
+        output_cells,
     )
 
 
@@ -1410,16 +1412,21 @@ def _canonical_card_form(
     index = {vertex: i for i, vertex in enumerate(vertices)}
     edge_indices = {frozenset((index[left], index[right])) for left, right in edges}
     pairs = tuple(combinations(range(n), 2))
-    best: tuple[int, ...] | None = None
-    best_order: tuple[int, ...] | None = None
-    for order in permutations(range(n)):
-        bits = tuple(
+
+    def _edge_bits(order: tuple[int, ...]) -> tuple[int, ...]:
+        return tuple(
             int(frozenset((order[i], order[j])) in edge_indices) for i, j in pairs
         )
-        if best is None or bits < best:
+
+    # ``permutations`` always yields the identity first, so seeding with it
+    # leaves the minimum total without an absent-value sentinel.
+    best_order = tuple(range(n))
+    best = _edge_bits(best_order)
+    for order in permutations(range(n)):
+        bits = _edge_bits(order)
+        if bits < best:
             best = bits
             best_order = order
-    assert best is not None and best_order is not None
     labels = tuple(f"v{i:02d}" for i in range(n))
     canonical_edges = tuple(
         (labels[i], labels[j]) for bit, (i, j) in zip(best, pairs, strict=True) if bit
@@ -1508,7 +1515,7 @@ class EdgeDeckIsomorphismProfileRequest(StrictModel):
                     card_edges,
                     retained_vertices,
                 )
-        _, work, output_bytes = _edge_iso_profile_resource_estimates(
+        _, work, output_cells = _edge_iso_profile_resource_estimates(
             order, edge_count, edge_count
         )
         if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
@@ -1516,10 +1523,10 @@ class EdgeDeckIsomorphismProfileRequest(StrictModel):
                 "edge_iso_profile_work_bound",
                 "edge-deck isomorphism mapping exceeds the shared work bound",
             )
-        if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+        if output_cells > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
             raise _validation_error(
                 "edge_iso_profile_output_bound",
-                "edge-deck isomorphism profile exceeds the serialized byte bound",
+                "edge-deck isomorphism profile exceeds its materialization-cell bound",
             )
         normalized = dict(value)
         normalized["deck"] = _normalize_edge_family_json(family)
@@ -1670,15 +1677,14 @@ def _edge_iso_profile_resource_estimates(
     map_check_work = source_edge_count * (
         source_order + max(source_edge_count - 1, 0) ** 2
     )
-    class_bytes = class_count * (512 + 32 * pair_count + 16 * source_order)
-    family_bytes = 512 + 512 * (source_order + source_edge_count * source_order)
-    family_bytes += 1024 * (source_edge_count + source_edge_count**2)
-    maps_bytes = source_edge_count * (128 + 16 * source_order)
-    output_bytes = 256 + family_bytes + class_bytes + maps_bytes
+    class_cells = class_count * (1 + 32 * pair_count + 16 * source_order)
+    family_cells = 256 * (source_order + source_edge_count * source_order)
+    family_cells += 512 * (source_edge_count + source_edge_count**2)
+    map_cells = source_edge_count * (16 * source_order)
     return (
         canonical_work,
         canonical_work + family_check_work + map_check_work,
-        output_bytes,
+        256 + family_cells + class_cells + map_cells,
     )
 
 
@@ -1777,7 +1783,7 @@ def _admit_and_normalize_edge_iso_profile_result(value: Any) -> Any:
     _preflight_edge_profile_family_wire(family, order, pair_count, edge_count)
     _preflight_edge_profile_result_rows(value, order, pair_count, edge_count)
     _require_exact_edge_profile_wire_integers(value, classes)
-    _, work, output_bytes = _edge_iso_profile_resource_estimates(
+    _, work, output_cells = _edge_iso_profile_resource_estimates(
         order, edge_count, class_count
     )
     if work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
@@ -1785,10 +1791,10 @@ def _admit_and_normalize_edge_iso_profile_result(value: Any) -> Any:
             "edge_iso_profile_validation_work_bound",
             "class representatives and card maps exceed the shared validation work bound",
         )
-    if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+    if output_cells > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
         raise _validation_error(
             "edge_iso_profile_output_bound",
-            "edge-deck isomorphism profile exceeds the serialized byte bound",
+            "edge-deck isomorphism profile exceeds its materialization-cell bound",
         )
     return _normalize_edge_iso_profile_result(value)
 

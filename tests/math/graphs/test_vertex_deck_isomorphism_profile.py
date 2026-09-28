@@ -50,9 +50,7 @@ def _assert_maps_are_isomorphisms(profile: VertexDeckIsomorphismProfile) -> None
 
 def test_path3_profile_groups_cards_and_returns_exact_vertex_maps() -> None:
     family = vertex_deletion_family(_path3())
-    profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=family)
-    )
+    profile = vertex_deck_isomorphism_profile(family)
     assert profile.class_indices == (1, 0, 1)
     assert tuple(item.multiplicity for item in profile.classes) == (1, 2)
     assert tuple(item.card_indices for item in profile.classes) == ((1,), (0, 2))
@@ -65,12 +63,8 @@ def test_path3_profile_groups_cards_and_returns_exact_vertex_maps() -> None:
 
 
 def test_card_relabelling_preserves_classes_and_map_relations() -> None:
-    first = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3("x")))
-    )
-    second = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3("z")))
-    )
+    first = vertex_deck_isomorphism_profile(vertex_deletion_family(_path3("x")))
+    second = vertex_deck_isomorphism_profile(vertex_deletion_family(_path3("z")))
     assert first.class_indices == second.class_indices
     assert tuple(row.representative for row in first.classes) == tuple(
         row.representative for row in second.classes
@@ -85,9 +79,7 @@ def test_card_relabelling_preserves_classes_and_map_relations() -> None:
 @pytest.mark.parametrize("vertices", [(), ("v",)])
 def test_zero_order_cards_retain_empty_maps(vertices: tuple[str, ...]) -> None:
     family = vertex_deletion_family(SimpleUndirectedGraph(vertices=vertices, edges=()))
-    profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=family)
-    )
+    profile = vertex_deck_isomorphism_profile(family)
     assert len(profile.family.cards) == len(vertices)
     if not vertices:
         assert profile.classes == profile.vertex_maps == profile.class_indices == ()
@@ -100,9 +92,7 @@ def test_zero_order_cards_retain_empty_maps(vertices: tuple[str, ...]) -> None:
 
 
 def test_profile_round_trip_validates_maps_and_rejects_forged_bijection() -> None:
-    profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3()))
-    )
+    profile = vertex_deck_isomorphism_profile(vertex_deletion_family(_path3()))
     assert (
         VertexDeckIsomorphismProfile.model_validate_json(profile.model_dump_json())
         == profile
@@ -127,7 +117,7 @@ def test_native_operation_admits_and_checks_family_before_canonicalization(
     with pytest.raises(
         OperationDomainValidationError, match="one card per source vertex"
     ):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 @pytest.mark.parametrize("field", ["edge_appearances", "vertex_appearances"])
@@ -138,7 +128,7 @@ def test_native_operation_rejects_boolean_appearance_counts(field: str) -> None:
     forged = family.model_copy(update={field: tuple(counts)})
     request = VertexDeckIsomorphismProfileRequest.model_construct(deck=forged)
     with pytest.raises(OperationDomainValidationError, match="appearance ledgers"):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 @pytest.mark.parametrize("field", ["retained_edge_count", "deleted_edge_count"])
@@ -150,7 +140,7 @@ def test_native_operation_rejects_boolean_card_edge_counts(field: str) -> None:
     with pytest.raises(
         OperationDomainValidationError, match="bound source vertex deletion"
     ):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
@@ -164,33 +154,33 @@ def test_work_and_output_admission_have_exact_boundaries(monkeypatch) -> None:
     )
     monkeypatch.setattr(
         deck_operations,
-        "MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES",
+        "MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS",
         exact_output,
     )
-    assert vertex_deck_isomorphism_profile(request).classes
+    assert vertex_deck_isomorphism_profile(request.deck).classes
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work - 1
     )
     with pytest.raises(OperationResourceAdmissionError, match="shared work bound"):
-        vertex_deck_isomorphism_profile(request)
+        vertex_deck_isomorphism_profile(request.deck)
     monkeypatch.setattr(
         deck_operations, "MAX_UNLABELLED_DECK_ISOMORPHISM_WORK", exact_work
     )
     monkeypatch.setattr(
         deck_operations,
-        "MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES",
+        "MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS",
         exact_output - 1,
     )
-    with pytest.raises(OperationResourceAdmissionError, match="serialized byte bound"):
-        vertex_deck_isomorphism_profile(request)
+    with pytest.raises(
+        OperationResourceAdmissionError, match="materialization-cell bound"
+    ):
+        vertex_deck_isomorphism_profile(request.deck)
 
 
 def test_serialized_profile_admits_representative_validation_before_canonicalizing(
     monkeypatch,
 ) -> None:
-    profile = vertex_deck_isomorphism_profile(
-        VertexDeckIsomorphismProfileRequest(deck=vertex_deletion_family(_path3()))
-    )
+    profile = vertex_deck_isomorphism_profile(vertex_deletion_family(_path3()))
     data = json.dumps(profile.model_dump(mode="json"))
     _, exact_work, _ = deck_models._vertex_iso_profile_value_resource_estimates(
         3, 2, len(profile.classes)

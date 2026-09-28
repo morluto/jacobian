@@ -21,16 +21,15 @@ from jacobian.math.graphs.decks._models import (
     MAX_DECK_VERTICES,
     MAX_DEGREE_MULTISET_DIGITS,
     MAX_EDGE_DECK_EDGES,
-    MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES,
+    MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS,
     MAX_KELLY_DECK_TOTAL_WORK,
     MAX_UNLABELLED_DECK_ISOMORPHISM_WORK,
     MAX_UNLABELLED_DECK_VERTICES,
-    MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES,
+    MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
     EdgeDeckIsomorphismClass,
     EdgeDeckIsomorphismProfile,
-    EdgeDeckIsomorphismProfileRequest,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -43,7 +42,6 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckInducedSubgraphCount,
     VertexDeckIsomorphismClass,
     VertexDeckIsomorphismProfile,
-    VertexDeckIsomorphismProfileRequest,
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
@@ -1171,17 +1169,12 @@ def verify_vertex_deletion_family(claim: VertexDeletionFamily) -> bool:
 
 
 def vertex_deck_isomorphism_profile(
-    request: VertexDeckIsomorphismProfileRequest,
+    family: VertexDeletionFamily,
 ) -> VertexDeckIsomorphismProfile:
     """Return exact canonical classes and card-to-representative bijections."""
-    if type(request) is not VertexDeckIsomorphismProfileRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.vertex_iso_profile_request_carrier",
-            message="request must be a VertexDeckIsomorphismProfileRequest",
-        )
-    family = _admit_vertex_iso_profile_family(request.deck)
-    return _vertex_deck_isomorphism_profile_from_admitted(family)
+    return _vertex_deck_isomorphism_profile_from_admitted(
+        _admit_vertex_iso_profile_family(family)
+    )
 
 
 def _vertex_deck_isomorphism_profile_from_admitted(
@@ -1303,7 +1296,7 @@ def _admit_vertex_iso_profile_family(
             code="graph_deck.vertex_iso_profile_card_carrier",
             message="each family row must carry a canonical source-bound vertex card",
         )
-    _, total_work, output_bytes = _vertex_iso_profile_resource_estimates(
+    _, total_work, output_cells = _vertex_iso_profile_resource_estimates(
         order, len(source.edges), order
     )
     if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
@@ -1364,27 +1357,22 @@ def _admit_vertex_iso_profile_family(
                 code="graph_deck.vertex_iso_profile_family_relation",
                 message="each row must equal the bound source vertex deletion",
             )
-    if output_bytes > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+    if output_cells > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("deck",),
             code="graph_deck.vertex_iso_profile_output_bound",
-            message="vertex-deck isomorphism profile exceeds the serialized byte bound",
+            message="vertex-deck isomorphism profile exceeds its materialization-cell bound",
         )
     return family
 
 
 def edge_deck_isomorphism_profile(
-    request: EdgeDeckIsomorphismProfileRequest,
+    family: EdgeDeletionFamily,
 ) -> EdgeDeckIsomorphismProfile:
-    """Return exact canonical edge-card classes and card-to-class maps."""
-    if type(request) is not EdgeDeckIsomorphismProfileRequest:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="graph_deck.edge_iso_profile_request_carrier",
-            message="request must be an EdgeDeckIsomorphismProfileRequest",
-        )
-    family = _admit_edge_iso_profile_family(request.deck)
-    return _edge_deck_isomorphism_profile_from_admitted(family)
+    """Return exact canonical classes and card-to-class maps."""
+    return _edge_deck_isomorphism_profile_from_admitted(
+        _admit_edge_iso_profile_family(family)
+    )
 
 
 def _edge_deck_isomorphism_profile_from_admitted(
@@ -1467,7 +1455,7 @@ def _admit_edge_iso_profile_family(
             code="graph_deck.edge_iso_profile_source_edges",
             message="source edge count exceeds the simple-graph order bound",
         )
-    _, total_work, output_bytes = _edge_iso_profile_resource_estimates(
+    _, total_work, output_cells = _edge_iso_profile_resource_estimates(
         order, len(edges), len(edges)
     )
     if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
@@ -1476,11 +1464,11 @@ def _admit_edge_iso_profile_family(
             code="graph_deck.edge_iso_profile_work_bound",
             message="edge-deck isomorphism mapping exceeds the shared work bound",
         )
-    if output_bytes > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_BYTES:
+    if output_cells > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
         raise OperationResourceAdmissionError(
             location=("deck",),
             code="graph_deck.edge_iso_profile_output_bound",
-            message="edge-deck isomorphism profile exceeds the serialized byte bound",
+            message="edge-deck isomorphism profile exceeds its materialization-cell bound",
         )
     if any(
         type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES

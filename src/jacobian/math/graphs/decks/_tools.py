@@ -2,7 +2,11 @@
 
 from typing import Any
 
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.graphs.decks._models import (
     MAX_KELLY_DECK_TOTAL_WORK,
     AnonymousGraphCardMultiset,
@@ -29,9 +33,8 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
-    _edge_deck_isomorphism_profile_from_admitted,
-    _vertex_deck_isomorphism_profile_from_admitted,
     anonymous_graph_card_multiset,
+    edge_deck_isomorphism_profile,
     edge_deletion_family,
     unlabelled_deck,
     unlabelled_vertex_deck,
@@ -39,6 +42,7 @@ from jacobian.math.graphs.decks.operations import (
     vertex_deck_degree_multiset,
     vertex_deck_edge_count,
     vertex_deck_induced_subgraph_count,
+    vertex_deck_isomorphism_profile,
     vertex_deck_subgraph_count,
     vertex_deletion_family,
 )
@@ -104,17 +108,29 @@ def _run_vertex_deck_degree_multiset(
 def _run_vertex_isomorphism_profile(
     request: VertexDeckIsomorphismProfileRequest,
 ) -> VertexDeckIsomorphismProfile:
-    # Raw request admission precedes parsing; the nested family model then
+    # The wire carrier is this layer's boundary. The nested family model then
     # establishes the complete source-bound deletion relation exactly once.
-    return _vertex_deck_isomorphism_profile_from_admitted(request.deck)
+    if type(request) is not VertexDeckIsomorphismProfileRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="graph_deck.vertex_iso_profile_request_carrier",
+            message="request must be a VertexDeckIsomorphismProfileRequest",
+        )
+    return vertex_deck_isomorphism_profile(request.deck)
 
 
 def _run_edge_isomorphism_profile(
     request: EdgeDeckIsomorphismProfileRequest,
 ) -> EdgeDeckIsomorphismProfile:
-    # The raw request admission precedes nested parsing; EdgeDeletionFamily
+    # The wire carrier is this layer's boundary; EdgeDeletionFamily
     # establishes the exact source-minus-edge relation once.
-    return _edge_deck_isomorphism_profile_from_admitted(request.deck)
+    if type(request) is not EdgeDeckIsomorphismProfileRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="graph_deck.edge_iso_profile_request_carrier",
+            message="request must be an EdgeDeckIsomorphismProfileRequest",
+        )
+    return edge_deck_isomorphism_profile(request.deck)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

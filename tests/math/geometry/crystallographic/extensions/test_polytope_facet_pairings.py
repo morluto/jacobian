@@ -7,6 +7,8 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.dispatch import parse_operation_input
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,

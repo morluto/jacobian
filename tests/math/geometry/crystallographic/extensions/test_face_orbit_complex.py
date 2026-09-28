@@ -97,7 +97,13 @@ def _polygon_request(*, klein: bool) -> CrystallographicPolytopePairingRequest:
 
 
 def _compute(*, klein: bool):
-    pairing = pair_crystallographic_polytope_facets(_polygon_request(klein=klein))
+    request = _polygon_request(klein=klein)
+    pairing = pair_crystallographic_polytope_facets(
+        request.affine_realization,
+        request.polytope,
+        request.lattice_axes,
+        request.pairings,
+    )
     domain = check_crystallographic_fundamental_domain(pairing)
     assert domain.is_fundamental_domain
     return quotient_face_orbit_complex(domain)
@@ -111,8 +117,8 @@ def test_unit_square_face_orbits_augment_to_torus_chains() -> None:
     assert len(result.orbit_maps) == 8
     assert result.quotient_chain_complex.basis_sizes == (1, 2, 1)
     assert result.quotient_chain_complex.differential_matrices == (
-        (("0", "0"),),
-        (("0",), ("0",)),
+        ((0, 0),),
+        ((0,), (0,)),
     )
     homology = homology_groups(result.quotient_chain_complex).homology_groups
     assert tuple(group.free_rank for group in homology) == (1, 2, 1)
@@ -123,8 +129,8 @@ def test_klein_bottle_face_orbits_give_integral_homology() -> None:
     chain = result.quotient_chain_complex
 
     assert chain.basis_sizes == (1, 2, 1)
-    assert chain.differential_matrices[0] == (("0", "0"),)
-    assert sorted(row[0] for row in chain.differential_matrices[1]) == ["0", "2"]
+    assert chain.differential_matrices[0] == ((0, 0),)
+    assert sorted(row[0] for row in chain.differential_matrices[1]) == [0, 2]
     homology = homology_groups(chain).homology_groups
     assert homology[0].free_rank == 1
     assert homology[1].free_rank == 1

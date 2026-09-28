@@ -34,7 +34,7 @@ MAX_AFFINE_FACTOR_COORDINATE_DIGITS = 32
 MAX_AFFINE_FACTOR_RESULT_DIGITS = (
     MAX_AFFINE_FACTOR_COORDINATE_DIGITS + MAX_AFFINE_DIGITS + 1
 )
-MAX_AFFINE_FACTOR_RESULT_BYTES = 1_000_000
+MAX_AFFINE_FACTOR_RESULT_SIZE = 1_000_000
 
 
 def _err(reason: str, message: str) -> PydanticCustomError:
@@ -231,26 +231,30 @@ def _factorization_matches(
     )
 
 
-def _estimate_factorization_bytes(
+def _estimate_factorization_size(
     semigroup: PositiveAffineSemigroup, coordinates: tuple[int, ...]
 ) -> int:
-    """Conservatively bound serialized parent and factorization fields."""
+    """Conservatively bound retained parent and factorization scalars.
+
+    The estimate is a representation-size envelope -- label character counts
+    and maximum scalar decimal widths -- not an encoded transport measurement.
+    """
     configuration = semigroup.configuration
     labels = (*configuration.row_labels, *configuration.generator_labels)
     if any(type(label) is not str for label in labels):
-        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
+        return MAX_AFFINE_FACTOR_RESULT_SIZE + 1
     if any(
-        len(label) > MAX_AFFINE_FACTOR_RESULT_BYTES
+        len(label) > MAX_AFFINE_FACTOR_RESULT_SIZE
         or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
         for label in labels
     ):
-        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
+        return MAX_AFFINE_FACTOR_RESULT_SIZE + 1
     try:
-        label_bytes = sum(len(label.encode("utf-8")) for label in labels)
+        label_size = sum(len(label.encode("utf-8")) for label in labels)
     except UnicodeEncodeError:
-        return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
-    # JSON escaping expands an arbitrary control character to at most six bytes.
-    escaped_label_bytes = 6 * label_bytes
+        return MAX_AFFINE_FACTOR_RESULT_SIZE + 1
+    # JSON escaping expands an arbitrary control character to at most six units.
+    escaped_label_size = 6 * label_size
     matrix = sum(
         len(str(abs(int(value)))) + 2 for row in configuration.entries for value in row
     )
@@ -258,11 +262,9 @@ def _estimate_factorization_bytes(
         decimal_digit_width(value.num) + decimal_digit_width(value.den) + 16
         for value in semigroup.grading
     )
-    coefficient_bytes = sum(len(str(int(value))) + 3 for value in coordinates)
-    target_bytes = configuration.rows * (MAX_AFFINE_FACTOR_RESULT_DIGITS + 3)
-    return (
-        512 + escaped_label_bytes + matrix + grading + coefficient_bytes + target_bytes
-    )
+    coefficient_size = sum(len(str(int(value))) + 3 for value in coordinates)
+    target_size = configuration.rows * (MAX_AFFINE_FACTOR_RESULT_DIGITS + 3)
+    return 512 + escaped_label_size + matrix + grading + coefficient_size + target_size
 
 
 def _preflight_factorization_parent_size(value: object) -> None:
@@ -328,14 +330,14 @@ def _preflight_factorization_parent_size(value: object) -> None:
         raise OperationResourceAdmissionError(
             location=("semigroup", "grading"),
             code="affine_semigroup.factorization_output",
-            message="factorization parent exceeds the 1,000,000-byte output envelope",
+            message="factorization parent exceeds the 1,000,000-unit result representation envelope",
         )
-    estimated_bytes = _estimate_factorization_bytes(value, ())
-    if estimated_bytes > MAX_AFFINE_FACTOR_RESULT_BYTES:
+    estimated_size = _estimate_factorization_size(value, ())
+    if estimated_size > MAX_AFFINE_FACTOR_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("semigroup",),
             code="affine_semigroup.factorization_output",
-            message="factorization result exceeds the 1,000,000-byte output envelope",
+            message="factorization result exceeds the 1,000,000-unit result representation envelope",
         )
 
 
@@ -885,13 +887,13 @@ def _evaluate_factorization(
             message="exact factorization evaluation exceeds its arithmetic work envelope",
         )
     if (
-        _estimate_factorization_bytes(semigroup, coordinates)
-        > MAX_AFFINE_FACTOR_RESULT_BYTES
+        _estimate_factorization_size(semigroup, coordinates)
+        > MAX_AFFINE_FACTOR_RESULT_SIZE
     ):
         raise OperationResourceAdmissionError(
             location=("semigroup",),
             code="affine_semigroup.factorization_output",
-            message="factorization result exceeds the 1,000,000-byte output envelope",
+            message="factorization result exceeds the 1,000,000-unit result representation envelope",
         )
     target = tuple(
         sum(
@@ -1238,7 +1240,7 @@ def _canonical_graph_moves(
 def _graph_components(
     vertex_count: int, edges: set[tuple[int, int]]
 ) -> tuple[tuple[int, ...], ...]:
-    adjacency = [set() for _ in range(vertex_count)]
+    adjacency: list[set[int]] = [set() for _ in range(vertex_count)]
     for left, right in edges:
         adjacency[left].add(right)
         adjacency[right].add(left)

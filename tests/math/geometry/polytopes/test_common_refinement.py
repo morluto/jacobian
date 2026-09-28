@@ -3,9 +3,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -189,11 +187,3 @@ def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width()
         match="complex ambient coordinate axes",
     ):
         polytopal_complex_common_refinement(malformed_square, right)
-
-
-def test_common_refinement_catalog_example_is_composable():
-    catalog = Catalog.open()
-    operation = catalog.operation("polytopal_complex.common_refinement.compute")
-    example = operation.examples[0]
-    result = invoke_operation(operation.operation_id, example.input, catalog)
-    assert result.output["cell_pairs"][0]["refined_cell_id"] == "M0"

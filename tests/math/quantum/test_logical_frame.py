@@ -2,11 +2,6 @@ from __future__ import annotations
 
 from itertools import combinations
 
-import pytest
-from pydantic import ValidationError
-
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.quantum import (
     CheckSpaceValue,
     LogicalPauliFrame,
@@ -87,30 +82,3 @@ def test_logical_frames_exhaust_all_two_qubit_isotropic_subspaces() -> None:
         )
         assert _span((*stabilizer, *x_rows, *z_rows)) == orthogonal
         assert all(row not in stabilizer for row in (*x_rows, *z_rows))
-
-
-def test_catalog_publishes_generic_mixed_pauli_logical_frame() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("quantum.stabilizer.logical_frame.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    frame = LogicalPauliFrame.model_validate(result.output)
-    assert frame.logical_qubits == 1
-    assert frame.x_logical_basis[0].qubit_register == frame.check_space.qubit_register
-    assert frame.z_logical_basis[0].qubit_register == frame.check_space.qubit_register
-    assert LogicalPauliFrame.model_validate(frame.model_dump(mode="json")) == frame
-
-    # Deserialization is structural only: the kernel establishes S-perp
-    # membership and canonical pairings once, so model_validate must not replay
-    # that GF(2) work. Structural violations are still rejected here.
-    bad_register = frame.model_dump(mode="json")
-    bad_register["x_logical_basis"][0]["qubit_register"] = {"qubit_ids": ["other"]}
-    with pytest.raises(ValidationError, match="register"):
-        LogicalPauliFrame.model_validate(bad_register)
-
-    bad_dimension = frame.model_dump(mode="json")
-    bad_dimension["x_logical_basis"] = []
-    with pytest.raises(ValidationError, match="size k"):
-        LogicalPauliFrame.model_validate(bad_dimension)

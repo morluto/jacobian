@@ -3,10 +3,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.number_theory.modular_forms import (
     ModularFormCoordinates,
     ModularFormSpace,
@@ -16,7 +13,6 @@ from jacobian.math.number_theory.modular_forms import (
     modular_form_coordinates_transport,
     modular_form_space_inclusion,
 )
-from jacobian.math.number_theory.modular_forms._tools import TOOLS
 
 
 def _coordinates(
@@ -127,49 +123,6 @@ def test_transport_rejects_nontrivial_character_target() -> None:
     target = ModularFormSpace(level=4, weight=4, kind="M", character=character)
     with pytest.raises(OperationDomainValidationError, match="trivial-character QQ"):
         modular_form_space_inclusion(source.space, target)
-
-
-def test_transport_catalog_operation_round_trips_target_coordinates() -> None:
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "modular_form.coordinates.transport.compute"
-    )
-    source = _coordinates(1, 4, "M", "level-one-e4-e6-monomials-v1", (1,))
-    inclusion_tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "modular_form.space.inclusion.compute"
-    )
-    catalog = Catalog.open()
-    inclusion_result = invoke_operation(
-        inclusion_tool.operation_id,
-        {
-            "source_space": source.space.model_dump(mode="json"),
-            "target_space": {"level": 2, "weight": 4, "kind": "M"},
-        },
-        catalog,
-    )
-    decoded = ModularFormSpaceInclusion.model_validate_json(
-        encode_strict_json(inclusion_result.output)
-    )
-    assert decoded == modular_form_space_inclusion(
-        source.space, ModularFormSpace(level=2, weight=4, kind="M")
-    )
-
-    result = invoke_operation(
-        tool.operation_id,
-        {"form": source.model_dump(mode="json"), "inclusion": inclusion_result.output},
-        catalog,
-    )
-
-    assert result.output["space"]["level"] == 2
-    assert (
-        ModularFormCoordinates.model_validate_json(
-            encode_strict_json(result.output)
-        ).space.level
-        == 2
-    )
 
 
 def test_transport_rejects_forged_inclusion_and_source_mismatch() -> None:

@@ -7,12 +7,12 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
     CrystallographicAffineRealization,
     CrystallographicPolytopePairingRequest,
@@ -212,7 +212,11 @@ def test_pairing_operation_is_published_with_square_example() -> None:
     )
 
     assert tool.examples[0].name == "unit_square_translation_pairings"
-    example_request = parse_operation_input(tool.request_type, tool.examples[0].input)
+    # ``dispatch.parse_operation_input`` is exactly this projection, inlined so a
+    # math test does not import the product dispatch boundary.
+    example_request = tool.request_type.model_validate_json(
+        encode_strict_json(tool.examples[0].input), strict=True
+    )
     assert tool.run(example_request).facet_profile.dimension == 2
 
 

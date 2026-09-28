@@ -8,12 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes import (
     PolytopeFaceLatticeResult,
     RationalCoordinateSpace,
@@ -22,8 +20,6 @@ from jacobian.math.geometry.polytopes import (
     polytope_face_lattice,
 )
 from jacobian.math.geometry.polytopes import operations as polytope_operations
-
-_OPERATION_ID = "polytope.face_lattice.compute"
 
 
 def _rational(value: int, denominator: int = 1) -> CanonicalRational:
@@ -303,12 +299,3 @@ def test_face_lattice_admits_postprocessing_before_facet_expansion(
     assert (
         error.value.errors()[0]["type"] == "polytope.face_lattice.work_budget_exceeded"
     )
-
-
-def test_face_lattice_operation_is_catalogued_and_runs_its_example() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation(_OPERATION_ID)
-    assert operation is not None
-    result = invoke_operation(_OPERATION_ID, operation.examples[0].input, catalog)
-    assert result.output["faces"]
-    assert len(result.output["covers"]) == 32

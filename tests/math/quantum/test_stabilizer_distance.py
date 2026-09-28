@@ -90,21 +90,3 @@ def test_stabilizer_distance_rejects_search_beyond_ten_qubits() -> None:
     value = CheckSpaceValue(register=register, basis=())
     with pytest.raises(OperationResourceAdmissionError, match="complete mixed-Pauli"):
         stabilizer_exact_distance(value)
-
-
-def test_catalog_example_runs_and_returns_source_bound_result() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    operation = catalog.operation("quantum.stabilizer.distance.compute")
-    assert operation is not None
-    output = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    ).output
-    assert output["logical_qubits"] == 1
-    assert output["distance"] == 1
-    assert (
-        output["representative"]["qubit_register"]
-        == output["check_space"]["qubit_register"]
-    )

@@ -1,7 +1,6 @@
 """Exact least common left multiples for first-order differential operators."""
 
 from jacobian.math.ore_algebras.first_order_lclm._models import (
-    FirstOrderLCLMRequest,
     FirstOrderLCLMResult,
 )
 from jacobian.math.ore_algebras.first_order_lclm.operations import (
@@ -9,7 +8,6 @@ from jacobian.math.ore_algebras.first_order_lclm.operations import (
 )
 
 __all__ = [
-    "FirstOrderLCLMRequest",
     "FirstOrderLCLMResult",
     "differential_first_order_lclm",
 ]

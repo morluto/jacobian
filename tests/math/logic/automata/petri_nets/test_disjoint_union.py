@@ -199,9 +199,10 @@ def test_disjoint_union_manifest_declares_typed_pair_operation() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-def test_marked_union_accounts_for_recursively_serialized_parent_nets() -> None:
-    # JSON escaping expands each control code to six bytes; all three marking
-    # parents (two source nets and the union net) are serialized recursively.
+def test_marked_union_accounts_for_recursively_retained_parent_nets() -> None:
+    # The estimator charges six representation units per label character, so a
+    # control-code-heavy label is admitted by all three retained parents (the
+    # two source nets and the union net).
     oversized_label = "\\x01" * 700_000
     net = PetriNet(
         place_count=1,
@@ -212,7 +213,7 @@ def test_marked_union_accounts_for_recursively_serialized_parent_nets() -> None:
     )
     marking = Marking(tokens=(0,), net=net)
     with pytest.raises(
-        OperationResourceAdmissionError, match="serialized-output bound"
+        OperationResourceAdmissionError, match="result representation-size bound"
     ):
         disjoint_union(net, net, marking, marking)
 
@@ -227,7 +228,7 @@ def test_output_growth_is_rejected_before_union_matrix_materialization() -> None
         post=((),),
     )
     with pytest.raises(
-        OperationResourceAdmissionError, match="serialized-output bound"
+        OperationResourceAdmissionError, match="result representation-size bound"
     ):
         disjoint_union(
             net, PetriNet(place_count=0, transition_count=0, pre=(), post=())
@@ -236,8 +237,8 @@ def test_output_growth_is_rejected_before_union_matrix_materialization() -> None
 
 def test_malformed_axis_encoding_precedes_union_resource_admission() -> None:
     # An unpaired surrogate is a canonical-encoding domain failure.  The same
-    # malformed axis must not change error category when its serialized size
-    # crosses the resource envelope.
+    # malformed axis must not change error category when its retained
+    # representation size crosses the resource envelope.
     empty = PetriNet(place_count=0, transition_count=0, pre=(), post=())
 
     short = PetriNet(

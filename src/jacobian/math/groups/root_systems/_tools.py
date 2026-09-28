@@ -409,7 +409,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_simple_root_vector",
                 description="Create the first simple root in the A2 root lattice.",
-                input={"matrix": _A2["matrix"], "coordinates": [1, 0]},
+                input={"matrix": _A2["matrix"], "coordinates": ["1", "0"]},
             ),
         ),
     ),
@@ -429,7 +429,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_simple_coroot_vector",
                 description="Create the first simple coroot in the A2 coroot lattice.",
-                input={"matrix": _A2["matrix"], "coordinates": [1, 0]},
+                input={"matrix": _A2["matrix"], "coordinates": ["1", "0"]},
             ),
         ),
     ),
@@ -449,7 +449,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_fundamental_weight_vector",
                 description="Create the first fundamental weight of A2.",
-                input={"matrix": _A2["matrix"], "coordinates": [1, 0]},
+                input={"matrix": _A2["matrix"], "coordinates": ["1", "0"]},
             ),
         ),
     ),
@@ -469,7 +469,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_fundamental_coweight_vector",
                 description="Create the first fundamental coweight of A2.",
-                input={"matrix": _A2["matrix"], "coordinates": [1, 0]},
+                input={"matrix": _A2["matrix"], "coordinates": ["1", "0"]},
             ),
         ),
     ),
@@ -490,7 +490,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_root_to_weight_inclusion",
                 description="Express the first A2 simple root in fundamental weights.",
-                input={"vector": {"datum": _A2_LATTICE_DATUM, "coordinates": [1, 0]}},
+                input={
+                    "vector": {"datum": _A2_LATTICE_DATUM, "coordinates": ["1", "0"]}
+                },
             ),
         ),
     ),
@@ -514,7 +516,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_coroot_to_coweight_inclusion",
                 description="Express the first A2 simple coroot in fundamental coweights.",
-                input={"vector": {"datum": _A2_LATTICE_DATUM, "coordinates": [1, 0]}},
+                input={
+                    "vector": {"datum": _A2_LATTICE_DATUM, "coordinates": ["1", "0"]}
+                },
             ),
         ),
     ),
@@ -1178,7 +1182,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                                 "entries": [["2", "-1"], ["-1", "2"]],
                             },
                         },
-                        "coordinates": [1, 0],
+                        "coordinates": ["1", "0"],
                     },
                 },
             ),
@@ -1227,7 +1231,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     },
                     "vector": {
                         "datum": _A2_LATTICE_DATUM,
-                        "coordinates": [1, 0],
+                        "coordinates": ["1", "0"],
                     },
                 },
             ),
@@ -1383,7 +1387,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         },
                         "simple_root_axis": [0, 1],
                     },
-                    "highest_weight": [1, 0],
+                    "highest_weight": ["1", "0"],
                 },
             ),
         ),

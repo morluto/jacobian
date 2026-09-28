@@ -947,7 +947,12 @@ def _finite_group_factorization(value: int) -> tuple[tuple[int, int], ...]:
 def _finite_point_key(point: FiniteFieldEllipticPoint) -> tuple[object, ...]:
     if point.at_infinity:
         return (True,)
-    assert point.x is not None and point.y is not None
+    if point.x is None or point.y is None:
+        raise OperationDomainValidationError(
+            location=("point",),
+            code="elliptic_curve.finite_field.point_coordinates",
+            message="a finite elliptic-curve point requires both coordinates",
+        )
     return (False, *point.x.coordinates, *point.y.coordinates)
 
 
@@ -1736,12 +1741,19 @@ def finite_field_curve_base_change(
         if point.at_infinity:
             target_point = FiniteFieldEllipticPoint.infinity(target_curve)
         else:
-            assert point.x is not None and point.y is not None
+            source_x = point.x
+            source_y = point.y
+            if source_x is None or source_y is None:
+                raise OperationDomainValidationError(
+                    location=("point",),
+                    code="elliptic_curve.finite_field.point_coordinates",
+                    message="a finite elliptic-curve point requires both coordinates",
+                )
             target_point = FiniteFieldEllipticPoint.model_construct(
                 curve=target_curve,
                 at_infinity=False,
-                x=mapped(point.x),
-                y=mapped(point.y),
+                x=mapped(source_x),
+                y=mapped(source_y),
             )
     return FiniteFieldCurveBaseChangeResult(curve=target_curve, point=target_point)
 

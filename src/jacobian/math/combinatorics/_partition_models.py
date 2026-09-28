@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics._models import _combinatorics_validation_error
 from jacobian.math.combinatorics.symmetric_functions.values import (
     MAX_PARTITION_SIZE,
@@ -61,7 +61,7 @@ class PartitionCheckRequest(StrictModel):
             admitted = dict(value)
             admitted["parts"] = tuple(parts)
             return admitted
-        return value
+        return canonicalize_json_containers(value)
 
 
 class PartitionFound(StrictModel):

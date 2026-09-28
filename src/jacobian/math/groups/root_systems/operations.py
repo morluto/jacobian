@@ -1400,6 +1400,7 @@ def _integer_inverse(
         pivot = next((row for row in range(column, rank) if work[row][column]), None)
         if pivot is None:
             raise OperationDomainValidationError(
+                location=("element", "root_action"),
                 code="root_system.noninvertible_weyl_action",
                 message="a Weyl action matrix must be invertible",
             )

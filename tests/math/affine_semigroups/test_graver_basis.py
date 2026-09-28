@@ -89,8 +89,10 @@ def test_small_matrices_against_independent_finite_conformal_check():
 
 
 def test_exact_work_envelope_rejects_before_enumeration():
+    # The kernel-aware presolve charges the same work envelope before any
+    # candidate pair is enumerated, so it is the boundary that rejects.
     with pytest.raises(
-        OperationResourceAdmissionError, match="complete Graver enumeration"
+        OperationResourceAdmissionError, match="Graver presolve exceeds its work"
     ):
         graver_basis(_matrix((100, 99, 98, 97, 96)))
 

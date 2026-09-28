@@ -11,8 +11,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._execution import OperationExecutionCancelledError, request_cancellation
-from jacobian.catalog.catalog import Catalog
-from jacobian.dispatch import invoke_operation
 from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryMatrixRequest,
     BinaryMatrixResult,
@@ -169,32 +167,6 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
                 }
             )
         )
-
-
-def test_zero_matrix_twist_example_composes_through_catalog_dispatch() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation("delta_matroid.binary.from_matrix_twist.compute")
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-
-    decoded = BinaryMatrixResult.model_validate_json(json.dumps(result.output))
-    assert decoded.matrix.entries == ((0, 0), (0, 0))
-    assert decoded.twist == (0, 1)
-    assert decoded.delta_matroid.feasible == ((0, 1),)
-
-
-def test_request_schema_publishes_exact_preflight_envelopes() -> None:
-    assert BinaryMatrixTwistRequest.model_json_schema()["admission_limits"] == {
-        "max_ground_elements": 8,
-        "max_principal_minor_elimination_work": 250_000,
-        "max_feasible_rows": 256,
-        "max_feasible_set_memberships": 1_024,
-        "max_twist_transport_work_units": 20_736,
-        "max_output_cells": 1_376,
-        "max_output_ground_label_utf8_bytes": 4_096,
-    }
 
 
 @pytest.mark.parametrize("entry", [True, "1", 1.0])

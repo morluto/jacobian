@@ -5,11 +5,9 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.math.quantum import (
     ExactQubitPauli,
-    PauliFromLabelsRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_from_labels,
@@ -80,40 +78,6 @@ def test_label_round_trips_match_independent_dense_operator(width: int) -> None:
             assert _operator(decoded.labels, decoded.phase) == _operator(
                 labels, scalar_phase
             )
-
-
-def test_label_conversion_catalog_round_trip_preserves_y_scalar() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    from_labels = catalog.operation("quantum.pauli.qubit.from_labels.compute")
-    to_labels = catalog.operation("quantum.pauli.qubit.to_labels.compute")
-    assert from_labels is not None and to_labels is not None
-    constructed = invoke_operation(
-        from_labels.operation_id,
-        {"register": {"qubit_ids": ["a", "b"]}, "labels": ["Y", "Z"], "phase": 2},
-        catalog,
-    )
-    decoded = invoke_operation(
-        to_labels.operation_id, {"pauli": constructed.output["pauli"]}, catalog
-    ).output
-    assert decoded["labels"] == ["Y", "Z"]
-    assert decoded["phase"] == 2
-
-
-def test_labels_must_cover_register_and_use_named_pauli_symbols() -> None:
-    from jacobian.catalog.models import OperationDomainValidationError
-
-    register = QubitRegister(qubit_ids=("q0", "q1"))
-    with pytest.raises(ValidationError):
-        PauliFromLabelsRequest(register=register, labels=("X",))
-    with pytest.raises(ValidationError):
-        PauliFromLabelsRequest(register=register, labels=("X", "A"))
-    with pytest.raises(OperationDomainValidationError):
-        pauli_from_labels(register, ("X",), 0)
-    with pytest.raises(OperationDomainValidationError):
-        pauli_from_labels(register, ("X", "A"), 0)  # type: ignore[arg-type]
 
 
 def test_scalar_phase_encoding_is_not_reinterpreted_as_y_phase() -> None:

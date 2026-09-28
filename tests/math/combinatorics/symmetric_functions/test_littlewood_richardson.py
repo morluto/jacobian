@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 import jacobian.math.combinatorics.symmetric_functions.littlewood_richardson as lr_operations
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     MAX_LR_SKEW_CELLS,
@@ -195,10 +196,10 @@ def test_lr_request_enforces_exact_cell_and_search_envelopes() -> None:
     assert MAX_LR_SKEW_CELLS == 8
     assert MAX_LR_SEARCH_STATES == 100_000
     assert _coefficient((8,), (), (8,)) == 1
-    with pytest.raises(ValidationError, match="content size"):
-        _request((5,), (), (9,))
-    with pytest.raises(ValidationError, match="prefix bound"):
-        _request((8,), (), (1,) * 8)
+    with pytest.raises(OperationResourceAdmissionError, match="content size"):
+        _coefficient((5,), (), (9,))
+    with pytest.raises(OperationResourceAdmissionError, match="prefix bound"):
+        _coefficient((8,), (), (1,) * 8)
 
 
 def test_lr_operation_is_published_in_its_owner_manifest() -> None:
@@ -273,8 +274,8 @@ def test_lr_admits_tiny_skew_inside_large_ambient_diagrams() -> None:
     assert _independent_lr_character_oracle((9,), (8,), (1,)) == 1
     assert _coefficient((500,), (492,), (8,)) == 1
     assert _coefficient((10,), (2,), (7,)) == 0  # sizes disagree: no search
-    with pytest.raises(ValidationError, match="skew"):
-        _request((9,), (), (9,))  # nine search cells exceeds the envelope
+    with pytest.raises(OperationResourceAdmissionError, match="skew size"):
+        _coefficient((9,), (), (9,))  # nine search cells exceeds the envelope
 
 
 def test_schur_product_admission_is_invariant_under_operand_order() -> None:

@@ -15,7 +15,7 @@ from jacobian.math.logic.automata.transducers.values import SubsequentialTransdu
 def _run(
     request: SubsequentialDomainRestrictionRequest,
 ) -> SubsequentialTransducer:
-    return restrict_subsequential_domain(request)
+    return restrict_subsequential_domain(request.transducer, request.domain_dfa)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

@@ -10,7 +10,10 @@ from typing import TYPE_CHECKING, cast
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import (
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -32,7 +35,6 @@ from jacobian.math.number_theory.galois._models import (
     MAX_FIELD_ORDER,
     AutomorphismResult,
     ElementAutomorphismImage,
-    ElementEmbeddingOrbitRequest,
     ElementEmbeddingOrbitResult,
     FiniteFieldFactor,
     FinitePermutationGroup,
@@ -41,12 +43,9 @@ from jacobian.math.number_theory.galois._models import (
     GaloisCorrespondencePair,
     GaloisCorrespondenceResult,
     GaloisFactorResult,
-    GaloisFixedFieldRequest,
     GaloisFixedFieldResult,
     GaloisGroupResult,
     GaloisRootAxis,
-    GaloisSubgroupRequest,
-    IntermediateFieldStabilizerRequest,
     IntermediateFieldStabilizerResult,
     PolynomialDiscriminantResult,
     QQFieldAutomorphism,
@@ -54,6 +53,7 @@ from jacobian.math.number_theory.galois._models import (
     QQSplittingField,
     SolvableResult,
     SplittingFieldResult,
+    _applied_inclusion_image,
     _discriminant_coefficients,
     _require_prime,
     _supported_galois_polynomial,
@@ -61,8 +61,6 @@ from jacobian.math.number_theory.galois._models import (
 )
 from jacobian.math.number_theory.number_fields._field_embedding import (
     SimpleNumberFieldEmbedding,
-    SimpleNumberFieldEmbeddingRequest,
-    apply_simple_number_field_embedding,
 )
 from jacobian.math.number_theory.number_fields.values import (
     MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
@@ -72,7 +70,7 @@ from jacobian.math.number_theory.number_fields.values import (
 from jacobian.math.polynomials.values import MonicPolynomial, RationalPolynomial
 
 MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS = 1100
-MAX_ELEMENT_ORBIT_OUTPUT_BYTES = 32_768
+MAX_ELEMENT_ORBIT_RESULT_DIGITS = 32_768
 MAX_GALOIS_CORRESPONDENCE_WORK = 512
 MAX_GALOIS_CORRESPONDENCE_ALLOCATION_UNITS = 32
 
@@ -880,25 +878,22 @@ def _canonical_automorphism_subgroup(
 
 
 def galois_subgroup(
-    field: QQSplittingField | GaloisSubgroupRequest,
+    field: QQSplittingField,
     elements: tuple[QQFieldAutomorphism, ...] | None = None,
 ) -> GaloisAutomorphismSubgroup:
     """Admit a complete subgroup of the exact supported automorphism group."""
     try:
-        request = (
-            field
-            if isinstance(field, GaloisSubgroupRequest)
-            else GaloisSubgroupRequest(field=field, elements=elements)
-        )
-        canonical_request = GaloisSubgroupRequest.model_validate(request.model_dump())
-        field = _canonical_splitting_field(canonical_request.field, location=("field",))
+        if elements is None:
+            raise OperationDomainValidationError(
+                location=("subgroup",),
+                code="galois_theory.invalid_subgroup_request",
+                message="subgroup request must retain one exact supported field",
+            )
+        canonical_field = _canonical_splitting_field(field, location=("field",))
         candidate = GaloisAutomorphismSubgroup(
-            field=field,
+            field=canonical_field,
             elements=tuple(
-                sorted(
-                    canonical_request.elements,
-                    key=lambda element: element.root_permutation,
-                )
+                sorted(elements, key=lambda element: element.root_permutation)
             ),
         )
     except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
@@ -911,24 +906,24 @@ def galois_subgroup(
 
 
 def galois_fixed_field(
-    subgroup: GaloisAutomorphismSubgroup | GaloisFixedFieldRequest,
+    subgroup: GaloisAutomorphismSubgroup,
 ) -> GaloisFixedFieldResult:
     """Return the exact embedded fixed field of a supported QQ subgroup."""
     try:
-        request = (
-            subgroup
-            if isinstance(subgroup, GaloisFixedFieldRequest)
-            else GaloisFixedFieldRequest(subgroup=subgroup)
+        if not isinstance(subgroup, GaloisAutomorphismSubgroup):
+            raise TypeError("subgroup must be a typed automorphism subgroup")
+        canonical_subgroup = GaloisAutomorphismSubgroup.model_validate(
+            subgroup.model_dump()
         )
-        canonical_request = GaloisFixedFieldRequest.model_validate(request.model_dump())
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("subgroup",),
             code="galois_theory.invalid_fixed_field_request",
             message="fixed-field request must contain one typed automorphism subgroup",
         ) from exc
-    subgroup = _canonical_automorphism_subgroup(canonical_request.subgroup)
-    return _fixed_field_for_canonical_subgroup(subgroup)
+    return _fixed_field_for_canonical_subgroup(
+        _canonical_automorphism_subgroup(canonical_subgroup)
+    )
 
 
 def _fixed_field_for_canonical_subgroup(
@@ -1077,18 +1072,20 @@ def galois_correspondence(
 
 
 def intermediate_field_stabilizer(
-    field: QQSplittingField | IntermediateFieldStabilizerRequest,
+    field: QQSplittingField,
     inclusion: SimpleNumberFieldEmbedding | None = None,
 ) -> IntermediateFieldStabilizerResult:
     """Return automorphisms fixing a supplied embedded intermediate field."""
     try:
-        request = (
-            field
-            if isinstance(field, IntermediateFieldStabilizerRequest)
-            else IntermediateFieldStabilizerRequest(field=field, inclusion=inclusion)
-        )
-        canonical_request = IntermediateFieldStabilizerRequest.model_validate(
-            request.model_dump()
+        if inclusion is None:
+            raise OperationDomainValidationError(
+                location=("inclusion",),
+                code="galois_theory.invalid_intermediate_field_request",
+                message="stabilizer request must contain a typed field inclusion",
+            )
+        canonical_field = _canonical_splitting_field(field, location=("field",))
+        canonical_inclusion = SimpleNumberFieldEmbedding.model_validate(
+            inclusion.model_dump()
         )
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
@@ -1096,8 +1093,8 @@ def intermediate_field_stabilizer(
             code="galois_theory.invalid_intermediate_field_request",
             message="stabilizer request must contain a typed field inclusion",
         ) from exc
-    field = _canonical_splitting_field(canonical_request.field, location=("field",))
-    inclusion = canonical_request.inclusion
+    field = canonical_field
+    inclusion = canonical_inclusion
     if inclusion.target != field.extension or inclusion.source.degree > field.degree:
         raise OperationDomainValidationError(
             location=("inclusion",),
@@ -1109,14 +1106,7 @@ def intermediate_field_stabilizer(
         (Fraction(1),) + (Fraction(0),) * (inclusion.source.degree - 1),
     )
     try:
-        mapped_one = apply_simple_number_field_embedding(
-            SimpleNumberFieldEmbeddingRequest(
-                source=inclusion.source,
-                target=inclusion.target,
-                generator_image=inclusion.generator_image,
-                element=source_one,
-            )
-        )
+        mapped_one = _applied_inclusion_image(inclusion, source_one)
     except (
         OperationDomainValidationError,
         ValidationError,
@@ -1274,10 +1264,7 @@ def _admit_element_orbit_output(
 ) -> None:
     """Preflight polynomial coordinate growth and the fixed-size result shape."""
     element_digits = max(
-        max(
-            len(str(abs(coefficient.num))),
-            len(str(coefficient.den)),
-        )
+        canonical_rational_component_digits(coefficient)
         for coefficient in element.coefficients_ascending
     )
     field_coefficient_digits = max(
@@ -1299,31 +1286,31 @@ def _admit_element_orbit_output(
 
     # The output repeats at most five field elements (source, two images,
     # two orbit values), three polynomial coefficients, and a bounded field/map
-    # envelope. This estimate is evaluated before constructing any images.
-    element_payload = 5 * field.extension.degree * 2 * element_digits
-    polynomial_payload = 3 * 2 * polynomial_digits
-    estimated_bytes = 2 * (element_payload + polynomial_payload) + 8_192
-    if estimated_bytes > MAX_ELEMENT_ORBIT_OUTPUT_BYTES:
+    # envelope. This estimate is evaluated before constructing any images. The
+    # units are retained scalars charged their maximum decimal width, so the
+    # total is a digit budget rather than an encoded transport measurement.
+    element_digits_payload = 5 * field.extension.degree * 2 * element_digits
+    polynomial_digits_payload = 3 * 2 * polynomial_digits
+    estimated_result_digits = (
+        2 * (element_digits_payload + polynomial_digits_payload) + 8_192
+    )
+    if estimated_result_digits > MAX_ELEMENT_ORBIT_RESULT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("element",),
             code="galois_theory.element_orbit_output_over_envelope",
             message=(
                 "the conservative exact orbit result estimate exceeds "
-                f"{MAX_ELEMENT_ORBIT_OUTPUT_BYTES} bytes"
+                f"{MAX_ELEMENT_ORBIT_RESULT_DIGITS} retained decimal digits"
             ),
         )
 
 
 def element_embedding_orbit(
-    request: ElementEmbeddingOrbitRequest,
+    field: QQSplittingField, element: SimpleNumberFieldElement
 ) -> ElementEmbeddingOrbitResult:
     """Return the complete element orbit under the bounded QQ automorphism group."""
     try:
-        canonical_request = ElementEmbeddingOrbitRequest.model_validate(
-            request.model_dump()
-        )
-        field = _canonical_splitting_field(canonical_request.field, location=("field",))
-        element = canonical_request.element
+        field = _canonical_splitting_field(field, location=("field",))
     except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("field",),

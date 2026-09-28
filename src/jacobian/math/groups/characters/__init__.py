@@ -2,7 +2,6 @@
 
 from jacobian.math.groups.characters._abelian_models import (
     FiniteAbelianCharacterRow,
-    FiniteAbelianCharacterTableRequest,
     FiniteAbelianCharacterTableResult,
 )
 from jacobian.math.groups.characters._models import (
@@ -50,7 +49,6 @@ __all__ = [
     "CyclicCharacterRestrictionResult",
     "CyclotomicValue",
     "FiniteAbelianCharacterRow",
-    "FiniteAbelianCharacterTableRequest",
     "FiniteAbelianCharacterTableResult",
     "FiniteClassFunction",
     "FrobeniusSchurIndicatorResult",

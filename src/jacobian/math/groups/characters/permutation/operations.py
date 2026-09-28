@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import NoReturn
+from typing import NoReturn, Self
 
 from pydantic import ConfigDict, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -31,7 +31,7 @@ from jacobian.math.groups.characters._models import (
 from jacobian.math.groups.characters.permutation._models import (
     MAX_ACTION_LABEL_UTF8_BYTES,
     MAX_PERMUTATION_CHARACTER_GROUP_ORDER,
-    MAX_PERMUTATION_CHARACTER_OUTPUT_BYTES,
+    MAX_PERMUTATION_CHARACTER_OUTPUT_SIZE,
     FiniteCharacter,
     _preflight_action,
 )
@@ -121,11 +121,10 @@ def _classes_from_elements(
 
 def _admit_action(action: object) -> FinitePermutationAction:
     try:
-        action = _preflight_action(action)
+        admitted = _preflight_action(action)
     except PydanticCustomError as exc:
         _domain_error(("action",), exc.type, exc.message())
-    assert isinstance(action, FinitePermutationAction)
-    return action
+    return admitted
 
 
 class PermutationCharacterRequest(StrictModel):
@@ -144,7 +143,7 @@ class PermutationCharacterRequest(StrictModel):
                 "max_action_label_utf8_bytes": MAX_ACTION_LABEL_UTF8_BYTES,
                 "max_group_order": MAX_PERMUTATION_CHARACTER_GROUP_ORDER,
                 "max_exact_work": MAX_PERMUTATION_CHARACTER_WORK,
-                "max_output_bytes": MAX_PERMUTATION_CHARACTER_OUTPUT_BYTES,
+                "max_output_size": MAX_PERMUTATION_CHARACTER_OUTPUT_SIZE,
             },
         }
     )
@@ -193,17 +192,17 @@ class PermutationCharacterRequest(StrictModel):
                             "groups.characters.permutation.action_generator_shape",
                             "action generators must match the admitted domain size",
                         )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
-    def require_admitted_action(self) -> PermutationCharacterRequest:
+    def require_admitted_action(self) -> Self:
         _admit_action(self.action)
         return self
 
 
-def permutation_character(request: PermutationCharacterRequest) -> FiniteCharacter:
+def permutation_character(action: FinitePermutationAction) -> FiniteCharacter:
     """Return the complete fixed-point character of an admitted finite action."""
-    action = _admit_action(request.action)
+    action = _admit_action(action)
     degree = len(action.domain)
     generator_count = len(action.generators)
 
@@ -214,7 +213,9 @@ def permutation_character(request: PermutationCharacterRequest) -> FiniteCharact
         + MAX_PERMUTATION_CHARACTER_GROUP_ORDER**2 * degree
         + MAX_PERMUTATION_CHARACTER_GROUP_ORDER * degree
     )
-    output_bound = (
+    # Representation-size estimate: retained scalars times a fixed per-scalar
+    # allocation allowance, not an encoded transport measurement.
+    output_size_bound = (
         64 * MAX_PERMUTATION_CHARACTER_GROUP_ORDER * degree
         + 128 * MAX_PERMUTATION_CHARACTER_GROUP_ORDER * degree
         + 2048 * MAX_PERMUTATION_CHARACTER_GROUP_ORDER
@@ -226,11 +227,11 @@ def permutation_character(request: PermutationCharacterRequest) -> FiniteCharact
             "groups.characters.permutation.work_over_envelope",
             "permutation-character group/class work exceeds its exact envelope",
         )
-    if output_bound > MAX_PERMUTATION_CHARACTER_OUTPUT_BYTES:
+    if output_size_bound > MAX_PERMUTATION_CHARACTER_OUTPUT_SIZE:
         _resource_error(
             ("action",),
             "groups.characters.permutation.output_over_envelope",
-            "permutation-character output exceeds its exact byte envelope",
+            "permutation-character output exceeds its exact representation-size envelope",
         )
 
     # Group closure is capped at 65 elements; no over-order group is ever

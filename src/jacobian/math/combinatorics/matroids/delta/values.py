@@ -227,6 +227,23 @@ class FiniteDeltaMatroid(StrictModel):
         )
 
 
+__all__ = [
+    "MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS",
+    "MAX_DELTA_DISTANCE_PROFILE_STATES",
+    "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
+    "MAX_DELTA_LABEL_BYTES",
+    "MAX_DELTA_MEMBERSHIPS",
+    "DeltaMatroidObstruction",
+    "FiniteDeltaMatroid",
+    "canonical_feasible_rows",
+    "first_symmetric_exchange_obstruction",
+    "require_delta_matroid_admission",
+    "require_delta_matroid_envelope",
+    "require_delta_matroid_exchange_work",
+    "require_delta_matroid_source_size",
+]
+
+
 class DeltaMatroidDistanceProfile(StrictModel):
     """The exact distance-to-feasibility function on a finite ground set."""
 
@@ -317,7 +334,6 @@ class DeltaMatroidDistanceProfile(StrictModel):
 
 
 __all__ = [
-    "MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS",
     "MAX_DELTA_DISTANCE_PROFILE_STATES",
     "MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS",
     "MAX_DELTA_LABEL_BYTES",
@@ -330,5 +346,4 @@ __all__ = [
     "require_delta_matroid_admission",
     "require_delta_matroid_envelope",
     "require_delta_matroid_exchange_work",
-    "require_delta_matroid_source_size",
 ]

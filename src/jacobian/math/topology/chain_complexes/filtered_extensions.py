@@ -860,8 +860,11 @@ def _abutment_retained_cells(
     chain_cells = sum(
         sizes[index] * sizes[index + 1] for index in range(len(sizes) - 1)
     )
+    # A filtration level may name exactly the retained chain degrees; charge a
+    # row that is absent from the size axis as its ambient upper bound instead
+    # of indexing past it.
     filtration_cells = sum(
-        len(subspace.vectors) * sizes[degree]
+        len(subspace.vectors) * (sizes[degree] if degree < len(sizes) else 1)
         for level in filtration
         for degree, subspace in enumerate(level.subspaces)
     )

@@ -29,9 +29,55 @@ parent. Backward traversal resolves through the parent's inverse map. A
 zero-step path returns the table identity at its named lattice vertex.
 
 The path convention is `h_0 = 1` and `h_i = h_{i-1} * U_i` in traversal
-order. This matters for noncommutative groups such as S3. This slice does not
-provide vertex gauge transformations, plaquette curvature, or Wilson traces
-for arbitrary table groups.
+order. This matters for noncommutative groups such as S3.
+
+`lattice_gauge.finite_group.gauge_transform.compute` applies the exact vertex
+action `U'_(u->v) = g_u U_(u->v) g_v^-1` to every edge. It requires one
+parent-bound group element for every source vertex and returns a field over the
+same lattice and multiplication-table parent, along with the source field and
+canonical vertex-frame map. An open path's transformed holonomy has endpoint
+covariance `g_s Hol_U(path) g_t^-1`; a based loop is conjugated. Applying `h`
+after `g` composes the frames as `h_v g_v` under the published left-to-right
+table product convention. The accepted work accounts for table associativity,
+per-edge products, and repeated parent-table output size before constructing
+the target field. This is a supplied finite action, not a gauge-equivalence
+search or gauge fixing operation.
+
+`lattice_gauge.holonomy.conjugacy_profile.compute computes the holonomy of
+the supplied field and path, then returns its complete conjugacy class as sorted
+indices in the retained group parent. The least index is the deterministic
+class representative; class size is derived from the complete orbit. It admits
+the group table, quadratic conjugation work, source-bound result size, and
+class-axis size before building the orbit. This is a finite-group conjugacy
+observable; arbitrary characters and Wilson traces in general representations
+remain separate operations.
+
+lattice_gauge.finite_group.complex.construct.compute` supplies the missing
+source-bound 2-cell carrier for that path operation. Each face stores an
+ordered, closed attaching walk over the exact `GaugeLattice` and retains the
+same `FiniteGroupTable` parent used by finite-group edge fields. The walk is
+the oriented attaching map, so reversing a face reverses step order and flips
+each `forward` bit. A constant attachment is an empty walk with an explicit
+basepoint; a backtracking walk remains a separate, nonempty face. Face IDs are
+unique and sorted. This is the finite combinatorial form of attaching a
+2-cell along a map from its boundary circle into the 1-skeleton ([Hatcher,
+Algebraic Topology, Appendix](https://pi.math.cornell.edu/~hatcher/AT/ATapp.pdf)).
+
+Construction admits at most 128 faces, 256 steps per face, 4096 aggregate
+steps, and a conservative serialized result estimate below two megabytes before
+returning the value. The value records topology only: no curvature product,
+flatness conclusion, or Wilson observable is computed by this constructor.
+
+`lattice_gauge.finite_group.curvature.compute` consumes that complex together
+with an edge field over the same exact lattice and table parent. It returns the
+ordered group product for every face boundary, plus `flat`, which is true exactly
+when every represented face product is the group identity. Reversing a face
+inverts its curvature; a constant attaching walk has identity curvature, while
+a nonempty backtracking walk is evaluated step by step. Under the usual lattice
+gauge law `U_{u→v} ↦ g_u U_{u→v} g_v^{-1}`, each closed-face product is conjugated
+at its starting vertex, so the identity/flatness predicate is gauge invariant
+([Philipsen, *QCD on the Lattice*](https://link.springer.com/chapter/10.1007/978-3-030-38207-0_5)).
+Flatness applies only to faces present in the supplied finite complex.
 
 ## Identity cases
 

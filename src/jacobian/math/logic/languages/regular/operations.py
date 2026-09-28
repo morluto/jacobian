@@ -39,7 +39,7 @@ from jacobian.math.logic.languages.regular.values import (
     MAX_NFA_STATES,
     MAX_NFA_TRANSITIONS,
     MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES,
-    MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES,
+    MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_CELLS,
     MAX_SUBSEQUENTIAL_IMAGE_WORK,
     MAX_WORD_LENGTH,
     NFA,
@@ -812,7 +812,7 @@ def _admit_nfa_subsequential_image(
         state_bound > MAX_NFA_STATES
         or transition_bound > MAX_NFA_TRANSITIONS
         or intermediate_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES
-        or output_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES
+        or output_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_CELLS
         or work_bound > MAX_SUBSEQUENTIAL_IMAGE_WORK
     ):
         raise OperationResourceAdmissionError(
@@ -942,7 +942,7 @@ def _admit_subsequential_image(
         nfa_state_bound > MAX_NFA_STATES
         or nfa_transition_bound > MAX_NFA_TRANSITIONS
         or intermediate_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_INTERMEDIATE_BYTES
-        or output_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_BYTES
+        or output_bytes_bound > MAX_SUBSEQUENTIAL_IMAGE_OUTPUT_CELLS
         or work_bound > MAX_SUBSEQUENTIAL_IMAGE_WORK
     ):
         raise OperationResourceAdmissionError(
@@ -1076,8 +1076,12 @@ def _expand_image_nfa(
             )
         )
 
-    # Product state IDs are stable as BFS discovers them.
-    accepting_sink = add_nfa_state() if terminal_pairs else None
+    # Product state IDs are stable as BFS discovers them.  The terminal output
+    # sink exists exactly when terminal pairs do, so it is allocated inside that
+    # branch and the final-output expansion below reuses the narrowed value.
+    accepting_sink: int | None = None
+    if terminal_pairs:
+        accepting_sink = add_nfa_state()
 
     def add_word_path(source: int, word: tuple[int, ...], target: int) -> None:
         if not word:
@@ -1092,10 +1096,10 @@ def _expand_image_nfa(
     for source, output, target in product_edges:
         request_checkpoint("during subsequential image path expansion")
         add_word_path(source, output, target)
-    for source, output in terminal_pairs:
-        request_checkpoint("during subsequential image final-output expansion")
-        assert accepting_sink is not None
-        add_word_path(source, output, accepting_sink)
+    if accepting_sink is not None:
+        for source, output in terminal_pairs:
+            request_checkpoint("during subsequential image final-output expansion")
+            add_word_path(source, output, accepting_sink)
     return tuple(transitions), state_count, accepting_sink
 
 

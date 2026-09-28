@@ -20,7 +20,6 @@ from jacobian.math.logic.automata.transducers.operations import (
     word_morphism_to_subsequential,
 )
 from jacobian.math.logic.automata.transducers.values import (
-    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     SubseqFinalOutput,
@@ -29,7 +28,6 @@ from jacobian.math.logic.automata.transducers.values import (
 )
 
 __all__ = [
-    "FiniteAlphabet",
     "RationalEdge",
     "RationalTransducer",
     "SubseqFinalOutput",

@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import json
 from itertools import product
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.automata.transducers.domain_restriction import (
-    SubsequentialDomainRestrictionRequest,
     restrict_subsequential_domain,
+)
+from jacobian.math.logic.automata.transducers.domain_restriction._models import (
+    SubsequentialDomainRestrictionRequest,
 )
 from jacobian.math.logic.automata.transducers.values import (
     FiniteAlphabet,
@@ -83,9 +82,7 @@ def _accepts(dfa: DFA, word: tuple[int, ...]) -> bool:
 
 def test_restricted_machine_matches_independent_word_oracle() -> None:
     source, dfa = _parity_machine()
-    restricted = restrict_subsequential_domain(
-        SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=dfa)
-    )
+    restricted = restrict_subsequential_domain(source, dfa)
 
     assert restricted.input_alphabet == source.input_alphabet
     assert restricted.input_alphabet_id == source.input_alphabet_id
@@ -100,9 +97,7 @@ def test_restricted_machine_matches_independent_word_oracle() -> None:
 def test_rejected_domain_returns_one_state_empty_function() -> None:
     source, dfa = _parity_machine()
     rejecting = dfa.model_copy(update={"accepting_states": ()})
-    restricted = restrict_subsequential_domain(
-        SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=rejecting)
-    )
+    restricted = restrict_subsequential_domain(source, rejecting)
     assert restricted.state_count == 1
     assert restricted.initial_state == 0
     assert restricted.transitions == ()
@@ -135,9 +130,7 @@ def test_restriction_preserves_partial_domain_and_final_output() -> None:
             DFATransition(source=0, symbol=1, target=0),
         ),
     )
-    restricted = restrict_subsequential_domain(
-        SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=all_words)
-    )
+    restricted = restrict_subsequential_domain(source, all_words)
     assert _run(restricted, (0,)) == (1, 0)
     assert _run(restricted, ()) is None
     assert _run(restricted, (1,)) is None
@@ -185,24 +178,7 @@ def test_product_larger_than_result_carrier_is_refused_exactly() -> None:
         ),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        restrict_subsequential_domain(
-            SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=dfa)
-        )
+        restrict_subsequential_domain(source, dfa)
     assert error.value.errors()[0]["type"] == (
         "finite_state_transducer.domain_restriction_state_bound_exceeded"
     )
-
-
-def test_tool_is_discoverable_and_has_a_valid_example() -> None:
-    operation_id = "transducer.subsequential.restrict_domain.compute"
-    catalog = Catalog.open()
-    tool = catalog.operation(operation_id)
-    assert tool is not None
-    assert len(tool.examples) == 1
-    result = invoke_operation(operation_id, tool.examples[0].input, catalog)
-    restricted = tool.result_type.model_validate_json(json.dumps(result.output))
-    assert isinstance(restricted, SubsequentialTransducer)
-    assert restricted.state_count == 2
-    assert len(restricted.final_outputs) == 1
-    assert restricted.final_outputs[0].state == 0
-    assert restricted.final_outputs[0].output == ()

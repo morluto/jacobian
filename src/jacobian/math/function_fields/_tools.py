@@ -21,6 +21,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementMultiplyResult,
     FunctionFieldGenusRequest,
     FunctionFieldGenusResult,
+    FunctionFieldNormRequest,
+    FunctionFieldNormResult,
     FunctionFieldPlaceEnumerationRequest,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPlaceValuationRequest,
@@ -29,12 +31,18 @@ from jacobian.math.function_fields._models import (
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldResidueRequest,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRequest,
     FunctionFieldRiemannRochSpace,
     FunctionFieldRiemannRochSpaceRequest,
     FunctionFieldTraceRequest,
     FunctionFieldTraceResult,
     FunctionFieldUniformizerRequest,
     FunctionFieldUniformizerResult,
+    HyperellipticAffinePlaceValuationRequest,
+    HyperellipticAffinePlaceValuationResult,
+    HyperellipticInfinityPlaceValuationRequest,
+    HyperellipticInfinityPlaceValuationResult,
 )
 from jacobian.math.function_fields.operations import (
     function_field_base_embedding,
@@ -47,13 +55,17 @@ from jacobian.math.function_fields.operations import (
     function_field_element_add,
     function_field_element_inverse,
     function_field_element_multiply,
+    function_field_element_norm,
     function_field_element_trace,
     function_field_genus,
+    function_field_hyperelliptic_affine_valuation,
+    function_field_hyperelliptic_infinity_valuation,
     function_field_place_residue,
     function_field_place_uniformizer,
     function_field_place_valuation,
     function_field_principal_divisor,
     function_field_rational_places_degree_bounded,
+    function_field_riemann_roch_membership,
     function_field_riemann_roch_space,
 )
 
@@ -80,10 +92,25 @@ def _run_element_trace(request: FunctionFieldTraceRequest) -> FunctionFieldTrace
     return function_field_element_trace(request.element)
 
 
-def _rational_function(numerator: list[int], denominator: list[int]) -> dict[str, Any]:
+def _run_element_norm(request: FunctionFieldNormRequest) -> FunctionFieldNormResult:
+    return function_field_element_norm(request.element)
+
+
+def _rational_function(
+    numerator: list[int], denominator: list[int], characteristic: int = 2
+) -> dict[str, Any]:
     return {
-        "numerator": {"characteristic": 2, "coefficients": numerator},
-        "denominator": {"characteristic": 2, "coefficients": denominator},
+        "numerator": {"characteristic": characteristic, "coefficients": numerator},
+        "denominator": {"characteristic": characteristic, "coefficients": denominator},
+    }
+
+
+def _gf5_rational_function(
+    numerator: list[int], denominator: list[int]
+) -> dict[str, Any]:
+    return {
+        "numerator": {"characteristic": 5, "coefficients": numerator},
+        "denominator": {"characteristic": 5, "coefficients": denominator},
     }
 
 
@@ -226,6 +253,29 @@ _GF2_Y = {
     "coordinates": [
         _rational_function([0], [1]),
         _rational_function([1], [1]),
+    ],
+}
+
+
+def _run_hyperelliptic_affine_valuation(
+    request: HyperellipticAffinePlaceValuationRequest,
+) -> HyperellipticAffinePlaceValuationResult:
+    return function_field_hyperelliptic_affine_valuation(request.place, request.element)
+
+
+def _run_hyperelliptic_infinity_valuation(
+    request: HyperellipticInfinityPlaceValuationRequest,
+) -> HyperellipticInfinityPlaceValuationResult:
+    return function_field_hyperelliptic_infinity_valuation(
+        request.place, request.element
+    )
+
+
+_GF5_HYPERELLIPTIC_Y = {
+    "field": _GF5_HYPERELLIPTIC_FIELD,
+    "coordinates": [
+        _rational_function([0], [1], characteristic=5),
+        _rational_function([1], [1], characteristic=5),
     ],
 }
 
@@ -788,6 +838,200 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "y and y+1, so their sum and the field trace are 1."
                 ),
                 input={"element": _GF2_Y},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.element.norm.compute",
+        title="Compute the relative norm of a function-field element",
+        description=(
+            "Compute the exact field norm from a presented finite separable "
+            "extension GF(p)(x)[y]/(f) to GF(p)(x), retaining the source field "
+            "and element alongside the rational-function result. The norm is "
+            "the determinant of multiplication by the element. Coefficient "
+            "degree, intermediate work, and output size are admitted before "
+            "exact rational-function expansion."
+        ),
+        request_type=FunctionFieldNormRequest,
+        result_type=FunctionFieldNormResult,
+        run=_run_element_norm,
+        tags=("algebra", "function-field", "norm", "exact"),
+        discovery_terms=(
+            "function field norm",
+            "relative norm to GF(p)(x)",
+            "norm of algebraic function",
+        ),
+        examples=(
+            OperationExample(
+                name="norm_of_one_plus_y_in_y_squared_equals_x",
+                description=(
+                    "In GF(5)(x)[y]/(y^2-x), the multiplication matrix of "
+                    "1+y has determinant 1-x."
+                ),
+                input={
+                    "element": {
+                        "field": {
+                            "characteristic": 5,
+                            "variable": "x",
+                            "generator": "y",
+                            "defining_polynomial": [
+                                _gf5_rational_function([0, 4], [1]),
+                                _gf5_rational_function([0], [1]),
+                                _gf5_rational_function([1], [1]),
+                            ],
+                        },
+                        "coordinates": [
+                            _gf5_rational_function([1], [1]),
+                            _gf5_rational_function([1], [1]),
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.hyperelliptic_affine_place.valuation.compute",
+        title="Compute a rational affine hyperelliptic valuation",
+        description=(
+            "Compute an exact valuation at one GF(p)-rational affine point of "
+            "an odd-characteristic squarefree model y^2=f(x). The point retains "
+            "its curve, coordinates, GF(p) residue parent, and local parameter "
+            "(x-x0 off the branch locus, y at a branch point). Infinity and "
+            "points over extension residue fields are not represented. Finite "
+            "valuations carry an integer; the zero element returns the structural "
+            "POSITIVE_INFINITY branch without a numeric value."
+        ),
+        request_type=HyperellipticAffinePlaceValuationRequest,
+        result_type=HyperellipticAffinePlaceValuationResult,
+        run=_run_hyperelliptic_affine_valuation,
+        tags=("function-field", "hyperelliptic", "affine-place", "valuation", "exact"),
+        examples=(
+            OperationExample(
+                name="branch_uniformizer_at_origin",
+                description="On y^2=x^3-x over GF(5), y is the uniformizer at (0,0) and has valuation one.",
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "x": 0,
+                        "y": 0,
+                        "local_parameter": "y",
+                        "residue_field": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["0", "1"],
+                            "generator": "a",
+                        },
+                    },
+                    "element": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "coordinates": [
+                            _rational_function([0], [1], characteristic=5),
+                            _rational_function([1], [1], characteristic=5),
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.hyperelliptic_infinity_place.valuation.compute",
+        title="Compute a hyperelliptic valuation at infinity",
+        description=(
+            "Compute an exact valuation at the unique GF(p)-rational point at "
+            "infinity of an odd-characteristic squarefree model y^2=f(x) with "
+            "odd deg(f). The place retains the exact curve and GF(p) residue "
+            "parent; finite values include zero and the zero element returns "
+            "the structural POSITIVE_INFINITY branch."
+        ),
+        request_type=HyperellipticInfinityPlaceValuationRequest,
+        result_type=HyperellipticInfinityPlaceValuationResult,
+        run=_run_hyperelliptic_infinity_valuation,
+        tags=(
+            "function-field",
+            "hyperelliptic",
+            "infinite-place",
+            "valuation",
+            "exact",
+        ),
+        examples=(
+            OperationExample(
+                name="valuation_of_y_at_odd_degree_infinity",
+                description=(
+                    "For y^2=x^3-x over GF(5), the unique point at infinity has "
+                    "v(x)=-2 and v(y)=-3."
+                ),
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "residue_field": {
+                            "characteristic": "5",
+                            "modulus_coefficients": ["0", "1"],
+                            "generator": "z",
+                        },
+                    },
+                    "element": _GF5_HYPERELLIPTIC_Y,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.riemann_roch.membership.compute",
+        title="Check exact membership in a rational function-field Riemann-Roch space",
+        description=(
+            "Decide whether a function belongs to L(D) over GF(p)(x), returning "
+            "the complete exact valuation inequalities on the union of the "
+            "function's principal-divisor support and D's support. The zero "
+            "function is always included through a structural empty-profile branch. "
+            "The operation admits at most 256 divisor places, 281 profile places, "
+            "and a 4 MiB conservative output envelope."
+        ),
+        request_type=FunctionFieldRiemannRochMembershipRequest,
+        result_type=FunctionFieldRiemannRochMembership,
+        run=lambda request: function_field_riemann_roch_membership(
+            request.element, request.divisor
+        ),
+        tags=("function-field", "riemann-roch", "membership", "exact"),
+        discovery_terms=(
+            "function-field Riemann-Roch membership",
+            "test a function in L of a divisor",
+            "valuation inequalities for a rational function",
+        ),
+        examples=(
+            OperationExample(
+                name="x_squared_in_twice_infinity_space",
+                description=(
+                    "Check x^2 in L(2[∞]) over GF(5)(x); its infinity "
+                    "valuation plus divisor multiplicity is zero."
+                ),
+                input={
+                    "element": {
+                        "field": _RATIONAL_FIELD,
+                        "coordinates": [
+                            {
+                                "numerator": {
+                                    "characteristic": 5,
+                                    "coefficients": [0, 0, 1],
+                                },
+                                "denominator": {
+                                    "characteristic": 5,
+                                    "coefficients": [1],
+                                },
+                            }
+                        ],
+                    },
+                    "divisor": {
+                        "field": _RATIONAL_FIELD,
+                        "terms": [
+                            {
+                                "place": {
+                                    "field": _RATIONAL_FIELD,
+                                    "kind": "INFINITE",
+                                    "degree": 1,
+                                },
+                                "multiplicity": "2",
+                            }
+                        ],
+                    },
+                },
             ),
         ),
     ),

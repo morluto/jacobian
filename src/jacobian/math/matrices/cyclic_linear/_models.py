@@ -307,11 +307,6 @@ class CyclotomicFieldInclusionRequest(StrictModel):
     target: RationalCyclotomicField
 
 
-class CyclotomicFieldInclusionCompositionRequest(StrictModel):
-    first: CyclotomicFieldInclusion
-    second: CyclotomicFieldInclusion
-
-
 def _require_raw_coordinate_bound(
     coordinates: object,
     *,
@@ -801,7 +796,6 @@ __all__ = [
     "CyclicRationalRankKernelProfileRequest",
     "CyclotomicElementMapRequest",
     "CyclotomicFieldInclusion",
-    "CyclotomicFieldInclusionCompositionRequest",
     "CyclotomicFieldInclusionRequest",
     "CyclotomicNonzeroMinor",
     "CyclotomicRankKernelComponent",

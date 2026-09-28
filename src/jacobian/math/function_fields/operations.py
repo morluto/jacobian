@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from itertools import product
+from collections.abc import Iterable
+from itertools import permutations, product
+from math import comb
 
 from pydantic import ValidationError
 
@@ -32,6 +34,7 @@ from jacobian.math.function_fields._gfpx import (
     poly_gcd,
     poly_mul,
     poly_powmod,
+    poly_sub,
     rf_add,
     rf_evaluate,
     rf_inv,
@@ -49,6 +52,7 @@ from jacobian.math.function_fields._models import (
     MAX_FIELD_ADMISSION_WORK,
     MAX_INVERSION_WORK,
     MAX_MULTIPLICATION_WORK,
+    MAX_NORM_WORK,
     MAX_POLYNOMIAL_X_DEGREE,
     MAX_RATIONAL_PLACE_CANDIDATES,
     MAX_RATIONAL_PLACE_DEGREE,
@@ -56,6 +60,9 @@ from jacobian.math.function_fields._models import (
     MAX_RATIONAL_PLACE_WORK,
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS,
     MAX_TRACE_WORK,
     FiniteFunctionField,
     FiniteFunctionFieldElement,
@@ -67,18 +74,31 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisorEffectivePartsResult,
     FunctionFieldDivisorTerm,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldFiniteValuation,
     FunctionFieldGenusResult,
+    FunctionFieldNormResult,
     FunctionFieldPlace,
     FunctionFieldPlaceEnumerationResult,
+    FunctionFieldPositiveInfinityValuation,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldProductTerm,
     FunctionFieldReductionStep,
     FunctionFieldResidueResult,
+    FunctionFieldRiemannRochMembership,
+    FunctionFieldRiemannRochMembershipRow,
     FunctionFieldRiemannRochSpace,
     FunctionFieldTraceResult,
     FunctionFieldUniformizerResult,
+    FunctionFieldValuation,
+    HyperellipticAffinePlace,
+    HyperellipticAffinePlaceValuationResult,
+    HyperellipticInfinityPlace,
+    HyperellipticInfinityPlaceValuationResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
+    _canonical_field,
+    _from_internal_rational_function,
+    _to_internal_rational_function,
 )
 
 
@@ -93,53 +113,37 @@ def _is_prime(value: int) -> bool:
     return True
 
 
-def _to_internal_polynomial(polynomial: PrimeFieldPolynomial) -> tuple[int, ...]:
-    coefficients = polynomial.coefficients
-    if coefficients == (0,):
-        return ()
-    return coefficients
+def _bounded_element_coordinates(
+    values: Iterable[RF],
+    prime: int,
+    location: tuple[str | int, ...],
+) -> tuple[PrimeFieldRationalFunction, ...]:
+    """Build canonical coordinates, reporting coefficient growth as admission.
 
+    ``_admit_multiplication_resources`` bounds the product with a cheap
+    estimate that cannot account for every accumulated contribution of a
+    chained reduction, so a genuinely oversized product can still reach
+    construction. ``_from_internal_rational_function`` validates for real, and
+    its raw ``ValidationError`` would otherwise escape an operation that
+    promises a typed resource rejection, and the product is assembled through
+    ``model_construct``, so an out-of-schema value would be returned as
+    canonical and could neither round-trip nor compose.
+    """
 
-def _to_internal_rational_function(value: PrimeFieldRationalFunction) -> RF:
-    prime = value.characteristic
-    return rf_normalize(
-        _to_internal_polynomial(value.numerator),
-        _to_internal_polynomial(value.denominator),
-        prime,
-    )
-
-
-def _from_internal_polynomial(
-    coefficients: tuple[int, ...], prime: int
-) -> PrimeFieldPolynomial:
-    return PrimeFieldPolynomial(
-        characteristic=prime,
-        coefficients=coefficients if coefficients else (0,),
-    )
-
-
-def _from_internal_rational_function(
-    value: RF, prime: int
-) -> PrimeFieldRationalFunction:
-    return PrimeFieldRationalFunction(
-        numerator=_from_internal_polynomial(value[0], prime),
-        denominator=_from_internal_polynomial(value[1], prime),
-    )
-
-
-def _canonical_field(field: FiniteFunctionField) -> FiniteFunctionField:
-    prime = field.characteristic
-    return FiniteFunctionField.model_construct(
-        characteristic=prime,
-        variable=field.variable,
-        generator=field.generator,
-        defining_polynomial=tuple(
-            _from_internal_rational_function(
-                _to_internal_rational_function(coefficient), prime
-            )
-            for coefficient in field.defining_polynomial
-        ),
-    )
+    coordinates: list[PrimeFieldRationalFunction] = []
+    for value in values:
+        try:
+            coordinates.append(_from_internal_rational_function(value, prime))
+        except ValidationError as error:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.coefficient_growth_exceeds_envelope",
+                message=(
+                    "the exact reduced product exceeds the "
+                    f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+                ),
+            ) from error
+    return tuple(coordinates)
 
 
 def _canonical_element(
@@ -785,8 +789,8 @@ def function_field_element_multiply(
     )
     product = FiniteFunctionFieldElement.model_construct(
         field=field,
-        coordinates=tuple(
-            _from_internal_rational_function(value, prime) for value in reduced
+        coordinates=_bounded_element_coordinates(
+            reduced, prime, ("left", "coordinates")
         ),
     )
     return FunctionFieldElementMultiplyResult._from_kernel(
@@ -816,6 +820,169 @@ def function_field_element_multiply(
         ),
         product=product,
     )
+
+
+def _admit_norm_growth(
+    field: FiniteFunctionField, element: FiniteFunctionFieldElement
+) -> tuple[int, int]:
+    """Bound multiplication-matrix determinant growth before RF arithmetic."""
+
+    degree = field.degree
+    coordinates = tuple(
+        _trace_degree(_to_internal_rational_function(value))
+        for value in element.coordinates
+    )
+    if degree == 1:
+        return coordinates[0]
+    canonical_field = _canonical_field(field)
+    coefficients = tuple(
+        _trace_degree(_to_internal_rational_function(value))
+        for value in canonical_field.defining_polynomial
+    )
+    work = 0
+
+    def admit(value: tuple[int, int]) -> None:
+        nonlocal work
+        if value == (-1, 0):
+            return
+        size = max(value)
+        # Matrix entries are intermediates, not returned coefficients. Permit
+        # their bounded growth here; the determinant's output degree is checked
+        # separately below. Work remains charged for each intermediate.
+        if size > 4 * MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.norm_work_exceeds_envelope",
+                message="function-field norm intermediate exceeds the work envelope",
+            )
+        work += 3 * (size + 1) ** 3
+        if work > MAX_NORM_WORK:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.norm_work_exceeds_envelope",
+                message=f"function-field norm work exceeds the {MAX_NORM_WORK} unit envelope",
+            )
+
+    matrix_columns: list[tuple[tuple[int, int], ...]] = []
+    column = coordinates
+    for column_index in range(degree):
+        matrix_columns.append(column)
+        if column_index == degree - 1:
+            break
+        next_column = [(-1, 0), *column[:-1]]
+        for row in range(degree):
+            product_degree = _trace_multiply_degree(column[-1], coefficients[row])
+            admit(product_degree)
+            next_column[row] = _trace_add_degree(next_column[row], product_degree)
+            admit(next_column[row])
+        column = tuple(next_column)
+
+    determinant_degree = (-1, 0)
+    for ordering in permutations(range(degree)):
+        term = (0, 0)
+        for row, column_index in enumerate(ordering):
+            term = _trace_multiply_degree(term, matrix_columns[column_index][row])
+            admit(term)
+        determinant_degree = _trace_add_degree(determinant_degree, term)
+        admit(determinant_degree)
+    # This is only a cancellation-blind growth bound. Do not treat it as the
+    # degree of the reduced determinant; the exact carrier limit is checked on
+    # the normalized result once determinant cancellation has been computed.
+    return determinant_degree
+
+
+def function_field_element_norm(
+    element: FiniteFunctionFieldElement,
+) -> FunctionFieldNormResult:
+    """Compute the exact relative norm to the rational function field GF(p)(x)."""
+
+    field, canonical = _preflight_inverse_operand(element)
+    _admit_field(field)
+    _admit_norm_growth(field, canonical)
+    prime = field.characteristic
+    if field.degree == 1:
+        norm = _to_internal_rational_function(canonical.coordinates[0])
+    elif all(
+        coordinate == (-1, 0)
+        for coordinate in (
+            _trace_degree(_to_internal_rational_function(value))
+            for value in canonical.coordinates
+        )
+    ):
+        norm = ZERO_RF
+    else:
+        coefficients = _field_kpoly(field)
+        degree = field.degree
+        columns: list[tuple[RF, ...]] = []
+        column = list(_internal_coordinates(canonical))
+        for column_index in range(degree):
+            columns.append(tuple(column))
+            if column_index == degree - 1:
+                break
+            next_column = [ZERO_RF, *column[:-1]]
+            for row in range(degree):
+                next_column[row] = rf_sub(
+                    next_column[row],
+                    rf_mul(column[-1], coefficients[row], prime),
+                    prime,
+                )
+            column = next_column
+        norm = ZERO_RF
+        for ordering in permutations(range(degree)):
+            term: RF = ((1,), (1,))
+            inversions = sum(
+                ordering[left] > ordering[right]
+                for left in range(degree)
+                for right in range(left + 1, degree)
+            )
+            for row, column_index in enumerate(ordering):
+                term = rf_mul(term, columns[column_index][row], prime)
+                if rf_is_zero(term):
+                    break
+            norm = rf_add(
+                norm,
+                term if inversions % 2 == 0 else rf_sub(ZERO_RF, term, prime),
+                prime,
+            )
+    if (
+        len(norm[0]) - 1 > MAX_POLYNOMIAL_X_DEGREE
+        or len(norm[1]) - 1 > MAX_POLYNOMIAL_X_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
+    norm_value = _from_internal_rational_function(norm, prime)
+    if (
+        norm_value.numerator.degree > MAX_POLYNOMIAL_X_DEGREE
+        or norm_value.denominator.degree > MAX_POLYNOMIAL_X_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
+    result = FunctionFieldNormResult(field=field, element=canonical, norm=norm_value)
+    if (
+        len(encode_strict_json(result.model_dump(mode="json")))
+        > MAX_ELEMENT_VALUE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_output_exceeds_envelope",
+            message=(
+                "the exact function-field norm result exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
+            ),
+        )
+    return result
 
 
 def function_field_element_add(
@@ -2481,3 +2648,590 @@ __all__ = [
     "function_field_principal_divisor",
     "function_field_rational_places_degree_bounded",
 ]
+
+
+def _hyperelliptic_numerator_series(
+    u: tuple[int, ...],
+    v: tuple[int, ...],
+    branch: tuple[int, ...],
+    place: HyperellipticAffinePlace,
+    order_bound: int,
+    prime: int,
+) -> list[int]:
+    size = order_bound + 1
+    if place.local_parameter == "x_minus_x0":
+        y_series = [place.y] + [0] * order_bound
+        branch_series = _affine_shift(branch, place.x, size, prime)
+        inverse_two_y = pow(2 * place.y, -1, prime)
+        for degree in range(1, size):
+            lower_terms = sum(
+                y_series[i] * y_series[degree - i] for i in range(1, degree)
+            )
+            y_series[degree] = (
+                (branch_series[degree] - lower_terms) * inverse_two_y
+            ) % prime
+        u_series = _affine_shift(u, place.x, size, prime)
+        v_series = _affine_shift(v, place.x, size, prime)
+        return [
+            (
+                u_series[degree]
+                + sum(v_series[i] * y_series[degree - i] for i in range(degree + 1))
+            )
+            % prime
+            for degree in range(size)
+        ]
+
+    derivative = poly_derivative(branch, prime)
+    slope = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(derivative)
+        )
+        % prime
+    )
+    if not slope:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.affine_point_singular",
+            message="a branch point must be a simple root of f(x)",
+        )
+    x_series = [0] * size
+    inverse_slope = pow(slope, -1, prime)
+    # Write f(x0+X) as a polynomial in X. Its linear coefficient is
+    # f'(x0), so each new X_n depends only on already-computed terms.
+    taylor = _affine_shift(branch, place.x, len(branch), prime)
+    powers = [[0] * size for _ in range(len(branch))]
+    powers[0][0] = 1
+    powers[1] = x_series.copy()
+    # Here y is t and x-x0 starts at t^2. Solve f(x(t))=t^2 in O(d*N^2).
+    for degree in range(2, size):
+        for exponent in range(2, len(branch)):
+            powers[exponent][degree] = (
+                sum(
+                    x_series[index] * powers[exponent - 1][degree - index]
+                    for index in range(2, degree + 1)
+                )
+                % prime
+            )
+        known = (
+            sum(
+                taylor[exponent] * powers[exponent][degree]
+                for exponent in range(2, len(branch))
+            )
+            % prime
+        )
+        target = 1 if degree == 2 else 0
+        x_series[degree] = ((target - known) * inverse_slope) % prime
+        powers[1][degree] = x_series[degree]
+    x_series[0] = place.x
+    u_series = _affine_polynomial_at_series(u, x_series, prime)
+    v_series = _affine_polynomial_at_series(v, x_series, prime)
+    return [
+        (u_series[degree] + (v_series[degree - 1] if degree else 0)) % prime
+        for degree in range(size)
+    ]
+
+
+def function_field_hyperelliptic_affine_valuation(
+    place: HyperellipticAffinePlace,
+    element: FiniteFunctionFieldElement,
+) -> HyperellipticAffinePlaceValuationResult:
+    """Compute a rational affine valuation on an odd-characteristic y^2=f(x) model.
+
+    The norm of the polynomial numerator gives a finite expansion bound. Only
+    GF(p)-rational affine points are represented; infinity and nonrational
+    places require distinct carriers and are not inferred here.
+    """
+
+    if not isinstance(place, HyperellipticAffinePlace):
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.affine_place_type",
+            message="place must be a typed rational hyperelliptic affine point",
+        )
+    try:
+        place = HyperellipticAffinePlace.model_validate(place.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.invalid_affine_place",
+            message="affine place has malformed parent, coordinates, or residue data",
+        ) from exc
+    field = _canonical_field(_validated_field(place.field))
+    place = HyperellipticAffinePlace.model_construct(
+        field=field,
+        x=place.x,
+        y=place.y,
+        local_parameter=place.local_parameter,
+        residue_field=place.residue_field,
+    )
+    _admit_field(field)
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None:
+        raise OperationDomainValidationError(
+            location=("place", "field"),
+            code="function_field.affine_place_requires_hyperelliptic_model",
+            message="affine places require an odd-characteristic squarefree y^2=f(x) model",
+        )
+    prime = field.characteristic
+    curve_value = (
+        sum(
+            coefficient * pow(place.x, degree, prime)
+            for degree, coefficient in enumerate(branch)
+        )
+        % prime
+    )
+    if place.y * place.y % prime != curve_value:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.affine_point_not_on_curve",
+            message="retained affine coordinates must satisfy y^2=f(x)",
+        )
+    if place.local_parameter == "y":
+        slope = (
+            sum(
+                coefficient * pow(place.x, degree, prime)
+                for degree, coefficient in enumerate(poly_derivative(branch, prime))
+            )
+            % prime
+        )
+        if slope == 0:
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.affine_point_singular",
+                message="a branch point must be a simple root of f(x)",
+            )
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    element_field = _canonical_field(_validated_field(element.field))
+    if element_field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="place and element must retain the identical function field",
+        )
+    element = _canonical_element(element, field)
+    first, second = (
+        _to_internal_rational_function(coordinate) for coordinate in element.coordinates
+    )
+    denominator_degree = (len(first[1]) - 1) + (len(second[1]) - 1)
+    u_degree = (len(first[0]) - 1) + (len(second[1]) - 1)
+    v_degree = (len(second[0]) - 1) + (len(first[1]) - 1)
+    norm_degree_bound = max(2 * u_degree, 2 * v_degree + len(branch) - 1)
+    if (
+        max(denominator_degree, u_degree, v_degree, norm_degree_bound)
+        > 4 * MAX_POLYNOMIAL_X_DEGREE + 12
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.affine_valuation_growth_exceeds_envelope",
+            message="norm and common-coordinate growth exceed the admitted envelope",
+        )
+    admitted_work = (len(branch) + max(u_degree, v_degree) + 1) * (
+        norm_degree_bound + 1
+    ) ** 2
+    if admitted_work > 1_000_000:
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.affine_valuation_work_exceeds_envelope",
+            message="local-series valuation work exceeds the admitted envelope",
+        )
+    denominator = poly_mul(first[1], second[1], prime)
+    u = poly_mul(first[0], second[1], prime)
+    v = poly_mul(second[0], first[1], prime)
+    norm = poly_sub(
+        poly_mul(u, u, prime), poly_mul(poly_mul(v, v, prime), branch, prime), prime
+    )
+    if not norm:
+        return HyperellipticAffinePlaceValuationResult(
+            place=place,
+            element=element,
+            valuation=_function_field_valuation(None),
+        )
+    order_bound = _affine_point_order(norm, place.x, prime)
+    numerator_series = _hyperelliptic_numerator_series(
+        u, v, branch, place, order_bound, prime
+    )
+    numerator_order = next(
+        (index for index, coefficient in enumerate(numerator_series) if coefficient),
+        None,
+    )
+    if numerator_order is None:
+        raise ArithmeticError("norm-bound local expansion missed a nonzero term")
+    denominator_order = _affine_point_order(denominator, place.x, prime)
+    ramification_index = 1 if place.local_parameter == "x_minus_x0" else 2
+    return HyperellipticAffinePlaceValuationResult(
+        place=place,
+        element=element,
+        valuation=_function_field_valuation(
+            numerator_order - ramification_index * denominator_order
+        ),
+    )
+
+
+def function_field_hyperelliptic_infinity_valuation(
+    place: HyperellipticInfinityPlace | FunctionFieldPlace,
+    element: FiniteFunctionFieldElement,
+) -> HyperellipticInfinityPlaceValuationResult:
+    """Value a quadratic hyperelliptic function at its odd-degree infinity.
+
+    For odd ``d = deg(f)``, the unique place over infinity has
+    ``v(x)=-2`` and ``v(y)=-d``. For ``a(x)+b(x)y``, the two nonzero
+    summands have valuations of opposite parity, so their leading terms
+    cannot cancel. The valuation is therefore their minimum.
+    """
+
+    if isinstance(place, FunctionFieldPlace):
+        place = _admit_place(place)
+        if place.kind != "INFINITE":
+            raise OperationDomainValidationError(
+                location=("place",),
+                code="function_field.infinity_place_type",
+                message="hyperelliptic infinity valuation requires an infinite place",
+            )
+        place = HyperellipticInfinityPlace(
+            field=place.field,
+            residue_field=FiniteFieldPresentation(
+                characteristic=place.field.characteristic,
+                modulus_coefficients=(0, 1),
+                generator="z",
+            ),
+        )
+    if not isinstance(place, HyperellipticInfinityPlace):
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.infinity_place_type",
+            message="place must be the typed hyperelliptic point at infinity",
+        )
+    try:
+        place = HyperellipticInfinityPlace.model_validate(place.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("place",),
+            code="function_field.invalid_infinity_place",
+            message="infinity place has malformed field or residue-parent data",
+        ) from exc
+    field = _validated_field(place.field)
+    _admit_field(field)
+    branch = _hyperelliptic_branch_polynomial(field)
+    if branch is None or (len(branch) - 1) % 2 == 0:
+        raise OperationDomainValidationError(
+            location=("place", "field"),
+            code="function_field.odd_hyperelliptic_infinity_required",
+            message=(
+                "the represented unique rational point at infinity requires an "
+                "odd-degree squarefree hyperelliptic model"
+            ),
+        )
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="place and element must retain the identical function field",
+        )
+    element = _canonical_element(element, field)
+    degree_y = len(branch) - 1
+    valuations: list[int] = []
+    for coordinate_index, coordinate in enumerate(element.coordinates):
+        if coordinate.numerator.is_zero():
+            continue
+        rational_order = coordinate.denominator.degree - coordinate.numerator.degree
+        term_value = 2 * rational_order
+        if coordinate_index == 1:
+            term_value -= degree_y
+        valuations.append(term_value)
+    value = min(valuations) if valuations else None
+    return HyperellipticInfinityPlaceValuationResult(
+        place=place,
+        element=element,
+        valuation=_function_field_valuation(value),
+    )
+
+
+def _hyperelliptic_infinity_dimension(multiplicity: int, branch_degree: int) -> int:
+    if multiplicity < 0:
+        return 0
+    x_count = multiplicity // 2 + 1
+    y_count = max(0, (multiplicity - branch_degree) // 2 + 1)
+    return x_count + y_count
+
+
+def _function_field_valuation(value: int | None) -> FunctionFieldValuation:
+    if value is None:
+        return FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
+    return FunctionFieldFiniteValuation(kind="FINITE", value=value)
+
+
+def _hyperelliptic_infinity_riemann_roch_space(
+    field: FiniteFunctionField,
+    branch: tuple[int, ...],
+    dimension: int,
+    multiplicity: int,
+) -> FunctionFieldRiemannRochSpace:
+    """Construct the private hyperelliptic basis for ``L(m P_infinity)``."""
+
+    degree = len(branch) - 1
+    prime = field.characteristic
+    one_poly = PrimeFieldPolynomial(characteristic=prime, coefficients=(1,))
+    zero = PrimeFieldRationalFunction(
+        numerator=PrimeFieldPolynomial(characteristic=prime, coefficients=(0,)),
+        denominator=one_poly,
+    )
+
+    def monomial(exponent: int) -> PrimeFieldRationalFunction:
+        coefficients = (0,) * exponent + (1,)
+        return PrimeFieldRationalFunction(
+            numerator=PrimeFieldPolynomial(
+                characteristic=prime, coefficients=coefficients
+            ),
+            denominator=one_poly,
+        )
+
+    basis: list[FiniteFunctionFieldElement] = []
+    if multiplicity >= 0:
+        for exponent in range(multiplicity // 2 + 1):
+            basis.append(
+                FiniteFunctionFieldElement(
+                    field=field, coordinates=(monomial(exponent), zero)
+                )
+            )
+        for exponent in range(max(0, (multiplicity - degree) // 2 + 1)):
+            basis.append(
+                FiniteFunctionFieldElement(
+                    field=field, coordinates=(zero, monomial(exponent))
+                )
+            )
+    if len(basis) != dimension:
+        raise ArithmeticError(
+            "hyperelliptic Riemann-Roch basis count changed after admission"
+        )
+    canonical_terms: tuple[FunctionFieldDivisorTerm, ...] = ()
+    if multiplicity != 0:
+        canonical_terms = (
+            FunctionFieldDivisorTerm(
+                place=FunctionFieldPlace(field=field, kind="INFINITE", degree=1),
+                multiplicity=multiplicity,
+            ),
+        )
+    return FunctionFieldRiemannRochSpace(
+        divisor=FunctionFieldDivisor(field=field, terms=canonical_terms),
+        dimension=dimension,
+        basis=tuple(basis),
+    )
+
+
+def function_field_riemann_roch_membership(
+    element: FiniteFunctionFieldElement,
+    divisor: FunctionFieldDivisor,
+) -> FunctionFieldRiemannRochMembership:
+    """Decide exact membership in ``L(D)`` over the rational field GF(p)(x)."""
+
+    field, terms = _preflight_riemann_roch_input(divisor)
+    if not _is_rational_field(field):
+        raise OperationDomainValidationError(
+            location=("divisor", "field"),
+            code="function_field.riemann_roch_membership_requires_rational_field",
+            message=(
+                "Riemann-Roch membership profiles are currently supported only "
+                "for the rational function field GF(p)(x)"
+            ),
+        )
+    _preflight_riemann_roch_profile(field, terms)
+    if not isinstance(element, FiniteFunctionFieldElement):
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.element_type",
+            message="element must be a finite function-field element value",
+        )
+    try:
+        element = FiniteFunctionFieldElement.model_validate(element.model_dump())
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="function_field.invalid_element",
+            message="element has malformed coordinate or parent data",
+        ) from exc
+    if element.field != field:
+        raise OperationDomainValidationError(
+            location=("element", "field"),
+            code="function_field.parent_mismatch",
+            message="element and divisor must belong to the same exact function field",
+        )
+    canonical_element = _canonical_element(element, field)
+    coordinate = canonical_element.coordinates[0]
+    is_zero = coordinate.numerator.is_zero()
+
+    # A rational function of numerator and denominator degrees at most 12 has
+    # at most their summed number of finite prime factors and one infinity
+    # place. This bounds the complete support union before any factorization.
+    support_rows_bound = len(terms)
+    if not is_zero:
+        support_rows_bound += (
+            coordinate.numerator.degree + coordinate.denominator.degree + 1
+        )
+    if support_rows_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS:
+        raise OperationResourceAdmissionError(
+            location=("result", "profile"),
+            code="function_field.riemann_roch_membership_profile_exceeds_envelope",
+            message=(
+                "the complete divisor/function support union exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS}-place profile bound"
+            ),
+        )
+
+    # Admission depends on the profile's own row axis, not on a serialized
+    # byte estimate: a deployment's wire ceiling must not bound a native
+    # mathematical result.
+    profile_cells = 64 * support_rows_bound
+    if profile_cells > MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("result",),
+            code="function_field.riemann_roch_membership_output_exceeds_envelope",
+            message=(
+                "the complete exact membership profile exceeds the "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS}-cell output envelope"
+            ),
+        )
+
+    prime_bits = field.characteristic.bit_length()
+    factor_work = sum(max(1, term.place.degree**3) * prime_bits for term in terms)
+    if not is_zero:
+        factor_work += (
+            max(1, coordinate.numerator.degree**3)
+            + max(1, coordinate.denominator.degree**3)
+        ) * prime_bits
+    if factor_work > MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK:
+        raise OperationResourceAdmissionError(
+            location=("divisor",),
+            code="function_field.riemann_roch_membership_work_exceeds_envelope",
+            message=(
+                "place and element factorization exceed the admitted "
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK}-unit work bound"
+            ),
+        )
+
+    admitted_divisor = _admit_divisor(divisor)
+    canonical_element = _canonical_element(element, admitted_divisor.field)
+    if is_zero:
+        return FunctionFieldRiemannRochMembership(
+            element=canonical_element,
+            divisor=admitted_divisor,
+            status="IN_SPACE",
+            profile=(),
+        )
+
+    principal = function_field_principal_divisor(
+        admitted_divisor.field, canonical_element
+    )
+    divisor_multiplicities = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in admitted_divisor.terms
+    }
+    element_valuations = {
+        term.place.model_dump_json(): (term.place, term.multiplicity)
+        for term in principal.divisor.terms
+    }
+    # Merge the divisor and function axes before walking the support union, so
+    # each place carries both contributions without an optional lookup.
+    support: dict[str, tuple[FunctionFieldPlace, int, int]] = {
+        key: (place, 0, valuation)
+        for key, (place, valuation) in element_valuations.items()
+    }
+    for key, (place, multiplicity) in divisor_multiplicities.items():
+        element_valuation = support[key][2] if key in support else 0
+        support[key] = (place, multiplicity, element_valuation)
+    profile: list[FunctionFieldRiemannRochMembershipRow] = []
+    for key in sorted(support):
+        place, divisor_multiplicity, element_valuation = support[key]
+        total = element_valuation + divisor_multiplicity
+        profile.append(
+            FunctionFieldRiemannRochMembershipRow(
+                place=place,
+                element_valuation=element_valuation,
+                divisor_multiplicity=divisor_multiplicity,
+                sum=total,
+            )
+        )
+    return FunctionFieldRiemannRochMembership(
+        element=principal.element,
+        divisor=admitted_divisor,
+        status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),
+        profile=tuple(profile),
+    )
+
+
+def _affine_shift(
+    polynomial: tuple[int, ...], point: int, length: int, prime: int
+) -> list[int]:
+    """Return coefficients of polynomial(point+t) through the requested order."""
+
+    return [
+        sum(
+            coefficient * comb(degree, power) * pow(point, degree - power, prime)
+            for degree, coefficient in enumerate(polynomial)
+            if degree >= power
+        )
+        % prime
+        for power in range(length)
+    ]
+
+
+def _affine_polynomial_at_series(
+    polynomial: tuple[int, ...], argument: list[int], prime: int
+) -> list[int]:
+    value = [0] * len(argument)
+    for coefficient in reversed(polynomial):
+        value = _affine_series_product(value, argument, prime)
+        value[0] = (value[0] + coefficient) % prime
+    return value
+
+
+def _affine_point_order(polynomial: tuple[int, ...], point: int, prime: int) -> int:
+    if not polynomial:
+        raise ValueError("the zero polynomial has infinite order")
+    for order, coefficient in enumerate(
+        _affine_shift(polynomial, point, len(polynomial), prime)
+    ):
+        if coefficient:
+            return order
+    raise ArithmeticError("polynomial translation lost its nonzero leading term")
+
+
+def _is_rational_field(field: FiniteFunctionField) -> bool:
+    return len(field.defining_polynomial) == 1 and (
+        field.defining_polynomial[0].numerator.is_one()
+        and field.defining_polynomial[0].denominator.is_one()
+    )
+
+
+def _affine_series_product(left: list[int], right: list[int], prime: int) -> list[int]:
+    return [
+        sum(left[index] * right[power - index] for index in range(power + 1)) % prime
+        for power in range(len(left))
+    ]

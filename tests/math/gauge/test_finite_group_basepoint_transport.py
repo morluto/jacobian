@@ -99,7 +99,9 @@ def test_nonabelian_transport_is_exact_conjugation_and_composes_after_json() -> 
         field=field, loop=_loop(), connector=connector
     )
 
-    result = finite_group_gauge_basepoint_transport(request)
+    result = finite_group_gauge_basepoint_transport(
+        request.field, request.loop, request.connector
+    )
 
     p = (0, 2, 1)
     q = (1, 0, 2)
@@ -130,9 +132,7 @@ def test_empty_connector_and_empty_loop_keep_identity_cases_exact() -> None:
     field, _ = _nonabelian_field()
     empty_connector = OrientedGaugePath(steps=(), basepoint="a")
     loop_result = finite_group_gauge_basepoint_transport(
-        FiniteGroupGaugeBasepointTransportRequest(
-            field=field, loop=_loop(), connector=empty_connector
-        )
+        field, _loop(), empty_connector
     )
     assert loop_result.target_basepoint == "a"
     assert loop_result.transported_holonomy == loop_result.source_holonomy
@@ -143,9 +143,7 @@ def test_empty_connector_and_empty_loop_keep_identity_cases_exact() -> None:
         steps=(GaugePathStep(edge_id="ab", forward=True),), basepoint="a"
     )
     identity_result = finite_group_gauge_basepoint_transport(
-        FiniteGroupGaugeBasepointTransportRequest(
-            field=field, loop=empty_loop, connector=connector
-        )
+        field, empty_loop, connector
     )
     assert identity_result.source_holonomy.index == field.group.identity
     assert identity_result.transported_holonomy.index == field.group.identity
@@ -160,11 +158,7 @@ def test_open_source_path_is_rejected() -> None:
         steps=(GaugePathStep(edge_id="ab", forward=True),), basepoint="a"
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        finite_group_gauge_basepoint_transport(
-            FiniteGroupGaugeBasepointTransportRequest(
-                field=field, loop=open_path, connector=connector
-            )
-        )
+        finite_group_gauge_basepoint_transport(field, open_path, connector)
     assert error.value.errors()[0]["type"] == (
         "lattice_gauge.finite_group.loop_not_closed"
     )
@@ -195,31 +189,27 @@ def test_transported_path_admits_exactly_256_steps_and_rejects_above() -> None:
     )
 
     exact = finite_group_gauge_basepoint_transport(
-        FiniteGroupGaugeBasepointTransportRequest(
-            field=field,
-            loop=loop,
-            connector=OrientedGaugePath(
-                steps=tuple(
-                    GaugePathStep(edge_id="loop", forward=True) for _ in range(127)
-                ),
-                basepoint="v",
+        field,
+        loop,
+        OrientedGaugePath(
+            steps=tuple(
+                GaugePathStep(edge_id="loop", forward=True) for _ in range(127)
             ),
-        )
+            basepoint="v",
+        ),
     )
     assert len(exact.transported_loop.steps) == 256
 
     with pytest.raises(OperationResourceAdmissionError) as error:
         finite_group_gauge_basepoint_transport(
-            FiniteGroupGaugeBasepointTransportRequest(
-                field=field,
-                loop=loop,
-                connector=OrientedGaugePath(
-                    steps=tuple(
-                        GaugePathStep(edge_id="loop", forward=True) for _ in range(128)
-                    ),
-                    basepoint="v",
+            field,
+            loop,
+            OrientedGaugePath(
+                steps=tuple(
+                    GaugePathStep(edge_id="loop", forward=True) for _ in range(128)
                 ),
-            )
+                basepoint="v",
+            ),
         )
     assert error.value.errors()[0]["type"] == (
         "lattice_gauge.finite_group.basepoint_path_bound"

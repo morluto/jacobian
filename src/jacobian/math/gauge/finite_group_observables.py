@@ -17,7 +17,7 @@ from jacobian.math.gauge._models import (
 from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
 
 MAX_HOLONOMY_CONJUGACY_WORK = 2_000
-MAX_HOLONOMY_CONJUGACY_OUTPUT_BYTES = 1_000_000
+MAX_HOLONOMY_CONJUGACY_OUTPUT_UNITS = 1_000_000
 
 
 class FiniteGroupConjugacyProfileRequest(StrictModel):
@@ -108,36 +108,28 @@ class FiniteGroupConjugacyProfile(StrictModel):
 
 
 def finite_group_holonomy_conjugacy_profile(
-    request: FiniteGroupConjugacyProfileRequest,
+    field: FiniteGroupGaugeField,
+    path: OrientedGaugePath,
 ) -> FiniteGroupConjugacyProfile:
     """Return the exact conjugacy orbit of a complete based-loop holonomy."""
-    if not isinstance(request, FiniteGroupConjugacyProfileRequest):
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="lattice_gauge.conjugacy.request_type",
-            message="expected a typed finite-group holonomy conjugacy request",
-        )
-    field = getattr(request, "field", None)
-    path = getattr(request, "path", None)
     if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
         path, OrientedGaugePath
     ):
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("field", "path"),
             code="lattice_gauge.conjugacy.request_values",
-            message="conjugacy request requires a finite-group field and oriented path",
+            message="conjugacy requires a finite-group field and oriented path",
         )
     try:
-        request = FiniteGroupConjugacyProfileRequest.model_validate(
-            {"field": field.model_dump(), "path": path.model_dump()}
-        )
+        canonical_field = FiniteGroupGaugeField.model_validate(field.model_dump())
+        canonical_path = OrientedGaugePath.model_validate(path.model_dump())
     except (AttributeError, TypeError, ValueError, ValidationError) as exc:
         raise OperationDomainValidationError(
-            location=("request",),
+            location=("field", "path"),
             code="lattice_gauge.conjugacy.request_invalid",
-            message="conjugacy request must retain bounded canonical field and path values",
+            message="conjugacy requires bounded canonical field and path values",
         ) from exc
-    loop = finite_group_gauge_holonomy(request.field, request.path)
+    loop = finite_group_gauge_holonomy(canonical_field, canonical_path)
     if loop.start != loop.end or (
         loop.path.basepoint is not None and loop.path.basepoint != loop.start
     ):
@@ -156,12 +148,12 @@ def finite_group_holonomy_conjugacy_profile(
             code="lattice_gauge.conjugacy.work_bound",
             message="finite-group conjugacy orbit exceeds its work envelope",
         )
-    source_bytes = len(loop.model_dump_json(warnings=False).encode("utf-8"))
-    if source_bytes + 4096 + order * 4 > MAX_HOLONOMY_CONJUGACY_OUTPUT_BYTES:
+    source_units = len(loop.model_dump_json(warnings=False).encode("utf-8"))
+    if source_units + 4096 + order * 4 > MAX_HOLONOMY_CONJUGACY_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("field", "path"),
-            code="lattice_gauge.conjugacy.output_bound",
-            message="conjugacy profile exceeds its conservative output envelope",
+            code="lattice_gauge.conjugacy.output_units",
+            message="conjugacy profile exceeds its conservative output-unit envelope",
         )
     if order > 24:
         raise OperationResourceAdmissionError(

@@ -56,7 +56,9 @@ def test_oriented_square_and_reversed_face_round_trip_with_same_parents():
             FiniteGroupGaugeFace(face_id="reverse", boundary=reversed_path),
         ),
     )
-    result = construct_finite_group_gauge_complex(request)
+    result = construct_finite_group_gauge_complex(
+        request.lattice, request.group, request.faces
+    )
 
     assert result.lattice == lattice
     assert result.group == request.group
@@ -91,7 +93,9 @@ def test_constant_and_backtracking_attaching_maps_are_distinct_degenerate_faces(
             ),
         ),
     )
-    result = construct_finite_group_gauge_complex(request)
+    result = construct_finite_group_gauge_complex(
+        request.lattice, request.group, request.faces
+    )
     assert len(result.faces[0].boundary.steps) == 2
     assert result.faces[1].boundary.steps == ()
     assert result.faces[1].boundary.basepoint == "v"
@@ -113,7 +117,9 @@ def test_open_or_foreign_face_boundary_is_rejected():
         ),
     )
     with pytest.raises(OperationDomainValidationError, match="must be closed"):
-        construct_finite_group_gauge_complex(request)
+        construct_finite_group_gauge_complex(
+            request.lattice, request.group, request.faces
+        )
 
     foreign = FiniteGroupGaugeComplex.model_construct(
         lattice=lattice,
@@ -184,7 +190,14 @@ def test_exact_aggregate_face_step_bound_is_accepted():
             for i in range(16)
         ),
     )
-    assert len(construct_finite_group_gauge_complex(request).faces) == 16
+    assert (
+        len(
+            construct_finite_group_gauge_complex(
+                request.lattice, request.group, request.faces
+            ).faces
+        )
+        == 16
+    )
 
 
 def test_result_size_is_admitted_before_complex_result_construction():
@@ -211,5 +224,7 @@ def test_result_size_is_admitted_before_complex_result_construction():
             for i in range(16)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="two-megabyte"):
-        construct_finite_group_gauge_complex(request)
+    with pytest.raises(OperationResourceAdmissionError, match="output-unit envelope"):
+        construct_finite_group_gauge_complex(
+            request.lattice, request.group, request.faces
+        )

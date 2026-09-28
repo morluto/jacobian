@@ -9,17 +9,14 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
-    FiniteGroupGaugeBasepointTransportRequest,
     FiniteGroupGaugeBasepointTransportResult,
     FiniteGroupGaugeComplex,
     FiniteGroupGaugeContribution,
-    FiniteGroupGaugeCurvatureRequest,
     FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyResult,
-    FiniteGroupGaugeTransformRequest,
     FiniteGroupGaugeTransformResult,
     FiniteGroupGaugeVertexValue,
     GaugeEdge,
@@ -401,7 +398,9 @@ def finite_group_gauge_holonomy(
 
 
 def finite_group_gauge_basepoint_transport(
-    request: FiniteGroupGaugeBasepointTransportRequest,
+    field: FiniteGroupGaugeField,
+    loop: OrientedGaugePath,
+    connector: OrientedGaugePath,
 ) -> FiniteGroupGaugeBasepointTransportResult:
     r"""Transport a based loop by conjugating with a connector holonomy.
 
@@ -409,13 +408,6 @@ def finite_group_gauge_basepoint_transport(
     ``s``, the returned loop is ``reverse(gamma) * ell * gamma``. Its
     holonomy is therefore ``Hol(gamma)^-1 Hol(ell) Hol(gamma)``.
     """
-    if not isinstance(request, FiniteGroupGaugeBasepointTransportRequest):
-        _reject(
-            "request",
-            "lattice_gauge.finite_group.basepoint_request_type",
-            "expected a finite-group basepoint transport request",
-        )
-    field, loop, connector = request.field, request.loop, request.connector
     if (
         not isinstance(field, FiniteGroupGaugeField)
         or not isinstance(loop, OrientedGaugePath)
@@ -536,7 +528,8 @@ def finite_group_gauge_basepoint_transport(
 
 
 def finite_group_gauge_curvature(
-    request: FiniteGroupGaugeCurvatureRequest,
+    complex_value: FiniteGroupGaugeComplex,
+    field: FiniteGroupGaugeField,
 ) -> FiniteGroupGaugeCurvatureResult:
     """Return ordered face holonomies and whether every face is flat.
 
@@ -545,13 +538,6 @@ def finite_group_gauge_curvature(
     noncommutative groups. Flatness means every represented 2-cell has identity
     boundary product; it makes no claim about cells absent from the complex.
     """
-    if not isinstance(request, FiniteGroupGaugeCurvatureRequest):
-        _reject(
-            "request",
-            "lattice_gauge.finite_group.curvature_request_type",
-            "expected a finite-group gauge curvature request",
-        )
-    complex_value, field = request.complex, request.field
     if not isinstance(complex_value, FiniteGroupGaugeComplex) or not isinstance(
         field, FiniteGroupGaugeField
     ):
@@ -632,7 +618,8 @@ def finite_group_gauge_curvature(
 
 
 def finite_group_gauge_transform(
-    request: FiniteGroupGaugeTransformRequest,
+    field: FiniteGroupGaugeField,
+    vertex_values: tuple[object, ...],
 ) -> FiniteGroupGaugeTransformResult:
     r"""Apply ``U'_(u->v) = g_u U_(u->v) g_v^-1`` to every edge.
 
@@ -640,13 +627,6 @@ def finite_group_gauge_transform(
     group path holonomy. Applying ``h`` after ``g`` therefore composes frames
     as ``h_v g_v`` at every vertex.
     """
-    if not isinstance(request, FiniteGroupGaugeTransformRequest):
-        _reject(
-            "request",
-            "lattice_gauge.finite_group.transform_request_type",
-            "expected a finite-group vertex gauge transform request",
-        )
-    field = getattr(request, "field", None)
     group = getattr(field, "group", None)
     if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
         group, FiniteGroupTable
@@ -658,7 +638,7 @@ def finite_group_gauge_transform(
         )
     table, inverse, _, order = _admit_group(group)
     vertices, edges, edge_values = _admit_field(field, group, order)
-    supplied = getattr(request, "vertex_values", None)
+    supplied = vertex_values
     if not isinstance(supplied, tuple) or len(supplied) > 64:
         _reject(
             "vertex_values",

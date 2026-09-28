@@ -7,7 +7,6 @@ import pytest
 from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.gauge import (
-    FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeCurvatureRequest,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeFace,
@@ -82,14 +81,12 @@ def _triangle(group, index):
         )
     )
     complex_value = construct_finite_group_gauge_complex(
-        FiniteGroupGaugeComplexRequest(
-            lattice=lattice,
-            group=group,
-            faces=(
-                FiniteGroupGaugeFace(face_id="forward", boundary=forward),
-                FiniteGroupGaugeFace(face_id="reverse", boundary=reverse),
-            ),
-        )
+        lattice,
+        group,
+        (
+            FiniteGroupGaugeFace(face_id="forward", boundary=forward),
+            FiniteGroupGaugeFace(face_id="reverse", boundary=reverse),
+        ),
     )
     return lattice, field, complex_value
 
@@ -97,9 +94,7 @@ def _triangle(group, index):
 def test_face_curvature_preserves_orientation_and_table_product():
     group, index = _s3()
     _, field, complex_value = _triangle(group, index)
-    result = finite_group_gauge_curvature(
-        FiniteGroupGaugeCurvatureRequest(complex=complex_value, field=field)
-    )
+    result = finite_group_gauge_curvature(complex_value, field)
     identity = group.identity
     to_permutation = {value: key for key, value in index.items()}
 
@@ -127,9 +122,7 @@ def test_face_curvature_preserves_orientation_and_table_product():
 def test_curvature_is_gauge_covariant_for_nonabelian_table_group():
     group, index = _s3()
     _, field, complex_value = _triangle(group, index)
-    source = finite_group_gauge_curvature(
-        FiniteGroupGaugeCurvatureRequest(complex=complex_value, field=field)
-    )
+    source = finite_group_gauge_curvature(complex_value, field)
     table = group.multiplication
     frames = {
         "a": index[(1, 2, 0)],
@@ -154,9 +147,7 @@ def test_curvature_is_gauge_covariant_for_nonabelian_table_group():
             )
         }
     )
-    target = finite_group_gauge_curvature(
-        FiniteGroupGaugeCurvatureRequest(complex=complex_value, field=transformed)
-    )
+    target = finite_group_gauge_curvature(complex_value, transformed)
     source_by_face = {entry.face_id: entry.value.index for entry in source.face_values}
     target_by_face = {entry.face_id: entry.value.index for entry in target.face_values}
     edge_by_id = {edge.edge_id: edge for edge in field.lattice.edges}
@@ -175,19 +166,17 @@ def test_empty_face_is_identity_and_result_round_trips_through_json():
     group, index = _s3()
     lattice, field, _ = _triangle(group, index)
     complex_value = construct_finite_group_gauge_complex(
-        FiniteGroupGaugeComplexRequest(
-            lattice=lattice,
-            group=group,
-            faces=(
-                FiniteGroupGaugeFace(
-                    face_id="constant",
-                    boundary=OrientedGaugePath(steps=(), basepoint="b"),
-                ),
+        lattice,
+        group,
+        (
+            FiniteGroupGaugeFace(
+                face_id="constant",
+                boundary=OrientedGaugePath(steps=(), basepoint="b"),
             ),
-        )
+        ),
     )
     request = FiniteGroupGaugeCurvatureRequest(complex=complex_value, field=field)
-    result = finite_group_gauge_curvature(request)
+    result = finite_group_gauge_curvature(request.complex, request.field)
     assert result.face_values[0].value.index == group.identity
     assert result.flat
     assert type(result).model_validate_json(result.model_dump_json()) == result
@@ -223,22 +212,18 @@ def test_parent_table_repetition_is_admitted_before_face_values_are_built():
         ),
     )
     complex_value = construct_finite_group_gauge_complex(
-        FiniteGroupGaugeComplexRequest(
-            lattice=lattice,
-            group=group,
-            faces=tuple(
-                FiniteGroupGaugeFace(
-                    face_id=f"f{i:03}",
-                    boundary=OrientedGaugePath(steps=(), basepoint="v"),
-                )
-                for i in range(128)
-            ),
-        )
+        lattice,
+        group,
+        tuple(
+            FiniteGroupGaugeFace(
+                face_id=f"f{i:03}",
+                boundary=OrientedGaugePath(steps=(), basepoint="v"),
+            )
+            for i in range(128)
+        ),
     )
     with pytest.raises(OperationResourceAdmissionError) as error:
-        finite_group_gauge_curvature(
-            FiniteGroupGaugeCurvatureRequest(complex=complex_value, field=field)
-        )
+        finite_group_gauge_curvature(complex_value, field)
     assert error.value.errors()[0]["type"] == (
         "lattice_gauge.finite_group.curvature_output_bound"
     )

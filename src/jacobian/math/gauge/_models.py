@@ -215,7 +215,7 @@ MAX_GAUGE_LOOP_FAMILY_WORK = 750_000
 
 MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS = 350_000
 """Maximum value cells and scalar text units for one loop family result."""
-MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES = 1_900_000
+MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 1_900_000
 """Maximum conservative serialized size of one finite gauge complex."""
 
 MAX_GAUGE_LABEL_LENGTH = 64
@@ -509,25 +509,25 @@ class FiniteGroupGaugeComplex(StrictModel):
                 raise _validation_error(
                     "complex_face_closed", "each oriented face boundary must be closed"
                 )
-        output_bytes = 2048 + len(self.group.multiplication) ** 2 * 4
-        output_bytes += len(self.group.multiplication) * 12
-        output_bytes += sum(6 * len(vertex) + 32 for vertex in self.lattice.vertices)
-        output_bytes += sum(
+        output_units = 2048 + len(self.group.multiplication) ** 2 * 4
+        output_units += len(self.group.multiplication) * 12
+        output_units += sum(6 * len(vertex) + 32 for vertex in self.lattice.vertices)
+        output_units += sum(
             6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80
             for edge in self.lattice.edges
         )
         for face in self.faces:
-            output_bytes += 6 * len(face.face_id) + 64
+            output_units += 6 * len(face.face_id) + 64
             if face.boundary.steps:
-                output_bytes += sum(
+                output_units += sum(
                     6 * len(step.edge_id) + 48 for step in face.boundary.steps
                 )
             else:
-                output_bytes += 6 * len(face.boundary.basepoint or "") + 16
-        if output_bytes > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES:
+                output_units += 6 * len(face.boundary.basepoint or "") + 16
+        if output_units > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS:
             raise _validation_error(
                 "complex_output_bound",
-                "source-bound complex exceeds the conservative two-megabyte output envelope",
+                "source-bound complex exceeds the conservative output-unit envelope",
             )
         return self
 
@@ -935,54 +935,6 @@ class HolonomyRequest(StrictModel):
     path: OrientedGaugePath
 
 
-def _check_raw_loop_family_shape(value: object) -> None:
-    """Preflight raw path arrays before Pydantic builds canonical tuples."""
-
-    if not isinstance(value, dict):
-        return
-    if "loops" not in value:
-        return
-    loops = value.get("loops")
-    if not isinstance(loops, (tuple, list)) or type(loops) not in (tuple, list):
-        raise _validation_error(
-            "loop_family_container", "loops must be a built-in list or tuple"
-        )
-    if len(loops) > MAX_GAUGE_LOOP_FAMILY_SIZE:
-        raise _validation_error(
-            "loop_family_count", "a loop family may contain at most 128 loops"
-        )
-    total_steps = 0
-    for loop in loops:
-        path = (
-            loop.get("path", loop)
-            if isinstance(loop, dict)
-            else getattr(loop, "path", loop)
-        )
-        steps = (
-            path.get("steps")
-            if isinstance(path, dict)
-            else getattr(path, "steps", None)
-        )
-        if steps is None:
-            continue
-        if not isinstance(steps, (tuple, list)) or type(steps) not in (tuple, list):
-            raise _validation_error(
-                "loop_family_path_container",
-                "path steps must be a built-in list or tuple",
-            )
-        if len(steps) > MAX_GAUGE_PATH_LENGTH:
-            raise _validation_error(
-                "loop_family_path_length",
-                "each loop may contain at most 256 oriented steps",
-            )
-        total_steps += len(steps)
-        if total_steps > MAX_GAUGE_LOOP_FAMILY_STEPS:
-            raise _validation_error(
-                "loop_family_steps",
-                "aggregate loop-family paths may contain at most 4096 steps",
-            )
-
-
 class GaugeLoopFamilyRequest(StrictModel):
     """Evaluate an explicit finite family of loops over one permutation field."""
 
@@ -996,11 +948,24 @@ class GaugeLoopFamilyRequest(StrictModel):
         ),
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def preflight_raw_paths(cls, value: object) -> object:
-        _check_raw_loop_family_shape(value)
-        return value
+    @model_validator(mode="after")
+    def require_bounded_family_steps(self) -> Self:
+        """Bound the aggregate step count across the admitted loop family.
+
+        The per-loop count and each path's step count are already bounded by
+        their field declarations, so only the aggregate remains. Validating
+        after parsing keeps this model on the strict JSON contract: a
+        ``mode="before"`` validator makes Pydantic validate the whole model
+        against Python objects, which rejects JSON arrays for the
+        tuple-typed field, vertex, and edge axes.
+        """
+        if sum(len(loop.steps) for loop in self.loops) > MAX_GAUGE_LOOP_FAMILY_STEPS:
+            raise _validation_error(
+                "loop_family_steps",
+                "aggregate loop-family paths may contain at most "
+                f"{MAX_GAUGE_LOOP_FAMILY_STEPS} steps",
+            )
+        return self
 
 
 class GaugeLoopHolonomy(StrictModel):
@@ -1041,11 +1006,19 @@ class GaugeLoopFamilyHolonomies(StrictModel):
         ),
     )
 
-    @model_validator(mode="before")
-    @classmethod
-    def preflight_raw_paths(cls, value: object) -> object:
-        _check_raw_loop_family_shape(value)
-        return value
+    @model_validator(mode="after")
+    def require_bounded_family_steps(self) -> Self:
+        """Bound the aggregate step count retained by this loop family."""
+        if (
+            sum(len(entry.path.steps) for entry in self.loops)
+            > MAX_GAUGE_LOOP_FAMILY_STEPS
+        ):
+            raise _validation_error(
+                "loop_family_steps",
+                "aggregate loop-family paths may contain at most "
+                f"{MAX_GAUGE_LOOP_FAMILY_STEPS} steps",
+            )
+        return self
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:
@@ -1229,7 +1202,7 @@ class HolonomyResult(StrictModel):
 
 
 __all__ = [
-    "MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES",
+    "MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS",
     "MAX_GAUGE_DEGREE",
     "MAX_GAUGE_EDGES",
     "MAX_GAUGE_FACES",

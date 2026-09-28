@@ -82,31 +82,35 @@ def _run_su2_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
 def _run_finite_group_conjugacy_profile(
     request: FiniteGroupConjugacyProfileRequest,
 ) -> FiniteGroupConjugacyProfile:
-    return finite_group_holonomy_conjugacy_profile(request)
+    return finite_group_holonomy_conjugacy_profile(request.field, request.path)
 
 
 def _run_finite_group_basepoint_transport(
     request: FiniteGroupGaugeBasepointTransportRequest,
 ) -> FiniteGroupGaugeBasepointTransportResult:
-    return finite_group_gauge_basepoint_transport(request)
+    return finite_group_gauge_basepoint_transport(
+        request.field, request.loop, request.connector
+    )
 
 
 def _run_finite_group_complex(
     request: FiniteGroupGaugeComplexRequest,
 ) -> FiniteGroupGaugeComplex:
-    return construct_finite_group_gauge_complex(request)
+    return construct_finite_group_gauge_complex(
+        request.lattice, request.group, request.faces
+    )
 
 
 def _run_finite_group_curvature(
     request: FiniteGroupGaugeCurvatureRequest,
 ) -> FiniteGroupGaugeCurvatureResult:
-    return finite_group_gauge_curvature(request)
+    return finite_group_gauge_curvature(request.complex, request.field)
 
 
 def _run_finite_group_transform(
     request: FiniteGroupGaugeTransformRequest,
 ) -> FiniteGroupGaugeTransformResult:
-    return finite_group_gauge_transform(request)
+    return finite_group_gauge_transform(request.field, request.vertex_values)
 
 
 _TRIANGLE_FIELD = {

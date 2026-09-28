@@ -9,13 +9,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
-    MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES,
+    MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS,
     MAX_GAUGE_EDGES,
     MAX_GAUGE_FACES,
     MAX_GAUGE_TOTAL_FACE_STEPS,
     MAX_GAUGE_VERTICES,
     FiniteGroupGaugeComplex,
-    FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeFace,
     GaugeEdge,
     GaugeLattice,
@@ -84,11 +83,11 @@ def _admit_lattice(
             "edge IDs must be unique and ordered",
         )
     edge_by_id = {edge.edge_id: edge for edge in edges}
-    output_bytes = 2048 + sum(6 * len(value) + 32 for value in vertices)
-    output_bytes += sum(
+    output_units = 2048 + sum(6 * len(value) + 32 for value in vertices)
+    output_units += sum(
         6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80 for edge in edges
     )
-    return vertices, edges, vertex_set, edge_by_id, output_bytes
+    return vertices, edges, vertex_set, edge_by_id, output_units
 
 
 def _admit_faces(
@@ -104,7 +103,7 @@ def _admit_faces(
         _reject("faces", "lattice_gauge.complex.face_shape", "faces are malformed")
     face_ids: list[str] = []
     total_steps = 0
-    output_bytes = 0
+    output_units = 0
     for face in faces:
         face_id = getattr(face, "face_id", None)
         path = getattr(face, "boundary", None)
@@ -126,14 +125,14 @@ def _admit_faces(
                 code="lattice_gauge.complex.total_face_steps",
                 message="aggregate face boundary exceeds 4096 oriented edge steps",
             )
-        output_bytes += 6 * len(cast(str, face_id)) + 64
-        total_steps, output_bytes = _admit_one_face(
+        output_units += 6 * len(cast(str, face_id)) + 64
+        total_steps, output_units = _admit_one_face(
             steps,
             basepoint,
             vertex_set,
             edge_by_id,
             total_steps,
-            output_bytes,
+            output_units,
         )
     if tuple(sorted(face_ids)) != tuple(face_ids) or len(set(face_ids)) != len(
         face_ids
@@ -143,7 +142,7 @@ def _admit_faces(
             "lattice_gauge.complex.face_ids",
             "face IDs must be unique and ordered",
         )
-    return output_bytes
+    return output_units
 
 
 def _admit_one_face(
@@ -152,7 +151,7 @@ def _admit_one_face(
     vertex_set: set[str],
     edge_by_id: dict[str, GaugeEdge],
     total_steps: int,
-    output_bytes: int,
+    output_units: int,
 ) -> tuple[int, int]:
     if not steps:
         if not _is_label(basepoint) or basepoint not in vertex_set:
@@ -161,7 +160,7 @@ def _admit_one_face(
                 "lattice_gauge.complex.empty_face_basepoint",
                 "constant face attachment must name a source lattice vertex",
             )
-        return total_steps, output_bytes + 6 * len(basepoint) + 16
+        return total_steps, output_units + 6 * len(basepoint) + 16
     first: str | None = None
     cursor: str | None = None
     for step in steps:
@@ -191,25 +190,18 @@ def _admit_one_face(
         if first is None:
             first = tail
         cursor = head
-        output_bytes += 6 * len(edge_id) + 48
+        output_units += 6 * len(edge_id) + 48
     if first != cursor or (basepoint is not None and basepoint != first):
         _reject(
             "faces",
             "lattice_gauge.complex.face_closed",
             "each oriented face boundary must be closed",
         )
-    return total_steps, output_bytes
+    return total_steps, output_units
 
 
-def _admit(request: FiniteGroupGaugeComplexRequest) -> None:
+def _admit(lattice: GaugeLattice, group: FiniteGroupTable, faces: object) -> None:
     """Validate source identities and bound work/output before result creation."""
-    if not isinstance(request, FiniteGroupGaugeComplexRequest):
-        _reject(
-            "request", "lattice_gauge.complex.request_shape", "request is malformed"
-        )
-    lattice = getattr(request, "lattice", None)
-    group = getattr(request, "group", None)
-    faces = getattr(request, "faces", None)
     if not isinstance(group, FiniteGroupTable):
         _reject(
             "group", "lattice_gauge.complex.group_shape", "group table is malformed"
@@ -220,26 +212,28 @@ def _admit(request: FiniteGroupGaugeComplexRequest) -> None:
         )
     table, inverse, identity, order = _admit_group(group)
     del table, inverse, identity
-    _, _, vertex_set, edge_by_id, output_bytes = _admit_lattice(lattice)
-    face_bytes = _admit_faces(faces, vertex_set, edge_by_id)
-    output_bytes += face_bytes + order * order * 4 + order * 12
-    if output_bytes > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_BYTES:
+    _, _, vertex_set, edge_by_id, output_units = _admit_lattice(lattice)
+    face_units = _admit_faces(faces, vertex_set, edge_by_id)
+    output_units += face_units + order * order * 4 + order * 12
+    if output_units > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("result",),
-            code="lattice_gauge.complex.output_bytes",
-            message="source-bound complex exceeds the conservative two-megabyte output envelope",
+            code="lattice_gauge.complex.output_units",
+            message="source-bound complex exceeds the conservative output-unit envelope",
         )
 
 
 def construct_finite_group_gauge_complex(
-    request: FiniteGroupGaugeComplexRequest,
+    lattice: GaugeLattice,
+    group: FiniteGroupTable,
+    faces: tuple[FiniteGroupGaugeFace, ...],
 ) -> FiniteGroupGaugeComplex:
     """Admit and retain a finite lattice with ordered oriented face boundaries."""
-    _admit(request)
+    _admit(lattice, group, faces)
     return FiniteGroupGaugeComplex.model_construct(
-        lattice=request.lattice,
-        group=request.group,
-        faces=request.faces,
+        lattice=lattice,
+        group=group,
+        faces=faces,
     )
 
 

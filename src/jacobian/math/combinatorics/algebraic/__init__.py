@@ -6,9 +6,15 @@ from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
+    RSKWordInverseTraceResult,
+    RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     StandardTableauCheckResult,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
+    inverse_row_insertion_rsk_trace,
+    row_insertion_rsk_trace,
 )
 from jacobian.math.combinatorics.algebraic.biword import (
     Biword,
@@ -51,6 +57,9 @@ from jacobian.math.combinatorics.algebraic.subsequences import (
 from jacobian.math.combinatorics.algebraic.values import (
     FinitePermutation,
     PermutationRSKPair,
+    RSKInsertionEvent,
+    RSKReverseBumpStep,
+    RSKReverseInsertionEvent,
     RSKTableauPair,
 )
 from jacobian.math.combinatorics.algebraic.weighted_monotone._models import (
@@ -76,7 +85,12 @@ __all__ = [
     "PermutationRSKPair",
     "PlacticEquivalenceResult",
     "PlacticNormalFormResult",
+    "RSKInsertionEvent",
+    "RSKReverseBumpStep",
+    "RSKReverseInsertionEvent",
     "RSKTableauPair",
+    "RSKWordInverseTraceResult",
+    "RSKWordTraceResult",
     "SemistandardTableauCheckResult",
     "SemistandardYoungTableauCountResult",
     "StandardTableauCheckResult",
@@ -92,6 +106,7 @@ __all__ = [
     "inverse_matrix",
     "inverse_permutation_rsk",
     "inverse_row_insertion_rsk",
+    "inverse_row_insertion_rsk_trace",
     "knuth_moves",
     "longest_decreasing_subsequence",
     "longest_increasing_subsequence",
@@ -102,6 +117,7 @@ __all__ = [
     "plactic_equivalence",
     "plactic_normal_form",
     "row_insertion_rsk",
+    "row_insertion_rsk_trace",
     "rsk_biword",
     "semistandard_young_tableaux_count",
     "standard_young_tableaux_count",

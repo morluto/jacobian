@@ -28,6 +28,8 @@ from jacobian.math.combinatorics.algebraic._models import (
     PartitionDominanceResult,
     PlacticEquivalenceResult,
     PlacticNormalFormResult,
+    RSKWordInverseTraceResult,
+    RSKWordTraceResult,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountResult,
     SkewLittlewoodRichardsonCheckResult,
@@ -45,7 +47,13 @@ from jacobian.math.combinatorics.algebraic._rsk import (
     inverse_row_insertion_rsk as _inverse_row_insertion_rsk,
 )
 from jacobian.math.combinatorics.algebraic._rsk import (
+    inverse_row_insertion_rsk_trace as _inverse_row_insertion_rsk_trace,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
     row_insertion_rsk as _row_insertion_rsk,
+)
+from jacobian.math.combinatorics.algebraic._rsk import (
+    row_insertion_rsk_trace as _row_insertion_rsk_trace,
 )
 from jacobian.math.combinatorics.algebraic.values import (
     MAX_RSK_ALPHABET_RANK_DIGITS,
@@ -1334,3 +1342,15 @@ def verify_skew_littlewood_richardson(
         )
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
+
+
+def row_insertion_rsk_trace(word: FiniteWord) -> RSKWordTraceResult:
+    """Return word RSK with its complete ordinary insertion bump path."""
+    return _row_insertion_rsk_trace(word)
+
+
+def inverse_row_insertion_rsk_trace(
+    pair: RSKTableauPair,
+) -> RSKWordInverseTraceResult:
+    """Return the reconstructed word with its complete reverse-insertion ledger."""
+    return _inverse_row_insertion_rsk_trace(pair)

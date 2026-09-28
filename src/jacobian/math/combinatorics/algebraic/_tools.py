@@ -28,7 +28,10 @@ from jacobian.math.combinatorics.algebraic._models import (
     RSKInversePermutationRequest,
     RSKInverseWordRequest,
     RSKPermutationRequest,
+    RSKWordInverseTraceResult,
     RSKWordRequest,
+    RSKWordTraceRequest,
+    RSKWordTraceResult,
     SemistandardTableauCheckRequest,
     SemistandardTableauCheckResult,
     SemistandardYoungTableauCountRequest,
@@ -76,6 +79,22 @@ from jacobian.math.combinatorics.algebraic.values import (
     RSKTableauPair,
 )
 from jacobian.math.logic.languages.words.values import FiniteWord
+
+
+def rsk_word_trace(request: RSKWordTraceRequest) -> RSKWordTraceResult:
+    return native.row_insertion_rsk_trace(request.word)
+
+
+def inverse_rsk_word_trace(
+    request: RSKInverseWordRequest,
+) -> RSKWordInverseTraceResult:
+    if request.convention != request.pair.convention:
+        raise OperationDomainValidationError(
+            location=("convention",),
+            code="algebraic_combinatorics.rsk_inverse_trace_convention",
+            message="the request and tableau pair must use the same RSK convention",
+        )
+    return native.inverse_row_insertion_rsk_trace(request.pair)
 
 
 def hook_lengths(request: HookLengthRequest) -> HookLengthResult:
@@ -182,6 +201,71 @@ def check_skew_littlewood_richardson(
 _PARTITION_321 = {"partition": {"parts": [3, 2, 1]}}
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="tableau.rsk.word.trace.compute",
+        title="Trace ordinary row-insertion RSK for an ordered word",
+        description=(
+            "Return the final RSK pair and one exact insertion event for every "
+            "letter of a bounded ordered word. Each event records the zero-based "
+            "cells and entries bumped, plus the terminal added cell and entry "
+            "under ROW_INSERTION_RSK_V1. Complete trace work and ledger growth "
+            "are admitted before insertion."
+        ),
+        request_type=RSKWordTraceRequest,
+        result_type=RSKWordTraceResult,
+        run=rsk_word_trace,
+        tags=("combinatorics", "rsk", "words", "trace", "exact"),
+        discovery_terms=(
+            "RSK insertion trace",
+            "row bumping path",
+            "Robinson-Schensted bumping ledger",
+        ),
+        examples=(
+            OperationExample(
+                name="reverse_word_bumping_trace",
+                description=(
+                    "Trace each insertion for (c,b,a), returning its bump path; "
+                    "the alphabet is explicitly ordered a<b<c."
+                ),
+                input={
+                    "word": {
+                        "alphabet": ["a", "b", "c"],
+                        "letters": ["c", "b", "a"],
+                    },
+                    "convention": "ROW_INSERTION_RSK_V1",
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tableau.rsk.inverse_word.trace.compute",
+        title="Trace ordinary word RSK reverse insertion",
+        description=(
+            "Reconstruct the exact finite word from a compatible ordinary word-RSK "
+            "pair and return one reverse-insertion event per recording label, "
+            "including the removed corner, carried entries, and resulting shape."
+        ),
+        request_type=RSKInverseWordRequest,
+        result_type=RSKWordInverseTraceResult,
+        run=inverse_rsk_word_trace,
+        tags=("combinatorics", "rsk", "words", "inverse", "trace", "exact"),
+        examples=(
+            OperationExample(
+                name="reverse_trace_repeated_letters",
+                description="Recover a repeated-letter word with all reverse bumps.",
+                input={
+                    "pair": {
+                        "alphabet": ["a", "b", "c", "d"],
+                        "insertion_tableau": {"rows": [[1, 3, 4], [2], [3]]},
+                        "recording_tableau": {"rows": [[1, 2, 4], [3], [5]]},
+                        "shape": {"parts": [3, 1, 1]},
+                        "source_kind": "WORD",
+                        "convention": "ROW_INSERTION_RSK_V1",
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="combinatorics.hook_length.compute",
         title="Compute hook lengths of a Young diagram",

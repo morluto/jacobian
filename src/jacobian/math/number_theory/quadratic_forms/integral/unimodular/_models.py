@@ -9,7 +9,7 @@ from pydantic import Field, model_validator
 from pydantic.json_schema import WithJsonSchema
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math._labels import OpaqueLabel
 from jacobian.math.matrices.values import (
     IntegerMatrix,
@@ -101,7 +101,7 @@ class UnimodularChangeRequest(StrictModel):
                         "matrix_entry_bound",
                         "change matrix entries are limited to 128 digits",
                     )
-        return value
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_shape_and_axes(self) -> Self:

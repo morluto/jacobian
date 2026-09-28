@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-from typing import Annotated, Self
-
-from pydantic import ConfigDict, Field, StrictInt, model_validator
 from collections.abc import Sequence
-from typing import Self, cast
+from typing import Annotated, Self, cast
+
 from pydantic import ConfigDict, Field, StrictInt, field_validator, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
     MAX_DELTA_MEMBERSHIPS,
@@ -45,10 +43,13 @@ MAX_TWIST_POLYNOMIAL_HISTOGRAM_ENTRIES = MAX_TWIST_POLYNOMIAL_GROUND + 1
 MAX_TWIST_POLYNOMIAL_SOURCE_ROWS = MAX_DELTA_MEMBERSHIPS + 1
 MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS = len(str(MAX_TWIST_POLYNOMIAL_STATES))
 
+
 class DeltaMatroidDirectSumRequest(StrictModel):
     """Take the direct sum on disjoint labelled ground sets."""
+
     left: FiniteDeltaMatroid
     right: FiniteDeltaMatroid
+
     @model_validator(mode="after")
     def require_disjoint_ground(self) -> Self:
         if set(self.left.ground).intersection(self.right.ground):
@@ -57,23 +58,38 @@ class DeltaMatroidDirectSumRequest(StrictModel):
                 "direct-sum ground labels must be disjoint",
             )
         return self
+
+
 class DeltaMatroidDirectSumResult(StrictModel):
     """Direct sum and its canonical source-index injections."""
+
+    left: FiniteDeltaMatroid
+    right: FiniteDeltaMatroid
     direct_sum: FiniteDeltaMatroid
     left_injection: tuple[int, ...]
     right_injection: tuple[int, ...]
+
+    @model_validator(mode="after")
     def require_source_maps(self) -> Self:
         if self.left_injection != tuple(range(len(self.left.ground))):
+            raise PydanticCustomError(
                 "delta_matroid.direct_sum_map",
                 "left injection must retain source indices",
+            )
         offset = len(self.left.ground)
         if self.right_injection != tuple(
             offset + i for i in range(len(self.right.ground))
         ):
+            raise PydanticCustomError(
+                "delta_matroid.direct_sum_map",
                 "right injection must follow the left ground axis",
+            )
         if self.direct_sum.ground != self.left.ground + self.right.ground:
+            raise PydanticCustomError(
                 "delta_matroid.direct_sum_ground",
                 "direct-sum ground must concatenate the disjoint source grounds",
+            )
+        return self
 
 
 class DeltaMatroidDualRequest(StrictModel):
@@ -168,67 +184,6 @@ class BinarySymmetricMatrix(StrictModel):
 
 class BinaryMatrixRequest(StrictModel):
     matrix: BinarySymmetricMatrix
-
-
-class BinaryMatrixTwistRequest(StrictModel):
-    """Present a binary delta-matroid with a supplied twist subset."""
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "description": (
-                "Construct the complete feasible family of D(A)*T. Principal "
-                "submatrix work is bounded by "
-                f"{MAX_BINARY_PRINCIPAL_MINOR_WORK} pivot units; the ground "
-                "axis has at most eight elements. The output contains at most "
-                f"{MAX_BINARY_TWIST_STATES} feasible rows, "
-                f"{MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS} feasible memberships, "
-                f"{MAX_BINARY_TWIST_OUTPUT_CELLS} matrix, row, membership, and "
-                "twist cells, and 4,096 aggregate ground-label bytes across the "
-                "retained matrix and delta-matroid axes."
-            ),
-            "admission_limits": {
-                "max_ground_elements": MAX_BINARY_GROUND,
-                "max_principal_minor_elimination_work": MAX_BINARY_PRINCIPAL_MINOR_WORK,
-                "max_feasible_rows": MAX_BINARY_TWIST_STATES,
-                "max_feasible_set_memberships": MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS,
-                "max_twist_transport_work_units": MAX_BINARY_TWIST_TRANSPORT_WORK,
-                "max_output_cells": MAX_BINARY_TWIST_OUTPUT_CELLS,
-                "max_output_ground_label_utf8_bytes": 2 * MAX_BINARY_LABEL_BYTES,
-            },
-        }
-    )
-
-    matrix: BinarySymmetricMatrix = Field(
-        description=(
-            "Symmetric GF(2) matrix on at most eight labelled elements. The "
-            "principal-minor constructor admits at most "
-            f"{MAX_BINARY_PRINCIPAL_MINOR_WORK} elimination "
-            "work units before enumerating feasible sets."
-        )
-    )
-    subset: tuple[StrictInt, ...] = Field(
-        default=(),
-        max_length=MAX_BINARY_GROUND,
-        description=(
-            "Sorted unique matrix-axis indices defining the twist. Each index "
-            f"must lie in 0..{MAX_BINARY_GROUND - 1}."
-        ),
-    )
-
-    @model_validator(mode="after")
-    def require_subset(self) -> Self:
-        if (
-            any(type(index) is not int for index in self.subset)
-            or self.subset != tuple(sorted(set(self.subset)))
-            or any(
-                index < 0 or index >= len(self.matrix.ground) for index in self.subset
-            )
-        ):
-            raise PydanticCustomError(
-                "delta_matroid.binary_twist_subset",
-                "twist indices must be sorted, distinct, and in range",
-            )
-        return self
 
 
 class BinaryMatrixResult(StrictModel):
@@ -474,7 +429,7 @@ class DeltaMatroidTwistPolynomialRequest(StrictModel):
             )
         normalized_value = dict(raw_value)
         normalized_value["delta_matroid"] = normalized_delta
-        return normalized_value
+        return canonicalize_json_containers(normalized_value)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -624,11 +579,6 @@ class DeltaMatroidTwistPolynomialResult(StrictModel):
 __all__ = [
     "MAX_BINARY_GROUND",
     "MAX_BINARY_LABEL_BYTES",
-    "MAX_BINARY_PRINCIPAL_MINOR_WORK",
-    "MAX_BINARY_TWIST_OUTPUT_CELLS",
-    "MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS",
-    "MAX_BINARY_TWIST_STATES",
-    "MAX_BINARY_TWIST_TRANSPORT_WORK",
     "MAX_FEASIBLE_SIZE_PROFILE_ENTRIES",
     "MAX_FEASIBLE_SIZE_PROFILE_RETAINED_UNITS",
     "MAX_TWIST_POLYNOMIAL_COEFFICIENT_DIGITS",
@@ -642,7 +592,6 @@ __all__ = [
     "MAX_TWIST_WIDTH_WORK",
     "BinaryMatrixRequest",
     "BinaryMatrixResult",
-    "BinaryMatrixTwistRequest",
     "BinarySymmetricMatrix",
     "DeltaMatroidDualRequest",
     "DeltaMatroidDualResult",
@@ -656,3 +605,64 @@ __all__ = [
     "DeltaMatroidTwistWidthProfileRequest",
     "DeltaMatroidTwistWidthProfileResult",
 ]
+
+
+class BinaryMatrixTwistRequest(StrictModel):
+    """Present a binary delta-matroid with a supplied twist subset."""
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "description": (
+                "Construct the complete feasible family of D(A)*T. Principal "
+                "submatrix work is bounded by "
+                f"{MAX_BINARY_PRINCIPAL_MINOR_WORK} pivot units; the ground "
+                "axis has at most eight elements. The output contains at most "
+                f"{MAX_BINARY_TWIST_STATES} feasible rows, "
+                f"{MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS} feasible memberships, "
+                f"{MAX_BINARY_TWIST_OUTPUT_CELLS} matrix, row, membership, and "
+                "twist cells, and 4,096 aggregate ground-label bytes across the "
+                "retained matrix and delta-matroid axes."
+            ),
+            "admission_limits": {
+                "max_ground_elements": MAX_BINARY_GROUND,
+                "max_principal_minor_elimination_work": MAX_BINARY_PRINCIPAL_MINOR_WORK,
+                "max_feasible_rows": MAX_BINARY_TWIST_STATES,
+                "max_feasible_set_memberships": MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS,
+                "max_twist_transport_work_units": MAX_BINARY_TWIST_TRANSPORT_WORK,
+                "max_output_cells": MAX_BINARY_TWIST_OUTPUT_CELLS,
+                "max_output_ground_label_utf8_bytes": 2 * MAX_BINARY_LABEL_BYTES,
+            },
+        }
+    )
+
+    matrix: BinarySymmetricMatrix = Field(
+        description=(
+            "Symmetric GF(2) matrix on at most eight labelled elements. The "
+            "principal-minor constructor admits at most "
+            f"{MAX_BINARY_PRINCIPAL_MINOR_WORK} elimination "
+            "work units before enumerating feasible sets."
+        )
+    )
+    subset: tuple[StrictInt, ...] = Field(
+        default=(),
+        max_length=MAX_BINARY_GROUND,
+        description=(
+            "Sorted unique matrix-axis indices defining the twist. Each index "
+            f"must lie in 0..{MAX_BINARY_GROUND - 1}."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_subset(self) -> Self:
+        if (
+            any(type(index) is not int for index in self.subset)
+            or self.subset != tuple(sorted(set(self.subset)))
+            or any(
+                index < 0 or index >= len(self.matrix.ground) for index in self.subset
+            )
+        ):
+            raise PydanticCustomError(
+                "delta_matroid.binary_twist_subset",
+                "twist indices must be sorted, distinct, and in range",
+            )
+        return self

@@ -9,13 +9,13 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.automata.transducers import (
-    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     invert_rational,
     project_rational_relation,
 )
 from jacobian.math.logic.automata.transducers._tools import TOOLS
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.regular.operations import nfa_membership
 from jacobian.math.logic.languages.regular.values import NFA
 

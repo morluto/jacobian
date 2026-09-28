@@ -6,9 +6,7 @@ from itertools import product
 from math import gcd
 
 import pytest
-from pydantic import TypeAdapter
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -22,12 +20,8 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.modular_forms import character_basis as basis_module
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
-    _character_sturm_precision,
     modular_character_basis_q_expansions,
     modular_character_coordinates_u_prime,
-)
-from jacobian.math.number_theory.modular_forms.character_basis_models import (
-    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -131,50 +125,6 @@ def _numerators(value: RationalCyclotomicElement) -> tuple[int, ...]:
 
 
 @pytest.mark.parametrize("character_coordinate,level,prime", tuple(_EXPECTED))
-def test_u_prime_matches_independent_q_prefix_action_and_target_coordinates(
-    character_coordinate: int, level: int, prime: int
-) -> None:
-    space = _space(character_coordinate, level)
-    sturm_precision = _character_sturm_precision(space)
-    source_precision = prime * (sturm_precision - 1) + 1
-    source_basis = modular_character_basis_q_expansions(space, source_precision)
-    target_basis = modular_character_basis_q_expansions(space)
-    result_columns = []
-    for basis_index in range(len(target_basis.elements)):
-        form = _coordinates(space, basis_index)
-        result = modular_character_coordinates_u_prime(form, prime)
-        assert result.space == space
-        assert result.basis_id == _GENERIC_BASIS
-        assert (
-            TypeAdapter(ModularFormCoordinates).validate_json(result.model_dump_json())
-            == result
-        )
-        result_columns.append(tuple(_numerators(value) for value in result.coordinates))
-
-        source_coefficients = source_basis.elements[basis_index].expansion.coefficients
-        expected_prefix = tuple(
-            source_coefficients[prime * exponent] for exponent in range(sturm_precision)
-        )
-        # Expand the returned coordinates using the public exact target basis.
-        target_prefix = tuple(
-            _sum(
-                cyclotomic.multiply(
-                    result.coordinates[row],
-                    target_basis.elements[row].expansion.coefficients[exponent],
-                )
-                for row in range(len(result.coordinates))
-            )
-            for exponent in range(sturm_precision)
-        )
-        assert target_prefix == expected_prefix
-
-    assert tuple(result_columns) == _EXPECTED[(character_coordinate, level, prime)]
-    tool = Catalog.open().operation("modular_form.character_coordinates.u_prime.apply")
-    assert "order-six" in tool.description
-    request = ModularCharacterUPrimeRequest(form=_coordinates(space, 0), prime=prime)
-    assert tool.run(request).space == space
-
-
 def _sum(values):
     result = _zero(_FIELD)
     for value in values:

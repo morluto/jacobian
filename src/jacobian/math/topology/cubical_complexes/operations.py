@@ -423,8 +423,7 @@ def closed_star(
     try:
         cell = CubicalCell.model_validate(cell.model_dump(mode="python"))
         cells = tuple(
-            CubicalCell.model_validate(item.model_dump(mode="python"))
-            for item in cells
+            CubicalCell.model_validate(item.model_dump(mode="python")) for item in cells
         )
     except (AttributeError, TypeError, ValueError, ValidationError) as exc:
         raise OperationDomainValidationError(

@@ -4,9 +4,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.galois._models import (
     GaloisAutomorphismSubgroup,
-    GaloisFixedFieldRequest,
-    GaloisSubgroupRequest,
-    IntermediateFieldStabilizerRequest,
     QQFieldAutomorphism,
     QQSplittingField,
     SplittingFieldResult,
@@ -53,7 +50,7 @@ def _split(coefficients: tuple[int, ...]) -> SplittingFieldResult:
 def _subgroup(
     field: QQSplittingField, maps: tuple[QQFieldAutomorphism, ...]
 ) -> GaloisAutomorphismSubgroup:
-    return galois_subgroup(GaloisSubgroupRequest(field=field, elements=tuple(maps)))
+    return galois_subgroup(field, tuple(maps))
 
 
 def _element(
@@ -74,8 +71,8 @@ def test_quadratic_galois_correspondence_binds_both_directions_exactly() -> None
     trivial = _subgroup(field, (identity,))
     whole = _subgroup(field, (identity, conjugation))
 
-    trivial_fixed = galois_fixed_field(GaloisFixedFieldRequest(subgroup=trivial))
-    whole_fixed = galois_fixed_field(GaloisFixedFieldRequest(subgroup=whole))
+    trivial_fixed = galois_fixed_field(trivial)
+    whole_fixed = galois_fixed_field(whole)
     assert trivial_fixed.fixed_field == field.extension
     assert trivial_fixed.inclusion.generator_image == _element(field.extension, 0, 1)
     assert whole_fixed.fixed_field == SimpleNumberFieldPresentation(
@@ -84,12 +81,10 @@ def test_quadratic_galois_correspondence_binds_both_directions_exactly() -> None
     assert whole_fixed.inclusion.generator_image == _element(field.extension, 0, 0)
 
     rational_stabilizer = intermediate_field_stabilizer(
-        IntermediateFieldStabilizerRequest(field=field, inclusion=whole_fixed.inclusion)
+        field, whole_fixed.inclusion
     ).subgroup
     extension_stabilizer = intermediate_field_stabilizer(
-        IntermediateFieldStabilizerRequest(
-            field=field, inclusion=trivial_fixed.inclusion
-        )
+        field, trivial_fixed.inclusion
     ).subgroup
     assert rational_stabilizer == whole
     assert extension_stabilizer == trivial
@@ -99,13 +94,11 @@ def test_split_quadratic_carrier_has_only_the_trivial_correspondence() -> None:
     field = _split((-1, 0, 1)).field
     (identity,) = automorphisms(field).automorphisms
     subgroup = _subgroup(field, (identity,))
-    fixed = galois_fixed_field(GaloisFixedFieldRequest(subgroup=subgroup))
+    fixed = galois_fixed_field(subgroup)
     assert fixed.fixed_field == field.extension
     assert fixed.inclusion.source == fixed.inclusion.target
 
-    stabilizer = intermediate_field_stabilizer(
-        IntermediateFieldStabilizerRequest(field=field, inclusion=fixed.inclusion)
-    )
+    stabilizer = intermediate_field_stabilizer(field, fixed.inclusion)
     assert stabilizer.subgroup == subgroup
 
 
@@ -135,9 +128,7 @@ def test_intermediate_field_embedding_must_target_the_exact_extension() -> None:
         generator_image=_element(wrong_target, 0, 0),
     )
     with pytest.raises(OperationDomainValidationError, match="retained extension"):
-        intermediate_field_stabilizer(
-            IntermediateFieldStabilizerRequest(field=field, inclusion=inclusion)
-        )
+        intermediate_field_stabilizer(field, inclusion)
 
 
 def test_stabilizer_uses_the_exact_embedded_image_not_just_field_degree() -> None:
@@ -149,9 +140,7 @@ def test_stabilizer_uses_the_exact_embedded_image_not_just_field_degree() -> Non
         generator_image=_element(field.extension, 0, 2),
     )
 
-    stabilizer = intermediate_field_stabilizer(
-        IntermediateFieldStabilizerRequest(field=field, inclusion=inclusion)
-    )
+    stabilizer = intermediate_field_stabilizer(field, inclusion)
     assert stabilizer.inclusion == inclusion
     assert len(stabilizer.subgroup.elements) == 1
     assert stabilizer.subgroup.elements[0].root_permutation == (0, 1)
@@ -167,6 +156,4 @@ def test_stabilizer_rejects_a_generator_image_that_breaks_the_field_relation() -
     )
 
     with pytest.raises(OperationDomainValidationError, match="injective QQ-field map"):
-        intermediate_field_stabilizer(
-            IntermediateFieldStabilizerRequest(field=field, inclusion=inclusion)
-        )
+        intermediate_field_stabilizer(field, inclusion)

@@ -111,8 +111,10 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
                 return support
         return support
 
-    original = {monomial.exponents for monomial in polynomial.terms}
-    shifted_support = set().union(
+    original: set[tuple[int, int]] = {
+        (monomial.exponents[0], monomial.exponents[1]) for monomial in polynomial.terms
+    }
+    shifted_support: set[tuple[int, int]] = set().union(
         *(
             {
                 (
@@ -155,17 +157,15 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
             code="ore_algebra.hypergeometric_quotient_expansion_budget",
             message="the exact quotient numerator or denominator may exceed 256 terms",
         )
-    coefficient_digits = (
-        0
-        if len(polynomial.terms) == 1 and polynomial.terms[0].exponents == (0, 0)
-        else sum(
-            max(
-                decimal_digit_width(numerator),
-                decimal_digit_width(denominator),
-            )
-            for monomial in polynomial.terms
-            for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
+    # A single constant monomial still carries its own coefficient magnitude, so
+    # it is charged like any other term instead of being treated as unit.
+    coefficient_digits = sum(
+        max(
+            decimal_digit_width(numerator),
+            decimal_digit_width(denominator),
         )
+        for monomial in polynomial.terms
+        for numerator, denominator in (monomial.coefficient.as_integer_ratio(),)
     )
     base = term.n_base if axis == 0 else term.k_base
     base_numerator, base_denominator = base.as_integer_ratio()

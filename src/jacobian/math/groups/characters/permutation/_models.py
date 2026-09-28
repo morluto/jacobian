@@ -7,6 +7,7 @@ from typing import Any, Self
 
 from pydantic import model_validator
 
+from jacobian._models import canonicalize_json_containers
 from jacobian.math.groups._models import PermutationGroup
 from jacobian.math.groups.actions._models import (
     MAX_DOMAIN_SIZE,
@@ -21,7 +22,7 @@ from jacobian.math.groups.characters._models import (
 )
 
 MAX_PERMUTATION_CHARACTER_GROUP_ORDER = 64
-MAX_PERMUTATION_CHARACTER_OUTPUT_BYTES = 1_000_000
+MAX_PERMUTATION_CHARACTER_OUTPUT_SIZE = 1_000_000
 MAX_ACTION_LABEL_UTF8_BYTES = 16_384
 
 
@@ -195,7 +196,7 @@ class FiniteCharacter(FiniteClassFunction):
                                 "partition_size_bound",
                                 "character partition exceeds its order bound",
                             )
-        return data
+        return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_action_class_values(self) -> Self:
@@ -270,6 +271,6 @@ class FiniteCharacter(FiniteClassFunction):
 __all__ = [
     "MAX_ACTION_LABEL_UTF8_BYTES",
     "MAX_PERMUTATION_CHARACTER_GROUP_ORDER",
-    "MAX_PERMUTATION_CHARACTER_OUTPUT_BYTES",
+    "MAX_PERMUTATION_CHARACTER_OUTPUT_SIZE",
     "FiniteCharacter",
 ]

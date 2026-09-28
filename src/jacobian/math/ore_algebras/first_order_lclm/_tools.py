@@ -54,9 +54,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
         request_type=FirstOrderLCLMRequest,
         result_type=FirstOrderLCLMResult,
-        run=lambda request: differential_first_order_lclm(
-            request.left, request.right
-        ),
+        run=lambda request: differential_first_order_lclm(request.left, request.right),
         tags=("ore-algebra", "differential-operator", "lclm", "exact"),
         discovery_terms=(
             "first-order differential operator least common left multiple",

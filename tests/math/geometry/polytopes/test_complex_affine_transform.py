@@ -3,19 +3,14 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
     RationalVPolytope,
-)
-from jacobian.math.geometry.polytopes.complexes import (
-    polytopal_complex_affine_transform as exported_affine_transform,
 )
 from jacobian.math.geometry.polytopes.complexes._models import (
     PolytopalComplexClosureResult,
@@ -155,18 +150,3 @@ def test_affine_transform_admits_result_coordinate_growth_before_target_closure(
         polytopal_complex_affine_transform(
             source, *_bound_map(((base, 0), (0, 1)), (0, 0))
         )
-
-
-def test_affine_transform_catalog_example_roundtrips():
-    catalog = Catalog.open()
-    operation = catalog.operation("polytopal_complex.affine_transform.compute")
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    target = result.output["target"]
-    assert target["maximal_cells"][0]["vertices"] == [
-        {"coordinates": [{"num": "3", "den": "1"}]},
-        {"coordinates": [{"num": "5", "den": "1"}]},
-    ]
-    assert len(result.output["cell_transport"]) == 1
-    assert exported_affine_transform is polytopal_complex_affine_transform

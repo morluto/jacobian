@@ -7,11 +7,11 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.automata.transducers.values import (
-    FiniteAlphabet,
     SubseqFinalOutput,
     SubseqTransition,
     SubsequentialTransducer,
 )
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.regular import (
     nfa_membership,
     nfa_subsequential_image,

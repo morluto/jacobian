@@ -826,7 +826,7 @@ def _admit_morphism_resources(
     source: FiniteCellularSheaf,
     target: FiniteCellularSheaf,
     components: tuple[Component, ...],
-) -> dict[RestrictionKey, SheafRestriction]:
+) -> tuple[dict[RestrictionKey, SheafRestriction], int, int]:
     axis = source.canonical_face_order
     source_stalks = {stalk.simplex: stalk for stalk in source.stalks}
     target_stalks = {stalk.simplex: stalk for stalk in target.stalks}
@@ -873,7 +873,7 @@ def _admit_morphism_resources(
             "morphism.digit_work_bound",
             "worst-case exact naturality arithmetic exceeds its admitted digit-work envelope",
         )
-    return target_cover
+    return target_cover, max_input_digits, square_work
 
 
 def _admit_component_matrix(
@@ -961,7 +961,9 @@ def morphism(
         )
     _complete_diagram(source, role="source")
     _complete_diagram(target, role="target")
-    target_cover = _admit_morphism_resources(source, target, components)
+    target_cover, _max_input_digits, _square_work = _admit_morphism_resources(
+        source, target, components
+    )
     p = source_field.prime
     source_axis = source.canonical_face_order
     normalized_keys = tuple(

@@ -237,7 +237,11 @@ def graver_basis(configuration: IntegerMatrix) -> IntegerConfigurationGraverBasi
             vector = tuple(int(value) for value in lattice.relation_basis.entries[0])
             first = next(value for value in vector if value)
             vectors = (vector if first > 0 else tuple(-value for value in vector),)
-    return IntegerConfigurationGraverBasis(configuration=configuration, vectors=vectors)
+    # The published contract retains Graver vectors sorted and unique, so the
+    # kernel normalizes its own enumeration before packaging the value.
+    return IntegerConfigurationGraverBasis(
+        configuration=configuration, vectors=tuple(sorted(set(vectors)))
+    )
 
 
 def markov_basis(configuration: IntegerMatrix) -> IntegerConfigurationMarkovBasis:

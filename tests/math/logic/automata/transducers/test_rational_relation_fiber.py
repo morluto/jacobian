@@ -11,7 +11,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.transducers import (
-    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     operations,
@@ -21,6 +20,7 @@ from jacobian.math.logic.automata.transducers._models import (
     RationalRelationFiberRequest,
 )
 from jacobian.math.logic.automata.transducers._tools import TOOLS
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.regular.operations import nfa_membership
 from jacobian.math.logic.languages.regular.values import NFA
 

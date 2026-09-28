@@ -5,8 +5,6 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
     ExactQubitPauli,
-    ExactStabilizerGroup,
-    ExactStabilizerGroupRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_multiply,
@@ -31,9 +29,7 @@ def test_reduces_redundant_bell_generators_without_losing_phase() -> None:
     xx = _pauli(register, (1, 1), (0, 0), 0)
     zz = _pauli(register, (0, 0), (1, 1), 0)
     yy_product = _pauli(register, (1, 1), (1, 1), 0)
-    group = stabilizer_group_from_generators(
-        ExactStabilizerGroupRequest(register=register, generators=(xx, zz, yy_product))
-    )
+    group = stabilizer_group_from_generators(register, (xx, zz, yy_product))
 
     assert group.register == register
     assert group.generators == (xx, zz)
@@ -46,12 +42,8 @@ def test_accepts_positive_identity_dependency_and_empty_trivial_group() -> None:
     register = QubitRegister(qubit_ids=("q",))
     z = _pauli(register, (0,), (1,), 0)
     same_z = _pauli(register, (0,), (1,), 0)
-    reduced = stabilizer_group_from_generators(
-        ExactStabilizerGroupRequest(register=register, generators=(z, same_z))
-    )
-    trivial = stabilizer_group_from_generators(
-        ExactStabilizerGroupRequest(register=register, generators=())
-    )
+    reduced = stabilizer_group_from_generators(register, (z, same_z))
+    trivial = stabilizer_group_from_generators(register, ())
 
     assert reduced.generators == (z,)
     assert trivial.generators == ()
@@ -60,9 +52,7 @@ def test_accepts_positive_identity_dependency_and_empty_trivial_group() -> None:
 def test_reduces_maximum_dependent_generator_family() -> None:
     register = QubitRegister(qubit_ids=("q",))
     z = _pauli(register, (0,), (1,), 0)
-    reduced = stabilizer_group_from_generators(
-        ExactStabilizerGroupRequest(register=register, generators=(z,) * 64)
-    )
+    reduced = stabilizer_group_from_generators(register, (z,) * 64)
     assert reduced.generators == (z,)
 
 
@@ -81,9 +71,7 @@ def test_rejects_nonstabilizer_generator_families(generators) -> None:
     register = QubitRegister(qubit_ids=("q",))
     values = tuple(_pauli(register, (x,), (z,), phase) for x, z, phase in generators)
     with pytest.raises(OperationDomainValidationError):
-        stabilizer_group_from_generators(
-            ExactStabilizerGroupRequest(register=register, generators=values)
-        )
+        stabilizer_group_from_generators(register, values)
 
 
 def test_rejects_exact_generators_from_another_ordered_register() -> None:
@@ -93,36 +81,4 @@ def test_rejects_exact_generators_from_another_ordered_register() -> None:
     z_foreign = _pauli(other, (0, 0), (1, 0), 0)
 
     with pytest.raises(OperationDomainValidationError):
-        stabilizer_group_from_generators(
-            ExactStabilizerGroupRequest(register=register, generators=(z0, z_foreign))
-        )
-
-
-def test_exact_group_is_available_through_catalog_dispatch() -> None:
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.dispatch import invoke_operation
-
-    catalog = Catalog.open()
-    operation_id = "quantum.stabilizer.exact_group.from_generators.compute"
-    assert catalog.operation(operation_id) is not None
-    operation_result = invoke_operation(
-        operation_id,
-        {
-            "register": {"qubit_ids": ["q"]},
-            "generators": [
-                {
-                    "phase_free": {
-                        "register": {"qubit_ids": ["q"]},
-                        "x_bits": [0],
-                        "z_bits": [1],
-                    },
-                    "phase": 0,
-                }
-            ],
-        },
-        catalog,
-    )
-    result = ExactStabilizerGroup.model_validate(operation_result.output)
-    assert result.generators == (
-        _pauli(QubitRegister(qubit_ids=("q",)), (0,), (1,), 0),
-    )
+        stabilizer_group_from_generators(register, (z0, z_foreign))

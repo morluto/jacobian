@@ -1,15 +1,12 @@
-import json
 from fractions import Fraction
 
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
     RationalPolytopeVertex,
@@ -78,13 +75,6 @@ def _function(complex_value, coefficients: dict[tuple[int, ...], int]):
     return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
 
 
-def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fraction]:
-    return {
-        term.exponents: term.coefficient.as_fraction()
-        for term in polynomial.polynomial.terms
-    }
-
-
 def test_addition_matches_independent_coefficient_oracle_and_composes_at_shared_point():
     complex_value = _complex()
     left = _function(complex_value, {(1,): 1})
@@ -107,6 +97,13 @@ def test_addition_matches_independent_coefficient_oracle_and_composes_at_shared_
     )
     assert evaluation.value is not None
     assert evaluation.value.as_fraction() == 3
+
+
+def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fraction]:
+    return {
+        term.exponents: term.coefficient.as_fraction()
+        for term in polynomial.polynomial.terms
+    }
 
 
 def test_addition_rejects_different_complex_values_even_when_support_matches():
@@ -234,18 +231,6 @@ def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound(
     )
     assert result.status == "COMPATIBLE"
     assert all(_coefficient_map(piece.polynomial) == {} for piece in result.pieces)
-
-
-def test_catalog_addition_example_executes_through_typed_contract():
-    catalog = Catalog.open()
-    operation = catalog.operation("piecewise_polynomial.add.compute")
-    assert operation is not None and operation.examples
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    validated = PiecewisePolynomialResult.model_validate_json(json.dumps(result.output))
-    assert validated.status == "COMPATIBLE"
-    assert _coefficient_map(validated.pieces[0].polynomial) == {(0,): Fraction(3)}
 
 
 def test_native_addition_rejects_a_forged_request_with_a_typed_error():

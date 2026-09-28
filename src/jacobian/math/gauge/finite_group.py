@@ -9,10 +9,16 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeBasepointTransportResult,
+    FiniteGroupGaugeComplex,
     FiniteGroupGaugeContribution,
+    FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeEdgeLabel,
+    FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyResult,
+    FiniteGroupGaugeTransformResult,
+    FiniteGroupGaugeVertexValue,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
@@ -357,10 +363,13 @@ def finite_group_gauge_holonomy(
     # constructing the contribution ledger.
     parent_copies = len(edges) + len(steps) + 2
     output_units = parent_copies * order**2 + len(edges) + len(vertices) + len(steps)
-    if (
-        work > MAX_FINITE_GROUP_GAUGE_WORK
-        or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS
-    ):
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.curvature_work_bound",
+            message="finite-group curvature work exceeds the admitted envelope",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="lattice_gauge.finite_group.output_bound",
@@ -385,4 +394,334 @@ def finite_group_gauge_holonomy(
         contributions=tuple(contributions),
         start=start,
         end=end,
+    )
+
+
+def finite_group_gauge_basepoint_transport(
+    field: FiniteGroupGaugeField,
+    loop: OrientedGaugePath,
+    connector: OrientedGaugePath,
+) -> FiniteGroupGaugeBasepointTransportResult:
+    r"""Transport a based loop by conjugating with a connector holonomy.
+
+    For a connector ``gamma`` from ``s`` to ``t`` and loop ``ell`` based at
+    ``s``, the returned loop is ``reverse(gamma) * ell * gamma``. Its
+    holonomy is therefore ``Hol(gamma)^-1 Hol(ell) Hol(gamma)``.
+    """
+    if (
+        not isinstance(field, FiniteGroupGaugeField)
+        or not isinstance(loop, OrientedGaugePath)
+        or not isinstance(connector, OrientedGaugePath)
+        or not isinstance(field.group, FiniteGroupTable)
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.basepoint_request_shape",
+            "field, based loop, and connector must be typed finite-group values",
+        )
+    group = field.group
+    table, inverse, identity, order = _admit_group(group)
+    vertices, edges, values = _admit_field(field, group, order)
+    if (
+        not isinstance(loop.steps, tuple)
+        or not isinstance(connector.steps, tuple)
+        or len(loop.steps) > 256
+        or len(connector.steps) > 256
+    ):
+        raise OperationResourceAdmissionError(
+            location=("loop", "connector"),
+            code="lattice_gauge.finite_group.basepoint_input_path_bound",
+            message="source paths exceed the 256-step path bound",
+        )
+    transported_length = 2 * len(connector.steps) + len(loop.steps)
+    if transported_length > 256:
+        raise OperationResourceAdmissionError(
+            location=("connector", "loop"),
+            code="lattice_gauge.finite_group.basepoint_path_bound",
+            message="transported loop exceeds the 256-step path bound",
+        )
+    work = order**3 + len(edges) + len(loop.steps) + len(connector.steps) + 2
+    output_units = (
+        (len(edges) + 4) * order**2
+        + 3 * len(connector.steps)
+        + 2 * len(loop.steps)
+        + len(edges)
+        + len(vertices)
+    )
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.basepoint_work_bound",
+            message="basepoint transport work exceeds its admitted envelope",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.basepoint_output_bound",
+            message="basepoint transport result exceeds its admitted output envelope",
+        )
+    loop_start, loop_end, loop_resolved = _resolve_path(
+        loop, vertices, edges, values, inverse
+    )
+    connector_start, connector_end, connector_resolved = _resolve_path(
+        connector, vertices, edges, values, inverse
+    )
+    for name, path, start in (
+        ("loop", loop, loop_start),
+        ("connector", connector, connector_start),
+    ):
+        if path.basepoint is not None and (
+            not _is_gauge_label(path.basepoint) or path.basepoint != start
+        ):
+            _reject(
+                name,
+                "lattice_gauge.finite_group.basepoint_mismatch",
+                "an authored path basepoint must equal its first vertex",
+            )
+    if loop_start != loop_end:
+        _reject(
+            "loop",
+            "lattice_gauge.finite_group.loop_not_closed",
+            "source path must be a loop before changing its basepoint",
+        )
+    if connector_start != loop_start:
+        _reject(
+            "connector",
+            "lattice_gauge.finite_group.connector_start_mismatch",
+            "connector must start at the source loop basepoint",
+        )
+
+    def product_of(resolved: tuple[tuple[str, bool, int], ...]) -> int:
+        product = identity
+        for _, _, element in resolved:
+            product = table[product][element]
+        return product
+
+    source_holonomy = product_of(loop_resolved)
+    connector_holonomy = product_of(connector_resolved)
+    target_holonomy = table[table[inverse[connector_holonomy]][source_holonomy]][
+        connector_holonomy
+    ]
+    reverse_steps = tuple(
+        GaugePathStep(edge_id=step.edge_id, forward=not step.forward)
+        for step in reversed(connector.steps)
+    )
+    transported_loop = OrientedGaugePath(
+        steps=reverse_steps + loop.steps + connector.steps,
+        basepoint=connector_end,
+    )
+    return FiniteGroupGaugeBasepointTransportResult.model_construct(
+        field=field,
+        loop=loop,
+        connector=connector,
+        transported_loop=transported_loop,
+        source_basepoint=loop_start,
+        target_basepoint=connector_end,
+        source_holonomy=FiniteGroupTableElement(group=group, index=source_holonomy),
+        connector_holonomy=FiniteGroupTableElement(
+            group=group, index=connector_holonomy
+        ),
+        transported_holonomy=FiniteGroupTableElement(
+            group=group, index=target_holonomy
+        ),
+    )
+
+
+def finite_group_gauge_curvature(
+    complex_value: FiniteGroupGaugeComplex,
+    field: FiniteGroupGaugeField,
+) -> FiniteGroupGaugeCurvatureResult:
+    """Return ordered face holonomies and whether every face is flat.
+
+    Face curvature is the path-ordered product around each oriented attaching
+    walk. Reversing the face therefore takes the group inverse, including for
+    noncommutative groups. Flatness means every represented 2-cell has identity
+    boundary product; it makes no claim about cells absent from the complex.
+    """
+    if not isinstance(complex_value, FiniteGroupGaugeComplex) or not isinstance(
+        field, FiniteGroupGaugeField
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_shape",
+            "complex and field must be typed values",
+        )
+    group = complex_value.group
+    if (
+        not isinstance(group, FiniteGroupTable)
+        or complex_value.lattice != field.lattice
+        or group != field.group
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_parent_mismatch",
+            "complex and field must share the exact lattice and group parent",
+        )
+    table, inverse, identity, order = _admit_group(group)
+    vertices, edges, values = _admit_field(field, group, order)
+    # The complex is caller-supplied; re-admit its faces at the consuming
+    # boundary rather than trusting constructor provenance.
+    from jacobian.math.gauge.finite_group_complex import _admit_faces, _admit_lattice
+
+    _, _, vertex_set, edge_by_id, _ = _admit_lattice(complex_value.lattice)
+    _admit_faces(complex_value.faces, vertex_set, edge_by_id)
+    total_steps = sum(len(face.boundary.steps) for face in complex_value.faces)
+    work = (
+        order**3
+        + (len(edges) + 2) * order**2
+        + len(edges)
+        + total_steps
+        + len(complex_value.faces)
+    )
+    # Returned values retain both source parents, the field's edge-bound table
+    # elements, and one table-bound curvature element per face.
+    parent_copies = len(edges) + len(complex_value.faces) + 3
+    output_units = (
+        parent_copies * order**2
+        + len(vertices)
+        + len(edges) * 4
+        + total_steps * 2
+        + len(complex_value.faces) * 4
+    )
+    if (
+        work > MAX_FINITE_GROUP_GAUGE_WORK
+        or output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.curvature_output_bound",
+            message="finite-group curvature result exceeds admitted work or output",
+        )
+    face_values = []
+    edge_by_id = {edge.edge_id: edge for edge in edges}
+    for face in complex_value.faces:
+        product = identity
+        path = face.boundary
+        if path.steps:
+            for step in path.steps:
+                index = values[step.edge_id]
+                if not step.forward:
+                    index = inverse[index]
+                product = table[product][index]
+        face_values.append(
+            FiniteGroupGaugeFaceCurvature(
+                face_id=face.face_id,
+                value=FiniteGroupTableElement(group=group, index=product),
+            )
+        )
+    return FiniteGroupGaugeCurvatureResult.model_construct(
+        complex=complex_value,
+        field=field,
+        face_values=tuple(face_values),
+        flat=all(value.value.index == identity for value in face_values),
+    )
+
+
+def finite_group_gauge_transform(
+    field: FiniteGroupGaugeField,
+    vertex_values: tuple[object, ...],
+) -> FiniteGroupGaugeTransformResult:
+    r"""Apply ``U'_(u->v) = g_u U_(u->v) g_v^-1`` to every edge.
+
+    Table products use the same left-to-right traversal convention as finite
+    group path holonomy. Applying ``h`` after ``g`` therefore composes frames
+    as ``h_v g_v`` at every vertex.
+    """
+    group = getattr(field, "group", None)
+    if not isinstance(field, FiniteGroupGaugeField) or not isinstance(
+        group, FiniteGroupTable
+    ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.transform_request_shape",
+            "field must be a typed finite-table gauge field",
+        )
+    table, inverse, _, order = _admit_group(group)
+    vertices, edges, edge_values = _admit_field(field, group, order)
+    supplied = vertex_values
+    if not isinstance(supplied, tuple) or len(supplied) > 64:
+        _reject(
+            "vertex_values",
+            "lattice_gauge.finite_group.transform_vertex_values",
+            "vertex frames must be a finite labelled family",
+        )
+    frame_by_vertex: dict[str, int] = {}
+    for entry in supplied:
+        vertex = getattr(entry, "vertex", None)
+        value = getattr(entry, "value", None)
+        if (
+            not isinstance(entry, FiniteGroupGaugeVertexValue)
+            or not _is_gauge_label(vertex)
+            or vertex in frame_by_vertex
+            or not isinstance(value, FiniteGroupTableElement)
+            or getattr(value, "group", None) != group
+            or type(getattr(value, "index", None)) is not int
+            or not 0 <= getattr(value, "index", -1) < order
+        ):
+            _reject(
+                "vertex_values",
+                "lattice_gauge.finite_group.transform_vertex_value",
+                "every frame must be a unique element of the field's group",
+            )
+        frame_index = getattr(value, "index", None)
+        if type(frame_index) is not int or not isinstance(vertex, str):
+            _reject(
+                "frames",
+                "lattice_gauge.frame_missing_index",
+                "every frame must name a lattice vertex and carry a group index",
+            )
+        frame_by_vertex[vertex] = frame_index
+    if set(frame_by_vertex) != set(vertices) or len(frame_by_vertex) != len(supplied):
+        _reject(
+            "vertex_values",
+            "lattice_gauge.finite_group.transform_vertex_coverage",
+            "frames must label every lattice vertex exactly once",
+        )
+
+    # Include complete associativity admission, two table products per edge,
+    # and every repeated serialized parent table in the result estimate.
+    work = order**3 + 2 * len(edges) + len(vertices)
+    parent_copies = 2 * (len(edges) + 1) + len(vertices)
+    output_units = parent_copies * order**2 + 4 * len(edges) + 2 * len(vertices)
+    if work > MAX_FINITE_GROUP_GAUGE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.transform_work_bound",
+            message="finite-group gauge transform exceeds its work bound",
+        )
+    if output_units > MAX_FINITE_GROUP_GAUGE_OUTPUT_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("request",),
+            code="lattice_gauge.finite_group.transform_output_bound",
+            message="finite-group gauge transform exceeds its output bound",
+        )
+
+    transformed_labels = tuple(
+        FiniteGroupGaugeEdgeLabel(
+            edge_id=edge.edge_id,
+            value=FiniteGroupTableElement(
+                group=group,
+                index=table[
+                    table[frame_by_vertex[edge.tail]][edge_values[edge.edge_id]]
+                ][inverse[frame_by_vertex[edge.head]]],
+            ),
+        )
+        for edge in edges
+    )
+    transformed = FiniteGroupGaugeField.model_construct(
+        lattice=field.lattice,
+        group=group,
+        edge_values=transformed_labels,
+    )
+    canonical_frames = tuple(
+        FiniteGroupGaugeVertexValue(
+            vertex=vertex,
+            value=FiniteGroupTableElement(group=group, index=frame_by_vertex[vertex]),
+        )
+        for vertex in vertices
+    )
+    return FiniteGroupGaugeTransformResult.model_construct(
+        source=field,
+        transformed=transformed,
+        vertex_values=canonical_frames,
     )

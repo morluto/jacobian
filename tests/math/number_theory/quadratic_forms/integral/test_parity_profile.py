@@ -19,8 +19,10 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular import (
 )
 from jacobian.math.number_theory.quadratic_forms.integral.parity import (
     ParityProfile,
-    ParityProfileRequest,
     parity_profile,
+)
+from jacobian.math.number_theory.quadratic_forms.integral.parity._models import (
+    ParityProfileRequest,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.parity._tools import TOOLS
 

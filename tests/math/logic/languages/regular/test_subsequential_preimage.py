@@ -14,7 +14,6 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
 )
 from jacobian.math.logic.finite_alphabet import FiniteAlphabet as CanonicalAlphabet
-from jacobian.math.logic.languages.regular import FiniteAlphabet as RegularAlphabet
 from jacobian.math.logic.languages.regular._models import (
     EquivalenceRequest,
     SubsequentialPreimageRequest,
@@ -89,7 +88,7 @@ def oracle(
 def test_preimage_matches_independent_exhaustive_input_word_oracle() -> None:
     dfa, transducer = carriers()
     result = dfa_subsequential_preimage(dfa, transducer)
-    assert CanonicalAlphabet is RegularAlphabet is FiniteAlphabet
+    assert CanonicalAlphabet is FiniteAlphabet
     assert result.alphabet == transducer.input_alphabet
     assert result.alphabet_id == transducer.input_alphabet_id
     for length in range(6):

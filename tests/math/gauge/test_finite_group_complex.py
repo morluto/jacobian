@@ -7,7 +7,6 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.gauge import (
     FiniteGroupGaugeComplex,
-    FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeFace,
     GaugeEdge,
     GaugeLattice,
@@ -15,6 +14,7 @@ from jacobian.math.gauge import (
     OrientedGaugePath,
     construct_finite_group_gauge_complex,
 )
+from jacobian.math.gauge._models import FiniteGroupGaugeComplexRequest
 from jacobian.math.groups._table_models import FiniteGroupTable
 
 

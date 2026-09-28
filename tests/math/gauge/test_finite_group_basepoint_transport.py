@@ -9,7 +9,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge import (
-    FiniteGroupGaugeBasepointTransportRequest,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
     GaugeEdge,
@@ -19,6 +18,7 @@ from jacobian.math.gauge import (
     finite_group_gauge_basepoint_transport,
     finite_group_gauge_holonomy,
 )
+from jacobian.math.gauge._models import FiniteGroupGaugeBasepointTransportRequest
 from jacobian.math.gauge._tools import TOOLS
 from jacobian.math.groups._table_models import (
     FiniteGroupTable,

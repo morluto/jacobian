@@ -6,7 +6,6 @@ import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.gauge import (
-    FiniteGroupGaugeCurvatureRequest,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeFace,
     FiniteGroupGaugeField,
@@ -17,6 +16,7 @@ from jacobian.math.gauge import (
     construct_finite_group_gauge_complex,
     finite_group_gauge_curvature,
 )
+from jacobian.math.gauge._models import FiniteGroupGaugeCurvatureRequest
 from jacobian.math.groups._table_models import (
     FiniteGroupTableElement,
     FiniteGroupTableRequest,

@@ -26,6 +26,12 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK,
     MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS,
+    MAX_FREE_ALGEBRA_FACTOR_DFA_OUTPUT_CELLS,
+    MAX_FREE_ALGEBRA_FACTOR_DFA_PREFIX_CANDIDATES,
+    MAX_FREE_ALGEBRA_FACTOR_DFA_STATES,
+    MAX_FREE_ALGEBRA_FACTOR_DFA_WORK,
+    MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS,
+    MAX_FREE_ALGEBRA_FORBIDDEN_WORDS,
     MAX_FREE_ALGEBRA_GENERATORS,
     MAX_FREE_ALGEBRA_GS_COMPOSITIONS,
     MAX_FREE_ALGEBRA_GS_PAIR_CHECKS,
@@ -92,6 +98,8 @@ from jacobian.math.free_algebras._models import (
     TruncatedFreeAlgebraQuotient,
     canonical_word_key,
 )
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
+from jacobian.math.logic.languages.regular.values import DFA, DFATransition
 
 
 def _reject_resource(location: tuple[str | int, ...], code: str, message: str) -> None:
@@ -634,6 +642,333 @@ def reverse_polynomial_antiautomorphism(
     return FreeAlgebraPolynomial.model_construct(
         alphabet=polynomial.alphabet, terms=canonical_terms
     )
+
+
+def _admit_factor_avoidance_inputs(
+    alphabet: tuple[str, ...],
+    forbidden_factors: tuple[tuple[str, ...], ...],
+) -> tuple[tuple[str, ...], tuple[tuple[str, ...], ...]]:
+    """Revalidate the canonical avoidance family without a transport request."""
+
+    if type(alphabet) is not tuple or any(
+        type(letter) is not str for letter in alphabet
+    ):
+        raise OperationDomainValidationError(
+            location=("alphabet",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the avoidance alphabet is not canonical",
+        )
+    if any(
+        not letter or len(letter) > MAX_FREE_ALGEBRA_LETTER_LENGTH
+        for letter in alphabet
+    ):
+        raise OperationDomainValidationError(
+            location=("alphabet",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the avoidance alphabet is not canonical",
+        )
+    if len(set(alphabet)) != len(alphabet):
+        raise OperationDomainValidationError(
+            location=("alphabet",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the avoidance alphabet is not canonical",
+        )
+    if type(forbidden_factors) is not tuple or any(
+        type(word) is not tuple or any(type(letter) is not str for letter in word)
+        for word in forbidden_factors
+    ):
+        raise OperationDomainValidationError(
+            location=("forbidden_factors",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the forbidden-factor family is not canonical",
+        )
+    if len(forbidden_factors) > MAX_FREE_ALGEBRA_FORBIDDEN_WORDS:
+        raise OperationDomainValidationError(
+            location=("forbidden_factors",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the forbidden-factor family is not canonical",
+        )
+    if any(
+        len(word) > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH for word in forbidden_factors
+    ):
+        raise OperationDomainValidationError(
+            location=("forbidden_factors",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the forbidden-factor family is not canonical",
+        )
+    if any(letter not in alphabet for word in forbidden_factors for letter in word):
+        raise OperationDomainValidationError(
+            location=("forbidden_factors",),
+            code="free_algebra.factor_avoidance_shape",
+            message="every forbidden factor must use the declared alphabet",
+        )
+    if sum(map(len, forbidden_factors)) > MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS:
+        raise OperationDomainValidationError(
+            location=("forbidden_factors",),
+            code="free_algebra.factor_avoidance_shape",
+            message="the forbidden-factor family is not canonical",
+        )
+    return alphabet, forbidden_factors
+
+
+def _contains_factor(word: tuple[int, ...], factor: tuple[int, ...]) -> bool:
+    return len(factor) <= len(word) and any(
+        word[start : start + len(factor)] == factor
+        for start in range(len(word) - len(factor) + 1)
+    )
+
+
+def _ends_with(word: tuple[int, ...], suffix: tuple[int, ...]) -> bool:
+    return len(suffix) <= len(word) and word[len(word) - len(suffix) :] == suffix
+
+
+def _minimal_forbidden_factors(
+    supplied: tuple[tuple[int, ...], ...], work_bound: int
+) -> tuple[tuple[int, ...], ...]:
+    ordered = sorted(set(supplied), key=lambda word: (len(word), word))
+    max_pattern_length = max(map(len, ordered), default=0)
+    if len(ordered) ** 2 * max_pattern_length**2 > work_bound:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_work_bound",
+            "forbidden-factor normalization exceeds the admitted work bound",
+        )
+    minimal: list[tuple[int, ...]] = []
+    for index, word in enumerate(ordered):
+        if index % 16 == 0:
+            request_checkpoint("during factor-avoidance normalization")
+        if not any(_contains_factor(word, factor) for factor in minimal):
+            minimal.append(word)
+    return tuple(sorted(minimal, key=lambda word: (len(word), word)))
+
+
+def _factor_avoidance_states(
+    patterns: tuple[tuple[int, ...], ...], state_bound: int
+) -> tuple[tuple[tuple[int, ...], ...], int, int, tuple[int, ...]]:
+    if patterns == ((),):
+        return (), 0, 1, ()
+    prefixes: set[tuple[int, ...]] = {()}
+    for word in patterns:
+        for length in range(len(word)):
+            prefixes.add(word[:length])
+    ordered_prefixes = tuple(sorted(prefixes, key=lambda word: (len(word), word)))
+    dead_state = len(ordered_prefixes)
+    state_count = dead_state + (1 if patterns else 0)
+    if state_count > state_bound:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_state_bound",
+            f"factor-avoidance DFA exceeds the {state_bound}-state carrier bound",
+        )
+    return ordered_prefixes, dead_state, state_count, tuple(range(dead_state))
+
+
+def _preflight_factor_prefix_states(
+    patterns: tuple[tuple[int, ...], ...],
+    state_bound: int,
+    prefix_candidate_bound: int,
+) -> int:
+    """Admit a conservative prefix bound, then count trie nodes without expansion.
+
+    The length sum bounds every distinct proper-prefix node. Because
+    ``patterns`` is a factor antichain, it is also prefix-free; adjacent words
+    in lexical order therefore give the exact number of shared proper-prefix
+    nodes from their lengths and longest common prefixes.
+    """
+
+    if patterns == ((),):
+        return 1
+    prefix_upper_bound = 1 + sum(max(0, len(word) - 1) for word in patterns)
+    state_upper_bound = prefix_upper_bound + (1 if patterns else 0)
+    if state_upper_bound > prefix_candidate_bound:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_prefix_bound",
+            "factor-avoidance prefix candidates exceed the admitted intermediate bound",
+        )
+
+    prefix_count = 1
+    previous: tuple[int, ...] | None = None
+    for word in sorted(patterns):
+        common = 0
+        if previous is not None:
+            limit = min(len(previous), len(word))
+            while common < limit and previous[common] == word[common]:
+                common += 1
+        prefix_count += max(0, len(word) - 1 - common)
+        previous = word
+    predicted_states = prefix_count + (1 if patterns else 0)
+    if predicted_states > state_bound:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_state_bound",
+            f"factor-avoidance DFA exceeds the {state_bound}-state carrier bound",
+        )
+    return predicted_states
+
+
+def _factor_avoidance_target(
+    prefix: tuple[int, ...],
+    symbol: int,
+    patterns: tuple[tuple[int, ...], ...],
+    prefix_index: dict[tuple[int, ...], int],
+    dead_state: int,
+    max_prefix_length: int,
+) -> int:
+    candidate = (*prefix, symbol)
+    if any(_ends_with(candidate, pattern) for pattern in patterns):
+        return dead_state
+    for length in range(min(len(candidate), max_prefix_length), -1, -1):
+        suffix = candidate[-length:] if length else ()
+        if suffix in prefix_index:
+            return prefix_index[suffix]
+    return 0
+
+
+def _factor_avoidance_transitions(
+    prefixes: tuple[tuple[int, ...], ...],
+    patterns: tuple[tuple[int, ...], ...],
+    alphabet_size: int,
+    dead_state: int,
+) -> tuple[DFATransition, ...]:
+    if patterns == ((),):
+        return tuple(
+            DFATransition(source=0, symbol=symbol, target=0)
+            for symbol in range(alphabet_size)
+        )
+    prefix_index = {word: index for index, word in enumerate(prefixes)}
+    max_prefix_length = max(map(len, prefixes), default=0)
+    transitions: list[DFATransition] = []
+    for state, prefix in enumerate(prefixes):
+        if state % 16 == 0:
+            request_checkpoint("during factor-avoidance transition construction")
+        for symbol in range(alphabet_size):
+            transitions.append(
+                DFATransition(
+                    source=state,
+                    symbol=symbol,
+                    target=_factor_avoidance_target(
+                        prefix,
+                        symbol,
+                        patterns,
+                        prefix_index,
+                        dead_state,
+                        max_prefix_length,
+                    ),
+                )
+            )
+    if patterns:
+        transitions.extend(
+            DFATransition(source=dead_state, symbol=symbol, target=dead_state)
+            for symbol in range(alphabet_size)
+        )
+    return tuple(transitions)
+
+
+def factor_avoidance_dfa(
+    alphabet: tuple[str, ...],
+    forbidden_factors: tuple[tuple[str, ...], ...],
+) -> DFA:
+    """Build the total DFA for words avoiding a finite set of contiguous factors.
+
+    States record the longest suffix of the scanned word that is a proper
+    prefix of a forbidden factor. A sink records that a forbidden factor has
+    occurred. Generator labels map to DFA symbols by their declared alphabet
+    rank. No quotient or Gröbner-completion claim is made.
+    """
+
+    alphabet, forbidden_factors = _admit_factor_avoidance_inputs(
+        alphabet, forbidden_factors
+    )
+    supplied = tuple(
+        tuple(alphabet.index(letter) for letter in word) for word in forbidden_factors
+    )
+    supplied_letter_count = sum(map(len, supplied))
+    if (
+        len(supplied) > MAX_FREE_ALGEBRA_FORBIDDEN_WORDS
+        or supplied_letter_count > MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS
+    ):
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_input_bound",
+            "forbidden-factor input exceeds the admitted family or letter bound",
+        )
+
+    # Canonicalize the family to its unique minimal factor antichain. Removing
+    # a word that contains another forbidden word preserves exactly the same
+    # avoidance language.
+    minimal_tuple = _minimal_forbidden_factors(
+        supplied, MAX_FREE_ALGEBRA_FACTOR_DFA_WORK
+    )
+    canonical_source_patterns = tuple(
+        sorted(set(supplied), key=lambda word: (len(word), word))
+    )
+    labels = tuple(alphabet)
+    predicted_state_count = _preflight_factor_prefix_states(
+        minimal_tuple,
+        MAX_FREE_ALGEBRA_FACTOR_DFA_STATES,
+        MAX_FREE_ALGEBRA_FACTOR_DFA_PREFIX_CANDIDATES,
+    )
+    state_prefixes, dead_state, state_count, accepting = _factor_avoidance_states(
+        minimal_tuple, MAX_FREE_ALGEBRA_FACTOR_DFA_STATES
+    )
+    if state_count != predicted_state_count:
+        raise RuntimeError("factor-avoidance prefix preflight disagrees with trie size")
+    alphabet_size = len(labels)
+    transition_count = state_count * alphabet_size
+    if transition_count > 4096:
+        _reject_resource(
+            ("alphabet",),
+            "factor_avoidance_transition_bound",
+            "factor-avoidance DFA exceeds the regular-language transition bound",
+        )
+    max_prefix_length = max(map(len, state_prefixes), default=0)
+    minimal_letter_count = sum(map(len, minimal_tuple))
+    transition_work = transition_count * (
+        minimal_letter_count + len(state_prefixes) * max_prefix_length + 1
+    )
+    total_work = (
+        len(supplied) ** 2 * max((len(word) for word in supplied), default=0) ** 2
+        + transition_work
+    )
+    if total_work > MAX_FREE_ALGEBRA_FACTOR_DFA_WORK:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_work_bound",
+            "factor-avoidance DFA construction exceeds the admitted work bound",
+        )
+    output_cells = (
+        sum(map(len, labels))
+        + sum(len(labels[rank]) for word in canonical_source_patterns for rank in word)
+        + 24 * len(canonical_source_patterns)
+        + transition_count * 48
+        + state_count * 24
+        + 256
+    )
+    if output_cells > MAX_FREE_ALGEBRA_FACTOR_DFA_OUTPUT_CELLS:
+        _reject_resource(
+            ("forbidden_factors",),
+            "factor_avoidance_output_bound",
+            "factor-avoidance DFA exceeds the admitted output allocation",
+        )
+
+    transitions = _factor_avoidance_transitions(
+        state_prefixes,
+        minimal_tuple,
+        alphabet_size,
+        dead_state,
+    )
+    initial_state = 0
+
+    dfa = DFA(
+        state_count=state_count,
+        alphabet_size=alphabet_size,
+        alphabet=FiniteAlphabet(symbols=labels) if labels else None,
+        transitions=tuple(transitions),
+        initial_state=initial_state,
+        accepting_states=accepting,
+    )
+    return dfa
 
 
 def _admit_substitution_images(
@@ -2406,6 +2741,7 @@ def truncated_quotient_algebra(
 __all__ = [
     "compare_words",
     "concatenate_words",
+    "factor_avoidance_dfa",
     "groebner_shirshov_through_degree",
     "ideal_degree_component",
     "ideal_generated_prefix",

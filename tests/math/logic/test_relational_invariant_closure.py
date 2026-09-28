@@ -12,10 +12,12 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
-    RelationalInvariantClosureRequest,
     RelationalPolymorphism,
     close_relation_under_polymorphisms,
     operations,
+)
+from jacobian.math.logic.relational_structures._models import (
+    RelationalInvariantClosureRequest,
 )
 
 

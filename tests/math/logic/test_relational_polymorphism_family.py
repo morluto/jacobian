@@ -10,10 +10,12 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
-    RelationalPolymorphismEnumerationRequest,
     RelationalPolymorphismFamily,
     enumerate_polymorphisms,
     operations,
+)
+from jacobian.math.logic.relational_structures._models import (
+    RelationalPolymorphismEnumerationRequest,
 )
 
 

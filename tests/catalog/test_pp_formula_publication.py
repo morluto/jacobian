@@ -11,6 +11,8 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.relational_structures import (
     PPDefinedRelation,
+)
+from jacobian.math.logic.relational_structures._models import (
     PPFormulaEvaluationRequest,
 )
 

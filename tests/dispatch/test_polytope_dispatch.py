@@ -79,7 +79,6 @@ def test_dispatch_rejects_a_profile_beyond_the_facet_cap_as_invalid_request() ->
 
     assert exc_info.value.errors()[0]["type"] == "polytope.facet_profile_not_admitted"
 
-
 def test_dispatch_admits_the_seven_simplex_with_interior_rows_at_the_cap_budget() -> (
     None
 ):

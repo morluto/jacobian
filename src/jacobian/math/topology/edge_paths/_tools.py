@@ -54,7 +54,7 @@ def _presentation_abelianization(
 
 
 def _free_reduce_word(request: FreeReductionRequest) -> FiniteGroupWord:
-    return free_reduce(request)
+    return free_reduce(request.generator_count, request.letters)
 
 
 def _fundamental_group(

@@ -27,6 +27,11 @@ def _request(letters: tuple[tuple[int, int], ...]) -> FreeReductionRequest:
     )
 
 
+def _reduce(request: FreeReductionRequest):
+    """Call the native free_reduce with unpacked domain arguments."""
+    return free_reduce(request.generator_count, request.letters)
+
+
 def _stack_oracle(
     letters: tuple[tuple[int, int], ...],
 ) -> tuple[tuple[int, int], ...]:
@@ -47,7 +52,7 @@ def _pairs(word: FiniteGroupWord) -> tuple[tuple[int, int], ...]:
 def test_free_reduction_matches_exact_oracle_exhaustively() -> None:
     for length in range(8):
         for letters in itertools.product(_ALPHABET, repeat=length):
-            result = free_reduce(_request(letters))
+            result = _reduce(_request(letters))
             assert _pairs(result) == _stack_oracle(letters)
 
 
@@ -58,18 +63,16 @@ def test_free_reduction_is_idempotent_and_commutes_with_word_inverse() -> None:
         ((0, 1), (1, -1), (1, 1), (0, -1)),
         ((0, 1), (0, 1), (0, -1), (1, -1), (1, 1)),
     ):
-        reduced = free_reduce(_request(letters))
+        reduced = _reduce(_request(letters))
         assert (
-            free_reduce(
-                FreeReductionRequest(generator_count=2, letters=reduced.letters)
-            )
+            _reduce(FreeReductionRequest(generator_count=2, letters=reduced.letters))
             == reduced
         )
 
         inverse_letters = tuple(
             (generator, -sign) for generator, sign in reversed(letters)
         )
-        reduced_inverse = free_reduce(_request(inverse_letters))
+        reduced_inverse = _reduce(_request(inverse_letters))
         expected_inverse = tuple(
             (generator, -sign) for generator, sign in reversed(_pairs(reduced))
         )
@@ -92,14 +95,12 @@ def test_free_reduction_catalog_operation_and_serialized_result() -> None:
 
 
 def test_free_reduction_empty_and_maximum_words() -> None:
-    assert (
-        free_reduce(FreeReductionRequest(generator_count=0, letters=())).letters == ()
-    )
+    assert _reduce(FreeReductionRequest(generator_count=0, letters=())).letters == ()
     maximum = FreeReductionRequest(
         generator_count=1,
         letters=tuple(WordLetter(generator=0, exponent=1) for _ in range(128)),
     )
-    assert len(free_reduce(maximum).letters) == 128
+    assert len(_reduce(maximum).letters) == 128
     with pytest.raises(ValidationError):
         FreeReductionRequest(
             generator_count=1,

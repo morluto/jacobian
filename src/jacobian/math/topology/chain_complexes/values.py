@@ -123,11 +123,9 @@ class _ChainCoefficientEncoding:
 
         def require_native(value: int | Fraction) -> int | Fraction:
             if type(value) is int:
-                components: tuple[int, ...] = (
-                    _bounded_integer_digits(value, self.max_digits),
-                )
+                digits = _bounded_integer_digits(value, self.max_digits)
             elif type(value) is Fraction:
-                components = (
+                digits = max(
                     _bounded_integer_digits(value.numerator, self.max_digits),
                     _bounded_integer_digits(value.denominator, self.max_digits),
                 )
@@ -136,7 +134,7 @@ class _ChainCoefficientEncoding:
                     "chain_complex.entry_type",
                     "chain coefficients must be native integers or Fractions",
                 )
-            if max(components, default=1) > self.max_digits:
+            if digits > self.max_digits:
                 raise PydanticCustomError(
                     "chain_complex.entry_digit_bound_exceeded",
                     "chain coefficient exceeds the decimal digit bound",
@@ -622,7 +620,6 @@ HomologyGroup = Annotated[
     HomologyGroupValue | IntegralHomologyGroupValue,
     Field(discriminator="kind"),
 ]
-
 
 def _require_integral_group_source_binding(
     source: ChainComplexValue,

@@ -65,9 +65,18 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"link_diagram.{reason}", message)
 
 
-MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES = 8 * 1024 * 1024
-MAX_LINK_SIGNATURE_OUTPUT_BYTES = 2 * 1024 * 1024
 MAX_LINK_SIGNATURE_WORK = 50_000_000
+# The signature result retains the admitted diagram, its Goeritz matrix over
+# canonical rationals, and the inertia triple. Count those as materialization
+# cells (label characters, structural entries, matrix cells, and rational
+# components) so admission depends on the value's own cardinality.
+MAX_LINK_SIGNATURE_OUTPUT_CELLS = (
+    _MAX_LINK_DIAGRAM_LABEL_CELLS
+    + _MAX_LINK_DIAGRAM_STRUCTURAL_CELLS
+    + 4 * MAX_LINK_SIGNATURE_CROSSINGS**2
+    + 8 * MAX_LINK_SIGNATURE_CROSSINGS
+    + 256
+)
 
 
 class CheckerboardRegion(StrictModel):
@@ -271,8 +280,7 @@ class LinkSignatureResult(StrictModel):
     @model_validator(mode="after")
     def require_source_bound_signature(self) -> Self:
         goeritz_data = self.goeritz_data
-        graph = goeritz_data.blackboard_graph if goeritz_data is not None else None
-        if graph is None:
+        if goeritz_data is None:
             if self.diagram.crossings or not self.diagram.free_loops:
                 raise _validation_error(
                     "signature_empty_projection",
@@ -280,12 +288,11 @@ class LinkSignatureResult(StrictModel):
                 )
             matrix_entries: tuple[tuple[int, ...], ...] = ()
         else:
-            if graph.diagram != self.diagram:
+            if goeritz_data.blackboard_graph.diagram != self.diagram:
                 raise _validation_error(
                     "signature_diagram_source",
                     "Goeritz data must retain the exact signature source diagram",
                 )
-            assert goeritz_data is not None
             matrix_entries = goeritz_data.reduced_matrix.entries
         expected_rational = RationalMatrix(
             entries=tuple(
@@ -308,7 +315,7 @@ class LinkSignatureResult(StrictModel):
                 "correction rows must cover the complete diagram crossing axis",
             )
         correction = 0
-        edges = () if graph is None else graph.edges
+        edges = () if goeritz_data is None else goeritz_data.blackboard_graph.edges
         for crossing, edge, row in zip(
             self.diagram.crossings, edges, self.correction_contributions, strict=True
         ):
@@ -1032,7 +1039,7 @@ __all__ = [
     "MAX_BRAID_WORD_LENGTH",
     "MAX_LINK_CROSSINGS",
     "MAX_LINK_SIGNATURE_CROSSINGS",
-    "MAX_LINK_SIGNATURE_OUTPUT_BYTES",
+    "MAX_LINK_SIGNATURE_OUTPUT_CELLS",
     "MAX_LINK_SIGNATURE_WORK",
     "MAX_WIRTINGER_GENERATORS",
     "AlexanderPolynomialRequest",

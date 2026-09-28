@@ -31,7 +31,7 @@ from jacobian.math.topology.links._extensions_models import (
     MAX_CONWAY_OUTPUT_CELLS,
     MAX_LINK_CROSSINGS,
     MAX_LINK_SIGNATURE_CROSSINGS,
-    MAX_LINK_SIGNATURE_OUTPUT_BYTES,
+    MAX_LINK_SIGNATURE_OUTPUT_CELLS,
     MAX_LINK_SIGNATURE_WORK,
     MAX_STATE_CIRCLE_CROSSINGS,
     MAX_STATE_CIRCLE_OUTPUT_CELLS,
@@ -669,13 +669,28 @@ def link_signature(diagram: OrientedLinkDiagram) -> LinkSignatureResult:
     inertia_work_bound = 4 * dimension**3 * minor_digits_bound
     if inertia_work_bound > MAX_LINK_SIGNATURE_WORK:
         raise RuntimeError("link signature inertia envelope is inconsistent")
-    diagram_bytes = len(admitted.model_dump_json(warnings=False).encode("utf-8"))
-    output_bound = 4 * diagram_bytes + 1_024 * crossing_count**2 + 4_096
-    if output_bound > MAX_LINK_SIGNATURE_OUTPUT_BYTES:
+    # Count the retained value's own materialization cells: the admitted
+    # diagram's labels and structure, the Goeritz matrix over canonical
+    # rationals, and the inertia triple. Entry magnitude is already bounded
+    # by the admitted minor-digit envelope, so cells decide admission.
+    label_cells = sum(
+        len(crossing.crossing_id) for crossing in admitted.crossings
+    ) + sum(
+        len(dart) for crossing in admitted.crossings for dart in crossing.half_edges
+    )
+    diagram_cells = (
+        len(admitted.crossings)
+        + len(admitted.arcs)
+        + admitted.free_loops
+        + 4 * len(admitted.crossings)
+        + label_cells
+    )
+    output_cells = diagram_cells + 2 * dimension**2 + 2 * dimension + 256
+    if output_cells > MAX_LINK_SIGNATURE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("diagram",),
             code="link_diagram.signature_output_bound",
-            message="link signature result exceeds its conservative output envelope",
+            message="link signature result exceeds its materialization-cell bound",
         )
 
     goeritz_data = (

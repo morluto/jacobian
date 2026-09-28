@@ -10,8 +10,10 @@ from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.catalog import Catalog
 from jacobian.dispatch import invoke_operation
 from jacobian.math.logic.relational_structures import (
-    RelationalPolymorphismEnumerationRequest,
     RelationalPolymorphismFamily,
+)
+from jacobian.math.logic.relational_structures._models import (
+    RelationalPolymorphismEnumerationRequest,
 )
 
 

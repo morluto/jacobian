@@ -40,6 +40,7 @@ from jacobian.math.quantum._models import (
     StabilizerCodeValue,
     StabilizerDistanceResult,
     StabilizerErasureCorrectabilityResult,
+    StabilizerErrorCoset,
     StabilizerErrorEquivalenceResult,
     StabilizerMeasurementBranch,
     StabilizerStatePauliMeasurementResult,
@@ -1248,6 +1249,86 @@ def stabilizer_syndrome(
         check_space=CheckSpaceValue(register=register, basis=canonical_basis),
         error=error,
         syndrome=syndrome,
+    )
+
+
+def stabilizer_error_coset(
+    check_space: CheckSpaceValue,
+    error: PhaseFreeQubitPauli,
+) -> StabilizerErrorCoset:
+    """Return the unique RREF-reduced representative of ``error + S``."""
+    if not isinstance(check_space, CheckSpaceValue):
+        _reject(
+            "check_space",
+            "quantum.stabilizer.not_a_check_space",
+            "error-coset projection requires a typed register-bound check space",
+        )
+    register = _admit_register(
+        getattr(check_space, "qubit_register", None), "check_space"
+    )
+    basis_value = getattr(check_space, "basis", None)
+    if not isinstance(basis_value, tuple) or len(basis_value) > MAX_CHECK_ROWS:
+        _reject(
+            "check_space",
+            "quantum.stabilizer.invalid_basis",
+            "check-space basis is malformed",
+        )
+    basis = tuple(basis_value)
+    rows: list[list[int]] = []
+    for check_row in basis:
+        _admit_phase_free(check_row, "check_space")
+        if check_row.qubit_register != register:
+            _reject(
+                "check_space",
+                "quantum.stabilizer.parent_mismatch",
+                "all check rows must use the declared register",
+            )
+        rows.append([*check_row.x_bits, *check_row.z_bits])
+    n = len(register.qubit_ids)
+    for i, left_bits in enumerate(rows):
+        for right_bits in rows[i + 1 :]:
+            if _symplectic_pairing(left_bits, right_bits, n):
+                _reject(
+                    "check_space",
+                    "quantum.stabilizer.not_isotropic",
+                    "error-coset check space must be symplectically isotropic",
+                )
+    if not isinstance(error, PhaseFreeQubitPauli):
+        _reject(
+            "error",
+            "quantum.pauli.not_a_pauli",
+            "error must be a typed phase-free Pauli",
+        )
+    _admit_phase_free(error, "error")
+    if error.qubit_register != register:
+        _reject(
+            "error",
+            "quantum.pauli.register_mismatch",
+            "error and check space must use the identical ordered register",
+        )
+    canonical, pivots = _gf2_rref(rows, 2 * n)
+    residual = [*error.x_bits, *error.z_bits]
+    for basis_row, pivot in zip(canonical, pivots, strict=True):
+        if residual[pivot]:
+            residual = [(a + b) % 2 for a, b in zip(residual, basis_row, strict=True)]
+    canonical_space = CheckSpaceValue(
+        register=register,
+        basis=tuple(
+            PhaseFreeQubitPauli(
+                register=register,
+                x_bits=tuple(canonical_row[:n]),
+                z_bits=tuple(canonical_row[n:]),
+            )
+            for canonical_row in canonical
+        ),
+    )
+    representative = PhaseFreeQubitPauli(
+        register=register,
+        x_bits=tuple(residual[:n]),
+        z_bits=tuple(residual[n:]),
+    )
+    return StabilizerErrorCoset._from_kernel(
+        check_space=canonical_space, representative=representative
     )
 
 

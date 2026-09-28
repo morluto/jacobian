@@ -5,7 +5,11 @@ from typing import Any
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
 from jacobian.math.koszul.dga_operations import module_koszul_dga
+from jacobian.math.koszul.homology_map import (
+    koszul_homology_map,
+)
 from jacobian.math.koszul.module_models import (
+    ModuleKoszulChainMap,
     ModuleKoszulComplex,
     ModuleKoszulDGA,
     ModuleKoszulDGARequest,
@@ -15,10 +19,17 @@ from jacobian.math.koszul.module_models import (
     ModuleKoszulDirectSumValue,
     ModuleKoszulExactnessProfile,
     ModuleKoszulHomology,
+    ModuleKoszulHomologyMap,
+    ModuleKoszulHomologyMapRequest,
     ModuleKoszulHomologyRequest,
+    ModuleKoszulMapRequest,
     ModuleKoszulRequest,
+    ModuleKoszulSequenceLinearChange,
+    ModuleKoszulSequenceLinearChangeRequest,
     ModuleKoszulSequencePermutation,
     ModuleKoszulSequencePermutationRequest,
+    ModuleKoszulTopHomology,
+    ModuleKoszulTopHomologyRequest,
     ModuleKoszulUnitContraction,
     ModuleKoszulUnitContractionRequest,
     ModuleKoszulZeroExtension,
@@ -32,8 +43,11 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_direct_sum,
     module_koszul_exactness_profile,
     module_koszul_homology,
+    module_koszul_map,
     module_koszul_quotient,
+    module_koszul_sequence_linear_change,
     module_koszul_sequence_permute,
+    module_koszul_top_homology,
     module_koszul_unit_contract,
 )
 from jacobian.math.koszul.operations import koszul_complex
@@ -455,6 +469,197 @@ TOOLS: MathTools = (
                 name="quotient_by_unit",
                 description="The unit generates the whole module, so the degree-zero quotient is the zero module.",
                 input=_MODULE_EXAMPLE,
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.homology_map.compute",
+        title="Induce exact maps on finite-module Koszul homology",
+        description=(
+            "Revalidate a typed module-induced Koszul chain map and compute its "
+            "exact matrices on every homology group in the returned canonical "
+            "homology bases. Combined chain-basis size and rational coefficient "
+            "growth, exact quotient-coordinate work, and aggregate output use a "
+            "deliberately small finite envelope; output includes the source and "
+            "target homology bases for interpreting coordinates."
+        ),
+        request_type=ModuleKoszulHomologyMapRequest,
+        result_type=ModuleKoszulHomologyMap,
+        run=koszul_homology_map,
+        tags=("koszul", "homology", "chain-map", "exact"),
+        discovery_terms=(
+            "induced map on Koszul homology",
+            "functoriality of Koszul homology",
+            "module map homology matrix",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_on_degree_zero_homology",
+                description="The identity map of QQ induces the identity on H0 of the empty-sequence complex.",
+                input={
+                    "chain_map": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "source": _MODULE_EXAMPLE["module"],
+                        "target": _MODULE_EXAMPLE["module"],
+                        "sequence": [],
+                        "module_map": [[{"num": "1", "den": "1"}]],
+                        "source_complex": {
+                            "algebra": _MODULE_EXAMPLE["algebra"],
+                            "module": _MODULE_EXAMPLE["module"],
+                            "sequence": [],
+                            "basis_sizes": [1],
+                            "differentials": [],
+                            "square_zero": True,
+                        },
+                        "target_complex": {
+                            "algebra": _MODULE_EXAMPLE["algebra"],
+                            "module": _MODULE_EXAMPLE["module"],
+                            "sequence": [],
+                            "basis_sizes": [1],
+                            "differentials": [],
+                            "square_zero": True,
+                        },
+                        "degree_maps": [
+                            {
+                                "row_count": 1,
+                                "column_count": 1,
+                                "entries": [[0, 0, {"num": "1", "den": "1"}]],
+                            }
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.module_map.compute",
+        title="Induce a map between finite-module Koszul complexes",
+        description=(
+            "Check an exact QQ-linear map is a homomorphism over the supplied "
+            "finite commutative algebra, then return its degreewise induced "
+            "chain map between Koszul complexes on the same ordered sequence. "
+            "Action checks, wedge axes, chain-map equations, work, and output "
+            "are bounded before publication."
+        ),
+        request_type=ModuleKoszulMapRequest,
+        result_type=ModuleKoszulChainMap,
+        run=module_koszul_map,
+        tags=("koszul", "module", "chain-map", "exact"),
+        discovery_terms=(
+            "module homomorphism induces map on Koszul complexes",
+            "functoriality of Koszul homology",
+            "chain map from a module map",
+        ),
+        examples=(
+            OperationExample(
+                name="identity_module_map",
+                description="The identity of a one-dimensional module induces identity maps in every Koszul degree.",
+                input={
+                    "algebra": _MODULE_EXAMPLE["algebra"],
+                    "source": _MODULE_EXAMPLE["module"],
+                    "target": _MODULE_EXAMPLE["module"],
+                    "sequence": _MODULE_EXAMPLE["sequence"],
+                    "map_matrix": [[{"num": "1", "den": "1"}]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.sequence_linear_change.compute",
+        title="Change a finite-module Koszul sequence by an invertible rational matrix",
+        description=(
+            "For target entry g_j = sum_i C[j,i] f_i, construct K(g) and return "
+            "the induced exterior-power chain isomorphisms K(f) <-> K(g). "
+            "The input is an exact square rational matrix; singular changes and "
+            "requests exceeding scalar, work, or output admission are rejected. "
+            "The source differential is checked against its retained algebra, "
+            "module action, and sequence before transport."
+        ),
+        request_type=ModuleKoszulSequenceLinearChangeRequest,
+        result_type=ModuleKoszulSequenceLinearChange,
+        run=module_koszul_sequence_linear_change,
+        tags=("koszul", "sequence", "linear-change", "chain-isomorphism", "exact"),
+        discovery_terms=(
+            "Koszul sequence recombination",
+            "invertible change of Koszul generators",
+            "Koszul complex isomorphism",
+        ),
+        examples=(
+            OperationExample(
+                name="shear_two_generators",
+                description="Apply a rational shear to the sequence (1, 0) over QQ.",
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": [
+                            [{"num": "1", "den": "1"}],
+                            [{"num": "0", "den": "1"}],
+                        ],
+                        "basis_sizes": [1, 2, 1],
+                        "differentials": [
+                            {
+                                "row_count": 1,
+                                "column_count": 2,
+                                "entries": [[0, 0, {"num": "1", "den": "1"}]],
+                            },
+                            {
+                                "row_count": 2,
+                                "column_count": 1,
+                                "entries": [[1, 0, {"num": "1", "den": "1"}]],
+                            },
+                        ],
+                        "square_zero": True,
+                    },
+                    "change_matrix": [
+                        [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        [
+                            {"num": "0", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.koszul.top_homology.compute",
+        title="Compute top Koszul homology as a module annihilator",
+        description=(
+            "Compute H_r(f; M) in the canonical top wedge coordinates and "
+            "identify it with the simultaneous annihilator {m in M: f_i m=0 "
+            "for every i}. The operation admits and reconstructs only the "
+            "top differential; the empty sequence returns M as H_0."
+        ),
+        request_type=ModuleKoszulTopHomologyRequest,
+        result_type=ModuleKoszulTopHomology,
+        run=module_koszul_top_homology,
+        tags=("koszul", "top-homology", "annihilator", "exact"),
+        discovery_terms=(
+            "top Koszul homology",
+            "simultaneous annihilator of a sequence on a module",
+            "common kernel of Koszul sequence actions",
+        ),
+        examples=(
+            OperationExample(
+                name="empty_sequence_top_homology",
+                description=(
+                    "For the empty sequence the top degree is zero and "
+                    "H_0 is the whole one-dimensional module."
+                ),
+                input={
+                    "complex": {
+                        "algebra": _MODULE_EXAMPLE["algebra"],
+                        "module": _MODULE_EXAMPLE["module"],
+                        "sequence": [],
+                        "basis_sizes": [1],
+                        "differentials": [],
+                        "square_zero": True,
+                    }
+                },
             ),
         ),
     ),

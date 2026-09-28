@@ -101,6 +101,17 @@ and output bounds apply. Acyclicity is a statement about this finite complex;
 it does not by itself label the sequence regular under a module convention or
 after localization/base change.
 
+`homological.koszul.top_homology.compute` returns `H_r(f; M)` in the unique
+top exterior coordinate and identifies it with the simultaneous annihilator
+`{m in M : f_i m = 0 for every i}`. The producer reconstructs the top
+differential from the retained module actions before using this identity, so a
+caller-supplied square-zero matrix that is not the sequence-derived Koszul
+differential is rejected. The empty sequence has top degree zero and returns
+all of `M`. The result retains the algebra, module, sequence, and top
+differential needed to interpret both bases. Admission bounds that source
+context and the one top-kernel elimination; it does not compute the lower
+homology groups.
+
 `homological.koszul.sequence_permute.compute` uses `new_to_old[j]` to specify
 which source entry occupies target position `j`. It constructs the target
 sequence in that order and returns source-to-target and inverse chain maps in
@@ -112,6 +123,16 @@ action, verifies both chain-map equations and inverse maps, and admits the
 doubled complexes and map tables before reconstruction. In particular,
 transposing two sequence entries acts by `-1` on the top exterior power; equal
 sequence elements are still separate ordered generators.
+
+`homological.koszul.sequence_linear_change.compute` accepts an exact rational
+matrix `C` and defines target entries by `g_j = sum_i C[j,i] f_i`. It requires
+`C` to be invertible over `QQ`, then returns both complexes and degreewise
+inverse chain maps. The source-to-target map is the exterior power of
+`C^{-1}`; the reverse map is the exterior power of `C`, and both act as the
+identity on the module factor. Admission bounds determinant and exterior-map
+coefficient growth, exact work, and retained map size before constructing the
+maps. This is the finite-module form of the change-of-generators isomorphism
+for Koszul complexes ([Stacks Project, Lemma 15.29.4](https://stacks.math.columbia.edu/tag/0621)).
 
 `homological.koszul.unit_contraction.compute` accepts a selected sequence
 entry only when it is a unit in the retained finite algebra. It returns that
@@ -129,3 +150,46 @@ the original complex and its degree shift. The shifted summand has differential
 `-d`, as required by the homological shift convention. The operation checks
 both chain-map identities and the direct-sum splitting on every basis vector.
 The extended sequence remains within the finite-module length limit.
+
+`homological.koszul.module_map.compute` takes an exact matrix from a based
+finite module `M` to another `N` over the same algebra, with rows indexed by
+the target basis and columns by the source basis. It checks the module-map
+equations `phi A_i = B_i phi` for every algebra basis action, then returns the
+source and target complexes on the same ordered sequence and the induced map
+`id_(wedge^k) tensor phi` in each degree. The producer checks each chain square
+`d_N phi_k = phi_(k-1) d_M`; the operation admits the aggregate wedge maps,
+action checks, differential products, and serialized result before expanding
+them. This is the finite exact form of the usual functoriality of Koszul
+complexes in the coefficient module; see [Hochster's commutative algebra lecture notes](https://dept.math.lsa.umich.edu/~hochster/615W12/615W12.pdf) and the [Stacks Project's functoriality lemma for Koszul complexes](https://stacks.math.columbia.edu/tag/0621).
+
+The returned value binds both complexes and the original module map. Its JSON
+decoder checks axes and parent bindings but does not repeat the module-linearity
+or chain-square computation. A future consumer of a caller-supplied decoded
+map must check the relations it relies on. Current bounds are sequence length
+6, module dimensions 8, at most 4,096 aggregate degree-map cells, 2,000,000
+estimated exact work units, and 8 MiB estimated output. Coefficient growth in
+module-linearity, algebra-action, and chain-square checks is bounded before
+exact arithmetic. The coefficient domain remains `QQ`.
+
+`homological.koszul.homology_map.compute` consumes this typed chain map and
+reconstructs it from its retained module map, rechecking module-linearity and
+every chain square before using it. The operation computes exact homology for
+both complexes and applies each chain matrix to the source homology basis. It
+then expresses each image in the target's boundary-plus-homology basis and
+returns the homology coordinates. Matrices use target homology classes as rows
+and source classes as columns; the result retains both full homology values so
+those coordinates are interpretable after serialization. This is the ordinary
+functorial map `ker(d)/im(d) -> ker(d')/im(d')` induced by a chain map; see the
+[Stacks Project definition and functoriality of homology](https://stacks.math.columbia.edu/tag/010V).
+
+The initial induced-map envelope caps the combined source and target chain-basis
+count at 8, each reconstructed differential or degree-map rational component at
+8 decimal digits, the exact quotient-coordinate work estimate at `2^40`, and
+the aggregate retained homology and induced-map output at 8 MiB. These estimates
+are computed from the complexes rebuilt from the retained modules and sequence,
+after the supplied chain map is reconstructed and checked, and before either
+homology elimination or quotient-coordinate expansion. This smaller bound
+reflects the additional exact quotient-coordinate solve; standalone
+construction and homology keep their larger envelopes. As with the other
+decoded Koszul values, shape checks alone do not authenticate producer history:
+this operation explicitly checks the module and chain-map relations it uses.

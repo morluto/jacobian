@@ -701,6 +701,20 @@ class PauliFamilyCommutationResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        family: tuple[PauliFamilyEntry, ...],
+        *,
+        commutation_matrix: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Retain the admitted family axis alongside its exact matrix."""
+
+        return cls(
+            source=PauliFamilyCommutationRequest(family=family),
+            commutation_matrix=commutation_matrix,
+        )
+
 
 class CheckSpaceValue(StrictModel):
     model_config = ConfigDict(populate_by_name=True)
@@ -1242,14 +1256,18 @@ class CSSDistanceResult(StrictModel):
                     "a code with no logical qubits has no logical distances",
                 )
             return self
-        if any(
-            value is None
-            for value in (
-                self.x_distance,
-                self.x_representative,
-                self.z_distance,
-                self.z_representative,
-            )
+        # Bind the four exact sectors to locals so the established failure below
+        # also narrows them for the representative checks; the check itself is
+        # the same "every sector is present" condition as before.
+        x_distance = self.x_distance
+        x_representative = self.x_representative
+        z_distance = self.z_distance
+        z_representative = self.z_representative
+        if (
+            x_distance is None
+            or x_representative is None
+            or z_distance is None
+            or z_representative is None
         ):
             raise _validation_error(
                 "css_distance_missing_sector",
@@ -1257,10 +1275,9 @@ class CSSDistanceResult(StrictModel):
             )
         register = self.css_check_space.qubit_register
         for distance, representative, role in (
-            (self.x_distance, self.x_representative, "x"),
-            (self.z_distance, self.z_representative, "z"),
+            (x_distance, x_representative, "x"),
+            (z_distance, z_representative, "z"),
         ):
-            assert distance is not None and representative is not None
             if (
                 representative.qubit_register != register
                 or representative.weight != distance
@@ -1384,6 +1401,32 @@ class StabilizerErasureCorrectabilityResult(StrictModel):
                     "logical witness must be supported inside the erasure",
                 )
         return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        check_space: CheckSpaceValue,
+        *,
+        erased_qubit_ids: tuple[QubitId, ...],
+        supported_normalizer_dimension: int,
+        supported_stabilizer_dimension: int,
+        supported_logical_dimension: int,
+        correctable: bool,
+        witness: PhaseFreeQubitPauli | None,
+    ) -> Self:
+        """Retain the canonical erasure source beside its exact criterion."""
+
+        return cls(
+            source=StabilizerErasureCorrectabilityRequest(
+                check_space=check_space,
+                erased_qubit_ids=erased_qubit_ids,
+            ),
+            supported_normalizer_dimension=supported_normalizer_dimension,
+            supported_stabilizer_dimension=supported_stabilizer_dimension,
+            supported_logical_dimension=supported_logical_dimension,
+            correctable=correctable,
+            witness=witness,
+        )
 
 
 __all__ = [

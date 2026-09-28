@@ -1508,7 +1508,12 @@ def function_field_place_uniformizer(
     # These are the complete possible result coefficients. Admit transport
     # size before irreducibility invokes polynomial factorization.
     if place.kind == "FINITE":
-        assert prime_polynomial is not None
+        if prime_polynomial is None:
+            raise OperationDomainValidationError(
+                location=("place", "prime_polynomial"),
+                code="function_field.finite_place_polynomial",
+                message="a finite place requires its prime polynomial",
+            )
         numerator = prime_polynomial
         denominator = PrimeFieldPolynomial(
             characteristic=field.characteristic, coefficients=(1,)
@@ -1542,8 +1547,8 @@ def function_field_place_uniformizer(
             ),
         )
     if place.kind == "FINITE":
-        assert prime_polynomial is not None
-        estimated_work = prime_polynomial.degree**3 * max(
+        admitted_polynomial = numerator
+        estimated_work = admitted_polynomial.degree**3 * max(
             1, field.characteristic.bit_length()
         )
         if estimated_work > MAX_RATIONAL_PLACE_WORK:
@@ -1555,8 +1560,8 @@ def function_field_place_uniformizer(
                     f"{MAX_RATIONAL_PLACE_WORK} unit envelope"
                 ),
             )
-        factors = _factor_polynomial(prime_polynomial)
-        if factors != ((prime_polynomial, 1),):
+        factors = _factor_polynomial(admitted_polynomial)
+        if factors != ((admitted_polynomial, 1),):
             raise OperationDomainValidationError(
                 location=("place",),
                 code="function_field.place_not_prime",

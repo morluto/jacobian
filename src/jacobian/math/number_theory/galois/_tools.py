@@ -107,7 +107,7 @@ def _apply_element(
 def _element_orbit(
     request: ElementEmbeddingOrbitRequest,
 ) -> ElementEmbeddingOrbitResult:
-    return element_embedding_orbit(request)
+    return element_embedding_orbit(request.field, request.element)
 
 
 def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:

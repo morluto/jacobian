@@ -200,7 +200,7 @@ def test_degenerate_submodule_admits_derived_output_before_chain_matrices(
 ):
     source = standard_simplex(1, 2)
     sizes = tuple(len(level) for level in source.sets)
-    ambient_bound = chains_module._estimate_output_bytes(source, sizes)
+    ambient_bound = chains_module._estimate_output_cells(source, sizes)
     original_from_tables = chains_module.from_tables
     validations = 0
     matrix_construction_started = False
@@ -218,7 +218,7 @@ def test_degenerate_submodule_admits_derived_output_before_chain_matrices(
     monkeypatch.setattr(chains_module, "from_tables", count_source_checks)
     monkeypatch.setattr(
         chains_module,
-        "MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES",
+        "MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS",
         ambient_bound,
     )
     monkeypatch.setattr(

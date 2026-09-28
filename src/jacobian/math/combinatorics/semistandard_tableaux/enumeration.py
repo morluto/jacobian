@@ -12,7 +12,7 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.semistandard_tableaux._models import (
     MAX_ENUMERATED_CELLS,
     MAX_ENUMERATION_WORK,
-    MAX_RESULT_BYTES,
+    MAX_RESULT_SIZE,
     MAX_SEMISTANDARD_TABLEAUX,
     SemistandardTableauEnumerationRequest,
     SemistandardTableauEnumerationResult,
@@ -185,12 +185,12 @@ def enumerate_semistandard_young_tableaux(
             code="semistandard_tableaux.work_bound",
             message="the complete family exceeds the admitted construction work",
         )
-    estimated_bytes = count * (10 * size + 64) + 256
-    if estimated_bytes > MAX_RESULT_BYTES:
+    estimated_size = count * (10 * size + 64) + 256
+    if estimated_size > MAX_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("partition",),
             code="semistandard_tableaux.output_bound",
-            message="the complete family exceeds the admitted result byte bound",
+            message="the complete family exceeds the admitted result representation size",
         )
 
     request_checkpoint("before semistandard-tableau enumeration")

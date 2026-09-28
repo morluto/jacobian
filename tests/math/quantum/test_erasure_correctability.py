@@ -90,11 +90,7 @@ def test_erasure_profile_matches_exhaustive_pauli_oracle(n, rows) -> None:
         oracle_normalizer, oracle_stabilizer, logicals = _oracle(
             rows, n, erased_positions
         )
-        result = stabilizer_erasure_correctability(
-            StabilizerErasureCorrectabilityRequest(
-                check_space=value, erased_qubit_ids=erased_ids
-            )
-        )
+        result = stabilizer_erasure_correctability(value, erased_ids)
         assert result.supported_normalizer_dimension == oracle_normalizer
         assert result.supported_stabilizer_dimension == oracle_stabilizer
         assert (
@@ -136,17 +132,13 @@ def test_erasure_request_rejects_duplicate_or_foreign_axes() -> None:
 
 def test_forged_native_request_fields_are_rejected_without_helper_errors() -> None:
     value = _value(2, ())
-    for request in (
-        StabilizerErasureCorrectabilityRequest.model_construct(erased_qubit_ids=()),
-        StabilizerErasureCorrectabilityRequest.model_construct(
-            check_space=CheckSpaceValue.model_construct(), erased_qubit_ids=()
-        ),
-        StabilizerErasureCorrectabilityRequest.model_construct(
-            check_space=value, erased_qubit_ids=({},)
-        ),
+    for forged_check_space, forged_ids in (
+        (None, ()),
+        (CheckSpaceValue.model_construct(), ()),
+        (value, ({},)),
     ):
         with pytest.raises(ValueError):
-            stabilizer_erasure_correctability(request)
+            stabilizer_erasure_correctability(forged_check_space, forged_ids)
 
 
 def test_uncorrectable_result_rejects_identity_witness() -> None:
@@ -173,8 +165,5 @@ def test_nonisotropic_check_space_is_rejected() -> None:
     z = PhaseFreeQubitPauli(register=register, x_bits=(0,), z_bits=(1,))
     with pytest.raises(ValueError, match="isotropic"):
         stabilizer_erasure_correctability(
-            StabilizerErasureCorrectabilityRequest(
-                check_space=CheckSpaceValue(register=register, basis=(x, z)),
-                erased_qubit_ids=("q0",),
-            )
+            CheckSpaceValue(register=register, basis=(x, z)), ("q0",)
         )

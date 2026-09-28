@@ -97,14 +97,18 @@ __all__ = [
 ]
 
 MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES = 10 * 1024 * 1024
-MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_SIZE = 10 * 1024 * 1024
 MAX_PETRI_NET_DISJOINT_UNION_WORK = 2 * MAX_PETRI_PLACES * MAX_PETRI_TRANSITIONS
 
 
-def _petri_net_union_output_bound(
+def _petri_net_union_output_size_bound(
     left: PetriNet, right: PetriNet, *, include_markings: bool
 ) -> tuple[int, int]:
-    """Conservatively admit serialized output and matrix-entry work."""
+    """Conservatively admit the retained result and matrix-entry work.
+
+    The units are entry counts times a fixed per-entry scalar allowance, not
+    an encoded transport measurement.
+    """
 
     def matrix_bound(rows: int, columns: int) -> int:
         row = 2 + max(0, columns - 1) + 4 * columns
@@ -222,7 +226,7 @@ def disjoint_union(
                 f"{MAX_PETRI_PLACES}-place or {MAX_PETRI_TRANSITIONS}-transition carrier bound"
             ),
         )
-    output_bound, work = _petri_net_union_output_bound(
+    output_size_bound, work = _petri_net_union_output_size_bound(
         left_net, right_net, include_markings=left_marking is not None
     )
     if work > MAX_PETRI_NET_DISJOINT_UNION_WORK:
@@ -231,11 +235,11 @@ def disjoint_union(
             code="petri_net.union_work_bound",
             message="disjoint-union matrix expansion exceeds its admitted work bound",
         )
-    if output_bound > MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_BYTES:
+    if output_size_bound > MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_SIZE:
         raise OperationResourceAdmissionError(
             location=("net",),
             code="petri_net.union_output_bound",
-            message="disjoint-union result exceeds its admitted serialized-output bound",
+            message="disjoint-union result exceeds its admitted result representation-size bound",
         )
 
     def combine_ids(

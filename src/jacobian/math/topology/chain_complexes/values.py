@@ -621,6 +621,7 @@ HomologyGroup = Annotated[
     Field(discriminator="kind"),
 ]
 
+
 def _require_integral_group_source_binding(
     source: ChainComplexValue,
     groups: tuple[HomologyGroup, ...],

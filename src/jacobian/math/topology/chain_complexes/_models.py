@@ -26,7 +26,6 @@ from jacobian.math.topology.chain_complexes.values import (
     ChainMapValue,
     CoefficientRing,
     _bounded_integer_digits,
-    _format_chain_coefficient,
 )
 
 type _RawCoefficientEntry = str | int | Fraction

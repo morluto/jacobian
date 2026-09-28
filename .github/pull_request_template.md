@@ -14,6 +14,20 @@ verification. Name the final head SHA that the evidence covers. -->
 - Final head SHA tested:
 - Relevant CI checks or links:
 
+### Test lane ownership
+
+`tests/math` boots kernels and must not import `jacobian.catalog.catalog`,
+`jacobian.dispatch`, `jacobian.cli`, or `jacobian.mcp`. This applies to re-lands
+and to tests ported from an older branch. A test that opens a catalog, dispatches
+by operation ID, or decodes a published example in its wire encoding belongs in
+`tests/catalog/`. Lane follows what the test *calls*, not what it concludes, so a
+math-lane and a catalog-lane test may assert the same mathematical fact.
+
+<!-- Mark N/A only when this PR adds or moves no test at all. -->
+- Tests added or moved, with their lane:
+- Any test that opens a catalog or dispatches by operation ID, and why it is not
+  in `tests/math`:
+
 Contributor quick path:
 
 ```sh

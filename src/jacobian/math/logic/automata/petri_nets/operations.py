@@ -19,6 +19,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES,
     MAX_MARKING_COMMUTATION_PROFILE_WORK,
     MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES,
+    MAX_MARKING_EQUATION_FORMAL_TARGET_ABS,
     MAX_PUMPING_WITNESS_MATERIALIZED_BYTES,
     MAX_REACHABLE_DEAD_MARKINGS_MATERIALIZED_BYTES,
     MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES,
@@ -34,11 +35,14 @@ from jacobian.math.logic.automata.petri_nets._models import (
     IncidenceMatrixResult,
     MarkingCommutationProfileResult,
     MarkingConflictProfileResult,
+    MarkingEquationResult,
     MarkingReachabilityLimit,
     MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
     PetriNetDisjointUnionResult,
+    PetriNetMatricesResult,
+    PetriNetRelabelingResult,
     PetriPlaceSubset,
     PetriReachabilityEdge,
     PlaceSetInitialMarkingProfileResult,
@@ -2400,3 +2404,371 @@ def verify_invariants(claim: PetriInvariantsResult) -> bool:
         raise
     except OperationDomainValidationError:
         return False
+
+
+def marking_equation(
+    net: PetriNet,
+    source_marking: Marking,
+    target_marking: Marking,
+    transition_counts: tuple[int, ...],
+) -> MarkingEquationResult:
+    """Compare a target with M0 + Cx over Z; this is not a reachability test."""
+    net = _admit_net(net)
+    source_marking = _require_marking_size(net, source_marking)
+    target_marking = _require_marking_size(net, target_marking)
+    if (
+        not isinstance(transition_counts, tuple)
+        or len(transition_counts) != net.transition_count
+        or any(type(count) is not int or count < 0 for count in transition_counts)
+    ):
+        raise OperationDomainValidationError(
+            location=("transition_counts",),
+            code="petri_net.state_equation_transition_axis",
+            message="transition counts must be nonnegative integers on the net axis",
+        )
+    if (
+        any(count > MAX_STATE_EQUATION_OCCURRENCES for count in transition_counts)
+        or sum(transition_counts) > MAX_STATE_EQUATION_OCCURRENCES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transition_counts",),
+            code="petri_net.state_equation_occurrence_bound",
+            message="total transition count exceeds the admitted bound",
+        )
+    # A shape-based upper bound admits serialization before allocating either
+    # computed vector; input axes cap each vector at 64 coordinates.
+    max_coordinate_digits = len(str(MAX_MARKING_EQUATION_FORMAL_TARGET_ABS)) + 1
+
+    def vector_size(coordinates: tuple[int, ...], *, bounded: bool = False) -> int:
+        return (
+            2
+            + max(0, len(coordinates) - 1)
+            + sum(
+                max_coordinate_digits if bounded else len(str(value))
+                for value in coordinates
+            )
+        )
+
+    def marking_size(marking: Marking) -> int:
+        return strict_json_object_size(
+            (
+                ("tokens", vector_size(marking.tokens)),
+                (
+                    "net",
+                    4 if marking.net is None else _petri_net_reverse_output_bound(net),
+                ),
+            )
+        )
+
+    formal_vector_bound = vector_size(source_marking.tokens, bounded=True)
+    residual_vector_bound = vector_size(target_marking.tokens, bounded=True)
+    output_bound = strict_json_object_size(
+        (
+            ("net", _petri_net_reverse_output_bound(net)),
+            ("source_marking", marking_size(source_marking)),
+            ("target_marking", marking_size(target_marking)),
+            (
+                "transition_counts",
+                2 + max(0, net.transition_count - 1) + net.transition_count * 4,
+            ),
+            ("formal_target", formal_vector_bound),
+            ("residual", residual_vector_bound),
+            ("satisfies_equation", 5),
+        )
+    )
+    if output_bound > MAX_MARKING_EQUATION_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=(),
+            code="petri_net.marking_equation_output_bound",
+            message="marking-equation result exceeds the admitted output bound",
+        )
+    formal_target = tuple(
+        source_marking.tokens[place]
+        + sum(
+            (net.post[place][transition] - net.pre[place][transition])
+            * transition_counts[transition]
+            for transition in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    residual = tuple(
+        target_marking.tokens[place] - formal_target[place]
+        for place in range(net.place_count)
+    )
+    return MarkingEquationResult(
+        net=net,
+        source_marking=source_marking,
+        target_marking=target_marking,
+        transition_counts=transition_counts,
+        formal_target=formal_target,
+        residual=residual,
+        satisfies_equation=all(value == 0 for value in residual),
+    )
+
+
+def petri_net_matrices(net: PetriNet) -> PetriNetMatricesResult:
+    """Return exact Pre, Post, and C=Post-Pre matrices in the net's axes."""
+    admitted = _admit_net(net)
+    place_count = admitted.place_count
+    transition_count = admitted.transition_count
+
+    def array_size(items: list[int]) -> int:
+        return 2 + max(0, len(items) - 1) + sum(items)
+
+    def matrix_size(entries: tuple[tuple[int, ...], ...]) -> int:
+        values_size = array_size(
+            [array_size([len(str(value)) + 2 for value in row]) for row in entries]
+        )
+        return strict_json_object_size(
+            (
+                ("domain", 4),
+                ("row_count", len(str(place_count))),
+                ("column_count", len(str(transition_count))),
+                ("entries", values_size),
+            )
+        )
+
+    def support_map_size(
+        *,
+        outer_axis: int,
+        inner_axis: int,
+        matrix: tuple[tuple[int, ...], ...],
+        transpose: bool,
+    ) -> int:
+        row_sizes: list[int] = []
+        for outer in range(outer_axis):
+            indices = [
+                index
+                for index in range(inner_axis)
+                if (matrix[index][outer] if transpose else matrix[outer][index]) > 0
+            ]
+            row_sizes.append(array_size([len(str(index)) for index in indices]))
+        return array_size(row_sizes)
+
+    # Pre-admit support-map serialization from bounded input matrices before
+    # allocating any output tuples.
+    input_places_size = support_map_size(
+        outer_axis=transition_count,
+        inner_axis=place_count,
+        matrix=admitted.pre,
+        transpose=True,
+    )
+    output_places_size = support_map_size(
+        outer_axis=transition_count,
+        inner_axis=place_count,
+        matrix=admitted.post,
+        transpose=True,
+    )
+    consumer_transitions_size = support_map_size(
+        outer_axis=place_count,
+        inner_axis=transition_count,
+        matrix=admitted.pre,
+        transpose=False,
+    )
+    producer_transitions_size = support_map_size(
+        outer_axis=place_count,
+        inner_axis=transition_count,
+        matrix=admitted.post,
+        transpose=False,
+    )
+
+    output_size = strict_json_object_size(
+        (
+            ("net", _petri_net_reverse_output_bound(admitted)),
+            ("pre", matrix_size(admitted.pre)),
+            ("post", matrix_size(admitted.post)),
+            # ExactInteger scalars serialize as quoted decimal strings. An
+            # incidence entry has at most five digits plus sign and quotes.
+            (
+                "incidence",
+                strict_json_object_size(
+                    (
+                        ("domain", 4),
+                        ("row_count", len(str(place_count))),
+                        ("column_count", len(str(transition_count))),
+                        (
+                            "entries",
+                            array_size(
+                                [
+                                    array_size([7] * transition_count)
+                                    for _place in range(place_count)
+                                ]
+                            ),
+                        ),
+                    )
+                ),
+            ),
+            ("input_places_by_transition", input_places_size),
+            ("output_places_by_transition", output_places_size),
+            ("consumer_transitions_by_place", consumer_transitions_size),
+            ("producer_transitions_by_place", producer_transitions_size),
+        )
+    )
+    if output_size > MAX_PETRI_NET_REVERSE_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.matrices_output_bound",
+            message="Petri-net matrices exceed the serialized output bound",
+        )
+    incidence = tuple(
+        tuple(
+            admitted.post[place][transition] - admitted.pre[place][transition]
+            for transition in range(transition_count)
+        )
+        for place in range(place_count)
+    )
+    input_places_by_transition = tuple(
+        tuple(
+            place for place in range(place_count) if admitted.pre[place][transition] > 0
+        )
+        for transition in range(transition_count)
+    )
+    output_places_by_transition = tuple(
+        tuple(
+            place
+            for place in range(place_count)
+            if admitted.post[place][transition] > 0
+        )
+        for transition in range(transition_count)
+    )
+    consumer_transitions_by_place = tuple(
+        tuple(
+            transition
+            for transition in range(transition_count)
+            if admitted.pre[place][transition] > 0
+        )
+        for place in range(place_count)
+    )
+    producer_transitions_by_place = tuple(
+        tuple(
+            transition
+            for transition in range(transition_count)
+            if admitted.post[place][transition] > 0
+        )
+        for place in range(place_count)
+    )
+    # The admitted net bounds matrix and support-map work by four scans of at
+    # most 64 by 64 cells; no backend expansion or data-dependent search occurs.
+    return PetriNetMatricesResult.model_construct(
+        net=admitted,
+        pre=IntegerMatrix.model_construct(
+            row_count=place_count,
+            column_count=transition_count,
+            entries=admitted.pre,
+        ),
+        post=IntegerMatrix.model_construct(
+            row_count=place_count,
+            column_count=transition_count,
+            entries=admitted.post,
+        ),
+        incidence=IntegerMatrix.model_construct(
+            row_count=place_count,
+            column_count=transition_count,
+            entries=incidence,
+        ),
+        input_places_by_transition=input_places_by_transition,
+        output_places_by_transition=output_places_by_transition,
+        consumer_transitions_by_place=consumer_transitions_by_place,
+        producer_transitions_by_place=producer_transitions_by_place,
+    )
+
+
+def relabel_petri_net(
+    net: PetriNet,
+    place_source_to_target: tuple[int, ...],
+    transition_source_to_target: tuple[int, ...],
+) -> PetriNetRelabelingResult:
+    """Reindex place and transition axes through explicit bijections."""
+    net = _admit_net(net)
+    place_map = place_source_to_target
+    transition_map = transition_source_to_target
+    for axis_name, mapping, size in (
+        ("place", place_map, net.place_count),
+        ("transition", transition_map, net.transition_count),
+    ):
+        if (
+            not isinstance(mapping, tuple)
+            or len(mapping) != size
+            or any(type(index) is not int for index in mapping)
+            or tuple(sorted(mapping)) != tuple(range(size))
+        ):
+            raise OperationDomainValidationError(
+                location=(f"{axis_name}_source_to_target",),
+                code=f"petri_net.relabel.{axis_name}_bijection",
+                message=f"{axis_name} map must be a bijection of its complete axis",
+            )
+    work = (
+        2 * net.place_count * net.transition_count
+        + net.place_count
+        + net.transition_count
+    )
+    if work > MAX_PETRI_NET_RELABEL_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.relabel_work_bound",
+            message="net relabeling exceeds the admitted matrix work bound",
+        )
+    # Both relabeled axes plus the nets the result retains. The bound counts
+    # retained entries; scalar index magnitudes stay exact and unbounded.
+    net_cells = 1 + net.place_count + net.transition_count
+    output_cells = 2 * net_cells + len(place_map) + len(transition_map)
+    if output_cells > MAX_PETRI_NET_RELABEL_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.relabel_output_bound",
+            message="relabeling result exceeds its admitted output cell bound",
+        )
+    place_inverse_values = [0] * net.place_count
+    for source, target_index in enumerate(place_map):
+        place_inverse_values[target_index] = source
+    place_inverse = tuple(place_inverse_values)
+    transition_inverse_values = [0] * net.transition_count
+    for source, target_index in enumerate(transition_map):
+        transition_inverse_values[target_index] = source
+    transition_inverse = tuple(transition_inverse_values)
+    target = PetriNet.model_construct(
+        place_count=net.place_count,
+        transition_count=net.transition_count,
+        place_ids=(
+            None
+            if net.place_ids is None
+            else tuple(net.place_ids[index] for index in place_inverse)
+        ),
+        transition_ids=(
+            None
+            if net.transition_ids is None
+            else tuple(net.transition_ids[index] for index in transition_inverse)
+        ),
+        pre=tuple(
+            tuple(
+                net.pre[place_inverse[place]][transition_inverse[transition]]
+                for transition in range(net.transition_count)
+            )
+            for place in range(net.place_count)
+        ),
+        post=tuple(
+            tuple(
+                net.post[place_inverse[place]][transition_inverse[transition]]
+                for transition in range(net.transition_count)
+            )
+            for place in range(net.place_count)
+        ),
+    )
+    return PetriNetRelabelingResult._from_kernel(
+        source_net=net,
+        target_net=target,
+        place_source_to_target=place_map,
+        transition_source_to_target=transition_map,
+    )
+
+
+# Bounds for the ported matrices, relabeling, and marking-equation kernels.
+# These count retained entries, not encoded bytes.
+MAX_PETRI_NET_REVERSE_OUTPUT_CELLS = 4 * 1024 * 1024
+MAX_PETRI_NET_RELABEL_OUTPUT_CELLS = 4 * 1024 * 1024
+MAX_PETRI_NET_RELABEL_WORK = (
+    2 * MAX_PETRI_PLACES * MAX_PETRI_TRANSITIONS
+    + MAX_PETRI_PLACES
+    + MAX_PETRI_TRANSITIONS
+)
+MAX_MARKING_EQUATION_OUTPUT_CELLS = 4 * 1024 * 1024

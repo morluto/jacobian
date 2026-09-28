@@ -23,6 +23,16 @@ existing limits (64 places, 64 transitions, arc weights at most 1,000) bound
 the multiplication work and result size. The result retains the exact net and
 source marking context, including an explicit marking parent when supplied.
 
+`petri_net.marking_equation.compute` compares a supplied target marking with
+the formal target. It returns that formal target, the full signed residual
+`M_target - M_source - (Post - Pre)y`, and whether every residual coordinate is
+zero. It uses the same 1,000 total-count bound. The formal-target and residual
+coordinates are bounded by 1,001,000 from the marking, arc-weight, and
+multiplicity limits; output admission occurs before either vector is built.
+Even a zero residual only establishes the algebraic state equation. It does not
+establish that the counts can be ordered as enabled firings or that the target
+is reachable.
+
 For example, if two transitions require opposite places and produce into each
 other's required place, `y = (1, 1)` may satisfy the state equation at the
 empty marking although neither transition is enabled. The result reports the

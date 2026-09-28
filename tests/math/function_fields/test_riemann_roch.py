@@ -340,7 +340,7 @@ def test_riemann_roch_accepts_nonmonic_associate_of_x_place() -> None:
         assert function_field_place_valuation(two_x_place, element) + 1 >= 0
 
 
-def test_riemann_roch_rejects_unsupported_extension_fields() -> None:
+def test_riemann_roch_rejects_algebraic_extension_fields() -> None:
     def rf(numerator: tuple[int, ...]) -> PrimeFieldRationalFunction:
         return PrimeFieldRationalFunction(
             numerator=PrimeFieldPolynomial(characteristic=2, coefficients=numerator),

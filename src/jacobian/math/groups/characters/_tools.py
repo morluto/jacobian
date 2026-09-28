@@ -8,9 +8,15 @@ from jacobian.math.groups.characters._abelian_models import (
     FiniteAbelianCharacterTableResult,
 )
 from jacobian.math.groups.characters._models import (
+    CharacterCenter,
+    CharacterCenterRequest,
+    CharacterExteriorSquareRequest,
+    CharacterKernel,
+    CharacterKernelRequest,
     CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
+    CharacterSymmetricSquareRequest,
     CharacterTableRequest,
     CharacterTableResult,
     CharacterTensorDecompositionRequest,
@@ -26,6 +32,8 @@ from jacobian.math.groups.characters._models import (
     ClassFunctionRestrictionRequest,
     ClassFunctionRestrictionResult,
     ClassFunctionScaleRequest,
+    ClassMultiplicationConstantsRequest,
+    ClassMultiplicationConstantsResult,
     ClassPowerMapRequest,
     ClassPowerMapResult,
     CyclicCharacterRestrictionRequest,
@@ -36,6 +44,9 @@ from jacobian.math.groups.characters._models import (
 )
 from jacobian.math.groups.characters.abelian_operations import (
     _run_finite_abelian_character_table,
+)
+from jacobian.math.groups.characters.class_algebra import (
+    class_multiplication_constants,
 )
 from jacobian.math.groups.characters.operations import (
     character_table,
@@ -52,9 +63,33 @@ from jacobian.math.groups.characters.operations import (
     restrict_cyclic_character,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_center,
+    character_exterior_square,
+    character_kernel,
+    character_symmetric_square,
     character_tensor_product,
     class_function_character_decomposition,
 )
+
+
+def _run_character_center(request: CharacterCenterRequest) -> CharacterCenter:
+    return character_center(request)
+
+
+def _run_character_exterior_square(
+    request: CharacterExteriorSquareRequest,
+) -> CharacterRingElement:
+    return character_exterior_square(request)
+
+
+def _run_character_kernel(request: CharacterKernelRequest) -> CharacterKernel:
+    return character_kernel(request)
+
+
+def _run_character_symmetric_square(
+    request: CharacterSymmetricSquareRequest,
+) -> CharacterRingElement:
+    return character_symmetric_square(request)
 
 
 def _run_inner_product(
@@ -796,6 +831,153 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "Express the standard S3 character in the complete irreducible basis."
                 ),
                 input={"class_function": _s3_standard_class_function()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.center.compute",
+        title="Compute the scalar-action subgroup of a finite-group character",
+        description=(
+            "For a table-bound ordinary character, return the subgroup of group "
+            "elements acting as scalars in an afforded complex representation. "
+            "An element is selected exactly when chi(g) * conjugate(chi(g)) "
+            "equals chi(1)^2; its normalized character value is the scalar "
+            "root of unity. The result retains selected canonical classes and "
+            "their exact scalar values. Supported groups are trivial, cyclic "
+            "of order at most 60, and S3."
+        ),
+        request_type=CharacterCenterRequest,
+        result_type=CharacterCenter,
+        run=_run_character_center,
+        tags=("finite-group", "character", "center", "exact"),
+        discovery_terms=(
+            "center of a finite group character",
+            "scalar action subgroup of representation",
+            "elements where character value has maximal absolute value",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_character_center",
+                description=(
+                    "The standard two-dimensional representation of S3 acts "
+                    "by scalars only at the identity."
+                ),
+                input={"character": _s3_ring_element(["0", "0", "1"])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.exterior_square.compute",
+        title="Compute a finite-group character's second exterior power",
+        description=(
+            "Apply Lambda^2(x) = (x tensor x - psi^2(x))/2 to one exact, "
+            "table-bound virtual character. The canonical table is rebuilt "
+            "from its concrete group, and the class squaring map is derived "
+            "from that complete partition. Supported groups are trivial, "
+            "cyclic of order at most 60, and S3; signed virtual coordinates "
+            "are accepted when the result has exact integral coordinates."
+        ),
+        request_type=CharacterExteriorSquareRequest,
+        result_type=CharacterRingElement,
+        run=_run_character_exterior_square,
+        tags=("finite-group", "character", "exterior-power", "exact"),
+        discovery_terms=(
+            "exterior square of a finite group character",
+            "second exterior power virtual character",
+            "exterior square representation ring",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_exterior_square",
+                description="Lambda^2 of the standard S3 representation is sign.",
+                input={"character": _s3_ring_element(["0", "0", "1"])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.kernel.compute",
+        title="Compute the kernel of a bounded ordinary character",
+        description=(
+            "Return the subgroup on which an exact ordinary character has "
+            "value equal to its degree. Input coordinates must be nonnegative "
+            "in the canonical irreducible basis, and the canonical character "
+            "table is rebuilt from its concrete group. The exact cyclotomic "
+            "trace equality is equivalent to identity action. Supported "
+            "groups are trivial, cyclic of order at most 60, and S3. The "
+            "result retains both the ambient group and its kernel subgroup."
+        ),
+        request_type=CharacterKernelRequest,
+        result_type=CharacterKernel,
+        run=_run_character_kernel,
+        tags=("finite-group", "character", "kernel", "exact"),
+        discovery_terms=(
+            "kernel subgroup of a finite group character",
+            "normal subgroup where a representation acts trivially",
+            "character kernel from exact irreducible multiplicities",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_sign_character_kernel",
+                description="The sign character of S3 has kernel A3.",
+                input={"character": _s3_ring_element(["0", "1", "0"])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="character.symmetric_square.compute",
+        title="Compute a finite-group character's second symmetric power",
+        description=(
+            "Apply Sym^2(x) = (x tensor x + psi^2(x))/2 to one exact, "
+            "table-bound virtual character. The canonical table is rebuilt "
+            "from its concrete group, and the class squaring map is derived "
+            "from that complete partition. Supported groups are trivial, "
+            "cyclic of order at most 60, and S3; signed virtual coordinates "
+            "are accepted when the result has exact integral coordinates."
+        ),
+        request_type=CharacterSymmetricSquareRequest,
+        result_type=CharacterRingElement,
+        run=_run_character_symmetric_square,
+        tags=("finite-group", "character", "symmetric-power", "exact"),
+        discovery_terms=(
+            "symmetric square of a finite group character",
+            "second symmetric power virtual character",
+            "symmetric square representation ring",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_standard_symmetric_square",
+                description="Sym^2 of the standard S3 representation is 1 plus standard.",
+                input={"character": _s3_ring_element(["0", "0", "1"])},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="group.class_multiplication_constants.compute",
+        title="Compute finite-group class multiplication constants",
+        description=(
+            "Multiply every pair of integral conjugacy-class sums and return the "
+            "complete nonnegative integer structure-constant tensor. The source "
+            "partition is checked against its concrete permutation group. This "
+            "operation admits groups of order at most 256 and at most 64 classes, "
+            "with explicit work and output-cell bounds; each coefficient is at "
+            "most the group order."
+        ),
+        request_type=ClassMultiplicationConstantsRequest,
+        result_type=ClassMultiplicationConstantsResult,
+        run=class_multiplication_constants,
+        tags=("group", "character", "conjugacy", "class-algebra", "exact"),
+        discovery_terms=(
+            "finite group class multiplication constants",
+            "conjugacy class algebra structure constants",
+            "multiply class sums",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_class_algebra",
+                description=(
+                    "Return the exact class-sum multiplication tensor for S3."
+                ),
+                input={"partition": _S3_PARTITION},
             ),
         ),
     ),

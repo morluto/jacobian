@@ -995,13 +995,13 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
     @classmethod
     def preflight_raw_source_order(cls, value: Any) -> Any:
         if type(value) is not dict:
-            return value
+            return canonicalize_json_containers(value)
         deck = value.get("deck")
         source = deck.get("source") if type(deck) is dict else None
         vertices: Any = source.get("vertices") if type(source) is dict else None
         edges: Any = source.get("edges") if type(source) is dict else None
         if type(vertices) not in (list, tuple):
-            return value
+            return canonicalize_json_containers(value)
         order = len(vertices)
         if order > MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
@@ -1063,7 +1063,9 @@ class VertexDeckIsomorphismProfileRequest(StrictModel):
                 "vertex_iso_profile_output_bound",
                 "vertex-deck isomorphism profile exceeds its materialization-cell bound",
             )
-        return _normalize_vertex_iso_profile_request(value)
+        return canonicalize_json_containers(
+            _normalize_vertex_iso_profile_request(value)
+        )
 
 
 class VertexDeckIsomorphismClass(StrictModel):
@@ -1085,7 +1087,9 @@ class VertexDeckIsomorphismProfile(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_json_tuple_fields(cls, value: Any) -> Any:
-        return _admit_and_normalize_vertex_iso_profile_result(value)
+        return canonicalize_json_containers(
+            _admit_and_normalize_vertex_iso_profile_result(value)
+        )
 
     @model_validator(mode="after")
     def require_exact_partition_and_maps(self) -> Self:
@@ -1446,13 +1450,13 @@ class EdgeDeckIsomorphismProfileRequest(StrictModel):
     @classmethod
     def preflight_raw_source_order(cls, value: Any) -> Any:
         if type(value) is not dict:
-            return value
+            return canonicalize_json_containers(value)
         family: Any = value.get("deck")
         source: Any = family.get("source") if type(family) is dict else None
         vertices: Any = source.get("vertices") if type(source) is dict else None
         edges: Any = source.get("edges") if type(source) is dict else None
         if type(vertices) not in (list, tuple):
-            return value
+            return canonicalize_json_containers(value)
         order = len(vertices)
         if order > MAX_UNLABELLED_DECK_VERTICES:
             raise _validation_error(
@@ -1530,7 +1534,7 @@ class EdgeDeckIsomorphismProfileRequest(StrictModel):
             )
         normalized = dict(value)
         normalized["deck"] = _normalize_edge_family_json(family)
-        return normalized
+        return canonicalize_json_containers(normalized)
 
 
 class EdgeDeckIsomorphismClass(StrictModel):
@@ -1553,7 +1557,9 @@ class EdgeDeckIsomorphismProfile(StrictModel):
     @model_validator(mode="before")
     @classmethod
     def admit_and_normalize_wire_value(cls, value: Any) -> Any:
-        return _admit_and_normalize_edge_iso_profile_result(value)
+        return canonicalize_json_containers(
+            _admit_and_normalize_edge_iso_profile_result(value)
+        )
 
     @model_validator(mode="after")
     def require_exact_partition_and_maps(self) -> Self:

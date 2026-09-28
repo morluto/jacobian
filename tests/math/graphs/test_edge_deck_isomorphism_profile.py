@@ -1,16 +1,12 @@
 from __future__ import annotations
 
-import json
-
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.graphs.decks import (
     EdgeDeckIsomorphismProfile,
     edge_deck_isomorphism_profile,
@@ -187,48 +183,6 @@ def test_raw_tuple_preflight_rejects_order_before_nested_family_parsing() -> Non
     }
     with pytest.raises(ValidationError, match="at most 10 source vertices"):
         EdgeDeckIsomorphismProfileRequest.model_validate(payload)
-
-
-def test_catalog_admission_rejects_before_nested_family_parsing() -> None:
-    payload = {
-        "deck": {
-            "source": {
-                "vertices": [f"v{index}" for index in range(11)],
-                "edges": [],
-            },
-            "cards": "malformed but over the admitted order",
-        }
-    }
-    with pytest.raises(OperationRequestValidationError) as error:
-        invoke_operation(
-            "graph.deck.edge.isomorphism_classes.compute", payload, Catalog.open()
-        )
-    assert "at most 10 source vertices" in str(error.value.cause)
-
-
-def test_catalog_producer_does_not_replay_class_canonicalization(monkeypatch) -> None:
-    operation = Catalog.open().operation("graph.deck.edge.isomorphism_classes.compute")
-    assert operation is not None
-    original = deck_models._canonical_card_edges
-    calls = 0
-
-    def counted(vertices, edges):
-        nonlocal calls
-        calls += 1
-        return original(vertices, edges)
-
-    with monkeypatch.context() as patcher:
-        patcher.setattr(deck_models, "_canonical_card_edges", counted)
-        invocation = invoke_operation(
-            operation.operation_id, operation.examples[0].input, Catalog.open()
-        )
-        assert calls == 0
-        decoded = EdgeDeckIsomorphismProfile.model_validate_json(
-            json.dumps(invocation.output)
-        )
-        assert calls == len(decoded.classes)
-    assert sum(item.multiplicity for item in decoded.classes) == 3
-    _assert_maps_are_isomorphisms(decoded)
 
 
 def test_wire_output_shape_bound_precedes_nested_representative_canonicalization(

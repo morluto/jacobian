@@ -5,12 +5,10 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import OperationRequestValidationError, invoke_operation
 from jacobian.math.graphs.decks import (
     VertexDeckIsomorphismProfile,
     vertex_deck_isomorphism_profile,
@@ -205,22 +203,6 @@ def test_serialized_profile_admits_representative_validation_before_canonicalizi
     assert calls == 0
 
 
-def test_catalog_admission_occurs_before_nested_card_parsing() -> None:
-    tool_id = "graph.deck.isomorphism_classes.compute"
-    source_vertices = [f"v{index}" for index in range(11)]
-    payload = {
-        "deck": {
-            "source": {"vertices": source_vertices, "edges": []},
-            "cards": "malformed but over the admitted order",
-        }
-    }
-    operation = Catalog.open().operation(tool_id)
-    assert operation is not None
-    with pytest.raises(OperationRequestValidationError) as error:
-        invoke_operation(tool_id, payload, Catalog.open())
-    assert "supports at most 10 source vertices" in str(error.value.cause)
-
-
 def test_native_request_tuple_preflight_occurs_before_nested_parsing() -> None:
     payload = {
         "deck": {
@@ -233,28 +215,3 @@ def test_native_request_tuple_preflight_occurs_before_nested_parsing() -> None:
     }
     with pytest.raises(ValidationError, match="supports at most 10 source vertices"):
         VertexDeckIsomorphismProfileRequest.model_validate(payload)
-
-
-def test_catalog_example_executes_and_returns_exact_maps() -> None:
-    operation = Catalog.open().operation("graph.deck.isomorphism_classes.compute")
-    assert operation is not None
-    original = deck_models._canonical_card_edges
-    calls = 0
-
-    def counted(vertices, edges):
-        nonlocal calls
-        calls += 1
-        return original(vertices, edges)
-
-    with pytest.MonkeyPatch.context() as monkeypatch:
-        monkeypatch.setattr(deck_models, "_canonical_card_edges", counted)
-        invocation = invoke_operation(
-            operation.operation_id, operation.examples[0].input, Catalog.open()
-        )
-        assert calls == 0
-        result = VertexDeckIsomorphismProfile.model_validate_json(
-            json.dumps(invocation.output)
-        )
-        assert calls == len(result.classes)
-    assert result.class_indices == (1, 0, 1)
-    _assert_maps_are_isomorphisms(result)

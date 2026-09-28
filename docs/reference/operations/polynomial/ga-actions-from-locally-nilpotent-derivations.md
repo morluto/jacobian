@@ -24,23 +24,20 @@ axis. If `t` is already a source variable, the operation selects another
 canonical fresh name. The returned value retains both axes and the generator
 images.
 
-Before returning, the producer checks the counit \(t=0\), recovers each
-\(D(x_i)\) as the coefficient of (t), and expands the two sides of the
-additive coaction law with independent parameters:
-
-\[
-(\rho_s\otimes\mathrm{id})\rho_t
-= (\mathrm{id}\otimes\Delta)\rho,
-\qquad \Delta(t)=s+t.
-\]
+The runtime checks are the certificate replay above, the carrier bounds on
+the published action value, and the output preflight below. The operation does
+not re-expand the counit \(t=0\) or the two-parameter additive coaction law at
+runtime; those identities are structural consequences of the truncated
+exponential and are verified against an independent substitution oracle in the
+test suite.
 
 The request is bounded to seven source variables so the explicit parameter
 fits the polynomial carrier's eight axes. Generator chains contain at most 32
-polynomials including the terminal zero. The exponential output is limited to
-4096 terms and 2,000,000 estimated serialized bytes. The exact two-parameter
-coaction check is preflighted to 25,000 expansion cells and 512 coefficient
-digits. Source polynomial terms, degrees, and coefficient sizes use the
-derivation owner's stated bounds.
+polynomials including the terminal zero. The exponential output is preflighted
+to 4096 terms and 2,000,000 estimated expansion cells, and every published
+action image must satisfy the source exponent envelope and the 128-digit
+coefficient envelope. Source polynomial terms, degrees, and coefficient sizes
+use the derivation owner's stated bounds.
 
 The operation handles this `G_a` action construction only. It does not
 classify arbitrary group actions, construct `G_m` actions, determine invariant

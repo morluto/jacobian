@@ -9,14 +9,18 @@ from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.math.topology.chain_complexes.values import ChainComplexValue
+from jacobian.math.topology.chain_complexes.values import (
+    ChainCoefficient,
+    ChainComplexValue,
+    ChainMapValue,
+)
 
 MAX_FILTER_LEVELS = 8
 MAX_FILTER_AMBIENT_DIMENSION = 32
 MAX_FILTER_VECTORS_PER_GROUP = 64
 MAX_SPECTRAL_PAGE = 4
 
-Vector = tuple[str, ...]
+Vector = tuple[ChainCoefficient, ...]
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -27,9 +31,8 @@ class FilteredSubspace(StrictModel):
     """One filtration subspace bound to its ambient chain group.
 
     ``vectors`` spans F_p C_n in ambient C_n coordinates; the empty tuple is
-    the zero subspace. Entries use the canonical coefficient grammar of the
-    retained complex: integers without leading zeros, reduced QQ fractions,
-    and GF(p) residues in [0, p).
+    the zero subspace. Entries are native integers or Fractions interpreted
+    in the coefficient ring of the retained complex.
     """
 
     vectors: tuple[Vector, ...] = Field(
@@ -52,7 +55,7 @@ class FiltrationLevel(StrictModel):
     )
 
 
-class FilteredChainComplexRequest(StrictModel):
+class FilteredChainComplex(StrictModel):
     """A finite bounded increasing filtration of a based chain complex.
 
     Level 0 is the bottom of the filtration and the final level must be
@@ -73,7 +76,7 @@ class FilteredChainComplexRequest(StrictModel):
     @model_validator(mode="after")
     def require_structural_filtration(self) -> Self:
         from jacobian.math.topology.chain_complexes.values import (
-            _require_rational_entry_grammar,
+            _require_coefficient_scalar,
         )
 
         sizes = self.complex.basis_sizes
@@ -99,7 +102,7 @@ class FilteredChainComplexRequest(StrictModel):
                             "must use ambient chain coordinates",
                         )
                     for entry in vector:
-                        _require_rational_entry_grammar(
+                        _require_coefficient_scalar(
                             self.complex.coefficient_ring,
                             entry,
                             prime=self.complex.prime,
@@ -230,6 +233,40 @@ class SpectralPageStatus(StrEnum):
     STABILIZED = "STABILIZED"
     ACTIVE = "ACTIVE"
     TRUNCATED = "TRUNCATED"
+
+
+
+class FilteredChainComplexRequest(StrictModel):
+    """Request wrapper binding one filtered chain complex to its carrier."""
+
+    complex: ChainComplexValue
+    filtration: tuple[FiltrationLevel, ...] = Field(
+        min_length=1,
+        max_length=MAX_FILTER_LEVELS,
+        description=(
+            "Increasing filtration levels from bottom to top; the final level "
+            "must span every chain group."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_request_shape(self) -> Self:
+        # Reuse the established value contract so the request and the value
+        # admit exactly the same structural filtration.
+        FilteredChainComplex(complex=self.complex, filtration=self.filtration)
+        return self
+
+
+class FilteredChainMapRequest(StrictModel):
+    """Request wrapper binding one filtered chain map to its two filtrations."""
+
+    chain_map: ChainMapValue
+    source_filtration: tuple[FiltrationLevel, ...] = Field(
+        min_length=1, max_length=MAX_FILTER_LEVELS
+    )
+    target_filtration: tuple[FiltrationLevel, ...] = Field(
+        min_length=1, max_length=MAX_FILTER_LEVELS
+    )
 
 
 class SpectralPageRequest(StrictModel):
@@ -473,12 +510,14 @@ class SpectralPageResult(StrictModel):
 
 
 __all__ = [
+    "FilteredChainComplexRequest",
+    "FilteredChainMapRequest",
     "MAX_FILTER_AMBIENT_DIMENSION",
     "MAX_FILTER_LEVELS",
     "MAX_FILTER_VECTORS_PER_GROUP",
     "MAX_SPECTRAL_PAGE",
     "AssociatedGradedResult",
-    "FilteredChainComplexRequest",
+    "FilteredChainComplex",
     "FilteredSubspace",
     "FiltrationLevel",
     "GradedSquareLedgerEntry",

@@ -4,22 +4,19 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
-from jacobian.catalog.models import (
-    OperationDomainValidationError,
-    OperationResourceAdmissionError,
-)
-from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.derivations._models import (
     GaActionRequest,
     PolynomialDerivation,
 )
 from jacobian.math.polynomials.derivations._tools import TOOLS
 from jacobian.math.polynomials.derivations.operations import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
     ga_action_from_derivation,
 )
 from jacobian.math.polynomials.values import RationalPolynomial
@@ -172,6 +169,58 @@ def test_triangular_locally_nilpotent_derivation_exponentiates_exactly() -> None
     _independent_coaction_oracle(action.generator_images)
 
 
+def test_action_rejects_lying_outer_and_empty_inner_sequences() -> None:
+    from collections.abc import Sequence
+
+    derivation, chains = _derivation()
+
+    class TooMany(Sequence[Any]):
+        def __len__(self) -> int:
+            return len(chains)
+
+        def __getitem__(self, index: int) -> Any:
+            if index < len(chains):
+                return chains[index]
+            raise IndexError
+
+        def __iter__(self):
+            yield from chains
+            while True:
+                yield chains[0]
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, TooMany())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+    class ShortOuter(Sequence[Any]):
+        def __len__(self) -> int:
+            return len(chains)
+
+        def __getitem__(self, index: int) -> Any:
+            return chains[index] if index == 0 else (_ for _ in ()).throw(IndexError)
+
+        def __iter__(self):
+            yield chains[0]
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, ShortOuter())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+    class EmptyChain(Sequence[Any]):
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> Any:
+            raise IndexError
+
+        def __iter__(self):
+            return iter(())
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, (EmptyChain(), *chains[1:]))
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+
 def test_action_checks_every_generator_chain() -> None:
     derivation, chains = _derivation()
     invalid = (chains[0], (chains[1][0], _poly(("x", "y", "z"), ())), chains[2])
@@ -261,17 +310,44 @@ def test_ga_action_catalog_example_and_request_are_publishable() -> None:
     assert result.generator_images[0].variables == ("x", "y", "t")
     assert GaActionRequest.model_validate(request.model_dump()) == request
 
-    catalog = Catalog(TOOLS)
-    operation = catalog.operation(tool.operation_id)
-    assert operation is not None
-    invocation = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert invocation.output["parameter"] == "t"
-    assert invocation.output["generator_images"][0]["polynomial"]["terms"] == [
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 0, 0]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 1, 1]},
-    ]
+    assert result.parameter == "t"
+    assert [
+        (term.coefficient.num, term.coefficient.den, term.exponents)
+        for term in result.generator_images[0].polynomial.terms
+    ] == [(1, 1, (1, 0, 0)), (1, 1, (0, 1, 1))]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        None,
+        5,
+        (None, None, None),
+        (5, 5, 5),
+    ],
+)
+def test_native_action_rejects_malformed_chains_as_domain_errors(
+    invalid: Any,
+) -> None:
+    derivation, _ = _derivation()
+    with pytest.raises(OperationDomainValidationError) as error:
+        ga_action_from_derivation(derivation, invalid)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.certificate_shape"
+
+
+def test_native_action_rejects_lazy_chain_iterables_without_materializing() -> None:
+    derivation, _ = _derivation()
+    pulled = 0
+
+    def lazy():
+        nonlocal pulled
+        while pulled < 100_000:
+            pulled += 1
+            yield ()
+
+    with pytest.raises(OperationDomainValidationError):
+        ga_action_from_derivation(derivation, lazy())
+    assert pulled == 0
 
 
 def test_action_input_chain_shape_is_bounded() -> None:

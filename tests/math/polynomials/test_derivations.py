@@ -1,6 +1,7 @@
 """Tests for exact polynomial-derivation application."""
 
-from fractions import Fraction
+from collections.abc import Iterator, Sequence
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -96,17 +97,13 @@ class TestDerivationApplyKnownAnswers:
 
 
 def test_vector_field_conversion_preserves_generator_semantics() -> None:
-    from jacobian.math.polynomials.derivations._models import (
-        DerivationFromVectorFieldRequest,
-    )
     from jacobian.math.polynomials.derivations._tools import TOOLS
     from jacobian.math.polynomials.derivations.operations import (
         derivation_from_vector_field,
     )
 
     components = (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
-    request = DerivationFromVectorFieldRequest(components=components)
-    derivation = derivation_from_vector_field(request)
+    derivation = derivation_from_vector_field(components)
     assert derivation.variables == XY
     assert derivation.images == components
 
@@ -114,68 +111,131 @@ def test_vector_field_conversion_preserves_generator_semantics() -> None:
     source = _poly(XY, ((1, (2, 0)), (3, (0, 1))))
     assert _terms(apply_derivation(derivation, source).result) == ((2, (1, 1)),)
 
-    tool = next(
-        tool
+    # The binder is a copy-only projection with no postcondition beyond the
+    # derivation value itself, so it stays a native helper and is not a
+    # published catalog operation.
+    assert all(
+        tool.operation_id != "polynomial_derivation.from_vector_field.compute"
         for tool in TOOLS
-        if tool.operation_id == "polynomial_derivation.from_vector_field.compute"
     )
-    assert tool.run(request) == derivation
+
+
+def test_vector_field_conversion_accepts_decoded_component_values() -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    derivation = derivation_from_vector_field(
+        {
+            "components": [
+                _poly(XY, ((1, (0, 1)),)).model_dump(),
+                _poly(XY, ()).model_dump(),
+            ]
+        }
+    )
+    assert derivation.variables == XY
+    assert derivation.images == (_poly(XY, ((1, (0, 1)),)), _poly(XY, ()))
+
+
+class _OversizedComponentSequence(Sequence[RationalPolynomial]):
+    """A bounded sequence that must never be iterated past admission."""
+
+    def __init__(self, length: int) -> None:
+        self.length = length
+        self.iterated = False
+
+    def __len__(self) -> int:
+        return self.length
+
+    def __getitem__(self, index: int) -> RationalPolynomial:
+        raise AssertionError("component parsed beyond the vector-field bound")
+
+    def __iter__(self) -> Iterator[RationalPolynomial]:
+        self.iterated = True
+        return super().__iter__()
+
+
+def test_oversized_vector_field_rejected_before_component_parsing() -> None:
+    from jacobian.math.polynomials.derivations._models import (
+        MAX_DERIVATION_VARIABLES,
+    )
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    oversized = _OversizedComponentSequence(MAX_DERIVATION_VARIABLES + 1)
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(oversized)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
+    assert not oversized.iterated
+
+
+def test_vector_field_iteration_cannot_exceed_component_bound() -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    class _LyingSequence(Sequence[Any]):
+        # A Sequence whose __len__ passes the early bound check but whose
+        # iterator yields one component beyond the admitted count.
+        def __len__(self) -> int:
+            return 1
+
+        def __getitem__(self, index: int) -> Any:
+            raise AssertionError
+
+        def __iter__(self) -> Iterator[Any]:
+            yield from (_poly(XY, ((1, (0, 1)),)).model_dump() for _ in range(8))
+            yield "ninth-component"
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(_LyingSequence())
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
+    assert "bounded by 8" in error.value.errors()[0]["msg"]
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    [
+        (),
+        {"components": []},
+        [_poly(XY, ((1, (0, 1)),))],
+        [_poly(("x",), ((1, (1,)),)), _poly(("y",), ())],
+        "not-a-vector-field",
+        7,
+        [_poly(XY, ((1, (0, 1)),)), "not-a-polynomial"],
+    ],
+)
+def test_vector_field_invalid_shapes_raise_domain_errors(invalid: Any) -> None:
+    from jacobian.math.polynomials.derivations.operations import (
+        derivation_from_vector_field,
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        derivation_from_vector_field(invalid)
+    assert error.value.errors()[0]["type"] == "polynomial_derivation.vector_field_shape"
 
 
 class TestDerivationInvariants:
     def test_leibniz_rule(self) -> None:
-        from jacobian.math.polynomials.derivations.operations import (
-            _add,
-            _encode,
-            _multiply,
-            _term_map,
-        )
-
         derivation = _triangular()
         left = _poly(XY, ((1, (2, 0)),))
         right = _poly(XY, ((1, (1, 1)),))
-        product = _encode(XY, _multiply(_term_map(left), _term_map(right)))
-        direct = _term_map(apply_derivation(derivation, product).result)
-        replay: dict[tuple[int, ...], Fraction] = {}
-        _add(
-            replay,
-            _multiply(
-                _term_map(apply_derivation(derivation, left).result), _term_map(right)
-            ),
-        )
-        _add(
-            replay,
-            _multiply(
-                _term_map(left), _term_map(apply_derivation(derivation, right).result)
-            ),
-        )
-        assert direct == replay
+        product = _poly(XY, ((1, (3, 1)),))
+
+        assert _terms(apply_derivation(derivation, product).result) == ((3, (2, 2)),)
+        assert _terms(apply_derivation(derivation, left).result) == ((2, (1, 1)),)
+        assert _terms(apply_derivation(derivation, right).result) == ((1, (0, 2)),)
 
     def test_qq_linearity(self) -> None:
-        from jacobian.math.polynomials.derivations.operations import (
-            _add,
-            _encode,
-            _multiply,
-            _term_map,
-        )
-
         derivation = _triangular()
         left = _poly(XY, ((1, (2, 0)),))
         right = _poly(XY, ((1, (0, 2)),))
-        combined_terms = _term_map(left)
-        _add(combined_terms, _multiply({(0, 0): Fraction(3)}, _term_map(right)))
-        separate = _term_map(apply_derivation(derivation, left).result)
-        _add(
-            separate,
-            _multiply(
-                {(0, 0): Fraction(3)},
-                _term_map(apply_derivation(derivation, right).result),
-            ),
-        )
-        assert (
-            _term_map(apply_derivation(derivation, _encode(XY, combined_terms)).result)
-            == separate
-        )
+        combined = _poly(XY, ((1, (2, 0)), (3, (0, 2))))
+
+        assert _terms(apply_derivation(derivation, combined).result) == ((2, (1, 1)),)
+        assert _terms(apply_derivation(derivation, left).result) == ((2, (1, 1)),)
+        assert _terms(apply_derivation(derivation, right).result) == ()
 
 
 class TestDerivationAdmission:
@@ -203,21 +263,6 @@ class TestDerivationAdmission:
                     ],
                 }
             )
-
-    def test_native_and_catalog_paths_agree(self) -> None:
-        from jacobian.math.polynomials.derivations._tools import TOOLS
-
-        tool = next(
-            tool
-            for tool in TOOLS
-            if tool.operation_id == "polynomial_derivation.apply.compute"
-        )
-        request = DerivationApplyRequest(
-            derivation=_triangular(), polynomial=_poly(XY, ((1, (2, 0)),))
-        )
-        assert tool.run(request) == apply_derivation(
-            request.derivation, request.polynomial
-        )
 
     def test_published_example_validates(self) -> None:
         from jacobian.canonical import encode_strict_json

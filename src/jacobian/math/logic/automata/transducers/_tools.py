@@ -8,34 +8,59 @@ from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeRequest,
     MinimizeResult,
+    RationalRelationFiberRequest,
+    RationalRelationInverseRequest,
+    RationalRelationProjectionRequest,
+    RationalRelationRestrictInputRequest,
+    RationalRelationRestrictInputResult,
+    ReachableStatesRequest,
+    ReachableStatesResult,
     RelationPathReplayRequest,
     RelationPathReplayResult,
+    SubseqIdentityRequest,
     SubseqRunRequest,
     SubseqRunResult,
     TrimRequest,
     TrimResult,
+    WordMorphismToSubseqRequest,
 )
 from jacobian.math.logic.automata.transducers.operations import (
     compose_subsequential,
+    identity_transducer,
+    invert_rational,
     minimize_subsequential,
+    project_rational_relation,
+    rational_relation_outputs_for_input,
+    reachable_state_witnesses,
     replay_rational_path,
+    restrict_rational_input,
     run_subsequential,
     trim_subsequential,
+    word_morphism_to_subsequential,
 )
+from jacobian.math.logic.automata.transducers.values import (
+    RationalTransducer,
+    SubsequentialTransducer,
+)
+from jacobian.math.logic.languages.regular.values import NFA
 
 
 def compute_run(request: SubseqRunRequest) -> SubseqRunResult:
-    status, output, final_state, undefined_position, partial_output = run_subsequential(
-        request.transducer, request.word
+    return run_subsequential(request.transducer, request.word)
+
+
+def compute_identity(request: SubseqIdentityRequest) -> SubsequentialTransducer:
+    return identity_transducer(
+        len(request.alphabet.symbols),
+        alphabet=request.alphabet,
+        alphabet_id=request.alphabet_id,
     )
-    return SubseqRunResult._from_kernel(
-        request,
-        status=status,
-        output=output,
-        final_state=final_state,
-        undefined_position=undefined_position,
-        partial_output=partial_output,
-    )
+
+
+def compute_word_morphism_to_subsequential(
+    request: WordMorphismToSubseqRequest,
+) -> SubsequentialTransducer:
+    return word_morphism_to_subsequential(request.morphism)
 
 
 def compute_compose(request: ComposeRequest) -> ComposeResult:
@@ -54,6 +79,12 @@ def compute_minimize(request: MinimizeRequest) -> MinimizeResult:
     return minimize_subsequential(request.transducer, request.sample_max_length)
 
 
+def compute_reachable_states(
+    request: ReachableStatesRequest,
+) -> ReachableStatesResult:
+    return reachable_state_witnesses(request.transducer)
+
+
 def compute_relation_path_replay(
     request: RelationPathReplayRequest,
 ) -> RelationPathReplayResult:
@@ -67,6 +98,36 @@ def compute_relation_path_replay(
         output_word=output_word,
         state_trace=state_trace,
         error=error,
+    )
+
+
+def compute_relation_inverse(
+    request: RationalRelationInverseRequest,
+) -> RationalTransducer:
+    return invert_rational(request.transducer)
+
+
+def compute_relation_projection(
+    request: RationalRelationProjectionRequest,
+) -> NFA:
+    return project_rational_relation(request.transducer, request.tape)
+
+
+def compute_relation_fiber(request: RationalRelationFiberRequest) -> NFA:
+    return rational_relation_outputs_for_input(request.transducer, request.input_word)
+
+
+def compute_relation_restrict_input(
+    request: RationalRelationRestrictInputRequest,
+) -> RationalRelationRestrictInputResult:
+    restricted, product_states, source_edge_indices = restrict_rational_input(
+        request.transducer, request.dfa
+    )
+    return RationalRelationRestrictInputResult._from_kernel(
+        request,
+        restricted=restricted,
+        product_states=product_states,
+        source_edge_indices=source_edge_indices,
     )
 
 
@@ -145,10 +206,66 @@ _RELATION = {
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
+        operation_id="transducer.subsequential.identity.compute",
+        title="Construct the identity subsequential transducer",
+        description=(
+            "Construct the total one-state identity function on an explicit "
+            "ordered finite alphabet. Each input symbol is emitted unchanged; "
+            "the final output is empty. Input and output retain the same alphabet "
+            "context and optional identity."
+        ),
+        request_type=SubseqIdentityRequest,
+        result_type=SubsequentialTransducer,
+        run=compute_identity,
+        tags=("transducer", "subsequential", "identity", "exact"),
+        examples=(
+            OperationExample(
+                name="binary_identity",
+                description="Construct identity on ordered alphabet (a,b).",
+                input={"alphabet": {"symbols": ["a", "b"]}, "alphabet_id": "binary"},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.subsequential.from_word_morphism.compute",
+        title="Represent a word morphism as a subsequential transducer",
+        description=(
+            "Construct the one-state total subsequential transducer for a finite "
+            "word morphism. Source and target symbol orders are preserved, each "
+            "source symbol has one transition carrying its exact image, and the "
+            "final output is empty. The transducer carrier admits at most 32 "
+            "symbols per alphabet and 512 symbols per image."
+        ),
+        request_type=WordMorphismToSubseqRequest,
+        result_type=SubsequentialTransducer,
+        run=compute_word_morphism_to_subsequential,
+        tags=("transducer", "subsequential", "word-morphism", "exact"),
+        examples=(
+            OperationExample(
+                name="morphism_with_empty_image",
+                description=(
+                    "Represent a->xy and b->empty as total transitions; b remains "
+                    "defined and emits the empty word."
+                ),
+                input={
+                    "morphism": {
+                        "source_alphabet": ["a", "b"],
+                        "target_alphabet": ["x", "y"],
+                        "images": [["x", "y"], []],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="transducer.subsequential.run.compute",
         title="Run a subsequential transducer on a word",
-        description="Execute one exact bounded run, distinguishing successful empty output, "
-        "an undefined transition, and termination in a nonfinal state.",
+        description=(
+            "Execute one exact bounded run and return its state-after-prefix trace, "
+            "transition outputs, cumulative outputs, separate final output, and "
+            "complete output. Successful empty output, undefined transitions, and "
+            "termination in a nonfinal state remain distinct."
+        ),
         request_type=SubseqRunRequest,
         result_type=SubseqRunResult,
         run=compute_run,
@@ -229,6 +346,129 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         ),
     ),
     MathTool(
+        operation_id="transducer.subsequential.reachable_states.compute",
+        title="Find reachable states and shortest output paths",
+        description=(
+            "Return one shortest input word to each reachable state, its exact "
+            "state trace, and the concatenated transition output. Equal-length "
+            "ties use lexicographically least input words. Final outputs are "
+            "excluded because a witness reaches a state at an input prefix."
+        ),
+        request_type=ReachableStatesRequest,
+        result_type=ReachableStatesResult,
+        run=compute_reachable_states,
+        tags=("transducer", "subsequential", "reachability", "exact"),
+        discovery_terms=("reachable states", "state reachability", "shortest path"),
+        examples=(
+            OperationExample(
+                name="reachable_shortest_witnesses",
+                description=(
+                    "Return the shortest input and emitted transition word "
+                    "reaching each state of a three-state transducer."
+                ),
+                input={"transducer": _MINIMIZE_SOURCE},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.inverse.compute",
+        title="Invert a finite rational relation",
+        description=(
+            "Return the same finite-state relation with input and output "
+            "labels and their alphabet parents swapped. States, initial and "
+            "accepting sets, and edge order are preserved. Applying the "
+            "operation twice returns the original canonical relation."
+        ),
+        request_type=RationalRelationInverseRequest,
+        result_type=RationalTransducer,
+        run=compute_relation_inverse,
+        tags=("transducer", "rational-relation", "inverse", "exact"),
+        examples=(
+            OperationExample(
+                name="invert_two_pair_relation",
+                description="Swap each input/output word pair in a two-edge relation.",
+                input={
+                    "transducer": {
+                        "input_alphabet_size": 2,
+                        "output_alphabet_size": 2,
+                        "state_count": 1,
+                        "initial_states": [0],
+                        "accepting_states": [0],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 0,
+                                "input_label": [0],
+                                "output_label": [1],
+                            },
+                            {
+                                "source": 0,
+                                "target": 0,
+                                "input_label": [1],
+                                "output_label": [0],
+                            },
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.projection.compute",
+        title="Project a finite rational relation to one tape",
+        description=(
+            "Return an epsilon-NFA accepting exactly the selected tape words "
+            "that occur on accepting paths. The relation may be nondeterministic: "
+            "different accepting paths and output choices remain possible. "
+            "Multi-symbol labels expand to paths and empty labels to epsilon "
+            "edges. Alphabet symbols, explicit parent, and optional identity "
+            "are preserved; result expansion is admitted before construction."
+        ),
+        request_type=RationalRelationProjectionRequest,
+        result_type=NFA,
+        run=compute_relation_projection,
+        tags=("transducer", "rational-relation", "projection", "exact"),
+        examples=(
+            OperationExample(
+                name="project_relation_output",
+                description=(
+                    "Project accepting pairs (a,xy) and (ba,x) to their output "
+                    "language {xy,x}."
+                ),
+                input={
+                    "tape": "output",
+                    "transducer": {
+                        "input_alphabet_size": 2,
+                        "output_alphabet_size": 2,
+                        "state_count": 3,
+                        "initial_states": [0],
+                        "accepting_states": [2],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 2,
+                                "input_label": [0],
+                                "output_label": [0, 1],
+                            },
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "input_label": [1],
+                                "output_label": [0],
+                            },
+                            {
+                                "source": 1,
+                                "target": 2,
+                                "input_label": [0],
+                                "output_label": [],
+                            },
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="transducer.relation.path.replay.compute",
         title="Replay a rational-relation path",
         description="Replay one candidate edge-index path from an explicitly selected "
@@ -245,6 +485,113 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "transducer": _RELATION,
                     "initial_state": 0,
                     "edge_path": [0, 1],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.outputs_for_input_automaton.compute",
+        title="Represent a rational-relation output fiber",
+        description=(
+            "Fix one input word and return an epsilon-NFA accepting exactly all "
+            "outputs on accepting paths with that input. Input labels are matched "
+            "as complete words; empty input labels preserve epsilon-input cycles. "
+            "The result retains output alphabet context and represents infinite "
+            "fibers as automata rather than enumerating words. Product, matching, "
+            "intermediate, transition, work, and output bounds are admitted before "
+            "NFA construction."
+        ),
+        request_type=RationalRelationFiberRequest,
+        result_type=NFA,
+        run=compute_relation_fiber,
+        tags=("transducer", "rational-relation", "fiber", "exact"),
+        discovery_terms=(
+            "fixed input outputs",
+            "output fiber",
+            "rational relation section",
+        ),
+        examples=(
+            OperationExample(
+                name="finite_output_fiber",
+                description=(
+                    "With an explicit output alphabet, the accepted input word "
+                    "(0) has the sole output (1)."
+                ),
+                input={
+                    "input_word": [0],
+                    "transducer": {
+                        "input_alphabet_size": 2,
+                        "output_alphabet_size": 2,
+                        "input_alphabet": {"symbols": ["a", "b"]},
+                        "output_alphabet": {"symbols": ["x", "y"]},
+                        "state_count": 2,
+                        "initial_states": [0],
+                        "accepting_states": [1],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 1,
+                                "input_label": [0],
+                                "output_label": [1],
+                            }
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="transducer.relation.restrict_input.compute",
+        title="Restrict a rational relation by an input language",
+        description=(
+            "Intersect the input tape of a finite rational relation with a total "
+            "DFA language. The reachable product advances the DFA across each "
+            "complete input edge label and preserves the corresponding output "
+            "label and path multiplicity. Exact input alphabet context and "
+            "identity are required; product exploration and result size are "
+            "bounded before result edges are constructed."
+        ),
+        request_type=RationalRelationRestrictInputRequest,
+        result_type=RationalRelationRestrictInputResult,
+        run=compute_relation_restrict_input,
+        tags=("transducer", "rational-relation", "restriction", "exact"),
+        discovery_terms=("input restriction", "relation domain language"),
+        examples=(
+            OperationExample(
+                name="keep_relation_pairs_with_even_input_length",
+                description=(
+                    "Restrict a relation over the one-symbol alphabet to inputs "
+                    "of even length."
+                ),
+                input={
+                    "transducer": {
+                        "input_alphabet_size": 1,
+                        "output_alphabet_size": 1,
+                        "input_alphabet": {"symbols": ["a"]},
+                        "output_alphabet": {"symbols": ["x"]},
+                        "state_count": 1,
+                        "initial_states": [0],
+                        "accepting_states": [0],
+                        "edges": [
+                            {
+                                "source": 0,
+                                "target": 0,
+                                "input_label": [0],
+                                "output_label": [0],
+                            }
+                        ],
+                    },
+                    "dfa": {
+                        "state_count": 2,
+                        "alphabet_size": 1,
+                        "alphabet": {"symbols": ["a"]},
+                        "transitions": [
+                            {"source": 0, "symbol": 0, "target": 1},
+                            {"source": 1, "symbol": 0, "target": 0},
+                        ],
+                        "initial_state": 0,
+                        "accepting_states": [0],
+                    },
                 },
             ),
         ),

@@ -10,7 +10,6 @@ from jacobian.math.polynomials.derivations._stable_operations import (
 from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightAction,
     PolynomialWeightActionResult,
-    PolynomialWeightInvariantRequest,
     PolynomialWeightInvariantResult,
 )
 from jacobian.math.polynomials.derivations._weight_operations import (
@@ -31,7 +30,6 @@ __all__ = [
     "PolynomialGaStableSubrepresentationRequest",
     "PolynomialWeightAction",
     "PolynomialWeightActionResult",
-    "PolynomialWeightInvariantRequest",
     "PolynomialWeightInvariantResult",
     "apply_derivation",
     "construct_locally_nilpotent_certificate",

@@ -14,11 +14,12 @@ Laurent coaction, every nonzero integer-weight component, and the weight-zero
 polynomial. Negative weights are represented by the existing exact sparse
 Laurent value; no coefficient field extension is needed.
 
-The accepted envelope is at most 8 variables, weights of magnitude at most 64,
-256 source terms, total degree at most 64, and 128 decimal digits per rational
-coefficient. The induced Laurent exponent is bounded by 4096. These checks run
-before coaction terms and projections are constructed. Result terms cannot
-exceed the source term count.
+The accepted envelope is at most 7 source variables — the Laurent coaction
+carrier reserves its eighth axis for the parameter — weights of magnitude at
+most 64, 256 source terms, total degree at most 64, and 128 decimal digits per
+rational coefficient. The induced Laurent exponent is bounded by 4096. These
+checks run before coaction terms and projections are constructed. Result terms
+cannot exceed the source term count.
 
 For every monomial, the exponent is the dot product `w.e`. Setting `t=1`
 therefore gives the counit identity. Under multiplication of parameters, the
@@ -35,9 +36,13 @@ weight-zero subspace of `QQ[x_1,...,x_n]_{<=d}`. It returns the canonical
 weight-zero monomial basis and the number of invariant monomials in each exact
 degree from zero through `d`. The complete candidate monomial count
 `binomial(n+d,d)` is checked against 4096 before exponent tuples are generated.
-Each returned basis polynomial is a normal polynomial-ring value and can be
-passed directly to `algebraic_group.gm.diagonal_weight_action.compute`; its
-coaction parameter has exponent zero.
+Each returned basis polynomial is a normal polynomial-ring value. When the
+action is inside the seven-variable envelope of
+`algebraic_group.gm.diagonal_weight_action.compute`, it can be passed to that
+operation unchanged; its coaction parameter then has exponent zero. An
+eight-variable invariant slice is valid arithmetic but has no representable
+diagonal coaction, because the Laurent carrier reserves its eighth axis for
+the parameter.
 
 This follows the standard equivalence between representations of the
 multiplicative group and integer-graded modules: the weight-zero subspace is

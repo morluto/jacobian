@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from fractions import Fraction
 from math import factorial
 from typing import Any
 
+from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
@@ -23,11 +24,11 @@ from jacobian.math.polynomials.derivations._models import (
     MAX_DERIVATION_ITERATE_COUNT,
     MAX_DERIVATION_ITERATE_TERMS,
     MAX_DERIVATION_SOURCE_TERMS,
-    MAX_GA_ACTION_OUTPUT_BYTES,
+    MAX_DERIVATION_VARIABLES,
+    MAX_GA_ACTION_OUTPUT_CELLS,
     MAX_GA_ACTION_OUTPUT_TERMS,
     MAX_GA_ACTION_VARIABLES,
     DerivationApplyResult,
-    DerivationFromVectorFieldRequest,
     DerivationIteratesResult,
     LocallyNilpotentCertificate,
     PolynomialDerivation,
@@ -342,17 +343,17 @@ def _admit_action_output(
     )
     # This covers each scalar, exponent vector, and term object; axis labels
     # and polynomial wrappers are added separately below.
-    output_bytes = term_count * 384
-    output_bytes += sum(len(variable.encode("utf-8")) for variable in variables)
-    output_bytes += len(parameter.encode("utf-8")) + 256
+    output_cells = term_count * 384
+    output_cells += sum(len(variable.encode("utf-8")) for variable in variables)
+    output_cells += len(parameter.encode("utf-8")) + 256
     if (
         term_count > MAX_GA_ACTION_OUTPUT_TERMS
-        or output_bytes > MAX_GA_ACTION_OUTPUT_BYTES
+        or output_cells > MAX_GA_ACTION_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("certificate", "generator_iterates"),
             code="polynomial_derivation.action_output_budget",
-            message="exponential action exceeds its term or serialized-output envelope",
+            message="exponential action exceeds its term or expansion-cell envelope",
         )
 
     action_coefficients: list[tuple[Fraction, ...]] = []
@@ -586,6 +587,12 @@ def construct_locally_nilpotent_certificate(
     """Check complete generator chains and return the typed certificate."""
     derivation_value = _as_derivation(derivation)
     _admit_derivation(derivation_value)
+    if not isinstance(chains, Sequence) or isinstance(chains, (str, bytes)):
+        raise OperationDomainValidationError(
+            location=("chains",),
+            code="polynomial_derivation.certificate_shape",
+            message="the certificate must supply one iterate chain per generator",
+        )
     if len(chains) != len(derivation_value.variables):
         raise OperationDomainValidationError(
             location=("chains",),
@@ -593,7 +600,20 @@ def construct_locally_nilpotent_certificate(
             message="one chain is required per generator",
         )
     canonical: list[tuple[RationalPolynomial, ...]] = []
+    expected_chain_count = len(derivation_value.variables)
     for index, chain in enumerate(chains):
+        if index >= expected_chain_count:
+            raise OperationDomainValidationError(
+                location=("chains", index),
+                code="polynomial_derivation.certificate_shape",
+                message="one chain is required per generator",
+            )
+        if not isinstance(chain, Sequence) or isinstance(chain, (str, bytes)):
+            raise OperationDomainValidationError(
+                location=("chains", index),
+                code="polynomial_derivation.certificate_shape",
+                message="each generator chain must be a sequence of polynomials",
+            )
         if not 1 <= len(chain) <= MAX_DERIVATION_CERTIFICATE_CHAIN:
             raise OperationResourceAdmissionError(
                 location=("chains", index),
@@ -602,8 +622,23 @@ def construct_locally_nilpotent_certificate(
             )
         generator = _generator(derivation_value.variables, index)
         # The supplied chain is caller-authored; re-admit each polynomial and
-        # replay every transition.
-        canonical_chain = tuple(_as_polynomial(value) for value in chain)
+        # replay every transition. Do not trust iteration to honor __len__.
+        canonical_values: list[RationalPolynomial] = []
+        for item_index, value in enumerate(chain):
+            if item_index >= MAX_DERIVATION_CERTIFICATE_CHAIN:
+                raise OperationResourceAdmissionError(
+                    location=("chains", index),
+                    code="polynomial_derivation.certificate_bound",
+                    message="generator chain exceeds the admitted bound",
+                )
+            canonical_values.append(_as_polynomial(value))
+        if len(canonical_values) != len(chain) or not canonical_values:
+            raise OperationDomainValidationError(
+                location=("chains", index),
+                code="polynomial_derivation.certificate_shape",
+                message="each generator chain must yield its declared nonempty length",
+            )
+        canonical_chain = tuple(canonical_values)
         if canonical_chain[0] != generator:
             raise OperationDomainValidationError(
                 location=("chains", index, 0),
@@ -626,6 +661,12 @@ def construct_locally_nilpotent_certificate(
                 message="each generator chain must end at zero",
             )
         canonical.append(canonical_chain)
+    if len(canonical) != expected_chain_count or len(chains) != expected_chain_count:
+        raise OperationDomainValidationError(
+            location=("chains",),
+            code="polynomial_derivation.certificate_shape",
+            message="one chain is required per generator",
+        )
     return LocallyNilpotentCertificate.model_construct(
         derivation=derivation_value, generator_iterates=tuple(canonical)
     )
@@ -709,9 +750,7 @@ def apply_derivation(
 
 
 def derivation_from_vector_field(
-    components: tuple[RationalPolynomial, ...]
-    | DerivationFromVectorFieldRequest
-    | Mapping[str, Any],
+    components: Sequence[RationalPolynomial | Mapping[str, Any]] | Mapping[str, Any],
 ) -> PolynomialDerivation:
     """Bind vector-field components as the generator images of a derivation.
 
@@ -719,16 +758,66 @@ def derivation_from_vector_field(
     characterized by ``D(x_i)=f_i``.  This conversion preserves the ordered
     polynomial parent and does not interpret the components through a backend.
     """
-    if isinstance(components, DerivationFromVectorFieldRequest):
-        request = DerivationFromVectorFieldRequest.model_validate(
-            components.model_dump()
+    payload = (
+        components.get("components") if isinstance(components, Mapping) else components
+    )
+    if not isinstance(payload, Sequence) or isinstance(payload, (str, bytes)):
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_derivation.vector_field_shape",
+            message="a vector field must supply one component polynomial per generator",
         )
-    elif isinstance(components, Mapping):
-        request = DerivationFromVectorFieldRequest.model_validate(components)
-    else:
-        request = DerivationFromVectorFieldRequest(components=components)
-    variables = request.components[0].variables
-    derivation = PolynomialDerivation(variables=variables, images=request.components)
+    if len(payload) > MAX_DERIVATION_VARIABLES:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_derivation.vector_field_shape",
+            message=(
+                "a vector field supplies at most one component per derivation "
+                f"variable, bounded by {MAX_DERIVATION_VARIABLES}"
+            ),
+        )
+    images: list[RationalPolynomial] = []
+    absent = object()
+    supplier = iter(payload)
+    while True:
+        component: Any = next(supplier, absent)
+        if component is absent:
+            break
+        index = len(images)
+        if index >= MAX_DERIVATION_VARIABLES:
+            raise OperationDomainValidationError(
+                location=("components", index),
+                code="polynomial_derivation.vector_field_shape",
+                message=(
+                    "a vector field supplies at most one component per derivation "
+                    f"variable, bounded by {MAX_DERIVATION_VARIABLES}"
+                ),
+            )
+        try:
+            value = (
+                component.model_dump()
+                if isinstance(component, RationalPolynomial)
+                else component
+            )
+            images.append(RationalPolynomial.model_validate(value))
+        except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+            raise OperationDomainValidationError(
+                location=("components", index),
+                code="polynomial_derivation.vector_field_shape",
+                message="vector-field components must be exact QQ polynomials",
+            ) from exc
+    variables = images[0].variables if images else ()
+    try:
+        derivation = PolynomialDerivation(variables=variables, images=tuple(images))
+    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("components",),
+            code="polynomial_derivation.vector_field_shape",
+            message=(
+                "a vector field needs one component per distinct generator "
+                "of one ordered QQ ring"
+            ),
+        ) from exc
     _admit_derivation(derivation)
     return derivation
 

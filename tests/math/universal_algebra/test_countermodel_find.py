@@ -8,6 +8,7 @@ never yields a negative conclusion, and admission.
 from __future__ import annotations
 
 import json
+from itertools import product
 from typing import Any
 
 import pytest
@@ -17,7 +18,6 @@ from jacobian.catalog.models import MathTool, OperationDomainValidationError
 from jacobian.math.universal_algebra import (
     countermodel_find,
     implication_countermodel_check,
-    verify_countermodel_find,
 )
 from jacobian.math.universal_algebra._models import (
     CountermodelFindRequest,
@@ -102,7 +102,6 @@ class TestFound:
         assert result.certificate is not None
         assert result.certificate.is_countermodel is True
         assert len(result.certificate.algebra.carrier) == result.order
-        assert verify_countermodel_find(result)
 
     def test_found_certificate_replays_through_the_checker(self) -> None:
         result = countermodel_find(
@@ -142,7 +141,6 @@ class TestFound:
         assert result.order == 2
         assert result.certificate is not None
         assert result.certificate.algebra.tables[0][0] != 0
-        assert verify_countermodel_find(result)
 
     def test_search_is_deterministic(self) -> None:
         first = countermodel_find(
@@ -164,7 +162,74 @@ class TestExhausted:
         assert result.total_tables == 1 + 16
         assert result.tables_examined == 17
         assert result.orders_complete == (1, 2)
-        assert verify_countermodel_find(result)
+
+    def test_exhaustion_matches_independent_finite_oracle(self) -> None:
+        """Replay every table and valuation without calling Jacobian kernels."""
+        # The left-zero law x*y=x implies associativity, but the oracle checks
+        # that implication directly across every order-1 and order-2 table.
+        left_zero = MagmaEquation(
+            left=_term([_variable(0), _variable(1), _apply((0, 1))], 2),
+            right=_term([_variable(0)], 0),
+        )
+        associative = MagmaEquation(
+            left=_term(
+                [
+                    _variable(0),
+                    _variable(1),
+                    _variable(2),
+                    _apply((0, 1)),
+                    _apply((3, 2)),
+                ],
+                4,
+            ),
+            right=_term(
+                [
+                    _variable(0),
+                    _variable(1),
+                    _variable(2),
+                    _apply((1, 2)),
+                    _apply((0, 3)),
+                ],
+                4,
+            ),
+        )
+        result = countermodel_find((left_zero,), associative, 1, 2, 1000)
+
+        def evaluate(
+            term: FlatTerm, assignment: tuple[int, ...], table: tuple[int, ...], n: int
+        ) -> int:
+            values: list[int] = []
+            for node in term.nodes:
+                if node.kind == "variable":
+                    values.append(assignment[node.variable_id])
+                else:
+                    left, right = (values[index] for index in node.children)
+                    values.append(table[left * n + right])
+            return values[term.root]
+
+        examined = 0
+        countermodels = 0
+        for n in (1, 2):
+            for table in product(range(n), repeat=n * n):
+                examined += 1
+                premise_holds = all(
+                    evaluate(left_zero.left, assignment, table, n)
+                    == evaluate(left_zero.right, assignment, table, n)
+                    for assignment in product(range(n), repeat=2)
+                )
+                target_fails = any(
+                    evaluate(associative.left, assignment, table, n)
+                    != evaluate(associative.right, assignment, table, n)
+                    for assignment in product(range(n), repeat=3)
+                )
+                if premise_holds and target_fails:
+                    countermodels += 1
+
+        assert (examined, countermodels) == (17, 0)
+        assert result.status == "EXHAUSTED_UP_TO_BOUND"
+        assert result.tables_examined == examined
+        assert result.total_tables == examined
+        assert result.orders_complete == (1, 2)
 
 
 class TestUnknown:
@@ -226,6 +291,18 @@ class TestInvalidRequests:
                 table_budget=100,
             )
 
+    def test_aggregate_search_work_is_admitted_before_enumeration(self) -> None:
+        nodes: list[dict[str, object]] = [_variable(0)]
+        for _ in range(50):
+            nodes.append(_apply((len(nodes) - 1, 0)))
+        deep_term = _term(nodes, len(nodes) - 1)
+        law = MagmaEquation(left=deep_term, right=_term([_variable(0)], 0))
+        with pytest.raises(OperationDomainValidationError) as exc_info:
+            countermodel_find((law,), law, 1, 4, 500_000)
+        assert exc_info.value.errors()[0]["type"] == (
+            "universal_algebra.countermodel_search_work_bound"
+        )
+
 
 class TestAdmissionAndParity:
     def test_native_and_catalog_paths_agree(self) -> None:
@@ -246,7 +323,7 @@ class TestAdmissionAndParity:
             == native
         )
 
-    def test_round_trip_and_verify(self) -> None:
+    def test_round_trip(self) -> None:
         for premises, target, min_order, max_order, budget in (
             ((_benchmark_premise(),), _benchmark_target(), 1, 2, 1000),
             ((_idempotent_law(),), _idempotent_law(), 1, 2, 1000),
@@ -258,17 +335,6 @@ class TestAdmissionAndParity:
             )
 
             assert restored == result
-            assert verify_countermodel_find(restored)
-
-    def test_found_forgery_fails_verify(self) -> None:
-        result = countermodel_find(
-            (_benchmark_premise(),), _benchmark_target(), 1, 2, 1000
-        )
-        assert result.status == "FOUND"
-        forged = json.loads(result.model_dump_json())
-        forged["tables_examined"] = result.tables_examined + 1
-        forged_claim = CountermodelFindResult.model_validate_json(json.dumps(forged))
-        assert not verify_countermodel_find(forged_claim)
 
     def test_exhausted_count_forgery_is_rejected(self) -> None:
         law = _idempotent_law()
@@ -278,3 +344,40 @@ class TestAdmissionAndParity:
         forged["tables_examined"] = 16
         with pytest.raises(ValidationError):
             CountermodelFindResult.model_validate_json(json.dumps(forged))
+
+    def test_exhaustion_total_must_match_declared_orders(self) -> None:
+        law = _idempotent_law()
+        result = countermodel_find((law,), law, 1, 2, 1000)
+        forged = json.loads(result.model_dump_json())
+        forged["total_tables"] = forged["tables_examined"] = 1
+        with pytest.raises(ValidationError):
+            CountermodelFindResult.model_validate_json(json.dumps(forged))
+
+    def test_result_rejects_reversed_order_range(self) -> None:
+        law = _idempotent_law()
+        result = countermodel_find((law,), law, 1, 2, 1000)
+        forged = json.loads(result.model_dump_json())
+        forged["min_order"], forged["max_order"] = 2, 1
+        forged["total_tables"] = 0
+        forged["tables_examined"] = 0
+        forged["orders_complete"] = []
+        with pytest.raises(ValidationError):
+            CountermodelFindResult.model_validate_json(json.dumps(forged))
+
+    def test_found_certificate_must_match_declared_equations_and_range(self) -> None:
+        premise = _benchmark_premise()
+        target = _benchmark_target()
+        result = countermodel_find((premise,), target, 1, 2, 1000)
+        assert result.status == "FOUND"
+        assert result.certificate is not None
+
+        wrong_equation = json.loads(result.model_dump_json())
+        wrong_equation["target"] = premise.model_dump(mode="json")
+        with pytest.raises(ValidationError):
+            CountermodelFindResult.model_validate_json(json.dumps(wrong_equation))
+
+        wrong_range = json.loads(result.model_dump_json())
+        wrong_range["min_order"] = wrong_range["max_order"] = 1
+        wrong_range["total_tables"] = 1
+        with pytest.raises(ValidationError):
+            CountermodelFindResult.model_validate_json(json.dumps(wrong_range))

@@ -15,8 +15,10 @@ from __future__ import annotations
 from fractions import Fraction
 from itertools import pairwise
 
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational
 from jacobian._execution import BackendFailureReason, OperationBackendError
-from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -41,6 +43,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     FiniteCellularSheaf,
     FromCoverMapsResult,
     SheafCoboundaryLedgerEntry,
+    SheafCochainComplex,
     SheafCochainCoordinate,
     SheafCohomologyGroup,
     SheafCohomologyResult,
@@ -49,7 +52,9 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafObstructionCode,
     SheafOutcome,
     SheafRestriction,
+    SheafScalar,
     SheafStalk,
+    sheaf_scalar_digits,
 )
 
 Scalar = Fraction | int
@@ -85,7 +90,7 @@ def _is_prime(value: int) -> bool:
 
 
 class _ExactField:
-    """One declared exact scalar field with canonical text round trips."""
+    """One declared exact scalar field with typed scalar round trips."""
 
     def __init__(self, field: SheafField, prime: int | None) -> None:
         self.field = field
@@ -96,28 +101,24 @@ class _ExactField:
             raise RuntimeError("prime-field arithmetic has no modulus")
         return self.prime
 
-    def parse(self, text: str) -> Scalar:
-        stripped = text.strip()
+    def parse(self, scalar: SheafScalar) -> Scalar:
         if self.field is SheafField.RATIONAL:
-            if not stripped or any(char not in "-+/0123456789" for char in stripped):
-                raise ValueError(f"{text!r} is not an exact rational scalar")
-            return Fraction(stripped)
-        if not stripped or any(char not in "-+0123456789" for char in stripped):
-            raise ValueError(f"{text!r} is not an exact integer scalar")
+            if not isinstance(scalar, CanonicalRational):
+                raise ValueError("QQ scalars must be CanonicalRational values")
+            return Fraction(scalar.num, scalar.den)
+        if type(scalar) is not int:
+            raise ValueError("GF(p) scalars must be strict integer representatives")
         prime = self.prime_modulus()
-        return int(stripped) % prime
+        if not 0 <= scalar < prime:
+            raise ValueError("GF(p) scalar must be the canonical residue")
+        return scalar
 
-    def text(self, value: Scalar) -> str:
+    def typed(self, value: Scalar) -> SheafScalar:
         if self.field is SheafField.RATIONAL:
             if not isinstance(value, Fraction):
                 raise RuntimeError("rational sheaf field received a modular scalar")
-            if value.denominator == 1:
-                return format_canonical_integer(value.numerator)
-            return (
-                f"{format_canonical_integer(value.numerator)}/"
-                f"{format_canonical_integer(value.denominator)}"
-            )
-        return str(int(value))
+            return CanonicalRational(num=value.numerator, den=value.denominator)
+        return int(value) % self.prime_modulus()
 
     def zero(self) -> Scalar:
         return Fraction(0) if self.field is SheafField.RATIONAL else 0
@@ -185,8 +186,8 @@ class _ExactField:
                 return False
         return True
 
-    def render(self, matrix: Matrix) -> tuple[tuple[str, ...], ...]:
-        return tuple(tuple(self.text(value) for value in row) for row in matrix)
+    def render(self, matrix: Matrix) -> tuple[tuple[SheafScalar, ...], ...]:
+        return tuple(tuple(self.typed(value) for value in row) for row in matrix)
 
 
 def _cells(complex_: FiniteSimplicialComplex) -> tuple[Simplex, ...]:
@@ -303,7 +304,11 @@ def _admit_resources(
     for index, cover_map in enumerate(cover_maps):
         for row in cover_map.entries:
             for entry in row:
-                if len(entry) > MAX_SHEAF_ENTRY_DIGITS:
+                if (
+                    isinstance(entry, (CanonicalRational, int))
+                    and type(entry) is not bool
+                    and sheaf_scalar_digits(entry) > MAX_SHEAF_ENTRY_DIGITS
+                ):
                     raise _resource(
                         "admission.entry_digits",
                         f"cover map {index} carries a scalar above the "
@@ -759,17 +764,10 @@ def _cohomology_admission(sheaf: FiniteCellularSheaf) -> _ExactField:
     return field
 
 
-def sheaf_cohomology(  # noqa: C901
+def _assemble_sheaf_cochain_complex(  # noqa: C901
     sheaf: FiniteCellularSheaf,
-) -> SheafCohomologyResult:
-    """Compute cellular cohomology of a checked finite cellular sheaf.
-
-    The kernel assembles the signed-incidence cochain complex from the
-    complete restriction diagram, replays ``delta^2 = 0`` and the
-    Euler-characteristic identity, and returns Betti numbers with
-    representative cocycles. Diamond commutativity, already established
-    by construction, is what makes the signed coboundary square to zero.
-    """
+) -> tuple[SheafCochainComplex, _ExactField, list[list[list[Scalar]]]]:
+    """Admit once, assemble signed incidence blocks, and establish delta squared zero."""
     field = _cohomology_admission(sheaf)
     basis_for = {stalk.simplex: stalk.basis for stalk in sheaf.stalks}
     parsed: dict[CoverKey, Matrix] = {}
@@ -859,7 +857,6 @@ def sheaf_cohomology(  # noqa: C901
                         ] = _cochain_add(field, current, value)
         scalar_coboundaries.append(block)
 
-    ledger: list[SheafCoboundaryLedgerEntry] = []
     for degree in range(max(0, dimension - 1)):
         product = _cochain_mat_mul(
             field, scalar_coboundaries[degree + 1], scalar_coboundaries[degree]
@@ -870,15 +867,40 @@ def sheaf_cohomology(  # noqa: C901
                 "the cellular coboundary must square to zero",
                 ("sheaf",),
             )
-        ledger.append(
-            SheafCoboundaryLedgerEntry(
-                degree=degree,
-                product_rows=cochain_sizes[degree + 2],
-                product_columns=cochain_sizes[degree],
-                nonzero_entries=0,
-            )
-        )
+    result = SheafCochainComplex._from_kernel(
+        sheaf=sheaf,
+        cochain_dimensions=tuple(cochain_sizes),
+        cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
+        coboundary_matrices=tuple(
+            tuple(tuple(field.typed(value) for value in row) for row in block)
+            for block in scalar_coboundaries
+        ),
+    )
+    return result, field, scalar_coboundaries
 
+
+def sheaf_cochain_complex(sheaf: FiniteCellularSheaf) -> SheafCochainComplex:
+    """Return the checked signed-incidence cellular sheaf cochain complex."""
+    return _assemble_sheaf_cochain_complex(sheaf)[0]
+
+
+def sheaf_cohomology(
+    sheaf: FiniteCellularSheaf,
+) -> SheafCohomologyResult:
+    """Compute cohomology from the checked cellular sheaf cochain complex."""
+    cochain_complex, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(sheaf)
+    cochain_sizes = list(cochain_complex.cochain_dimensions)
+    cochain_bases = [list(basis) for basis in cochain_complex.cochain_bases]
+    dimension = sheaf.complex.dimension
+    ledger = [
+        SheafCoboundaryLedgerEntry(
+            degree=degree,
+            product_rows=cochain_sizes[degree + 2],
+            product_columns=cochain_sizes[degree],
+            nonzero_entries=0,
+        )
+        for degree in range(max(0, dimension - 1))
+    ]
     groups: list[SheafCohomologyGroup] = []
     euler_cohomology = 0
     for degree in range(dimension + 1):
@@ -917,16 +939,14 @@ def sheaf_cohomology(  # noqa: C901
                 coboundary_rank=incoming_rank,
                 betti_number=betti,
                 cocycle_representatives=tuple(
-                    tuple(field.text(value) for value in vector)
+                    tuple(field.typed(value) for value in vector)
                     for vector in representatives
                 ),
             )
         )
         euler_cohomology += betti if degree % 2 == 0 else -betti
     euler_stalk = sum(
-        (len(basis_for[face]) if degree % 2 == 0 else -len(basis_for[face]))
-        for degree, faces in enumerate(faces_by_degree)
-        for face in faces
+        size if degree % 2 == 0 else -size for degree, size in enumerate(cochain_sizes)
     )
     if euler_stalk != euler_cohomology:
         raise _domain(
@@ -939,7 +959,7 @@ def sheaf_cohomology(  # noqa: C901
         cochain_dimensions=tuple(cochain_sizes),
         cochain_bases=tuple(tuple(basis) for basis in cochain_bases),
         coboundary_matrices=tuple(
-            tuple(tuple(field.text(value) for value in row) for row in block)
+            tuple(tuple(field.typed(value) for value in row) for row in block)
             for block in scalar_coboundaries
         ),
         groups=tuple(groups),
@@ -958,7 +978,7 @@ def _transpose_rows(rows: list[list[Scalar]]) -> list[list[Scalar]]:
     ]
 
 
-__all__ = ["from_cover_maps", "sheaf_cohomology"]
+__all__ = ["from_cover_maps", "sheaf_cochain_complex", "sheaf_cohomology"]
 
 
 def from_cover_maps(
@@ -1023,4 +1043,70 @@ def from_cover_maps(
     )
 
 
-__all__ = ["from_cover_maps"]
+def require_canonical_sheaf_admission(
+    sheaf: FiniteCellularSheaf,
+) -> FiniteCellularSheaf:
+    """Rebuild an authored sheaf from covers and bind every derived map."""
+    if type(sheaf) is not FiniteCellularSheaf:
+        raise _domain(
+            "authored_sheaf_invalid",
+            "a canonical finite cellular sheaf is required",
+            ("sheaf",),
+        )
+    try:
+        admitted = FiniteCellularSheaf.model_validate(
+            sheaf.model_dump(mode="python"), strict=True
+        )
+    except (AttributeError, TypeError, ValueError, ValidationError) as exc:
+        raise _domain(
+            "authored_sheaf_invalid",
+            "the authored sheaf violates its structural contract",
+            ("sheaf",),
+        ) from exc
+    rebuilt = from_cover_maps(
+        admitted.complex,
+        admitted.coefficient_field,
+        admitted.prime,
+        admitted.stalks,
+        tuple(
+            CoverRestrictionMatrix(
+                source=item.source, target=item.target, entries=item.entries
+            )
+            for item in admitted.cover_restrictions
+        ),
+    )
+    if rebuilt.sheaf is None:
+        raise _domain(
+            "authored_sheaf_not_functorial",
+            "the authored cover diagram does not define a cellular sheaf",
+            ("sheaf",),
+        )
+    canonical = rebuilt.sheaf
+
+    def restrictions_by_pair(
+        restrictions: tuple[SheafRestriction, ...],
+    ) -> dict[CoverKey, tuple[object, ...]]:
+        return {
+            (item.source, item.target): (
+                item.row_basis,
+                item.column_basis,
+                item.entries,
+                item.cover_path,
+            )
+            for item in restrictions
+        }
+
+    if restrictions_by_pair(admitted.cover_restrictions) != restrictions_by_pair(
+        canonical.cover_restrictions
+    ) or restrictions_by_pair(admitted.derived_restrictions) != restrictions_by_pair(
+        canonical.derived_restrictions
+    ):
+        raise _domain(
+            "authored_sheaf_derived_map_mismatch",
+            "every authored derived restriction must equal its cover-map composite",
+            ("sheaf", "derived_restrictions"),
+        )
+    return canonical
+
+
+__all__ = ["from_cover_maps", "require_canonical_sheaf_admission"]

@@ -13,7 +13,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.analysis._models import InertiaResult
+from jacobian.math.matrices.analysis.operations import compute_inertia
+from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
 from jacobian.math.polynomials.values import (
     RationalLaurentPolynomial,
     RationalLaurentPolynomialTerm,
@@ -24,16 +26,40 @@ from jacobian.math.topology.edge_paths._models import (
     WordLetter,
 )
 from jacobian.math.topology.links._extensions_models import (
+    MAX_CONWAY_CENTERED_DEGREE,
+    MAX_CONWAY_COEFFICIENT_DIGITS,
+    MAX_CONWAY_OUTPUT_CELLS,
+    MAX_LINK_CROSSINGS,
+    MAX_LINK_SIGNATURE_CROSSINGS,
+    MAX_LINK_SIGNATURE_OUTPUT_CELLS,
+    MAX_LINK_SIGNATURE_WORK,
+    MAX_STATE_CIRCLE_CROSSINGS,
+    MAX_STATE_CIRCLE_OUTPUT_CELLS,
     MAX_WIRTINGER_GENERATORS,
     AlexanderPolynomialResult,
+    BraidArtinActionResult,
     BraidClosureResult,
     BraidLetter,
     BraidPermutationResult,
     BraidWord,
-    GoeritzCrossingContribution,
+    CheckerboardRegion,
+    ConwayPolynomialResult,
+    GoeritzCorrectionContribution,
     GoeritzDataResult,
-    GoeritzRegion,
+    LinkBlackboardEdge,
+    LinkBlackboardGraph,
+    LinkCrossingProfileEntry,
+    LinkCrossingProfileResult,
     LinkDeterminantResult,
+    LinkDiagramSmoothingState,
+    LinkDisjointUnionArcMap,
+    LinkDisjointUnionCrossingMap,
+    LinkDisjointUnionDartMap,
+    LinkDisjointUnionFreeLoopMap,
+    LinkDisjointUnionResult,
+    LinkSignatureResult,
+    LinkSmoothedCircle,
+    LinkStateCirclesResult,
     SeifertCircle,
     SeifertCircleResult,
     WirtingerArc,
@@ -41,8 +67,8 @@ from jacobian.math.topology.links._extensions_models import (
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links._models import (
-    ArcPairing,
     LinkCrossing,
+    OrientedDiagramArc,
     OrientedLinkDiagram,
 )
 from jacobian.math.topology.links.operations import link_components
@@ -129,6 +155,88 @@ def braid_permutation(word: BraidWord) -> BraidPermutationResult:
     )
 
 
+def _reduce_free_word(letters: Iterable[WordLetter]) -> tuple[WordLetter, ...]:
+    reduced: list[WordLetter] = []
+    for letter in letters:
+        if (
+            reduced
+            and reduced[-1].generator == letter.generator
+            and reduced[-1].exponent == -letter.exponent
+        ):
+            reduced.pop()
+        else:
+            reduced.append(letter)
+    return tuple(reduced)
+
+
+def braid_artin_action(word: BraidWord) -> BraidArtinActionResult:
+    """Apply the standard Artin action to the free group on braid strands.
+
+    A braid letter acts on the current images from left to right. Its positive
+    generator sends ``x_i`` to ``x_i*x_(i+1)*x_i^-1`` and ``x_(i+1)`` to
+    ``x_i``; the negative generator uses the inverse automorphism. The output
+    is an exact free-group automorphism presentation, not a braid-equivalence
+    or word-problem decision procedure.
+    """
+
+    admitted = _admit_braid(word)
+    images: list[tuple[WordLetter, ...]] = [
+        (WordLetter(generator=index, exponent=1),)
+        for index in range(admitted.strand_count)
+    ]
+    # Adjacent inverse braid generators induce mutually inverse substitutions.
+    # Reduce them before expansion: transient images of cancelling prefixes do
+    # not describe the work or output required by the represented automorphism.
+    reduced_braid: list[BraidLetter] = []
+    for letter in admitted.letters:
+        if (
+            reduced_braid
+            and reduced_braid[-1].generator == letter.generator
+            and reduced_braid[-1].exponent == -letter.exponent
+        ):
+            reduced_braid.pop()
+        else:
+            reduced_braid.append(letter)
+
+    total_work = admitted.strand_count
+    for letter in reduced_braid:
+        i = letter.generator - 1
+        first, second = images[i], images[i + 1]
+        if letter.exponent == 1:
+            inverse_first = tuple(
+                WordLetter(generator=item.generator, exponent=-item.exponent)
+                for item in reversed(first)
+            )
+            candidate = _reduce_free_word(first + second + inverse_first)
+            replacement = first
+            target = i
+        else:
+            inverse_second = tuple(
+                WordLetter(generator=item.generator, exponent=-item.exponent)
+                for item in reversed(second)
+            )
+            candidate = _reduce_free_word(inverse_second + first + second)
+            replacement = second
+            target = i + 1
+        total_work += len(first) + len(second) + len(candidate) + len(replacement)
+        if len(candidate) > 128 or total_work > 100_000:
+            raise OperationResourceAdmissionError(
+                location=("word", "letters"),
+                code="link_diagram.artin_action_expansion_bound",
+                message=(
+                    "the reduced braid action exceeds the 128-letter per-image "
+                    "or 100000-letter cumulative substitution envelope"
+                ),
+            )
+        images[target] = candidate
+        images[i + 1 if target == i else i] = replacement
+
+    return BraidArtinActionResult(
+        word=admitted,
+        generator_images=tuple(FiniteGroupWord(letters=image) for image in images),
+    )
+
+
 def braid_multiply(left: BraidWord, right: BraidWord) -> BraidWord:
     """Concatenate two presentation words in the same braid group."""
 
@@ -172,7 +280,7 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
     first_top: list[str | None] = [None] * admitted.strand_count
     last_bottom: list[str | None] = [None] * admitted.strand_count
     crossings: list[LinkCrossing] = []
-    arcs: list[ArcPairing] = []
+    arcs: list[OrientedDiagramArc] = []
 
     for crossing_index, letter in enumerate(admitted.letters):
         crossing_id = f"crossing_{crossing_index:03d}"
@@ -192,14 +300,19 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
             if previous is None:
                 first_top[position] = top
             else:
-                arcs.append(ArcPairing(first=previous, second=top))
+                arcs.append(OrientedDiagramArc(tail=previous, head=top))
             last_bottom[position] = bottom_by_position[position]
+        ccw_darts = (darts[0], darts[3], darts[2], darts[1])
+        old_to_new = {0: 0, 3: 1, 2: 2, 1: 3}
+        old_over = (0, 2) if letter.exponent == 1 else (1, 3)
+        over_pair = tuple(sorted(old_to_new[index] for index in old_over))
+        under_pair = tuple(index for index in range(4) if index not in over_pair)
         crossings.append(
             LinkCrossing(
                 crossing_id=crossing_id,
-                half_edges=darts,
-                over_pair=(0, 2) if letter.exponent == 1 else (1, 3),
-                under_pair=(1, 3) if letter.exponent == 1 else (0, 2),
+                half_edges=ccw_darts,
+                over_pair=(over_pair[0], over_pair[1]),
+                under_pair=(under_pair[0], under_pair[1]),
                 sign=letter.exponent,
             )
         )
@@ -211,8 +324,8 @@ def braid_closure(word: BraidWord) -> BraidClosureResult:
         if first is None or last is None:
             free_loops += 1
         else:
-            arcs.append(ArcPairing(first=last, second=first))
-    arcs.sort(key=lambda arc: (min(arc.first, arc.second), max(arc.first, arc.second)))
+            arcs.append(OrientedDiagramArc(tail=last, head=first))
+    arcs.sort(key=lambda arc: (arc.tail, arc.head))
     diagram = OrientedLinkDiagram(
         crossings=tuple(crossings),
         arcs=tuple(arcs),
@@ -267,32 +380,8 @@ def _reduced_word(
 
 
 def _incoming_darts(diagram: OrientedLinkDiagram) -> set[str]:
-    strand_partner: dict[str, str] = {}
-    arc_partner: dict[str, str] = {}
-    for crossing in diagram.crossings:
-        for pair in (crossing.over_pair, crossing.under_pair):
-            left = crossing.half_edges[pair[0]]
-            right = crossing.half_edges[pair[1]]
-            strand_partner[left] = right
-            strand_partner[right] = left
-    for arc in diagram.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
-
-    covered: set[str] = set()
-    incoming: set[str] = set()
-    for start in sorted(strand_partner):
-        if start in covered:
-            continue
-        current = start
-        while current not in covered:
-            entry = arc_partner[current]
-            exit_dart = strand_partner[entry]
-            covered.add(current)
-            covered.add(entry)
-            incoming.add(entry)
-            current = exit_dart
-    return incoming
+    """Return source darts where the encoded orientation enters crossings."""
+    return {arc.head for arc in diagram.arcs}
 
 
 def _integer_determinant(matrix: tuple[tuple[int, ...], ...]) -> int:
@@ -342,8 +431,8 @@ def _projection_faces(
         for index, dart in enumerate(crossing.half_edges):
             cyclic_successor[dart] = crossing.half_edges[(index + 1) % 4]
     for arc in diagram.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
+        arc_partner[arc.tail] = arc.head
+        arc_partner[arc.head] = arc.tail
     face_successor = {
         dart: cyclic_successor[arc_partner[dart]] for dart in cyclic_successor
     }
@@ -372,8 +461,8 @@ def _projection_faces(
     }
     adjacency: dict[int, set[int]] = {index: set() for index in range(len(faces))}
     for arc in diagram.arcs:
-        left = face_of[arc.first]
-        right = face_of[arc.second]
+        left = face_of[arc.tail]
+        right = face_of[arc.head]
         if left == right:
             _domain_error(
                 ("diagram",),
@@ -410,34 +499,44 @@ def _checkerboard_colors(adjacency: dict[int, set[int]]) -> dict[int, int]:
     return colors
 
 
-def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
-    """Construct a deterministic checkerboard shading and reduced Goeritz matrix."""
-
-    admitted = _admit_diagram(diagram)
+def _construct_blackboard_graph(
+    admitted: OrientedLinkDiagram,
+) -> LinkBlackboardGraph:
+    """Construct a Tait graph from one already-admitted source diagram."""
     crossing_count = len(admitted.crossings)
     if crossing_count == 0 or admitted.free_loops:
         _domain_error(
             ("diagram",),
-            "goeritz_crossing_projection",
+            "blackboard_graph_crossing_projection",
             "Goeritz data requires a nonempty crossing projection without free loops",
         )
-    if crossing_count > 32:
+    if crossing_count > MAX_LINK_CROSSINGS:
         raise OperationResourceAdmissionError(
             location=("diagram",),
-            code="link_diagram.goeritz_matrix_bound",
-            message="Goeritz matrices are admitted for at most 32 crossings",
+            code="link_diagram.blackboard_graph_bound",
+            message="blackboard graphs are admitted for at most 64 crossings",
+        )
+    # A returned value repeats each bounded source label in crossing/arc rows,
+    # face cycles, and crossing-edge transport. This conservative bound is
+    # checked before computing any face permutation or result objects.
+    output_bound = 8192 + crossing_count * 6000 + (crossing_count + 2) * 1024
+    if output_bound > 512 * 1024:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.blackboard_graph_output_bound",
+            message="checkerboard graph result exceeds its 512 KiB output envelope",
         )
 
     faces, face_of, adjacency = _projection_faces(admitted)
     if len(faces) != crossing_count + 2:
         _domain_error(
             ("diagram",),
-            "goeritz_planar_projection",
+            "blackboard_graph_planar_projection",
             "connected crossing projection must satisfy the sphere Euler identity",
         )
     colors = _checkerboard_colors(adjacency)
     regions = tuple(
-        GoeritzRegion(
+        CheckerboardRegion(
             region_id=f"region_{index:03d}",
             boundary_darts=face,
             shaded=colors[index] == 0,
@@ -445,11 +544,7 @@ def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
         for index, face in enumerate(faces)
     )
     shaded_indices = tuple(index for index in range(len(faces)) if colors[index] == 0)
-    shaded_positions = {
-        region: position for position, region in enumerate(shaded_indices)
-    }
-    contributions: list[GoeritzCrossingContribution] = []
-    matrix = [[0 for _ in shaded_indices] for _ in shaded_indices]
+    edges: list[LinkBlackboardEdge] = []
     for crossing in admitted.crossings:
         corner_regions = tuple(face_of[dart] for dart in crossing.half_edges)
         shaded_corners = tuple(
@@ -458,29 +553,74 @@ def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
         if len(shaded_corners) != 2 or (shaded_corners[0] - shaded_corners[1]) % 2:
             _domain_error(
                 ("diagram",),
-                "goeritz_crossing_shading",
+                "blackboard_graph_crossing_shading",
                 "checkerboard shading must occupy opposite corners at each crossing",
             )
         first_region = corner_regions[shaded_corners[0]]
         second_region = corner_regions[shaded_corners[1]]
-        incidence: Literal[-1, 1] = (
+        tait_sign: Literal[-1, 1] = (
             1 if set(shaded_corners) == set(crossing.over_pair) else -1
         )
-        contributions.append(
-            GoeritzCrossingContribution(
+        edges.append(
+            LinkBlackboardEdge(
                 crossing_id=crossing.crossing_id,
                 first_region_id=regions[first_region].region_id,
                 second_region_id=regions[second_region].region_id,
-                incidence=incidence,
+                first_corner_index=shaded_corners[0],
+                second_corner_index=shaded_corners[1],
+                tait_sign=tait_sign,
             )
         )
-        first_position = shaded_positions[first_region]
-        second_position = shaded_positions[second_region]
+    return LinkBlackboardGraph(
+        diagram=admitted,
+        regions=regions,
+        shaded_region_ids=tuple(regions[index].region_id for index in shaded_indices),
+        edges=tuple(edges),
+    )
+
+
+def link_blackboard_graph(diagram: OrientedLinkDiagram) -> LinkBlackboardGraph:
+    """Construct the canonical signed Tait graph with source region transport."""
+    return _construct_blackboard_graph(_admit_diagram(diagram))
+
+
+def link_goeritz_data(graph: LinkBlackboardGraph) -> GoeritzDataResult:
+    """Construct the reduced Goeritz matrix from an admitted Tait graph."""
+    if not isinstance(graph, LinkBlackboardGraph):
+        _domain_error(
+            ("blackboard_graph",),
+            "goeritz_graph_type",
+            "graph must be a LinkBlackboardGraph",
+        )
+    try:
+        graph = LinkBlackboardGraph.model_validate_json(
+            graph.model_dump_json(warnings=False)
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("blackboard_graph",),
+            code="link_diagram.goeritz_graph_shape",
+            message="graph must satisfy the bounded checkerboard graph contract",
+        ) from exc
+    if len(graph.diagram.crossings) > 32:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.goeritz_matrix_bound",
+            message="Goeritz matrices are admitted for at most 32 crossings",
+        )
+    shaded_indices = graph.shaded_region_ids
+    shaded_positions = {
+        region: position for position, region in enumerate(shaded_indices)
+    }
+    matrix = [[0 for _ in shaded_indices] for _ in shaded_indices]
+    for edge in graph.edges:
+        first_position = shaded_positions[edge.first_region_id]
+        second_position = shaded_positions[edge.second_region_id]
         if first_position != second_position:
-            matrix[first_position][first_position] += incidence
-            matrix[second_position][second_position] += incidence
-            matrix[first_position][second_position] -= incidence
-            matrix[second_position][first_position] -= incidence
+            matrix[first_position][first_position] += edge.tait_sign
+            matrix[second_position][second_position] += edge.tait_sign
+            matrix[first_position][second_position] -= edge.tait_sign
+            matrix[second_position][first_position] -= edge.tait_sign
     deleted_position = len(shaded_indices) - 1
     reduced_entries = tuple(
         tuple(value for column, value in enumerate(row) if column != deleted_position)
@@ -493,13 +633,124 @@ def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
         column_count=len(reduced_entries),
     )
     return GoeritzDataResult(
-        diagram=admitted,
-        regions=regions,
-        shaded_region_ids=tuple(regions[index].region_id for index in shaded_indices),
-        crossing_contributions=tuple(contributions),
-        deleted_region_id=regions[shaded_indices[deleted_position]].region_id,
+        blackboard_graph=graph,
+        deleted_region_id=shaded_indices[deleted_position],
         reduced_matrix=reduced,
         absolute_determinant=abs(_integer_determinant(reduced_entries)),
+    )
+
+
+def link_signature(diagram: OrientedLinkDiagram) -> LinkSignatureResult:
+    """Return the exact Gordon-Litherland signature for a bounded diagram.
+
+    This uses Jacobian's Tait convention: an edge incidence is +1 when its
+    shaded corners are the overpassing pair. Thus the source Goeritz matrix is
+    the signed Laplacian with those incidences, and a crossing is type II when
+    its oriented crossing sign times its incidence is -1. The link signature
+    is the Goeritz matrix signature minus the sum of type-II incidences.
+    A crossing-free unlink has signature zero and uses the zero-dimensional
+    inertia convention.
+    """
+    admitted = _admit_diagram(diagram)
+    crossing_count = len(admitted.crossings)
+    if crossing_count > MAX_LINK_SIGNATURE_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.signature_crossing_bound",
+            message="exact link signatures are admitted for at most 32 crossings",
+        )
+
+    # A connected c-crossing plane graph has at most c+2 regions, so its
+    # reduced Goeritz order is at most c. Each entry has magnitude at most c.
+    # For integer entries of at most two digits and denominator 1, the exact
+    # inertia owner's Hadamard/minor estimate is bounded by 10*n+4 digits.
+    dimension = crossing_count
+    minor_digits_bound = 10 * dimension + 4
+    inertia_work_bound = 4 * dimension**3 * minor_digits_bound
+    if inertia_work_bound > MAX_LINK_SIGNATURE_WORK:
+        raise RuntimeError("link signature inertia envelope is inconsistent")
+    # Count the retained value's own materialization cells: the admitted
+    # diagram's labels and structure, the Goeritz matrix over canonical
+    # rationals, and the inertia triple. Entry magnitude is already bounded
+    # by the admitted minor-digit envelope, so cells decide admission.
+    label_cells = sum(
+        len(crossing.crossing_id) for crossing in admitted.crossings
+    ) + sum(
+        len(dart) for crossing in admitted.crossings for dart in crossing.half_edges
+    )
+    diagram_cells = (
+        len(admitted.crossings)
+        + len(admitted.arcs)
+        + admitted.free_loops
+        + 4 * len(admitted.crossings)
+        + label_cells
+    )
+    output_cells = diagram_cells + 2 * dimension**2 + 2 * dimension + 256
+    if output_cells > MAX_LINK_SIGNATURE_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.signature_output_bound",
+            message="link signature result exceeds its materialization-cell bound",
+        )
+
+    goeritz_data = (
+        link_goeritz_data(_construct_blackboard_graph(admitted))
+        if crossing_count
+        else None
+    )
+    integer_matrix = goeritz_data.reduced_matrix if goeritz_data is not None else None
+    rational_matrix = (
+        RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational(num=value, den=1) for value in row)
+                for row in integer_matrix.entries
+            ),
+            row_count=integer_matrix.row_count,
+            column_count=integer_matrix.column_count,
+        )
+        if integer_matrix is not None
+        else RationalMatrix(entries=(), row_count=0, column_count=0)
+    )
+    if rational_matrix.row_count == 0:
+        inertia = InertiaResult._from_kernel(
+            matrix=rational_matrix,
+            n_positive=0,
+            n_negative=0,
+            n_zero=0,
+        )
+    else:
+        inertia = compute_inertia(rational_matrix)
+    contributions = (
+        tuple(
+            GoeritzCorrectionContribution(
+                crossing_id=crossing.crossing_id,
+                crossing_sign=crossing.sign,
+                incidence_number=edge.tait_sign,
+                crossing_type=(
+                    "TYPE_I" if crossing.sign * edge.tait_sign == 1 else "TYPE_II"
+                ),
+                correction_contribution=(
+                    edge.tait_sign if crossing.sign * edge.tait_sign == -1 else 0
+                ),
+            )
+            for crossing, edge in zip(
+                goeritz_data.blackboard_graph.diagram.crossings,
+                goeritz_data.blackboard_graph.edges,
+                strict=True,
+            )
+        )
+        if goeritz_data is not None
+        else ()
+    )
+    correction_term = sum(row.correction_contribution for row in contributions)
+    signature = inertia.n_positive - inertia.n_negative - correction_term
+    return LinkSignatureResult(
+        diagram=admitted,
+        goeritz_data=goeritz_data,
+        goeritz_inertia=inertia,
+        correction_contributions=contributions,
+        correction_term=correction_term,
+        signature=signature,
     )
 
 
@@ -547,8 +798,8 @@ def link_seifert_circles(diagram: OrientedLinkDiagram) -> SeifertCircleResult:
             smoothing_partner[right] = left
     arc_partner: dict[str, str] = {}
     for arc in admitted.arcs:
-        arc_partner[arc.first] = arc.second
-        arc_partner[arc.second] = arc.first
+        arc_partner[arc.tail] = arc.head
+        arc_partner[arc.head] = arc.tail
 
     covered: set[str] = set()
     circle_rows: list[SeifertCircle] = []
@@ -605,7 +856,7 @@ def wirtinger_presentation(
     )
     find, union = _union_find(darts)
     for arc in admitted.arcs:
-        union(arc.first, arc.second)
+        union(arc.tail, arc.head)
     for crossing in admitted.crossings:
         over_left = crossing.half_edges[crossing.over_pair[0]]
         over_right = crossing.half_edges[crossing.over_pair[1]]
@@ -830,6 +1081,167 @@ def link_alexander_polynomial(
     return AlexanderPolynomialResult(diagram=admitted, polynomial=polynomial)
 
 
+def link_conway_polynomial(
+    diagram: OrientedLinkDiagram,
+) -> ConwayPolynomialResult:
+    """Return the normalized knot Conway polynomial from the exact Alexander value."""
+    return _conway_from_alexander(link_alexander_polynomial(diagram))
+
+
+def _conway_from_alexander(
+    alexander: AlexanderPolynomialResult,
+) -> ConwayPolynomialResult:
+    """Return the normalized knot Conway polynomial from the exact Alexander value.
+
+    For knots the Alexander polynomial is symmetric after a Laurent shift.
+    With ``x = t + t^-1 = z^2 + 2``, each symmetric pair
+    ``t^k + t^-k`` is converted by an exact integer recurrence. The normalization
+    ``Delta(1)=1`` fixes the sign and gives ``nabla(0)=1``.
+    """
+    centered_terms, degree, unit_power, unit_sign = _center_normalized_alexander(
+        alexander
+    )
+    _admit_conway_expansion(alexander, centered_terms, degree)
+    conway_terms = _expand_conway_coefficients(centered_terms, degree)
+    polynomial = RationalLaurentPolynomial(
+        variables=("z",),
+        terms=tuple(
+            RationalLaurentPolynomialTerm(
+                coefficient=CanonicalRational(num=coefficient, den=1),
+                exponents=(exponent,),
+            )
+            for exponent, coefficient in sorted(conway_terms.items(), reverse=True)
+        ),
+    )
+    return ConwayPolynomialResult(
+        alexander=alexander,
+        polynomial=polynomial,
+        alexander_unit_sign=unit_sign,
+        alexander_unit_power=unit_power,
+    )
+
+
+def _center_normalized_alexander(
+    alexander: AlexanderPolynomialResult,
+) -> tuple[dict[int, int], int, int, Literal[-1, 1]]:
+    source_terms: dict[int, int] = {}
+    for term in alexander.polynomial.terms:
+        coefficient = term.coefficient.as_fraction()
+        if coefficient.denominator != 1:
+            raise RuntimeError("knot Alexander coefficients must be integral")
+        source_terms[term.exponents[0]] = coefficient.numerator
+    if not source_terms:
+        raise RuntimeError("a knot Alexander polynomial cannot be zero")
+
+    least_exponent = min(source_terms)
+    greatest_exponent = max(source_terms)
+    exponent_span = greatest_exponent - least_exponent
+    if exponent_span % 2:
+        raise RuntimeError("knot Alexander support must have an integral center")
+    center = (least_exponent + greatest_exponent) // 2
+    centered_terms = {
+        exponent - center: coefficient for exponent, coefficient in source_terms.items()
+    }
+    degree = max(abs(exponent) for exponent in centered_terms)
+    if degree > MAX_CONWAY_CENTERED_DEGREE:
+        raise OperationResourceAdmissionError(
+            location=("diagram", "alexander", "polynomial"),
+            code="link_diagram.conway_degree_bound",
+            message="Conway conversion is bounded to centered Alexander degree 64",
+        )
+    if any(
+        centered_terms.get(exponent, 0) != centered_terms.get(-exponent, 0)
+        for exponent in range(1, degree + 1)
+    ):
+        raise RuntimeError("knot Alexander coefficients must be reciprocal")
+    augmentation = sum(centered_terms.values())
+    if augmentation not in (-1, 1):
+        raise RuntimeError(
+            "knot Alexander polynomial must evaluate to plus or minus one at 1"
+        )
+    unit_sign: Literal[-1, 1] = 1
+    if augmentation == -1:
+        unit_sign = -1
+        centered_terms = {
+            exponent: -coefficient for exponent, coefficient in centered_terms.items()
+        }
+    return centered_terms, degree, -center, unit_sign
+
+
+def _admit_conway_expansion(
+    alexander: AlexanderPolynomialResult,
+    centered_terms: dict[int, int],
+    degree: int,
+) -> None:
+    maximum_input_bits = max(
+        abs(value).bit_length() for value in centered_terms.values()
+    )
+    maximum_input_digits = (maximum_input_bits * 30_103 + 99_999) // 100_000
+    coefficient_digits_bound = (
+        maximum_input_digits + 2 * (degree + 1) + len(centered_terms)
+    )
+    work_bound = 4 * (degree + 1) ** 2
+    alexander_diagram = alexander.diagram
+    # Retained Alexander cells (diagram labels/structure plus polynomial terms)
+    # measured as materialization cells, not transport bytes.
+    alexander_cells = (
+        len(alexander_diagram.crossings)
+        + len(alexander_diagram.arcs)
+        + alexander_diagram.free_loops
+        + 4 * len(alexander_diagram.crossings)
+        + sum(len(c.crossing_id) for c in alexander_diagram.crossings)
+        + sum(len(d) for c in alexander_diagram.crossings for d in c.half_edges)
+        + len(alexander.polynomial.terms)
+    )
+    output_cells = (
+        alexander_cells + 256 + (degree + 1) * (2 * coefficient_digits_bound + 128)
+    )
+    if (
+        coefficient_digits_bound > MAX_CONWAY_COEFFICIENT_DIGITS
+        or work_bound > 100_000
+        or output_cells > MAX_CONWAY_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("diagram", "alexander", "polynomial"),
+            code="link_diagram.conway_output_bound",
+            message="exact Conway conversion exceeds its coefficient, work, or output bound",
+        )
+
+
+def _expand_conway_coefficients(
+    centered_terms: dict[int, int], degree: int
+) -> dict[int, int]:
+    conway_terms: dict[int, int] = {0: centered_terms.get(0, 0)}
+    if degree:
+        previous_previous = {0: 2}
+        previous = {0: 2, 2: 1}
+        for exponent, coefficient in previous.items():
+            conway_terms[exponent] = (
+                conway_terms.get(exponent, 0) + centered_terms.get(1, 0) * coefficient
+            )
+        for index in range(2, degree + 1):
+            current: dict[int, int] = {}
+            for exponent, coefficient in previous.items():
+                current[exponent] = current.get(exponent, 0) + 2 * coefficient
+                current[exponent + 2] = current.get(exponent + 2, 0) + coefficient
+            for exponent, coefficient in previous_previous.items():
+                current[exponent] = current.get(exponent, 0) - coefficient
+            current = {exponent: value for exponent, value in current.items() if value}
+            scalar = centered_terms.get(index, 0)
+            if scalar:
+                for exponent, coefficient in current.items():
+                    conway_terms[exponent] = (
+                        conway_terms.get(exponent, 0) + scalar * coefficient
+                    )
+            previous_previous, previous = previous, current
+    conway_terms = {
+        exponent: coefficient
+        for exponent, coefficient in conway_terms.items()
+        if coefficient
+    }
+    return conway_terms
+
+
 def link_determinant(diagram: OrientedLinkDiagram) -> LinkDeterminantResult:
     """Return ``abs(Delta_K(-1))`` under the knot Alexander convention."""
 
@@ -848,14 +1260,284 @@ def link_determinant(diagram: OrientedLinkDiagram) -> LinkDeterminantResult:
     )
 
 
+def link_crossing_profile(
+    diagram: OrientedLinkDiagram,
+) -> LinkCrossingProfileResult:
+    """Return each crossing's sign and ordered over/under component pair."""
+    components = link_components(diagram)
+    component_by_role: dict[tuple[str, str], set[str]] = {}
+    for component in components.components:
+        for visit in component.visits:
+            component_by_role.setdefault((visit.crossing_id, visit.role), set()).add(
+                component.component_id
+            )
+    entries = []
+    for crossing in components.diagram.crossings:
+        over_ids = component_by_role.get((crossing.crossing_id, "OVER"), set())
+        under_ids = component_by_role.get((crossing.crossing_id, "UNDER"), set())
+        if len(over_ids) != 1 or len(under_ids) != 1:
+            raise OperationDomainValidationError(
+                location=("diagram", "crossings", crossing.crossing_id),
+                code="link_diagram.crossing_profile_component_roles",
+                message="each crossing strand must belong to exactly one diagram component",
+            )
+        entries.append(
+            LinkCrossingProfileEntry(
+                crossing_id=crossing.crossing_id,
+                sign=crossing.sign,
+                over_component_id=next(iter(over_ids)),
+                under_component_id=next(iter(under_ids)),
+            )
+        )
+    return LinkCrossingProfileResult(
+        components=components,
+        crossings=tuple(entries),
+        writhe=sum(entry.sign for entry in entries),
+    )
+
+
+def link_state_circles(
+    state: LinkDiagramSmoothingState,
+) -> LinkStateCirclesResult:
+    """Return the exact cyclic dart circles of one complete A/B state."""
+    if not isinstance(state, LinkDiagramSmoothingState):
+        _domain_error(
+            ("state",),
+            "smoothing_state_type",
+            "state must be a complete LinkDiagramSmoothingState value",
+        )
+    try:
+        admitted = LinkDiagramSmoothingState.model_validate_json(
+            state.model_dump_json(warnings=False)
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("state",),
+            code="link_diagram.smoothing_state_shape",
+            message="state must satisfy the complete source crossing-axis contract",
+        ) from exc
+    diagram = admitted.diagram
+    crossing_count = len(diagram.crossings)
+    if crossing_count > MAX_STATE_CIRCLE_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("state", "diagram", "crossings"),
+            code="link_diagram.state_circles_state_bound",
+            message="state-circle computation is bounded to 64 crossings",
+        )
+    dart_labels = tuple(
+        dart for crossing in diagram.crossings for dart in crossing.half_edges
+    )
+    # Count retained materialization cells (label characters and structural
+    # entries), not transport bytes: the result keeps the source diagram plus
+    # the circle partition and crossing-choice ledger.
+    label_cells = sum(len(dart) for dart in dart_labels) + sum(
+        len(crossing.crossing_id) for crossing in diagram.crossings
+    )
+    diagram_cells = (
+        crossing_count
+        + len(diagram.arcs)
+        + diagram.free_loops
+        + len(dart_labels)
+        + label_cells
+    )
+    output_cells = diagram_cells + (
+        20 * len(dart_labels) + 8 * crossing_count + 16 * diagram.free_loops + 128
+    )
+    if output_cells > MAX_STATE_CIRCLE_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("state",),
+            code="link_diagram.state_circles_output_bound",
+            message="the state-circle result exceeds its materialization-cell bound",
+        )
+    if 2 * len(dart_labels) + crossing_count > 4_096:
+        raise OperationResourceAdmissionError(
+            location=("state",),
+            code="link_diagram.state_circles_work_bound",
+            message="the state-circle traversal exceeds its work bound",
+        )
+
+    if not dart_labels:
+        circles = tuple(LinkSmoothedCircle(darts=()) for _ in range(diagram.free_loops))
+    else:
+        arc_mate: dict[str, str] = {}
+        for arc in diagram.arcs:
+            arc_mate[arc.tail] = arc.head
+            arc_mate[arc.head] = arc.tail
+        smoothing_mate: dict[str, str] = {}
+        for crossing, choice in zip(diagram.crossings, admitted.choices, strict=True):
+            over_even = set(crossing.over_pair) == {0, 2}
+            smoothing_index = (
+                (0 if choice == "A" else 1)
+                if over_even
+                else (1 if choice == "A" else 0)
+            )
+            pairs = ((0, 1, 2, 3), (1, 2, 3, 0))[smoothing_index]
+            half_edges = crossing.half_edges
+            left, right = half_edges[pairs[0]], half_edges[pairs[1]]
+            smoothing_mate[left] = right
+            smoothing_mate[right] = left
+            left, right = half_edges[pairs[2]], half_edges[pairs[3]]
+            smoothing_mate[left] = right
+            smoothing_mate[right] = left
+
+        unseen = set(dart_labels)
+        circle_rows: list[tuple[str, ...]] = []
+        while unseen:
+            start = min(unseen)
+            candidates: list[tuple[str, ...]] = []
+            for first_edge in ("arc", "smooth"):
+                row: list[str] = []
+                current = start
+                edge = first_edge
+                while True:
+                    row.append(current)
+                    current = (
+                        arc_mate[current] if edge == "arc" else smoothing_mate[current]
+                    )
+                    edge = "smooth" if edge == "arc" else "arc"
+                    if current == start and edge == first_edge:
+                        break
+                    if current in row:
+                        _domain_error(
+                            ("state",),
+                            "state_circles_not_cycles",
+                            "smoothing pairings must form disjoint dart cycles",
+                        )
+                candidates.append(tuple(row))
+            cycle = min(candidates)
+            circle_rows.append(cycle)
+            unseen.difference_update(cycle)
+        circles = tuple(
+            [LinkSmoothedCircle(darts=row) for row in sorted(circle_rows)]
+            + [LinkSmoothedCircle(darts=()) for _ in range(diagram.free_loops)]
+        )
+    return LinkStateCirclesResult(
+        state=admitted,
+        circles=circles,
+        circle_count=len(circles),
+    )
+
+
+def link_disjoint_union(
+    diagrams: tuple[OrientedLinkDiagram, ...],
+) -> LinkDisjointUnionResult:
+    """Form a tagged, source-transporting disjoint union of link diagrams."""
+
+    if not isinstance(diagrams, tuple) or not 1 <= len(diagrams) <= 64:
+        _domain_error(
+            ("diagrams",),
+            "disjoint_union_arity",
+            "disjoint union needs between one and 64 diagrams",
+        )
+    admitted = tuple(_admit_diagram(diagram) for diagram in diagrams)
+    crossing_count = sum(len(diagram.crossings) for diagram in admitted)
+    free_loop_count = sum(diagram.free_loops for diagram in admitted)
+    if crossing_count > MAX_LINK_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagrams",),
+            code="link_diagram.disjoint_union_crossing_bound",
+            message="the union may contain at most 64 crossings in total",
+        )
+    if free_loop_count > MAX_LINK_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagrams",),
+            code="link_diagram.disjoint_union_free_loop_bound",
+            message="the union may contain at most 64 crossing-free components in total",
+        )
+    output_crossings: list[LinkCrossing] = []
+    output_arcs: list[OrientedDiagramArc] = []
+    crossing_map: list[LinkDisjointUnionCrossingMap] = []
+    dart_map: list[LinkDisjointUnionDartMap] = []
+    arc_map: list[LinkDisjointUnionArcMap] = []
+    free_loop_map: list[LinkDisjointUnionFreeLoopMap] = []
+    loop_offset = 0
+    for source_index, source in enumerate(admitted):
+        source_dart_map: dict[str, str] = {}
+        for crossing_index, crossing in enumerate(source.crossings):
+            target_crossing_id = (
+                f"link_{source_index:02d}_crossing_{crossing_index:03d}"
+            )
+            target_darts: tuple[str, str, str, str] = (
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_0",
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_1",
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_2",
+                f"link_{source_index:02d}_dart_{crossing_index:03d}_3",
+            )
+            crossing_map.append(
+                LinkDisjointUnionCrossingMap(
+                    source_index=source_index,
+                    source_crossing_id=crossing.crossing_id,
+                    target_crossing_id=target_crossing_id,
+                )
+            )
+            for source_dart, target_dart in zip(
+                crossing.half_edges, target_darts, strict=True
+            ):
+                source_dart_map[source_dart] = target_dart
+                dart_map.append(
+                    LinkDisjointUnionDartMap(
+                        source_index=source_index,
+                        source_dart_id=source_dart,
+                        target_dart_id=target_dart,
+                    )
+                )
+            output_crossings.append(
+                LinkCrossing(
+                    crossing_id=target_crossing_id,
+                    half_edges=target_darts,
+                    over_pair=crossing.over_pair,
+                    under_pair=crossing.under_pair,
+                    sign=crossing.sign,
+                )
+            )
+        for arc in source.arcs:
+            target_tail = source_dart_map[arc.tail]
+            target_head = source_dart_map[arc.head]
+            output_arcs.append(OrientedDiagramArc(tail=target_tail, head=target_head))
+            arc_map.append(
+                LinkDisjointUnionArcMap(
+                    source_index=source_index,
+                    source_tail=arc.tail,
+                    source_head=arc.head,
+                    target_tail=target_tail,
+                    target_head=target_head,
+                )
+            )
+        for local_index in range(source.free_loops):
+            free_loop_map.append(
+                LinkDisjointUnionFreeLoopMap(
+                    source_index=source_index,
+                    source_loop_index=local_index,
+                    target_loop_index=loop_offset + local_index,
+                )
+            )
+        loop_offset += source.free_loops
+    output = OrientedLinkDiagram(
+        crossings=tuple(output_crossings),
+        arcs=tuple(sorted(output_arcs, key=lambda arc: (arc.tail, arc.head))),
+        free_loops=loop_offset,
+    )
+    return LinkDisjointUnionResult(
+        sources=admitted,
+        diagram=output,
+        crossing_map=tuple(crossing_map),
+        dart_map=tuple(dart_map),
+        arc_map=tuple(arc_map),
+        free_loop_map=tuple(free_loop_map),
+    )
+
+
 __all__ = [
     "braid_closure",
     "braid_inverse",
     "braid_multiply",
     "braid_permutation",
     "link_alexander_polynomial",
+    "link_conway_polynomial",
+    "link_crossing_profile",
     "link_determinant",
     "link_goeritz_data",
     "link_seifert_circles",
+    "link_state_circles",
     "wirtinger_presentation",
 ]

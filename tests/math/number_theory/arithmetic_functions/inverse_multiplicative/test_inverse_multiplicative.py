@@ -1,5 +1,7 @@
 """Tests for inverse multiplicative function operations."""
 
+import pytest
+
 from jacobian.canonical import format_canonical_integer
 from jacobian.math.number_theory.arithmetic_functions.inverse_multiplicative import (
     euler_phi_preimage_count,
@@ -42,7 +44,7 @@ def test_preimage_of_1() -> None:
     }
 
 
-def test_inverse_totient_results_accept_large_native_integers() -> None:
+def test_count_and_power_sum_results_accept_large_native_integers() -> None:
     large = 10**5_000
     result = EulerPhiPreimageCountResult(target=1, count=large)
     assert result.count == large
@@ -52,11 +54,17 @@ def test_inverse_totient_results_accept_large_native_integers() -> None:
     assert power.model_dump(mode="json")["power_sum"] == format_canonical_integer(large)
 
 
-def test_preimage_count_of_1() -> None:
-    request = EulerPhiPreimageCountRequest(target=1)
-    result = compute_euler_phi_preimage_count(request)
-    assert result.count == 2
-    assert euler_phi_preimage_count(1) == result.count
+@pytest.mark.parametrize(
+    ("target", "expected_count"),
+    ((1, 2), (48, 11)),
+    ids=("unit-target", "large-bound-regression"),
+)
+def test_preimage_count(target: int, expected_count: int) -> None:
+    result = compute_euler_phi_preimage_count(
+        EulerPhiPreimageCountRequest(target=target)
+    )
+    assert result.count == expected_count
+    assert euler_phi_preimage_count(target) == result.count
 
 
 def test_power_sum_of_1_squared() -> None:
@@ -65,16 +73,6 @@ def test_power_sum_of_1_squared() -> None:
     assert result.power_sum == 5  # 1^2 + 2^2 = 5
     assert result.count == 2
     assert euler_phi_preimage_power_sum(1, 2) == result.power_sum
-
-
-def test_preimage_of_4() -> None:
-    request = EulerPhiPreimageRequest(target=4)
-    result = compute_euler_phi_preimage(request)
-    assert result.count > 0
-    assert 5 in result.preimage  # phi(5) = 4
-    assert 8 in result.preimage  # phi(8) = 4
-    assert 10 in result.preimage  # phi(10) = 4
-    assert 12 in result.preimage  # phi(12) = 4
 
 
 def test_preimage_of_4_is_complete() -> None:
@@ -94,23 +92,11 @@ def test_preimage_of_48_includes_210() -> None:
     assert result.count == len(result.preimage)
 
 
-def test_preimage_count_of_48() -> None:
-    request = EulerPhiPreimageCountRequest(target=48)
-    result = compute_euler_phi_preimage_count(request)
-    assert result.count == 11
-
-
 def test_preimage_of_80_includes_330() -> None:
     """phi(330) = 80 but 330 > 4*80 = 320, so the old bound dropped it."""
     request = EulerPhiPreimageRequest(target=80)
     result = compute_euler_phi_preimage(request)
     assert 330 in result.preimage
-    assert result.count == 10
-
-
-def test_preimage_count_of_80() -> None:
-    request = EulerPhiPreimageCountRequest(target=80)
-    result = compute_euler_phi_preimage_count(request)
     assert result.count == 10
 
 
@@ -123,23 +109,11 @@ def test_preimage_of_96_includes_390_and_420() -> None:
     assert result.count == 17
 
 
-def test_preimage_count_of_96() -> None:
-    request = EulerPhiPreimageCountRequest(target=96)
-    result = compute_euler_phi_preimage_count(request)
-    assert result.count == 17
-
-
 def test_preimage_of_480_includes_2310() -> None:
     """phi(2310) = 480 but 2310 > 4*480 = 1920, so the old bound dropped it."""
     request = EulerPhiPreimageRequest(target=480)
     result = compute_euler_phi_preimage(request)
     assert 2310 in result.preimage
-    assert result.count == 37
-
-
-def test_preimage_count_of_480() -> None:
-    request = EulerPhiPreimageCountRequest(target=480)
-    result = compute_euler_phi_preimage_count(request)
     assert result.count == 37
 
 

@@ -6,7 +6,13 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Literal, cast
 
-from jacobian._execution import BackendFailureReason, OperationBackendError
+from jacobian._execution import (
+    BackendFailureReason,
+    OperationBackendError,
+    OperationWorkLedger,
+    request_checkpoint,
+)
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,13 +20,21 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeResult,
+    ReachableStatesResult,
+    ReachableStateWitness,
     StatePairDistinguishability,
     SubseqRunResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
+    MAX_FST_ALPHABET,
+    MAX_FST_ALPHABET_ID_LENGTH,
+    MAX_FST_EDGES,
+    MAX_FST_REACHABLE_RESULT_SIZE,
     MAX_FST_RESULT_WORD_LENGTH,
+    MAX_FST_RUN_RESULT_SIZE,
     MAX_FST_STATES,
     MAX_FST_WORD_LENGTH,
+    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     SubseqFinalOutput,
@@ -28,6 +42,15 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
     alphabet_parent_mismatch,
 )
+from jacobian.math.logic.languages.regular.values import (
+    DFA,
+    MAX_NFA_OUTPUT_CELLS,
+    MAX_NFA_STATES,
+    MAX_NFA_TRANSITIONS,
+    NFA,
+    NFATransition,
+)
+from jacobian.math.logic.languages.words.values import WordMorphism
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,17 +79,30 @@ __all__ = [
     "identity_transducer",
     "invert_rational",
     "minimize_subsequential",
+    "project_rational_relation",
+    "reachable_state_witnesses",
     "reachable_states",
     "replay_rational_path",
+    "restrict_rational_input",
     "run_subsequential",
     "trim_subsequential",
     "verify_composition",
     "verify_minimization",
     "verify_subsequential_run",
+    "word_morphism_to_subsequential",
 ]
 
 
 MAX_MINIMIZE_SAMPLE_WORDS = 20000
+MAX_MORPHISM_TRANSITION_CELLS = 32 * 512
+MAX_MORPHISM_TRANSDUCER_BYTES = 128 * 1024
+MAX_FST_IDENTITY_RESULT_SIZE = 64 * 1024
+MAX_RATIONAL_PROJECTION_WORK = 4_000_000
+MAX_RATIONAL_FIBER_WORK = 25_000_000
+MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES = 128_000_000
+MAX_RATIONAL_RESTRICTION_WORK = 4_000_000
+MAX_RATIONAL_RESTRICTION_INTERMEDIATE_BYTES = 64_000_000
+MAX_RATIONAL_RESTRICTION_OUTPUT_SIZE = 128_000_000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -115,6 +151,81 @@ def _admit_rational_transducer(transducer: object) -> RationalTransducer:
         ) from exc
 
 
+def word_morphism_to_subsequential(
+    morphism: WordMorphism,
+) -> SubsequentialTransducer:
+    """Represent a bounded word morphism as a one-state total transducer.
+
+    Each source symbol labels one self-loop carrying that symbol's image.
+    The one state is final with empty output, so empty images remain defined
+    empty transition outputs rather than missing transitions.
+    """
+    if not isinstance(morphism, WordMorphism):
+        _reject("word_morphism_type", "morphism must be a WordMorphism", "morphism")
+    source_size = len(morphism.source_alphabet)
+    target_size = len(morphism.target_alphabet)
+    if source_size > 32 or target_size > 32:
+        raise OperationResourceAdmissionError(
+            location=("morphism",),
+            code="finite_state_transducer.morphism_alphabet_bound_exceeded",
+            message="source and target alphabets must each have at most 32 symbols",
+        )
+    if any(len(image) > 512 for image in morphism.images):
+        raise OperationResourceAdmissionError(
+            location=("morphism", "images"),
+            code="finite_state_transducer.morphism_image_bound_exceeded",
+            message="each morphism image must fit one transition output (512 symbols)",
+        )
+    mapped_cells = sum(len(image) for image in morphism.images)
+    if mapped_cells > MAX_MORPHISM_TRANSITION_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("morphism", "images"),
+            code="finite_state_transducer.morphism_transition_cells_exceeded",
+            message="aggregate mapped image cells exceed the transition bound",
+        )
+    # No transition output has been expanded to index rows yet. Every target
+    # index is at most 31; the estimate covers indices, commas, transition
+    # records, alphabets, and fixed machine fields.
+    alphabet_bytes = len(
+        encode_strict_json(
+            {
+                "source": list(morphism.source_alphabet),
+                "target": list(morphism.target_alphabet),
+            }
+        )
+    )
+    projected_bytes = alphabet_bytes + 4 * mapped_cells + 512 * source_size + 4096
+    if projected_bytes > MAX_MORPHISM_TRANSDUCER_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("morphism",),
+            code="finite_state_transducer.morphism_result_bytes_exceeded",
+            message="canonical transducer output may exceed the byte bound",
+        )
+
+    target_index = {
+        symbol: index for index, symbol in enumerate(morphism.target_alphabet)
+    }
+    transitions = tuple(
+        SubseqTransition(
+            source=0,
+            input_symbol=input_index,
+            target=0,
+            output=tuple(target_index[symbol] for symbol in image),
+        )
+        for input_index, image in enumerate(morphism.images)
+    )
+    return SubsequentialTransducer(
+        input_alphabet_size=source_size,
+        output_alphabet_size=target_size,
+        state_count=1,
+        initial_state=0,
+        transitions=transitions,
+        final_outputs=(SubseqFinalOutput(state=0, output=()),),
+        input_alphabet=FiniteAlphabet(symbols=morphism.source_alphabet),
+        output_alphabet=FiniteAlphabet(symbols=morphism.target_alphabet),
+    )
+
+
 def _admit_word(word: object, *, field: str) -> tuple[int, ...]:
     if type(word) is not tuple or any(type(symbol) is not int for symbol in word):
         _reject("word_shape", "word must be a tuple of exact integers", field)
@@ -139,16 +250,13 @@ def _final_output_map(
 def run_subsequential(
     transducer: SubsequentialTransducer,
     word: tuple[int, ...],
-) -> tuple[
-    Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
-    tuple[int, ...],
-    int,
-    int | None,
-    tuple[int, ...],
-]:
+) -> SubseqRunResult:
     """Run a subsequential transducer on ``word``.
 
-    Returns ``(status, output, final_state, undefined_position, partial_output)``.
+    Returns status and output data followed by exact prefix traces.  ``state_trace``
+    includes the initial state; each remaining state follows one consumed input
+    symbol.  ``cumulative_outputs`` starts with the empty prefix output and then
+    records transition outputs after each consumed symbol, before final output.
 
     ``status`` is one of ``"OUTPUT"``, ``"UNDEFINED_TRANSITION"``, or
     ``"NONFINAL_DOMAIN_STATE"``.
@@ -176,42 +284,205 @@ def run_subsequential(
             "subsequential output may exceed the result word bound",
             "word",
         )
+    request_bytes = len(
+        encode_strict_json(
+            {
+                "transducer": transducer.model_dump(mode="json"),
+                "word": list(word),
+            }
+        )
+    )
+    prefix_output_cells = sum(
+        min(prefix_length * transition_bound, MAX_FST_RESULT_WORD_LENGTH)
+        for prefix_length in range(len(word) + 1)
+    )
+    transition_output_cells = min(
+        len(word) * transition_bound, MAX_FST_RESULT_WORD_LENGTH
+    )
+    # Each output symbol is an integer in 0..31 (at most two digits and a
+    # separator).  The conservative estimate covers repeated prefix outputs,
+    # per-step output rows, state IDs, outer array syntax, all other output
+    # fields, and the request values echoed into the result.  Its units are
+    # retained scalar cells times a fixed per-cell allowance, folded with an
+    # exact encoded-request allocation proxy -- not a transport byte bound.
+    projected_result_size = (
+        request_bytes
+        + 3
+        * (
+            prefix_output_cells
+            + transition_output_cells
+            + 3 * MAX_FST_RESULT_WORD_LENGTH
+            + MAX_FST_WORD_LENGTH
+        )
+        + 12 * (len(word) + 1)
+        + 4096
+    )
+    if projected_result_size > MAX_FST_RUN_RESULT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "word"),
+            code="finite_state_transducer.run_result_bytes_exceeded",
+            message=(
+                "the exact run trace may exceed the canonical result "
+                "representation size"
+            ),
+        )
+
+    def result(
+        status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
+        *,
+        output: tuple[int, ...],
+        final_state: int,
+        undefined_position: int | None,
+        partial_output: tuple[int, ...],
+        state_trace: tuple[int, ...],
+        transition_outputs: tuple[tuple[int, ...], ...],
+        cumulative_outputs: tuple[tuple[int, ...], ...],
+        final_output: tuple[int, ...],
+        obstruction_position: int | None,
+        obstruction_state: int | None,
+        obstruction_symbol: int | None,
+    ) -> SubseqRunResult:
+        return SubseqRunResult._from_kernel(
+            transducer=transducer,
+            word=word,
+            status=status,
+            output=output,
+            final_state=final_state,
+            undefined_position=undefined_position,
+            partial_output=partial_output,
+            state_trace=state_trace,
+            transition_outputs=transition_outputs,
+            cumulative_outputs=cumulative_outputs,
+            final_output=final_output,
+            obstruction_position=obstruction_position,
+            obstruction_state=obstruction_state,
+            obstruction_symbol=obstruction_symbol,
+        )
+
     transitions = _transition_map(transducer)
     finals = _final_output_map(transducer)
     state = transducer.initial_state
     accumulated: list[int] = []
+    state_trace = [state]
+    transition_outputs: list[tuple[int, ...]] = []
+    cumulative_outputs: list[tuple[int, ...]] = [()]
     for pos, symbol in enumerate(word):
         key = (state, symbol)
         if key not in transitions:
-            return (
+            return result(
                 "UNDEFINED_TRANSITION",
-                (),
-                state,
-                pos,
-                tuple(accumulated),
+                output=(),
+                final_state=state,
+                undefined_position=pos,
+                partial_output=tuple(accumulated),
+                state_trace=tuple(state_trace),
+                transition_outputs=tuple(transition_outputs),
+                cumulative_outputs=tuple(cumulative_outputs),
+                final_output=(),
+                obstruction_position=pos,
+                obstruction_state=state,
+                obstruction_symbol=symbol,
             )
         target, output = transitions[key]
         accumulated.extend(output)
         if len(accumulated) > MAX_FST_RESULT_WORD_LENGTH:
             raise RuntimeError("admitted subsequential output exceeded its bound")
+        transition_outputs.append(output)
         state = target
+        state_trace.append(state)
+        cumulative_outputs.append(tuple(accumulated))
     if state not in finals:
-        return (
+        return result(
             "NONFINAL_DOMAIN_STATE",
-            (),
-            state,
-            None,
-            tuple(accumulated),
+            output=(),
+            final_state=state,
+            undefined_position=None,
+            partial_output=tuple(accumulated),
+            state_trace=tuple(state_trace),
+            transition_outputs=tuple(transition_outputs),
+            cumulative_outputs=tuple(cumulative_outputs),
+            final_output=(),
+            obstruction_position=len(word),
+            obstruction_state=state,
+            obstruction_symbol=None,
         )
     final_word = finals[state]
     accumulated.extend(final_word)
     if len(accumulated) > MAX_FST_RESULT_WORD_LENGTH:
         raise RuntimeError("admitted subsequential output exceeded its bound")
-    return ("OUTPUT", tuple(accumulated), state, None, ())
+    return result(
+        "OUTPUT",
+        output=tuple(accumulated),
+        final_state=state,
+        undefined_position=None,
+        partial_output=(),
+        state_trace=tuple(state_trace),
+        transition_outputs=tuple(transition_outputs),
+        cumulative_outputs=tuple(cumulative_outputs),
+        final_output=final_word,
+        obstruction_position=None,
+        obstruction_state=None,
+        obstruction_symbol=None,
+    )
 
 
-def identity_transducer(alphabet_size: int) -> SubsequentialTransducer:
-    """Return the identity subsequential transducer on one alphabet."""
+def identity_transducer(
+    alphabet_size: int,
+    *,
+    alphabet: FiniteAlphabet | None = None,
+    alphabet_id: str | None = None,
+) -> SubsequentialTransducer:
+    """Return the identity subsequential transducer on one alphabet.
+
+    When a structural alphabet context is supplied, both sides retain that
+    exact context and identity. The size-only form remains useful for
+    request-scoped integer alphabets.
+    """
+    if type(alphabet_size) is not int or not 1 <= alphabet_size <= MAX_FST_ALPHABET:
+        raise OperationResourceAdmissionError(
+            location=("alphabet",),
+            code="finite_state_transducer.identity_alphabet_bound_exceeded",
+            message="identity alphabet size must be between 1 and 32",
+        )
+    if alphabet is not None:
+        if not isinstance(alphabet, FiniteAlphabet):
+            _reject("alphabet_type", "alphabet must be a FiniteAlphabet", "alphabet")
+        try:
+            alphabet = FiniteAlphabet.model_validate(alphabet.model_dump(), strict=True)
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("alphabet",),
+                code="finite_state_transducer.alphabet_carrier_shape",
+                message="alphabet must satisfy its canonical carrier shape",
+            ) from exc
+        if len(alphabet.symbols) != alphabet_size:
+            _reject(
+                "alphabet_size_mismatch",
+                "alphabet context length must equal alphabet_size",
+                "alphabet",
+            )
+    if alphabet_id is not None and (
+        type(alphabet_id) is not str or len(alphabet_id) > MAX_FST_ALPHABET_ID_LENGTH
+    ):
+        _reject(
+            "alphabet_id_too_long",
+            "alphabet identity exceeds its carrier bound",
+            "alphabet_id",
+        )
+
+    alphabet_values = (
+        list(alphabet.symbols) if alphabet is not None else list(range(alphabet_size))
+    )
+    # Representation-size estimate: a folded exact encoded-alphabet allocation
+    # proxy plus a fixed per-symbol allowance, not an encoded transport bound.
+    alphabet_size_units = len(encode_strict_json(alphabet_values))
+    projected_size = 2 * alphabet_size_units + 64 * alphabet_size + 2048
+    if projected_size > MAX_FST_IDENTITY_RESULT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("alphabet",),
+            code="finite_state_transducer.identity_result_bytes_exceeded",
+            message="canonical identity transducer may exceed the result representation size",
+        )
 
     transitions = tuple(
         SubseqTransition(
@@ -229,6 +500,10 @@ def identity_transducer(alphabet_size: int) -> SubsequentialTransducer:
         initial_state=0,
         transitions=transitions,
         final_outputs=(SubseqFinalOutput(state=0, output=()),),
+        input_alphabet_id=alphabet_id,
+        output_alphabet_id=alphabet_id,
+        input_alphabet=alphabet,
+        output_alphabet=alphabet,
     )
 
 
@@ -251,6 +526,92 @@ def reachable_states(
                 visited.add(target)
                 queue.append(target)
     return visited
+
+
+def reachable_state_witnesses(
+    transducer: SubsequentialTransducer,
+) -> ReachableStatesResult:
+    """Return one shortest, lexicographically first path to each reachable state.
+
+    A witness output concatenates transition outputs along its input path;
+    final outputs are excluded because this describes a prefix reaching a
+    state, whether or not that state is final.
+    """
+    admitted = _admit_transducer(transducer)
+    max_transition_output = max(
+        (len(transition.output) for transition in admitted.transitions), default=0
+    )
+    max_path_output = max(0, admitted.state_count - 1) * max_transition_output
+    max_output_cells = admitted.state_count * max_path_output
+    source_bytes = len(encode_strict_json(admitted.model_dump(mode="json")))
+    # Integer indices are at most 31, so four units per output symbol safely
+    # bound commas and digits. The remaining allowance covers path rows,
+    # state traces, and fixed source fields. Check before allocating witnesses.
+    # These are retained-scalar units, not an encoded transport measurement.
+    projected_size = (
+        source_bytes
+        + 4 * max_output_cells
+        + 3 * admitted.state_count * max(0, admitted.state_count - 1)
+        + 512 * admitted.state_count
+        + 4096
+    )
+    if projected_size > MAX_FST_REACHABLE_RESULT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("transducer",),
+            code="finite_state_transducer.reachable_result_bytes_exceeded",
+            message=(
+                "shortest-path witness result may exceed the canonical "
+                "result representation size"
+            ),
+        )
+
+    transitions = _transition_map(admitted)
+    # Sorted symbol expansion makes the first BFS path to any state the
+    # lexicographically first among all shortest input words.
+    adjacency: dict[int, list[tuple[int, int, tuple[int, ...]]]] = {}
+    for (source, symbol), (target, output) in transitions.items():
+        adjacency.setdefault(source, []).append((symbol, target, output))
+    for row in adjacency.values():
+        row.sort(key=lambda item: item[0])
+
+    parent: dict[int, tuple[int, int, tuple[int, ...]] | None] = {
+        admitted.initial_state: None
+    }
+    queue: deque[int] = deque([admitted.initial_state])
+    while queue:
+        source = queue.popleft()
+        for symbol, target, output in adjacency.get(source, ()):
+            if target not in parent:
+                parent[target] = (source, symbol, output)
+                queue.append(target)
+
+    witnesses = []
+    for state in sorted(parent):
+        symbols: list[int] = []
+        output_words: list[tuple[int, ...]] = []
+        trace = [state]
+        current = state
+        while True:
+            predecessor = parent[current]
+            if predecessor is None:
+                break
+            previous, symbol, output = predecessor
+            symbols.append(symbol)
+            output_words.append(output)
+            current = previous
+            trace.append(current)
+        symbols.reverse()
+        output_words.reverse()
+        trace.reverse()
+        witnesses.append(
+            ReachableStateWitness(
+                state=state,
+                input_word=tuple(symbols),
+                output_word=tuple(symbol for word in output_words for symbol in word),
+                state_trace=tuple(trace),
+            )
+        )
+    return ReachableStatesResult._from_kernel(admitted, witnesses=tuple(witnesses))
 
 
 def coaccessible_states(
@@ -544,6 +905,601 @@ def invert_rational(
     )
 
 
+def project_rational_relation(
+    transducer: RationalTransducer,
+    tape: Literal["input", "output"],
+) -> NFA:
+    """Return the regular projection of a finite rational relation.
+
+    Every accepting transducer path contributes its selected tape word.  The
+    result remains nondeterministic: distinct paths and multiple words on the
+    other tape are not collapsed by pretending the relation is a function.
+    Empty edge labels become epsilon transitions, and multi-symbol labels are
+    expanded into paths with fresh intermediate states.
+    """
+    transducer = _admit_rational_transducer(transducer)
+    if tape not in ("input", "output"):
+        _reject("projection_tape", "tape must be 'input' or 'output'", "tape")
+
+    is_input = tape == "input"
+    alphabet_size = (
+        transducer.input_alphabet_size if is_input else transducer.output_alphabet_size
+    )
+    alphabet_id = (
+        transducer.input_alphabet_id if is_input else transducer.output_alphabet_id
+    )
+    alphabet = transducer.input_alphabet if is_input else transducer.output_alphabet
+    alphabet_context_bytes = 128
+    if alphabet is not None:
+        alphabet_context_bytes += sum(
+            6 * len(symbol) + 2 for symbol in alphabet.symbols
+        )
+    if alphabet_id is not None:
+        alphabet_context_bytes += 6 * len(alphabet_id) + 2
+    labels = tuple(
+        edge.input_label if is_input else edge.output_label for edge in transducer.edges
+    )
+    label_cells = sum(map(len, labels))
+    bridge_count = (
+        len(transducer.initial_states) if len(transducer.initial_states) > 1 else 0
+    )
+    state_count = transducer.state_count + (1 if bridge_count else 0)
+    transition_count = bridge_count
+    for label in labels:
+        if label:
+            state_count += len(label) - 1
+            transition_count += len(label)
+        else:
+            transition_count += 1
+
+    # Account for the canonical value, each expanded state/edge, source labels,
+    # and the construction passes before allocating the result lists.
+    work_bound = (
+        transducer.state_count
+        + len(transducer.edges)
+        + label_cells
+        + state_count
+        + transition_count
+    )
+    output_bytes_bound = (
+        state_count * 32
+        + transition_count * 128
+        + label_cells * 8
+        + alphabet_context_bytes
+        + 1024
+    )
+    if (
+        state_count > MAX_NFA_STATES
+        or transition_count > MAX_NFA_TRANSITIONS
+        or work_bound > MAX_RATIONAL_PROJECTION_WORK
+        or output_bytes_bound > MAX_NFA_OUTPUT_CELLS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "tape"),
+            code="finite_state_transducer.relation_projection_bound_exceeded",
+            message="rational relation projection exceeds its NFA expansion bound",
+        )
+
+    initial_state = (
+        transducer.state_count if bridge_count else transducer.initial_states[0]
+    )
+    next_state = transducer.state_count + (1 if bridge_count else 0)
+    transitions: list[NFATransition] = []
+    if bridge_count:
+        for source in transducer.initial_states:
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=initial_state,
+                    symbol=None,
+                    target=source,
+                )
+            )
+
+    for edge_index, (edge, label) in enumerate(
+        zip(transducer.edges, labels, strict=True)
+    ):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation projection expansion")
+        if not label:
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=edge.source,
+                    symbol=None,
+                    target=edge.target,
+                )
+            )
+            continue
+        source = edge.source
+        for index, symbol in enumerate(label):
+            target = edge.target if index == len(label) - 1 else next_state
+            transitions.append(
+                NFATransition(
+                    transition_id=len(transitions),
+                    source=source,
+                    symbol=symbol,
+                    target=target,
+                )
+            )
+            if target == next_state:
+                next_state += 1
+            source = target
+
+    request_checkpoint("before rational relation projection result construction")
+    return NFA(
+        state_count=state_count,
+        alphabet_size=alphabet_size,
+        alphabet_id=alphabet_id,
+        alphabet=alphabet,
+        transitions=tuple(transitions),
+        initial_state=initial_state,
+        accepting_states=tuple(sorted(transducer.accepting_states)),
+    )
+
+
+def restrict_rational_input(
+    transducer: RationalTransducer, dfa: DFA
+) -> tuple[RationalTransducer, tuple[tuple[int, int], ...], tuple[int, ...]]:
+    """Intersect a relation's input tape with a total DFA language.
+
+    Product states are reachable pairs ``(relation_state, dfa_state)``. Each
+    complete edge input label advances the DFA before the product edge target
+    is chosen; empty labels leave its state unchanged. Output labels and
+    nondeterministic edge multiplicity are preserved verbatim.
+    """
+    transducer = _admit_rational_transducer(transducer)
+    if type(dfa) is not DFA:
+        _reject("restriction_dfa_type", "dfa must be a canonical DFA", "dfa")
+    try:
+        dfa = DFA.model_validate(dfa.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("dfa",),
+            code="finite_state_transducer.restriction_dfa_shape",
+            message="dfa must satisfy its complete canonical carrier shape",
+        ) from exc
+    if (
+        transducer.input_alphabet is None
+        or dfa.alphabet is None
+        or transducer.input_alphabet != dfa.alphabet
+        or transducer.input_alphabet_id != dfa.alphabet_id
+        or dfa.alphabet_size != transducer.input_alphabet_size
+    ):
+        _reject(
+            "restriction_alphabet_mismatch",
+            "input restriction requires the same explicit alphabet context and identity",
+            "dfa",
+        )
+
+    # This upper bound covers every product pair and every relation edge at
+    # every DFA state, including the per-symbol DFA scans of multi-symbol
+    # labels and the copied label cells that request revalidation, result
+    # construction, and serialization must scan. The much smaller result limits
+    # are checked after reachable-pair discovery but before result edges are
+    # allocated.
+    product_bound = transducer.state_count * dfa.state_count
+    edge_scan_bound = len(transducer.edges) * dfa.state_count
+    label_work_bound = sum(len(edge.input_label) for edge in transducer.edges)
+    # The kernel stops immediately after observing the first state/edge over
+    # the public carrier cap, so these are the largest lists/maps it can hold.
+    # Per-record budgets include tuple/list slots, dict entries and table slack,
+    # Python integer references, and the outgoing/transition indexing rows.
+    possible_product_states = min(product_bound, MAX_FST_STATES + 1)
+    possible_product_edges = min(edge_scan_bound, MAX_FST_EDGES + 1)
+    source_label_cells = sum(
+        len(edge.input_label) + len(edge.output_label) for edge in transducer.edges
+    )
+    result_label_cells = min(
+        dfa.state_count * source_label_cells,
+        possible_product_edges * (2 * MAX_FST_WORD_LENGTH),
+    )
+    work_bound = (
+        product_bound
+        + edge_scan_bound
+        + dfa.state_count * label_work_bound
+        + result_label_cells
+    )
+    intermediate_bytes = (
+        4096
+        + possible_product_states * 512
+        + possible_product_edges * 512
+        + len(transducer.edges) * 256
+        + len(dfa.transitions) * 256
+        + result_label_cells * 8
+    )
+    if (
+        work_bound > MAX_RATIONAL_RESTRICTION_WORK
+        or intermediate_bytes > MAX_RATIONAL_RESTRICTION_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="finite_state_transducer.restriction_work_bound_exceeded",
+            message="input restriction exceeds its product exploration bound",
+        )
+    request_checkpoint("after rational relation input restriction admission")
+    ledger = OperationWorkLedger(work_bound)
+    dfa_edges = {(edge.source, edge.symbol): edge.target for edge in dfa.transitions}
+    outgoing: list[list[tuple[int, RationalEdge]]] = [
+        [] for _ in range(transducer.state_count)
+    ]
+    for edge_index, edge in enumerate(transducer.edges):
+        outgoing[edge.source].append((edge_index, edge))
+
+    initial_pairs = tuple(
+        (state, dfa.initial_state) for state in transducer.initial_states
+    )
+    product_states: list[tuple[int, int]] = list(initial_pairs)
+    product_index = {pair: index for index, pair in enumerate(product_states)}
+    product_edges: list[tuple[int, int, int]] = []
+    explored = 0
+    for source_index, (relation_state, dfa_state) in enumerate(product_states):
+        if source_index % 256 == 0:
+            request_checkpoint(
+                "during rational relation input restriction product exploration"
+            )
+        for edge_index, edge in outgoing[relation_state]:
+            explored += 1
+            if explored % 256 == 0:
+                request_checkpoint(
+                    "during rational relation input restriction edge exploration"
+                )
+            next_dfa_state = dfa_state
+            for symbol in edge.input_label:
+                ledger.charge()
+                next_dfa_state = dfa_edges[(next_dfa_state, symbol)]
+            ledger.charge()
+            target_pair = (edge.target, next_dfa_state)
+            target_index = product_index.get(target_pair)
+            if target_index is None:
+                target_index = len(product_states)
+                product_index[target_pair] = target_index
+                product_states.append(target_pair)
+            product_edges.append((source_index, target_index, edge_index))
+            if len(product_states) > MAX_FST_STATES:
+                raise OperationResourceAdmissionError(
+                    location=("transducer", "dfa"),
+                    code="finite_state_transducer.restriction_state_bound_exceeded",
+                    message="reachable input-restriction product exceeds the transducer state bound",
+                )
+            if len(product_edges) > MAX_FST_EDGES:
+                raise OperationResourceAdmissionError(
+                    location=("transducer", "dfa"),
+                    code="finite_state_transducer.restriction_edge_bound_exceeded",
+                    message="input-restriction product exceeds the transducer edge bound",
+                )
+
+    result_label_cells = sum(
+        len(transducer.edges[edge_index].input_label)
+        + len(transducer.edges[edge_index].output_label)
+        for _, _, edge_index in product_edges
+    )
+    retained_request_bytes = len(
+        encode_strict_json(
+            {
+                "transducer": transducer.model_dump(mode="json"),
+                "dfa": dfa.model_dump(mode="json"),
+            }
+        )
+    )
+    output_size_bound = (
+        retained_request_bytes * 2
+        + len(product_states) * 64
+        + len(product_edges) * 256
+        + result_label_cells * 8
+        + 4096
+    )
+    if output_size_bound > MAX_RATIONAL_RESTRICTION_OUTPUT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("transducer", "dfa"),
+            code="finite_state_transducer.restriction_output_bound_exceeded",
+            message="input-restriction result exceeds its result representation size",
+        )
+
+    request_checkpoint("before rational relation input restriction result construction")
+    accepting_source = set(transducer.accepting_states)
+    accepting_dfa = set(dfa.accepting_states)
+    # Admission already bounded the result label cells; charge them so result
+    # construction and its later revalidation and serialization stay inside the
+    # request's declared work ledger.
+    ledger.charge(result_label_cells)
+    restricted = RationalTransducer(
+        input_alphabet_size=transducer.input_alphabet_size,
+        output_alphabet_size=transducer.output_alphabet_size,
+        input_alphabet_id=transducer.input_alphabet_id,
+        output_alphabet_id=transducer.output_alphabet_id,
+        input_alphabet=transducer.input_alphabet,
+        output_alphabet=transducer.output_alphabet,
+        state_count=len(product_states),
+        initial_states=tuple(range(len(initial_pairs))),
+        accepting_states=tuple(
+            index
+            for index, (relation_state, dfa_state) in enumerate(product_states)
+            if relation_state in accepting_source and dfa_state in accepting_dfa
+        ),
+        edges=tuple(
+            RationalEdge(
+                source=source,
+                target=target,
+                input_label=transducer.edges[edge_index].input_label,
+                output_label=transducer.edges[edge_index].output_label,
+            )
+            for source, target, edge_index in product_edges
+        ),
+    )
+    return (
+        restricted,
+        tuple(product_states),
+        tuple(edge_index for _, _, edge_index in product_edges),
+    )
+
+
+def _matching_positions(word: tuple[int, ...], pattern: tuple[int, ...]) -> bytearray:
+    """Return matching offsets as a compact bitset using linear-time KMP."""
+
+    bitset_bytes = (len(word) + 8) // 8
+    if not pattern:
+        starts = bytearray([0xFF]) * bitset_bytes
+        valid_bits_in_last_byte = (len(word) + 1) % 8
+        if valid_bits_in_last_byte:
+            starts[-1] &= (1 << valid_bits_in_last_byte) - 1
+        return starts
+    prefix = [0] * len(pattern)
+    matched = 0
+    for index in range(1, len(pattern)):
+        while matched and pattern[index] != pattern[matched]:
+            matched = prefix[matched - 1]
+        if pattern[index] == pattern[matched]:
+            matched += 1
+        prefix[index] = matched
+    starts = bytearray(bitset_bytes)
+    matched = 0
+    for index, symbol in enumerate(word):
+        while matched and symbol != pattern[matched]:
+            matched = prefix[matched - 1]
+        if symbol == pattern[matched]:
+            matched += 1
+        if matched == len(pattern):
+            start = index - len(pattern) + 1
+            starts[start >> 3] |= 1 << (start & 7)
+            matched = prefix[matched - 1]
+    return starts
+
+
+def rational_relation_outputs_for_input(
+    transducer: RationalTransducer, input_word: tuple[int, ...]
+) -> NFA:
+    """Return an epsilon-NFA for the exact output fiber at ``input_word``.
+
+    Product states pair a transducer state with the consumed input position.
+    A transducer edge is available only where its full input label matches;
+    its output label is expanded into NFA edges. Input-epsilon cycles therefore
+    remain cycles, including output-producing cycles that represent infinite
+    fibers. The result is never an enumerated or determinized language.
+    """
+
+    transducer = _admit_rational_transducer(transducer)
+    _validate_rational_fiber_input(transducer, input_word)
+    matching, work_bound = _admit_rational_fiber(transducer, input_word)
+    return _build_rational_fiber(transducer, input_word, matching, work_bound)
+
+
+def _validate_rational_fiber_input(
+    transducer: RationalTransducer, input_word: tuple[int, ...]
+) -> None:
+    if transducer.output_alphabet is None:
+        _reject(
+            "relation_fiber_output_parent_missing",
+            "the output alphabet must be explicit so the returned NFA has a parent",
+            "transducer",
+            "output_alphabet",
+        )
+    if type(input_word) is not tuple or any(
+        type(symbol) is not int or not 0 <= symbol < transducer.input_alphabet_size
+        for symbol in input_word
+    ):
+        _reject(
+            "relation_fiber_input_word",
+            "input_word must be bounded and use the transducer input alphabet",
+            "input_word",
+        )
+
+
+def _admit_rational_fiber(
+    transducer: RationalTransducer, input_word: tuple[int, ...]
+) -> tuple[dict[tuple[int, ...], bytearray], int]:
+    request_checkpoint("before rational relation fiber admission")
+    word_length = len(input_word)
+    patterns = {edge.input_label for edge in transducer.edges}
+    match_work_bound = sum(
+        2 * len(pattern) + 2 * word_length for pattern in patterns
+    ) + sum(len(edge.input_label) for edge in transducer.edges)
+    match_position_bound = sum(
+        word_length + 1 if not pattern else max(0, word_length - len(pattern) + 1)
+        for pattern in patterns
+    )
+    product_state_bound = transducer.state_count * (word_length + 1)
+    candidate_edge_bound = len(transducer.edges) * (word_length + 1)
+    match_work_bound += match_position_bound * 8
+    if (
+        match_work_bound + candidate_edge_bound > MAX_RATIONAL_FIBER_WORK
+        or product_state_bound + 1 > MAX_NFA_STATES
+        or len(patterns) * 256 > MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "input_word"),
+            code="finite_state_transducer.relation_fiber_work_bound_exceeded",
+            message="rational relation fiber matching exceeds its admitted work bound",
+        )
+
+    matching_by_label: dict[tuple[int, ...], bytearray] = {}
+    for pattern_index, pattern in enumerate(patterns):
+        if pattern_index % 64 == 0:
+            request_checkpoint("during rational relation input-label matching")
+        matching_by_label[pattern] = _matching_positions(input_word, pattern)
+    eligible_counts_list: list[int] = []
+    for edge_index, edge in enumerate(transducer.edges):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation fiber admission")
+        eligible_counts_list.append(
+            sum(byte.bit_count() for byte in matching_by_label[edge.input_label])
+        )
+    eligible_counts = tuple(eligible_counts_list)
+    eligible_edge_positions = sum(eligible_counts)
+    output_transition_bound = 0
+    output_intermediate_bound = 0
+    for edge_index, (eligible, edge) in enumerate(
+        zip(eligible_counts, transducer.edges, strict=True)
+    ):
+        if edge_index % 256 == 0:
+            request_checkpoint("during rational relation fiber admission")
+        output_transition_bound += eligible * max(1, len(edge.output_label))
+        output_intermediate_bound += eligible * max(0, len(edge.output_label) - 1)
+    state_bound = 1 + product_state_bound + output_intermediate_bound
+    bridge_count = len(transducer.initial_states)
+    transition_bound = output_transition_bound + bridge_count
+    work_bound = (
+        match_work_bound
+        + candidate_edge_bound
+        + eligible_edge_positions
+        + output_transition_bound
+        + state_bound
+        + transition_bound
+    )
+    alphabet_context_bytes = 128
+    if transducer.output_alphabet is not None:
+        alphabet_context_bytes += sum(
+            6 * len(symbol) + 2 for symbol in transducer.output_alphabet.symbols
+        )
+    if transducer.output_alphabet_id is not None:
+        alphabet_context_bytes += 6 * len(transducer.output_alphabet_id) + 2
+    output_bytes_bound = (
+        state_bound * 32 + transition_bound * 128 + alphabet_context_bytes + 1024
+    )
+    intermediate_bytes_bound = (
+        product_state_bound * 192
+        + candidate_edge_bound * 8
+        + len(patterns) * 256
+        + output_intermediate_bound * 64
+        + transition_bound * 256
+    )
+    if (
+        state_bound > MAX_NFA_STATES
+        or transition_bound > MAX_NFA_TRANSITIONS
+        or work_bound > MAX_RATIONAL_FIBER_WORK
+        or output_bytes_bound > MAX_NFA_OUTPUT_CELLS
+        or intermediate_bytes_bound > MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("transducer", "input_word"),
+            code="finite_state_transducer.relation_fiber_bound_exceeded",
+            message=(
+                "rational relation output fiber exceeds its product, work, "
+                "intermediate-allocation, or NFA output bound"
+            ),
+        )
+    request_checkpoint("after rational relation fiber admission")
+    return matching_by_label, work_bound
+
+
+def _build_rational_fiber(
+    transducer: RationalTransducer,
+    input_word: tuple[int, ...],
+    matching_by_label: dict[tuple[int, ...], bytearray],
+    work_bound: int,
+) -> NFA:
+    word_length = len(input_word)
+    ledger = OperationWorkLedger(work_bound)
+    outgoing: list[list[RationalEdge]] = [[] for _ in range(transducer.state_count)]
+    for edge_index, edge in enumerate(transducer.edges):
+        if edge_index % 256 == 0:
+            request_checkpoint("preparing rational relation fiber expansion")
+        outgoing[edge.source].append(edge)
+
+    pairs: list[tuple[int, int]] = []
+    pair_ids: dict[tuple[int, int], int] = {}
+    queue: deque[tuple[int, int]] = deque()
+
+    def discover(pair: tuple[int, int]) -> int:
+        existing = pair_ids.get(pair)
+        if existing is not None:
+            return existing
+        state_id = len(pairs) + 1
+        pair_ids[pair] = state_id
+        pairs.append(pair)
+        queue.append(pair)
+        return state_id
+
+    transitions: list[NFATransition] = []
+    for initial_index, state in enumerate(transducer.initial_states):
+        if initial_index % 256 == 0:
+            request_checkpoint("initializing rational relation fiber expansion")
+        target = discover((state, 0))
+        transitions.append(
+            NFATransition(
+                transition_id=len(transitions), source=0, symbol=None, target=target
+            )
+        )
+    accepting: set[int] = set()
+    processed_pairs = 0
+    while queue:
+        if processed_pairs % 64 == 0:
+            request_checkpoint("during rational relation fiber product exploration")
+        processed_pairs += 1
+        state, position = queue.popleft()
+        source_id = pair_ids[(state, position)]
+        if position == word_length and state in transducer.accepting_states:
+            accepting.add(source_id)
+        for edge in outgoing[state]:
+            ledger.charge()
+            match_bits = matching_by_label[edge.input_label]
+            if not match_bits[position >> 3] & (1 << (position & 7)):
+                continue
+            next_position = position + len(edge.input_label)
+            target_id = discover((edge.target, next_position))
+            if not edge.output_label:
+                transitions.append(
+                    NFATransition(
+                        transition_id=len(transitions),
+                        source=source_id,
+                        symbol=None,
+                        target=target_id,
+                    )
+                )
+                ledger.charge()
+                continue
+            current_id = source_id
+            for index, symbol in enumerate(edge.output_label):
+                last = index == len(edge.output_label) - 1
+                next_id = target_id if last else len(pairs) + 1
+                if not last:
+                    pairs.append((-1, -1))
+                transitions.append(
+                    NFATransition(
+                        transition_id=len(transitions),
+                        source=current_id,
+                        symbol=symbol,
+                        target=next_id,
+                    )
+                )
+                current_id = next_id
+                ledger.charge()
+    request_checkpoint("before rational relation fiber result construction")
+    result_transitions = tuple(transitions)
+    request_checkpoint("after rational relation fiber transition materialization")
+    result_accepting = tuple(sorted(accepting))
+    request_checkpoint("after rational relation fiber accepting-state construction")
+    return NFA(
+        state_count=1 + len(pairs),
+        alphabet_size=transducer.output_alphabet_size,
+        alphabet_id=transducer.output_alphabet_id,
+        alphabet=transducer.output_alphabet,
+        transitions=result_transitions,
+        initial_state=0,
+        accepting_states=result_accepting,
+    )
+
+
 def replay_rational_path(
     transducer: RationalTransducer,
     initial_state: int,
@@ -673,13 +1629,7 @@ def verify_subsequential_run(claim: SubseqRunResult) -> bool:
 
     try:
         expected = run_subsequential(claim.transducer, claim.word)
-        return expected == (
-            claim.status,
-            claim.output,
-            claim.final_state,
-            claim.undefined_position,
-            claim.partial_output,
-        )
+        return expected == claim
     except (TypeError, ValueError, OperationDomainValidationError):
         return False
 
@@ -1224,15 +2174,15 @@ def minimize_subsequential(
     )
     sample_words = _iter_sample_words(transducer.input_alphabet_size, sample_max_length)
     for word in sample_words:
-        source_status, source_output, _, _, _ = run_subsequential(transducer, word)
-        minimized_status, minimized_output, _, _, _ = run_subsequential(minimized, word)
+        source_run = run_subsequential(transducer, word)
+        minimized_run = run_subsequential(minimized, word)
         # The shipped trim/run semantics preserve the realized partial
         # function: definedness with equal output words. Distinct failure
         # modes (undefined transition vs nonfinal state) both mean the word
         # is outside the domain.
-        if (source_status == "OUTPUT", source_output) != (
-            minimized_status == "OUTPUT",
-            minimized_output,
+        if (source_run.status == "OUTPUT", source_run.output) != (
+            minimized_run.status == "OUTPUT",
+            minimized_run.output,
         ):
             raise RuntimeError("minimized transducer disagrees with its source")
     old_to_new = tuple(

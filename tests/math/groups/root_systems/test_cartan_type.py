@@ -21,6 +21,14 @@ from jacobian.math.groups.root_systems.operations import (
     weyl_group_order,
 )
 
+
+def test_canonical_cartan_values_are_publicly_exported() -> None:
+    from jacobian.math.groups.root_systems import CartanMatrix, FiniteCartanDatum
+
+    assert CartanMatrix.__name__ == "CartanMatrix"
+    assert FiniteCartanDatum.__name__ == "FiniteCartanDatum"
+
+
 Matrix = tuple[tuple[int, ...], ...]
 
 A1: Matrix = ((2,),)
@@ -139,12 +147,12 @@ class TestCartanTypeKnownAnswers:
         assert result.matrix == CartanMatrixValue.model_validate(expected)
 
     def test_b_and_c_differ_only_in_bond_direction(self) -> None:
-        short_end = cartan_matrix_from_type("B", 3).matrix.entries
-        long_end = cartan_matrix_from_type("C", 3).matrix.entries
-        assert short_end[1][2] == -1 and short_end[2][1] == -2
-        assert long_end[1][2] == -2 and long_end[2][1] == -1
-        assert cartan_datum(short_end).symmetrizer[-1].as_fraction() == Fraction(1, 2)
-        assert cartan_datum(long_end).symmetrizer[-1].as_fraction() == 2
+        long_end = cartan_matrix_from_type("B", 3).matrix.entries
+        short_end = cartan_matrix_from_type("C", 3).matrix.entries
+        assert long_end[1][2] == -1 and long_end[2][1] == -2
+        assert short_end[1][2] == -2 and short_end[2][1] == -1
+        assert cartan_datum(long_end).symmetrizer[-1].as_fraction() == Fraction(1, 2)
+        assert cartan_datum(short_end).symmetrizer[-1].as_fraction() == 2
 
     def test_e_family_shares_the_branch_node(self) -> None:
         for rank in (6, 7, 8):

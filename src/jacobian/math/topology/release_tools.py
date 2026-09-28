@@ -2,6 +2,7 @@
 """Public declarations for finite simplicial topology transforms."""
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.topology.operations import canonicalize
 from jacobian.math.topology.release import *
 
 
@@ -10,7 +11,11 @@ def _run_poset(r: FacePosetRequest) -> FacePosetResult:
 
 
 def _run_clique(r: CliqueRequest) -> CliqueResult:
-    return clique_complex(r)
+    return clique_complex(canonicalize(r.complex.vertices, r.complex.facets).complex)
+
+
+def _run_graph_clique(r: GraphCliqueRequest) -> CliqueResult:
+    return graph_clique_complex(r.graph)
 
 
 def _run_orient(r: OrientabilityRequest) -> OrientabilityResult:
@@ -56,6 +61,27 @@ TOOLS = (
                 name="triangle_clique",
                 description="Reconstruct the clique complex of a triangle graph; every pair of vertices is an edge.",
                 input={"complex": _TRIANGLE},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial_complex.clique_from_graph.compute",
+        title="Compute a graph's clique complex",
+        description="Return the exact flag complex of a bounded indexed simple graph, including isolated graph vertices as singleton simplices.",
+        request_type=GraphCliqueRequest,
+        result_type=CliqueResult,
+        run=_run_graph_clique,
+        tags=("topology", "simplicial", "graph", "clique", "flag", "exact"),
+        examples=(
+            OperationExample(
+                name="four_cycle_clique",
+                description="The clique complex of a four-cycle is the four-edge cycle because it has no triangles.",
+                input={
+                    "graph": {
+                        "vertex_count": 4,
+                        "edges": [[0, 1], [0, 3], [1, 2], [2, 3]],
+                    }
+                },
             ),
         ),
     ),

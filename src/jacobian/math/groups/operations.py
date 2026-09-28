@@ -19,9 +19,14 @@ from jacobian.math.groups._models import (
     PermutationGroup,
     SubgroupEntry,
 )
+from jacobian.math.groups._table_models import (
+    MAX_FINITE_TABLE_GROUP_ORDER,
+    FiniteGroupTable,
+)
 
 __all__ = [
     "element_order",
+    "finite_group_table",
     "group_conjugacy_classes",
     "group_orbit",
     "group_order",
@@ -34,6 +39,74 @@ __all__ = [
     "verify_group_stabilizer",
     "verify_subgroup_lattice",
 ]
+
+
+def finite_group_table(
+    multiplication: tuple[tuple[int, ...], ...], identity: int
+) -> FiniteGroupTable:
+    """Validate an indexed Cayley table and return its canonical group value."""
+    if (
+        type(multiplication) is not tuple
+        or not 1 <= len(multiplication) <= MAX_FINITE_TABLE_GROUP_ORDER
+        or type(identity) is not int
+        or not 0 <= identity < len(multiplication)
+        or any(
+            type(row) is not tuple
+            or len(row) != len(multiplication)
+            or any(
+                type(value) is not int or not 0 <= value < len(multiplication)
+                for value in row
+            )
+            for row in multiplication
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("multiplication",),
+            code="finite_group.table.invalid_input",
+            message="table must be a bounded square tuple of valid element indices",
+        )
+    order = len(multiplication)
+    if any(
+        multiplication[identity][i] != i or multiplication[i][identity] != i
+        for i in range(order)
+    ):
+        raise OperationDomainValidationError(
+            location=("identity",),
+            code="finite_group.table.identity_law",
+            message="the proposed identity must be two-sided",
+        )
+    inverses: list[int] = []
+    for i in range(order):
+        inverse = next(
+            (
+                j
+                for j in range(order)
+                if multiplication[i][j] == identity and multiplication[j][i] == identity
+            ),
+            None,
+        )
+        if inverse is None:
+            raise OperationDomainValidationError(
+                location=("multiplication",),
+                code="finite_group.table.inverse_law",
+                message="every element must have a two-sided inverse",
+            )
+        inverses.append(inverse)
+    for a in range(order):
+        for b in range(order):
+            ab = multiplication[a][b]
+            for c in range(order):
+                if multiplication[ab][c] != multiplication[a][multiplication[b][c]]:
+                    raise OperationDomainValidationError(
+                        location=("multiplication",),
+                        code="finite_group.table.associativity",
+                        message="multiplication table must be associative",
+                    )
+    return FiniteGroupTable.model_construct(
+        multiplication=multiplication,
+        identity=identity,
+        inverse=tuple(inverses),
+    )
 
 
 def _backend_group(group: PermutationGroup) -> Any:
@@ -378,3 +451,44 @@ def verify_subgroup_lattice(claim: GroupSubgroupLatticeResult) -> bool:
         raise
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
+
+
+def _admitted_backend_group(group: PermutationGroup) -> tuple[Any, int]:
+    """Build the SymPy group once and return it with its exact Schreier-Sims order.
+
+    Callers that need both the backend group and its order (admission followed
+    by a trusted enumeration) reuse the same construction instead of rebuilding
+    the backend and replaying the order computation.
+    """
+    backend = _backend_group(group)
+    return backend, int(backend.order())
+
+
+def _conjugacy_classes_from_admitted(
+    group: Any, degree: int, *, order: int
+) -> list[list[list[int]]]:
+    """Enumerate the canonical conjugacy partition of an admitted backend group.
+
+    ``group`` and ``order`` must come from ``_admitted_backend_group`` for the
+    same source value, so the owner-local order bound is checked against the
+    already-computed order rather than replaying Schreier-Sims.
+    """
+    from jacobian.math.groups._models import MAX_CONJUGACY_CLASSES_GROUP_ORDER
+
+    if order > MAX_CONJUGACY_CLASSES_GROUP_ORDER:
+        raise OperationDomainValidationError(
+            location=("generators",),
+            code="group.order_bound",
+            message=(
+                f"group order {order} exceeds the bounded maximum "
+                f"{MAX_CONJUGACY_CLASSES_GROUP_ORDER} for conjugacy classes "
+                f"(would materialize |G|={order} elements)"
+            ),
+        )
+    classes = group.conjugacy_classes()
+    canonical = [
+        sorted(list(_full_permutation_form(permutation, degree)) for permutation in cls)
+        for cls in classes
+    ]
+    canonical.sort(key=lambda cls: tuple(cls[0]))
+    return canonical

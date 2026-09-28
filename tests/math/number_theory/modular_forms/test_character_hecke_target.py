@@ -1,0 +1,173 @@
+"""Character Hecke images retain their exact source/target space parent."""
+
+from __future__ import annotations
+
+from fractions import Fraction
+
+import pytest
+from cypari import pari
+from pydantic import TypeAdapter
+
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
+from jacobian.math.matrices.cyclic_linear._models import (
+    RationalCyclotomicElement,
+    RationalCyclotomicField,
+)
+from jacobian.math.number_theory.characters.operations import (
+    character_group,
+    dirichlet_character,
+)
+from jacobian.math.number_theory.modular_forms._pari_basis_worker import (
+    _as_cyclotomic_coordinates,
+    _character_vector,
+)
+from jacobian.math.number_theory.modular_forms.character_basis import (
+    modular_character_coordinates_hecke,
+)
+from jacobian.math.number_theory.modular_forms.character_coordinates import (
+    CHARACTER_RREF_BASIS_ID,
+)
+from jacobian.math.number_theory.modular_forms.pari_backend import (
+    _pari_character_request,
+    pari_character_basis,
+)
+from jacobian.math.number_theory.modular_forms.values import (
+    ModularFormCoordinates,
+    ModularFormSpace,
+)
+
+_FIELD = RationalCyclotomicField(order=6)
+
+
+def _space() -> ModularFormSpace:
+    """The inflated even order-three character has a one-dimensional cusp space."""
+    return ModularFormSpace(
+        level=26,
+        weight=2,
+        kind="S",
+        character=dirichlet_character(character_group(26), (4,)),
+        coefficient_domain=_FIELD,
+    )
+
+
+def _element(value: object) -> RationalCyclotomicElement:
+    coordinates = _as_cyclotomic_coordinates(pari, value, 6, 3)
+    return RationalCyclotomicElement(
+        field=_FIELD,
+        coefficients_ascending=tuple(
+            {"num": int(numerator), "den": int(denominator)}
+            for numerator, denominator in coordinates
+        ),
+    )
+
+
+def _form() -> ModularFormCoordinates:
+    return ModularFormCoordinates(
+        space=_space(),
+        basis_id=CHARACTER_RREF_BASIS_ID,
+        coordinates=(
+            RationalCyclotomicElement(
+                field=_FIELD,
+                coefficients_ascending=(
+                    {"num": 1, "den": 1},
+                    {"num": 0, "den": 1},
+                ),
+            ),
+        ),
+    )
+
+
+def test_pari_character_basis_does_not_convert_the_order_three_basis_twice(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.number_theory.modular_forms.pari_backend as backend
+
+    monkeypatch.setattr(
+        backend,
+        "_run_basis_worker",
+        lambda *_args, **_kwargs: {
+            "kind": "character_complete",
+            "backend_dimension": 1,
+            "coefficient_field_order": 6,
+            "vectors": [[[["1", "1"], ["1", "1"]]]],
+        },
+    )
+
+    (vector,) = pari_character_basis(_space(), 1, 1)
+
+    assert vector == ((Fraction(1), Fraction(1)),)
+
+
+def test_character_hecke_action_preserves_rref_target_and_matches_pari() -> None:
+    form = _form()
+    result = modular_character_coordinates_hecke(form, 5)
+
+    assert result.space == form.space
+    assert result.basis_id == form.basis_id
+    assert len(result.coordinates) == 1
+    restored = TypeAdapter(ModularFormCoordinates).validate_json(
+        result.model_dump_json()
+    )
+    assert restored == result
+
+    # PARI's modular-form Hecke operator supplies an independent exact
+    # q-expansion oracle. In this one-dimensional space, the T_5 eigenvalue is
+    # the ratio at any nonzero source coefficient; the q-Sturm reconstruction
+    # in the operation returns that same scalar in Jacobian's RREF basis.
+    character_request = _pari_character_request(form.space)
+    pari_group, pari_character, _pari_character_order = _character_vector(
+        pari, character_request["character"], 6
+    )
+    pari_space = pari.mfinit([26, 2, [pari_group, pari_character]], 1)
+    pari_form = pari.mfbasis(pari_space)[0]
+    pari_image = pari.mfhecke(pari_space, pari_form, 5)
+    source_coefficients = tuple(pari.mfcoef(pari_form, index) for index in range(8))
+    pivot = next(index for index, value in enumerate(source_coefficients) if value)
+    expected = pari.mfcoef(pari_image, pivot) / source_coefficients[pivot]
+    assert result.coordinates[0] == _element(expected)
+
+
+def test_character_hecke_scales_nonunit_coordinate_once() -> None:
+    form = _form().model_copy(update={"coordinates": (_element(2),)})
+    unit_result = modular_character_coordinates_hecke(_form(), 5)
+    result = modular_character_coordinates_hecke(form, 5)
+
+    unit = unit_result.coordinates[0].coefficients_ascending
+    doubled = result.coordinates[0].coefficients_ascending
+    assert tuple(value.num for value in doubled) == tuple(
+        2 * value.num for value in unit
+    )
+    assert doubled != tuple(
+        type(value)(num=4 * value.num, den=value.den) for value in unit
+    )
+
+
+def test_character_hecke_admits_large_coordinate_without_double_charge() -> None:
+    coordinate = RationalCyclotomicElement(
+        field=_FIELD,
+        coefficients_ascending=(
+            {"num": 10**69, "den": 1},
+            {"num": 0, "den": 1},
+        ),
+    )
+    form = _form().model_copy(update={"coordinates": (coordinate,)})
+    result = modular_character_coordinates_hecke(form, 5)
+
+    unit = modular_character_coordinates_hecke(_form(), 5).coordinates[0]
+    assert result.coordinates[0].coefficients_ascending == tuple(
+        type(value)(num=10**69 * value.num, den=value.den)
+        for value in unit.coefficients_ascending
+    )
+
+
+def test_character_hecke_rejects_bad_prime_for_its_exact_level() -> None:
+    with pytest.raises(OperationDomainValidationError, match="gcd"):
+        modular_character_coordinates_hecke(_form(), 2)
+
+
+def test_character_hecke_advertises_precision_limited_index_for_level_26() -> None:
+    with pytest.raises(OperationResourceAdmissionError, match="through 18"):
+        modular_character_coordinates_hecke(_form(), 19)

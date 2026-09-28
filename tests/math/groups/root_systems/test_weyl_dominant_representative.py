@@ -90,6 +90,7 @@ def test_dominant_representative_and_transporter_match_exhaustive_oracle(
     result = weyl_dominant_representative(matrix, weight)
 
     assert result.dominant_weight == dominant[0]
+    assert result.dominant_weight.coordinates == dominant[0]
     assert result.element.matrix.entries == matrix
     assert result.element.root_action.entries in orbit[dominant[0]]
 
@@ -98,10 +99,41 @@ def test_already_dominant_identity_weight_returns_identity_element() -> None:
     result = weyl_dominant_representative(((2, -1), (-1, 2)), (0, 0))
 
     assert result.dominant_weight == (0, 0)
+    result = weyl_dominant_representative(((2, -1), (-1, 2)), ((1 << 53) - 1, 0))
+
+    assert result.dominant_weight.coordinates == ((1 << 53) - 1, 0)
     assert result.element.root_action.entries == _identity(2)
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_near_limit_non_dominant_weight_uses_bounded_transporter_path() -> None:
+    limit = (1 << 53) - 1
+    result = weyl_dominant_representative(((2, -1), (-1, 2)), (-limit, limit))
+
+    assert result.dominant_weight.coordinates == (limit, 0)
+    assert result.element.root_action.entries == ((-1, 1), (0, 1))
+
+
+def test_a4_near_limit_private_prefix_exceeds_public_coordinate_bound() -> None:
+    limit = (1 << 53) - 1
+    cartan = tuple(
+        tuple(2 if row == col else -1 if abs(row - col) == 1 else 0 for col in range(4))
+        for row in range(4)
+    )
+    source = (-limit,) * 4
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "weyl_group.dominant_representative.compute"
+    )
+    request = tool.request_type.model_validate({"matrix": cartan, "weight": source})
+    result = tool.run(request)
+
+    # The longest element of type A4 sends the negative all-ones weight to
+    # its positive counterpart; the first private reflection reaches -2M.
+    assert source[0] - source[0] * cartan[0][1] == -2 * limit
+    assert result.dominant_weight.coordinates == (limit,) * 4
+    assert type(result).model_validate_json(result.model_dump_json()) == result
 def test_dominant_representative_is_a_published_operation() -> None:
     tool = next(
         tool

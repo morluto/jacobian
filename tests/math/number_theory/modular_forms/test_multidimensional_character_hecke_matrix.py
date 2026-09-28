@@ -71,7 +71,7 @@ def test_multidimensional_t2_matrix_matches_independent_pari_oracle():
     # PARI's mfheckemat uses its own basis; its exact characteristic polynomial
     # is basis invariant and independently checks the returned matrix.
     character_request = _pari_character_request(request.space)
-    pari_group, pari_character = _character_vector(
+    pari_group, pari_character, _pari_character_order = _character_vector(
         pari, character_request["character"], 6
     )
     pari_space = pari.mfinit(
@@ -109,7 +109,7 @@ def test_order_three_field_transport_matches_pari_hecke_matrix():
 
     # In PARI's native basis T_2 is diagonal with eigenvalues t+2 and 2t+1.
     character_request = _pari_character_request(request.space)
-    pari_group, pari_character = _character_vector(
+    pari_group, pari_character, _pari_character_order = _character_vector(
         pari, character_request["character"], 6
     )
     pari_space = pari.mfinit(

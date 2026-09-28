@@ -48,8 +48,13 @@ CHARACTER_BASIS_ID: Literal["gamma0-13-even-order6-character-sturm-v1"] = (
 _DIMENSION = 1
 _STURM_PRECISION: Literal[3] = 3  # floor(2 * [SL2(Z):Gamma0(13)] / 12) + 1 = 3
 _MAX_WORK = 1_000_000
-_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
-_MAX_ALLOCATION_BYTES = 1_000_000
+# Exact decimal digits a character-valued result may materialize. The retained
+# cells of every value here are already bounded by the dimension, precision, and
+# field-degree bounds each admission checks, and the coefficient width is bounded
+# separately by MAX_CYCLIC_FIELD_ELEMENT_DIGITS; these ceilings admit the product
+# of those two facts. A consumer's encoder must not decide admission.
+_MAX_OUTPUT_DIGIT_WORK = 8 * 1024 * 1024
+_MAX_ALLOCATION_DIGIT_WORK = 1_000_000
 _MAX_NORMALIZED_COORDINATE_DIGITS = 1
 MAX_CHARACTER_HECKE_INDEX = 32
 MAX_CHARACTER_HECKE_SOURCE_PRECISION = 2 * MAX_CHARACTER_HECKE_INDEX + 1
@@ -311,10 +316,10 @@ def _character_basis_from_admission(
             code="modular_form.character_basis_height_admission",
             message="normalized character coefficients exceed the exact height envelope",
         )
-    allocation_bytes = (
-        max(1, dimension) * precision * field.degree * (2 * normalized_digits + 32)
+    allocation_digit_work = (
+        max(1, dimension) * precision * field.degree * normalized_digits
     )
-    if work > _MAX_WORK or allocation_bytes > _MAX_ALLOCATION_BYTES:
+    if work > _MAX_WORK or allocation_digit_work > _MAX_ALLOCATION_DIGIT_WORK:
         raise OperationResourceAdmissionError(
             location=("space",),
             code="modular_form.character_basis_admission",
@@ -334,8 +339,8 @@ def _character_basis_from_admission(
                 "independent character dimension differs from the transport basis envelope"
             )
         envelope_cells = dimension * precision * field.degree
-        envelope_bytes = envelope_cells * (2 * coefficient_digits + 32)
-        if envelope_bytes > _MAX_ALLOCATION_BYTES:
+        envelope_digit_work = envelope_cells * coefficient_digits
+        if envelope_digit_work > _MAX_ALLOCATION_DIGIT_WORK:
             raise OperationResourceAdmissionError(
                 location=("space",),
                 code="modular_form.character_basis_transport_admission",
@@ -454,8 +459,8 @@ def _admit_character_form(
             message="character coordinate height exceeds the exact multiplication envelope",
         )
     work = 3 * field.degree**2 * 3
-    allocation_bytes = 3 * field.degree * (2 * predicted_digits + 32)
-    if work > _MAX_WORK or allocation_bytes > _MAX_ALLOCATION_BYTES:
+    allocation_digit_work = 3 * field.degree * predicted_digits
+    if work > _MAX_WORK or allocation_digit_work > _MAX_ALLOCATION_DIGIT_WORK:
         raise OperationResourceAdmissionError(
             location=("form",),
             code="modular_form.character_coordinate_admission",
@@ -674,14 +679,13 @@ def modular_character_coordinates_product(
         + 2
     )
     work = precision * precision * field.degree**2 * 16
-    allocation_bytes = (
-        2 * precision * field.degree * (2 * coefficient_digits + 32)
-        + precision * field.degree * (2 * product_digits + 32)
-        + 2_048
+    allocation_digit_work = (
+        2 * precision * field.degree * coefficient_digits
+        + precision * field.degree * product_digits
     )
     if (
         work > _MAX_WORK
-        or allocation_bytes > _MAX_ALLOCATION_BYTES
+        or allocation_digit_work > _MAX_ALLOCATION_DIGIT_WORK
         or product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
     ):
         raise OperationResourceAdmissionError(
@@ -802,7 +806,7 @@ def _order_six_character_hecke_coefficient(
     output_index: int,
 ) -> RationalCyclotomicElement:
     """Apply the weight-two divisor formula with admitted exact arithmetic."""
-    result = (Fraction(0), Fraction(0))
+    result: tuple[Fraction, ...] = (Fraction(0), Fraction(0))
     for divisor in range(1, index + 1):
         if gcd(output_index, index) % divisor:
             continue
@@ -880,9 +884,9 @@ def _rref_character_coordinates_hecke(
     input_digits = max(
         cyclotomic._validate_element(value)[2] for value in form.coordinates
     )
-    if not any(
-        coefficient.num for coefficient in form.coordinates[0].coefficients_ascending
-    ):
+    # A zero source vector is its own Hecke image. Read the exact coefficients
+    # from the canonicalizer so the decision uses admitted values.
+    if not any(cyclotomic._validate_element(form.coordinates[0])[1]):
         return form
 
     sturm_precision = _character_sturm_precision(space)
@@ -923,17 +927,16 @@ def _rref_character_coordinates_hecke(
         + sturm_precision * index * field.degree * 12
         + divisor_count * sturm_precision * field.degree * 8
     )
-    output_bytes = (
-        source_precision * field.degree * (2 * basis_digits + 32)
-        + sturm_precision * field.degree * (2 * hecke_digits + 32)
-        + field.degree * (2 * result_digits + 32)
-        + 2_048
+    output_digit_work = (
+        source_precision * field.degree * basis_digits
+        + sturm_precision * field.degree * hecke_digits
+        + field.degree * result_digits
     )
     if (
         source_precision > MAX_CHARACTER_BASIS_PRECISION
         or result_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or work > _MAX_WORK
-        or output_bytes > _MAX_OUTPUT_BYTES
+        or output_digit_work > _MAX_OUTPUT_DIGIT_WORK
     ):
         raise OperationResourceAdmissionError(
             location=("index",),
@@ -1095,11 +1098,10 @@ def modular_character_coordinates_hecke(
         coordinate_digits * (2 * admitted[1].degree + 2) + 2 * len(str(index)) + 8
     )
     work = precision * admitted[1].degree * 64 + index * 16
-    allocation_bytes = (
-        precision * admitted[1].degree * (2 * coordinate_digits + 32)
-        + 3 * admitted[1].degree * (2 * hecke_intermediate_digits + 48)
-        + admitted[1].degree * (2 * predicted_coordinate_digits + 48)
-        + 2_048
+    allocation_digit_work = (
+        precision * admitted[1].degree * coordinate_digits
+        + 3 * admitted[1].degree * hecke_intermediate_digits
+        + admitted[1].degree * predicted_coordinate_digits
     )
     if (
         precision > MAX_CHARACTER_HECKE_SOURCE_PRECISION
@@ -1107,7 +1109,7 @@ def modular_character_coordinates_hecke(
         or hecke_intermediate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or predicted_coordinate_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or work > _MAX_WORK
-        or allocation_bytes > _MAX_ALLOCATION_BYTES
+        or allocation_digit_work > _MAX_ALLOCATION_DIGIT_WORK
     ):
         raise OperationResourceAdmissionError(
             location=("index",),

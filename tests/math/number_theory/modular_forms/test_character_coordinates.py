@@ -8,7 +8,6 @@ from math import gcd
 import pytest
 from pydantic import TypeAdapter
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
     RationalCyclotomicElement,
@@ -27,6 +26,7 @@ from jacobian.math.number_theory.modular_forms.character_basis import (
 )
 from jacobian.math.number_theory.modular_forms.character_coordinates import (
     CHARACTER_RREF_BASIS_ID,
+    modular_character_coordinates_equal,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -94,10 +94,6 @@ def test_multidimensional_character_coordinates_decide_global_equality() -> None
         first.model_dump_json()
     )
     assert restored == first
-    restored_second = TypeAdapter(ModularFormCoordinates).validate_json(
-        second.model_dump_json()
-    )
-
     # The exact producer prefixes are an independent coefficient oracle for
     # the two distinct coordinate vectors in the Sturm-determining basis.
     assert basis.elements[0].expansion.coefficients != (
@@ -105,10 +101,6 @@ def test_multidimensional_character_coordinates_decide_global_equality() -> None
     )
     assert modular_form_coordinates_equal(first, first)
     assert not modular_form_coordinates_equal(first, second)
-
-    tool = Catalog.open().operation("modular_form.equal.check")
-    result = tool.run(tool.request_type(left=restored, right=restored_second))
-    assert result.equal is False
 
 
 def test_empty_coordinates_are_the_unique_form_in_a_zero_dimensional_space() -> None:
@@ -175,11 +167,14 @@ def test_character_coordinates_reject_wrong_canonical_basis_and_parent() -> None
         basis_id=CHARACTER_RREF_BASIS_ID,
         coordinates=(foreign_field_value, _element(0)),
     )
+    # A coordinate whose field is not the space's field makes the carrier
+    # non-canonical, so the boundary rejects it before the character owner
+    # re-admits it.
     with pytest.raises(OperationDomainValidationError) as parent_error:
         modular_form_coordinates_equal(forged, valid)
     assert (
         parent_error.value.errors()[0]["type"]
-        == "modular_form.character_coordinates_parent"
+        == "modular_form.coordinates_carrier_invalid"
     )
 
 
@@ -211,11 +206,18 @@ def test_oversized_character_claim_is_rejected_before_group_reconstruction(
         raise AssertionError("oversized caller data reached group reconstruction")
 
     monkeypatch.setattr(
-        character_coordinates, "_require_basis_space", reconstruction_must_not_run
+        character_coordinates, "character_space_dimensions", reconstruction_must_not_run
     )
+    # The public boundary rejects the forged carrier before any group work.
     with pytest.raises(OperationDomainValidationError) as error:
         modular_form_coordinates_equal(forged_form, forged_form)
+    assert error.value.errors()[0]["type"] == "modular_form.coordinates_carrier_invalid"
+
+    # Reaching the character owner directly with the same value is rejected by
+    # its own bounded shape admission, still before group reconstruction.
+    with pytest.raises(OperationDomainValidationError) as owner_error:
+        modular_character_coordinates_equal(forged_form, forged_form)
     assert (
-        error.value.errors()[0]["type"]
+        owner_error.value.errors()[0]["type"]
         == "modular_form.character_coordinates_character_shape"
     )

@@ -48,7 +48,7 @@ def _decimal_digits(value: int) -> int:
 
 
 def _validate_element(
-    value: RationalCyclotomicElement,
+    value: object,
 ) -> tuple[RationalCyclotomicField, tuple[Fraction, ...], int]:
     if type(value) is not RationalCyclotomicElement:
         _fail_domain(

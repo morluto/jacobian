@@ -42,9 +42,14 @@ from jacobian.math.number_theory.modular_forms.pari_backend import (
 )
 from jacobian.math.number_theory.modular_forms.values import ModularFormSpace
 
-MAX_MULTIDIMENSIONAL_HECKE_OUTPUT_BYTES = 8 * 1024 * 1024
+# Exact decimal digits the Hecke basis and its intermediate values may
+# materialize. Their retained cells are bounded by the dimension, precision,
+# and field-degree bounds checked above, and the coefficient width is bounded
+# by MAX_CYCLIC_FIELD_ELEMENT_DIGITS; these ceilings admit the product of those
+# two facts, so admission never depends on an encoded transport size.
+MAX_MULTIDIMENSIONAL_HECKE_OUTPUT_DIGIT_WORK = 8 * 1024 * 1024
 MAX_MULTIDIMENSIONAL_HECKE_WORK = 50_000_000
-MAX_MULTIDIMENSIONAL_HECKE_INTERMEDIATE_BYTES = 512 * 1024 * 1024
+MAX_MULTIDIMENSIONAL_HECKE_INTERMEDIATE_DIGIT_WORK = 512 * 1024 * 1024
 
 
 def _zero(field: RationalCyclotomicField) -> RationalCyclotomicElement:
@@ -182,24 +187,25 @@ def _admit_hecke_request(space: ModularFormSpace, index: int) -> _HeckeAdmission
     determinant_term_count = factorial(dimension) * (2**dimension)
     basis_digit_bound = 8 * dimension + 2 * len(str(determinant_term_count)) + 24
     matrix_digit_bound = basis_digit_bound + len(str(index)) + len(str(dimension)) + 8
-    worker_bytes = dimension * source_precision * field.degree * 48
     intermediate_digits = 2 * (dimension * field.degree) ** 2 * 30 + 128
-    rref_bytes = (
-        dimension * source_precision * field.degree * (2 * intermediate_digits + 32)
-    )
-    basis_bytes = (
-        dimension * source_precision * field.degree * (2 * basis_digit_bound + 32)
-    )
-    image_bytes = (
-        dimension * target_precision * field.degree * (2 * matrix_digit_bound + 32)
-    )
-    matrix_bytes = dimension * dimension * field.degree * (2 * matrix_digit_bound + 32)
+    source_cells = dimension * source_precision * field.degree
+    image_cells = dimension * target_precision * field.degree
+    matrix_cells = dimension * dimension * field.degree
+    worker_digit_work = source_cells * 4
+    rref_digit_work = source_cells * intermediate_digits
+    basis_digit_work = source_cells * basis_digit_bound
+    image_digit_work = image_cells * matrix_digit_bound
+    matrix_digit_work = matrix_cells * matrix_digit_bound
     if (
         work > MAX_MULTIDIMENSIONAL_HECKE_WORK
         or work > MAX_PARI_BASIS_WORK
-        or matrix_bytes > MAX_MULTIDIMENSIONAL_HECKE_OUTPUT_BYTES
-        or worker_bytes + rref_bytes + basis_bytes + image_bytes + matrix_bytes
-        > MAX_MULTIDIMENSIONAL_HECKE_INTERMEDIATE_BYTES
+        or matrix_cells > MAX_MULTIDIMENSIONAL_HECKE_OUTPUT_DIGIT_WORK
+        or worker_digit_work
+        + rref_digit_work
+        + basis_digit_work
+        + image_digit_work
+        + matrix_digit_work
+        > MAX_MULTIDIMENSIONAL_HECKE_INTERMEDIATE_DIGIT_WORK
         or matrix_digit_bound > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
     ):
         raise OperationResourceAdmissionError(

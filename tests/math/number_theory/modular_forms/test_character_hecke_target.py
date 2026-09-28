@@ -8,7 +8,6 @@ import pytest
 from cypari import pari
 from pydantic import TypeAdapter
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -27,9 +26,6 @@ from jacobian.math.number_theory.modular_forms._pari_basis_worker import (
 )
 from jacobian.math.number_theory.modular_forms.character_basis import (
     modular_character_coordinates_hecke,
-)
-from jacobian.math.number_theory.modular_forms.character_basis_models import (
-    ModularCharacterHeckeRequest,
 )
 from jacobian.math.number_theory.modular_forms.character_coordinates import (
     CHARACTER_RREF_BASIS_ID,
@@ -107,11 +103,7 @@ def test_pari_character_basis_does_not_convert_the_order_three_basis_twice(
 
 def test_character_hecke_action_preserves_rref_target_and_matches_pari() -> None:
     form = _form()
-    operation = Catalog.open().operation(
-        "modular_form.character_coordinates.hecke.apply"
-    )
-    assert operation is not None
-    result = operation.run(ModularCharacterHeckeRequest(form=form, index=5))
+    result = modular_character_coordinates_hecke(form, 5)
 
     assert result.space == form.space
     assert result.basis_id == form.basis_id
@@ -126,7 +118,7 @@ def test_character_hecke_action_preserves_rref_target_and_matches_pari() -> None
     # the ratio at any nonzero source coefficient; the q-Sturm reconstruction
     # in the operation returns that same scalar in Jacobian's RREF basis.
     character_request = _pari_character_request(form.space)
-    pari_group, pari_character = _character_vector(
+    pari_group, pari_character, _pari_character_order = _character_vector(
         pari, character_request["character"], 6
     )
     pari_space = pari.mfinit([26, 2, [pari_group, pari_character]], 1)

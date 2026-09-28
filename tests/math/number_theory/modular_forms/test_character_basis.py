@@ -260,6 +260,7 @@ def test_conductor_thirteen_order_three_character_basis(
 
         def backend_must_not_run(*args: Any, **kwargs: Any) -> Any:
             raise AssertionError("a zero-dimensional basis needs no PARI worker")
+
         monkeypatch.setattr(
             character_basis_module, "pari_character_basis", backend_must_not_run
         )

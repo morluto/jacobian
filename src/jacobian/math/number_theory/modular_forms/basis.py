@@ -1531,11 +1531,11 @@ def modular_form_coordinates_equal(
     if left.space == right.space:
         if left.space.coefficient_domain != "QQ":
             if left.space.character != "TRIVIAL":
-                from jacobian.math.number_theory.modular_forms.character_basis import (
-                    _modular_character_coordinates_equal,
+                from jacobian.math.number_theory.modular_forms.character_coordinates import (
+                    modular_character_coordinates_equal,
                 )
 
-                return _modular_character_coordinates_equal(left, right)
+                return modular_character_coordinates_equal(left, right)
             from jacobian.math.number_theory.modular_forms.field_coordinates import (
                 modular_form_field_coordinates_equal,
             )

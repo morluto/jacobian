@@ -145,6 +145,15 @@ def _admit_coordinate_space(space: object) -> _CoordinateSpace:
     # above. Do not replay the level-13 PARI character admission here; the
     # generic coordinate contract uses the canonical field carried by space.
     field = space.coefficient_domain
+    if type(field) is not RationalCyclotomicField:
+        raise OperationDomainValidationError(
+            location=("space", "coefficient_domain"),
+            code="modular_form.character_coordinates_field",
+            message=(
+                "character coordinates require the exact cyclotomic coefficient "
+                "field carried by the space"
+            ),
+        )
     character = space.character
     if type(character) is not DirichletCharacter:
         raise OperationDomainValidationError(

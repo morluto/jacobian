@@ -30,6 +30,7 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldPresentation,
 )
 from jacobian.math.groups.abelian._models import AbelianPresentation
+from jacobian.math.polynomials._models import IntegerPolynomial
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -597,6 +598,75 @@ class FiniteFieldCardinalityResult(StrictModel):
     cardinality: int = Field(ge=1)
     trace: int
     frobenius_polynomial: tuple[int, int, int]
+
+
+class FiniteFieldZetaPolynomialResult(StrictModel):
+    """Numerator of the zeta function of one finite-field elliptic curve.
+
+    ``numerator`` is the dense integral polynomial ``1 - a*T + q*T^2``;
+    ``IntegerPolynomial`` stores coefficients in descending degree order.
+    The curve and count fields retain the source context and state the exact
+    relation from which the numerator was obtained.
+    """
+
+    curve: FiniteFieldShortWeierstrassCurve
+    cardinality: int = Field(ge=1)
+    trace: int
+    numerator: IntegerPolynomial
+
+    @model_validator(mode="after")
+    def require_numerator_identity(self) -> Self:
+        q = int(self.curve.field.characteristic**self.curve.field.degree)
+        if self.trace != q + 1 - self.cardinality or self.numerator.coefficients != (
+            q,
+            -self.trace,
+            1,
+        ):
+            raise _validation_error(
+                "zeta_polynomial_identity",
+                "zeta numerator must be 1 - trace*T + q*T^2 for the exact curve count",
+            )
+        return self
+
+
+class FiniteFieldQuadraticTwistRelation(StrictModel):
+    """A canonical nonsquare parameter and its source-bound twist model.
+
+    The producer establishes that ``parameter`` is a nonsquare and that the
+    target coefficients are ``d^2*A`` and ``d^3*B``. This carrier preserves
+    those exact inputs for consumers that need to use the twist relation; its
+    structural validation intentionally does not replay field arithmetic.
+    """
+
+    source_curve: FiniteFieldShortWeierstrassCurve
+    twisted_curve: FiniteFieldShortWeierstrassCurve
+    parameter: FiniteFieldElement
+
+    @model_validator(mode="after")
+    def require_one_field_presentation(self) -> Self:
+        if (
+            self.source_curve.field != self.twisted_curve.field
+            or self.parameter.presentation != self.source_curve.field
+        ):
+            raise _validation_error(
+                "twist_relation_field_mismatch",
+                "twist relation curves and parameter must share one field presentation",
+            )
+        return self
+
+
+MAX_FROBENIUS_EXTENSION_DEGREE = 64
+MAX_FROBENIUS_EXTENSION_INTEGER_DIGITS = 4096
+MAX_FROBENIUS_CHARACTER_SUM_WORK = 4_000_000
+MAX_ISOGENY_PAIR_CHARACTER_SUM_WORK = 8_000_000
+MAX_FINITE_FIELD_POINT_ENUMERATION_WORK = 20_000_000
+MAX_FINITE_FIELD_TWIST_ORDER = 4096
+MAX_FINITE_FIELD_TWIST_WORK = 4_000_000
+MAX_FINITE_FIELD_ISOMORPHISM_ORDER = 4096
+MAX_FINITE_FIELD_ISOMORPHISM_WORK = 4_000_000
+MAX_FINITE_FIELD_GROUP_STRUCTURE_WORK = 50_000_000
+MAX_POINT_ORDER_SCALAR_WORK = 100_000
+MAX_POINT_ORDER_WITNESSES = 8
 
 
 class FiniteFieldGroupStructureResult(StrictModel):
@@ -1320,6 +1390,57 @@ def finite_field_quadratic_twist(
         field=field,
         coefficient_a=_element(field, twisted_a),
         coefficient_b=_element(field, twisted_b),
+    )
+
+
+def finite_field_quadratic_twist_relation(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldQuadraticTwistRelation:
+    """Return the canonical twist model together with its nonsquare parameter.
+
+    The twisting parameter is the first nonsquare in the field's canonical
+    base-p coordinate order. For that nonsquare ``d``, the twist is
+    ``y^2 = x^3 + d^2 A x + d^3 B``.
+
+    The twist model itself comes from the existing quadratic-twist kernel, so
+    admission and the nonsquare search are shared rather than re-derived. The
+    parameter is the same first nonsquare that kernel uses.
+    """
+
+    twisted_curve = finite_field_quadratic_twist(curve)
+    field = twisted_curve.field
+    q = field.characteristic**field.degree
+    minus_one = (field.characteristic - 1,) + (0,) * (field.degree - 1)
+    parameter = None
+    for encoded in range(1, q):
+        candidate = _decode_field_element(field, encoded)
+        if _power(field, candidate, (q - 1) // 2) == minus_one:
+            parameter = _element(field, candidate)
+            break
+    if parameter is None:
+        raise RuntimeError("finite field has no quadratic nonsquare")
+    return FiniteFieldQuadraticTwistRelation(
+        source_curve=curve,
+        twisted_curve=twisted_curve,
+        parameter=parameter,
+    )
+
+
+def finite_field_zeta_polynomial(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldZetaPolynomialResult:
+    """Return ``1 - a*T + q*T^2`` from one admitted exact base-field count."""
+
+    curve = _curve_admit(curve)
+    q = _admit_extension_count_growth(curve, 1)
+    count = _cardinality_from_character_sum(curve, q)
+    return FiniteFieldZetaPolynomialResult(
+        curve=count.curve,
+        cardinality=count.cardinality,
+        trace=count.trace,
+        numerator=IntegerPolynomial(
+            coefficients=(q, -count.trace, 1),
+        ),
     )
 
 

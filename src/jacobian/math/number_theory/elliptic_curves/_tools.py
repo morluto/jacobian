@@ -34,8 +34,10 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldPointRequest,
     FiniteFieldPointResult,
     FiniteFieldPointSet,
+    FiniteFieldQuadraticTwistRelation,
     FiniteFieldScalarRequest,
     FiniteFieldShortWeierstrassCurve,
+    FiniteFieldZetaPolynomialResult,
     finite_field_cardinality,
     finite_field_curve_base_change,
     finite_field_discriminant,
@@ -50,6 +52,8 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_point_scalar,
     finite_field_points,
     finite_field_quadratic_twist,
+    finite_field_quadratic_twist_relation,
+    finite_field_zeta_polynomial,
 )
 from jacobian.math.number_theory.elliptic_curves.operations import (
     add_points,
@@ -601,7 +605,60 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.zeta_polynomial.compute",
+        title="Compute a finite-field elliptic zeta numerator",
+        description=(
+            "Return the exact numerator 1 - a*T + q*T^2 of the zeta function "
+            "for a nonsingular short-Weierstrass curve over a bounded finite "
+            "field, with a = q + 1 - #E(F_q). Coefficients are serialized in "
+            "descending degree order and the result retains the curve, count, "
+            "and trace."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldZetaPolynomialResult,
+        run=lambda request: finite_field_zeta_polynomial(request.curve),
+        tags=("elliptic-curve", "finite-field", "zeta", "frobenius", "exact"),
+        discovery_terms=(
+            "elliptic curve zeta polynomial numerator",
+            "frobenius trace from point count",
+            "finite field elliptic zeta",
+        ),
+        examples=(
+            OperationExample(
+                name="zeta_numerator_over_five",
+                description=(
+                    "Compute the zeta numerator for y^2 = x^3 + x + 1 over F5."
+                ),
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="elliptic_curve.finite_field.quadratic_twist_relation.compute",
+        title="Construct a source-bound finite-field quadratic-twist relation",
+        description=(
+            "Return the canonical nontrivial quadratic-twist model together "
+            "with its exact source curve and nonsquare parameter d, where "
+            "the new coefficients are d^2*A and d^3*B."
+        ),
+        request_type=FiniteFieldCurveRequest,
+        result_type=FiniteFieldQuadraticTwistRelation,
+        run=lambda request: finite_field_quadratic_twist_relation(request.curve),
+        tags=("elliptic-curve", "finite-field", "quadratic-twist", "exact"),
+        discovery_terms=(
+            "finite-field quadratic twist parameter and model",
+            "quadratic twist relation with nonsquare witness",
+            "twisted elliptic curve coefficients",
+        ),
+        examples=(
+            OperationExample(
+                name="nontrivial_twist_relation_over_five",
+                description="Return the canonical nontrivial twist over F5.",
+                input={"curve": _finite_curve()},
+            ),
+        ),
+    ),
 )
-
 
 __all__ = ["TOOLS"]

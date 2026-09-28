@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from itertools import product
 
 from pydantic import ValidationError
@@ -125,6 +126,39 @@ def _from_internal_rational_function(
         numerator=_from_internal_polynomial(value[0], prime),
         denominator=_from_internal_polynomial(value[1], prime),
     )
+
+
+def _bounded_element_coordinates(
+    values: Iterable[RF],
+    prime: int,
+    location: tuple[str | int, ...],
+) -> tuple[PrimeFieldRationalFunction, ...]:
+    """Build canonical coordinates, reporting coefficient growth as admission.
+
+    ``_admit_multiplication_resources`` bounds the product with a cheap
+    estimate that cannot account for every accumulated contribution of a
+    chained reduction, so a genuinely oversized product can still reach
+    construction. ``_from_internal_rational_function`` validates for real, and
+    its raw ``ValidationError`` would otherwise escape an operation that
+    promises a typed resource rejection, and the product is assembled through
+    ``model_construct``, so an out-of-schema value would be returned as
+    canonical and could neither round-trip nor compose.
+    """
+
+    coordinates: list[PrimeFieldRationalFunction] = []
+    for value in values:
+        try:
+            coordinates.append(_from_internal_rational_function(value, prime))
+        except ValidationError as error:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.coefficient_growth_exceeds_envelope",
+                message=(
+                    "the exact reduced product exceeds the "
+                    f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+                ),
+            ) from error
+    return tuple(coordinates)
 
 
 def _canonical_field(field: FiniteFunctionField) -> FiniteFunctionField:
@@ -785,8 +819,8 @@ def function_field_element_multiply(
     )
     product = FiniteFunctionFieldElement.model_construct(
         field=field,
-        coordinates=tuple(
-            _from_internal_rational_function(value, prime) for value in reduced
+        coordinates=_bounded_element_coordinates(
+            reduced, prime, ("left", "coordinates")
         ),
     )
     return FunctionFieldElementMultiplyResult._from_kernel(

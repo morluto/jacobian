@@ -7,6 +7,8 @@ from jacobian.math.graphs.decks._models import (
     MAX_KELLY_DECK_TOTAL_WORK,
     AnonymousGraphCardMultiset,
     AnonymousGraphCardMultisetRequest,
+    EdgeDeckIsomorphismProfile,
+    EdgeDeckIsomorphismProfileRequest,
     EdgeDeckRequest,
     EdgeDeletionFamily,
     UnlabelledDeck,
@@ -27,6 +29,7 @@ from jacobian.math.graphs.decks._models import (
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    _edge_deck_isomorphism_profile_from_admitted,
     _vertex_deck_isomorphism_profile_from_admitted,
     anonymous_graph_card_multiset,
     edge_deletion_family,
@@ -104,6 +107,14 @@ def _run_vertex_isomorphism_profile(
     # Raw request admission precedes parsing; the nested family model then
     # establishes the complete source-bound deletion relation exactly once.
     return _vertex_deck_isomorphism_profile_from_admitted(request.deck)
+
+
+def _run_edge_isomorphism_profile(
+    request: EdgeDeckIsomorphismProfileRequest,
+) -> EdgeDeckIsomorphismProfile:
+    # The raw request admission precedes nested parsing; EdgeDeletionFamily
+    # establishes the exact source-minus-edge relation once.
+    return _edge_deck_isomorphism_profile_from_admitted(request.deck)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -775,6 +786,73 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         ],
                         "edge_appearances": [1, 1],
                         "vertex_appearances": [2, 2, 2],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="graph.deck.edge.isomorphism_classes.compute",
+        title="Map edge-deck cards to exact isomorphism classes",
+        description=(
+            "Canonicalize each card in a complete source-bound edge-deletion "
+            "family and return its class index plus an exact vertex permutation "
+            "to the canonical representative. Preserve every class multiplicity, "
+            "card index, and deleted source edge. Supports at most 10 source "
+            "vertices under a shared 2000000-unit work bound. This classifies "
+            "the supplied cards and makes no graph reconstruction claim."
+        ),
+        request_type=EdgeDeckIsomorphismProfileRequest,
+        result_type=EdgeDeckIsomorphismProfile,
+        run=_run_edge_isomorphism_profile,
+        tags=("graph", "deck", "edge-deletion", "isomorphism", "bijection", "exact"),
+        discovery_terms=(
+            "edge deck isomorphism class maps",
+            "edge-deleted card-to-class vertex bijection",
+            "exact edge deck graph isomorphism witnesses",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_edge_deck_class_maps",
+                description=(
+                    "Map the three isomorphic edge-deleted triangle cards to one "
+                    "class while retaining multiplicity three and exact vertex maps."
+                ),
+                input={
+                    "deck": {
+                        "source": {
+                            "vertices": ["a", "b", "c"],
+                            "edges": [["a", "b"], ["a", "c"], ["b", "c"]],
+                        },
+                        "cards": [
+                            {
+                                "deleted_edge": ["a", "b"],
+                                "card": {
+                                    "vertices": ["a", "b", "c"],
+                                    "edges": [["a", "c"], ["b", "c"]],
+                                },
+                                "retained_vertices": ["a", "b", "c"],
+                                "retained_edge_count": 2,
+                            },
+                            {
+                                "deleted_edge": ["a", "c"],
+                                "card": {
+                                    "vertices": ["a", "b", "c"],
+                                    "edges": [["a", "b"], ["b", "c"]],
+                                },
+                                "retained_vertices": ["a", "b", "c"],
+                                "retained_edge_count": 2,
+                            },
+                            {
+                                "deleted_edge": ["b", "c"],
+                                "card": {
+                                    "vertices": ["a", "b", "c"],
+                                    "edges": [["a", "b"], ["a", "c"]],
+                                },
+                                "retained_vertices": ["a", "b", "c"],
+                                "retained_edge_count": 2,
+                            },
+                        ],
                     }
                 },
             ),

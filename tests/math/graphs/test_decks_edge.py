@@ -205,14 +205,22 @@ def test_edge_deck_canonicalization_is_relabeling_invariant_and_round_trips() ->
 
 
 def test_edge_deck_quotient_has_exactly_one_published_operation() -> None:
-    """One postcondition, one operation: no competing edge-quotient IDs."""
+    """One postcondition, one operation: no competing edge-deck quotient IDs.
+
+    The guard keys on the *result* carrier, not on the request input. Several
+    published operations legitimately consume an ``EdgeDeletionFamily`` -- the
+    quotient, and the classification profile that returns an explicit
+    permutation witness per card -- so matching on the input alone would flag
+    distinct postconditions as competing. Keying on the result is what actually
+    asserts "one quotient, one operation", and it keeps the guard strict: a
+    second operation returning ``UnlabelledDeck`` is still rejected.
+    """
     from jacobian.catalog.builtins import BUILTIN_TOOLS
 
     quotients = sorted(
         tool.operation_id
         for tool in BUILTIN_TOOLS
-        if tool.request_type.model_fields.get("deck") is not None
-        and tool.request_type.model_fields["deck"].annotation is EdgeDeletionFamily
+        if tool.result_type is UnlabelledDeck
     )
     assert quotients == ["graph.deck.unlabelled.compute"]
 

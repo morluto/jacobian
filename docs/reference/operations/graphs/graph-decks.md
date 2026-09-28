@@ -125,3 +125,25 @@ permutations. Permutation work is preflighted before any canonical form is
 computed, and the operation supports at most ten source vertices under a
 2,000,000-unit work bound. The operation classifies the supplied cards; it
 makes no claim about reconstructing the source graph from the profile.
+
+## Edge-deck isomorphism classes
+
+`graph.deck.edge.isomorphism_classes.compute` is the edge-deck counterpart of
+`graph.deck.isomorphism_classes.compute`. It classifies every card in a
+complete source-bound edge-deletion family, returning a canonical
+representative, its exact multiplicity, the source card indices, and the exact
+vertex permutation carrying each source card onto that representative.
+
+An edge card retains the entire source vertex domain, including isolated
+vertices, so the permutation is over the full source vertex axis rather than
+the bound vertex.
+
+It is a distinct postcondition from the edge quotient
+`graph.deck.unlabelled.compute`, which returns the same representatives and
+multiplicities but no per-card bijection. The profile adds the witness, so a
+caller can move a card between source and canonical form directly.
+
+Class membership uses the same complete invariant as the quotients: each card is
+canonicalized to the least adjacency bit word over all vertex permutations, with
+permutation work preflighted before any canonical form is computed. At most ten
+source vertices are admitted under the shared 2,000,000-unit work bound.

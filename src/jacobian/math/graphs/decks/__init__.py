@@ -3,6 +3,7 @@
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
+    EdgeDeckIsomorphismProfile,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -20,6 +21,7 @@ from jacobian.math.graphs.decks._models import (
 )
 from jacobian.math.graphs.decks.operations import (
     anonymous_graph_card_multiset,
+    edge_deck_isomorphism_profile,
     edge_deletion_family,
     unlabelled_deck,
     unlabelled_vertex_deck,
@@ -37,6 +39,7 @@ from jacobian.math.graphs.decks.operations import (
 __all__ = [
     "AnonymousGraphCardClass",
     "AnonymousGraphCardMultiset",
+    "EdgeDeckIsomorphismProfile",
     "EdgeDeletionFamily",
     "SourceBoundEdgeCard",
     "SourceBoundVertexCard",
@@ -52,6 +55,7 @@ __all__ = [
     "VertexDeckSubgraphCount",
     "VertexDeletionFamily",
     "anonymous_graph_card_multiset",
+    "edge_deck_isomorphism_profile",
     "edge_deletion_family",
     "unlabelled_deck",
     "unlabelled_vertex_deck",

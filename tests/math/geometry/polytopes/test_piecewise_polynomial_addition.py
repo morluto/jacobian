@@ -74,6 +74,9 @@ def _function(complex_value, coefficients: dict[tuple[int, ...], int]):
     )
     return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
 
+
+def test_addition_matches_independent_coefficient_oracle_and_composes_at_shared_point():
+    complex_value = _complex()
     left = _function(complex_value, {(1,): 1})
     right = _function(complex_value, {(2,): 1, (0,): 1})
 

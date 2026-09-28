@@ -1,9 +1,5 @@
 **English** · [简体中文](README.zh-CN.md)
 
-<p align="center">
-  <img src="docs/assets/jacobian-hero.jpg" width="100%" alt="An archival-style black-and-white photograph of a mathematician working at a chalkboard, with a constant Jacobian determinant and three distinct inputs mapping to one output.">
-</p>
-
 <h1 align="center">Jacobian</h1>
 
 <p align="center">

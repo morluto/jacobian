@@ -23,8 +23,6 @@ from jacobian.math.topology.simplicial_sets._models import (
 from jacobian.math.topology.simplicial_sets.operations import from_tables
 
 MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS = 256_000
-# Retained as the byte-named private admission lane used by composed operations.
-MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES = MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS
 _CHAIN_RESULT_STRUCTURAL_CELLS = 4_096
 
 
@@ -76,17 +74,11 @@ def _estimate_output_cells(
     return _CHAIN_RESULT_STRUCTURAL_CELLS + label_chars * 2 + 12 * cells
 
 
-def _estimate_output_bytes(
-    source: FiniteTruncatedSimplicialSet, sizes: tuple[int, ...]
-) -> int:
-    return _estimate_output_cells(source, sizes)
-
-
 def _preflight(
     source: FiniteTruncatedSimplicialSet,
     *,
     additional_matrix_cells: int = 0,
-    additional_output_bytes: int = 0,
+    additional_output_cells: int = 0,
     output_name: str = "unnormalized chain",
     output_error_code: str = "simplicial_set.unnormalized_chain_output_budget_exceeded",
 ) -> int:
@@ -102,10 +94,8 @@ def _preflight(
                 f"the {MAX_OPERATION_MATRIX_CELLS}-cell construction bound"
             ),
         )
-    estimate = _estimate_output_bytes(source, sizes) + additional_output_bytes
-    output_limit = min(
-        MAX_UNNORMALIZED_CHAIN_OUTPUT_BYTES, MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS
-    )
+    estimate = _estimate_output_cells(source, sizes) + additional_output_cells
+    output_limit = MAX_UNNORMALIZED_CHAIN_OUTPUT_CELLS
     if estimate > output_limit:
         raise OperationResourceAdmissionError(
             location=("simplicial_set",),

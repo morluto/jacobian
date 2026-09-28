@@ -8,12 +8,18 @@ from itertools import combinations, product
 import pytest
 
 from jacobian.math.quantum import (
+    CheckSpaceValue,
+    PhaseFreeQubitPauli,
     QubitRegister,
     css_check_space,
     css_exact_distance,
     css_logical_pauli_frame,
 )
-from jacobian.math.quantum._models import CSSNonOrthogonalWitness
+from jacobian.math.quantum._models import (
+    CSSNonOrthogonalWitness,
+    PauliFamilyCommutationRequest,
+    PauliFamilyEntry,
+)
 
 
 def _span(rows: tuple[tuple[int, ...], ...], width: int) -> set[tuple[int, ...]]:
@@ -367,3 +373,56 @@ def test_witness_retains_its_ordered_register_context() -> None:
     # Persisted coordinates map back onto the ordered qubit IDs.
     assert restored.qubit_register.qubit_ids[0] == "q0"
     assert restored.x_bits[0] == 1
+
+
+def test_result_validators_stay_structural_after_kernel_admission() -> None:
+    """Transport validation must not replay kernel-established mathematics.
+
+    The commutation form, the zero-syndrome summary, the GF(2) error
+    difference, and the minimum distance are each established once by their
+    producer. Re-deriving them here would rescan the relation on every
+    construction and JSON round trip, and would reject a value a consumer
+    legitimately received.
+    """
+    from jacobian.math.quantum._models import (
+        PauliFamilyCommutationResult,
+        StabilizerErrorEquivalenceResult,
+        StabilizerSyndromeResult,
+    )
+
+    register = QubitRegister(qubit_ids=("a",))
+    basis = (PhaseFreeQubitPauli(register=register, x_bits=(1,), z_bits=(0,)),)
+    space = CheckSpaceValue(register=register, basis=basis)
+    source = PauliFamilyCommutationRequest(
+        family=(PauliFamilyEntry(pauli_id="x", pauli=basis[0]),)
+    )
+
+    # A structurally valid but mathematically-forged payload now round-trips:
+    # the consumer that relies on the relation must check it itself.
+    forged = {
+        "source": source.model_dump(mode="json"),
+        "commutation_matrix": [[1]],
+    }
+    assert PauliFamilyCommutationResult.model_validate(forged).source == source
+
+    error = PhaseFreeQubitPauli(register=register, x_bits=(0,), z_bits=(1,))
+    syndrome = StabilizerSyndromeResult.model_validate(
+        {
+            "check_space": space.model_dump(mode="json"),
+            "error": error.model_dump(mode="json"),
+            "syndrome": [1],
+            "zero_syndrome": True,
+        }
+    )
+    assert syndrome.syndrome == (1,)
+
+    equivalence = StabilizerErrorEquivalenceResult.model_validate(
+        {
+            "check_space": space.model_dump(mode="json"),
+            "left": error.model_dump(mode="json"),
+            "right": error.model_dump(mode="json"),
+            "difference": error.model_dump(mode="json"),
+            "equivalent_mod_stabilizers": True,
+        }
+    )
+    assert equivalence.left == equivalence.difference

@@ -14,7 +14,7 @@ from jacobian.catalog.models import (
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     MAX_LR_SKEW_CELLS,
-    MAX_LR_TABLEAU_OUTPUT_BYTES,
+    MAX_LR_TABLEAU_RESULT_SIZE,
     MAX_LR_TABLEAUX,
     LittlewoodRichardsonCoefficientRequest,
     LittlewoodRichardsonCoefficientResult,
@@ -92,17 +92,20 @@ def _admit_lr_resources(
         )
     if isinstance(request, LittlewoodRichardsonTableauxRequest):
         complete_words = _lr_complete_word_bound(request.content)
-        context_bytes = 1024 + 48 * (
+        # Representation-size estimate: candidate tableau count times the
+        # per-tableau cell allowance, plus a fixed context overhead. The units
+        # are retained scalars, not encoded transport bytes.
+        context_size = 1024 + 48 * (
             len(request.outer.parts)
             + len(request.inner.parts)
             + len(request.content.parts)
         )
-        output_bytes = context_bytes + complete_words * (64 + 16 * MAX_LR_SKEW_CELLS)
-        if output_bytes > MAX_LR_TABLEAU_OUTPUT_BYTES:
+        result_size = context_size + complete_words * (64 + 16 * MAX_LR_SKEW_CELLS)
+        if result_size > MAX_LR_TABLEAU_RESULT_SIZE:
             raise OperationResourceAdmissionError(
                 location=("content",),
                 code="symmetric_functions.lr_tableau_output_exceeded",
-                message="complete LR tableau family exceeds its output byte bound",
+                message="complete LR tableau family exceeds its result representation size",
             )
         if complete_words > MAX_LR_TABLEAUX:
             raise OperationResourceAdmissionError(

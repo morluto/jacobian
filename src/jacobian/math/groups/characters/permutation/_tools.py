@@ -7,6 +7,13 @@ from jacobian.math.groups.characters.permutation.operations import (
     permutation_character,
 )
 
+
+def _run_permutation_character(
+    request: PermutationCharacterRequest,
+) -> FiniteCharacter:
+    return permutation_character(request.action)
+
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="group.permutation_character.compute",
@@ -19,7 +26,7 @@ TOOLS: MathTools = (
         ),
         request_type=PermutationCharacterRequest,
         result_type=FiniteCharacter,
-        run=permutation_character,
+        run=_run_permutation_character,
         tags=("group", "character", "permutation", "fixed-points", "exact"),
         discovery_terms=(
             "finite group permutation character",

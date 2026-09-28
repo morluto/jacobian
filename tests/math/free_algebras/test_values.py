@@ -11,7 +11,6 @@ from jacobian._exact import CanonicalRational
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_GENERATORS,
     MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
-    MAX_FREE_ALGEBRA_WORD_LENGTH,
     FreeAlgebraPolynomial,
     FreeAlgebraTerm,
     FreeAlgebraWord,
@@ -58,10 +57,15 @@ def test_word_value_rejects_structural_boundaries() -> None:
         FreeAlgebraWord(alphabet=("x", "x"), letters=("x",))
     with pytest.raises(ValidationError):
         FreeAlgebraWord(alphabet=("x",), letters=("z",))
+    value_bound = FreeAlgebraWord(
+        alphabet=tuple("abcdefghijklmnopqrstuvwxyz"),
+        letters=("a",) * MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
+    )
+    assert value_bound.length == MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
     with pytest.raises(ValidationError):
         FreeAlgebraWord(
             alphabet=tuple("abcdefghijklmnopqrstuvwxyz"),
-            letters=("a",) * (MAX_FREE_ALGEBRA_WORD_LENGTH + 1),
+            letters=("a",) * (MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH + 1),
         )
     with pytest.raises(ValidationError):
         FreeAlgebraWord(

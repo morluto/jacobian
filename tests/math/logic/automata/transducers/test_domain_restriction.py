@@ -82,9 +82,7 @@ def _accepts(dfa: DFA, word: tuple[int, ...]) -> bool:
 
 def test_restricted_machine_matches_independent_word_oracle() -> None:
     source, dfa = _parity_machine()
-    restricted = restrict_subsequential_domain(
-        SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=dfa)
-    )
+    restricted = restrict_subsequential_domain(source, dfa)
 
     assert restricted.input_alphabet == source.input_alphabet
     assert restricted.input_alphabet_id == source.input_alphabet_id
@@ -99,9 +97,7 @@ def test_restricted_machine_matches_independent_word_oracle() -> None:
 def test_rejected_domain_returns_one_state_empty_function() -> None:
     source, dfa = _parity_machine()
     rejecting = dfa.model_copy(update={"accepting_states": ()})
-    restricted = restrict_subsequential_domain(
-        SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=rejecting)
-    )
+    restricted = restrict_subsequential_domain(source, rejecting)
     assert restricted.state_count == 1
     assert restricted.initial_state == 0
     assert restricted.transitions == ()
@@ -134,9 +130,7 @@ def test_restriction_preserves_partial_domain_and_final_output() -> None:
             DFATransition(source=0, symbol=1, target=0),
         ),
     )
-    restricted = restrict_subsequential_domain(
-        SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=all_words)
-    )
+    restricted = restrict_subsequential_domain(source, all_words)
     assert _run(restricted, (0,)) == (1, 0)
     assert _run(restricted, ()) is None
     assert _run(restricted, (1,)) is None
@@ -184,9 +178,7 @@ def test_product_larger_than_result_carrier_is_refused_exactly() -> None:
         ),
     )
     with pytest.raises(OperationDomainValidationError) as error:
-        restrict_subsequential_domain(
-            SubsequentialDomainRestrictionRequest(transducer=source, domain_dfa=dfa)
-        )
+        restrict_subsequential_domain(source, dfa)
     assert error.value.errors()[0]["type"] == (
         "finite_state_transducer.domain_restriction_state_bound_exceeded"
     )

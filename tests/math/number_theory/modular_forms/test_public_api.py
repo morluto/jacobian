@@ -16,7 +16,6 @@ def test_exact_public_api_symbols() -> None:
         "ModularCharacterQExpansion",
         "ModularCharacterSpaceInclusion",
         "ModularCharacterTransportedForm",
-        "ModularCharacterUPrimeRequest",
         "ModularFormAtkinLehnerTarget",
         "ModularFormBasis",
         "ModularFormChangeOfBasisFrame",

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from fractions import Fraction
 from typing import Any
 
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,7 +16,6 @@ from jacobian.math.ore_algebras._models import (
     DifferentialOreOperator,
 )
 from jacobian.math.ore_algebras.first_order_lclm._models import (
-    FirstOrderLCLMRequest,
     FirstOrderLCLMResult,
 )
 from jacobian.math.polynomials._conversions import (
@@ -31,7 +32,7 @@ _INPUT_DEGREE = 4
 _INPUT_TERMS = 4
 _INPUT_SCALAR_DIGITS = 2
 _INPUT_BYTES = 2 * 1024 * 1024
-_OUTPUT_BYTES = 2 * 1024 * 1024
+_OUTPUT_SIZE = 2 * 1024 * 1024
 _WORK_CELLS = 2_000_000
 _OUTPUT_COEFFICIENT_TERMS = 64
 _OUTPUT_COEFFICIENT_DEGREE = 64
@@ -45,22 +46,28 @@ def _decode_polynomial(coefficient: RationalFunction) -> dict[int, Fraction]:
     }
 
 
-def _canonical_request(
+def _canonical_operator(
+    operator: DifferentialOreOperator | Mapping[str, Any],
+) -> DifferentialOreOperator:
+    payload = (
+        operator.model_dump()
+        if isinstance(operator, DifferentialOreOperator)
+        else operator
+    )
+    validated = DifferentialOreOperator.model_validate(payload)
+    return DifferentialOreOperator.model_validate(validated.model_dump())
+
+
+def _canonical_operators(
     left: DifferentialOreOperator | Mapping[str, Any],
     right: DifferentialOreOperator | Mapping[str, Any],
-) -> FirstOrderLCLMRequest:
+) -> tuple[DifferentialOreOperator, DifferentialOreOperator]:
     try:
-        request = FirstOrderLCLMRequest.model_validate(
-            {
-                "left": left.model_dump()
-                if isinstance(left, DifferentialOreOperator)
-                else left,
-                "right": right.model_dump()
-                if isinstance(right, DifferentialOreOperator)
-                else right,
-            }
-        )
-        return FirstOrderLCLMRequest.model_validate(request.model_dump())
+        canonical_left = _canonical_operator(left)
+        canonical_right = _canonical_operator(right)
+        if canonical_left.order != 1 or canonical_right.order != 1:
+            raise ValueError("both operators must have differential order one")
+        return canonical_left, canonical_right
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("request",),
@@ -114,8 +121,16 @@ def _admit_operator(operator: DifferentialOreOperator, label: str) -> None:
             )
 
 
-def _preflight(request: FirstOrderLCLMRequest) -> None:
-    encoded_bytes = len(request.model_dump_json().encode("utf-8"))
+def _preflight(left: DifferentialOreOperator, right: DifferentialOreOperator) -> None:
+    encoded_bytes = len(
+        json.dumps(
+            {
+                "left": left.model_dump(mode="json"),
+                "right": right.model_dump(mode="json"),
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+    )
     if encoded_bytes > _INPUT_BYTES:
         raise OperationResourceAdmissionError(
             location=("request",),
@@ -125,7 +140,7 @@ def _preflight(request: FirstOrderLCLMRequest) -> None:
     degree = max(
         (
             term.exponents[0]
-            for operator in (request.left, request.right)
+            for operator in (left, right)
             for value in operator.terms
             for polynomial in (
                 value.coefficient.numerator,
@@ -137,13 +152,14 @@ def _preflight(request: FirstOrderLCLMRequest) -> None:
     )
     scalar_terms = sum(
         len(polynomial.terms)
-        for operator in (request.left, request.right)
+        for operator in (left, right)
         for value in operator.terms
         for polynomial in (value.coefficient.numerator, value.coefficient.denominator)
     )
     scalar_digits = sum(
-        len(str(abs(term.coefficient.num))) + len(str(term.coefficient.den))
-        for operator in (request.left, request.right)
+        decimal_digit_width(term.coefficient.num)
+        + decimal_digit_width(term.coefficient.den)
+        for operator in (left, right)
         for value in operator.terms
         for polynomial in (value.coefficient.numerator, value.coefficient.denominator)
         for term in polynomial.terms
@@ -174,17 +190,20 @@ def _preflight(request: FirstOrderLCLMRequest) -> None:
     # Two inputs, two order-one multipliers, and one order-two result each have
     # at most two/three coefficients. Every coefficient is bounded above by the
     # 64-term, 64-digit rational-function envelope checked after conversion.
-    maximum_result_bytes = (
+    # The units are retained scalars charged their maximum digit width, folded
+    # with the exact encoded input lengths as a conservative allocation proxy;
+    # this is a result representation-size bound, not a transport byte bound.
+    maximum_result_size = (
         2 * encoded_bytes
         + 16_384
         + 11
         * (256 + 2 * _OUTPUT_COEFFICIENT_TERMS * (128 + 2 * _OUTPUT_COEFFICIENT_DIGITS))
     )
-    if maximum_result_bytes > _OUTPUT_BYTES:
+    if maximum_result_size > _OUTPUT_SIZE:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="ore_algebra.first_order_lclm_output_bytes",
-            message="the first-order LCLM result exceeds its serialized byte bound",
+            message="the first-order LCLM result exceeds its result representation size",
         )
 
 
@@ -263,16 +282,16 @@ def differential_first_order_lclm(
     U=b1*D+u0 and V=a1*D+v0. The Weyl rule D*a=a*D+a' gives two
     linear equations for u0,v0; the nonzero determinant case yields order two.
     """
-    request = _canonical_request(left, right)
-    _admit_operator(request.left, "left")
-    _admit_operator(request.right, "right")
-    _preflight(request)
+    canonical_left, canonical_right = _canonical_operators(left, right)
+    _admit_operator(canonical_left, "left")
+    _admit_operator(canonical_right, "right")
+    _preflight(canonical_left, canonical_right)
 
     from sympy import cancel
 
     x = symbols_for_variables(("x",))[0]
-    left_coefficients = _as_sympy(request.left, (x,))
-    right_coefficients = _as_sympy(request.right, (x,))
+    left_coefficients = _as_sympy(canonical_left, (x,))
+    right_coefficients = _as_sympy(canonical_right, (x,))
     a0 = left_coefficients.get(0, 0)
     a1 = left_coefficients[1]
     b0 = right_coefficients.get(0, 0)
@@ -283,7 +302,7 @@ def differential_first_order_lclm(
         # The two order-one coefficient rows are proportional over QQ(x).
         left_multiplier = _constant_operator(1)
         right_multiplier = _operator({0: cancel(a1 / b1)})
-        common = request.left
+        common = canonical_left
     else:
         r1 = cancel(a1 * (b1.diff(x) + b0) - b1 * (a1.diff(x) + a0))
         r0 = cancel(a1 * b0.diff(x) - b1 * a0.diff(x))
@@ -294,17 +313,19 @@ def differential_first_order_lclm(
         # The admitted formula has a tighter coefficient envelope than the
         # generic multiply operation. Construct its product directly so its
         # independent conservative admission cannot reject this request.
-        common = _operator(_first_order_product(left_multiplier, request.left, x))
+        common = _operator(_first_order_product(left_multiplier, canonical_left, x))
 
-    if len(common.model_dump_json().encode("utf-8")) > _OUTPUT_BYTES:
+    # Post-allocation confirmation that the retained operator stayed inside the
+    # admitted result representation envelope.
+    if len(common.model_dump_json().encode("utf-8")) > _OUTPUT_SIZE:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="ore_algebra.first_order_lclm_output_bytes",
-            message="the first-order LCLM result exceeds its serialized byte bound",
+            message="the first-order LCLM result exceeds its result representation size",
         )
     return FirstOrderLCLMResult._from_kernel(
-        request.left,
-        request.right,
+        canonical_left,
+        canonical_right,
         left_multiplier,
         right_multiplier,
         common,

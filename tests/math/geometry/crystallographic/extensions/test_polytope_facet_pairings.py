@@ -7,6 +7,8 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
+from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -199,6 +201,23 @@ def test_pairing_rejects_incomplete_ledger() -> None:
         OperationDomainValidationError, match="one entry per computed facet"
     ):
         _pair(request)
+
+
+def test_pairing_operation_is_published_with_square_example() -> None:
+    tool = next(
+        tool
+        for tool in BUILTIN_TOOLS
+        if tool.operation_id
+        == "crystallographic.extension.polytope_facet_pairings.compute"
+    )
+
+    assert tool.examples[0].name == "unit_square_translation_pairings"
+    # ``dispatch.parse_operation_input`` is exactly this projection, inlined so a
+    # math test does not import the product dispatch boundary.
+    example_request = tool.request_type.model_validate_json(
+        encode_strict_json(tool.examples[0].input), strict=True
+    )
+    assert tool.run(example_request).facet_profile.dimension == 2
 
 
 def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:

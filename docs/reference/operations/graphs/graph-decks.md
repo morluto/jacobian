@@ -106,3 +106,44 @@ without permutation canonicalization. The function validates each
 representative's fixed vertex axis and canonical edges before traversal, then
 admits connectivity work and output size. It is a native projection and is not
 published as a catalog operation.
+
+## Vertex-deck isomorphism classes
+
+`graph.deck.isomorphism_classes.compute` classifies every card in a complete
+source-bound vertex-deletion family. It returns, for each class, a canonical
+representative, its exact multiplicity, the source card indices, and an exact
+vertex permutation carrying each source card onto that representative.
+
+This differs from `graph.deck.vertex.unlabelled.compute`, which returns the
+quotient multiset of representatives and multiplicities. The profile adds the
+permutation witnesses, so a caller can transport a card between source and
+canonical form without recomputing the canonicalization.
+
+Class membership uses the same complete invariant as the unlabelled quotient:
+each card is canonicalized to the least adjacency bit word over all vertex
+permutations. Permutation work is preflighted before any canonical form is
+computed, and the operation supports at most ten source vertices under a
+2,000,000-unit work bound. The operation classifies the supplied cards; it
+makes no claim about reconstructing the source graph from the profile.
+
+## Edge-deck isomorphism classes
+
+`graph.deck.edge.isomorphism_classes.compute` is the edge-deck counterpart of
+`graph.deck.isomorphism_classes.compute`. It classifies every card in a
+complete source-bound edge-deletion family, returning a canonical
+representative, its exact multiplicity, the source card indices, and the exact
+vertex permutation carrying each source card onto that representative.
+
+An edge card retains the entire source vertex domain, including isolated
+vertices, so the permutation is over the full source vertex axis rather than
+the bound vertex.
+
+It is a distinct postcondition from the edge quotient
+`graph.deck.unlabelled.compute`, which returns the same representatives and
+multiplicities but no per-card bijection. The profile adds the witness, so a
+caller can move a card between source and canonical form directly.
+
+Class membership uses the same complete invariant as the quotients: each card is
+canonicalized to the least adjacency bit word over all vertex permutations, with
+permutation work preflighted before any canonical form is computed. At most ten
+source vertices are admitted under the shared 2,000,000-unit work bound.

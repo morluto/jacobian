@@ -20,20 +20,18 @@ from jacobian.catalog.models import (
 from jacobian.math.logic.automata.transducers._models import (
     ComposeResult,
     MinimizeResult,
-    ReachableStatesRequest,
     ReachableStatesResult,
     ReachableStateWitness,
     StatePairDistinguishability,
-    SubseqRunRequest,
     SubseqRunResult,
 )
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_ALPHABET,
     MAX_FST_ALPHABET_ID_LENGTH,
     MAX_FST_EDGES,
-    MAX_FST_REACHABLE_RESULT_BYTES,
+    MAX_FST_REACHABLE_RESULT_SIZE,
     MAX_FST_RESULT_WORD_LENGTH,
-    MAX_FST_RUN_RESULT_BYTES,
+    MAX_FST_RUN_RESULT_SIZE,
     MAX_FST_STATES,
     MAX_FST_WORD_LENGTH,
     FiniteAlphabet,
@@ -46,7 +44,7 @@ from jacobian.math.logic.automata.transducers.values import (
 )
 from jacobian.math.logic.languages.regular.values import (
     DFA,
-    MAX_NFA_OUTPUT_BYTES,
+    MAX_NFA_OUTPUT_CELLS,
     MAX_NFA_STATES,
     MAX_NFA_TRANSITIONS,
     NFA,
@@ -98,13 +96,13 @@ __all__ = [
 MAX_MINIMIZE_SAMPLE_WORDS = 20000
 MAX_MORPHISM_TRANSITION_CELLS = 32 * 512
 MAX_MORPHISM_TRANSDUCER_BYTES = 128 * 1024
-MAX_FST_IDENTITY_RESULT_BYTES = 64 * 1024
+MAX_FST_IDENTITY_RESULT_SIZE = 64 * 1024
 MAX_RATIONAL_PROJECTION_WORK = 4_000_000
 MAX_RATIONAL_FIBER_WORK = 25_000_000
 MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES = 128_000_000
 MAX_RATIONAL_RESTRICTION_WORK = 4_000_000
 MAX_RATIONAL_RESTRICTION_INTERMEDIATE_BYTES = 64_000_000
-MAX_RATIONAL_RESTRICTION_OUTPUT_BYTES = 128_000_000
+MAX_RATIONAL_RESTRICTION_OUTPUT_SIZE = 128_000_000
 
 
 def _reject(code: str, message: str, *location: str) -> None:
@@ -304,8 +302,10 @@ def run_subsequential(
     # Each output symbol is an integer in 0..31 (at most two digits and a
     # separator).  The conservative estimate covers repeated prefix outputs,
     # per-step output rows, state IDs, outer array syntax, all other output
-    # fields, and the request values echoed into the result.
-    projected_result_bytes = (
+    # fields, and the request values echoed into the result.  Its units are
+    # retained scalar cells times a fixed per-cell allowance, folded with an
+    # exact encoded-request allocation proxy -- not a transport byte bound.
+    projected_result_size = (
         request_bytes
         + 3
         * (
@@ -317,13 +317,15 @@ def run_subsequential(
         + 12 * (len(word) + 1)
         + 4096
     )
-    if projected_result_bytes > MAX_FST_RUN_RESULT_BYTES:
+    if projected_result_size > MAX_FST_RUN_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("transducer", "word"),
             code="finite_state_transducer.run_result_bytes_exceeded",
-            message="the exact run trace may exceed the canonical result byte bound",
+            message=(
+                "the exact run trace may exceed the canonical result "
+                "representation size"
+            ),
         )
-    request = SubseqRunRequest.model_construct(transducer=transducer, word=word)
 
     def result(
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
@@ -341,7 +343,8 @@ def run_subsequential(
         obstruction_symbol: int | None,
     ) -> SubseqRunResult:
         return SubseqRunResult._from_kernel(
-            request,
+            transducer=transducer,
+            word=word,
             status=status,
             output=output,
             final_state=final_state,
@@ -470,13 +473,15 @@ def identity_transducer(
     alphabet_values = (
         list(alphabet.symbols) if alphabet is not None else list(range(alphabet_size))
     )
-    alphabet_bytes = len(encode_strict_json(alphabet_values))
-    projected_bytes = 2 * alphabet_bytes + 64 * alphabet_size + 2048
-    if projected_bytes > MAX_FST_IDENTITY_RESULT_BYTES:
+    # Representation-size estimate: a folded exact encoded-alphabet allocation
+    # proxy plus a fixed per-symbol allowance, not an encoded transport bound.
+    alphabet_size_units = len(encode_strict_json(alphabet_values))
+    projected_size = 2 * alphabet_size_units + 64 * alphabet_size + 2048
+    if projected_size > MAX_FST_IDENTITY_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("alphabet",),
             code="finite_state_transducer.identity_result_bytes_exceeded",
-            message="canonical identity transducer may exceed the byte bound",
+            message="canonical identity transducer may exceed the result representation size",
         )
 
     transitions = tuple(
@@ -533,28 +538,31 @@ def reachable_state_witnesses(
     state, whether or not that state is final.
     """
     admitted = _admit_transducer(transducer)
-    request = ReachableStatesRequest(transducer=admitted)
     max_transition_output = max(
         (len(transition.output) for transition in admitted.transitions), default=0
     )
     max_path_output = max(0, admitted.state_count - 1) * max_transition_output
     max_output_cells = admitted.state_count * max_path_output
     source_bytes = len(encode_strict_json(admitted.model_dump(mode="json")))
-    # Integer indices are at most 31, so four JSON bytes per symbol safely
-    # bounds commas and digits. The remaining allowance covers path rows,
+    # Integer indices are at most 31, so four units per output symbol safely
+    # bound commas and digits. The remaining allowance covers path rows,
     # state traces, and fixed source fields. Check before allocating witnesses.
-    projected_bytes = (
+    # These are retained-scalar units, not an encoded transport measurement.
+    projected_size = (
         source_bytes
         + 4 * max_output_cells
         + 3 * admitted.state_count * max(0, admitted.state_count - 1)
         + 512 * admitted.state_count
         + 4096
     )
-    if projected_bytes > MAX_FST_REACHABLE_RESULT_BYTES:
+    if projected_size > MAX_FST_REACHABLE_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("transducer",),
             code="finite_state_transducer.reachable_result_bytes_exceeded",
-            message="shortest-path witness result may exceed the canonical byte bound",
+            message=(
+                "shortest-path witness result may exceed the canonical "
+                "result representation size"
+            ),
         )
 
     transitions = _transition_map(admitted)
@@ -603,7 +611,7 @@ def reachable_state_witnesses(
                 state_trace=tuple(trace),
             )
         )
-    return ReachableStatesResult._from_kernel(request, witnesses=tuple(witnesses))
+    return ReachableStatesResult._from_kernel(admitted, witnesses=tuple(witnesses))
 
 
 def coaccessible_states(
@@ -964,7 +972,7 @@ def project_rational_relation(
         state_count > MAX_NFA_STATES
         or transition_count > MAX_NFA_TRANSITIONS
         or work_bound > MAX_RATIONAL_PROJECTION_WORK
-        or output_bytes_bound > MAX_NFA_OUTPUT_BYTES
+        or output_bytes_bound > MAX_NFA_OUTPUT_CELLS
     ):
         raise OperationResourceAdmissionError(
             location=("transducer", "tape"),
@@ -1174,18 +1182,18 @@ def restrict_rational_input(
             }
         )
     )
-    output_bytes_bound = (
+    output_size_bound = (
         retained_request_bytes * 2
         + len(product_states) * 64
         + len(product_edges) * 256
         + result_label_cells * 8
         + 4096
     )
-    if output_bytes_bound > MAX_RATIONAL_RESTRICTION_OUTPUT_BYTES:
+    if output_size_bound > MAX_RATIONAL_RESTRICTION_OUTPUT_SIZE:
         raise OperationResourceAdmissionError(
             location=("transducer", "dfa"),
             code="finite_state_transducer.restriction_output_bound_exceeded",
-            message="input-restriction result exceeds its serialized-size bound",
+            message="input-restriction result exceeds its result representation size",
         )
 
     request_checkpoint("before rational relation input restriction result construction")
@@ -1379,7 +1387,7 @@ def _admit_rational_fiber(
         state_bound > MAX_NFA_STATES
         or transition_bound > MAX_NFA_TRANSITIONS
         or work_bound > MAX_RATIONAL_FIBER_WORK
-        or output_bytes_bound > MAX_NFA_OUTPUT_BYTES
+        or output_bytes_bound > MAX_NFA_OUTPUT_CELLS
         or intermediate_bytes_bound > MAX_RATIONAL_FIBER_INTERMEDIATE_BYTES
     ):
         raise OperationResourceAdmissionError(

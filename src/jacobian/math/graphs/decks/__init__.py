@@ -3,6 +3,7 @@
 from jacobian.math.graphs.decks._models import (
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
+    EdgeDeckIsomorphismProfile,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -13,12 +14,14 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckEdgeCount,
     VertexDeckInducedSubgraphContribution,
     VertexDeckInducedSubgraphCount,
+    VertexDeckIsomorphismProfile,
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
     anonymous_graph_card_multiset,
+    edge_deck_isomorphism_profile,
     edge_deletion_family,
     unlabelled_deck,
     unlabelled_vertex_deck,
@@ -28,6 +31,7 @@ from jacobian.math.graphs.decks.operations import (
     vertex_deck_degree_multiset,
     vertex_deck_edge_count,
     vertex_deck_induced_subgraph_count,
+    vertex_deck_isomorphism_profile,
     vertex_deck_subgraph_count,
     vertex_deletion_family,
 )
@@ -35,6 +39,7 @@ from jacobian.math.graphs.decks.operations import (
 __all__ = [
     "AnonymousGraphCardClass",
     "AnonymousGraphCardMultiset",
+    "EdgeDeckIsomorphismProfile",
     "EdgeDeletionFamily",
     "SourceBoundEdgeCard",
     "SourceBoundVertexCard",
@@ -45,10 +50,12 @@ __all__ = [
     "VertexDeckEdgeCount",
     "VertexDeckInducedSubgraphContribution",
     "VertexDeckInducedSubgraphCount",
+    "VertexDeckIsomorphismProfile",
     "VertexDeckSubgraphContribution",
     "VertexDeckSubgraphCount",
     "VertexDeletionFamily",
     "anonymous_graph_card_multiset",
+    "edge_deck_isomorphism_profile",
     "edge_deletion_family",
     "unlabelled_deck",
     "unlabelled_vertex_deck",
@@ -58,6 +65,7 @@ __all__ = [
     "vertex_deck_degree_multiset",
     "vertex_deck_edge_count",
     "vertex_deck_induced_subgraph_count",
+    "vertex_deck_isomorphism_profile",
     "vertex_deck_subgraph_count",
     "vertex_deletion_family",
 ]

@@ -20,6 +20,7 @@ from jacobian.math.topology.links import (
     braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
+    link_blackboard_graph,
     link_components,
     link_determinant,
     link_goeritz_data,
@@ -158,16 +159,20 @@ class TestBraidWords:
 class TestGoeritzData:
     def test_trefoil_goeritz_matrix_cross_checks_alexander_determinant(self) -> None:
         diagram = braid_closure(_two_braid(1, 1, 1)).diagram
-        result = link_goeritz_data(diagram)
+        result = link_goeritz_data(link_blackboard_graph(diagram))
 
         assert result.reduced_matrix.entries == ((2, -1), (-1, 2))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 3
-        assert len(result.crossing_contributions) == 3
+        assert len(result.blackboard_graph.edges) == 3
         assert GoeritzDataResult.model_validate_json(result.model_dump_json()) == result
 
     def test_mirror_negates_matrix_and_preserves_absolute_determinant(self) -> None:
-        right = link_goeritz_data(braid_closure(_two_braid(1, 1, 1)).diagram)
-        left = link_goeritz_data(braid_closure(_two_braid(-1, -1, -1)).diagram)
+        right = link_goeritz_data(
+            link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        )
+        left = link_goeritz_data(
+            link_blackboard_graph(braid_closure(_two_braid(-1, -1, -1)).diagram)
+        )
 
         assert left.reduced_matrix.entries == ((-2, 1), (1, -2))
         assert left.absolute_determinant == right.absolute_determinant
@@ -185,18 +190,18 @@ class TestGoeritzData:
             ),
         )
         diagram = braid_closure(word).diagram
-        result = link_goeritz_data(diagram)
+        result = link_goeritz_data(link_blackboard_graph(diagram))
 
         assert result.reduced_matrix.entries == ((3, -2), (-2, 3))
         assert result.absolute_determinant == link_determinant(diagram).determinant == 5
 
     def test_goeritz_slice_rejects_crossing_free_and_over_bound_diagrams(self) -> None:
         with pytest.raises(OperationDomainValidationError, match="nonempty"):
-            link_goeritz_data(OrientedLinkDiagram(free_loops=1))
+            link_blackboard_graph(OrientedLinkDiagram(free_loops=1))
 
         over_bound = braid_closure(_two_braid(*(1,) * 33)).diagram
         with pytest.raises(OperationResourceAdmissionError, match="32 crossings"):
-            link_goeritz_data(over_bound)
+            link_goeritz_data(link_blackboard_graph(over_bound))
 
 
 class TestSeifertCircles:
@@ -282,7 +287,7 @@ class TestAlexanderPolynomial:
         for diagram, expected in ((trefoil, 3), (figure_eight, 5)):
             determinant = link_determinant(diagram)
             # Independent diagram route: the absolute reduced Goeritz determinant.
-            goeritz = link_goeritz_data(diagram)
+            goeritz = link_goeritz_data(link_blackboard_graph(diagram))
             assert determinant.determinant == expected
             assert determinant.determinant == goeritz.absolute_determinant
             assert determinant.alexander.diagram == diagram
@@ -366,7 +371,13 @@ class TestLinkExtensionTools:
         catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
         assert (
             catalog["link_diagram.goeritz_matrix.compute"]
-            .run(GoeritzDataRequest(diagram=braid_closure(_two_braid(1, 1)).diagram))
+            .run(
+                GoeritzDataRequest(
+                    blackboard_graph=link_blackboard_graph(
+                        braid_closure(_two_braid(1, 1)).diagram
+                    )
+                )
+            )
             .absolute_determinant
             == 2
         )

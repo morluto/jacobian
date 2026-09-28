@@ -13,6 +13,60 @@ from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
 )
+from jacobian.math.function_fields._gfpx import (
+    RF,
+    rf_normalize,
+)
+
+
+def _to_internal_polynomial(polynomial: PrimeFieldPolynomial) -> tuple[int, ...]:
+    coefficients = polynomial.coefficients
+    if coefficients == (0,):
+        return ()
+    return coefficients
+
+
+def _to_internal_rational_function(value: PrimeFieldRationalFunction) -> RF:
+    prime = value.characteristic
+    return rf_normalize(
+        _to_internal_polynomial(value.numerator),
+        _to_internal_polynomial(value.denominator),
+        prime,
+    )
+
+
+def _from_internal_polynomial(
+    coefficients: tuple[int, ...], prime: int
+) -> PrimeFieldPolynomial:
+    return PrimeFieldPolynomial(
+        characteristic=prime,
+        coefficients=coefficients if coefficients else (0,),
+    )
+
+
+def _from_internal_rational_function(
+    value: RF, prime: int
+) -> PrimeFieldRationalFunction:
+    return PrimeFieldRationalFunction(
+        numerator=_from_internal_polynomial(value[0], prime),
+        denominator=_from_internal_polynomial(value[1], prime),
+    )
+
+
+def _canonical_field(field: FiniteFunctionField) -> FiniteFunctionField:
+    prime = field.characteristic
+    return FiniteFunctionField.model_construct(
+        characteristic=prime,
+        variable=field.variable,
+        generator=field.generator,
+        defining_polynomial=tuple(
+            _from_internal_rational_function(
+                _to_internal_rational_function(coefficient), prime
+            )
+            for coefficient in field.defining_polynomial
+        ),
+    )
+
 
 MAX_CHARACTERISTIC = 257
 MAX_EXTENSION_DEGREE = 6
@@ -54,7 +108,10 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS = 256 + 2 * MAX_POLYNOMIAL_X_DEGREE + 1
 
 
-MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES = 4 * 1024 * 1024
+# Each admitted place contributes a bounded number of valuation and unit
+# entries, so the profile is bounded by cells derived from its own row axis
+# rather than by serialized transport bytes.
+MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS = 64 * MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS
 
 
 MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK = 5_000_000
@@ -119,8 +176,6 @@ class HyperellipticAffinePlaceValuationRequest(StrictModel):
 
     @model_validator(mode="after")
     def require_shared_parent(self) -> Self:
-        from jacobian.math.function_fields.operations import _canonical_field
-
         try:
             place_field = FiniteFunctionField.model_validate(
                 self.place.field.model_dump()
@@ -928,7 +983,7 @@ __all__ = [
     "MAX_POLYNOMIAL_COEFFICIENTS",
     "MAX_POLYNOMIAL_X_DEGREE",
     "MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK",
-    "MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES",
+    "MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS",
     "MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS",
     "MAX_TRACE_WORK",
     "DivisorDegree",

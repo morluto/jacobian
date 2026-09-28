@@ -61,7 +61,7 @@ from jacobian.math.function_fields._models import (
     MAX_RIEMANN_ROCH_BASIS_DIMENSION,
     MAX_RIEMANN_ROCH_CONSTRUCTION_WORK,
     MAX_RIEMANN_ROCH_MEMBERSHIP_FACTOR_WORK,
-    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS,
     MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS,
     MAX_TRACE_WORK,
     FiniteFunctionField,
@@ -96,6 +96,9 @@ from jacobian.math.function_fields._models import (
     HyperellipticInfinityPlaceValuationResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
+    _canonical_field,
+    _from_internal_rational_function,
+    _to_internal_rational_function,
 )
 
 
@@ -108,40 +111,6 @@ def _is_prime(value: int) -> bool:
             return False
         divisor += 1
     return True
-
-
-def _to_internal_polynomial(polynomial: PrimeFieldPolynomial) -> tuple[int, ...]:
-    coefficients = polynomial.coefficients
-    if coefficients == (0,):
-        return ()
-    return coefficients
-
-
-def _to_internal_rational_function(value: PrimeFieldRationalFunction) -> RF:
-    prime = value.characteristic
-    return rf_normalize(
-        _to_internal_polynomial(value.numerator),
-        _to_internal_polynomial(value.denominator),
-        prime,
-    )
-
-
-def _from_internal_polynomial(
-    coefficients: tuple[int, ...], prime: int
-) -> PrimeFieldPolynomial:
-    return PrimeFieldPolynomial(
-        characteristic=prime,
-        coefficients=coefficients if coefficients else (0,),
-    )
-
-
-def _from_internal_rational_function(
-    value: RF, prime: int
-) -> PrimeFieldRationalFunction:
-    return PrimeFieldRationalFunction(
-        numerator=_from_internal_polynomial(value[0], prime),
-        denominator=_from_internal_polynomial(value[1], prime),
-    )
 
 
 def _bounded_element_coordinates(
@@ -175,21 +144,6 @@ def _bounded_element_coordinates(
                 ),
             ) from error
     return tuple(coordinates)
-
-
-def _canonical_field(field: FiniteFunctionField) -> FiniteFunctionField:
-    prime = field.characteristic
-    return FiniteFunctionField.model_construct(
-        characteristic=prime,
-        variable=field.variable,
-        generator=field.generator,
-        defining_polynomial=tuple(
-            _from_internal_rational_function(
-                _to_internal_rational_function(coefficient), prime
-            )
-            for coefficient in field.defining_polynomial
-        ),
-    )
 
 
 def _canonical_element(
@@ -3151,22 +3105,17 @@ def function_field_riemann_roch_membership(
             ),
         )
 
-    input_bytes = len(
-        encode_strict_json(
-            {
-                "element": element.model_dump(mode="json"),
-                "divisor": divisor.model_dump(mode="json"),
-            }
-        )
-    )
-    output_bytes_bound = 4096 + 2 * input_bytes + 4096 * support_rows_bound
-    if output_bytes_bound > MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES:
+    # Admission depends on the profile's own row axis, not on a serialized
+    # byte estimate: a deployment's wire ceiling must not bound a native
+    # mathematical result.
+    profile_cells = 64 * support_rows_bound
+    if profile_cells > MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("result",),
             code="function_field.riemann_roch_membership_output_exceeds_envelope",
             message=(
                 "the complete exact membership profile exceeds the "
-                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_BYTES}-byte output envelope"
+                f"{MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS}-cell output envelope"
             ),
         )
 
@@ -3208,17 +3157,18 @@ def function_field_riemann_roch_membership(
         term.place.model_dump_json(): (term.place, term.multiplicity)
         for term in principal.divisor.terms
     }
+    # Merge the divisor and function axes before walking the support union, so
+    # each place carries both contributions without an optional lookup.
+    support: dict[str, tuple[FunctionFieldPlace, int, int]] = {
+        key: (place, 0, valuation)
+        for key, (place, valuation) in element_valuations.items()
+    }
+    for key, (place, multiplicity) in divisor_multiplicities.items():
+        element_valuation = support[key][2] if key in support else 0
+        support[key] = (place, multiplicity, element_valuation)
     profile: list[FunctionFieldRiemannRochMembershipRow] = []
-    for key in sorted(divisor_multiplicities.keys() | element_valuations.keys()):
-        divisor_row = divisor_multiplicities.get(key)
-        element_row = element_valuations.get(key)
-        if divisor_row is None:
-            assert element_row is not None
-            place = element_row[0]
-            divisor_multiplicity = 0
-        else:
-            place, divisor_multiplicity = divisor_row
-        element_valuation = element_row[1] if element_row is not None else 0
+    for key in sorted(support):
+        place, divisor_multiplicity, element_valuation = support[key]
         total = element_valuation + divisor_multiplicity
         profile.append(
             FunctionFieldRiemannRochMembershipRow(

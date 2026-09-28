@@ -31,6 +31,7 @@ from jacobian.math.logic.automata.tree._models import (
     TreeContextTransformation,
     TreeContextTransformationMonoidResult,
     TreeDeterminizeResult,
+    TreeLanguageProfile,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.contexts import (
@@ -1629,6 +1630,42 @@ def reachable_state_profile(
     """Return each reachable state and its canonical minimum-node witness tree."""
 
     return _build_reachable_state_profile(automaton)
+
+
+def tree_language_profile(
+    automaton: BottomUpTreeAutomaton,
+) -> TreeLanguageProfile:
+    """Project the admitted state-reachability value to reachable finals.
+
+    The saturation, its admission, and the canonical minimum-node witnesses are
+    computed once by the shared reachability pass, so this postcondition reuses
+    an admission fact instead of repeating the fixpoint. Emptiness is the
+    projection's own consequence: the language is empty exactly when no final
+    state survives the reachability filter.
+    """
+
+    if type(automaton) is not BottomUpTreeAutomaton:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_automata.language_profile.value_type",
+            message="automaton must be a canonical bottom-up tree automaton",
+        )
+    profile = _build_reachable_state_profile(automaton)
+    final_states = set(automaton.final_states)
+    accepting = tuple(
+        state for state in profile.reachable_states if state in final_states
+    )
+    witnesses = tuple(
+        witness for witness in profile.witnesses if witness.state in final_states
+    )
+    return TreeLanguageProfile._from_kernel(
+        automaton=automaton,
+        reachable_states=profile.reachable_states,
+        unreachable_states=profile.unreachable_states,
+        reachable_final_states=accepting,
+        witnesses=witnesses,
+        empty=not accepting,
+    )
 
 
 def _productive_states(automaton: BottomUpTreeAutomaton) -> set[int]:

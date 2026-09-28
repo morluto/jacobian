@@ -1,6 +1,7 @@
 """Exact finite bottom-up tree automata."""
 
 from jacobian.math.logic.automata.tree._models import (
+    TreeLanguageProfile,
     AcceptedTreeHeightProfileResult,
     NondeterministicRunCountsResult,
     RankedTreePositionsResult,
@@ -37,6 +38,7 @@ from jacobian.math.logic.automata.tree.operations import (
     run_tree_automaton,
     tree_automaton_to_regular_tree_grammar,
     tree_context_transformation_monoid,
+    tree_language_profile,
     trim_tree_automaton,
     verify_accepted_tree_count,
     verify_determinization,
@@ -82,6 +84,7 @@ __all__ = [
     "TreeContextStateMapResult",
     "TreeContextTransformation",
     "TreeContextTransformationMonoidResult",
+    "TreeLanguageProfile",
     "accepted_tree_count",
     "accepted_tree_height_profile",
     "boolean_product_tree_automata",
@@ -100,6 +103,7 @@ __all__ = [
     "run_tree_automaton",
     "tree_automaton_to_regular_tree_grammar",
     "tree_context_transformation_monoid",
+    "tree_language_profile",
     "trim_tree_automaton",
     "verify_accepted_tree_count",
     "verify_determinization",

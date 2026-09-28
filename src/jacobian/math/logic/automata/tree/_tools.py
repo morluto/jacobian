@@ -33,6 +33,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonTrimResult,
     TreeDeterminizeRequest,
     TreeDeterminizeResult,
+    TreeLanguageProfile,
+    TreeLanguageProfileRequest,
     TreeRunRequest,
     TreeRunResult,
 )
@@ -50,6 +52,7 @@ from jacobian.math.logic.automata.tree.operations import (
     ranked_tree_subtree,
     reachable_state_profile,
     regular_tree_grammar_to_automaton,
+    tree_language_profile,
     trim_tree_automaton,
 )
 from jacobian.math.logic.automata.tree.state_algebra import (
@@ -165,6 +168,14 @@ def compute_tree_automaton_reachability(
     """Compute the exact reachable-state profile with minimum tree witnesses."""
 
     return reachable_state_profile(request.automaton)
+
+
+def compute_tree_language_profile(
+    request: TreeLanguageProfileRequest,
+) -> TreeLanguageProfile:
+    """Project the admitted reachability profile onto the final states."""
+
+    return tree_language_profile(request)
 
 
 def compute_tree_automaton_trim(
@@ -330,6 +341,48 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 "arity[symbol].",
                 input={
                     "automaton": _RUN_EXAMPLE["automaton"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="tree_automaton.language.profile.compute",
+        title="Profile the accepted tree language",
+        description=(
+            "Return the exact reachable states, reachable final states, and "
+            "the canonical minimum-node witness tree for each reachable final "
+            "state. The language is empty exactly when no final state is "
+            "reachable. Uses the same admitted fixed-point profile as "
+            "tree_automaton.states.reachable.compute, so it performs no "
+            "second saturation and inherits that operation's witness "
+            "envelopes; it does not enumerate trees."
+        ),
+        request_type=TreeLanguageProfileRequest,
+        result_type=TreeLanguageProfile,
+        run=compute_tree_language_profile,
+        tags=("tree-automata", "language-profile", "emptiness", "exact"),
+        discovery_terms=(
+            "tree automaton emptiness",
+            "shortest accepted tree",
+            "reachable final states",
+        ),
+        examples=(
+            OperationExample(
+                name="one_leaf_language",
+                description="The one reachable final state has a one-node witness.",
+                input={
+                    "automaton": {
+                        "state_count": 1,
+                        "arity": [0],
+                        "transitions": [
+                            {
+                                "symbol": 0,
+                                "child_states": [],
+                                "target_state": 0,
+                            }
+                        ],
+                        "final_states": [0],
+                    }
                 },
             ),
         ),

@@ -27,6 +27,8 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonMinimizeResult,
     TreeAutomatonTrimResult,
     TreeDeterminizeResult,
+    TreeLanguageProfile,
+    TreeLanguageProfileRequest,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.values import (
@@ -949,6 +951,40 @@ def reachable_state_profile(
     """Return each reachable state and its canonical minimum-node witness tree."""
 
     return _build_reachable_state_profile(automaton)
+
+
+def tree_language_profile(request: TreeLanguageProfileRequest) -> TreeLanguageProfile:
+    """Project the admitted state-reachability value to reachable finals.
+
+    The saturation, its admission, and the canonical minimum-node witnesses are
+    computed once by the shared reachability pass, so this postcondition reuses
+    an admission fact instead of repeating the fixpoint. Emptiness is the
+    projection's own consequence: the language is empty exactly when no final
+    state survives the reachability filter.
+    """
+
+    if type(request) is not TreeLanguageProfileRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_automata.language_profile.request_type",
+            message="request must be a canonical tree-language profile request",
+        )
+    profile = _build_reachable_state_profile(request.automaton)
+    final_states = set(request.automaton.final_states)
+    accepting = tuple(
+        state for state in profile.reachable_states if state in final_states
+    )
+    witnesses = tuple(
+        witness for witness in profile.witnesses if witness.state in final_states
+    )
+    return TreeLanguageProfile._from_kernel(
+        automaton=request.automaton,
+        reachable_states=profile.reachable_states,
+        unreachable_states=profile.unreachable_states,
+        reachable_final_states=accepting,
+        witnesses=witnesses,
+        empty=not accepting,
+    )
 
 
 def _productive_states(automaton: BottomUpTreeAutomaton) -> set[int]:

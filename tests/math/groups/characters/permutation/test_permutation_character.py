@@ -49,7 +49,7 @@ def test_s3_fixed_point_values_and_classes_match_direct_permutation_oracle() -> 
         domain=("a", "b", "c"),
         generators=((1, 0, 2), (1, 2, 0)),
     )
-    result = permutation_character(PermutationCharacterRequest(action=action))
+    result = permutation_character(action)
 
     classes = _direct_s3_classes()
     expected_values = tuple(
@@ -68,7 +68,7 @@ def test_trivial_group_action_is_a_degree_three_permutation_character() -> None:
     action = FinitePermutationAction(
         domain=("red", "green", "blue"), generators=((0, 1, 2),)
     )
-    result = permutation_character(PermutationCharacterRequest(action=action))
+    result = permutation_character(action)
 
     assert result.partition.classes == (((0, 1, 2),),)
     assert result.values[0].coefficients[0].as_fraction() == 3
@@ -79,7 +79,7 @@ def test_character_serialization_and_tampering_are_checked() -> None:
     action = FinitePermutationAction(
         domain=("a", "b", "c"), generators=((1, 0, 2), (1, 2, 0))
     )
-    result = permutation_character(PermutationCharacterRequest(action=action))
+    result = permutation_character(action)
     decoded = FiniteCharacter.model_validate_json(result.model_dump_json())
     assert decoded == result
 
@@ -124,7 +124,7 @@ def test_character_serialization_and_tampering_are_checked() -> None:
 
 def test_typed_constructed_action_and_axis_are_readmitted() -> None:
     action = FinitePermutationAction(domain=("a", "b"), generators=((1, 0),))
-    result = permutation_character(PermutationCharacterRequest(action=action))
+    result = permutation_character(action)
     forged_axis = result.axis.model_copy(update={"group_order": 999})
     forged_payload = result.model_dump(mode="python")
     forged_payload["axis"] = forged_axis
@@ -158,7 +158,7 @@ def test_action_group_order_is_rejected_before_class_enumeration(
         classes_must_not_be_computed,
     )
     with pytest.raises(OperationResourceAdmissionError, match="order at most 64"):
-        permutation_character(PermutationCharacterRequest(action=action))
+        permutation_character(action)
 
 
 def test_order_sixty_four_dihedral_action_fits_the_complete_boundary() -> None:
@@ -169,7 +169,7 @@ def test_order_sixty_four_dihedral_action_fits_the_complete_boundary() -> None:
         domain=tuple(f"v{point}" for point in range(degree)),
         generators=(rotation, reflection),
     )
-    result = permutation_character(PermutationCharacterRequest(action=action))
+    result = permutation_character(action)
     assert sum(result.axis.class_sizes) == 64
     assert len(result.values) <= 64
     assert sum(result.axis.class_sizes) == result.axis.group_order

@@ -123,7 +123,7 @@ def test_shortest_witness_output_growth_is_preflighted(
         ),
         final_outputs=(),
     )
-    monkeypatch.setattr(operations, "MAX_FST_REACHABLE_RESULT_BYTES", 1)
+    monkeypatch.setattr(operations, "MAX_FST_REACHABLE_RESULT_SIZE", 1)
     with pytest.raises(OperationResourceAdmissionError) as excinfo:
         reachable_state_witnesses(transducer)
     assert (

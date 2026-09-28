@@ -1,14 +1,23 @@
 """Exact finite lattice-gauge values and native operations."""
 
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeBasepointTransportResult,
+    FiniteGroupGaugeComplex,
     FiniteGroupGaugeContribution,
+    FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeEdgeLabel,
+    FiniteGroupGaugeFace,
+    FiniteGroupGaugeFaceCurvature,
     FiniteGroupGaugeField,
     FiniteGroupGaugeHolonomyResult,
+    FiniteGroupGaugeTransformResult,
+    FiniteGroupGaugeVertexValue,
     GaugeEdge,
     GaugeField,
     GaugeFieldEdgeLabel,
     GaugeLattice,
+    GaugeLoopFamilyHolonomies,
+    GaugeLoopHolonomy,
     GaugePathStep,
     GaugeTransformResult,
     GaugeVertexValue,
@@ -26,10 +35,23 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyResult,
     SU2WilsonTraceResult,
 )
-from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
+from jacobian.math.gauge.finite_group import (
+    finite_group_gauge_basepoint_transport,
+    finite_group_gauge_curvature,
+    finite_group_gauge_holonomy,
+    finite_group_gauge_transform,
+)
+from jacobian.math.gauge.finite_group_complex import (
+    construct_finite_group_gauge_complex,
+)
+from jacobian.math.gauge.finite_group_observables import (
+    FiniteGroupConjugacyProfile,
+    finite_group_holonomy_conjugacy_profile,
+)
 from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
+    loop_family_holonomies,
     path_holonomy,
     plaquette_curvature,
 )
@@ -40,14 +62,24 @@ from jacobian.math.gauge.su2 import (
 )
 
 __all__ = [
+    "FiniteGroupConjugacyProfile",
+    "FiniteGroupGaugeBasepointTransportResult",
+    "FiniteGroupGaugeComplex",
     "FiniteGroupGaugeContribution",
+    "FiniteGroupGaugeCurvatureResult",
     "FiniteGroupGaugeEdgeLabel",
+    "FiniteGroupGaugeFace",
+    "FiniteGroupGaugeFaceCurvature",
     "FiniteGroupGaugeField",
     "FiniteGroupGaugeHolonomyResult",
+    "FiniteGroupGaugeTransformResult",
+    "FiniteGroupGaugeVertexValue",
     "GaugeEdge",
     "GaugeField",
     "GaugeFieldEdgeLabel",
     "GaugeLattice",
+    "GaugeLoopFamilyHolonomies",
+    "GaugeLoopHolonomy",
     "GaugePathStep",
     "GaugeTransformResult",
     "GaugeVertexValue",
@@ -62,8 +94,14 @@ __all__ = [
     "SU2GaugeVertexValue",
     "SU2HolonomyResult",
     "SU2WilsonTraceResult",
+    "construct_finite_group_gauge_complex",
+    "finite_group_gauge_basepoint_transport",
+    "finite_group_gauge_curvature",
     "finite_group_gauge_holonomy",
+    "finite_group_gauge_transform",
+    "finite_group_holonomy_conjugacy_profile",
     "gauge_transform",
+    "loop_family_holonomies",
     "path_holonomy",
     "permutation_wilson_trace",
     "plaquette_curvature",

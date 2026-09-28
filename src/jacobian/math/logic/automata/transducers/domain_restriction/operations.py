@@ -13,9 +13,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.logic.automata.transducers.domain_restriction._models import (
-    SubsequentialDomainRestrictionRequest,
-)
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_ALPHABET,
     MAX_FST_EDGES,
@@ -24,8 +21,9 @@ from jacobian.math.logic.automata.transducers.values import (
     SubseqFinalOutput,
     SubseqTransition,
     SubsequentialTransducer,
+    alphabet_parent_mismatch,
 )
-from jacobian.math.logic.languages.regular.values import MAX_DFA_STATES
+from jacobian.math.logic.languages.regular.values import DFA, MAX_DFA_STATES
 
 MAX_DOMAIN_RESTRICTION_PRODUCT_STATES = MAX_FST_STATES * MAX_DFA_STATES
 MAX_DOMAIN_RESTRICTION_PRODUCT_TRANSITIONS = (
@@ -53,18 +51,21 @@ def _reject(code: str, message: str, *location: str) -> NoReturn:
     )
 
 
-def _admit_request(
-    request: object,
-) -> SubsequentialDomainRestrictionRequest:
-    if not isinstance(request, SubsequentialDomainRestrictionRequest):
+def _admit_carrier(
+    transducer: object, domain_dfa: object
+) -> tuple[SubsequentialTransducer, DFA]:
+    if not isinstance(transducer, SubsequentialTransducer) or not isinstance(
+        domain_dfa, DFA
+    ):
         _reject(
             "domain_restriction_request_type",
             "request must be a SubsequentialDomainRestrictionRequest",
         )
     try:
-        return SubsequentialDomainRestrictionRequest.model_validate(
-            request.model_dump(), strict=True
+        admitted_transducer = SubsequentialTransducer.model_validate(
+            transducer.model_dump(), strict=True
         )
+        admitted_dfa = DFA.model_validate(domain_dfa.model_dump(), strict=True)
     except ValidationError as exc:
         raise OperationDomainValidationError(
             location=("request",),
@@ -74,16 +75,29 @@ def _admit_request(
                 "and share an input alphabet"
             ),
         ) from exc
+    if admitted_transducer.input_alphabet_size != admitted_dfa.alphabet_size:
+        _reject(
+            "domain_alphabet_size_mismatch",
+            "domain DFA and transducer input alphabet sizes must match",
+        )
+    mismatch = alphabet_parent_mismatch(
+        admitted_transducer.input_alphabet_id,
+        admitted_transducer.input_alphabet,
+        admitted_dfa.alphabet_id,
+        admitted_dfa.alphabet,
+    )
+    if mismatch is not None:
+        reason, message = mismatch
+        _reject(f"domain_{reason.removeprefix('composition_')}", message)
+    return admitted_transducer, admitted_dfa
 
 
 def _preflight(
-    request: SubsequentialDomainRestrictionRequest,
+    transducer: SubsequentialTransducer, domain_dfa: DFA
 ) -> tuple[OperationWorkLedger, int]:
-    transducer = request.transducer
-    dfa = request.domain_dfa
     source_label_cells = sum(len(edge.output) for edge in transducer.transitions)
     final_label_cells = sum(len(final.output) for final in transducer.final_outputs)
-    product_state_bound = transducer.state_count * dfa.state_count
+    product_state_bound = transducer.state_count * domain_dfa.state_count
     product_transition_bound = product_state_bound * transducer.input_alphabet_size
     # The canonical result carrier bounds the labels duplicated by the product.
     result_label_cells_bound = (
@@ -96,7 +110,7 @@ def _preflight(
         + source_label_cells
         + len(transducer.final_outputs)
         + final_label_cells
-        + len(dfa.transitions)
+        + len(domain_dfa.transitions)
         + 3 * product_transition_bound
         + 2 * result_label_cells_bound
         + result_record_bound
@@ -116,21 +130,20 @@ def _preflight(
 
 
 def _explore_product(
-    request: SubsequentialDomainRestrictionRequest,
+    transducer: SubsequentialTransducer,
+    domain_dfa: DFA,
     ledger: OperationWorkLedger,
 ) -> _ProductGraph:
-    transducer = request.transducer
-    dfa = request.domain_dfa
     transducer_transitions = {
         (edge.source, edge.input_symbol): edge for edge in transducer.transitions
     }
     dfa_transitions = {
-        (edge.source, edge.symbol): edge.target for edge in dfa.transitions
+        (edge.source, edge.symbol): edge.target for edge in domain_dfa.transitions
     }
     final_outputs = {item.state: item.output for item in transducer.final_outputs}
-    accepting = set(dfa.accepting_states)
+    accepting = set(domain_dfa.accepting_states)
 
-    initial = (transducer.initial_state, dfa.initial_state)
+    initial = (transducer.initial_state, domain_dfa.initial_state)
     states = [initial]
     state_ids = {initial: 0}
     edges: list[_ProductEdge] = []
@@ -190,13 +203,12 @@ def _empty_function(transducer: SubsequentialTransducer) -> SubsequentialTransdu
 
 
 def _build_restricted_transducer(
-    request: SubsequentialDomainRestrictionRequest,
+    transducer: SubsequentialTransducer,
     graph: _ProductGraph,
     coaccessible: set[int],
     ledger: OperationWorkLedger,
     result_label_cells_bound: int,
 ) -> SubsequentialTransducer:
-    transducer = request.transducer
     if 0 not in coaccessible:
         return _empty_function(transducer)
 
@@ -271,16 +283,16 @@ def _build_restricted_transducer(
 
 
 def restrict_subsequential_domain(
-    request: SubsequentialDomainRestrictionRequest,
+    transducer: SubsequentialTransducer, domain_dfa: DFA
 ) -> SubsequentialTransducer:
     """Return the same partial function restricted to the supplied DFA language."""
 
-    request = _admit_request(request)
-    ledger, label_bound = _preflight(request)
-    graph = _explore_product(request, ledger)
+    transducer, domain_dfa = _admit_carrier(transducer, domain_dfa)
+    ledger, label_bound = _preflight(transducer, domain_dfa)
+    graph = _explore_product(transducer, domain_dfa, ledger)
     coaccessible = _coaccessible_states(graph, ledger)
     return _build_restricted_transducer(
-        request, graph, coaccessible, ledger, label_bound
+        transducer, graph, coaccessible, ledger, label_bound
     )
 
 

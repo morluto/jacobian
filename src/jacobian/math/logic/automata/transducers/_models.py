@@ -180,8 +180,9 @@ class SubseqRunResult(SubseqRunRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: SubseqRunRequest,
         *,
+        transducer: SubsequentialTransducer,
+        word: tuple[int, ...],
         status: Literal["OUTPUT", "UNDEFINED_TRANSITION", "NONFINAL_DOMAIN_STATE"],
         output: tuple[int, ...],
         final_state: int,
@@ -198,8 +199,8 @@ class SubseqRunResult(SubseqRunRequest):
         """Construct a run outcome emitted by the trusted owner-local kernel."""
 
         return cls.model_construct(
-            transducer=request.transducer,
-            word=request.word,
+            transducer=transducer,
+            word=word,
             status=status,
             output=output,
             final_state=final_state,
@@ -352,11 +353,11 @@ class ReachableStatesResult(ReachableStatesRequest):
     @classmethod
     def _from_kernel(
         cls,
-        request: ReachableStatesRequest,
+        transducer: SubsequentialTransducer,
         *,
         witnesses: tuple[ReachableStateWitness, ...],
     ) -> Self:
-        return cls.model_construct(transducer=request.transducer, witnesses=witnesses)
+        return cls.model_construct(transducer=transducer, witnesses=witnesses)
 
 
 class TrimResult(TrimRequest):

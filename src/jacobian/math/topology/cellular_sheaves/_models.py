@@ -1158,3 +1158,15 @@ __all__ = [
     "SheafRestriction",
     "SheafStalk",
 ]
+# Output admission counts the exact decimal digits a result must materialize
+# and the cells it retains. A serialized transport size would let a
+# consumer's encoder choice, not the mathematics, decide admission.
+MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK = 8000000
+# Retained parent values: simplices, total stalk rank, cover maps, and the
+# derived restrictions every morphism image/kernel/cokernel carries back.
+MAX_SHEAF_MORPHISM_PARENT_CELLS = (
+    MAX_SHEAF_SIMPLICES
+    + MAX_SHEAF_TOTAL_STALK_RANK
+    + MAX_SHEAF_COVER_MAPS
+    + MAX_SHEAF_DERIVED_RESTRICTIONS
+)

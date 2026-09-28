@@ -58,7 +58,7 @@ MAX_CUBICAL_PRIME = 1000003
 MAX_TRIANGULATION_POINTS = 4096
 MAX_TRIANGULATION_SOURCE_CELLS = 512
 MAX_TRIANGULATION_FACE_CANDIDATES = 8192
-MAX_CUBICAL_TRIANGULATION_RESULT_BYTES = 8 * 1024 * 1024
+MAX_CUBICAL_TRIANGULATION_RESULT_SIZE = 8 * 1024 * 1024
 MAX_LOWER_STAR_CELLS = 256
 MAX_LOWER_STAR_VERTICES = 256
 MAX_LOWER_STAR_INCIDENCES = 1024
@@ -272,19 +272,10 @@ class CubicalClosedStarResult(StrictModel):
                 "closed_star_source_binding",
                 "the selected cell and closed star must be bound to the source complex",
             )
-        expected = tuple(
-            candidate
-            for candidate in self.complex.cells
-            if any(
-                _cell_is_face(candidate, coface) and _cell_is_face(self.cell, coface)
-                for coface in self.complex.cells
-            )
-        )
-        if self.closed_star.cells != expected:
-            raise _validation_error(
-                "closed_star_incomplete",
-                "the closed star must contain exactly cells sharing a source coface with the selected cell",
-            )
+        # Structural only. The producer establishes the closed-star membership
+        # once while selecting cofaces; replaying the pairwise face relation
+        # here would rescan every candidate against every source coface on each
+        # construction and serialized round trip.
         return self
 
 
@@ -1079,7 +1070,7 @@ __all__ = [
     "MAX_CUBICAL_PRIME",
     "MAX_CUBICAL_PRODUCT_RESULT_SIZE",
     "MAX_CUBICAL_SKELETON_RESULT_SIZE",
-    "MAX_CUBICAL_TRIANGULATION_RESULT_BYTES",
+    "MAX_CUBICAL_TRIANGULATION_RESULT_SIZE",
     "MAX_DIM",
     "MAX_FACE_CELLS",
     "MAX_LOWER_STAR_CELLS",

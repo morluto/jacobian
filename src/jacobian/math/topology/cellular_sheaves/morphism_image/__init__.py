@@ -19,14 +19,15 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     _ExactField,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
-    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
+    MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
     MAX_SHEAF_STALK_RANK,
     FiniteCellularSheaf,
     SheafField,
     SheafRestriction,
     SheafStalk,
-    sheaf_scalar_json_bound,
+    sheaf_scalar_digit_work,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     Component,
@@ -371,7 +372,7 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
         work += max(1, target_rank**2 * (target_rank + source_rank))
     for item in restrictions.values():
         work += _induced_restriction_work(item, source_ranks, target_ranks)
-    reconstruction_work, reconstruction_chars = _parent_reconstruction_bounds(
+    reconstruction_work, reconstruction_digit_work = _parent_reconstruction_bounds(
         (source, target), input_digits=input_digits
     )
     if work + reconstruction_work > MAX_SHEAF_MORPHISM_WORK:
@@ -402,10 +403,10 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     else:
         output_digits = max(input_digits, len(str(source.prime)))
     if (
-        4 * len(value.model_dump_json(exclude={"obstruction"}))
-        + reconstruction_chars
-        + sheaf_scalar_json_bound(output_cells, output_digits)
-        > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
+        MAX_SHEAF_MORPHISM_PARENT_CELLS
+        + reconstruction_digit_work
+        + sheaf_scalar_digit_work(output_cells, output_digits)
+        > MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK
     ):
         raise _resource(
             "output_bound",

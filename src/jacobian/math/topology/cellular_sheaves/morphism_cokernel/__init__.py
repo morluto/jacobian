@@ -20,7 +20,8 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_ENTRY_DIGITS,
-    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
+    MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
@@ -29,8 +30,8 @@ from jacobian.math.topology.cellular_sheaves._models import (
     SheafScalar,
     SheafStalk,
     _require_field_scalars,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     Component,
@@ -348,7 +349,7 @@ def cokernel_of_morphism(
         )
         for lower, upper in target_restrictions
     )
-    reconstruction_work, reconstruction_chars = _parent_reconstruction_bounds(
+    reconstruction_work, reconstruction_digit_work = _parent_reconstruction_bounds(
         (source, target), input_digits=input_digits
     )
     if work + reconstruction_work > MAX_SHEAF_MORPHISM_WORK:
@@ -367,10 +368,10 @@ def cokernel_of_morphism(
         else max(input_digits, len(str(source.prime)))
     )
     if (
-        4 * len(checked.model_dump_json())
-        + reconstruction_chars
-        + sheaf_scalar_json_bound(output_cells, output_digits)
-        > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
+        MAX_SHEAF_MORPHISM_PARENT_CELLS
+        + reconstruction_digit_work
+        + sheaf_scalar_digit_work(output_cells, output_digits)
+        > MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK
     ):
         raise _resource(
             "output_bound", "cokernel quotient maps exceed the output envelope"

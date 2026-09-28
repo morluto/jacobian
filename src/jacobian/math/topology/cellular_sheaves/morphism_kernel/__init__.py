@@ -21,14 +21,15 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     from_cover_maps,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
-    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
+    MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
     MAX_SHEAF_STALK_RANK,
     CoverRestrictionMatrix,
     FiniteCellularSheaf,
     SheafRestriction,
     SheafStalk,
-    sheaf_scalar_json_bound,
+    sheaf_scalar_digit_work,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     Component,
@@ -209,7 +210,7 @@ def _parent_reconstruction_bounds(
                             ranks[source] * ranks[left_middle] * ranks[target],
                             ranks[source] * ranks[right_middle] * ranks[target],
                         )
-    return total_work, sheaf_scalar_json_bound(output_cells, output_digits)
+    return total_work, sheaf_scalar_digit_work(output_cells, output_digits)
 
 
 def _coordinates(
@@ -321,7 +322,7 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
         for a, b in restrictions
     )
     kernel_work += restriction_cells * max(1, MAX_SHEAF_STALK_RANK)
-    reconstruction_work, reconstruction_chars = _parent_reconstruction_bounds(
+    reconstruction_work, reconstruction_digit_work = _parent_reconstruction_bounds(
         (source, target), input_digits=input_digits
     )
     total_work = kernel_work + morphism_work + reconstruction_work
@@ -342,10 +343,10 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
     )
     output_digits = 2 * MAX_SHEAF_STALK_RANK * input_digits + 32
     if (
-        4 * len(value.model_dump_json())
-        + reconstruction_chars
-        + sheaf_scalar_json_bound(output_cells, output_digits)
-        > MAX_SHEAF_MORPHISM_OUTPUT_CHARS
+        MAX_SHEAF_MORPHISM_PARENT_CELLS
+        + reconstruction_digit_work
+        + sheaf_scalar_digit_work(output_cells, output_digits)
+        > MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK
     ):
         raise _fail_resource(
             "output_bound",

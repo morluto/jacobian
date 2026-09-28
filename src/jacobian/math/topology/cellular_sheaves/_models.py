@@ -1017,13 +1017,15 @@ __all__ = [
     "SheafRestriction",
     "SheafStalk",
 ]
-MAX_SHEAF_MORPHISM_OUTPUT_CHARS = 8000000
-MAX_SHEAF_SECTION_OUTPUT_CHARS = 8000000
-MAX_SHEAF_SECTION_RESTRICTION_OUTPUT_CHARS = 8000000
-
-
-def sheaf_scalar_json_bound(count: int, digits: int = MAX_SHEAF_ENTRY_DIGITS) -> int:
-    """Conservative JSON character bound for exact scalar collections."""
-    # Canonical rational JSON carries numerator and denominator as separate
-    # decimal strings plus object keys, quotes, and punctuation. Bound both.
-    return count * (2 * digits + 32)
+# Output admission counts the exact decimal digits a result must materialize
+# and the cells it retains. A serialized transport size would let a
+# consumer's encoder choice, not the mathematics, decide admission.
+MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK = 8000000
+# Retained parent values: simplices, total stalk rank, cover maps, and the
+# derived restrictions every morphism image/kernel/cokernel carries back.
+MAX_SHEAF_MORPHISM_PARENT_CELLS = (
+    MAX_SHEAF_SIMPLICES
+    + MAX_SHEAF_TOTAL_STALK_RANK
+    + MAX_SHEAF_COVER_MAPS
+    + MAX_SHEAF_DERIVED_RESTRICTIONS
+)

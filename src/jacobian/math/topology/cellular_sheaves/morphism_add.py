@@ -13,15 +13,16 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_DERIVED_RESTRICTIONS,
     MAX_SHEAF_ENTRY_DIGITS,
     MAX_SHEAF_MORPHISM_COMPONENT_CELLS,
-    MAX_SHEAF_MORPHISM_OUTPUT_CHARS,
+    MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
+    MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
     MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     FiniteCellularSheaf,
     SheafRestriction,
     SheafStalk,
+    sheaf_scalar_digit_work,
     sheaf_scalar_digits,
-    sheaf_scalar_json_bound,
 )
 from jacobian.math.topology.cellular_sheaves.extensions import (
     SheafMorphismResult,
@@ -247,24 +248,24 @@ def add_morphisms(
     left_by_face = dict(checked_left.components)
     right_by_face = dict(checked_right.components)
     axis = source.canonical_face_order
-    # Each admitted input scalar has at most 64 decimal digits. Adding two
-    # rationals needs at most two 64-digit cross-products and one carry digit.
-    # The input morphism admission caps this output at 32,768 scalar cells, so
-    # reserving 256 bytes per exact sum bounds the complete transient matrix at
-    # 8,388,608 bytes before the values are constructed.
-
-    # Both parent diagrams are retained in the returned morphism. Their exact
-    # canonical wire sizes and the maximum composable component size are known
-    # before any summed matrix is allocated.
-    parent_chars = len(source.model_dump_json()) + len(target.model_dump_json())
-    axis_chars = sum(64 + sum(2 + len(vertex) for vertex in face) for face in axis)
-    admitted_output_chars = (
-        parent_chars
-        + axis_chars
-        + sheaf_scalar_json_bound(output_cells, MAX_SHEAF_ENTRY_DIGITS)
-        + 512
+    # Each admitted input scalar has at most MAX_SHEAF_ENTRY_DIGITS decimal
+    # digits. Adding two rationals needs at most two such cross-products and
+    # one carry digit, so the summed matrix is bounded by exact scalar
+    # allocation and digit work rather than by an estimated encoded size.
+    #
+    # Both parent diagrams are retained in the returned morphism. Their face
+    # axes and the maximum composable component size are known before any
+    # summed matrix is allocated.
+    axis_cells = sum(
+        MAX_SHEAF_ENTRY_DIGITS + sum(2 + len(vertex) for vertex in face)
+        for face in axis
     )
-    if admitted_output_chars > MAX_SHEAF_MORPHISM_OUTPUT_CHARS:
+    admitted_output_digit_work = (
+        2 * MAX_SHEAF_MORPHISM_PARENT_CELLS
+        + axis_cells
+        + sheaf_scalar_digit_work(output_cells, 2 * MAX_SHEAF_ENTRY_DIGITS + 1)
+    )
+    if admitted_output_digit_work > MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK:
         raise OperationResourceAdmissionError(
             location=(),
             code="topology.cellular_sheaf.morphism_add.output_bound",

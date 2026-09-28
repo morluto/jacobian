@@ -19,10 +19,13 @@ when \(m\ge l\), and zero otherwise. Rows before the largest polynomial
 coefficient degree are returned explicitly as `boundary_rows`. Once every
 coefficient monomial is active, the stable recurrence is returned as
 \(\sum_i q_i(n)a_{n+i}=0\), with its first valid index `valid_from`.
-The recurrence uses the canonical `ShiftOreOperator` value, so it can be
-serialized directly into `ore.shift.recurrence.generate_finite_prefix.compute`;
-pass `valid_from` as that operation's `start_index` and supply the needed
-initial values. The shared shift-operator value admits exponents through 80
+The recurrence uses the canonical `ShiftOreOperator` value, so positive-order
+outputs can be serialized directly into
+`ore.shift.recurrence.generate_finite_prefix.compute`; pass `valid_from` as
+that operation's `start_index` and supply the needed initial values. An
+order-zero output (for example, an Euler-type equation) is still a valid
+coefficient equation but is not a finite-prefix recurrence and cannot be
+handed to that operation. The shared shift-operator value admits exponents through 80
 for this recurrence domain; arithmetic and power operations retain their own
 tighter work and output limits.
 

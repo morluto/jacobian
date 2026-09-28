@@ -244,6 +244,14 @@ def test_transform_result_composes_unchanged_with_prefix_generation() -> None:
     ]
 
 
+def test_generated_coefficients_stay_within_downstream_shift_envelope() -> None:
+    # Although each input coefficient fits 64 digits, 10^63*(n+16)_16 has
+    # a 78-digit constant coefficient and cannot be consumed as a shift op.
+    operator = _operator((0, [(0, 1)]), (16, [(0, 10**63)]))
+    with pytest.raises(OperationResourceAdmissionError, match="coefficient recurrence coefficient"):
+        differential_operator_to_coefficient_recurrence(operator)
+
+
 def test_output_uses_canonical_shift_operator_through_maximum_shift_span() -> None:
     result = differential_operator_to_coefficient_recurrence(
         _operator((0, [(64, 1)]), (16, [(0, 1)]))

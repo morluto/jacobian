@@ -269,10 +269,6 @@ _GF2_Y = {
 }
 
 
-def _run_hyperelliptic_affine_valuation(
-    request: HyperellipticAffinePlaceValuationRequest,
-) -> HyperellipticAffinePlaceValuationResult:
-    return function_field_hyperelliptic_affine_valuation(request.place, request.element)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (

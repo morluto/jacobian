@@ -584,8 +584,7 @@ def _admit_multiplication_resources(
                 location=("left", "coordinates"),
                 code="function_field.coefficient_growth_exceeds_envelope",
                 message="the rational-function product exceeds the coefficient envelope",
-            )
-        return
+            )        return
     max_terms = 1
     total_degree = 0
     max_numerator_degree = 0
@@ -2344,8 +2343,7 @@ def function_field_divisor_add(
                     kind=place.kind,
                     prime_polynomial=canonical_polynomial,
                     degree=canonical_polynomial.degree,
-                )
-            key = place.model_dump_json()
+                )            key = place.model_dump_json()
             previous = raw_support.get(key)
             raw_support[key] = (
                 place,

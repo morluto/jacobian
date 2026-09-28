@@ -8,6 +8,8 @@ from jacobian.math.ore_algebras._models import (
     DFinitePowerSeries,
     DFinitePowerSeriesPrefixRequest,
     DFinitePowerSeriesRequest,
+    DifferentialCoefficientRecurrence,
+    DifferentialCoefficientRecurrenceRequest,
     DifferentialOperatorAddRequest,
     DifferentialOperatorAddResult,
     DifferentialOperatorApplyRequest,
@@ -36,6 +38,7 @@ from jacobian.math.ore_algebras.operations import (
     differential_operator_apply,
     differential_operator_multiply,
     differential_operator_normalize_polynomial_coefficients,
+    differential_operator_to_coefficient_recurrence,
     differential_series_construct,
     differential_series_generate_prefix,
     polynomial_recurrence_generate_prefix,
@@ -109,6 +112,39 @@ _DIFF_ONE = _rf_num_den([(1, [0])], [(1, [0])], "x")
 _DIFF_X = _rf_num_den([(1, [1])], [(1, [0])], "x")
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="holonomic.differential_operator.to_coefficient_recurrence.compute",
+        title="Convert a polynomial differential equation to coefficient recurrence",
+        description=(
+            "Return the exact Taylor coefficient equations for an operator "
+            "sum p_j(x) D^j over QQ[x]. The stable recurrence is expressed "
+            "as sum q_i(n) a_(n+i)=0 for every n at or above valid_from; "
+            "all earlier coefficient rows are returned explicitly. This is "
+            "formal coefficient algebra and makes no convergence claim."
+        ),
+        request_type=DifferentialCoefficientRecurrenceRequest,
+        result_type=DifferentialCoefficientRecurrence,
+        run=lambda request: differential_operator_to_coefficient_recurrence(
+            request.operator
+        ),
+        tags=("holonomic", "d-finite", "ore-algebra", "recurrence", "exact"),
+        discovery_terms=(
+            "convert differential equation to Taylor coefficient recurrence",
+            "ODE coefficient recurrence including boundary rows",
+            "D-finite series recurrence from differential operator",
+        ),
+        examples=(
+            OperationExample(
+                name="exponential_coefficients",
+                description="Convert y'-y=0 to (n+1)a_(n+1)-a_n=0.",
+                input={
+                    "operator": _differential_operator(
+                        [(0, _rf_num_den([(-1, [0])], [(1, [0])], "x")), (1, _DIFF_ONE)]
+                    )
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="holonomic.differential_series.generate_finite_prefix.compute",
         title="Generate a finite Taylor prefix from a D-finite series",

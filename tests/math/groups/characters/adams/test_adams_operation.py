@@ -173,3 +173,18 @@ def test_adams_work_bound_rejects_huge_bit_length_before_class_expansion(
     monkeypatch.setattr(adams_operations, "group_conjugacy_classes", fail_if_expanded)
     with pytest.raises(OperationResourceAdmissionError):
         adams_operations.character_adams_operation(request.character, request.exponent)
+
+
+def test_cyclic_order_eleven_zero_character_is_admitted() -> None:
+    generator = tuple(range(1, 11)) + (0,)
+    source = PermutationGroup(degree=11, generators=(generator,))
+    classes = group_conjugacy_classes(11, [list(generator)])
+    partition = GroupConjugacyClassesResult._from_kernel(
+        source, tuple(tuple(tuple(item) for item in cls) for cls in classes)
+    )
+    table = character_table(partition)
+    zero = CharacterRingElement(
+        table=table, irreducible_multiplicities=(0,) * len(table.rows)
+    )
+    result = adams_operations.character_adams_operation(zero, 1)
+    assert result.irreducible_multiplicities == (0,) * len(table.rows)

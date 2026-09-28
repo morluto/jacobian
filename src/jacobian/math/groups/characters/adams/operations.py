@@ -83,6 +83,13 @@ def character_adams_operation(
     )
     element = request.character
     _admit_ring_element_shape(element, "character")
+    if all(multiplicity == 0 for multiplicity in element.irreducible_multiplicities):
+        # The Adams operations fix zero: psi^k(0) = 0 without any table
+        # reconstruction or inner products, so admit it before work admission.
+        return CharacterRingElement(
+            table=element.table,
+            irreducible_multiplicities=element.irreducible_multiplicities,
+        )
     source = element.table.partition.source
     group_order, source_work = _admit_source_group_order(source)
     if group_order > MAX_CYCLOTOMIC_ORDER:

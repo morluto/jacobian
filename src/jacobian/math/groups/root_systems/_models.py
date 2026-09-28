@@ -1295,6 +1295,79 @@ class WeylWeightOrbitResult(StrictModel):
         return cls.model_construct(matrix=matrix, weight=weight, orbit=orbit)
 
 
+class WeylParabolicWeightOrbitRequest(StrictModel):
+    """A typed weight and a canonical subset of parabolic generators."""
+
+    weight: WeightLatticeVector
+    simple_root_indices: tuple[
+        Annotated[StrictInt, Field(ge=0, le=MAX_RANK - 1)], ...
+    ] = Field(max_length=MAX_RANK)
+
+    @model_validator(mode="after")
+    def require_canonical_subset(self) -> Self:
+        rank = len(self.weight.datum.cartan_matrix)
+        if tuple(
+            sorted(set(self.simple_root_indices))
+        ) != self.simple_root_indices or any(
+            index >= rank for index in self.simple_root_indices
+        ):
+            raise _validation_error(
+                "parabolic_simple_indices",
+                "parabolic simple-root indices must be a strictly increasing subset of the Cartan axis",
+            )
+        return self
+
+
+class WeylParabolicWeightOrbitResult(StrictModel):
+    """The complete parabolic orbit, bound to its weight datum and generators."""
+
+    datum: FiniteCartanDatum
+    simple_root_indices: tuple[
+        Annotated[StrictInt, Field(ge=0, le=MAX_RANK - 1)], ...
+    ] = Field(max_length=MAX_RANK)
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    orbit: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=MAX_WEIGHT_ORBIT_SIZE
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_orbit(self) -> Self:
+        rank = len(self.datum.cartan_matrix)
+        if (
+            tuple(sorted(set(self.simple_root_indices))) != self.simple_root_indices
+            or any(index >= rank for index in self.simple_root_indices)
+            or len(self.weight) != rank
+            or self.orbit != tuple(sorted(set(self.orbit)))
+            or self.weight not in self.orbit
+            or any(len(value) != rank for value in self.orbit)
+            or any(
+                abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.orbit, self.weight)
+                for coordinate in value
+            )
+        ):
+            raise _validation_error(
+                "parabolic_weight_orbit_shape",
+                "the parabolic orbit must be sorted, distinct, bounded, and use its Cartan weight axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        datum: FiniteCartanDatum,
+        simple_root_indices: tuple[int, ...],
+        weight: tuple[int, ...],
+        orbit: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            datum=datum,
+            simple_root_indices=simple_root_indices,
+            weight=weight,
+            orbit=orbit,
+        )
+
+
 class WeylDominantRepresentativeRequest(CartanMatrixRequest):
     """An integral weight in fundamental-weight coordinates."""
 
@@ -1359,6 +1432,61 @@ class WeylDominantRepresentativeResult(StrictModel):
             matrix=matrix,
             weight=weight,
             dominant_weight=dominant_weight,
+            element=element,
+        )
+
+
+class WeylAntidominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight with one fundamental-weight coordinate per Cartan row."""
+
+    weight: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description="Integral fundamental-weight coordinates; length must equal the number of Cartan matrix rows.",
+    )
+
+
+class WeylAntidominantRepresentativeResult(StrictModel):
+    """The antidominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    antidominant_weight: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_RANK
+    )
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_antidominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            len(self.weight) != rank
+            or len(self.antidominant_weight) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.weight, *self.antidominant_weight)
+            )
+            or any(value > 0 for value in self.antidominant_weight)
+        ):
+            raise _validation_error(
+                "antidominant_representative_shape",
+                "the source, antidominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: tuple[int, ...],
+        antidominant_weight: tuple[int, ...],
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            antidominant_weight=antidominant_weight,
             element=element,
         )
 

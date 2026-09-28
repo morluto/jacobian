@@ -31,6 +31,11 @@ from .arithmetic_models import (
     RationalFunctionExpansionResult,
     RationalFunctionInfinityExpansionRequest,
 )
+from .contact_profile import (
+    PuiseuxContactProfile,
+    PuiseuxContactRequest,
+    puiseux_contact_profile,
+)
 from .newton_polygon import (
     LocalPolynomialInSeries,
     LocalPolynomialNewtonPolygonResult,
@@ -40,6 +45,11 @@ from .newton_polygon import (
     local_polynomial_newton_polygon,
     newton_edge_characteristic_polynomial,
     newton_edge_characteristic_roots,
+)
+from .newton_transform import (
+    NewtonTransformRequest,
+    NewtonTransformResult,
+    newton_transform,
 )
 from .operations import (
     add_puiseux,
@@ -55,6 +65,14 @@ from .operations import (
     to_power_series,
 )
 from .puiseux_values import PuiseuxTerm, TruncatedPuiseuxWindow
+from .smooth_branch import (
+    SmoothBranchFirstJetRequest,
+    SmoothBranchFirstJetResult,
+    SmoothBranchPrefixRequest,
+    SmoothBranchPrefixResult,
+    smooth_branch_first_jet,
+    smooth_branch_prefix,
+)
 from .values import TruncatedLaurentWindow
 
 
@@ -845,6 +863,232 @@ TOOLS: MathTools = (
                             ),
                         ),
                     ).model_dump(mode="json")
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.puiseux.contact_profile.compute",
+        title="Profile pairwise contact of Puiseux prefixes",
+        description=(
+            "Return the first differing rational exponent for each pair of "
+            "Puiseux prefixes on a shared known window, or mark agreement "
+            "through the finite cutoff unresolved. This compares formal values; "
+            "it does not assert branch validity or family completeness."
+        ),
+        request_type=PuiseuxContactRequest,
+        result_type=PuiseuxContactProfile,
+        run=puiseux_contact_profile,
+        tags=("local-series", "puiseux", "contact-order", "exact"),
+        discovery_terms=(
+            "compare Puiseux branch prefixes",
+            "contact order of truncated Puiseux series",
+            "first exponent where two local expansions differ",
+        ),
+        examples=(
+            OperationExample(
+                name="fractional_contact_order",
+                description=(
+                    "The prefixes t^(1/2)+O(t^2) and 2t^(1/2)+O(t^2) "
+                    "first differ at exponent 1/2."
+                ),
+                input={"prefixes": [_example_puiseux(1), _example_puiseux(2)]},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.polynomial.newton_transform.compute",
+        title="Apply one exact Newton edge transform",
+        description=(
+            "Apply the selected Newton edge substitution at a caller-supplied "
+            "simple rational characteristic root, retaining exact truncated "
+            "coefficient windows and the source-bound edge."
+        ),
+        request_type=NewtonTransformRequest,
+        result_type=NewtonTransformResult,
+        run=newton_transform,
+        tags=("local-series", "polynomial", "newton-polygon", "exact"),
+        examples=(
+            OperationExample(
+                name="simple_rational_edge_root",
+                description=(
+                    "For y^2 - t^2(1+t), substituting y=t(1+z) and "
+                    "dividing by t^2 gives z^2 + 2z - t."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 2,
+                                    "precision": 4,
+                                    "coefficients": [
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "-1", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 4,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "edge_index": 0,
+                    "initial_root": {"num": "1", "den": "1"},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.polynomial.smooth_branch_prefix.compute",
+        title="Lift a simple rational local branch to finite precision",
+        description=(
+            "Return the exact formal branch y(t) modulo t^N for a supplied "
+            "rational simple root of F(0,y), with N from 3 through 32. The "
+            "unramified branch is unique over QQ; multiple roots, ramified "
+            "branches, and algebraic coefficients are outside this operation."
+        ),
+        request_type=SmoothBranchPrefixRequest,
+        result_type=SmoothBranchPrefixResult,
+        run=smooth_branch_prefix,
+        tags=("local-series", "polynomial", "branch-lifting", "exact"),
+        discovery_terms=(
+            "smooth branch power series prefix",
+            "implicit function formal series to finite order",
+            "lift simple rational root to local branch",
+        ),
+        examples=(
+            OperationExample(
+                name="square_root_smooth_branch_prefix",
+                description=(
+                    "For F(t,y)=y^2-(1+t), return the unique branch at y(0)=1 "
+                    "modulo t^5."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 5,
+                                    "coefficients": [
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "-1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 2,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 5,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "initial_root": {"num": "1", "den": "1"},
+                    "precision": 5,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="local_series.polynomial.smooth_branch_first_jet.compute",
+        title="Lift a simple rational local branch through first order",
+        description=(
+            "Return the exact first-order power-series jet at a supplied simple "
+            "rational root of F(0,y). This is an unramified smooth-branch slice; "
+            "multiple, ramified, and algebraic-coefficient branches are outside "
+            "its contract."
+        ),
+        request_type=SmoothBranchFirstJetRequest,
+        result_type=SmoothBranchFirstJetResult,
+        run=smooth_branch_first_jet,
+        tags=("local-series", "polynomial", "branch-lifting", "exact"),
+        examples=(
+            OperationExample(
+                name="smooth_linear_branch",
+                description=(
+                    "For F(t,y)=y-2-3t and the simple root y(0)=2, return "
+                    "y(t)=2+3t+O(t^2)."
+                ),
+                input={
+                    "polynomial": {
+                        "variable": "t",
+                        "place": "FINITE",
+                        "center": {"num": "0", "den": "1"},
+                        "coefficients": [
+                            {
+                                "y_degree": 0,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 2,
+                                    "coefficients": [
+                                        {"num": "-2", "den": "1"},
+                                        {"num": "-3", "den": "1"},
+                                    ],
+                                },
+                            },
+                            {
+                                "y_degree": 1,
+                                "series": {
+                                    "variable": "t",
+                                    "place": "FINITE",
+                                    "center": {"num": "0", "den": "1"},
+                                    "valuation_lower": 0,
+                                    "precision": 2,
+                                    "coefficients": [
+                                        {"num": "1", "den": "1"},
+                                        {"num": "0", "den": "1"},
+                                    ],
+                                },
+                            },
+                        ],
+                    },
+                    "initial_root": {"num": "2", "den": "1"},
                 },
             ),
         ),

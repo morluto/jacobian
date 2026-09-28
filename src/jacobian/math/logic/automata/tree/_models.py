@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import ExactInteger
 from jacobian._models import StrictModel
+from jacobian.math.logic.automata.tree.contexts import FiniteTreeContext
 from jacobian.math.logic.automata.tree.values import (
     MAX_REACHABILITY_WITNESS_NODES,
     MAX_RUN_TREE_DEPTH,
@@ -171,6 +172,148 @@ class RankedTreeSubtreeResult(RankedTreeSubtreeRequest):
         subtree: RankedTree,
     ) -> Self:
         return cls.model_construct(tree=tree, position=position, subtree=subtree)
+
+
+class TreeContextPlugRequest(StrictModel):
+    context: FiniteTreeContext
+    tree: RankedTree
+
+
+class TreeContextPlugResult(TreeContextPlugRequest):
+    plugged_tree: RankedTree
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        context: FiniteTreeContext,
+        tree: RankedTree,
+        plugged_tree: RankedTree,
+    ) -> Self:
+        return cls.model_construct(
+            context=context, tree=tree, plugged_tree=plugged_tree
+        )
+
+
+class TreeContextStateMapRequest(StrictModel):
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+    context: FiniteTreeContext
+
+
+class TreeContextStateMapResult(TreeContextStateMapRequest):
+    state_map: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+
+    @model_validator(mode="after")
+    def require_state_axis(self) -> Self:
+        if len(self.state_map) != self.automaton.state_count or any(
+            not 0 <= state < self.automaton.state_count for state in self.state_map
+        ):
+            raise _validation_error(
+                "context_state_map_axis",
+                "state map must be a total endomap on the automaton state axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        automaton: CompleteDeterministicBottomUpTreeAutomaton,
+        context: FiniteTreeContext,
+        state_map: tuple[int, ...],
+    ) -> Self:
+        return cls.model_construct(
+            automaton=automaton, context=context, state_map=state_map
+        )
+
+
+class TreeContextTransformationMonoidRequest(StrictModel):
+    """Bound exact closure of all context-induced state maps."""
+
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+    max_elements: int = Field(default=128, ge=1, le=512)
+
+
+class TreeContextTransformation(StrictModel):
+    """One distinct state map and a ground-tree-backed context inducing it."""
+
+    state_map: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    context: FiniteTreeContext
+
+
+class TreeContextTransformationMonoidResult(StrictModel):
+    """Finite monoid of all state maps induced by ranked one-hole contexts."""
+
+    automaton: CompleteDeterministicBottomUpTreeAutomaton
+    max_elements: int = Field(ge=1, le=512)
+    elements: tuple[TreeContextTransformation, ...] = Field(max_length=512)
+    multiplication_table: tuple[tuple[int, ...], ...] = Field(max_length=512)
+    identity_index: int = Field(ge=0, lt=512)
+
+    @model_validator(mode="after")
+    def require_canonical_monoid_shape(self) -> Self:
+        count = len(self.elements)
+        states = self.automaton.state_count
+        if (
+            not count
+            or count > self.max_elements
+            or len(self.multiplication_table) != count
+        ):
+            raise _validation_error(
+                "context_monoid_shape", "monoid axes exceed their declared bounds"
+            )
+        maps = tuple(element.state_map for element in self.elements)
+        if maps != tuple(sorted(set(maps))):
+            raise _validation_error(
+                "context_monoid_order",
+                "monoid maps must be unique and lexicographically ordered",
+            )
+        if any(
+            element.context.arity != self.automaton.arity for element in self.elements
+        ):
+            raise _validation_error(
+                "context_monoid_signature",
+                "every element witness context must match the automaton signature",
+            )
+        if any(
+            len(mapping) != states or any(not 0 <= q < states for q in mapping)
+            for mapping in maps
+        ):
+            raise _validation_error(
+                "context_monoid_map",
+                "every element must be an endomap on the automaton state axis",
+            )
+        if any(
+            len(row) != count or any(not 0 <= entry < count for entry in row)
+            for row in self.multiplication_table
+        ):
+            raise _validation_error(
+                "context_monoid_table", "multiplication table must be square and closed"
+            )
+        if not 0 <= self.identity_index < count:
+            raise _validation_error(
+                "context_monoid_identity", "identity index is outside the monoid"
+            )
+        identity = tuple(range(states))
+        if maps[self.identity_index] != identity:
+            raise _validation_error(
+                "context_monoid_identity",
+                "identity entry must be the identity state map",
+            )
+        if any(
+            self.multiplication_table[self.identity_index][i] != i
+            or self.multiplication_table[i][self.identity_index] != i
+            for i in range(count)
+        ):
+            raise _validation_error(
+                "context_monoid_identity",
+                "identity row and column must act identically",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
 
 
 class AcceptedTreeCountRequest(StrictModel):
@@ -695,6 +838,118 @@ class TreeAutomatonReachabilityRequest(StrictModel):
     )
 
 
+class TreeLanguageProfileRequest(StrictModel):
+    """Project the admitted reachability profile onto the final states.
+
+    This request shares the reachability admission envelopes with
+    :class:`TreeAutomatonReachabilityRequest`: one owner-local saturation pass
+    priced against ``MAX_TREE_AUTOMATON_REACHABILITY_WORK`` and an aggregate
+    witness budget ``MAX_REACHABILITY_WITNESS_NODES`` summed over the minimum
+    witnesses of all reachable states. The profile keeps only the witnesses of
+    reachable final states, so its own output is bounded by the same aggregate
+    limit; it never exceeds the reachability result it is derived from.
+    """
+
+    automaton: BottomUpTreeAutomaton = Field(
+        description=(
+            f"nondeterministic bottom-up tree automaton with at most "
+            f"{MAX_TA_STATES} states, {MAX_TA_SYMBOLS} ranked symbols, and "
+            f"{MAX_TA_TRANSITIONS} unique transitions. "
+            "Execution is bounded by the shared reachability envelopes "
+            f"(MAX_TREE_AUTOMATON_REACHABILITY_WORK = {MAX_TREE_AUTOMATON_REACHABILITY_WORK:,} units; "
+            f"MAX_REACHABILITY_WITNESS_NODES = {MAX_REACHABILITY_WITNESS_NODES} nodes summed across "
+            "every reachable state's minimum witness)"
+        ),
+    )
+
+
+class TreeLanguageProfile(StrictModel):
+    """Reachable states and canonical minimum trees for reachable finals.
+
+    The domain-owned canonical value returned by ``tree_language_profile``:
+    every state is listed exactly once as reachable or unreachable, and each
+    reachable final state carries one canonical minimum-node ground-tree
+    witness taken unchanged from the admitted reachability profile. ``empty``
+    is the emptiness postcondition: the language is empty exactly when no final
+    state is reachable.
+
+    Deserialized profiles are untrusted, so validation re-establishes the
+    partition, the reachable-final set, the one-witness-per-reachable-final
+    correspondence, and that every supplied witness is a ground tree over this
+    automaton's ranked alphabet at the declared arity and depth bound.
+    """
+
+    automaton: BottomUpTreeAutomaton
+    reachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    unreachable_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    reachable_final_states: tuple[int, ...] = Field(max_length=MAX_TA_STATES)
+    witnesses: tuple[TreeStateWitness, ...] = Field(max_length=MAX_TA_STATES)
+    empty: bool
+
+    @model_validator(mode="after")
+    def require_profile_shape(self) -> Self:
+        if self.reachable_states != tuple(sorted(set(self.reachable_states))):
+            raise _validation_error(
+                "language_profile_reachable",
+                "reachable states must be sorted and unique",
+            )
+        if self.unreachable_states != tuple(sorted(set(self.unreachable_states))):
+            raise _validation_error(
+                "language_profile_unreachable",
+                "unreachable states must be sorted and unique",
+            )
+        if set(self.reachable_states) | set(self.unreachable_states) != set(
+            range(self.automaton.state_count)
+        ) or set(self.reachable_states) & set(self.unreachable_states):
+            raise _validation_error(
+                "language_profile_partition",
+                "reachable and unreachable states must partition the state set",
+            )
+        expected_finals = tuple(
+            sorted(set(self.automaton.final_states) & set(self.reachable_states))
+        )
+        if self.reachable_final_states != expected_finals:
+            raise _validation_error(
+                "language_profile_finals",
+                "reachable final states must be exactly the reachable accepting states",
+            )
+        if tuple(witness.state for witness in self.witnesses) != expected_finals:
+            raise _validation_error(
+                "language_profile_witnesses",
+                "one witness must be supplied for every reachable final state",
+            )
+        for witness in self.witnesses:
+            stack = [(witness.tree, 1)]
+            while stack:
+                node, depth = stack.pop()
+                if depth > MAX_RUN_TREE_DEPTH:
+                    raise _validation_error(
+                        "language_profile_witness_depth",
+                        "witness exceeds the ranked-tree depth bound",
+                    )
+                if node.symbol >= len(self.automaton.arity):
+                    raise _validation_error(
+                        "language_profile_witness_symbol",
+                        "witness symbol is outside the automaton alphabet",
+                    )
+                if len(node.children) != self.automaton.arity[node.symbol]:
+                    raise _validation_error(
+                        "language_profile_witness_arity",
+                        "witness node arity does not match the automaton alphabet",
+                    )
+                stack.extend((child, depth + 1) for child in node.children)
+        if self.empty != (not expected_finals):
+            raise _validation_error(
+                "language_profile_empty",
+                "empty must indicate whether any final state is reachable",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        return cls.model_construct(**values)
+
+
 class TreeDeterminizeRequest(StrictModel):
     """Determinize a bottom-up tree automaton by subset construction."""
 
@@ -828,6 +1083,8 @@ __all__ = [
     "TreeAutomatonMinimizeRequest",
     "TreeAutomatonMinimizeResult",
     "TreeAutomatonReachabilityRequest",
+    "TreeAutomatonToRegularTreeGrammarRequest",
+    "TreeAutomatonToRegularTreeGrammarResult",
     "TreeAutomatonTrimRequest",
     "TreeAutomatonTrimResult",
     "TreeDeterminizeRequest",
@@ -837,3 +1094,22 @@ __all__ = [
     "TreeStateChartEntry",
     "TreeStateWitness",
 ]
+
+
+class TreeAutomatonToRegularTreeGrammarRequest(StrictModel):
+    """Construct a unit-free regular grammar for a finite tree automaton."""
+
+    automaton: BottomUpTreeAutomaton
+
+
+class TreeAutomatonToRegularTreeGrammarResult(StrictModel):
+    """Source-bound grammar denoting exactly the source automaton language."""
+
+    automaton: BottomUpTreeAutomaton
+    grammar: RegularTreeGrammar
+
+    @classmethod
+    def _from_kernel(
+        cls, *, automaton: BottomUpTreeAutomaton, grammar: RegularTreeGrammar
+    ) -> Self:
+        return cls.model_construct(automaton=automaton, grammar=grammar)

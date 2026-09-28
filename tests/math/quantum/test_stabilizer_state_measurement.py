@@ -9,7 +9,6 @@ from jacobian.math.quantum._models import (
     ExactStabilizerGroup,
     PhaseFreeQubitPauli,
     QubitRegister,
-    StabilizerCodeRequest,
     StabilizerStatePauliMeasurementRequest,
     StabilizerStatePauliMeasurementResult,
 )
@@ -35,10 +34,8 @@ def _pauli(
 def _state(*generators: ExactQubitPauli):
     register = generators[0].register
     return stabilizer_code_compute(
-        StabilizerCodeRequest(
-            group=ExactStabilizerGroup(register=register, generators=generators),
-            generator_eigenvalues=(1,) * len(generators),
-        )
+        ExactStabilizerGroup(register=register, generators=generators),
+        (1,) * len(generators),
     )
 
 
@@ -110,9 +107,7 @@ def test_commuting_measurement_returns_signed_deterministic_relation(
     register = QubitRegister(qubit_ids=("q0",))
     source = _state(_pauli(register, (0,), (1,)))
     observable = _pauli(register, (0,), (1,), phase=observable_phase)
-    result = stabilizer_state_measure_pauli(
-        StabilizerStatePauliMeasurementRequest(state=source, observable=observable)
-    )
+    result = stabilizer_state_measure_pauli(source, observable)
 
     assert result.status == "DETERMINISTIC"
     assert result.deterministic_outcome == outcome
@@ -130,12 +125,7 @@ def test_measurement_on_bell_state_matches_exact_projector_oracle() -> None:
         _pauli(register, (1, 1), (0, 0)),
         _pauli(register, (0, 0), (1, 1)),
     )
-    result = stabilizer_state_measure_pauli(
-        StabilizerStatePauliMeasurementRequest(
-            state=source,
-            observable=_pauli(register, (0, 0), (1, 0)),
-        )
-    )
+    result = stabilizer_state_measure_pauli(source, _pauli(register, (0, 0), (1, 0)))
 
     assert result.status == "UNIFORM_BINARY"
     assert result.positive_branch is not None
@@ -147,8 +137,6 @@ def test_measurement_rejects_nonhermitian_observable() -> None:
     register = QubitRegister(qubit_ids=("q0",))
     with pytest.raises(OperationDomainValidationError):
         stabilizer_state_measure_pauli(
-            StabilizerStatePauliMeasurementRequest(
-                state=_state(_pauli(register, (0,), (1,))),
-                observable=_pauli(register, (1,), (0,), phase=1),
-            )
+            _state(_pauli(register, (0,), (1,))),
+            _pauli(register, (1,), (0,), phase=1),
         )

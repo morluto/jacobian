@@ -240,6 +240,7 @@ ignore_imports = [
     "jacobian.math.geometry.affine_tori._flint_process -> jacobian.process",
     "jacobian.math.optimization._ppl_process -> jacobian.process",
     "jacobian.math.topology.chain_complexes._smith_process -> jacobian.process",
+    "jacobian.math.ore_algebras.proper_hypergeometric_actions._action_process -> jacobian.process",
     "jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy._optimum_process -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy.bounded_coloring._process -> jacobian.process",

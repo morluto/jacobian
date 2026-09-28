@@ -11,6 +11,15 @@ from jacobian.math.logic.automata.tree._models import TreeAutomatonMinimizeReque
 
 
 def test_boolean_product_example_states_the_completeness_precondition() -> None:
+    """The advertised example must be a product of complete machines.
+
+    The product rejects a missing transition, so an example built from
+    partial machines would describe a different relation than the
+    operation computes. The left machine accepts the leaf, the right one
+    rejects it, and their intersection keeps only the pair that both
+    reach.
+    """
+
     operation = Catalog.open().operation("tree_automaton.boolean_product.compute")
     assert operation is not None
     example = operation.examples[0]
@@ -19,7 +28,16 @@ def test_boolean_product_example_states_the_completeness_precondition() -> None:
     request = operation.request_type.model_validate_json(
         encode_strict_json(example.input), strict=True
     )
-    assert operation.run(request).product.state_count == 1
+    for machine in (request.left, request.right):
+        assert all(
+            sum(1 for transition in machine.transitions if transition.symbol == symbol)
+            == 1
+            for symbol in range(len(machine.arity))
+        )
+    result = operation.run(request)
+    assert result.product.state_count == 4
+    assert result.product.transitions[0].child_states == ()
+    assert result.product.final_states == (2,)
 
 
 def test_catalog_discovery_surfaces_tree_language_products() -> None:

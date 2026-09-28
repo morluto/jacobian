@@ -15,7 +15,7 @@ from jacobian.math.combinatorics.algebraic.operations import (
     standard_young_tableaux_count,
 )
 from jacobian.math.combinatorics.semistandard_tableaux._models import (
-    MAX_KOSTKA_RESULT_BYTES,
+    MAX_KOSTKA_RESULT_SIZE,
     MAX_KOSTKA_SEARCH_WORK,
     FixedContentCountRequest,
     FixedContentCountResult,
@@ -86,10 +86,14 @@ def _count_by_row_major_search(
     return total
 
 
-def _result_byte_upper_bound(
+def _result_size_upper_bound(
     partition: IntegerPartition, content: TableauContent
 ) -> int:
-    """Bound JSON bytes from canonical axes and the 500-cell scalar envelope."""
+    """Bound the retained result from canonical axes and the 500-cell scalar envelope.
+
+    The units are scalar count times maximum decimal width plus a fixed
+    overhead allowance, not an encoded transport measurement.
+    """
 
     size = sum(partition.parts)
     # Every valid count is at most size!, which is at most size**size.
@@ -242,11 +246,11 @@ def fixed_content_count(
             code="semistandard_tableaux.fixed_content_input_invalid",
             message="partition and content must be canonical bounded values",
         ) from exc
-    if _result_byte_upper_bound(partition, content) > MAX_KOSTKA_RESULT_BYTES:
+    if _result_size_upper_bound(partition, content) > MAX_KOSTKA_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("content",),
             code="semistandard_tableaux.kostka_output_bound",
-            message="fixed-content result exceeds its admitted byte envelope",
+            message="fixed-content result exceeds its admitted representation envelope",
         )
 
     request_checkpoint("before fixed-content tableau admission")

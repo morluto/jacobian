@@ -50,7 +50,7 @@ from jacobian.math.logic.automata.transducers._tools import (
 )
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_RESULT_WORD_LENGTH,
-    MAX_FST_RUN_RESULT_BYTES,
+    MAX_FST_RUN_RESULT_SIZE,
 )
 from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.words.operations import apply_morphism
@@ -372,12 +372,12 @@ class TestSubsequentialRun:
         assert result.cumulative_outputs == ((), (), (1, 0))
         assert result.final_output == (0,)
 
-    def test_run_result_byte_bound_is_checked_before_trace_expansion(
+    def test_run_result_size_bound_is_checked_before_trace_expansion(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import jacobian.math.logic.automata.transducers.operations as kernels
 
-        monkeypatch.setattr(kernels, "MAX_FST_RUN_RESULT_BYTES", 1)
+        monkeypatch.setattr(kernels, "MAX_FST_RUN_RESULT_SIZE", 1)
         monkeypatch.setattr(
             kernels,
             "_transition_map",
@@ -390,7 +390,7 @@ class TestSubsequentialRun:
             == "finite_state_transducer.run_result_bytes_exceeded"
         )
 
-    def test_maximum_admitted_output_keeps_cumulative_trace_within_bytes(self) -> None:
+    def test_maximum_admitted_output_keeps_cumulative_trace_within_size(self) -> None:
         transducer = SubsequentialTransducer(
             input_alphabet_size=1,
             output_alphabet_size=1,
@@ -412,7 +412,7 @@ class TestSubsequentialRun:
         assert len(result.cumulative_outputs) == 513
         assert len(result.cumulative_outputs[-1]) == MAX_FST_RESULT_WORD_LENGTH
         assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
-            MAX_FST_RUN_RESULT_BYTES
+            MAX_FST_RUN_RESULT_SIZE
         )
 
     def test_adapter_binds_transducer_and_word(self) -> None:

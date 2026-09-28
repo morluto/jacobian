@@ -17,10 +17,10 @@ from jacobian.math.combinatorics.symmetric_functions.values import (
 MAX_SEMISTANDARD_TABLEAUX = 4_096
 MAX_ENUMERATED_CELLS = 100_000
 MAX_ENUMERATION_WORK = 25_000_000
-MAX_RESULT_BYTES = 2_000_000
+MAX_RESULT_SIZE = 2_000_000
 MAX_TABLEAU_ALPHABET = 4_096
 MAX_KOSTKA_SEARCH_WORK = 5_000_000
-MAX_KOSTKA_RESULT_BYTES = 65_536
+MAX_KOSTKA_RESULT_SIZE = 65_536
 
 _NonnegativeExactInteger = Annotated[
     ExactInteger,
@@ -71,9 +71,9 @@ class FixedContentCountResult(StrictModel):
 __all__ = [
     "MAX_ENUMERATED_CELLS",
     "MAX_ENUMERATION_WORK",
-    "MAX_KOSTKA_RESULT_BYTES",
+    "MAX_KOSTKA_RESULT_SIZE",
     "MAX_KOSTKA_SEARCH_WORK",
-    "MAX_RESULT_BYTES",
+    "MAX_RESULT_SIZE",
     "MAX_SEMISTANDARD_TABLEAUX",
     "MAX_TABLEAU_ALPHABET",
     "FixedContentCountRequest",

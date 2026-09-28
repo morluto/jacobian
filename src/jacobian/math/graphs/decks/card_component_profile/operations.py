@@ -21,7 +21,7 @@ from jacobian.math.graphs.decks.card_component_profile._models import (
 from jacobian.math.graphs.values import SimpleUndirectedGraph
 
 MAX_CARD_COMPONENT_PROFILE_WORK = 2_000_000
-MAX_CARD_COMPONENT_PROFILE_OUTPUT_BYTES = 1_000_000
+MAX_CARD_COMPONENT_PROFILE_OUTPUT_UNITS = 1_000_000
 _PARTITION_COUNTS_THROUGH_TEN = (1, 1, 2, 3, 5, 7, 11, 15, 22, 30, 42)
 
 
@@ -50,20 +50,22 @@ def _admit_deck(
         )
 
     pair_count = comb(order, 2)
-    input_bytes = len(classes) * (64 + 16 * pair_count)
+    # Canonical representation units -- entry counts times a fixed per-entry
+    # scalar allowance -- not encoded transport bytes.
+    input_units = len(classes) * (64 + 16 * pair_count)
     profile_rows = min(len(classes), _PARTITION_COUNTS_THROUGH_TEN[order])
-    output_bytes = 128 + profile_rows * (64 + 4 * order)
-    if input_bytes > MAX_ANONYMOUS_CARD_RESULT_UNITS:
+    output_units = 128 + profile_rows * (64 + 4 * order)
+    if input_units > MAX_ANONYMOUS_CARD_RESULT_UNITS:
         raise OperationResourceAdmissionError(
             location=("deck",),
             code="graph_deck.component_profile_input_bound",
             message="deck class input exceeds the canonical representation unit bound",
         )
-    if output_bytes > MAX_CARD_COMPONENT_PROFILE_OUTPUT_BYTES:
+    if output_units > MAX_CARD_COMPONENT_PROFILE_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("deck",),
             code="graph_deck.component_profile_output_bound",
-            message="component profile output exceeds its serialized byte bound",
+            message="component profile output exceeds its admitted result unit bound",
         )
 
     expected_vertices = tuple(f"v{i:02d}" for i in range(order))
@@ -190,7 +192,7 @@ def card_component_profile(
 
 
 __all__ = [
-    "MAX_CARD_COMPONENT_PROFILE_OUTPUT_BYTES",
+    "MAX_CARD_COMPONENT_PROFILE_OUTPUT_UNITS",
     "MAX_CARD_COMPONENT_PROFILE_WORK",
     "card_component_profile",
 ]

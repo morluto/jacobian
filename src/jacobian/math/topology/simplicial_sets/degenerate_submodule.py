@@ -123,17 +123,18 @@ def _admit(
             f"exceeding {MAX_DEGENERATE_SUBMODULE_WORK_UNITS}",
         )
 
-    # The shared estimate includes the source tables, the repeated serialized
-    # simplex_bases labels (ASCII-escaped at their 32-character bound), and the
-    # ambient differential. Add exact-rank inclusion/restricted matrices and
-    # the standalone result envelope before permitting any chain matrices.
-    additional_output_bytes = _DEGENERATE_SUBMODULE_OUTPUT_OVERHEAD // 2 + 12 * (
+    # The shared estimate includes the source tables, the repeated
+    # simplex_bases labels (at their 32-character bound), and the ambient
+    # differential. Add exact-rank inclusion/restricted matrices and the
+    # standalone result envelope before permitting any chain matrices. The
+    # units are retained cells, not encoded transport bytes.
+    additional_output_cells = _DEGENERATE_SUBMODULE_OUTPUT_OVERHEAD // 2 + 12 * (
         sum(ranks) + inclusion_cells + degenerate_boundary_cells
     )
     chains_module._preflight(
         source,
         additional_matrix_cells=inclusion_cells + degenerate_boundary_cells,
-        additional_output_bytes=additional_output_bytes,
+        additional_output_cells=additional_output_cells,
         output_name="degenerate submodule",
         output_error_code="simplicial_set.degenerate_submodule_output_budget_exceeded",
     )

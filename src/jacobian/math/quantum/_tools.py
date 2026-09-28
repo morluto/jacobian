@@ -31,6 +31,8 @@ from jacobian.math.quantum._models import (
     StabilizerDistanceResult,
     StabilizerErasureCorrectabilityRequest,
     StabilizerErasureCorrectabilityResult,
+    StabilizerErrorCoset,
+    StabilizerErrorCosetRequest,
     StabilizerErrorEquivalenceRequest,
     StabilizerErrorEquivalenceResult,
     StabilizerStatePauliMeasurementRequest,
@@ -51,6 +53,7 @@ from jacobian.math.quantum.operations import (
     pauli_to_labels,
     stabilizer_code_compute,
     stabilizer_erasure_correctability,
+    stabilizer_error_coset,
     stabilizer_error_equivalence,
     stabilizer_exact_distance,
     stabilizer_group_from_generators,
@@ -86,7 +89,9 @@ def _run_stabilizer_distance(value: CheckSpaceValue) -> StabilizerDistanceResult
 def _run_erasure_correctability(
     request: StabilizerErasureCorrectabilityRequest,
 ) -> StabilizerErasureCorrectabilityResult:
-    return stabilizer_erasure_correctability(request)
+    return stabilizer_erasure_correctability(
+        request.check_space, request.erased_qubit_ids
+    )
 
 
 def _run_logical_frame(value: CheckSpaceValue) -> LogicalPauliFrame:
@@ -109,7 +114,7 @@ def _run_pairing(request: PauliPairingRequest) -> PauliPairingResult:
 def _run_family_commutation(
     request: PauliFamilyCommutationRequest,
 ) -> PauliFamilyCommutationResult:
-    return pauli_family_commutation_matrix(request)
+    return pauli_family_commutation_matrix(request.family)
 
 
 def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:
@@ -144,7 +149,21 @@ def _run_error_equivalence(
 def _run_exact_stabilizer_group(
     request: ExactStabilizerGroupRequest,
 ) -> ExactStabilizerGroup:
-    return stabilizer_group_from_generators(request)
+    return stabilizer_group_from_generators(request.qubit_register, request.generators)
+
+
+def _run_stabilizer_code(request: StabilizerCodeRequest) -> StabilizerCodeValue:
+    return stabilizer_code_compute(request.group, request.generator_eigenvalues)
+
+
+def _run_stabilizer_state_measurement(
+    request: StabilizerStatePauliMeasurementRequest,
+) -> StabilizerStatePauliMeasurementResult:
+    return stabilizer_state_measure_pauli(request.state, request.observable)
+
+
+def _run_error_coset(request: StabilizerErrorCosetRequest) -> StabilizerErrorCoset:
+    return stabilizer_error_coset(request.check_space, request.error)
 
 
 TOOLS = (
@@ -161,7 +180,7 @@ TOOLS = (
         ),
         request_type=StabilizerCodeRequest,
         result_type=StabilizerCodeValue,
-        run=stabilizer_code_compute,
+        run=_run_stabilizer_code,
         tags=("quantum", "stabilizer", "code-space", "character", "exact"),
         discovery_terms=(
             "stabilizer code eigenspace",
@@ -214,7 +233,7 @@ TOOLS = (
         ),
         request_type=StabilizerStatePauliMeasurementRequest,
         result_type=StabilizerStatePauliMeasurementResult,
-        run=stabilizer_state_measure_pauli,
+        run=_run_stabilizer_state_measurement,
         tags=("quantum", "stabilizer", "measurement", "pauli", "exact"),
         discovery_terms=(
             "Pauli measurement on stabilizer state",
@@ -839,6 +858,45 @@ TOOLS = (
                             "z_bits": [1, 1],
                         },
                     ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quantum.stabilizer.error_coset.compute",
+        title="Project a Pauli error to its stabilizer coset",
+        description=(
+            "Return the canonical binary representative of e + S modulo an "
+            "isotropic check space. The check rows are put in RREF over the "
+            "register-bound flattened (x | z) axis, then the error is reduced "
+            "at each pivot. Equivalent errors therefore produce the same exact "
+            "coset value, while zero-syndrome logical errors remain distinct."
+        ),
+        request_type=StabilizerErrorCosetRequest,
+        result_type=StabilizerErrorCoset,
+        run=_run_error_coset,
+        tags=("quantum", "stabilizer", "error-coset", "quotient", "exact"),
+        discovery_terms=("Pauli error coset", "error modulo stabilizers"),
+        examples=(
+            OperationExample(
+                name="zz_stabilizer_reduces_to_identity",
+                description="Project ZZ to the zero coset when ZZ generates the check space.",
+                input={
+                    "check_space": {
+                        "register": {"qubit_ids": ["q0", "q1"]},
+                        "basis": [
+                            {
+                                "register": {"qubit_ids": ["q0", "q1"]},
+                                "x_bits": [0, 0],
+                                "z_bits": [1, 1],
+                            }
+                        ],
+                    },
+                    "error": {
+                        "register": {"qubit_ids": ["q0", "q1"]},
+                        "x_bits": [0, 0],
+                        "z_bits": [1, 1],
+                    },
                 },
             ),
         ),

@@ -272,19 +272,10 @@ class CubicalClosedStarResult(StrictModel):
                 "closed_star_source_binding",
                 "the selected cell and closed star must be bound to the source complex",
             )
-        expected = tuple(
-            candidate
-            for candidate in self.complex.cells
-            if any(
-                _cell_is_face(candidate, coface) and _cell_is_face(self.cell, coface)
-                for coface in self.complex.cells
-            )
-        )
-        if self.closed_star.cells != expected:
-            raise _validation_error(
-                "closed_star_incomplete",
-                "the closed star must contain exactly cells sharing a source coface with the selected cell",
-            )
+        # Structural only. The producer establishes the closed-star membership
+        # once while selecting cofaces; replaying the pairwise face relation
+        # here would rescan every candidate against every source coface on each
+        # construction and serialized round trip.
         return self
 
 

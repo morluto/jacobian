@@ -125,6 +125,20 @@ def test_zero_and_empty_alphabet_keep_their_parent() -> None:
     assert _coefficient_map(add(scalar, scalar)) == {(): Fraction(2, 3)}
 
 
+def test_addition_accepts_canonical_product_support_and_word_lengths() -> None:
+    alphabet = ("x",)
+    long_word = ("x",) * 64
+    left = _polynomial(alphabet, {long_word: 1})
+    zero = _polynomial(alphabet, {})
+    assert add(left, zero) == left
+
+    support = tuple(("x",) * degree + ("y",) for degree in range(64))
+    # Distinct words through degree 64 fit the canonical word bound.
+    alphabet = ("x", "y")
+    polynomial = _polynomial(alphabet, dict.fromkeys(support, 1))
+    assert len(add(polynomial, _polynomial(alphabet, {})).terms) == 64
+
+
 def test_sum_of_disjoint_maximum_operands_admits_full_support() -> None:
     alphabet = ("x", "y")
     words = _binary_words(alphabet, 2 * MAX_FREE_ALGEBRA_OPERAND_TERMS)

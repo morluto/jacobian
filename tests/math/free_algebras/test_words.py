@@ -67,6 +67,7 @@ def test_power_producer_word_composes_with_serialized_reverse_consumer() -> None
     # Review thread: reversing the canonical result of a maximal power failed
     # only because the shared word request applied the 32-letter source bound.
     power = power_word(word("c"), 64).power
+    assert compare_words(power, power).comparison == 0
     round_trip = FreeAlgebraWord.model_validate_json(power.model_dump_json())
     assert round_trip.length == 64
     request = FreeAlgebraWordRequest(word=round_trip)

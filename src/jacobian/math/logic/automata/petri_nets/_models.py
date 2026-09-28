@@ -5,7 +5,7 @@ from __future__ import annotations
 from itertools import combinations
 from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictBool, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
@@ -1428,6 +1428,217 @@ class PetriNetDisjointUnionRequest(StrictModel):
         return self
 
 
+class MarkingEquationRequest(StrictModel):
+    """Compare a target marking with the formal state-equation target."""
+
+    net: PetriNet
+    source_marking: Marking
+    target_marking: Marking
+    transition_counts: tuple[StrictInt, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS,
+        description=(
+            "Nonnegative transition counts with total at most "
+            f"{MAX_STATE_EQUATION_OCCURRENCES}; equality is only a necessary "
+            "reachability condition, not a firing witness."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_marking_equation_axes(self) -> Self:
+        for name, marking in (
+            ("source_marking", self.source_marking),
+            ("target_marking", self.target_marking),
+        ):
+            _require_marking_parent(self.net, marking)
+            if len(marking.tokens) != self.net.place_count:
+                raise _validation_error(
+                    f"{name}_length", f"{name} must match place_count"
+                )
+        if len(self.transition_counts) != self.net.transition_count:
+            raise _validation_error(
+                "state_equation_transition_axis",
+                "counts must match transition_count",
+            )
+        if any(count < 0 for count in self.transition_counts):
+            raise _validation_error(
+                "state_equation_count_sign", "transition counts must be nonnegative"
+            )
+        return self
+
+
+class MarkingEquationResult(StrictModel):
+    """Exact formal target and residual for one supplied marking equation."""
+
+    net: PetriNet
+    source_marking: Marking
+    target_marking: Marking
+    transition_counts: tuple[StrictInt, ...]
+    formal_target: tuple[StrictInt, ...] = Field(max_length=MAX_PETRI_PLACES)
+    residual: tuple[StrictInt, ...] = Field(max_length=MAX_PETRI_PLACES)
+    satisfies_equation: StrictBool
+
+    @model_validator(mode="after")
+    def require_result_axes(self) -> Self:
+        _require_result_marking(self.net, self.source_marking)
+        _require_result_marking(
+            self.net, self.target_marking, reason="target_marking_length"
+        )
+        if (
+            len(self.transition_counts) != self.net.transition_count
+            or any(
+                count < 0 or count > MAX_STATE_EQUATION_OCCURRENCES
+                for count in self.transition_counts
+            )
+            or sum(self.transition_counts) > MAX_STATE_EQUATION_OCCURRENCES
+        ):
+            raise _validation_error(
+                "state_equation_transition_axis",
+                "counts must be admitted on the net transition axis",
+            )
+        if (
+            len(self.formal_target) != self.net.place_count
+            or len(self.residual) != self.net.place_count
+        ):
+            raise _validation_error(
+                "marking_equation_place_axis",
+                "formal target and residual must match the net place axis",
+            )
+        if any(
+            abs(value) > MAX_MARKING_EQUATION_FORMAL_TARGET_ABS
+            for value in self.formal_target
+        ) or any(
+            abs(value) > MAX_MARKING_EQUATION_RESIDUAL_ABS for value in self.residual
+        ):
+            raise _validation_error(
+                "marking_equation_coordinate_bound",
+                "formal target and residual must fit the admitted exact integer bound",
+            )
+        if self.satisfies_equation != all(value == 0 for value in self.residual):
+            raise _validation_error(
+                "marking_equation_predicate",
+                "satisfies_equation must match the exact zero residual profile",
+            )
+        return self
+
+
+class PetriNetMatricesRequest(StrictModel):
+    """Project the pre-, post-, and incidence matrices of a Petri net."""
+
+    net: PetriNet
+
+
+class PetriNetMatricesResult(StrictModel):
+    """Exact matrices, with the source net retaining their place/transition axes."""
+
+    net: PetriNet
+    pre: IntegerMatrix
+    post: IntegerMatrix
+    incidence: IntegerMatrix
+    input_places_by_transition: tuple[tuple[int, ...], ...]
+    output_places_by_transition: tuple[tuple[int, ...], ...]
+    consumer_transitions_by_place: tuple[tuple[int, ...], ...]
+    producer_transitions_by_place: tuple[tuple[int, ...], ...]
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        places = self.net.place_count
+        transitions = self.net.transition_count
+        matrices = (self.pre, self.post, self.incidence)
+        if any(
+            matrix.row_count != places or matrix.column_count != transitions
+            for matrix in matrices
+        ):
+            raise _validation_error(
+                "matrices_axes", "all matrices must match the source net axes"
+            )
+        if (
+            len(self.input_places_by_transition) != transitions
+            or len(self.output_places_by_transition) != transitions
+            or len(self.consumer_transitions_by_place) != places
+            or len(self.producer_transitions_by_place) != places
+        ):
+            raise _validation_error(
+                "support_axes", "support profiles must match the source net axes"
+            )
+        for support in (
+            *self.input_places_by_transition,
+            *self.output_places_by_transition,
+        ):
+            if tuple(sorted(set(support))) != support or any(
+                index < 0 or index >= places for index in support
+            ):
+                raise _validation_error(
+                    "support_indices",
+                    "transition supports must use source place indices",
+                )
+        for support in (
+            *self.consumer_transitions_by_place,
+            *self.producer_transitions_by_place,
+        ):
+            if tuple(sorted(set(support))) != support or any(
+                index < 0 or index >= transitions for index in support
+            ):
+                raise _validation_error(
+                    "support_indices",
+                    "place supports must use source transition indices",
+                )
+        return self
+
+
+class PetriNetRelabelingRequest(StrictModel):
+    """Permute place and transition axes of a weighted Petri net.
+
+    Each map sends a source index to its index on the relabeled axis. Optional
+    labels are carried with their elements; unlabeled axes remain unlabeled.
+    """
+
+    net: PetriNet
+    place_source_to_target: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
+    transition_source_to_target: tuple[int, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS
+    )
+
+
+class PetriNetRelabelingResult(StrictModel):
+    """An exact isomorphism between a net and its permuted-axis presentation."""
+
+    source_net: PetriNet
+    target_net: PetriNet
+    place_source_to_target: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
+    transition_source_to_target: tuple[int, ...] = Field(
+        max_length=MAX_PETRI_TRANSITIONS
+    )
+
+    @model_validator(mode="after")
+    def require_relabeling_shape(self) -> Self:
+        if (self.source_net.place_count, self.source_net.transition_count) != (
+            self.target_net.place_count,
+            self.target_net.transition_count,
+        ):
+            raise _validation_error(
+                "relabel_axes", "source and target net axes must have equal sizes"
+            )
+        for axis_name, mapping, size in (
+            ("place", self.place_source_to_target, self.source_net.place_count),
+            (
+                "transition",
+                self.transition_source_to_target,
+                self.source_net.transition_count,
+            ),
+        ):
+            if len(mapping) != size or tuple(sorted(mapping)) != tuple(range(size)):
+                raise _validation_error(
+                    f"relabel_{axis_name}_bijection",
+                    f"{axis_name} map must be a bijection of its complete axis",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(cls, **values: Any) -> Self:
+        """Build the result after the kernel establishes the relabeling law."""
+        return cls.model_construct(**values)
+
+
 class PetriNetDisjointUnionResult(StrictModel):
     """A disjoint union retaining its source nets and axis embeddings."""
 
@@ -1499,6 +1710,9 @@ class PetriNetDisjointUnionResult(StrictModel):
                 _require_result_marking(source, marking)
         return self
 
+
+MAX_MARKING_EQUATION_FORMAL_TARGET_ABS = MAX_STATE_EQUATION_TARGET_ABS
+MAX_MARKING_EQUATION_RESIDUAL_ABS = MAX_STATE_EQUATION_TARGET_ABS
 
 __all__ = [
     "MAX_CONCURRENT_STEP_OCCURRENCES",

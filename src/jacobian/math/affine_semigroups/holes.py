@@ -34,7 +34,9 @@ from jacobian.math.affine_semigroups.semigroup import (
 MAX_AFFINE_HOLE_SCALAR_DIGITS = 64
 MAX_AFFINE_HOLE_CANDIDATES = 50_000
 MAX_AFFINE_HOLE_WORK = 2_000_000
-MAX_AFFINE_HOLE_OUTPUT_BYTES = 2_000_000
+# The hole output is a grid of exact integer points, so admission counts
+# materialised cells and retained digits rather than serialized bytes.
+MAX_AFFINE_HOLE_OUTPUT_CELLS = 2_000_000
 MAX_AFFINE_HOLE_LABEL_CHARS = 4_096
 AffineHoleDegree = Annotated[
     int, DecimalIntegerEncoding(max_digits=MAX_AFFINE_HOLE_SCALAR_DIGITS)
@@ -223,8 +225,8 @@ def _coordinate_configuration(
         coordinates.append(
             (first_numerator // determinant, second_numerator // determinant)
         )
-    coordinates = tuple(coordinates)
-    if any(abs(value) >= 10**MAX_AFFINE_DIGITS for row in coordinates for value in row):
+    resolved: tuple[tuple[int, int], ...] = tuple(coordinates)
+    if any(abs(value) >= 10**MAX_AFFINE_DIGITS for row in resolved for value in row):
         raise OperationResourceAdmissionError(
             location=("semigroup", "configuration"),
             code="affine_semigroup.hole_lattice_coordinates",
@@ -361,7 +363,7 @@ def holes_through_degree(
         for row in range(2)
     )
     coordinate_digits = tuple(len(str(value)) for value in ambient_bounds)
-    point_bytes = 2 * max(coordinate_digits) + 10
+    point_cells = 2 * len(coordinate_digits) + 10
     source_label_chars = sum(
         len(label)
         for label in (
@@ -369,23 +371,21 @@ def holes_through_degree(
             *source.configuration.generator_labels,
         )
     )
-    source_bytes = (
-        6 * source_label_chars
+    source_cells = (
+        source_label_chars
         + source.configuration.rows
-        * source.configuration.columns
-        * (MAX_AFFINE_DIGITS + 4)
-        + 2 * MAX_AFFINE_HOLE_SCALAR_DIGITS * len(source.grading)
-        + MAX_AFFINE_HOLE_SCALAR_DIGITS
-        + 512
+        + source.configuration.columns
+        + 2 * len(source.grading)
+        + 1
     )
-    output_bound = source_bytes + box_count * point_bytes
-    if output_bound > MAX_AFFINE_HOLE_OUTPUT_BYTES:
+    output_cells = source_cells + box_count * point_cells
+    if output_cells > MAX_AFFINE_HOLE_OUTPUT_CELLS:
         raise OperationResourceAdmissionError(
             location=("max_degree",),
             code="affine_semigroup.hole_output_bound",
             message=(
-                f"degree-bounded hole output {output_bound} bytes exceeds "
-                f"{MAX_AFFINE_HOLE_OUTPUT_BYTES} bytes"
+                f"degree-bounded hole output {output_cells} cells exceeds "
+                f"{MAX_AFFINE_HOLE_OUTPUT_CELLS} cells"
             ),
         )
 

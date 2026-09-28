@@ -97,11 +97,11 @@ def _det(left: tuple[int, int], right: tuple[int, int]) -> int:
 
 
 def _generator_coordinates_in_lattice_basis(
-    vectors: tuple[tuple[int, int], ...],
+    vectors: tuple[tuple[int, ...], ...],
     basis: tuple[tuple[int, ...], tuple[int, ...]],
-) -> tuple[tuple[int, int], ...]:
+) -> tuple[tuple[int, ...], ...]:
     """Recover exact source-column coordinates in a full-rank row-HNF basis."""
-    determinant = _det(basis[0], basis[1])
+    determinant = _det((basis[0][0], basis[0][1]), (basis[1][0], basis[1][1]))
     if determinant == 0:
         raise OperationDomainValidationError(
             location=("semigroup", "configuration"),

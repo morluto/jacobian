@@ -80,6 +80,8 @@ def test_decoded_graph_rejects_false_fiber_claims(changes: dict[str, object]) ->
     payload.update(changes)
     with pytest.raises(ValueError):
         AffineFiberGraph.model_validate(payload)
+
+
 def test_fiber_graph_tool_is_discoverable_and_round_trips() -> None:
     tool = next(
         item

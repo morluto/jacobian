@@ -203,13 +203,35 @@ def _rref_character_prefix(
     vectors: tuple[tuple[tuple[Fraction, ...], ...], ...],
     field: RationalCyclotomicField,
     precision: int,
+    *,
+    normalization_precision: int | None = None,
 ) -> tuple[tuple[RationalCyclotomicElement, ...], ...]:
-    """Canonical row frame of the backend subspace over its declared field."""
+    """Canonical row frame of the backend subspace over its declared field.
+
+    ``normalization_precision`` reduces the row frame over a shorter prefix
+    than it retains, so a caller that needs Sturm-normalized rows can keep the
+    higher-precision tail of every backend vector. Omitting it reproduces the
+    plain prefix reduction exactly.
+    """
+    retain_precision = normalization_precision is not None
+    if (
+        normalization_precision is not None
+        and not 1 <= normalization_precision <= precision
+    ):
+        raise ValueError(
+            "Sturm normalization precision must fit in the retained prefix"
+        )
+    if retain_precision and any(len(vector) < precision for vector in vectors):
+        raise RuntimeError("PARI character basis is shorter than the requested prefix")
     rows = [
-        [_coefficient(field, term) for term in vector[:precision]] for vector in vectors
+        [
+            _coefficient(field, term)
+            for term in (vector if retain_precision else vector[:precision])
+        ]
+        for vector in vectors
     ]
     pivot_row = 0
-    for column in range(precision):
+    for column in range(normalization_precision or precision):
         pivot = next(
             (
                 row

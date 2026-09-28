@@ -461,7 +461,6 @@ def _inverse_extension_element(
     inverse_translation = tuple(-value for value in _matvec(action_inverse, offset))
     return inverse_translation, inverse_holonomy
 
-
 def _admit_polytope_pairing(polytope: RationalVPolytope, pairing_count: int) -> None:
     """Preflight exact pairing work/output before the full facet enumeration."""
     dimension = len(polytope.space.axes)
@@ -577,6 +576,7 @@ def pair_crystallographic_polytope_facets(
             "affine realization, polytope, axes, and pairings must be canonical",
             ("source",),
         )
+    realization = affine_realization
     source, order, rank = _admit_and_validate(realization.source)
     if lattice_axes != polytope.space.axes or len(lattice_axes) != rank:
         _domain(

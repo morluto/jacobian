@@ -116,7 +116,6 @@ def test_oversized_pairing_coordinates_are_resource_refusals():
             request.pairings,
         )
 
-
 def _pair(request: CrystallographicPolytopePairingRequest):
     """Call the native pairing function with unpacked domain arguments."""
     return pair_crystallographic_polytope_facets(
@@ -203,6 +202,25 @@ def test_pairing_rejects_incomplete_ledger() -> None:
 
 def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:
     result = check_crystallographic_fundamental_domain(_pair(_request()))
+
+
+def test_pairing_operation_is_published_with_square_example() -> None:
+    tool = next(
+        tool
+        for tool in BUILTIN_TOOLS
+        if tool.operation_id
+        == "crystallographic.extension.polytope_facet_pairings.compute"
+    )
+
+    assert tool.examples[0].name == "unit_square_translation_pairings"
+    example_request = parse_operation_input(tool.request_type, tool.examples[0].input)
+    assert tool.run(example_request).facet_profile.dimension == 2
+
+
+def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:
+    result = check_crystallographic_fundamental_domain(
+        _pair(_request())
+    )
     assert result.is_fundamental_domain
     assert result.polytope_volume.as_fraction() == 1
     assert result.quotient_covolume.as_fraction() == 1
@@ -240,6 +258,9 @@ def test_width_two_square_fails_with_full_dimensional_translate_witness() -> Non
         update={"polytope": wide_polytope, "pairings": pairings}
     )
     result = check_crystallographic_fundamental_domain(_pair(wide_request))
+    result = check_crystallographic_fundamental_domain(
+        _pair(wide_request)
+    )
     assert not result.is_fundamental_domain
     assert result.overlap_translation is not None
     assert result.overlap_holonomy_element == 0
@@ -266,12 +287,18 @@ def test_off_origin_rational_square_is_fundamental_domain() -> None:
         update={"polytope": request.polytope.model_copy(update={"vertices": vertices})}
     )
     result = check_crystallographic_fundamental_domain(_pair(moved))
+    result = check_crystallographic_fundamental_domain(
+        _pair(moved)
+    )
     assert result.is_fundamental_domain
     assert result.polytope_volume.as_fraction() == 1
 
 
 def test_negative_fundamental_domain_result_requires_explanation() -> None:
     checked = check_crystallographic_fundamental_domain(_pair(_request()))
+    checked = check_crystallographic_fundamental_domain(
+        _pair(_request())
+    )
     forged = checked.model_dump()
     forged["is_fundamental_domain"] = False
 

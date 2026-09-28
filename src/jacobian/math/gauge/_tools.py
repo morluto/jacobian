@@ -10,6 +10,10 @@ from jacobian.math.gauge._models import (
     FiniteGroupGaugeCurvatureResult,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
+    FiniteGroupGaugeTransformRequest,
+    FiniteGroupGaugeTransformResult,
+    GaugeLoopFamilyHolonomies,
+    GaugeLoopFamilyRequest,
     GaugeTransformRequest,
     GaugeTransformResult,
     HolonomyRequest,
@@ -27,12 +31,19 @@ from jacobian.math.gauge.finite_group import (
     finite_group_gauge_basepoint_transport,
     finite_group_gauge_curvature,
     finite_group_gauge_holonomy,
+    finite_group_gauge_transform,
 )
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
 )
+from jacobian.math.gauge.finite_group_observables import (
+    FiniteGroupConjugacyProfile,
+    FiniteGroupConjugacyProfileRequest,
+    finite_group_holonomy_conjugacy_profile,
+)
 from jacobian.math.gauge.operations import (
     gauge_transform,
+    loop_family_holonomies,
     path_holonomy,
     plaquette_curvature,
 )
@@ -54,10 +65,10 @@ def _run_holonomy(request: HolonomyRequest) -> HolonomyResult:
     return path_holonomy(request.field, request.path)
 
 
-def _run_finite_group_holonomy(
-    request: FiniteGroupGaugeHolonomyRequest,
-) -> FiniteGroupGaugeHolonomyResult:
-    return finite_group_gauge_holonomy(request.field, request.path)
+def _run_loop_family(
+    request: GaugeLoopFamilyRequest,
+) -> GaugeLoopFamilyHolonomies:
+    return loop_family_holonomies(request.field, request.loops)
 
 
 def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformResult:
@@ -66,6 +77,12 @@ def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformRe
 
 def _run_su2_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
     return su2_path_holonomy(request.field, request.path)
+
+
+def _run_finite_group_conjugacy_profile(
+    request: FiniteGroupConjugacyProfileRequest,
+) -> FiniteGroupConjugacyProfile:
+    return finite_group_holonomy_conjugacy_profile(request)
 
 
 def _run_finite_group_basepoint_transport(
@@ -84,6 +101,12 @@ def _run_finite_group_curvature(
     request: FiniteGroupGaugeCurvatureRequest,
 ) -> FiniteGroupGaugeCurvatureResult:
     return finite_group_gauge_curvature(request)
+
+
+def _run_finite_group_transform(
+    request: FiniteGroupGaugeTransformRequest,
+) -> FiniteGroupGaugeTransformResult:
+    return finite_group_gauge_transform(request)
 
 
 _TRIANGLE_FIELD = {
@@ -109,6 +132,15 @@ _TRIANGLE_PATH = {
         {"edge_id": "ca", "forward": True},
     ]
 }
+_LOOP_FAMILY_FIELD = {
+    "lattice": _TRIANGLE_FIELD["lattice"],
+    "degree": 3,
+    "edge_labels": [
+        {"edge_id": "ab", "label": {"degree": 3, "image": [1, 0, 2]}},
+        {"edge_id": "bc", "label": {"degree": 3, "image": [0, 2, 1]}},
+        {"edge_id": "ca", "label": {"degree": 3, "image": [0, 1, 2]}},
+    ],
+}
 _TRIVIAL_FIELD = {
     "lattice": {
         "vertices": ["v"],
@@ -117,22 +149,12 @@ _TRIVIAL_FIELD = {
     "degree": 1,
     "edge_labels": [{"edge_id": "loop", "label": {"degree": 1, "image": [0]}}],
 }
-_CYCLIC_TWO_TABLE = {
-    "multiplication": [[0, 1], [1, 0]],
+
+_CYCLIC_THREE_GROUP = {
+    "multiplication": [[0, 1, 2], [1, 2, 0], [2, 0, 1]],
     "identity": 0,
-    "inverse": [0, 1],
+    "inverse": [0, 2, 1],
 }
-_FINITE_GROUP_FIELD = {
-    "lattice": {
-        "vertices": ["a", "b"],
-        "edges": [{"edge_id": "e1", "tail": "a", "head": "b"}],
-    },
-    "group": _CYCLIC_TWO_TABLE,
-    "edge_values": [
-        {"edge_id": "e1", "value": {"group": _CYCLIC_TWO_TABLE, "index": 1}},
-    ],
-}
-_FINITE_GROUP_PATH = {"steps": [{"edge_id": "e1", "forward": True}]}
 _SU2_IDENTITY = {
     "coordinates": [
         {"num": "1", "den": "1"},
@@ -199,6 +221,13 @@ _SU2_FIELD = {
     ],
 }
 _SU2_PATH = {"steps": [{"edge_id": f"e{i}", "forward": True} for i in range(4)]}
+
+
+def _run_finite_group_holonomy(
+    request: FiniteGroupGaugeHolonomyRequest,
+) -> FiniteGroupGaugeHolonomyResult:
+    return finite_group_gauge_holonomy(request.field, request.path)
+
 
 TOOLS = (
     MathTool(
@@ -309,6 +338,47 @@ TOOLS = (
         ),
     ),
     MathTool(
+        operation_id="lattice_gauge.loop_family.holonomies.compute",
+        title="Compute holonomies for an explicit finite family of loops",
+        description=(
+            "For one permutation-valued lattice gauge field and an explicit "
+            "bounded family of based closed paths, return each exact holonomy "
+            "with its path and basepoint. The result retains the source field "
+            "once; no loop search or family generation is performed."
+        ),
+        request_type=GaugeLoopFamilyRequest,
+        result_type=GaugeLoopFamilyHolonomies,
+        run=_run_loop_family,
+        tags=("lattice-gauge", "loop-family", "holonomy", "exact"),
+        discovery_terms=(
+            "finite family of lattice Wilson loops",
+            "multiple loop holonomies",
+            "lattice gauge loop profile",
+        ),
+        examples=(
+            OperationExample(
+                name="triangle_loop_family",
+                description=(
+                    "Evaluate the triangle loop and its reverse; the output "
+                    "keeps the shared field once and records each basepoint."
+                ),
+                input={
+                    "field": _LOOP_FAMILY_FIELD,
+                    "loops": [
+                        _TRIANGLE_PATH,
+                        {
+                            "steps": [
+                                {"edge_id": "ca", "forward": False},
+                                {"edge_id": "bc", "forward": False},
+                                {"edge_id": "ab", "forward": False},
+                            ]
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="lattice_gauge.finite_group.holonomy.compute",
         title="Compute path holonomy in an exact finite group table",
         description=(
@@ -327,12 +397,115 @@ TOOLS = (
         ),
         examples=(
             OperationExample(
-                name="cyclic_two_edge_holonomy",
-                description=(
-                    "Transport one non-identity C2 element along a single "
-                    "oriented edge; the ordered product is that element."
-                ),
-                input={"field": _FINITE_GROUP_FIELD, "path": _FINITE_GROUP_PATH},
+                name="s3_single_edge_holonomy",
+                description="Compute the holonomy along one edge in S3.",
+                input={
+                    "field": {
+                        "lattice": {
+                            "vertices": ["v", "w"],
+                            "edges": [{"edge_id": "e", "tail": "v", "head": "w"}],
+                        },
+                        "group": {
+                            "multiplication": [
+                                [0, 1, 2, 3, 4, 5],
+                                [1, 0, 3, 2, 5, 4],
+                                [2, 4, 0, 5, 1, 3],
+                                [3, 5, 1, 4, 0, 2],
+                                [4, 2, 5, 0, 3, 1],
+                                [5, 3, 4, 1, 2, 0],
+                            ],
+                            "identity": 0,
+                            "inverse": [0, 1, 2, 4, 3, 5],
+                        },
+                        "edge_values": [
+                            {
+                                "edge_id": "e",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [
+                                            [0, 1, 2, 3, 4, 5],
+                                            [1, 0, 3, 2, 5, 4],
+                                            [2, 4, 0, 5, 1, 3],
+                                            [3, 5, 1, 4, 0, 2],
+                                            [4, 2, 5, 0, 3, 1],
+                                            [5, 3, 4, 1, 2, 0],
+                                        ],
+                                        "identity": 0,
+                                        "inverse": [0, 1, 2, 4, 3, 5],
+                                    },
+                                    "index": 1,
+                                },
+                            }
+                        ],
+                    },
+                    "path": {"steps": [{"edge_id": "e", "forward": True}]},
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.holonomy.conjugacy_profile.compute",
+        title="Compute a finite-group loop holonomy conjugacy class",
+        description=(
+            "For a source-bound closed loop over a finite multiplication-table "
+            "group, return the complete exact conjugacy class of its holonomy. "
+            "Conjugates are canonical element indices in the retained group "
+            "parent; the least index is the class representative."
+        ),
+        request_type=FiniteGroupConjugacyProfileRequest,
+        result_type=FiniteGroupConjugacyProfile,
+        run=_run_finite_group_conjugacy_profile,
+        tags=("lattice-gauge", "finite-group", "holonomy", "conjugacy", "exact"),
+        discovery_terms=(
+            "finite-group Wilson conjugacy profile",
+            "conjugacy class of lattice loop holonomy",
+            "gauge-invariant finite-group loop observable",
+        ),
+        examples=(
+            OperationExample(
+                name="s3_closed_loop_conjugacy_class",
+                description="Compute the conjugacy class of a one-edge closed loop in S3.",
+                input={
+                    "field": {
+                        "lattice": {
+                            "vertices": ["v"],
+                            "edges": [{"edge_id": "e", "tail": "v", "head": "v"}],
+                        },
+                        "group": {
+                            "multiplication": [
+                                [0, 1, 2, 3, 4, 5],
+                                [1, 0, 3, 2, 5, 4],
+                                [2, 4, 0, 5, 1, 3],
+                                [3, 5, 1, 4, 0, 2],
+                                [4, 2, 5, 0, 3, 1],
+                                [5, 3, 4, 1, 2, 0],
+                            ],
+                            "identity": 0,
+                            "inverse": [0, 1, 2, 4, 3, 5],
+                        },
+                        "edge_values": [
+                            {
+                                "edge_id": "e",
+                                "value": {
+                                    "group": {
+                                        "multiplication": [
+                                            [0, 1, 2, 3, 4, 5],
+                                            [1, 0, 3, 2, 5, 4],
+                                            [2, 4, 0, 5, 1, 3],
+                                            [3, 5, 1, 4, 0, 2],
+                                            [4, 2, 5, 0, 3, 1],
+                                            [5, 3, 4, 1, 2, 0],
+                                        ],
+                                        "identity": 0,
+                                        "inverse": [0, 1, 2, 4, 3, 5],
+                                    },
+                                    "index": 1,
+                                },
+                            }
+                        ],
+                    },
+                    "path": {"steps": [{"edge_id": "e", "forward": True}]},
+                },
             ),
         ),
     ),
@@ -500,6 +673,61 @@ TOOLS = (
                         {
                             "face_id": "constant",
                             "boundary": {"steps": [], "basepoint": "v"},
+                        },
+                    ],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.gauge_transform.compute",
+        title="Transform a finite-table lattice gauge field",
+        description=(
+            "Apply U'_(u->v)=g_u U_(u->v) g_v^-1 to every edge using one "
+            "exact finite multiplication-table parent and one complete vertex "
+            "frame map. Products follow the same left-to-right order as path "
+            "holonomy; the result retains source, target, and canonical frames."
+        ),
+        request_type=FiniteGroupGaugeTransformRequest,
+        result_type=FiniteGroupGaugeTransformResult,
+        run=_run_finite_group_transform,
+        tags=("lattice-gauge", "finite-group", "gauge-transform", "exact"),
+        discovery_terms=(
+            "finite group lattice gauge transformation",
+            "transform table group edge field by vertex frames",
+        ),
+        examples=(
+            OperationExample(
+                name="cyclic_three_edge_frame_action",
+                description=(
+                    "On one edge in C3, the endpoint frames change link label "
+                    "1 to 2 by g_tail U g_head^-1."
+                ),
+                input={
+                    "field": {
+                        "lattice": {
+                            "vertices": ["u", "v"],
+                            "edges": [{"edge_id": "uv", "tail": "u", "head": "v"}],
+                        },
+                        "group": _CYCLIC_THREE_GROUP,
+                        "edge_values": [
+                            {
+                                "edge_id": "uv",
+                                "value": {
+                                    "group": _CYCLIC_THREE_GROUP,
+                                    "index": 1,
+                                },
+                            }
+                        ],
+                    },
+                    "vertex_values": [
+                        {
+                            "vertex": "u",
+                            "value": {"group": _CYCLIC_THREE_GROUP, "index": 1},
+                        },
+                        {
+                            "vertex": "v",
+                            "value": {"group": _CYCLIC_THREE_GROUP, "index": 0},
                         },
                     ],
                 },

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from fractions import Fraction
 
-from pydantic import ValidationError
-
 from jacobian._exact import canonical_rational_component_digits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -27,7 +25,6 @@ from jacobian.math.groups.characters._models import (
     MAX_CYCLOTOMIC_ORDER,
     MAX_GROUP_ORDER,
     MAX_VALUE_COEFFICIENT_DIGITS,
-    CharacterRingDecompositionRequest,
     CharacterRingDecompositionResult,
     CharacterRingElement,
     CyclotomicValue,
@@ -92,9 +89,7 @@ def _admit_output(
         + 2 * concrete_order * group.degree * 12
         + 65_536
     )
-    if (
-        output_allocation > MAX_CHARACTER_RING_DECOMPOSITION_ALLOCATION
-    ):
+    if output_allocation > MAX_CHARACTER_RING_DECOMPOSITION_ALLOCATION:
         raise OperationResourceAdmissionError(
             location=("class_function",),
             code="groups.characters.ring_decomposition_output_exceeds_envelope",
@@ -212,7 +207,7 @@ def _inner_product_value(
 
 
 def class_function_character_decomposition(
-    request: CharacterRingDecompositionRequest,
+    class_function: FiniteClassFunction,
 ) -> CharacterRingDecompositionResult:
     """Return exact irreducible coordinates when a bounded class function is virtual.
 
@@ -222,22 +217,7 @@ def class_function_character_decomposition(
     coordinates exactly when it is a virtual character in this complete
     orthonormal basis.
     """
-    if not isinstance(request, CharacterRingDecompositionRequest):
-        raise _invalid(
-            "groups.characters.ring_decomposition_request_type",
-            "request must be a character-ring decomposition request",
-            ("request",),
-        )
-    try:
-        request = CharacterRingDecompositionRequest.model_validate(request.model_dump())
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise _invalid(
-            "groups.characters.invalid_ring_decomposition_request",
-            "request has a malformed class function",
-            ("request",),
-        ) from exc
-
-    function = request.class_function
+    function = class_function
     source = function.axis.group
     if source is None:
         raise _invalid(
@@ -351,7 +331,7 @@ def class_function_character_decomposition(
 
 
 __all__ = [
-    "MAX_CHARACTER_RING_DECOMPOSITION_OUTPUT_BYTES",
+    "MAX_CHARACTER_RING_DECOMPOSITION_ALLOCATION",
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
     "class_function_character_decomposition",
 ]

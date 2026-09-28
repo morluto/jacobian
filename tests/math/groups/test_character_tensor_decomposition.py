@@ -10,7 +10,6 @@ from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
-from jacobian.math.groups.characters._models import CharacterTensorDecompositionRequest
 from jacobian.math.groups.characters.operations import character_tensor_decomposition
 from jacobian.math.groups.operations import group_conjugacy_classes
 

@@ -49,6 +49,9 @@ from jacobian.math.groups.characters.operations import (
     frobenius_schur_indicator,
     restrict_cyclic_character,
 )
+from jacobian.math.groups.characters.representation_ring_operations import (
+    class_function_character_decomposition,
+)
 
 
 def _run_inner_product(
@@ -256,6 +259,7 @@ _S3_PARTITION = _character_partition(
     ],
 )
 
+
 def _run_tensor_decomposition(
     request: CharacterTensorDecompositionRequest,
 ) -> CharacterTensorDecompositionResult:
@@ -263,10 +267,11 @@ def _run_tensor_decomposition(
         request.partition, request.left_row_index, request.right_row_index
     )
 
+
 def _run_character_ring_decomposition(
     request: CharacterRingDecompositionRequest,
 ) -> CharacterRingDecompositionResult:
-    return class_function_character_decomposition(request)
+    return class_function_character_decomposition(request.class_function)
 
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
@@ -703,7 +708,6 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             ),
         ),
     ),
-
     MathTool(
         operation_id="finite_group.class_function.character_ring_decompose.compute",
         title="Express a class function in a bounded character basis",

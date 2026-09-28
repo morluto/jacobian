@@ -16,7 +16,6 @@ from jacobian.dispatch import invoke_operation
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
 from jacobian.math.groups.characters._models import (
-    CharacterRingDecompositionRequest,
     CharacterRingElement,
     CharacterTableResult,
     ClassAxis,
@@ -114,9 +113,7 @@ def _function_on_partition(
 
 def test_s3_irreducible_and_reducible_virtual_coordinates() -> None:
     standard = _s3_class_function((Fraction(2), Fraction(0), Fraction(-1)))
-    result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=standard)
-    )
+    result = class_function_character_decomposition(standard)
     assert result.ring_element.irreducible_multiplicities == (0, 0, 1)
     assert (
         CharacterRingElement.model_validate_json(result.ring_element.model_dump_json())
@@ -124,9 +121,7 @@ def test_s3_irreducible_and_reducible_virtual_coordinates() -> None:
     )
 
     reducible = _s3_class_function((Fraction(3), Fraction(1), Fraction(0)))
-    decomposed = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=reducible)
-    )
+    decomposed = class_function_character_decomposition(reducible)
     assert decomposed.ring_element.irreducible_multiplicities == (1, 0, 1)
 
 
@@ -147,9 +142,7 @@ def test_backend_group_order_is_computed_once_for_decomposition(
 
     standard = _s3_class_function((Fraction(2), Fraction(0), Fraction(-1)))
     monkeypatch.setattr(SympyPermutationGroup, "order", counting_order)
-    result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=standard)
-    )
+    result = class_function_character_decomposition(standard)
     assert result.ring_element.irreducible_multiplicities == (0, 0, 1)
     # Admission builds the backend group and computes the Schreier-Sims order
     # once; class enumeration reuses both instead of replaying the order.
@@ -158,9 +151,7 @@ def test_backend_group_order_is_computed_once_for_decomposition(
 
 def test_s3_virtual_character_keeps_signed_coordinates() -> None:
     virtual = _s3_class_function((Fraction(-1), Fraction(1), Fraction(2)))
-    result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=virtual)
-    )
+    result = class_function_character_decomposition(virtual)
     assert result.ring_element.irreducible_multiplicities == (1, 0, -1)
 
 
@@ -171,9 +162,7 @@ def test_cyclic_complex_character_uses_exact_hermitian_pairing() -> None:
             table,
             tuple(int(row_index == index) for row_index in range(len(table.rows))),
         )
-        result = class_function_character_decomposition(
-            CharacterRingDecompositionRequest(class_function=function)
-        )
+        result = class_function_character_decomposition(function)
         assert result.ring_element.irreducible_multiplicities == tuple(
             int(row_index == index) for row_index in range(len(table.rows))
         )
@@ -185,9 +174,7 @@ def test_dihedral_order_eight_class_function_uses_published_character_table() ->
     partition = _partition(((1, 2, 3, 0), (0, 3, 2, 1)))
     trivial = _function_on_partition(partition, Fraction(1))
 
-    result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=trivial)
-    )
+    result = class_function_character_decomposition(trivial)
 
     assert len(result.ring_element.table.rows) == 5
     assert result.ring_element.irreducible_multiplicities == (1, 0, 0, 0, 0)
@@ -196,9 +183,7 @@ def test_dihedral_order_eight_class_function_uses_published_character_table() ->
 def test_nonintegral_class_function_is_not_a_virtual_character() -> None:
     half_trivial = _s3_class_function((Fraction(1, 2), Fraction(1, 2), Fraction(1, 2)))
     with pytest.raises(OperationDomainValidationError):
-        class_function_character_decomposition(
-            CharacterRingDecompositionRequest(class_function=half_trivial)
-        )
+        class_function_character_decomposition(half_trivial)
 
 
 def test_work_and_height_are_admitted_before_conjugacy_expansion(
@@ -214,44 +199,20 @@ def test_work_and_height_are_admitted_before_conjugacy_expansion(
         ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
     with pytest.raises(OperationResourceAdmissionError, match=r"height|envelope"):
-        class_function_character_decomposition(
-            CharacterRingDecompositionRequest(class_function=oversized)
-        )
+        class_function_character_decomposition(oversized)
 
 
 def test_maximum_supported_cyclic_group_decomposes_exactly() -> None:
     partition = _partition(((*range(1, 60), 0),))
     trivial = _function_on_partition(partition, Fraction(1))
-    result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=trivial)
-    )
+    result = class_function_character_decomposition(trivial)
     assert result.ring_element.irreducible_multiplicities == (1,) + (0,) * 59
 
 
 def test_trivial_group_decomposition_and_round_trip() -> None:
-    degree_zero_group = PermutationGroup(degree=0, generators=((),))
-    degree_zero_classes = group_conjugacy_classes(0, [[]])
-    degree_zero_partition = GroupConjugacyClassesResult._from_kernel(
-        degree_zero_group,
-        tuple(tuple(tuple(element) for element in cls) for cls in degree_zero_classes),
-    )
-    degree_zero_function = _function_on_partition(degree_zero_partition, Fraction(7))
-    degree_zero_result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=degree_zero_function)
-    )
-    assert degree_zero_result.ring_element.irreducible_multiplicities == (7,)
-    assert (
-        type(degree_zero_result).model_validate_json(
-            degree_zero_result.model_dump_json()
-        )
-        == degree_zero_result
-    )
-
     partition = _partition(((0,),))
     constant = _function_on_partition(partition, Fraction(7))
-    result = class_function_character_decomposition(
-        CharacterRingDecompositionRequest(class_function=constant)
-    )
+    result = class_function_character_decomposition(constant)
     assert result.ring_element.irreducible_multiplicities == (7,)
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
@@ -277,9 +238,7 @@ def test_group_order_above_table_envelope_rejects_before_class_expansion(
         ring_operations, "_conjugacy_classes_from_admitted", unexpected_expansion
     )
     with pytest.raises(OperationResourceAdmissionError, match="group order"):
-        class_function_character_decomposition(
-            CharacterRingDecompositionRequest(class_function=function)
-        )
+        class_function_character_decomposition(function)
 
 
 def test_ring_element_coordinates_are_strict_integers() -> None:

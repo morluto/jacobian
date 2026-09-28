@@ -2505,8 +2505,45 @@ MAX_CHARACTER_TENSOR_INNER_WORK = 50_000_000
 MAX_CHARACTER_TENSOR_ALLOCATION = 2_000_000
 
 
+def _predict_pointwise_heights(
+    heights: list[tuple[_InputHeight, _InputHeight]],
+    *,
+    dimension: int,
+) -> list[_InputHeight]:
+    """Predict the per-class coefficient height of the exact pointwise product.
+
+    Each class cell is a sum of at most ``dimension`` rational products reduced
+    through at most ``dimension-1`` monic cyclotomic steps, so the widest cell
+    bounds the inner-product work charged below.
+    """
+    reduction_digits = MAX_CYCLOTOMIC_REDUCTION_COEFFICIENT_DIGITS
+    predicted: list[_InputHeight] = []
+    for left_height, right_height in heights:
+        denominator = _bounded_product(
+            left_height.denominator, right_height.denominator
+        )
+        if denominator is None:
+            raise OperationResourceAdmissionError(
+                location=("partition",),
+                code="groups.characters.tensor_product_height",
+                message="predicted product denominator exceeds the exact coefficient envelope",
+            )
+        predicted.append(
+            _InputHeight(
+                denominator=denominator,
+                lifted_numerator_digits=(
+                    left_height.lifted_numerator_digits
+                    + right_height.lifted_numerator_digits
+                    + (len(str(dimension - 1)) if dimension > 1 else 0)
+                    + max(0, dimension - 1) * reduction_digits
+                ),
+            )
+        )
+    return predicted
+
+
 def character_tensor_decomposition(
-    partition: GroupConjugacyClassesResult | Any,
+    partition: GroupConjugacyClassesResult,
     left_row_index: int,
     right_row_index: int,
 ) -> CharacterTensorDecompositionResult:
@@ -2555,9 +2592,10 @@ def character_tensor_decomposition(
     pointwise_inputs = _admit_pointwise_inputs(
         left, right, class_count=3, dimension=dimension
     )
-    product_heights = _admit_pointwise_output(
+    _admit_pointwise_output(
         pointwise_inputs, dimension=dimension, output_cells=3 * dimension
     )
+    product_heights = _predict_pointwise_heights(pointwise_inputs, dimension=dimension)
     if any(height.denominator != 1 for height in product_heights):
         raise OperationResourceAdmissionError(
             location=("partition",),
@@ -2615,7 +2653,7 @@ def character_tensor_decomposition(
     group_bytes = 512 + generator_count * (degree * 8 + 16)
     structure_bytes = 3 * group_bytes + 12 * degree * 8 + 128_000
     value_bytes = 12 * dimension * (2 * MAX_VALUE_COEFFICIENT_DIGITS + 24)
-    if structure_bytes + value_bytes > MAX_CHARACTER_TENSOR_OUTPUT_BYTES:
+    if structure_bytes + value_bytes > MAX_CHARACTER_TENSOR_ALLOCATION:
         raise OperationResourceAdmissionError(
             location=("partition",),
             code="groups.characters.tensor_output_exceeds_envelope",
@@ -2663,8 +2701,6 @@ def character_tensor_decomposition(
 MAX_CHARACTER_TENSOR_INNER_WORK = 50_000_000
 
 
-
-
 def _admit_s3_tensor_partition(candidate: object) -> GroupConjugacyClassesResult:
     """Check cheap S3 shape and concrete order before authenticating classes."""
     classes = getattr(candidate, "classes", None)
@@ -2692,7 +2728,7 @@ def _admit_s3_tensor_partition(candidate: object) -> GroupConjugacyClassesResult
     from jacobian.math.groups.operations import _admitted_backend_group
 
     try:
-        backend, source_order = _admitted_backend_group(candidate.source)
+        _backend, source_order = _admitted_backend_group(candidate.source)
     except (TypeError, ValueError, AttributeError, KeyError, IndexError) as exc:
         raise OperationDomainValidationError(
             location=("partition", "source"),
@@ -2705,4 +2741,56 @@ def _admit_s3_tensor_partition(candidate: object) -> GroupConjugacyClassesResult
             code="groups.characters.tensor_group_unsupported",
             message="tensor decomposition currently supports only S3 groups",
         )
-    return _admit_character_partition(candidate)
+    return _authenticate_s3_partition(candidate)
+
+
+def _conjugate(element: tuple[int, ...], by: tuple[int, ...]) -> tuple[int, ...]:
+    """Conjugate ``element`` by ``by`` under the map-permutation convention."""
+    inverse = [0] * len(by)
+    for index, image in enumerate(by):
+        inverse[image] = index
+    return tuple(by[element[inverse[index]]] for index in range(len(by)))
+
+
+def _authenticate_s3_partition(
+    candidate: GroupConjugacyClassesResult,
+) -> GroupConjugacyClassesResult:
+    """Authenticate the claimed classes against the admitted order-six source.
+
+    The source order is already established, so the three disjoint claimed
+    classes account for every element. Each is checked to be closed under
+    conjugation by every generator, which makes each exactly one conjugacy
+    class without recomputing the order or re-deriving the partition.
+    """
+    source = candidate.source
+    generators = tuple(
+        tuple(int(image) for image in generator)
+        for generator in getattr(source, "generators", ())
+    )
+    claimed = [frozenset(cls) for cls in candidate.classes]
+    distinct: set[tuple[int, ...]] = set()
+    for cls in claimed:
+        if distinct & cls:
+            raise OperationDomainValidationError(
+                location=("partition", "classes"),
+                code="groups.characters.tensor_group_unsupported",
+                message="claimed classes overlap",
+            )
+        distinct |= cls
+    if len(distinct) != 6 or sum(len(cls) for cls in claimed) != 6:
+        raise OperationDomainValidationError(
+            location=("partition", "classes"),
+            code="groups.characters.tensor_group_unsupported",
+            message="claimed classes do not partition the source group",
+        )
+    for cls in claimed:
+        if any(
+            frozenset(_conjugate(_conjugate(left, right), right) for left in cls) != cls
+            for right in generators
+        ):
+            raise OperationDomainValidationError(
+                location=("partition", "classes"),
+                code="groups.characters.tensor_group_unsupported",
+                message="claimed classes are not closed under conjugation",
+            )
+    return candidate

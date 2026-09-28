@@ -89,7 +89,10 @@ def test_loop_path_conjugates_free_generators_and_composes_with_its_inverse():
     assert tuple(_letters(word) for word in round_trip.generator_images) == tuple(
         _letters(word) for word in identity_at_a.generator_images
     )
-    assert round_trip.abelianization_map.entries == identity_at_a.abelianization_map.entries
+    assert (
+        round_trip.abelianization_map.entries
+        == identity_at_a.abelianization_map.entries
+    )
 
 
 def test_path_morphism_serializes_and_binds_exact_basepoints():

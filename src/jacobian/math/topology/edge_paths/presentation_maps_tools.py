@@ -4,8 +4,15 @@ from typing import Any
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.topology._models import canonical_complex
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
-from jacobian.math.topology.edge_paths._models import FundamentalGroupMapRequest
+from jacobian.math.topology.edge_paths._models import (
+    FundamentalGroupBasepointChangeRequest,
+    FundamentalGroupMapRequest,
+)
 from jacobian.math.topology.edge_paths.presentation_maps import *
+
+
+def _run_basepoint_change(request: FundamentalGroupBasepointChangeRequest) -> Any:
+    return change_fundamental_group_basepoint(request)
 
 
 def _run(r: Any) -> Any:
@@ -90,6 +97,44 @@ TOOLS = (
                 input={
                     "first": _IDENTITY_MAP_RESULT,
                     "second": _IDENTITY_MAP_RESULT,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="topology.simplicial.fundamental_group.basepoint_change.compute",
+        title="Transport a fundamental-group presentation along an edge path",
+        description=(
+            "Given one finite simplicial complex and an explicit edge path p "
+            "from basepoint b0 to b1, return the based isomorphism sending each "
+            "loop a at b0 to p^-1 a p at b1. The result retains the path, exact "
+            "source and target presentations, generator words, target-relator "
+            "conjugacy witnesses, and the induced integer abelianization map. "
+            "The typed morphism composes with other based presentation maps."
+        ),
+        request_type=FundamentalGroupBasepointChangeRequest,
+        result_type=FundamentalGroupMapResult,
+        run=_run_basepoint_change,
+        tags=("topology", "fundamental-group", "basepoint-change", "exact"),
+        discovery_terms=(
+            "fundamental group change of basepoint path",
+            "basepoint transport isomorphism on pi1",
+            "conjugate loop under a basepoint path",
+        ),
+        examples=(
+            OperationExample(
+                name="circle_basepoint_change",
+                description=(
+                    "Transport the canonical fundamental-group generator of a "
+                    "3-edge circle along one edge."
+                ),
+                input={
+                    "path": {
+                        "complex": _CIRCLE,
+                        "source_base_vertex": "a",
+                        "target_base_vertex": "b",
+                        "path_vertices": ["a", "b"],
+                    }
                 },
             ),
         ),

@@ -10,6 +10,7 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -17,17 +18,19 @@ from jacobian.catalog.models import (
 from jacobian.math.number_theory._kempner_models import KempnerDigitSet
 from jacobian.math.number_theory.kempner import (
     enclose_kempner_series,
+    enclose_kempner_series_decimal,
     require_series_admission,
 )
 from jacobian.math.number_theory.kempner._models import (
     MAX_KEMPNER_SERIES_NUMERALS,
+    KempnerDecimalEnclosure,
+    KempnerDecimalEnclosureRequest,
     KempnerSeriesEnclosure,
     KempnerSeriesEnclosureRequest,
 )
 from jacobian.math.number_theory.kempner._tools import TOOLS
 from jacobian.math.number_theory.kempner.operations import (
     _family_lcm_digit_bound,
-    enclose_kempner_series_decimal,
 )
 
 
@@ -192,6 +195,23 @@ def test_dense_catalog_operation_round_trips_exact_interval() -> None:
     assert isinstance(result, KempnerSeriesEnclosure)
     assert (
         KempnerSeriesEnclosure.model_validate_json(result.model_dump_json()) == result
+    )
+
+
+def test_fixed_point_dense_operation_is_published_and_native_exported() -> None:
+    digit_set = KempnerDigitSet(base=4, allowed_digits=(0, 1, 2))
+    request = KempnerDecimalEnclosureRequest(digit_set=digit_set, cutoff=3, precision=8)
+    native = enclose_kempner_series_decimal(digit_set, 3, 8)
+    tool = Catalog.open().operation("number_theory.kempner_series.enclose_decimal")
+    assert tool is not None
+
+    published = tool.run(request)
+
+    assert isinstance(published, KempnerDecimalEnclosure)
+    assert published == native
+    assert (
+        KempnerDecimalEnclosure.model_validate_json(published.model_dump_json())
+        == published
     )
 
 

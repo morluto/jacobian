@@ -103,6 +103,12 @@ MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK = 8_000_000
 # before the table is built, so admission never depends on a serialized
 # transport size that a consumer's decoder may choose differently.
 MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS = 6_000_000
+# Reversal preserves words and coefficients, so its allocation envelope counts
+# stored alphabet scalar cells, word-letter cells, coefficient digit cells, and
+# fixed per-term allowances. It bounds the canonical result's cardinality, not
+# a serialized transport size.
+MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK = 4_000_000
+MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_CELLS = 2_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:

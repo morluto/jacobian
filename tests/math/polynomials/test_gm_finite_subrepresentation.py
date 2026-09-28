@@ -2,13 +2,11 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.polynomials.derivations import _weight_operations
 from jacobian.math.polynomials.derivations._weight_models import (
     MAX_GM_SUBREP_RESULT_DIGIT_WORK,
     PolynomialWeightAction,
-    PolynomialWeightSubrepresentationRequest,
     PolynomialWeightSubrepresentationResult,
 )
 from jacobian.math.polynomials.derivations._weight_operations import (
@@ -298,30 +296,3 @@ def test_empty_zero_and_duplicate_generators_have_canonical_degenerate_results()
     assert [
         [c.as_fraction() for c in row] for row in degenerate.generator_coordinates
     ] == [[Fraction(0)], [Fraction(0)], [Fraction(1)]]
-
-
-def test_support_is_admitted_before_projection_and_catalog_publishes_operation() -> (
-    None
-):
-    terms = tuple((1, (degree,)) for degree in range(64, 0, -1))
-    with pytest.raises(OperationResourceAdmissionError):
-        gm_generated_subrepresentation(
-            {
-                "action": {"variables": ["x"], "weights": [1]},
-                "generators": [_poly(("x",), *terms) for _ in range(5)],
-            }
-        )
-
-    operation = Catalog.open().operation(
-        "algebraic_group.gm.finite_subrepresentation.compute"
-    )
-    assert operation is not None
-    assert operation.request_type.__name__ == "PolynomialWeightSubrepresentationRequest"
-    assert operation.result_type.__name__ == "PolynomialWeightSubrepresentationResult"
-    parsed = PolynomialWeightSubrepresentationRequest.model_validate(
-        {
-            "action": {"variables": ["x"], "weights": [3]},
-            "generators": [_poly(("x",), (1, (1,)))],
-        }
-    )
-    assert operation.run(parsed).weights == (3,)

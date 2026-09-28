@@ -184,10 +184,14 @@ class TreeContextPlugResult(TreeContextPlugRequest):
 
     @classmethod
     def _from_kernel(
-        cls, request: TreeContextPlugRequest, *, plugged_tree: RankedTree
+        cls,
+        *,
+        context: FiniteTreeContext,
+        tree: RankedTree,
+        plugged_tree: RankedTree,
     ) -> Self:
         return cls.model_construct(
-            context=request.context, tree=request.tree, plugged_tree=plugged_tree
+            context=context, tree=tree, plugged_tree=plugged_tree
         )
 
 
@@ -221,6 +225,7 @@ class TreeContextStateMapResult(TreeContextStateMapRequest):
         return cls.model_construct(
             automaton=automaton, context=context, state_map=state_map
         )
+
 
 class TreeContextTransformationMonoidRequest(StrictModel):
     """Bound exact closure of all context-induced state maps."""
@@ -966,6 +971,8 @@ __all__ = [
     "TreeAutomatonMinimizeRequest",
     "TreeAutomatonMinimizeResult",
     "TreeAutomatonReachabilityRequest",
+    "TreeAutomatonToRegularTreeGrammarRequest",
+    "TreeAutomatonToRegularTreeGrammarResult",
     "TreeAutomatonTrimRequest",
     "TreeAutomatonTrimResult",
     "TreeDeterminizeRequest",
@@ -975,3 +982,22 @@ __all__ = [
     "TreeStateChartEntry",
     "TreeStateWitness",
 ]
+
+
+class TreeAutomatonToRegularTreeGrammarRequest(StrictModel):
+    """Construct a unit-free regular grammar for a finite tree automaton."""
+
+    automaton: BottomUpTreeAutomaton
+
+
+class TreeAutomatonToRegularTreeGrammarResult(StrictModel):
+    """Source-bound grammar denoting exactly the source automaton language."""
+
+    automaton: BottomUpTreeAutomaton
+    grammar: RegularTreeGrammar
+
+    @classmethod
+    def _from_kernel(
+        cls, *, automaton: BottomUpTreeAutomaton, grammar: RegularTreeGrammar
+    ) -> Self:
+        return cls.model_construct(automaton=automaton, grammar=grammar)

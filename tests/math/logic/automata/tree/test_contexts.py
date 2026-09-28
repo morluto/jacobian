@@ -6,10 +6,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.logic.automata.tree._models import (
-    TreeContextPlugRequest,
-    TreeContextStateMapRequest,
-)
 from jacobian.math.logic.automata.tree.contexts import (
     FiniteTreeContext,
     TreeContextFrame,
@@ -23,6 +19,21 @@ from jacobian.math.logic.automata.tree.values import (
     RankedTree,
     TreeAutomatonTransition,
 )
+
+
+def test_context_accepts_canonical_frames_and_sibling_values():
+    sibling = RankedTree(symbol=0)
+    frame = TreeContextFrame(symbol=1, hole_child=0, siblings=(sibling,))
+    context = FiniteTreeContext(arity=(0, 2), frames=(frame,))
+    assert context.frames == (frame,)
+    assert context.frames[0].siblings == (sibling,)
+
+
+def test_context_rejects_nested_arity_entries_before_canonicalization():
+    with pytest.raises(
+        ValueError, match="context arities must be in the supported range"
+    ):
+        FiniteTreeContext.model_validate({"arity": [[0] * 10000], "frames": []})
 
 
 def test_context_plugging_preserves_ranked_tree_structure():
@@ -42,9 +53,7 @@ def test_context_plugging_preserves_ranked_tree_structure():
         }
     )
     leaf = RankedTree(symbol=0, children=())
-    result = plug_tree_context_operation(
-        TreeContextPlugRequest(context=context, tree=leaf)
-    )
+    result = plug_tree_context_operation(context, leaf)
     assert result.plugged_tree == RankedTree(
         symbol=2,
         children=(
@@ -52,6 +61,18 @@ def test_context_plugging_preserves_ranked_tree_structure():
             RankedTree(symbol=1, children=(leaf,)),
         ),
     )
+
+
+def test_plug_admits_result_depth_using_hole_path_and_fixed_siblings():
+    sibling = RankedTree(symbol=0)
+    for _ in range(126):
+        sibling = RankedTree(symbol=1, children=(sibling,))
+    context = FiniteTreeContext(
+        arity=(0, 1, 2),
+        frames=({"symbol": 2, "hole_child": 0, "siblings": (sibling,)},),
+    )
+    result = plug_tree_context_operation(context, RankedTree(symbol=0))
+    assert result.plugged_tree.children[1] == sibling
 
 
 def test_induced_state_map_matches_independent_direct_evaluation():
@@ -130,9 +151,7 @@ def test_context_rank_mismatch_and_plug_growth_are_rejected():
     )
     tree = RankedTree(symbol=1, children=(oversized,))
     with pytest.raises(OperationResourceAdmissionError):
-        plug_tree_context_operation(
-            TreeContextPlugRequest(context=large_context, tree=tree)
-        )
+        plug_tree_context_operation(large_context, tree)
 
 
 def test_native_operations_revalidate_forged_nested_values():
@@ -140,11 +159,8 @@ def test_native_operations_revalidate_forged_nested_values():
         arity=(0, 2),
         frames=(TreeContextFrame.model_construct(symbol=1, hole_child=0, siblings=()),),
     )
-    plug_request = TreeContextPlugRequest.model_construct(
-        context=forged_context, tree=RankedTree(symbol=0)
-    )
     with pytest.raises(OperationDomainValidationError):
-        plug_tree_context_operation(plug_request)
+        plug_tree_context_operation(forged_context, RankedTree(symbol=0))
 
     machine = CompleteDeterministicBottomUpTreeAutomaton(
         state_count=1,
@@ -154,11 +170,8 @@ def test_native_operations_revalidate_forged_nested_values():
         ),
         final_states=(0,),
     )
-    state_request = TreeContextStateMapRequest.model_construct(
-        automaton=machine, context=forged_context
-    )
     with pytest.raises(OperationDomainValidationError):
-        map_tree_context_states(state_request.automaton, state_request.context)
+        map_tree_context_states(machine, forged_context)
 
 
 def test_context_json_admission_bounds_tree_growth_before_parsing():
@@ -179,14 +192,13 @@ def test_native_tree_and_context_bounds_run_before_serialization(monkeypatch):
     for _ in range(128):
         tree = RankedTree.model_construct(symbol=1, children=(tree,))
     context = FiniteTreeContext(arity=(0, 1), frames=())
-    request = TreeContextPlugRequest.model_construct(context=context, tree=tree)
 
     def serialization_must_not_run(*_args, **_kwargs):
         raise AssertionError("oversized value was serialized before admission")
 
     monkeypatch.setattr(RankedTree, "model_dump", serialization_must_not_run)
     with pytest.raises(OperationResourceAdmissionError):
-        plug_tree_context_operation(request)
+        plug_tree_context_operation(context, tree)
 
 
 def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
@@ -200,9 +212,6 @@ def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
         final_states=(0,),
     )
     context = FiniteTreeContext(arity=(0,), frames=())
-    request = TreeContextStateMapRequest.model_construct(
-        automaton=automaton, context=context
-    )
 
     def serialization_must_not_run(*_args, **_kwargs):
         raise AssertionError("oversized value was serialized before admission")
@@ -213,7 +222,7 @@ def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
         serialization_must_not_run,
     )
     with pytest.raises(OperationResourceAdmissionError):
-        map_tree_context_states(request.automaton, request.context)
+        map_tree_context_states(automaton, context)
 
     sibling = RankedTree.model_construct(symbol=0, children=())
     for _ in range(128):
@@ -226,9 +235,6 @@ def test_state_map_bounds_automaton_rows_before_serialization(monkeypatch):
             ),
         ),
     )
-    request = TreeContextPlugRequest.model_construct(
-        context=oversized_context, tree=RankedTree(symbol=0)
-    )
     monkeypatch.setattr(FiniteTreeContext, "model_dump", serialization_must_not_run)
     with pytest.raises(OperationResourceAdmissionError):
-        plug_tree_context_operation(request)
+        plug_tree_context_operation(oversized_context, RankedTree(symbol=0))

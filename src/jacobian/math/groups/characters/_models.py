@@ -717,6 +717,13 @@ class CharacterRingDecompositionRequest(StrictModel):
     class_function: FiniteClassFunction
 
 
+class CharacterTensorProductRequest(StrictModel):
+    """Multiply two virtual characters in one authenticated finite-group basis."""
+
+    left: CharacterRingElement
+    right: CharacterRingElement
+
+
 class CharacterRingDecompositionResult(StrictModel):
     """Virtual-character coordinates of one class function in a complete table."""
 

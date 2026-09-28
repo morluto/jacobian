@@ -39,6 +39,9 @@ from jacobian.math.groups.characters.operations import (
     restrict_cyclic_character,
 )
 from jacobian.math.groups.characters.representation_ring_operations import (
+    character_tensor_product,
+)
+from jacobian.math.groups.characters.representation_ring_operations import (
     class_function_character_decomposition as character_ring_decomposition,
 )
 
@@ -63,6 +66,7 @@ __all__ = [
     "character_ring_decomposition",
     "character_table",
     "character_tensor_decomposition",
+    "character_tensor_product",
     "class_function_add",
     "class_function_conjugate",
     "class_function_induce_from_subgroup",

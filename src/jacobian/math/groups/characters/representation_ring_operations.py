@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from fractions import Fraction
 
 from jacobian._exact import canonical_rational_component_digits
@@ -27,6 +28,7 @@ from jacobian.math.groups.characters._models import (
     MAX_VALUE_COEFFICIENT_DIGITS,
     CharacterRingDecompositionResult,
     CharacterRingElement,
+    CharacterTableResult,
     CyclotomicValue,
     FiniteClassFunction,
 )
@@ -35,6 +37,7 @@ from jacobian.math.groups.characters.operations import (
     _character_table_from_admitted_partition,
     _fractions,
     _make_value,
+    class_function_pointwise_product,
 )
 from jacobian.math.groups.operations import (
     _admitted_backend_group,
@@ -335,3 +338,178 @@ __all__ = [
     "MAX_CHARACTER_RING_DECOMPOSITION_WORK",
     "class_function_character_decomposition",
 ]
+
+
+def _admit_source_group_order(source: PermutationGroup) -> int:
+    """Derive the concrete group order from the source permutations alone.
+
+    The retained partition cannot be trusted to describe the group's size, so
+    the order is computed here from the generators only, and rejected once it
+    exceeds the character envelope. This runs before any backend group work so
+    an oversized group is refused without paying for that work.
+    """
+
+    degree = source.degree
+    support = tuple(
+        point
+        for point in range(degree)
+        if any(generator[point] != point for generator in source.generators)
+    )
+    if not support:
+        return 1
+    position = {point: index for index, point in enumerate(support)}
+    compressed = tuple(
+        sorted(
+            {
+                tuple(position[generator[point]] for point in support)
+                for generator in source.generators
+            }
+        )
+    )
+    active = len(support)
+    if len(compressed) == 1:
+        permutation = compressed[0]
+        visited: set[int] = set()
+        order = 1
+        for point in range(active):
+            if point in visited:
+                continue
+            current = point
+            length = 0
+            while current not in visited:
+                visited.add(current)
+                current = permutation[current]
+                length += 1
+            order = math.lcm(order, length)
+        return order
+    identity = tuple(range(active))
+    known = {identity}
+    pending = [identity]
+    while pending:
+        current_permutation = pending.pop()
+        for generator in compressed:
+            candidate = tuple(
+                generator[current_permutation[index]] for index in range(active)
+            )
+            if candidate not in known:
+                known.add(candidate)
+                if len(known) > MAX_CYCLOTOMIC_ORDER:
+                    raise OperationResourceAdmissionError(
+                        location=("left", "table", "partition", "source"),
+                        code="groups.characters.tensor_product_group_order_exceeds_envelope",
+                        message=(
+                            "tensor products currently admit group order at most "
+                            f"{MAX_CYCLOTOMIC_ORDER}"
+                        ),
+                    )
+                pending.append(candidate)
+    return len(known)
+
+
+def _expand_ring_element(
+    element: CharacterRingElement,
+    table: CharacterTableResult,
+) -> FiniteClassFunction:
+    """Expand exact irreducible coordinates into a class function."""
+
+    classes = len(table.axis.class_sizes)
+    dimension = euler_phi(table.axis.cyclotomic_order)
+    values = []
+    for index in range(classes):
+        coefficients = [Fraction(0) for _ in range(dimension)]
+        for multiplicity, row in zip(
+            element.irreducible_multiplicities, table.rows, strict=True
+        ):
+            for basis, value in enumerate(row.values[index].coefficients):
+                coefficients[basis] += multiplicity * value.as_fraction()
+        values.append(_make_value(table.axis.cyclotomic_order, tuple(coefficients)))
+    return FiniteClassFunction._from_kernel(axis=table.axis, values=tuple(values))
+
+
+def character_tensor_product(
+    left: CharacterRingElement,
+    right: CharacterRingElement,
+) -> CharacterRingElement:
+    """Return exact irreducible coordinates of a bounded virtual-character product.
+
+    Both factors must retain the exact canonical character table of the same
+    concrete group. Coordinates need not be nonnegative, so virtual characters
+    and their products are admitted alongside genuine ones.
+
+    The product is formed as a class function and then decomposed with the
+    existing ring-decomposition kernel, so table authentication, group-order
+    admission, and output admission are shared rather than re-derived.
+    """
+
+    for value, name in ((left, "left"), (right, "right")):
+        if type(value) is not CharacterRingElement:
+            raise _invalid(
+                "groups.characters.tensor_product_input_type",
+                "both factors must be table-bound virtual-character ring elements",
+                (name,),
+            )
+    if left.table.partition.source != right.table.partition.source:
+        raise _invalid(
+            "groups.characters.tensor_product_parent_mismatch",
+            "both virtual characters must have the same concrete group parent",
+            ("right", "table", "partition", "source"),
+        )
+    table = left.table
+    if right.table != table:
+        raise _invalid(
+            "groups.characters.tensor_product_noncanonical_table",
+            "both factors must retain the exact canonical character table",
+            ("right", "table"),
+        )
+    # Re-admit both element shapes before expansion. A model-constructed
+    # element bypasses the model's own validator, so the coordinate count and
+    # width must be re-checked here: the expansion below indexes every
+    # coordinate against every table row, and a forged count or an over-wide
+    # coordinate would otherwise drive unbounded exact arithmetic.
+    for element, name in ((left, "left"), (right, "right")):
+        coordinates = getattr(element, "irreducible_multiplicities", None)
+        if not isinstance(coordinates, tuple) or len(coordinates) != len(table.rows):
+            raise _invalid(
+                "groups.characters.tensor_product_coordinate_shape",
+                "one bounded coordinate is required per table row",
+                (name, "irreducible_multiplicities"),
+            )
+        for coordinate in coordinates:
+            if (
+                type(coordinate) is not int
+                or coordinate.bit_length() > 1702
+                or len(str(abs(coordinate))) > MAX_VALUE_COEFFICIENT_DIGITS
+            ):
+                raise OperationResourceAdmissionError(
+                    location=(name, "irreducible_multiplicities"),
+                    code="groups.characters.tensor_product_coordinate_height",
+                    message=(
+                        "virtual-character coordinates exceed the exact coefficient "
+                        "envelope"
+                    ),
+                )
+    # Raw input admission has passed; only now derive the concrete group order
+    # from the source permutations, so a group beyond the character envelope is
+    # refused before any backend group work.
+    _admit_source_group_order(table.partition.source)
+
+    # With the group admitted, the retained table can be checked for internal
+    # consistency before it is indexed class by class.
+    classes = len(table.axis.class_sizes)
+    dimension = euler_phi(table.axis.cyclotomic_order)
+    if any(
+        len(row.values) != classes
+        or any(len(value.coefficients) != dimension for value in row.values)
+        for row in table.rows
+    ):
+        raise _invalid(
+            "groups.characters.tensor_product_table_shape",
+            "each character row must supply one cyclotomic value per class",
+            ("left", "table", "rows"),
+        )
+
+    product = class_function_pointwise_product(
+        _expand_ring_element(left, table), _expand_ring_element(right, table)
+    )
+    decomposition = class_function_character_decomposition(product)
+    return decomposition.ring_element

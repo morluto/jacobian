@@ -125,6 +125,56 @@ class SimpleUndirectedGraph(StrictModel):
         return self
 
 
+class LoopedSimpleGraph(StrictModel):
+    """Finite looped simple graph with an explicit vertex axis.
+
+    ``edges`` contains only off-diagonal edges and is oriented by label;
+    ``loops`` lists the vertices with diagonal adjacency bit one.  The vertex
+    order is preserved as the matrix axis used by binary graph constructions.
+    """
+
+    vertices: tuple[str, ...] = Field(
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
+        description="Unique nonempty Unicode NFC labels of at most 64 UTF-8 bytes; axis order is preserved.",
+    )
+    edges: tuple[tuple[str, str], ...] = Field(
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_EDGES,
+        description="Unique off-diagonal pairs of declared vertices, oriented left < right by label; list order is preserved.",
+    )
+    loops: tuple[str, ...] = Field(
+        max_length=MAX_ENCODED_SIMPLE_GRAPH_VERTICES,
+        description="Unique declared vertex labels with diagonal entry one; labels obey the vertex canonical-label rules.",
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_looped_graph(self) -> Self:
+        for vertex in self.vertices:
+            _require_canonical_text(
+                vertex, kind="graph vertex labels", max_bytes=MAX_GRAPH_LABEL_BYTES
+            )
+        if len(set(self.vertices)) != len(self.vertices):
+            raise PydanticCustomError(
+                "graph.graph_vertices_must_be_unique", "graph vertices must be unique"
+            )
+        vertex_set = set(self.vertices)
+        if any(
+            left >= right or left not in vertex_set or right not in vertex_set
+            for left, right in self.edges
+        ) or len(set(self.edges)) != len(self.edges):
+            raise PydanticCustomError(
+                "graph.looped_edges_invalid",
+                "edges must be unique pairs of distinct declared vertices with left < right",
+            )
+        if any(vertex not in vertex_set for vertex in self.loops) or len(
+            set(self.loops)
+        ) != len(self.loops):
+            raise PydanticCustomError(
+                "graph.looped_vertices_invalid",
+                "loops must list unique declared vertices",
+            )
+        return self
+
+
 class IndexedSimpleUndirectedGraph(StrictModel):
     """A finite simple undirected graph on the integer axis ``0..n-1``.
 
@@ -257,5 +307,6 @@ __all__ = [
     "GraphCompositionOperation",
     "GraphVertexLabel",
     "IndexedSimpleUndirectedGraph",
+    "LoopedSimpleGraph",
     "SimpleUndirectedGraph",
 ]

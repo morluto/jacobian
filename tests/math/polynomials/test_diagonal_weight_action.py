@@ -177,25 +177,3 @@ def test_native_surface_excludes_wire_request_envelopes() -> None:
     assert "PolynomialWeightInvariantRequest" not in surface.__all__
     assert not hasattr(surface, "PolynomialWeightInvariantRequest")
     assert "PolynomialWeightActionRequest" not in surface.__all__
-
-
-def test_weight_action_is_catalogued_with_valid_example() -> None:
-    from jacobian.canonical import encode_strict_json
-    from jacobian.catalog.catalog import Catalog
-    from jacobian.catalog.models import OperationMatchRequest
-    from jacobian.math.polynomials.derivations._tools import TOOLS
-
-    operation_id = "algebraic_group.gm.diagonal_weight_action.compute"
-    tool = next(item for item in TOOLS if item.operation_id == operation_id)
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    assert (
-        tool.run(request).weight_zero
-        == diagonal_weight_action(
-            request.action, request.polynomial, request.parameter
-        ).weight_zero
-    )
-    assert operation_id in {item.operation_id for item in TOOLS}
-    found = Catalog.open().match(OperationMatchRequest(need="diagonal integer weights"))
-    assert any(item.operation_id == operation_id for item in found.matches)

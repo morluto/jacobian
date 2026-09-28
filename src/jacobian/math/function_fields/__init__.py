@@ -16,6 +16,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldResidueResult,
     FunctionFieldRiemannRochSpace,
     FunctionFieldTraceResult,
+    HyperellipticAffinePlace,
+    HyperellipticAffinePlaceValuationResult,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -33,6 +35,7 @@ from jacobian.math.function_fields.operations import (
     function_field_genus,
     function_field_place_residue,
     function_field_place_uniformizer,
+    function_field_hyperelliptic_affine_valuation,
     function_field_rational_places_degree_bounded,
     function_field_riemann_roch_space,
 )
@@ -53,6 +56,8 @@ __all__ = [
     "FunctionFieldResidueResult",
     "FunctionFieldRiemannRochSpace",
     "FunctionFieldTraceResult",
+    "HyperellipticAffinePlace",
+    "HyperellipticAffinePlaceValuationResult",
     "PrimeFieldPolynomial",
     "PrimeFieldRationalFunction",
     "function_field_base_embedding",
@@ -68,6 +73,7 @@ __all__ = [
     "function_field_genus",
     "function_field_place_residue",
     "function_field_place_uniformizer",
+    "function_field_hyperelliptic_affine_valuation",
     "function_field_rational_places_degree_bounded",
     "function_field_riemann_roch_space",
 ]

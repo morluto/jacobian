@@ -16,6 +16,8 @@
 - [Finite-field elliptic point orders](elliptic-curve-point-order.md)
 - [Finite-field elliptic group structures](elliptic-curve-group-structure.md)
 - [Finite-field elliptic quadratic twists](elliptic-curve-finite-field-twists.md)
+- [Rational function-field genus](function-field-genus.md)
+- [Rational affine hyperelliptic valuations](hyperelliptic-affine-valuations.md)
 - [Level-one named modular-form q-expansions](modular-forms-level-one-q-expansions.md)
 - [Standard cyclotomic field inclusions](cyclotomic-field-inclusions.md)
 - [Modular-form spaces, bases, and coordinates](modular-forms-level-one-bases-coordinates.md)

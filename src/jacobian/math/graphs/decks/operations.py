@@ -21,11 +21,15 @@ from jacobian.math.graphs.decks._models import (
     MAX_DECK_VERTICES,
     MAX_DEGREE_MULTISET_DIGITS,
     MAX_EDGE_DECK_EDGES,
+    MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS,
     MAX_KELLY_DECK_TOTAL_WORK,
     MAX_UNLABELLED_DECK_ISOMORPHISM_WORK,
     MAX_UNLABELLED_DECK_VERTICES,
+    MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS,
     AnonymousGraphCardClass,
     AnonymousGraphCardMultiset,
+    EdgeDeckIsomorphismClass,
+    EdgeDeckIsomorphismProfile,
     EdgeDeletionFamily,
     SourceBoundEdgeCard,
     SourceBoundVertexCard,
@@ -36,11 +40,16 @@ from jacobian.math.graphs.decks._models import (
     VertexDeckEdgeCount,
     VertexDeckInducedSubgraphContribution,
     VertexDeckInducedSubgraphCount,
+    VertexDeckIsomorphismClass,
+    VertexDeckIsomorphismProfile,
     VertexDeckSubgraphContribution,
     VertexDeckSubgraphCount,
     VertexDeletionFamily,
     _anonymous_canonicalization_work,
     _canonical_card_edges,
+    _canonical_card_form,
+    _edge_iso_profile_resource_estimates,
+    _vertex_iso_profile_resource_estimates,
 )
 from jacobian.math.graphs.decks.anonymous_equality.operations import (
     MAX_ANONYMOUS_DECK_EQUALITY_WORK,
@@ -1157,3 +1166,378 @@ def verify_vertex_deletion_family(claim: VertexDeletionFamily) -> bool:
         return vertex_deletion_family(claim.source) == claim
     except (OperationDomainValidationError, TypeError, ValueError):
         return False
+
+
+def vertex_deck_isomorphism_profile(
+    family: VertexDeletionFamily,
+) -> VertexDeckIsomorphismProfile:
+    """Return exact canonical classes and card-to-representative bijections."""
+    return _vertex_deck_isomorphism_profile_from_admitted(
+        _admit_vertex_iso_profile_family(family)
+    )
+
+
+def _vertex_deck_isomorphism_profile_from_admitted(
+    family: VertexDeletionFamily,
+) -> VertexDeckIsomorphismProfile:
+    """Construct the profile after request parsing and resource admission."""
+    card_order = max(len(family.source.vertices) - 1, 0)
+    forms = tuple(
+        _canonical_card_form(card.card.vertices, card.card.edges)
+        for card in family.cards
+    )
+    keys = tuple(sorted({form[0] for form in forms}))
+    class_indices_by_key = {key: index for index, key in enumerate(keys)}
+    cards_by_key: dict[tuple[tuple[str, str], ...], list[int]] = {
+        key: [] for key in keys
+    }
+    class_indices: list[int] = []
+    vertex_maps: list[tuple[int, ...]] = []
+    for card_index, (key, mapping) in enumerate(forms):
+        class_index = class_indices_by_key[key]
+        cards_by_key[key].append(card_index)
+        class_indices.append(class_index)
+        vertex_maps.append(mapping)
+    labels = tuple(f"v{i:02d}" for i in range(card_order))
+    classes = tuple(
+        VertexDeckIsomorphismClass.model_construct(
+            representative=SimpleUndirectedGraph.model_construct(
+                vertices=labels, edges=key
+            ),
+            multiplicity=len(cards_by_key[key]),
+            card_indices=tuple(cards_by_key[key]),
+        )
+        for key in keys
+    )
+    return VertexDeckIsomorphismProfile._from_kernel(
+        family=family,
+        classes=classes,
+        class_indices=tuple(class_indices),
+        vertex_maps=tuple(vertex_maps),
+    )
+
+
+def _admit_vertex_iso_profile_family(
+    family: VertexDeletionFamily,
+) -> VertexDeletionFamily:
+    if type(family) is not VertexDeletionFamily:
+        raise OperationDomainValidationError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_family_carrier",
+            message="deck must be a VertexDeletionFamily",
+        )
+    source = family.source
+    if type(source) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.vertex_iso_profile_source_carrier",
+            message="the deletion family source must be a SimpleUndirectedGraph",
+        )
+    vertices = getattr(source, "vertices", None)
+    edges = getattr(source, "edges", None)
+    if type(vertices) is not tuple or type(edges) is not tuple:
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.vertex_iso_profile_source_shape",
+            message="the source graph needs immutable vertex and edge tuples",
+        )
+    order = len(vertices)
+    if order > MAX_UNLABELLED_DECK_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_vertex_bound",
+            message="vertex-deck isomorphism profiles support at most 10 source vertices",
+        )
+    if len(edges) > comb(order, 2):
+        raise OperationDomainValidationError(
+            location=("deck", "source", "edges"),
+            code="graph_deck.vertex_iso_profile_source_edges",
+            message="source edge count exceeds the simple-graph order bound",
+        )
+    if any(
+        type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES
+        for label in vertices
+    ) or any(
+        type(edge) is not tuple
+        or len(edge) != 2
+        or any(
+            type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES
+            for label in edge
+        )
+        for edge in edges
+    ):
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.vertex_iso_profile_source_labels",
+            message="source vertices and edge labels must be bounded strings",
+        )
+    try:
+        source = SimpleUndirectedGraph.model_validate(source.model_dump(mode="python"))
+    except (ValidationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.vertex_iso_profile_source",
+            message="the deletion family source is not a valid simple graph",
+        ) from error
+    source = _admit_deck_graph(source)
+    if type(family.cards) is not tuple or len(family.cards) != order:
+        raise OperationDomainValidationError(
+            location=("deck", "cards"),
+            code="graph_deck.vertex_iso_profile_card_count",
+            message="the source-bound family must contain one card per source vertex",
+        )
+    if any(
+        type(card) is not SourceBoundVertexCard
+        or type(card.card) is not SimpleUndirectedGraph
+        for card in family.cards
+    ):
+        raise OperationDomainValidationError(
+            location=("deck", "cards"),
+            code="graph_deck.vertex_iso_profile_card_carrier",
+            message="each family row must carry a canonical source-bound vertex card",
+        )
+    _, total_work, output_cells = _vertex_iso_profile_resource_estimates(
+        order, len(source.edges), order
+    )
+    if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_work_bound",
+            message="vertex-deck isomorphism mapping exceeds the shared work bound",
+        )
+    if (
+        type(family.edge_appearances) is not tuple
+        or len(family.edge_appearances) != len(source.edges)
+        or any(type(value) is not int for value in family.edge_appearances)
+        or family.edge_appearances != tuple(max(order - 2, 0) for _ in source.edges)
+        or type(family.vertex_appearances) is not tuple
+        or len(family.vertex_appearances) != order
+        or any(type(value) is not int for value in family.vertex_appearances)
+        or family.vertex_appearances != (max(order - 1, 0),) * order
+    ):
+        raise OperationDomainValidationError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_ledger",
+            message="vertex and edge appearance ledgers must match the source order",
+        )
+    for index, (deleted, card) in enumerate(
+        zip(source.vertices, family.cards, strict=True)
+    ):
+        retained = tuple(vertex for vertex in source.vertices if vertex != deleted)
+        expected_edges = tuple(
+            edge for edge in source.edges if edge[0] != deleted and edge[1] != deleted
+        )
+        if (
+            type(card.deleted_vertex) is not str
+            or card.deleted_vertex != deleted
+            or type(card.retained_vertices) is not tuple
+            or len(card.retained_vertices) != order - 1
+            or any(type(vertex) is not str for vertex in card.retained_vertices)
+            or card.retained_vertices != retained
+            or type(card.card.vertices) is not tuple
+            or len(card.card.vertices) != order - 1
+            or any(type(vertex) is not str for vertex in card.card.vertices)
+            or card.card.vertices != retained
+            or type(card.card.edges) is not tuple
+            or len(card.card.edges) > comb(max(order - 1, 0), 2)
+            or any(
+                type(edge) is not tuple
+                or len(edge) != 2
+                or any(type(endpoint) is not str for endpoint in edge)
+                for edge in card.card.edges
+            )
+            or card.card.edges != expected_edges
+            or type(card.retained_edge_count) is not int
+            or card.retained_edge_count != len(expected_edges)
+            or type(card.deleted_edge_count) is not int
+            or card.deleted_edge_count != len(source.edges) - len(expected_edges)
+        ):
+            raise OperationDomainValidationError(
+                location=("deck", "cards", index),
+                code="graph_deck.vertex_iso_profile_family_relation",
+                message="each row must equal the bound source vertex deletion",
+            )
+    if output_cells > MAX_VERTEX_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.vertex_iso_profile_output_bound",
+            message="vertex-deck isomorphism profile exceeds its materialization-cell bound",
+        )
+    return family
+
+
+def edge_deck_isomorphism_profile(
+    family: EdgeDeletionFamily,
+) -> EdgeDeckIsomorphismProfile:
+    """Return exact canonical classes and card-to-class maps."""
+    return _edge_deck_isomorphism_profile_from_admitted(
+        _admit_edge_iso_profile_family(family)
+    )
+
+
+def _edge_deck_isomorphism_profile_from_admitted(
+    family: EdgeDeletionFamily,
+) -> EdgeDeckIsomorphismProfile:
+    """Build a profile after catalog parsing and resource admission."""
+    forms = tuple(
+        _canonical_card_form(card.card.vertices, card.card.edges)
+        for card in family.cards
+    )
+    keys = tuple(sorted({form[0] for form in forms}))
+    class_indices_by_key = {key: index for index, key in enumerate(keys)}
+    cards_by_key: dict[tuple[tuple[str, str], ...], list[int]] = {
+        key: [] for key in keys
+    }
+    class_indices: list[int] = []
+    vertex_maps: list[tuple[int, ...]] = []
+    for card_index, (key, mapping) in enumerate(forms):
+        class_index = class_indices_by_key[key]
+        cards_by_key[key].append(card_index)
+        class_indices.append(class_index)
+        vertex_maps.append(mapping)
+    labels = tuple(f"v{i:02d}" for i in range(len(family.source.vertices)))
+    classes = tuple(
+        EdgeDeckIsomorphismClass.model_construct(
+            representative=SimpleUndirectedGraph.model_construct(
+                vertices=labels, edges=key
+            ),
+            multiplicity=len(cards_by_key[key]),
+            card_indices=tuple(cards_by_key[key]),
+            deleted_edges=tuple(
+                family.cards[index].deleted_edge for index in cards_by_key[key]
+            ),
+        )
+        for key in keys
+    )
+    return EdgeDeckIsomorphismProfile._from_kernel(
+        family=family,
+        classes=classes,
+        class_indices=tuple(class_indices),
+        vertex_maps=tuple(vertex_maps),
+    )
+
+
+def _admit_edge_iso_profile_family(
+    family: EdgeDeletionFamily,
+) -> EdgeDeletionFamily:
+    """Admit work/output first, then establish the source-minus-edge relation."""
+    if type(family) is not EdgeDeletionFamily:
+        raise OperationDomainValidationError(
+            location=("deck",),
+            code="graph_deck.edge_iso_profile_family_carrier",
+            message="deck must be an EdgeDeletionFamily",
+        )
+    source = family.source
+    if type(source) is not SimpleUndirectedGraph:
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.edge_iso_profile_source_carrier",
+            message="the deletion family source must be a SimpleUndirectedGraph",
+        )
+    vertices = getattr(source, "vertices", None)
+    edges = getattr(source, "edges", None)
+    if type(vertices) is not tuple or type(edges) is not tuple:
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.edge_iso_profile_source_shape",
+            message="the source graph needs immutable vertex and edge tuples",
+        )
+    order = len(vertices)
+    if order > MAX_UNLABELLED_DECK_VERTICES:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.edge_iso_profile_vertex_bound",
+            message="edge-deck isomorphism profiles support at most 10 source vertices",
+        )
+    if len(edges) > comb(order, 2):
+        raise OperationDomainValidationError(
+            location=("deck", "source", "edges"),
+            code="graph_deck.edge_iso_profile_source_edges",
+            message="source edge count exceeds the simple-graph order bound",
+        )
+    _, total_work, output_cells = _edge_iso_profile_resource_estimates(
+        order, len(edges), len(edges)
+    )
+    if total_work > MAX_UNLABELLED_DECK_ISOMORPHISM_WORK:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.edge_iso_profile_work_bound",
+            message="edge-deck isomorphism mapping exceeds the shared work bound",
+        )
+    if output_cells > MAX_EDGE_DECK_ISOMORPHISM_PROFILE_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("deck",),
+            code="graph_deck.edge_iso_profile_output_bound",
+            message="edge-deck isomorphism profile exceeds its materialization-cell bound",
+        )
+    if any(
+        type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES
+        for label in vertices
+    ) or any(
+        type(edge) is not tuple
+        or len(edge) != 2
+        or any(
+            type(label) is not str or not label or len(label) > MAX_GRAPH_LABEL_BYTES
+            for label in edge
+        )
+        for edge in edges
+    ):
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.edge_iso_profile_source_labels",
+            message="source vertices and edge labels must be bounded strings",
+        )
+    try:
+        source = SimpleUndirectedGraph.model_validate(source.model_dump(mode="python"))
+    except (ValidationError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("deck", "source"),
+            code="graph_deck.edge_iso_profile_source",
+            message="the deletion family source is not a valid simple graph",
+        ) from error
+    family = family.model_copy(update={"source": source})
+    if type(family.cards) is not tuple or len(family.cards) != len(source.edges):
+        raise OperationDomainValidationError(
+            location=("deck", "cards"),
+            code="graph_deck.edge_iso_profile_card_count",
+            message="the source-bound family must contain one card per source edge",
+        )
+    for index, card in enumerate(family.cards):
+        if (
+            type(card) is not SourceBoundEdgeCard
+            or type(card.card) is not SimpleUndirectedGraph
+            or type(card.card.vertices) is not tuple
+            or len(card.card.vertices) != order
+            or type(card.card.edges) is not tuple
+            or len(card.card.edges) > comb(order, 2)
+            or type(card.retained_vertices) is not tuple
+            or len(card.retained_vertices) != order
+            or type(card.deleted_edge) is not tuple
+            or len(card.deleted_edge) != 2
+            or type(card.retained_edge_count) is not int
+            or any(
+                type(label) is not str or len(label) > MAX_GRAPH_LABEL_BYTES
+                for label in (
+                    *card.card.vertices,
+                    *card.retained_vertices,
+                    *card.deleted_edge,
+                )
+            )
+            or any(
+                type(edge) is not tuple
+                or len(edge) != 2
+                or any(
+                    type(label) is not str or len(label) > MAX_GRAPH_LABEL_BYTES
+                    for label in edge
+                )
+                for edge in card.card.edges
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("deck", "cards", index),
+                code="graph_deck.edge_iso_profile_card_shape",
+                message="each edge card must have bounded canonical graph axes and labels",
+            )
+    # One bounded source relation pass validates every supplied card.
+    _admit_edge_deletion_family(family)
+    return family

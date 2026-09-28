@@ -34,6 +34,8 @@ from jacobian.math.free_algebras._models import (
     FreeAlgebraWordSuffixesResult,
     GroebnerShirshovRequest,
     GroebnerShirshovResult,
+    TruncatedFreeAlgebraQuotient,
+    TruncatedFreeAlgebraQuotientRequest,
 )
 from jacobian.math.free_algebras.operations import (
     add,
@@ -49,6 +51,7 @@ from jacobian.math.free_algebras.operations import (
     reverse_word,
     substitute_polynomial,
     substitute_word,
+    truncated_quotient_algebra,
     word_factors,
     word_overlaps,
     word_prefixes,
@@ -201,6 +204,12 @@ def _run_membership(
     request: FreeAlgebraIdealMembershipRequest,
 ) -> FreeAlgebraIdealMembershipResult:
     return ideal_membership(request.ideal, request.polynomial)
+
+
+def _run_truncated_quotient(
+    request: TruncatedFreeAlgebraQuotientRequest,
+) -> TruncatedFreeAlgebraQuotient:
+    return truncated_quotient_algebra(request.ideal, request.degree)
 
 
 TOOLS = (
@@ -841,6 +850,68 @@ TOOLS = (
                         "side": "two-sided",
                     },
                     "degree": 3,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.two_sided_quotient.truncated_algebra.compute",
+        title="Build a finite degree-truncated free-algebra quotient",
+        description=(
+            "Construct the exact associative algebra QQ<X>/(I + F_{>D}) "
+            "from a homogeneous two-sided ideal I. The result is the "
+            "canonical normal-word basis through degree D, an exact reduced "
+            "multiplication table over QQ, and the quotient unit. Products "
+            "whose total degree exceeds D are zero by the explicit truncation. "
+            "This is a genuine finite-dimensional quotient and does not claim "
+            "that the untruncated presented algebra is finite-dimensional. "
+            "Normal-word, table-term, reduction-work, and output bounds are "
+            "checked before multiplication-table construction."
+        ),
+        request_type=TruncatedFreeAlgebraQuotientRequest,
+        result_type=TruncatedFreeAlgebraQuotient,
+        run=_run_truncated_quotient,
+        tags=(
+            "free-algebra",
+            "quotient",
+            "truncated-algebra",
+            "structure-constants",
+            "exact",
+        ),
+        discovery_terms=(
+            "truncated free associative algebra quotient",
+            "finite-dimensional quotient of a free algebra through degree D",
+            "noncommutative quotient multiplication table",
+            "quotient algebra structure constants from relations",
+        ),
+        examples=(
+            OperationExample(
+                name="commutative_polynomial_quotient_truncated_at_degree_two",
+                description=(
+                    "The commutator quotient has the six normal words through "
+                    "degree two, and products above degree two vanish."
+                ),
+                input={
+                    "ideal": {
+                        "alphabet": ["x", "y"],
+                        "generators": [
+                            {
+                                "alphabet": ["x", "y"],
+                                "terms": [
+                                    {
+                                        "coefficient": {"num": "-1", "den": "1"},
+                                        "word": ["y", "x"],
+                                    },
+                                    {
+                                        "coefficient": {"num": "1", "den": "1"},
+                                        "word": ["x", "y"],
+                                    },
+                                ],
+                            }
+                        ],
+                        "side": "two-sided",
+                    },
+                    "degree": 2,
                 },
             ),
         ),

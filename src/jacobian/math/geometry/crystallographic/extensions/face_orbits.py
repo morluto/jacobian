@@ -35,7 +35,10 @@ from jacobian.math.topology.chain_complexes.values import (
 
 MAX_FACE_ORBIT_POLYGON_VERTICES = 32
 MAX_FACE_ORBIT_POLYGON_FACETS = 32
-MAX_FACE_ORBIT_RESULT_BYTES = 20_000_000
+# One cell is one retained structural entry or chain coefficient of the
+# face-orbit complex. Admitting the value's own cardinality keeps a
+# consumer's encoder choice out of the mathematical bound.
+MAX_FACE_ORBIT_RESULT_CELLS = 20_000_000
 
 _Element = tuple[tuple[int, ...], int]
 
@@ -167,19 +170,20 @@ def _group_labels_to_vertex_representatives(
         graph[item.source_vertex_index].append((item.target_vertex_index, element))
         graph[item.target_vertex_index].append((item.source_vertex_index, inverse))
     orbit_ids = [-1] * vertex_count
-    to_root: list[_Element | None] = [None] * vertex_count
+    root_maps: dict[int, _Element] = {}
     identity: _Element = ((0,) * len(source.action_matrices[0]), 0)
     orbit_id = 0
     for root in range(vertex_count):
         if orbit_ids[root] >= 0:
             continue
         orbit_ids[root] = orbit_id
-        to_root[root] = identity
+        # Every vertex is a root or is discovered from one, so this map is
+        # total once the outer loop finishes and needs no absent-value marker.
+        root_maps[root] = identity
         queue = deque((root,))
         while queue:
             current = queue.popleft()
-            current_to_root = to_root[current]
-            assert current_to_root is not None
+            current_to_root = root_maps[current]
             for neighbor, current_to_neighbor in graph[current]:
                 if orbit_ids[neighbor] >= 0:
                     if orbit_ids[neighbor] != orbit_id:
@@ -191,10 +195,10 @@ def _group_labels_to_vertex_representatives(
                     source, current_to_root, _inverse(source, current_to_neighbor)
                 )
                 orbit_ids[neighbor] = orbit_id
-                to_root[neighbor] = neighbor_to_root
+                root_maps[neighbor] = neighbor_to_root
                 queue.append(neighbor)
         orbit_id += 1
-    return tuple(orbit_ids), tuple(value for value in to_root if value is not None)
+    return tuple(orbit_ids), tuple(root_maps[index] for index in range(vertex_count))
 
 
 def _one_skeleton_boundary(
@@ -354,10 +358,21 @@ def quotient_face_orbit_complex(
             "polygon_size_bound",
             "polygon exceeds the 32-vertex/facet exact face-orbit envelope",
         )
-    source_bytes = len(checked.model_dump_json().encode("utf-8"))
-    predicted_bytes = source_bytes + 256 * vertex_count + 512 * facet_count + 64_000
-    if predicted_bytes > MAX_FACE_ORBIT_RESULT_BYTES:
-        _resource("result_bound", "face-orbit complex exceeds its result byte envelope")
+    source_cells = (
+        len(pairing_result.facet_profile.vertices)
+        + sum(
+            len(vertex.coordinates) for vertex in pairing_result.facet_profile.vertices
+        )
+        + len(pairing_result.facet_profile.facets)
+        + len(pairing_result.pairings)
+        + len(pairing_result.affine_realization.source.action_matrices) * rank**2
+    )
+    predicted_cells = source_cells + 64 * vertex_count + 128 * facet_count + 16_000
+    if predicted_cells > MAX_FACE_ORBIT_RESULT_CELLS:
+        _resource(
+            "result_bound",
+            "face-orbit complex exceeds its materialization-cell envelope",
+        )
     recomputed = check_crystallographic_fundamental_domain(pairing_result)
     if not recomputed.is_fundamental_domain or recomputed != checked:
         _domain(

@@ -28,8 +28,8 @@ from jacobian.math.topology.chain_complexes.values import (
     CoefficientRing,
 )
 
-MAX_TORUS_SOURCE_BYTES = 256_000
-MAX_TORUS_RESULT_BYTES = 600_000
+MAX_TORUS_SOURCE_CELLS = 256_000
+MAX_TORUS_RESULT_CELLS = 600_000
 _Vector = tuple[Fraction, ...]
 
 
@@ -115,12 +115,23 @@ def translation_torus_quotient_chains(
             "shape_bound",
             "input must have rank one through four with 2^rank vertices and 2*rank facets and directed pairings",
         )
-    input_bytes = len(checked.model_dump_json().encode("utf-8"))
-    if input_bytes > MAX_TORUS_SOURCE_BYTES:
-        _resource("source_bound", "fundamental-domain source exceeds its byte envelope")
-    predicted_result_bytes = input_bytes + 4096
-    if predicted_result_bytes > MAX_TORUS_RESULT_BYTES:
-        _resource("result_bound", "quotient-chain result exceeds its byte envelope")
+    # Count the source's own structural entries: vertices, facets, directed
+    # pairings, circle directions, and the extension's action matrices. An
+    # estimated encoded size would let a consumer's encoder choose admission.
+    source_cells = (
+        len(profile.vertices)
+        + sum(len(vertex.coordinates) for vertex in profile.vertices)
+        + len(profile.facets)
+        + len(pairing.pairings)
+        + len(extension.action_matrices) * dimension**2
+    )
+    if source_cells > MAX_TORUS_SOURCE_CELLS:
+        _resource("source_bound", "fundamental-domain source exceeds its cell envelope")
+    # The product torus on (S^1)^n has sum(C(n, degree)) = 2^n cells, each
+    # carrying one exact rational vector entry.
+    predicted_result_cells = source_cells + 1 << dimension
+    if predicted_result_cells > MAX_TORUS_RESULT_CELLS:
+        _resource("result_bound", "quotient-chain result exceeds its cell envelope")
 
     identity = tuple(
         tuple(int(row == column) for column in range(dimension))

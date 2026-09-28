@@ -18,6 +18,8 @@ from jacobian.math.number_theory.modular_forms.values import (
     ModularFormSpace,
 )
 
+MAX_CHARACTER_BASIS_PRECISION = 128
+
 
 class ModularCharacterBasisRequest(StrictModel):
     """Request one supported exact character-valued basis prefix."""
@@ -61,7 +63,7 @@ class ModularCharacterCoordinatesRequest(StrictModel):
 
 
 class ModularCharacterHeckeRequest(StrictModel):
-    """Apply one admitted Hecke index to a character-valued form."""
+    """Apply one Hecke index, retaining the exact source space as target."""
 
     form: ModularFormCoordinates
     index: StrictInt = Field(ge=1, le=32)
@@ -118,7 +120,7 @@ class ModularCharacterBasis(StrictModel):
         "gamma0-13-even-order6-character-sturm-v1",
         "gamma0-cyclotomic-character-sturm-rref-v1",
     ]
-    precision: StrictInt = Field(ge=1, le=128)
+    precision: StrictInt = Field(ge=1, le=MAX_CHARACTER_BASIS_PRECISION)
     elements: tuple[ModularCharacterBasisElement, ...] = Field(max_length=32)
 
     @model_validator(mode="after")

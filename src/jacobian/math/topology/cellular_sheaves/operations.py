@@ -7,12 +7,16 @@ from jacobian.math.topology.cellular_sheaves._kernel import (
     from_cover_maps as _from_cover_maps,
 )
 from jacobian.math.topology.cellular_sheaves._kernel import (
+    sheaf_cochain_complex as _sheaf_cochain_complex,
+)
+from jacobian.math.topology.cellular_sheaves._kernel import (
     sheaf_cohomology as _sheaf_cohomology,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
     FiniteCellularSheaf,
     FromCoverMapsResult,
+    SheafCochainComplex,
     SheafCohomologyResult,
     SheafField,
     SheafStalk,
@@ -51,6 +55,11 @@ def sheaf_cohomology(sheaf: FiniteCellularSheaf) -> SheafCohomologyResult:
     return _sheaf_cohomology(sheaf)
 
 
+def sheaf_cochain_complex(sheaf: FiniteCellularSheaf) -> SheafCochainComplex:
+    """Assemble the bounded signed-incidence cochain complex of a sheaf."""
+    return _sheaf_cochain_complex(sheaf)
+
+
 def restrict_to_subcomplex(
     sheaf: FiniteCellularSheaf, subcomplex: FiniteSimplicialComplex
 ) -> SheafSubcomplexResult:
@@ -58,4 +67,9 @@ def restrict_to_subcomplex(
     return _restrict_to_subcomplex(sheaf, subcomplex)
 
 
-__all__ = ["from_cover_maps", "restrict_to_subcomplex", "sheaf_cohomology"]
+__all__ = [
+    "from_cover_maps",
+    "restrict_to_subcomplex",
+    "sheaf_cochain_complex",
+    "sheaf_cohomology",
+]

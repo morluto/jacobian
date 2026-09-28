@@ -509,7 +509,6 @@ def cokernel_of_morphism(
 
 __all__ = [
     "SheafCokernelStalkLift",
-    "SheafMorphismCokernelRequest",
     "SheafMorphismCokernelResult",
     "cokernel_of_morphism",
 ]

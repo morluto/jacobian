@@ -478,7 +478,6 @@ def kernel_of_morphism(value: SheafMorphismResult) -> SheafMorphismKernelResult:
 
 
 __all__ = [
-    "SheafMorphismKernelRequest",
     "SheafMorphismKernelResult",
     "kernel_of_morphism",
 ]

@@ -526,4 +526,4 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     )
 
 
-__all__ = ["SheafMorphismImageRequest", "SheafMorphismImageResult", "image_of_morphism"]
+__all__ = ["SheafMorphismImageResult", "image_of_morphism"]

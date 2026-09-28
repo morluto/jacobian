@@ -23,7 +23,10 @@ from jacobian.math.free_algebras._kernel import add_sparse, multiply_sparse
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_ADDITION_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_ADDITION_TERMS,
+    MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_CELLS,
+    MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK,
     MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS,
+    MAX_FREE_ALGEBRA_GENERATORS,
     MAX_FREE_ALGEBRA_GS_COMPOSITIONS,
     MAX_FREE_ALGEBRA_GS_PAIR_CHECKS,
     MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS,
@@ -40,6 +43,7 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES,
     MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_RESULT_TERMS,
+    MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
     MAX_FREE_ALGEBRA_SUBSTITUTION_EXPANSIONS,
     MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_SUBSTITUTION_WORK,
@@ -369,6 +373,266 @@ def multiply(
         right=right,
         product=product,
         ledger=ledger,
+    )
+
+
+def _admit_anti_label(label: object, location: tuple[str | int, ...]) -> int:
+    if type(label) is not str or not label:
+        raise OperationDomainValidationError(
+            location=location,
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        )
+    if len(label) > MAX_FREE_ALGEBRA_LETTER_LENGTH:
+        _reject_resource(
+            location,
+            "antiautomorphism_work_budget",
+            "polynomial reversal input is outside the admitted work envelope",
+        )
+    try:
+        label.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        ) from exc
+    return len(label)
+
+
+def _admit_anti_coefficient_digits(
+    term: FreeAlgebraTerm, polynomial: FreeAlgebraPolynomial
+) -> int:
+    coefficient = getattr(term, "coefficient", None)
+    if type(coefficient) is not CanonicalRational:
+        _admit_polynomial(polynomial, label="polynomial")
+        raise OperationDomainValidationError(
+            location=("polynomial", "terms"),
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        )
+    numerator = getattr(coefficient, "num", None)
+    denominator = getattr(coefficient, "den", None)
+    if type(numerator) is not int or type(denominator) is not int:
+        _admit_polynomial(polynomial, label="polynomial")
+        raise OperationDomainValidationError(
+            location=("polynomial", "terms"),
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        )
+    component_limit = 10**MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+    if (
+        abs(numerator).bit_length() > component_limit.bit_length()
+        or denominator.bit_length() > component_limit.bit_length()
+        or abs(numerator) >= component_limit
+        or denominator >= component_limit
+    ):
+        _reject_resource(
+            ("polynomial", "terms"),
+            "antiautomorphism_work_budget",
+            "polynomial coefficient exceeds the admitted digit bound",
+        )
+    return max(len(str(abs(numerator))), len(str(denominator)))
+
+
+def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
+    """Bound label admission, canonical checks, reversal, and linear sorting.
+
+    Only tuple shapes and bounded scalar lengths are inspected here. Oversized
+    labels and coefficients are rejected before any rank-key construction.
+    """
+
+    if type(value) is not FreeAlgebraPolynomial:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        )
+    alphabet = getattr(value, "alphabet", None)
+    terms = getattr(value, "terms", None)
+    if type(alphabet) is not tuple or type(terms) is not tuple:
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        )
+    if (
+        len(alphabet) > MAX_FREE_ALGEBRA_GENERATORS
+        or len(terms) > MAX_FREE_ALGEBRA_RESULT_TERMS
+    ):
+        _reject_resource(
+            ("polynomial",),
+            "antiautomorphism_work_budget",
+            "polynomial reversal input is outside the admitted work envelope",
+        )
+
+    alphabet_characters = 0
+    for letter in alphabet:
+        alphabet_characters += _admit_anti_label(letter, ("polynomial", "alphabet"))
+
+    term_count = len(terms)
+    total_cells = 0
+    word_characters = 0
+    coefficient_digits = 0
+    maximum_word_length = 0
+    for term in terms:
+        if type(term) is not FreeAlgebraTerm or not hasattr(term, "word"):
+            _admit_polynomial(value, label="polynomial")
+            raise OperationDomainValidationError(
+                location=("polynomial", "terms"),
+                code="free_algebra.polynomial_shape",
+                message="the free-algebra polynomial is not canonical",
+            )
+        word = term.word
+        if type(word) is not tuple:
+            _admit_polynomial(value, label="polynomial")
+            raise OperationDomainValidationError(
+                location=("polynomial", "terms"),
+                code="free_algebra.polynomial_shape",
+                message="the free-algebra polynomial is not canonical",
+            )
+        word_length = len(word)
+        if word_length > MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH:
+            _reject_resource(
+                ("polynomial", "terms"),
+                "antiautomorphism_work_budget",
+                "polynomial reversal input is outside the admitted work envelope",
+            )
+        for letter in word:
+            word_characters += _admit_anti_label(letter, ("polynomial", "terms"))
+        coefficient_digits += _admit_anti_coefficient_digits(term, value)
+        total_cells += word_length
+        maximum_word_length = max(maximum_word_length, word_length)
+
+    # Dictionary admission and lookups are charged using the actual label
+    # sizes. Canonical-key checks, reversal, and radix sorting each traverse
+    # the bounded word cells linearly.
+    label_work = 10 * (len(alphabet) + 1) * word_characters + 2 * alphabet_characters
+    linear_work = 6 * total_cells + len(alphabet) * maximum_word_length
+    coefficient_work = 4 * coefficient_digits + 2 * term_count
+    return max(1, label_work + linear_work + coefficient_work)
+
+
+def _reverse_canonical_terms(
+    polynomial: FreeAlgebraPolynomial,
+    letter_rank: dict[str, int],
+) -> tuple[FreeAlgebraTerm, ...]:
+    reversed_terms = tuple(
+        FreeAlgebraTerm(coefficient=term.coefficient, word=tuple(reversed(term.word)))
+        for term in polynomial.terms
+    )
+    groups: dict[int, list[FreeAlgebraTerm]] = {}
+    for term in reversed_terms:
+        groups.setdefault(len(term.word), []).append(term)
+    ordered: list[FreeAlgebraTerm] = []
+    for word_length in sorted(groups, reverse=True):
+        group = groups[word_length]
+        for position in range(word_length - 1, -1, -1):
+            buckets: list[list[FreeAlgebraTerm]] = [[] for _ in polynomial.alphabet]
+            for term in group:
+                buckets[letter_rank[term.word[position]]].append(term)
+            group = [term for bucket in reversed(buckets) for term in bucket]
+        ordered.extend(group)
+    return tuple(ordered)
+
+
+def _admit_antiautomorphism_polynomial(
+    polynomial: FreeAlgebraPolynomial,
+) -> dict[str, int]:
+    """Recheck this operation's relied-upon polynomial invariants linearly."""
+
+    rank = {letter: index for index, letter in enumerate(polynomial.alphabet)}
+    if len(rank) != len(polynomial.alphabet):
+        raise OperationDomainValidationError(
+            location=("polynomial", "alphabet"),
+            code="free_algebra.polynomial_shape",
+            message="the free-algebra polynomial is not canonical",
+        )
+
+    previous_key: tuple[int, tuple[int, ...]] | None = None
+    for term in polynomial.terms:
+        coefficient = term.coefficient
+        if (
+            coefficient.den <= 0
+            or gcd(abs(coefficient.num), coefficient.den) != 1
+            or coefficient.num == 0
+        ):
+            raise OperationDomainValidationError(
+                location=("polynomial", "terms"),
+                code="free_algebra.polynomial_shape",
+                message="the free-algebra polynomial is not canonical",
+            )
+        ranks: list[int] = []
+        for letter in term.word:
+            letter_index = rank.get(letter)
+            if letter_index is None:
+                raise OperationDomainValidationError(
+                    location=("polynomial", "terms"),
+                    code="free_algebra.polynomial_shape",
+                    message="the free-algebra polynomial is not canonical",
+                )
+            ranks.append(letter_index)
+        key = (len(term.word), tuple(ranks))
+        if previous_key is not None and previous_key <= key:
+            raise OperationDomainValidationError(
+                location=("polynomial", "terms"),
+                code="free_algebra.polynomial_shape",
+                message="the free-algebra polynomial is not canonical",
+            )
+        previous_key = key
+    return rank
+
+
+def reverse_polynomial_antiautomorphism(
+    polynomial: FreeAlgebraPolynomial,
+) -> FreeAlgebraPolynomial:
+    """Extend word reversal linearly to the free algebra over QQ.
+
+    This map fixes every scalar coefficient and reverses each monomial word.
+    Consequently it is involutive and reverses multiplication order.
+    """
+
+    work = _antiautomorphism_admission_work(polynomial)
+    if work > MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK:
+        _reject_resource(
+            ("polynomial", "terms"),
+            "antiautomorphism_work_budget",
+            "polynomial admission, reversal, and canonical ordering exceed the "
+            "work bound",
+        )
+
+    letter_rank = _admit_antiautomorphism_polynomial(polynomial)
+    term_cells = sum(len(term.word) for term in polynomial.terms)
+    maximum_cells = MAX_FREE_ALGEBRA_RESULT_TERMS * MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH
+    if term_cells > maximum_cells:
+        _reject_resource(
+            ("polynomial", "terms"),
+            "antiautomorphism_work_budget",
+            "polynomial word support exceeds the admitted reversal work bound",
+        )
+    # Reversal preserves each word's cells and every coefficient is unchanged.
+    # Bound the retained alphabet, cells, coefficient digits, and per-term
+    # allowances before creating the reversed support. This allocation bound
+    # counts canonical value cells, not serialized JSON bytes.
+    alphabet_cells = sum(len(letter) for letter in polynomial.alphabet)
+    predicted_output_cells = alphabet_cells + 64
+    for term in polynomial.terms:
+        coefficient_digits = canonical_rational_component_digits(term.coefficient)
+        predicted_output_cells += 64 + len(term.word) + 2 * (coefficient_digits + 1)
+        if predicted_output_cells > MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_CELLS:
+            _reject_resource(
+                ("polynomial",),
+                "antiautomorphism_output_budget",
+                "predicted reversed-polynomial output exceeds the "
+                f"{MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_CELLS}-cell bound",
+            )
+
+    canonical_terms = _reverse_canonical_terms(polynomial, letter_rank)
+    # The operation has admitted the input, preserved its coefficients and
+    # alphabet, and constructed a sorted support with distinct reversed words.
+    # Avoid replaying the polynomial model validator and its rank-key sort.
+    return FreeAlgebraPolynomial.model_construct(
+        alphabet=polynomial.alphabet, terms=canonical_terms
     )
 
 
@@ -2149,6 +2413,7 @@ __all__ = [
     "multiply",
     "power_word",
     "quotient_normal_word_profile",
+    "reverse_polynomial_antiautomorphism",
     "reverse_word",
     "substitute_word",
     "word_factors",

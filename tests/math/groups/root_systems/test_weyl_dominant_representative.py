@@ -89,16 +89,12 @@ def test_dominant_representative_and_transporter_match_exhaustive_oracle(
 
     result = weyl_dominant_representative(matrix, weight)
 
-    assert result.dominant_weight == dominant[0]
     assert result.dominant_weight.coordinates == dominant[0]
     assert result.element.matrix.entries == matrix
     assert result.element.root_action.entries in orbit[dominant[0]]
 
 
 def test_already_dominant_identity_weight_returns_identity_element() -> None:
-    result = weyl_dominant_representative(((2, -1), (-1, 2)), (0, 0))
-
-    assert result.dominant_weight == (0, 0)
     result = weyl_dominant_representative(((2, -1), (-1, 2)), ((1 << 53) - 1, 0))
 
     assert result.dominant_weight.coordinates == ((1 << 53) - 1, 0)
@@ -134,6 +130,8 @@ def test_a4_near_limit_private_prefix_exceeds_public_coordinate_bound() -> None:
     assert source[0] - source[0] * cartan[0][1] == -2 * limit
     assert result.dominant_weight.coordinates == (limit,) * 4
     assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
 def test_dominant_representative_is_a_published_operation() -> None:
     tool = next(
         tool

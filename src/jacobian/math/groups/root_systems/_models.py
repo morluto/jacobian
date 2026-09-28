@@ -1371,10 +1371,6 @@ class WeylParabolicWeightOrbitResult(StrictModel):
 class WeylDominantRepresentativeRequest(CartanMatrixRequest):
     """An integral weight in fundamental-weight coordinates."""
 
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-class WeylDominantRepresentativeRequest(CartanMatrixRequest):
-    """An integral weight in fundamental-weight coordinates."""
-
     weight: tuple[
         Annotated[
             int,
@@ -1396,8 +1392,6 @@ class WeylDominantRepresentativeResult(StrictModel):
     """The dominant orbit representative and a Weyl element mapping to it."""
 
     matrix: CartanMatrix
-    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    dominant_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
     weight: WeightLatticeVector
     dominant_weight: WeightLatticeVector
     element: WeylElement
@@ -1406,14 +1400,6 @@ class WeylDominantRepresentativeResult(StrictModel):
     def require_dominant_representative_shape(self) -> Self:
         rank = len(self.matrix)
         if (
-            len(self.weight) != rank
-            or len(self.dominant_weight) != rank
-            or self.element.matrix != self.matrix
-            or any(
-                abs(value) > MAX_REFLECTION_REPRESENTABLE
-                for value in (*self.weight, *self.dominant_weight)
-            )
-            or any(value < 0 for value in self.dominant_weight)
             self.weight.datum.cartan_matrix != self.matrix
             or self.dominant_weight.datum.cartan_matrix != self.matrix
             or len(self.weight.coordinates) != rank
@@ -1438,8 +1424,6 @@ class WeylDominantRepresentativeResult(StrictModel):
     def _from_kernel(
         cls,
         matrix: CartanMatrix,
-        weight: tuple[int, ...],
-        dominant_weight: tuple[int, ...],
         weight: WeightLatticeVector,
         dominant_weight: WeightLatticeVector,
         element: WeylElement,
@@ -1505,6 +1489,8 @@ class WeylAntidominantRepresentativeResult(StrictModel):
             antidominant_weight=antidominant_weight,
             element=element,
         )
+
+
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 

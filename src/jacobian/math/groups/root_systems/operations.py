@@ -100,7 +100,6 @@ from jacobian.math.groups.root_systems._models import (
     WeylGroupOrderResult,
     WeylLongestElementResult,
     WeylParabolicResult,
-    WeylParabolicWeightOrbitRequest,
     WeylParabolicWeightOrbitResult,
     WeylPoincarePolynomialResult,
     WeylVectorActionResult,
@@ -2019,15 +2018,6 @@ def weyl_dominant_representative(
             ),
         )
 
-    # Every prefix remains in the finite orbit. Admit its exact coordinate,
-    # matrix-work, and output envelopes before performing any reflections.
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.dominant_representative_coordinate_bound",
-            message="some Weyl image coordinate may exceed the interoperable integer bound",
-        )
     if all(coordinate >= 0 for coordinate in weight):
         dominant_value = weight_lattice_vector(cartan, weight)
         element = WeylElement.model_construct(
@@ -2057,18 +2047,6 @@ def weyl_dominant_representative(
             message="the dominant representative and transporter exceed the admitted work or output envelope",
         )
 
-    word: list[int] = []
-    dominant = _dominant_weight(
-        rows,
-        weight,
-        word=word,
-        max_steps=MAX_WEYL_WORD_LENGTH,
-        bound_code="root_system.dominant_representative_word_bound",
-        bound_message=(
-            "the dominant transporter exceeds the admitted "
-            f"{MAX_WEYL_WORD_LENGTH}-reflection word bound"
-        ),
-    )
     # The invariant positive-definite norm bounds *all* intermediate Weyl
     # images without imposing the wire limit on private reflection prefixes.
     intermediate_bounds = _weight_coordinate_bounds(
@@ -2117,170 +2095,10 @@ def weyl_dominant_representative(
         ),
     )
     return WeylDominantRepresentativeResult._from_kernel(
-        cartan, weight, dominant, element
-    )
-
-
-def weyl_bruhat_interval(
-    lower: WeylElement, upper: WeylElement
-) -> WeylBruhatIntervalResult:
-    """Return the complete strong Bruhat interval between two Weyl elements.
-
-    The subword characterization of Bruhat order is applied to shortest words
-    from an admitted complete enumeration of the small ambient group. An
-    incomparable endpoint pair yields the empty interval; equal endpoints
-    yield a singleton.
-    """
-    from jacobian.math.matrices.values import IntegerMatrix
-
-    lower_value = _validated_weyl_element(lower, "lower")
-    upper_value = _validated_weyl_element(upper, "upper")
-    cartan = _as_cartan(lower_value.matrix)
-    upper_cartan = _as_cartan(upper_value.matrix)
-    if cartan != upper_cartan:
-        raise OperationDomainValidationError(
-            location=("upper", "matrix"),
-            code="root_system.weyl_parent_mismatch",
-            message="Bruhat endpoints must use the same ordered Cartan parent",
-        )
-    rows = cartan.entries
-    _admit_cartan_finite_type(rows)
-
-    # Exponents determine the ambient group order before any group-element
-    # enumeration. Root expansion here is bounded by the finite-type contract.
-    _admit_weyl_exponent_work(rows)
-    exponent_components = _weyl_exponent_data(rows)
-    group_order = prod(
-        exponent + 1
-        for _indices, exponents in exponent_components
-        for exponent in exponents
-    )
-    positive_root_count = sum(
-        exponent
-        for _indices, exponents in exponent_components
-        for exponent in exponents
-    )
-    if not 1 <= group_order <= MAX_BRUHAT_INTERVAL_GROUP_ORDER:
-        raise OperationResourceAdmissionError(
-            location=("matrix",),
-            code="root_system.bruhat_interval_group_bound",
-            message=(
-                "complete Bruhat intervals are admitted only when the ambient "
-                f"Weyl group has order at most {MAX_BRUHAT_INTERVAL_GROUP_ORDER}"
-            ),
-        )
-
-    rank = len(rows)
-    work_bound = (
-        group_order * rank**4
-        + group_order**2 * positive_root_count**2 * rank**3
-        + 2 * positive_root_count * rank**3
-        + group_order**2
-        + group_order**3
-    )
-    output_bound = 1_024 + group_order * (rank * rank * 20 + 256) + group_order**2 * 32
-    if (
-        group_order > MAX_BRUHAT_INTERVAL_ELEMENTS
-        or work_bound > MAX_BRUHAT_INTERVAL_WORK
-        or output_bound > MAX_BRUHAT_INTERVAL_OUTPUT_CELLS
-    ):
-        raise OperationResourceAdmissionError(
-            location=("matrix",),
-            code="root_system.bruhat_interval_bounds",
-            message="complete Weyl-group enumeration or interval output exceeds its admitted bound",
-        )
-
-    lower_action = _admit_weyl_element_value(lower_value, "lower")
-    upper_action = _admit_weyl_element_value(upper_value, "upper")
-    group = _enumerate_small_weyl_group(rows, group_order)
-    words = dict(group)
-    if lower_action not in words or upper_action not in words:
-        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-    lower_word = words[lower_action]
-    reflections = tuple(
-        _reflection_matrix(rows, index, transpose=False) for index in range(rank)
-    )
-    identity = tuple(tuple(int(i == j) for j in range(rank)) for i in range(rank))
-    word_lengths = {action: len(word) for action, word in group}
-    below = {
-        action: _subword_actions(word, reflections, identity, word_lengths)
-        for action, word in group
-    }
-    actions = tuple(
-        sorted(
-            action
-            for action, _word in group
-            if lower_action in below[action] and action in below[upper_action]
-        )
-    )
-    if len(actions) > MAX_BRUHAT_INTERVAL_ELEMENTS:
-        raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
-
-    labels = tuple(f"w{index:03d}" for index in range(len(actions)))
-    label_for = dict(zip(actions, labels, strict=True))
-    strict = {
-        (label_for[first], label_for[second])
-        for first in actions
-        for second in actions
-        if len(words[first]) < len(words[second]) and first in below[second]
-    }
-    cover_pairs = _transitive_reduction(labels, strict)
-    incomparable = {
-        (labels[i], labels[j])
-        for i in range(len(labels))
-        for j in range(i + 1, len(labels))
-        if (labels[i], labels[j]) not in strict and (labels[j], labels[i]) not in strict
-    }
-    minimal = tuple(
-        label for label in labels if not any(hi == label for _lo, hi in strict)
-    )
-    maximal = tuple(
-        label for label in labels if not any(lo == label for lo, _hi in strict)
-    )
-    ranks = tuple(
-        ElementRank(element=label, rank=len(words[action]) - len(lower_word))
-        for label, action in zip(labels, actions, strict=True)
-    )
-    strict_pairs = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted(strict))
-    covers = tuple(OrderedPair(lower=lo, upper=hi) for lo, hi in sorted(cover_pairs))
-    incomparables = tuple(
-        IncomparablePair(left=lo, right=hi) for lo, hi in sorted(incomparable)
-    )
-    poset = FinitePoset(
-        elements=labels,
-        strict_order_pairs=strict_pairs,
-        cover_relations=covers,
-        incomparable_pairs=incomparables,
-        minimal_elements=minimal,
-        maximal_elements=maximal,
-        graded=True,
-        ranks=ranks,
-        poset_digest=finite_poset_digest(
-            elements=labels,
-            strict_order_pairs=strict_pairs,
-            cover_relations=covers,
-            incomparable_pairs=incomparables,
-            minimal_elements=minimal,
-            maximal_elements=maximal,
-            graded=True,
-            ranks=ranks,
-        ),
-    )
-    elements = tuple(
-        WeylElement.model_construct(
-            matrix=cartan,
-            root_action=IntegerMatrix(
-                row_count=rank, column_count=rank, entries=action
-            ),
-        )
-        for action in actions
-    )
-    return WeylBruhatIntervalResult(
-        matrix=cartan,
-        lower=lower_value,
-        upper=upper_value,
-        elements=elements,
-        poset=poset,
+        cartan,
+        weight_lattice_vector(cartan, weight),
+        weight_lattice_vector(cartan, dominant),
+        element,
     )
 
 
@@ -2526,7 +2344,8 @@ def weyl_weight_orbit(
 
 
 def weyl_parabolic_weight_orbit(
-    request: WeylParabolicWeightOrbitRequest,
+    weight_value: WeightLatticeVector,
+    simple_root_indices: tuple[int, ...],
 ) -> WeylParabolicWeightOrbitResult:
     """Return the complete orbit of a typed weight under a standard parabolic.
 
@@ -2534,10 +2353,10 @@ def weyl_parabolic_weight_orbit(
     determine the exact orbit size before the ambient-coordinate BFS begins.
     """
     datum, weight = _canonical_lattice_vector(
-        request.weight, WeightLatticeVector, output_bound=False
+        weight_value, WeightLatticeVector, output_bound=False
     )
     rows = datum.cartan_matrix.entries
-    indices = request.simple_root_indices
+    indices = simple_root_indices
     if tuple(sorted(set(indices))) != indices or any(
         index >= len(rows) for index in indices
     ):

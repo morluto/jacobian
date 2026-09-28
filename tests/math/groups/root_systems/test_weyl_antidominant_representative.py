@@ -117,7 +117,10 @@ def test_antidominant_representative_and_transporter_match_group_closure(
         for row in range(len(weight)):
             reflection[row][index] -= matrix[row][index]
         weight_action = _multiply(tuple(map(tuple, reflection)), weight_action)
-    assert _act(weight_action, dominant.dominant_weight) == result.antidominant_weight
+    assert (
+        _act(weight_action, dominant.dominant_weight.coordinates)
+        == result.antidominant_weight
+    )
 
 
 @pytest.mark.parametrize("weight", [(-1, -2), (0, 0)])

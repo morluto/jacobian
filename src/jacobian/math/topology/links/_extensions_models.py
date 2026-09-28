@@ -62,6 +62,234 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"link_diagram.{reason}", message)
 
 
+MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES = 8 * 1024 * 1024
+
+
+class LinkDisjointUnionRequest(StrictModel):
+    """A nonempty finite family of diagrams whose total size is bounded."""
+
+    diagrams: tuple[OrientedLinkDiagram, ...] = Field(min_length=1, max_length=64)
+
+
+class LinkDisjointUnionArcMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_tail: LinkLabel
+    source_head: LinkLabel
+    target_tail: LinkLabel
+    target_head: LinkLabel
+
+
+class LinkDisjointUnionCrossingMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_crossing_id: LinkLabel
+    target_crossing_id: LinkLabel
+
+
+class LinkDisjointUnionDartMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_dart_id: LinkLabel
+    target_dart_id: LinkLabel
+
+
+class LinkDisjointUnionFreeLoopMap(StrictModel):
+    source_index: StrictInt = Field(ge=0, le=63)
+    source_loop_index: StrictInt = Field(ge=0, le=63)
+    target_loop_index: StrictInt = Field(ge=0, le=63)
+
+
+class LinkDisjointUnionResult(StrictModel):
+    """Tagged disjoint union with complete crossing, dart, arc, and loop transport."""
+
+    sources: tuple[OrientedLinkDiagram, ...] = Field(min_length=1, max_length=64)
+    diagram: OrientedLinkDiagram
+    crossing_map: tuple[LinkDisjointUnionCrossingMap, ...] = Field(
+        max_length=MAX_LINK_CROSSINGS
+    )
+    dart_map: tuple[LinkDisjointUnionDartMap, ...] = Field(
+        max_length=4 * MAX_LINK_CROSSINGS
+    )
+    arc_map: tuple[LinkDisjointUnionArcMap, ...] = Field(
+        max_length=2 * MAX_LINK_CROSSINGS
+    )
+    free_loop_map: tuple[LinkDisjointUnionFreeLoopMap, ...] = Field(
+        max_length=MAX_LINK_CROSSINGS
+    )
+
+    def _require_unique_transport_keys(self) -> None:
+        source_keys = (
+            (
+                self.crossing_map,
+                lambda row: (row.source_index, row.source_crossing_id),
+                lambda row: row.target_crossing_id,
+            ),
+            (
+                self.dart_map,
+                lambda row: (row.source_index, row.source_dart_id),
+                lambda row: row.target_dart_id,
+            ),
+            (
+                self.arc_map,
+                lambda row: (row.source_index, row.source_tail, row.source_head),
+                lambda row: (row.target_tail, row.target_head),
+            ),
+            (
+                self.free_loop_map,
+                lambda row: (row.source_index, row.source_loop_index),
+                lambda row: row.target_loop_index,
+            ),
+        )
+        for rows, source_key, target_key in source_keys:
+            sources = tuple(source_key(row) for row in rows)
+            targets = tuple(target_key(row) for row in rows)
+            if len(set(sources)) != len(sources) or len(set(targets)) != len(targets):
+                raise _validation_error(
+                    "disjoint_union_transport_uniqueness",
+                    "source and target transport keys must each be unique",
+                )
+
+    @model_validator(mode="after")
+    def require_complete_source_transport(self) -> Self:
+        crossing_count = sum(len(source.crossings) for source in self.sources)
+        free_loop_count = sum(source.free_loops for source in self.sources)
+        if crossing_count > MAX_LINK_CROSSINGS or free_loop_count > MAX_LINK_CROSSINGS:
+            raise _validation_error(
+                "disjoint_union_source_bound",
+                "source family exceeds the bounded union size",
+            )
+        self._require_unique_transport_keys()
+
+        crossings = {row.crossing_id: row for row in self.diagram.crossings}
+        darts = {
+            dart for crossing in self.diagram.crossings for dart in crossing.half_edges
+        }
+        arcs = {(arc.tail, arc.head) for arc in self.diagram.arcs}
+        crossing_sources = {
+            (i, crossing.crossing_id)
+            for i, source in enumerate(self.sources)
+            for crossing in source.crossings
+        }
+        dart_sources = {
+            (i, dart)
+            for i, source in enumerate(self.sources)
+            for crossing in source.crossings
+            for dart in crossing.half_edges
+        }
+        arc_sources = {
+            (i, arc.tail, arc.head)
+            for i, source in enumerate(self.sources)
+            for arc in source.arcs
+        }
+        loop_sources = {
+            (i, loop)
+            for i, source in enumerate(self.sources)
+            for loop in range(source.free_loops)
+        }
+        if {
+            (r.source_index, r.source_crossing_id) for r in self.crossing_map
+        } != crossing_sources or len(self.crossing_map) != len(crossing_sources):
+            raise _validation_error(
+                "disjoint_union_crossing_coverage",
+                "crossing transport must cover every source crossing",
+            )
+        if {
+            (r.source_index, r.source_dart_id) for r in self.dart_map
+        } != dart_sources or len(self.dart_map) != len(dart_sources):
+            raise _validation_error(
+                "disjoint_union_dart_coverage",
+                "dart transport must cover every source dart",
+            )
+        if {
+            (r.source_index, r.source_tail, r.source_head) for r in self.arc_map
+        } != arc_sources or len(self.arc_map) != len(arc_sources):
+            raise _validation_error(
+                "disjoint_union_arc_coverage",
+                "arc transport must cover every source arc",
+            )
+        if {
+            (r.source_index, r.source_loop_index) for r in self.free_loop_map
+        } != loop_sources or len(self.free_loop_map) != len(loop_sources):
+            raise _validation_error(
+                "disjoint_union_loop_coverage",
+                "loop transport must cover every source loop",
+            )
+        if (
+            len(darts) != len(self.dart_map)
+            or len(arcs) != len(self.arc_map)
+            or len(crossings) != len(self.crossing_map)
+        ):
+            raise _validation_error(
+                "disjoint_union_target_coverage",
+                "transport targets must cover the target diagram",
+            )
+        dart_maps = {
+            (r.source_index, r.source_dart_id): r.target_dart_id for r in self.dart_map
+        }
+        for crossing_row in self.crossing_map:
+            source = self.sources[crossing_row.source_index]
+            source_crossing = next(
+                c
+                for c in source.crossings
+                if c.crossing_id == crossing_row.source_crossing_id
+            )
+            target = crossings.get(crossing_row.target_crossing_id)
+            mapped_darts = tuple(
+                dart_maps[(crossing_row.source_index, dart)]
+                for dart in source_crossing.half_edges
+            )
+            if (
+                target is None
+                or target.half_edges != mapped_darts
+                or (target.over_pair, target.under_pair, target.sign)
+                != (
+                    source_crossing.over_pair,
+                    source_crossing.under_pair,
+                    source_crossing.sign,
+                )
+            ):
+                raise _validation_error(
+                    "disjoint_union_crossing_binding",
+                    "crossing transport must bind matching source metadata",
+                )
+        arc_rows = {
+            (r.source_index, r.source_tail, r.source_head): r for r in self.arc_map
+        }
+        for i, source in enumerate(self.sources):
+            for arc in source.arcs:
+                row = arc_rows[(i, arc.tail, arc.head)]
+                if (row.target_tail, row.target_head) != (
+                    dart_maps[(i, arc.tail)],
+                    dart_maps[(i, arc.head)],
+                ) or (row.target_tail, row.target_head) not in arcs:
+                    raise _validation_error(
+                        "disjoint_union_arc_binding",
+                        "arc transport must bind directed source and target arcs",
+                    )
+        expected_loop_targets = {
+            (source_index, local_index): sum(
+                source.free_loops for source in self.sources[:source_index]
+            )
+            + local_index
+            for source_index, source in enumerate(self.sources)
+            for local_index in range(source.free_loops)
+        }
+        if self.diagram.free_loops != free_loop_count or any(
+            row.target_loop_index
+            != expected_loop_targets[(row.source_index, row.source_loop_index)]
+            for row in self.free_loop_map
+        ):
+            raise _validation_error(
+                "disjoint_union_target_loops",
+                "loop transport must preserve each source's cumulative offset",
+            )
+        return self
+
+
+class LinkSignatureRequest(StrictModel):
+    """Compute the oriented link signature from one bounded diagram."""
+
+    diagram: OrientedLinkDiagram
+
+
 class AlexanderPolynomialRequest(StrictModel):
     diagram: OrientedLinkDiagram
 
@@ -595,6 +823,7 @@ class WirtingerPresentationResult(StrictModel):
 __all__ = [
     "MAX_BRAID_STRANDS",
     "MAX_BRAID_WORD_LENGTH",
+    "MAX_LINK_CROSSINGS",
     "MAX_WIRTINGER_GENERATORS",
     "AlexanderPolynomialRequest",
     "AlexanderPolynomialResult",

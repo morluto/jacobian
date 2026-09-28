@@ -18,6 +18,8 @@ from jacobian.math.topology.links._extensions_models import (
     LinkCrossingProfileResult,
     LinkDeterminantRequest,
     LinkDeterminantResult,
+    LinkDisjointUnionRequest,
+    LinkDisjointUnionResult,
     LinkStateCirclesRequest,
     LinkStateCirclesResult,
     SeifertCircleRequest,
@@ -35,6 +37,7 @@ from jacobian.math.topology.links.extensions import (
     link_conway_polynomial,
     link_crossing_profile,
     link_determinant,
+    link_disjoint_union,
     link_goeritz_data,
     link_seifert_circles,
     link_state_circles,
@@ -106,6 +109,10 @@ _SIGMA_ONE_CUBED = {
         {"generator": 1, "exponent": 1},
     ],
 }
+
+
+def _disjoint_union(request: LinkDisjointUnionRequest) -> LinkDisjointUnionResult:
+    return link_disjoint_union(request.diagrams)
 
 
 TOOLS: MathTools = (
@@ -562,6 +569,35 @@ TOOLS: MathTools = (
                     "crossing unknot; every free loop contributes one meridian."
                 ),
                 input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.disjoint_union.compute",
+        title="Form a tagged disjoint union of link diagrams",
+        description=(
+            "Combine one to 64 classical oriented link diagrams by relabelling "
+            "their crossings and darts into disjoint source-indexed axes. Return "
+            "complete crossing, dart, arc, and crossing-free loop transport. "
+            "The total union is admitted before construction at 64 crossings, "
+            "64 free loops, and an estimated 8 MiB serialized output."
+        ),
+        request_type=LinkDisjointUnionRequest,
+        result_type=LinkDisjointUnionResult,
+        run=_disjoint_union,
+        tags=("link-diagram", "disjoint-union", "exact"),
+        discovery_terms=(
+            "disjoint union of link diagrams",
+            "combine classical link diagrams",
+        ),
+        examples=(
+            OperationExample(
+                name="disjoint_union_of_unlinked_unknots",
+                description=(
+                    "Combine two crossing-free unknots and preserve their separate "
+                    "source identities as two free-loop targets."
+                ),
+                input={"diagrams": [{"free_loops": 1}, {"free_loops": 1}]},
             ),
         ),
     ),

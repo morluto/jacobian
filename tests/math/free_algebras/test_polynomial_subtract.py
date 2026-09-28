@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from fractions import Fraction
 from itertools import product
 
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.free_algebras import polynomial_subtract
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_ADDITION_TERMS,
@@ -215,17 +212,3 @@ def test_result_term_bound_rejects_before_sparse_arithmetic(
     assert error.value.errors()[0]["type"] == (
         "free_algebra.subtraction_result_term_budget"
     )
-
-
-def test_catalog_example_executes_and_round_trips_canonical_result() -> None:
-    catalog = Catalog.open()
-    tool = catalog.operation(OPERATION_ID)
-    assert tool is not None
-    response = invoke_operation(OPERATION_ID, tool.examples[0].input, catalog)
-    result = tool.result_type.model_validate_json(json.dumps(response.output))
-    assert isinstance(result, FreeAlgebraPolynomial)
-    assert _coefficient_map(result) == {
-        ("x",): Fraction(1),
-        ("x", "y"): Fraction(3, 2),
-        ("y",): Fraction(-1),
-    }

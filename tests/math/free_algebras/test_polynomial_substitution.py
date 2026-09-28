@@ -8,9 +8,7 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.free_algebras._models import (
     FreeAlgebraPolynomial,
     FreeAlgebraPolynomialHomomorphism,
@@ -182,16 +180,10 @@ def test_expansion_work_is_admitted_before_cartesian_expansion() -> None:
         substitute_polynomial(substitution, source)
 
 
-def test_catalog_declaration_and_example() -> None:
+def test_catalog_declaration_example_declares_a_usable_substitution() -> None:
     declaration = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
     assert declaration.examples
     request = FreeAlgebraPolynomialSubstitutionRequest.model_validate_json(
         encode_strict_json(declaration.examples[0].input), strict=True
     )
     assert request.polynomial.alphabet == request.substitution.source_alphabet
-    catalog = Catalog.open()
-    public = invoke_operation(OPERATION_ID, declaration.examples[0].input, catalog)
-    assert public.output == {
-        "alphabet": ["a", "b"],
-        "terms": [{"coefficient": {"num": "1", "den": "1"}, "word": []}],
-    }

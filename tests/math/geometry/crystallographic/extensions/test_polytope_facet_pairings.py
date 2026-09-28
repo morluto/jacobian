@@ -7,12 +7,12 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.dispatch import parse_operation_input
 from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
     CrystallographicAffineRealization,
     CrystallographicPolytopePairingRequest,
@@ -118,6 +118,7 @@ def test_oversized_pairing_coordinates_are_resource_refusals():
             request.pairings,
         )
 
+
 def _pair(request: CrystallographicPolytopePairingRequest):
     """Call the native pairing function with unpacked domain arguments."""
     return pair_crystallographic_polytope_facets(
@@ -200,10 +201,6 @@ def test_pairing_rejects_incomplete_ledger() -> None:
         OperationDomainValidationError, match="one entry per computed facet"
     ):
         _pair(request)
-
-
-def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:
-    result = check_crystallographic_fundamental_domain(_pair(_request()))
 
 
 def test_pairing_operation_is_published_with_square_example() -> None:

@@ -1,5 +1,6 @@
 """Public finite crystallographic-extension tools."""
 
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.geometry.crystallographic.extensions._models import (
     BieberbachFaceOrbitComplex,
@@ -245,6 +246,16 @@ _UNIT_SQUARE_PAIRING_RESULT = {
     "pairings": _UNIT_SQUARE_PAIRING["pairings"],
 }
 
+# The face-orbit operation consumes the canonical fundamental-domain result, not
+# the raw side-pairing ledger. Build the published example by running the
+# producer so the advertised input is exactly the value it establishes.
+_UNIT_SQUARE_FUNDAMENTAL_DOMAIN = _check_fundamental_domain(
+    CrystallographicPolytopePairingResult.model_validate_json(
+        encode_strict_json(_UNIT_SQUARE_PAIRING_RESULT), strict=True
+    )
+).model_dump(mode="json")
+
+
 TOOLS: MathTools = (
     MathTool(
         operation_id="crystallographic.quotient_face_orbits.compute",
@@ -270,7 +281,7 @@ TOOLS: MathTools = (
             OperationExample(
                 name="unit_square_torus_quotient_chains",
                 description="Construct the integral quotient chains of the unit-square torus.",
-                input=_UNIT_SQUARE_PAIRING_RESULT,
+                input=_UNIT_SQUARE_FUNDAMENTAL_DOMAIN,
             ),
         ),
     ),

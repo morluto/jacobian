@@ -71,10 +71,30 @@ def _polygon_request(*, klein: bool) -> CrystallographicPolytopePairingRequest:
         )
         points = ((0, 0), (0, 1), (1, 0), (1, 1))
         pairings = (
-            PolytopeFacetPairing(source_facet_index=0, target_facet_index=3, lattice_translation=(1, 0), holonomy_element=0),
-            PolytopeFacetPairing(source_facet_index=1, target_facet_index=2, lattice_translation=(0, 1), holonomy_element=0),
-            PolytopeFacetPairing(source_facet_index=2, target_facet_index=1, lattice_translation=(0, -1), holonomy_element=0),
-            PolytopeFacetPairing(source_facet_index=3, target_facet_index=0, lattice_translation=(-1, 0), holonomy_element=0),
+            PolytopeFacetPairing(
+                source_facet_index=0,
+                target_facet_index=3,
+                lattice_translation=(1, 0),
+                holonomy_element=0,
+            ),
+            PolytopeFacetPairing(
+                source_facet_index=1,
+                target_facet_index=2,
+                lattice_translation=(0, 1),
+                holonomy_element=0,
+            ),
+            PolytopeFacetPairing(
+                source_facet_index=2,
+                target_facet_index=1,
+                lattice_translation=(0, -1),
+                holonomy_element=0,
+            ),
+            PolytopeFacetPairing(
+                source_facet_index=3,
+                target_facet_index=0,
+                lattice_translation=(-1, 0),
+                holonomy_element=0,
+            ),
         )
     polytope = RationalVPolytope(
         space={"axes": ("x", "y")},

@@ -441,6 +441,8 @@ def _facet_pairing_result_size(
         + vertex_count * dimension * (coordinate_digits * 2 + 8)
         + 32_768
     )
+
+
 def _inverse_extension_element(
     source: FiniteLatticeExtension,
     element: tuple[tuple[int, ...], int],
@@ -460,6 +462,7 @@ def _inverse_extension_element(
     )
     inverse_translation = tuple(-value for value in _matvec(action_inverse, offset))
     return inverse_translation, inverse_holonomy
+
 
 def _admit_polytope_pairing(polytope: RationalVPolytope, pairing_count: int) -> None:
     """Preflight exact pairing work/output before the full facet enumeration."""

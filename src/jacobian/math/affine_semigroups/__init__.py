@@ -3,9 +3,19 @@
 from jacobian.math.affine_semigroups._models import (
     IntegerConfigurationCircuitsResult,
 )
+from jacobian.math.affine_semigroups.atoms import (
+    AffineMinimalGenerators,
+    AffineMinimalGeneratorsRequest,
+    minimal_generators,
+)
 from jacobian.math.affine_semigroups.factorization_count import (
     AffineFactorizationCount,
     factorization_count,
+)
+from jacobian.math.affine_semigroups.fundamental_holes import (
+    AffineSemigroupFundamentalHoles,
+    AffineSemigroupFundamentalHolesRequest,
+    fundamental_holes,
 )
 from jacobian.math.affine_semigroups.graver import (
     graver_basis,
@@ -15,6 +25,15 @@ from jacobian.math.affine_semigroups.graver import (
 from jacobian.math.affine_semigroups.graver_models import (
     IntegerConfigurationGraverBasis,
     IntegerConfigurationMarkovBasis,
+)
+from jacobian.math.affine_semigroups.group_lattice import (
+    AffineGroupLattice,
+    compute_group_lattice,
+)
+from jacobian.math.affine_semigroups.holes import (
+    AffineSemigroupHoleProfile,
+    AffineSemigroupHolesRequest,
+    holes_through_degree,
 )
 from jacobian.math.affine_semigroups.operations import (
     integer_configuration_circuits,
@@ -46,24 +65,35 @@ __all__ = [
     "AffineFactorizationCount",
     "AffineFiber",
     "AffineFiberGraph",
+    "AffineGroupLattice",
     "AffineHilbertBasis",
     "AffineMembershipResult",
+    "AffineMinimalGenerators",
+    "AffineMinimalGeneratorsRequest",
+    "AffineSemigroupFundamentalHoles",
+    "AffineSemigroupFundamentalHolesRequest",
+    "AffineSemigroupHoleProfile",
+    "AffineSemigroupHolesRequest",
     "AffineSemigroupNormalization",
     "IntegerConfigurationCircuitsResult",
     "IntegerConfigurationGraverBasis",
     "IntegerConfigurationMarkovBasis",
     "PositiveAffineSemigroup",
     "PositiveGradingResult",
+    "compute_group_lattice",
     "construct",
     "evaluate_factorization",
     "factorization_count",
     "fiber",
     "fiber_graph",
+    "fundamental_holes",
     "graver_basis",
     "hilbert_basis",
+    "holes_through_degree",
     "integer_configuration_circuits",
     "markov_basis",
     "membership",
+    "minimal_generators",
     "normalization",
     "positive_grading",
     "relation_lattice",

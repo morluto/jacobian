@@ -35,6 +35,7 @@ MAX_AFFINE_FACTOR_RESULT_DIGITS = (
     MAX_AFFINE_FACTOR_COORDINATE_DIGITS + MAX_AFFINE_DIGITS + 1
 )
 MAX_AFFINE_FACTOR_RESULT_SIZE = 1_000_000
+MAX_AFFINE_FACTOR_RESULT_SIZE = 1_000_000
 
 
 def _err(reason: str, message: str) -> PydanticCustomError:
@@ -330,7 +331,9 @@ def _preflight_factorization_parent_size(value: object) -> None:
         raise OperationResourceAdmissionError(
             location=("semigroup", "grading"),
             code="affine_semigroup.factorization_output",
-            message="factorization parent exceeds the 1,000,000-unit result representation envelope",
+            message=(
+                "factorization parent exceeds the 1,000,000-unit result representation envelope"
+            ),
         )
     estimated_size = _estimate_factorization_size(value, ())
     if estimated_size > MAX_AFFINE_FACTOR_RESULT_SIZE:
@@ -893,7 +896,10 @@ def _evaluate_factorization(
         raise OperationResourceAdmissionError(
             location=("semigroup",),
             code="affine_semigroup.factorization_output",
-            message="factorization result exceeds the 1,000,000-unit result representation envelope",
+            message=(
+                "factorization result exceeds the 1,000,000-unit result "
+                "representation envelope"
+            ),
         )
     target = tuple(
         sum(

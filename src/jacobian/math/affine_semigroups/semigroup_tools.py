@@ -4,9 +4,19 @@ from jacobian.catalog.models import (
     OperationExample,
     OperationResourceAdmissionError,
 )
+from jacobian.math.affine_semigroups.atoms import (
+    AffineMinimalGenerators,
+    AffineMinimalGeneratorsRequest,
+    minimal_generators,
+)
 from jacobian.math.affine_semigroups.factorization_count import (
     AffineFactorizationCount,
     factorization_count,
+)
+from jacobian.math.affine_semigroups.fundamental_holes import (
+    AffineSemigroupFundamentalHoles,
+    AffineSemigroupFundamentalHolesRequest,
+    fundamental_holes,
 )
 from jacobian.math.affine_semigroups.group_lattice import (
     AffineGroupLattice,
@@ -14,6 +24,11 @@ from jacobian.math.affine_semigroups.group_lattice import (
 )
 from jacobian.math.affine_semigroups.group_lattice_models import (
     AffineGroupLatticeRequest,
+)
+from jacobian.math.affine_semigroups.holes import (
+    AffineSemigroupHoleProfile,
+    AffineSemigroupHolesRequest,
+    holes_through_degree,
 )
 from jacobian.math.affine_semigroups.semigroup import (
     AffineFactorization,
@@ -43,6 +58,142 @@ from jacobian.math.affine_semigroups.semigroup_models import (
     AffineSemigroupNormalizationRequest,
     AffineSemigroupRequest,
     PositiveGradingRequest,
+)
+
+
+def _minimal_generators(
+    request: AffineMinimalGeneratorsRequest,
+) -> AffineMinimalGenerators:
+    try:
+        return minimal_generators(request.semigroup)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.minimal_generators",
+            message=str(exc),
+        ) from exc
+
+
+def _fundamental_holes(
+    request: AffineSemigroupFundamentalHolesRequest,
+) -> AffineSemigroupFundamentalHoles:
+    try:
+        return fundamental_holes(request.semigroup)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.fundamental_holes",
+            message=str(exc),
+        ) from exc
+
+
+def _holes_through_degree(
+    request: AffineSemigroupHolesRequest,
+) -> AffineSemigroupHoleProfile:
+    try:
+        return holes_through_degree(request.semigroup, request.max_degree)
+    except (OperationResourceAdmissionError, OperationDomainValidationError):
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as exc:
+        raise OperationDomainValidationError(
+            location=("semigroup",),
+            code="affine_semigroup.hole_profile",
+            message=str(exc),
+        ) from exc
+
+
+_FUNDAMENTAL_HOLES_TOOL = MathTool(
+    operation_id="affine_semigroup.fundamental_holes.compute",
+    title="Compute fundamental holes of a positive affine semigroup",
+    description=(
+        "Return the Q-minimal holes h in cone(S) intersect gp(S): those for "
+        "which no nonzero s in S has h-s in cone(S) intersect gp(S). Every "
+        "hole is a fundamental hole plus a semigroup element. This implementation "
+        "admits full-rank pointed cones in two ambient dimensions and bounds the "
+        "containing half-open parallelogram before lattice-point enumeration."
+    ),
+    request_type=AffineSemigroupFundamentalHolesRequest,
+    result_type=AffineSemigroupFundamentalHoles,
+    run=_fundamental_holes,
+    tags=("affine-semigroup", "fundamental-holes", "normalization", "exact"),
+    discovery_terms=(
+        "fundamental holes of an affine semigroup",
+        "minimal generators of the normalization difference",
+        "finite Q-minimal saturation holes",
+        "holes that generate all semigroup holes by translation",
+    ),
+    examples=(
+        OperationExample(
+            name="fundamental_hole_parity_semigroup",
+            description=(
+                "For generators (2,0), (0,2), (1,1), (1,0), the only "
+                "fundamental hole is (0,1); every other hole is obtained "
+                "by adding (0,2)."
+            ),
+            input={
+                "semigroup": {
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["g0", "g1", "g2", "g3"],
+                        "entries": [
+                            ["2", "0", "1", "1"],
+                            ["0", "2", "1", "0"],
+                        ],
+                    },
+                    "grading": [
+                        {"num": "1", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                }
+            },
+        ),
+    ),
+)
+
+_MINIMAL_GENERATOR_TOOL = MathTool(
+    operation_id="affine_semigroup.minimal_generators.compute",
+    title="Compute the minimal generators of a positive affine semigroup",
+    description=(
+        "Return the unique atom vectors as a positive affine semigroup on the "
+        "retained ambient rows, together with one exact factorization of every "
+        "source generator in the atom coordinates. Completeness uses each "
+        "generator's full finite fiber; aggregate work is admitted before enumeration."
+    ),
+    request_type=AffineMinimalGeneratorsRequest,
+    result_type=AffineMinimalGenerators,
+    run=_minimal_generators,
+    tags=("affine-semigroup", "minimal-generators", "atoms", "exact"),
+    discovery_terms=(
+        "minimal additive generators of an affine semigroup",
+        "irreducible elements or atoms of a positive affine semigroup",
+        "remove redundant affine semigroup generators and factor them in atoms",
+    ),
+    examples=(
+        OperationExample(
+            name="redundant_generators",
+            description=(
+                "The generator (2,0) decomposes into two copies of (1,0), "
+                "while duplicate (1,0) columns represent one atom."
+            ),
+            input={
+                "semigroup": {
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["a", "a_copy", "b"],
+                        "entries": [["1", "1", "2"], ["0", "0", "0"]],
+                    },
+                    "grading": [
+                        {"num": "1", "den": "1"},
+                        {"num": "1", "den": "1"},
+                    ],
+                }
+            },
+        ),
+    ),
 )
 
 
@@ -168,6 +319,8 @@ def _group_lattice(r: AffineGroupLatticeRequest) -> AffineGroupLattice:
 
 
 TOOLS = (
+    _FUNDAMENTAL_HOLES_TOOL,
+    _MINIMAL_GENERATOR_TOOL,
     MathTool(
         operation_id="affine_semigroup.factorization_count.compute",
         title="Count a finite affine-semigroup fiber exactly",
@@ -482,6 +635,56 @@ TOOLS = (
                         "generator_labels": ["a", "b", "c"],
                         "entries": [["2", "0", "2"], ["0", "2", "2"]],
                     }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.holes_through_degree.compute",
+        title="Enumerate affine-semigroup holes through a positive degree",
+        description=(
+            "Return every point h in cone(S) intersect gp(S) with the retained "
+            "positive grading at most max_degree that is not in S. The operation "
+            "currently admits full-rank pointed cones in two ambient dimensions; "
+            "it enumerates a bounded containing box in generated-lattice coordinates "
+            "and closes the finite semigroup reachability set. Candidate points, "
+            "work, scalar heights, and the complete exact output are preflighted. "
+            "A degree-bounded profile is not the global set of holes."
+        ),
+        request_type=AffineSemigroupHolesRequest,
+        result_type=AffineSemigroupHoleProfile,
+        run=_holes_through_degree,
+        tags=("affine-semigroup", "holes", "normalization", "exact"),
+        discovery_terms=(
+            "affine semigroup holes through degree",
+            "bounded holes in a positive affine semigroup",
+            "lattice points in the normalization missing from the semigroup",
+            "degree bounded nonnormality profile",
+        ),
+        examples=(
+            OperationExample(
+                name="parity_holes_through_degree_two",
+                description=(
+                    "For generators (2,0), (0,2), (1,1), (1,0), the generated "
+                    "lattice is Z^2 and the only hole of x+y degree at most two "
+                    "is (0,1)."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["g0", "g1", "g2", "g3"],
+                            "entries": [
+                                ["2", "0", "1", "1"],
+                                ["0", "2", "1", "0"],
+                            ],
+                        },
+                        "grading": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                    },
+                    "max_degree": "2",
                 },
             ),
         ),

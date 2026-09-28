@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from math import comb
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -28,9 +28,9 @@ class BieberbachTranslationTorusChains(StrictModel):
     """
 
     source: CrystallographicFundamentalDomainResult
-    circle_directions: tuple[tuple[CanonicalRational, ...], ...] = Field(
-        min_length=1, max_length=4
-    )
+    circle_directions: tuple[
+        Annotated[tuple[CanonicalRational, ...], Field(max_length=4)], ...
+    ] = Field(min_length=1, max_length=4)
     quotient_chain_complex: ChainComplexValue
 
     @model_validator(mode="after")

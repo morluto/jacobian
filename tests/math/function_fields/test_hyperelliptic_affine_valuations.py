@@ -7,6 +7,10 @@ from jacobian.math.finite_fields.values import FiniteFieldPresentation
 from jacobian.math.function_fields._models import (
     FiniteFunctionField,
     FiniteFunctionFieldElement,
+    FunctionFieldFiniteValuation,
+    FunctionFieldPlace,
+    FunctionFieldPlaceValuationRequest,
+    FunctionFieldPositiveInfinityValuation,
     HyperellipticAffinePlace,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
@@ -64,6 +68,7 @@ def _element(c0: tuple[int, ...], c1: tuple[int, ...] = (0,)) -> FiniteFunctionF
 @pytest.mark.parametrize(
     ("point", "coordinates", "expected"),
     [
+        ((0, 0), ((1,), (0,)), 0),  # Nonzero constants have finite order zero.
         ((0, 0), ((0,), (1,)), 1),  # y is a uniformizer at a simple branch point.
         ((0, 0), ((0, 1), (0,)), 2),  # x has order two there.
         ((2, 1), ((3, 1), (0,)), 1),  # x-2 at an unramified rational point.
@@ -74,7 +79,9 @@ def test_affine_valuation_at_branch_and_unramified_points(point, coordinates, ex
     result = function_field_hyperelliptic_affine_valuation(
         _place(*point), _element(*coordinates)
     )
-    assert result.valuation == expected
+    assert isinstance(result.valuation, FunctionFieldFiniteValuation)
+    assert result.valuation.kind == "FINITE"
+    assert result.valuation.value == expected
     assert result.place.field == _field()
     assert result.place.residue_field.order == 5
     assert type(result).model_validate_json(result.model_dump_json()) == result
@@ -85,17 +92,35 @@ def test_affine_valuation_is_additive_on_products_and_handles_poles():
     y = _element((0,), (1,))
     x = _element((0, 1))
     product = function_field_element_multiply(y, y).product
-    product_order = function_field_hyperelliptic_affine_valuation(place, product).valuation
+    product_order = function_field_hyperelliptic_affine_valuation(
+        place, product
+    ).valuation.value
     assert product_order == 2
-    assert product_order == 2 * function_field_hyperelliptic_affine_valuation(place, y).valuation
+    assert product_order == 2 * function_field_hyperelliptic_affine_valuation(
+        place, y
+    ).valuation.value
     assert (
-        function_field_hyperelliptic_affine_valuation(place, x).valuation
+        function_field_hyperelliptic_affine_valuation(place, x).valuation.value
         == 2
     )
     inverse_x = FiniteFunctionFieldElement(
         field=_field(), coordinates=(_rational((1,), (0, 1)), _rf((0,)))
     )
-    assert function_field_hyperelliptic_affine_valuation(place, inverse_x).valuation == -2
+    assert function_field_hyperelliptic_affine_valuation(
+        place, inverse_x
+    ).valuation.value == -2
+
+
+def test_zero_element_returns_structural_positive_infinity_without_null():
+    result = function_field_hyperelliptic_affine_valuation(
+        _place(0, 0), _element((0,), (0,))
+    )
+
+    assert isinstance(result.valuation, FunctionFieldPositiveInfinityValuation)
+    assert result.valuation.kind == "POSITIVE_INFINITY"
+    assert result.valuation.model_dump() == {"kind": "POSITIVE_INFINITY"}
+    assert '"valuation":{"kind":"POSITIVE_INFINITY"}' in result.model_dump_json()
+    assert "null" not in result.model_dump_json()
 
 
 def test_unramified_local_series_finds_higher_order_cancellation():
@@ -130,7 +155,10 @@ def test_unramified_local_series_finds_higher_order_cancellation():
         ),
     )
 
-    assert function_field_hyperelliptic_affine_valuation(place, y_minus_one).valuation == 3
+    assert (
+        function_field_hyperelliptic_affine_valuation(place, y_minus_one).valuation.value
+        == 3
+    )
 
 
 def test_affine_place_serialization_retains_parent_uniformizer_and_residue_field():
@@ -173,5 +201,30 @@ def test_catalog_declares_affine_hyperelliptic_valuation():
     request = tool.request_type.model_validate_json(
         encode_strict_json(tool.examples[0].input), strict=True
     )
-    assert tool.run(request).valuation == 1
+    result = tool.run(request)
+    assert isinstance(result.valuation, FunctionFieldFiniteValuation)
+    assert result.valuation.value == 1
     assert tool in BUILTIN_TOOLS
+
+
+def test_rational_place_valuation_uses_same_structural_zero_result():
+    rational_field = FiniteFunctionField(
+        characteristic=5, defining_polynomial=(_rf((1,)),)
+    )
+    place = FunctionFieldPlace(
+        field=rational_field,
+        kind="FINITE",
+        prime_polynomial=PrimeFieldPolynomial(characteristic=5, coefficients=(0, 1)),
+        degree=1,
+    )
+    zero = FiniteFunctionFieldElement(field=rational_field, coordinates=(_rf((0,)),))
+    tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "function_field.place.valuation.compute"
+    )
+    result = tool.run(FunctionFieldPlaceValuationRequest(place=place, element=zero))
+
+    assert isinstance(result.valuation, FunctionFieldPositiveInfinityValuation)
+    assert result.model_dump()["valuation"] == {"kind": "POSITIVE_INFINITY"}
+    assert "null" not in result.model_dump_json()

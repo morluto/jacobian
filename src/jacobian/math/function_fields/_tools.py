@@ -22,12 +22,14 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementInverseRequest,
     FunctionFieldElementMultiplyRequest,
     FunctionFieldElementMultiplyResult,
+    FunctionFieldFiniteValuation,
     FunctionFieldGenusRequest,
     FunctionFieldGenusResult,
     FunctionFieldPlaceEnumerationRequest,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPlaceValuationRequest,
     FunctionFieldPlaceValuationResult,
+    FunctionFieldPositiveInfinityValuation,
     FunctionFieldPrincipalDivisorRequest,
     FunctionFieldPrincipalDivisorResult,
     FunctionFieldResidueRequest,
@@ -194,10 +196,15 @@ _X_DIVISOR = {
 def _run_place_valuation(
     request: FunctionFieldPlaceValuationRequest,
 ) -> FunctionFieldPlaceValuationResult:
+    valuation = function_field_place_valuation(request.place, request.element)
     return FunctionFieldPlaceValuationResult(
         place=request.place,
         element=request.element,
-        valuation=function_field_place_valuation(request.place, request.element),
+        valuation=(
+            FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
+            if valuation is None
+            else FunctionFieldFiniteValuation(kind="FINITE", value=valuation)
+        ),
     )
 
 
@@ -458,7 +465,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="function_field.place.valuation.compute",
         title="Compute a function-field valuation",
-        description="Compute the exact discrete valuation of a rational-function element at a finite or infinite place; the place and element must share the same rational function field.",
+        description=(
+            "Compute the exact discrete valuation of a rational-function element "
+            "at a finite or infinite place of GF(p)(x). A finite result is tagged "
+            "FINITE and carries an integer (including zero); the zero element has "
+            "the structural POSITIVE_INFINITY result."
+        ),
         request_type=FunctionFieldPlaceValuationRequest,
         result_type=FunctionFieldPlaceValuationResult,
         run=_run_place_valuation,
@@ -487,8 +499,7 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         title="Compute a place uniformizer",
         description=(
             "Return an exact element of valuation one at a finite or infinite "
-            "place of the rational function field GF(p)(x)."
-        ),
+            "place of the rational function field GF(p)(x)."        ),
         request_type=FunctionFieldUniformizerRequest,
         result_type=FunctionFieldUniformizerResult,
         run=_run_place_uniformizer,

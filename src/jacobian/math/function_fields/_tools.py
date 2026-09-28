@@ -269,8 +269,6 @@ _GF2_Y = {
 }
 
 
-
-
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="function_field.base_embedding.apply",

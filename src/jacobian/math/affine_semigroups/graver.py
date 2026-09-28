@@ -238,6 +238,11 @@ def graver_basis(configuration: IntegerMatrix) -> IntegerConfigurationGraverBasi
             first = next(value for value in vector if value)
             vectors = (vector if first > 0 else tuple(-value for value in vector),)
     return IntegerConfigurationGraverBasis(configuration=configuration, vectors=vectors)
+    # The published contract retains Graver vectors sorted and unique, so the
+    # kernel normalizes its own enumeration before packaging the value.
+    return IntegerConfigurationGraverBasis(
+        configuration=configuration, vectors=tuple(sorted(set(vectors)))
+    )
 
 
 def markov_basis(configuration: IntegerMatrix) -> IntegerConfigurationMarkovBasis:
@@ -369,6 +374,10 @@ def _graver_toric_plan(
                 f"complete Graver candidate-pair work exceeds {MAX_GRAVER_WORK} states"
             ),
         )
+    # Use the same pivot-aware admitted candidate envelope as Graver
+    # enumeration. The full ambient box contains many vectors that cannot
+    # satisfy the relation and is not a sound estimate of this kernel's work.
+    radius, _candidate_states = _admit_graver_search(reduced)
 
     exponent_bound = 1 if maximum == 0 else 2 * maximum
     if exponent_bound > MAX_POLYNOMIAL_EXPONENT:

@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import rfc8785
 from pydantic import model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
-from jacobian.canonical import CanonicalLimits
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -18,6 +16,11 @@ from jacobian.math.lattices.operations import hermite_normal_form
 from jacobian.math.matrices.values import IntegerMatrix
 
 MAX_AFFINE_GROUP_LATTICE_LABEL_CHARS = 4_096
+# Structural envelope for the retained Hermite basis: the digit width of every
+# source entry plus one bounded row per ambient dimension. This replaces an
+# encoded-size estimate, which is a transport measure rather than a
+# mathematical bound.
+MAX_AFFINE_GROUP_LATTICE_DIGITS = 1_000_000
 
 
 class AffineGroupLattice(StrictModel):
@@ -104,11 +107,15 @@ def compute_group_lattice(configuration: AffineConfiguration) -> AffineGroupLatt
             message="configuration is malformed",
         ) from exc
 
-    compact_configuration = config.model_dump(mode="json")
-    source_bytes = len(rfc8785.dumps(compact_configuration))
+    # Bound the retained result by cardinality and digit width rather than by
+    # encoded transport size: the Hermite basis has at most one row per ambient
+    # dimension, each entry bounded by the coefficient digits of the source.
+    source_digits = sum(
+        len(str(abs(int(value)))) for row in config.entries for value in row
+    )
     hnf_digits = len(row_labels) * 8 + 16
-    output_bound = source_bytes + len(row_labels) ** 2 * (hnf_digits + 8)
-    if output_bound > CanonicalLimits().max_output_bytes:
+    output_bound = source_digits + len(row_labels) ** 2 * (hnf_digits + 8)
+    if output_bound > MAX_AFFINE_GROUP_LATTICE_DIGITS:
         raise OperationResourceAdmissionError(
             location=("configuration",),
             code="affine_semigroup.group_lattice_output_bound",

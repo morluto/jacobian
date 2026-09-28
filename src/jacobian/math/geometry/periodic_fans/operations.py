@@ -10,9 +10,12 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.geometry.periodic_fans._kernel import (
+    MAX_PERIODIC_FM_GENERATED_ROWS,
+    MAX_PERIODIC_FM_ROWS,
     MAX_PERIODIC_TRANSLATION_ENUMERATION,
     _translation_count,
     _translations_between,
+    fm_structural_bound,
     recognize_periodic_fan,
 )
 from jacobian.math.geometry.periodic_fans._models import (
@@ -21,6 +24,7 @@ from jacobian.math.geometry.periodic_fans._models import (
     MAX_PERIODIC_INDEX_DIGITS,
     MAX_PERIODIC_LATTICE_RANK,
     MAX_PERIODIC_OVERLAP_CANDIDATES,
+    MAX_PERIODIC_POLYGON_VERTICES,
     MAX_PERIODIC_VERTICES,
     PeriodicFanPresentation,
     PeriodicFanValidationResult,
@@ -45,12 +49,12 @@ def _digit_weight(value: int | Fraction) -> int:
 
 
 def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
-    """Enforce the published envelope and preflight overlap enumeration.
+    """Enforce the published envelope and preflight enumeration and expansion.
 
     Catalog requests are already bounded by the presentation model, but native
-    callers can bypass wire validation, so the same envelope and the derived
-    translation-enumeration count are checked here before any exact arithmetic
-    starts.
+    callers can bypass wire validation, so the same envelope, the derived
+    translation-enumeration count, and the structural bound on every exact
+    feasibility tableau are checked here before any exact arithmetic starts.
     """
 
     rank = fan.lattice_rank
@@ -98,11 +102,12 @@ def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
                 f"{MAX_PERIODIC_COORDINATE_DIGITS} decimal digits"
             )
     for cell in fan.cells:
-        if len(cell) != rank + 1:
+        max_cell_vertices = MAX_PERIODIC_POLYGON_VERTICES if rank == 2 else rank + 1
+        if len(cell) < rank + 1 or len(cell) > max_cell_vertices:
             _reject_domain(
                 ("fan", "cells"),
                 "geometry.periodic_fan.cell_dimension_matches_lattice_rank",
-                "every maximal cell must have exactly lattice_rank + 1 vertices",
+                "maximal cells must be simplices, except for bounded rank-two polygons",
             )
         if any(index < 0 or index >= len(fan.vertices) for index in cell):
             _reject_domain(
@@ -110,6 +115,36 @@ def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
                 "geometry.periodic_fan.cell_vertex_index_out_of_range",
                 "cell vertex indices must address declared vertices",
             )
+        if len(set(cell)) != len(cell):
+            _reject_domain(
+                ("fan", "cells"),
+                "geometry.periodic_fan.cell_vertex_indices_distinct",
+                "cell vertex indices must be distinct",
+            )
+        if len(cell) == rank + 1 and tuple(sorted(cell)) != cell:
+            _reject_domain(
+                ("fan", "cells"),
+                "geometry.periodic_fan.cell_vertex_indices_strictly_increasing",
+                "simplex vertex indices must be strictly increasing",
+            )
+        if rank == 2 and len(cell) > rank + 1 and cell[0] != min(cell):
+            _reject_domain(
+                ("fan", "cells"),
+                "geometry.periodic_fan.polygon_vertex_order",
+                "polygon order must begin at its smallest vertex index",
+            )
+    if tuple(sorted(fan.cells)) != fan.cells or len(set(fan.cells)) != len(fan.cells):
+        _reject_domain(
+            ("fan", "cells"),
+            "geometry.periodic_fan.cells_sorted_and_distinct",
+            "cells must be sorted lexicographically and distinct",
+        )
+    if any(len(fan.cells[index]) != rank + 1 for index in fan.unimodular_cells):
+        _reject_domain(
+            ("fan", "unimodular_cells"),
+            "geometry.periodic_fan.unimodular_cell_not_simplex",
+            "unimodularity claims are defined only for simplex cells",
+        )
     if any(
         candidate.first_cell < 0
         or candidate.first_cell >= len(fan.cells)
@@ -128,6 +163,15 @@ def _admit_periodic_fan(fan: PeriodicFanPresentation) -> None:  # noqa: C901
     if _digit_weight(period_determinant) > MAX_PERIODIC_INDEX_DIGITS:
         _reject_envelope(
             f"the period index is limited to {MAX_PERIODIC_INDEX_DIGITS} decimal digits"
+        )
+    fm_rows = fm_structural_bound(rank)
+    if (
+        fm_rows > MAX_PERIODIC_FM_ROWS
+        or fm_rows * fm_rows > MAX_PERIODIC_FM_GENERATED_ROWS
+    ):
+        _reject_envelope(
+            "periodic fan feasibility tableau expansion exceeds the preflighted "
+            f"{MAX_PERIODIC_FM_ROWS} row cap"
         )
     enumeration = 0
     cell_coordinates = [

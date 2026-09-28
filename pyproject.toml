@@ -240,6 +240,7 @@ ignore_imports = [
     "jacobian.math.geometry.affine_tori._flint_process -> jacobian.process",
     "jacobian.math.optimization._ppl_process -> jacobian.process",
     "jacobian.math.topology.chain_complexes._smith_process -> jacobian.process",
+    "jacobian.math.ore_algebras.proper_hypergeometric_actions._action_process -> jacobian.process",
     "jacobian.math.combinatorics.finite_structures.hypergraphs._independence_z3 -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy._optimum_process -> jacobian.process",
     "jacobian.math.combinatorics.discrepancy.bounded_coloring._process -> jacobian.process",
@@ -286,6 +287,8 @@ ignore_imports = [
     "jacobian.math.polynomials.root_critical._profile_process -> jacobian.process",
     "jacobian.math.polynomials.root_critical._splitting_process -> jacobian.process",
     "jacobian.math.polynomials.unit_circle._root_profile_process -> jacobian.process",
+    # Gamma0 bases and Atkin-Lehner matrices run in bounded killable PARI workers.
+    "jacobian.math.number_theory.modular_forms.pari_backend -> jacobian.process",
 ]
 
 [[tool.importlinter.contracts]]

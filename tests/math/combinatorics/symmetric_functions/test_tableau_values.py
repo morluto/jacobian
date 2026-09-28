@@ -17,20 +17,27 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     IntegerPartition as RequestIntegerPartition,
 )
 
+_EXPECTED_ALL = (
+    "IntegerPartition",
+    "SemistandardYoungTableau",
+    "StandardYoungTableau",
+    "TableauCandidate",
+    "TableauContent",
+    "TableauContentTerm",
+    "littlewood_richardson_coefficient",
+    "littlewood_richardson_tableaux",
+    "partition_conjugate",
+    "require_semistandard",
+    "require_standard",
+    "schur_evaluation",
+    "schur_product",
+    "verify_schur_evaluation",
+)
+
 
 def test_symmetric_function_public_values_have_one_canonical_identity() -> None:
     assert RequestIntegerPartition is IntegerPartition
-    assert tuple(symmetric_functions.__all__) == (
-        "IntegerPartition",
-        "SemistandardYoungTableau",
-        "StandardYoungTableau",
-        "TableauCandidate",
-        "partition_conjugate",
-        "require_semistandard",
-        "require_standard",
-        "schur_evaluation",
-        "verify_schur_evaluation",
-    )
+    assert tuple(symmetric_functions.__all__) == tuple(_EXPECTED_ALL)
 
 
 def test_empty_tableaux_have_the_empty_partition_shape() -> None:

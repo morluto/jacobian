@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
-from jacobian._exact import CanonicalRational
+from jacobian._exact import CanonicalRational, ExactInteger
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.matrices.values import IntegerMatrix
@@ -184,14 +184,14 @@ class LatticeVectorCreateRequest(StrictModel):
     """Create one exact vector in a named basis of a finite Cartan datum."""
 
     matrix: CartanMatrix
-    coordinates: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
 
 class _FiniteCartanLatticeVector(StrictModel):
     """Shared structure for vectors in four distinct datum-owned lattices."""
 
     datum: FiniteCartanDatum
-    coordinates: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    coordinates: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
     @model_validator(mode="after")
     def require_bounded_datum_axis(self) -> Self:
@@ -1131,6 +1131,20 @@ class WeylElementInverseRequest(StrictModel):
     element: WeylElement
 
 
+class WeylElementWeightActionRequest(StrictModel):
+    """Apply one Weyl element to an exact weight-lattice value."""
+
+    element: WeylElement
+    weight: WeightLatticeVector
+
+
+class WeylElementRootActionRequest(StrictModel):
+    """Apply one Weyl element to an exact root-lattice value."""
+
+    element: WeylElement
+    vector: RootLatticeVector
+
+
 class WeylBruhatIntervalRequest(StrictModel):
     """Two elements of one finite Weyl group defining a closed interval."""
 
@@ -1281,10 +1295,206 @@ class WeylWeightOrbitResult(StrictModel):
         return cls.model_construct(matrix=matrix, weight=weight, orbit=orbit)
 
 
+class WeylParabolicWeightOrbitRequest(StrictModel):
+    """A typed weight and a canonical subset of parabolic generators."""
+
+    weight: WeightLatticeVector
+    simple_root_indices: tuple[
+        Annotated[StrictInt, Field(ge=0, le=MAX_RANK - 1)], ...
+    ] = Field(max_length=MAX_RANK)
+
+    @model_validator(mode="after")
+    def require_canonical_subset(self) -> Self:
+        rank = len(self.weight.datum.cartan_matrix)
+        if tuple(
+            sorted(set(self.simple_root_indices))
+        ) != self.simple_root_indices or any(
+            index >= rank for index in self.simple_root_indices
+        ):
+            raise _validation_error(
+                "parabolic_simple_indices",
+                "parabolic simple-root indices must be a strictly increasing subset of the Cartan axis",
+            )
+        return self
+
+
+class WeylParabolicWeightOrbitResult(StrictModel):
+    """The complete parabolic orbit, bound to its weight datum and generators."""
+
+    datum: FiniteCartanDatum
+    simple_root_indices: tuple[
+        Annotated[StrictInt, Field(ge=0, le=MAX_RANK - 1)], ...
+    ] = Field(max_length=MAX_RANK)
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    orbit: tuple[tuple[StrictInt, ...], ...] = Field(
+        min_length=1, max_length=MAX_WEIGHT_ORBIT_SIZE
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_orbit(self) -> Self:
+        rank = len(self.datum.cartan_matrix)
+        if (
+            tuple(sorted(set(self.simple_root_indices))) != self.simple_root_indices
+            or any(index >= rank for index in self.simple_root_indices)
+            or len(self.weight) != rank
+            or self.orbit != tuple(sorted(set(self.orbit)))
+            or self.weight not in self.orbit
+            or any(len(value) != rank for value in self.orbit)
+            or any(
+                abs(coordinate) > MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.orbit, self.weight)
+                for coordinate in value
+            )
+        ):
+            raise _validation_error(
+                "parabolic_weight_orbit_shape",
+                "the parabolic orbit must be sorted, distinct, bounded, and use its Cartan weight axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        datum: FiniteCartanDatum,
+        simple_root_indices: tuple[int, ...],
+        weight: tuple[int, ...],
+        orbit: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            datum=datum,
+            simple_root_indices=simple_root_indices,
+            weight=weight,
+            orbit=orbit,
+        )
+
+
+class WeylDominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight in fundamental-weight coordinates."""
+
+    weight: tuple[
+        Annotated[
+            int,
+            Field(ge=-MAX_REFLECTION_REPRESENTABLE, le=MAX_REFLECTION_REPRESENTABLE),
+        ],
+        ...,
+    ] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description=(
+            "Fundamental-weight coordinates; length must equal Cartan rank, "
+            f"and each integer must lie in [-{MAX_REFLECTION_REPRESENTABLE}, "
+            f"{MAX_REFLECTION_REPRESENTABLE}]."
+        ),
+    )
+
+
+class WeylDominantRepresentativeResult(StrictModel):
+    """The dominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: WeightLatticeVector
+    dominant_weight: WeightLatticeVector
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_dominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            self.weight.datum.cartan_matrix != self.matrix
+            or self.dominant_weight.datum.cartan_matrix != self.matrix
+            or len(self.weight.coordinates) != rank
+            or len(self.dominant_weight.coordinates) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (
+                    *self.weight.coordinates,
+                    *self.dominant_weight.coordinates,
+                )
+            )
+            or any(value < 0 for value in self.dominant_weight.coordinates)
+        ):
+            raise _validation_error(
+                "dominant_representative_shape",
+                "the source, dominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: WeightLatticeVector,
+        dominant_weight: WeightLatticeVector,
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            dominant_weight=dominant_weight,
+            element=element,
+        )
+
+
+class WeylAntidominantRepresentativeRequest(CartanMatrixRequest):
+    """An integral weight with one fundamental-weight coordinate per Cartan row."""
+
+    weight: tuple[StrictInt, ...] = Field(
+        min_length=1,
+        max_length=MAX_RANK,
+        description="Integral fundamental-weight coordinates; length must equal the number of Cartan matrix rows.",
+    )
+
+
+class WeylAntidominantRepresentativeResult(StrictModel):
+    """The antidominant orbit representative and a Weyl element mapping to it."""
+
+    matrix: CartanMatrix
+    weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    antidominant_weight: tuple[StrictInt, ...] = Field(
+        min_length=1, max_length=MAX_RANK
+    )
+    element: WeylElement
+
+    @model_validator(mode="after")
+    def require_antidominant_representative_shape(self) -> Self:
+        rank = len(self.matrix)
+        if (
+            len(self.weight) != rank
+            or len(self.antidominant_weight) != rank
+            or self.element.matrix != self.matrix
+            or any(
+                abs(value) > MAX_REFLECTION_REPRESENTABLE
+                for value in (*self.weight, *self.antidominant_weight)
+            )
+            or any(value > 0 for value in self.antidominant_weight)
+        ):
+            raise _validation_error(
+                "antidominant_representative_shape",
+                "the source, antidominant weight, and Weyl element must share the Cartan axis",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        matrix: CartanMatrix,
+        weight: tuple[int, ...],
+        antidominant_weight: tuple[int, ...],
+        element: WeylElement,
+    ) -> Self:
+        return cls.model_construct(
+            matrix=matrix,
+            weight=weight,
+            antidominant_weight=antidominant_weight,
+            element=element,
+        )
+
+
 class WeylDimensionRequest(CartanMatrixRequest):
     """An integral dominant weight in fundamental-weight coordinates."""
 
-    highest_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
+    highest_weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
 
     @model_validator(mode="after")
     def require_dominant_weight_axis(self) -> Self:
@@ -1303,8 +1513,8 @@ class WeylDimensionFactor(StrictModel):
 
     positive_root: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
     positive_coroot: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    numerator_pairing: StrictInt = Field(gt=0)
-    denominator_pairing: StrictInt = Field(gt=0)
+    numerator_pairing: ExactInteger = Field(gt=0)
+    denominator_pairing: ExactInteger = Field(gt=0)
 
 
 class WeylDimensionResult(StrictModel):
@@ -1312,8 +1522,8 @@ class WeylDimensionResult(StrictModel):
 
     matrix: CartanMatrix
     weight_axis: tuple[int, ...] = Field(min_length=1, max_length=MAX_RANK)
-    highest_weight: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_RANK)
-    dimension: StrictInt = Field(ge=1)
+    highest_weight: tuple[ExactInteger, ...] = Field(min_length=1, max_length=MAX_RANK)
+    dimension: ExactInteger = Field(ge=1)
     positive_root_factors: tuple[WeylDimensionFactor, ...] = Field(
         min_length=1, max_length=MAX_POSITIVE_ROOTS
     )

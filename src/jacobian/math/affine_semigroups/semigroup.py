@@ -35,6 +35,7 @@ MAX_AFFINE_FACTOR_RESULT_DIGITS = (
     MAX_AFFINE_FACTOR_COORDINATE_DIGITS + MAX_AFFINE_DIGITS + 1
 )
 MAX_AFFINE_FACTOR_RESULT_BYTES = 1_000_000
+MAX_AFFINE_FACTOR_RESULT_SIZE = 1_000_000
 
 
 def _err(reason: str, message: str) -> PydanticCustomError:
@@ -251,6 +252,30 @@ def _estimate_factorization_bytes(
         return MAX_AFFINE_FACTOR_RESULT_BYTES + 1
     # JSON escaping expands an arbitrary control character to at most six bytes.
     escaped_label_bytes = 6 * label_bytes
+def _estimate_factorization_size(
+    semigroup: PositiveAffineSemigroup, coordinates: tuple[int, ...]
+) -> int:
+    """Conservatively bound retained parent and factorization scalars.
+
+    The estimate is a representation-size envelope -- label character counts
+    and maximum scalar decimal widths -- not an encoded transport measurement.
+    """
+    configuration = semigroup.configuration
+    labels = (*configuration.row_labels, *configuration.generator_labels)
+    if any(type(label) is not str for label in labels):
+        return MAX_AFFINE_FACTOR_RESULT_SIZE + 1
+    if any(
+        len(label) > MAX_AFFINE_FACTOR_RESULT_SIZE
+        or any(0xD800 <= ord(character) <= 0xDFFF for character in label)
+        for label in labels
+    ):
+        return MAX_AFFINE_FACTOR_RESULT_SIZE + 1
+    try:
+        label_size = sum(len(label.encode("utf-8")) for label in labels)
+    except UnicodeEncodeError:
+        return MAX_AFFINE_FACTOR_RESULT_SIZE + 1
+    # JSON escaping expands an arbitrary control character to at most six units.
+    escaped_label_size = 6 * label_size
     matrix = sum(
         len(str(abs(int(value)))) + 2 for row in configuration.entries for value in row
     )
@@ -263,6 +288,9 @@ def _estimate_factorization_bytes(
     return (
         512 + escaped_label_bytes + matrix + grading + coefficient_bytes + target_bytes
     )
+    coefficient_size = sum(len(str(int(value))) + 3 for value in coordinates)
+    target_size = configuration.rows * (MAX_AFFINE_FACTOR_RESULT_DIGITS + 3)
+    return 512 + escaped_label_size + matrix + grading + coefficient_size + target_size
 
 
 def _preflight_factorization_parent_size(value: object) -> None:
@@ -336,6 +364,14 @@ def _preflight_factorization_parent_size(value: object) -> None:
             location=("semigroup",),
             code="affine_semigroup.factorization_output",
             message="factorization result exceeds the 1,000,000-byte output envelope",
+            message="factorization parent exceeds the 1,000,000-unit result representation envelope",
+        )
+    estimated_size = _estimate_factorization_size(value, ())
+    if estimated_size > MAX_AFFINE_FACTOR_RESULT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("semigroup",),
+            code="affine_semigroup.factorization_output",
+            message="factorization result exceeds the 1,000,000-unit result representation envelope",
         )
 
 
@@ -382,9 +418,9 @@ class AffineFiberGraph(StrictModel):
     semigroup: PositiveAffineSemigroup
     target: tuple[ExactInteger, ...]
     moves: tuple[tuple[ExactInteger, ...], ...]
-    vertices: tuple[tuple[ExactInteger, ...], ...]
-    edges: tuple[tuple[int, int], ...]
-    components: tuple[tuple[int, ...], ...]
+    vertices: tuple[tuple[ExactInteger, ...], ...] = Field(max_length=MAX_AFFINE_FIBER)
+    edges: tuple[tuple[int, int], ...] = Field(max_length=MAX_AFFINE_GRAPH_EDGES)
+    components: tuple[tuple[int, ...], ...] = Field(max_length=MAX_AFFINE_FIBER)
 
     @model_validator(mode="after")
     def _graph_shape(self) -> Self:
@@ -423,11 +459,43 @@ class AffineFiberGraph(StrictModel):
             raise _err(
                 "graph_vertex_axis", "fiber graph vertices must use the generator axis"
             )
+        if any(
+            len(vertex) != configuration.columns
+            or any(value < 0 for value in vertex)
+            or not _factorization_matches(self.semigroup, self.target, vertex)
+            for vertex in self.vertices
+        ):
+            raise _err(
+                "graph_vertex_fiber",
+                "fiber graph vertices must be nonnegative factorizations of the target",
+            )
         if self.edges != tuple(sorted(set(self.edges))):
             raise _err("graph_edges", "fiber graph edges must be sorted and unique")
         if any(not (0 <= left < right < n_vertices) for left, right in self.edges):
             raise _err(
                 "graph_edge_indices", "fiber graph edges must index distinct vertices"
+            )
+        normalized_moves = {
+            move
+            if next(value for value in move if value) > 0
+            else tuple(-v for v in move)
+            for move in self.moves
+        }
+        if any(
+            tuple(
+                a - b
+                for a, b in zip(self.vertices[right], self.vertices[left], strict=True)
+            )
+            not in normalized_moves
+            and tuple(
+                b - a
+                for a, b in zip(self.vertices[right], self.vertices[left], strict=True)
+            )
+            not in normalized_moves
+            for left, right in self.edges
+        ):
+            raise _err(
+                "graph_edge_move", "each edge must be induced by a supplied move"
             )
         if self.components != tuple(
             sorted(self.components, key=lambda part: part[0] if part else -1)
@@ -445,6 +513,10 @@ class AffineFiberGraph(StrictModel):
             )
         if len(self.edges) > MAX_AFFINE_GRAPH_EDGES:
             raise _err("graph_edge_bound", "fiber graph exceeds its edge envelope")
+        if self.components != _graph_components(n_vertices, set(self.edges)):
+            raise _err(
+                "graph_components", "components must be the graph connected components"
+            )
         return self
 
 
@@ -856,13 +928,16 @@ def _evaluate_factorization(
             message="exact factorization evaluation exceeds its arithmetic work envelope",
         )
     if (
-        _estimate_factorization_bytes(semigroup, coordinates)
-        > MAX_AFFINE_FACTOR_RESULT_BYTES
+        _estimate_factorization_size(semigroup, coordinates)
+        > MAX_AFFINE_FACTOR_RESULT_SIZE
     ):
         raise OperationResourceAdmissionError(
             location=("semigroup",),
             code="affine_semigroup.factorization_output",
-            message="factorization result exceeds the 1,000,000-byte output envelope",
+            message=(
+                "factorization result exceeds the 1,000,000-unit result "
+                "representation envelope"
+            ),
         )
     target = tuple(
         sum(
@@ -1210,6 +1285,7 @@ def _graph_components(
     vertex_count: int, edges: set[tuple[int, int]]
 ) -> tuple[tuple[int, ...], ...]:
     adjacency = [set() for _ in range(vertex_count)]
+    adjacency: list[set[int]] = [set() for _ in range(vertex_count)]
     for left, right in edges:
         adjacency[left].add(right)
         adjacency[right].add(left)

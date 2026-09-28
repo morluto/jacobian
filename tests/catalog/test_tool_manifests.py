@@ -31,6 +31,30 @@ def test_public_catalog_is_sorted_and_unique() -> None:
     assert all(catalog.operation(tool.operation_id) is tool for tool in BUILTIN_TOOLS)
 
 
+def test_hypergraph_coloring_has_one_bounded_decision_operation() -> None:
+    catalog = Catalog.open()
+
+    assert (
+        catalog.operation("hypergraph.nonmonochromatic_vertex_coloring.q_decide")
+        is not None
+    )
+    assert catalog.operation("hypergraph.coloring.non_monochromatic.decide") is None
+
+
+def test_cyclotomic_inclusion_has_no_composition_operation() -> None:
+    """Composition is a call-order helper, not a published postcondition.
+
+    ``matrix.cyclic.cyclotomic_inclusion.compute`` on the composed pair
+    already publishes the canonical inclusion, so a composition entry would
+    describe a call order rather than a distinct mathematical relation.
+    """
+
+    catalog = Catalog.open()
+
+    assert catalog.operation("matrix.cyclic.cyclotomic_inclusion.compute") is not None
+    assert catalog.operation("matrix.cyclic.cyclotomic_inclusion.compose") is None
+
+
 def test_friable_count_manifest_has_one_executable_example() -> None:
     operation = next(
         tool

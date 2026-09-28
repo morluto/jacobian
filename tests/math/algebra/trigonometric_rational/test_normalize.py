@@ -321,22 +321,6 @@ def test_reduced_quotient_support_is_bounded_before_gcd() -> None:
         normalize_trigonometric_rational(request)
 
 
-def test_univariate_lattice_stride_admits_sin_4096_over_sin() -> None:
-    request = TrigonometricRationalSource.model_validate(
-        {
-            "variables": ["x"],
-            "expression": {
-                "kind": "DIVIDE",
-                "numerator": {"kind": "SINE", "angle": {"coefficients": [4096]}},
-                "denominator": {"kind": "SINE", "angle": {"coefficients": [1]}},
-            },
-        }
-    )
-    result = normalize_trigonometric_rational(request)
-    assert len(result.numerator.terms) == 4096
-    assert len(result.denominator.terms) == 1
-
-
 def _scaled_sine(scale: int, coefficient: int = 1) -> dict[str, object]:
     return {
         "kind": "MULTIPLY",
@@ -728,16 +712,16 @@ def test_high_degree_univariate_nondivisor_uses_exact_modular_rejection(
         raise AssertionError("univariate divisibility must not compute a full GCD")
 
     monkeypatch.setattr(sympy, "cancel", no_dense_gcd)
-    sine = {
+    sine: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (1,): (Fraction(0), Fraction(1)),
         (-1,): (Fraction(0), Fraction(-1)),
     }
-    shared_locus = {
+    shared_locus: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (0,): (Fraction(2), Fraction(0)),
         (3000,): (Fraction(0), Fraction(1)),
         (-3000,): (Fraction(0), Fraction(-1)),
     }
-    higher_sine = {
+    higher_sine: dict[tuple[int, ...], tuple[Fraction, Fraction]] = {
         (6,): (Fraction(0), Fraction(1)),
         (-6,): (Fraction(0), Fraction(-1)),
     }

@@ -49,6 +49,10 @@ Legacy native-only helpers that have not yet been audited may violate this
 boundary; each such violation is migration debt. Audit and repair them before
 publishing them as public-operation implementations.
 
+The exact quadratic Galois slice includes splitting fields, their complete
+automorphism maps, and element-orbit projections; see the
+[number-theory operation reference](operations/number-theory/galois-element-orbits.md).
+
 Every built-in `MathTool` declaration must publish at least one small valid
 invocation example. An example is part of the public contract: it must validate
 against the declaration's request model, use canonical values where required,
@@ -906,3 +910,16 @@ mathematical correctness.
 If no bounded implementation can support the public claim, do not expose the
 operation yet. A backend import or native function is not evidence that its
 result has the desired mathematical semantics.
+
+### Stabilizer error cosets
+
+`quantum.stabilizer.error_coset.compute` projects a phase-free Pauli error to
+its coset modulo an isotropic check space. It canonicalizes the check rows in
+flattened `(x | z)` order over GF(2), then reduces the error at each pivot.
+The result retains the ordered register, canonical check basis, and the unique
+representative with zero pivot coordinates. Errors differing by a stabilizer
+therefore produce equal coset values. This quotient is finer than the syndrome
+partition: two errors with the same syndrome can represent distinct logical
+cosets. The operation is bounded by the existing envelope of 32 qubits and 64
+check rows.
+

@@ -9,7 +9,6 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._models import StrictModel
 from jacobian.math.combinatorics.finite_structures.hypergraphs._models import (
-    MAX_LABEL_LENGTH,
     FiniteHypergraph,
 )
 
@@ -19,11 +18,7 @@ class EdgePatternProfileRequest(StrictModel):
 
     hypergraph: FiniteHypergraph
     vertex_colors: dict[str, str] = Field(
-        description=(
-            "A total map on the hypergraph vertex labels. The complete result "
-            "retains one bounded color pattern per source edge; each color label "
-            f"has at most {MAX_LABEL_LENGTH} characters."
-        )
+        description="A total map on the hypergraph vertex labels to color strings."
     )
 
     @model_validator(mode="after")

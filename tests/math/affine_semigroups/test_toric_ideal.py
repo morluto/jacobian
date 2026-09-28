@@ -65,6 +65,21 @@ def test_toric_ideal_uses_the_labelled_axis_and_exact_graver_binomials() -> None
         assert len(weighted_degrees) == 1
 
 
+def test_toric_ideal_admits_pivot_bounded_five_generator_kernel() -> None:
+    weights = (1, 1, 1, 1, 2)
+    ideal = toric_ideal(_configuration(weights))
+    assert len(ideal.generators) == 16
+    for generator in ideal.generators:
+        degrees = {
+            sum(
+                weight * exponent
+                for weight, exponent in zip(weights, term.exponents, strict=True)
+            )
+            for term in generator.polynomial.terms
+        }
+        assert len(degrees) <= 1
+
+
 def test_toric_ideal_composes_with_polynomial_groebner_operation() -> None:
     ideal = toric_ideal(_configuration((1, 1, 2), ("u", "v", "w")))
 
@@ -227,9 +242,9 @@ def test_candidate_work_envelope_rejects_before_graver_enumeration(
 
     monkeypatch.setattr(graver_module, "_enumerate_graver_vectors", fail_if_called)
     with pytest.raises(
-        OperationResourceAdmissionError, match="candidate-pair work exceeds"
+        OperationResourceAdmissionError, match="kernel-aware Graver presolve"
     ):
-        toric_ideal(_configuration((1, 2, 10)))
+        toric_ideal(_configuration((1, 2, 10_000)))
 
 
 def test_generator_bound_admits_on_the_exact_enumerated_basis_size(

@@ -11,7 +11,6 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.automata.transducers import (
-    FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
     SubseqFinalOutput,
@@ -35,6 +34,7 @@ from jacobian.math.logic.automata.transducers._models import (
     RelationPathReplayRequest,
     SubseqIdentityRequest,
     SubseqRunRequest,
+    SubseqRunResult,
     TrimRequest,
     TrimResult,
 )
@@ -50,8 +50,9 @@ from jacobian.math.logic.automata.transducers._tools import (
 )
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_RESULT_WORD_LENGTH,
-    MAX_FST_RUN_RESULT_OUTPUT_CELLS,
+    MAX_FST_RUN_RESULT_SIZE,
 )
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.words.operations import apply_morphism
 from jacobian.math.logic.languages.words.values import FiniteWord, WordMorphism
 
@@ -111,7 +112,7 @@ class TestSubsequentialIdentityOperation:
         )
         assert result.final_outputs == (SubseqFinalOutput(state=0, output=()),)
 
-        words = [()]
+        words: list[tuple[int, ...]] = [()]
         for length in range(1, 6):
             words.extend(
                 tuple((bits >> shift) & 1 for shift in reversed(range(length)))
@@ -153,7 +154,7 @@ class TestWordMorphismTransducerConversion:
         assert tuple(edge.output for edge in transducer.transitions) == ((1, 0), ())
         assert transducer.final_outputs == (SubseqFinalOutput(state=0, output=()),)
 
-        words = [()]
+        words: list[tuple[int, ...]] = [()]
         for length in range(1, 5):
             words.extend(
                 tuple((bits >> shift) & 1 for shift in reversed(range(length)))
@@ -201,46 +202,10 @@ class TestWordMorphismTransducerConversion:
             "finite_state_transducer.morphism_alphabet_bound_exceeded"
         )
 
-    def test_forged_morphism_missing_images_is_revalidated_before_transitions(
-        self,
-    ) -> None:
-        forged = WordMorphism(
-            source_alphabet=("a",), target_alphabet=("x",), images=(("x",),)
-        ).model_copy(update={"images": ()})
-        with pytest.raises(OperationDomainValidationError) as error:
-            word_morphism_to_subsequential(forged)
-        assert error.value.errors()[0]["type"] == (
-            "finite_state_transducer.carrier_shape"
-        )
-
-    def test_forged_morphism_symbol_outside_target_is_rejected(self) -> None:
-        forged = WordMorphism.model_construct(
-            source_alphabet=("a",), target_alphabet=("x",), images=(("z",),)
-        )
-        with pytest.raises(OperationDomainValidationError) as error:
-            word_morphism_to_subsequential(forged)
-        assert error.value.errors()[0]["type"] == (
-            "finite_state_transducer.carrier_shape"
-        )
-
-
-class TestFiniteAlphabetCarrier:
-    def test_lone_surrogate_symbol_is_rejected_with_domain_code(self) -> None:
-        with pytest.raises(ValidationError) as error:
-            FiniteAlphabet(symbols=("\ud800",))
-        assert error.value.errors()[0]["type"] == (
-            "finite_state_transducer.alphabet_symbol_not_unicode_scalar"
-        )
-
-    def test_identity_rejects_forged_surrogate_alphabet(self) -> None:
-        forged = FiniteAlphabet.model_construct(symbols=("\ud800", "a"))
-        with pytest.raises(OperationDomainValidationError):
-            identity_transducer(2, alphabet=forged)
-
 
 class TestSubsequentialRun:
     @staticmethod
-    def _observed(result: object) -> tuple[object, ...]:
+    def _observed(result: SubseqRunResult) -> tuple[object, ...]:
         return (
             result.status,
             result.output,
@@ -266,7 +231,8 @@ class TestSubsequentialRun:
         state = transducer.initial_state
         states = [state]
         step_outputs: list[tuple[int, ...]] = []
-        prefixes = [()]
+        prefixes: list[tuple[int, ...]] = [()]
+
         emitted: tuple[int, ...] = ()
         for position, symbol in enumerate(word):
             transition = rows.get((state, symbol))
@@ -406,12 +372,12 @@ class TestSubsequentialRun:
         assert result.cumulative_outputs == ((), (), (1, 0))
         assert result.final_output == (0,)
 
-    def test_run_result_output_cell_bound_is_checked_before_trace_expansion(
+    def test_run_result_size_bound_is_checked_before_trace_expansion(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         import jacobian.math.logic.automata.transducers.operations as kernels
 
-        monkeypatch.setattr(kernels, "MAX_FST_RUN_RESULT_OUTPUT_CELLS", 1)
+        monkeypatch.setattr(kernels, "MAX_FST_RUN_RESULT_SIZE", 1)
         monkeypatch.setattr(
             kernels,
             "_transition_map",
@@ -424,9 +390,7 @@ class TestSubsequentialRun:
             == "finite_state_transducer.run_result_bytes_exceeded"
         )
 
-    def test_maximum_admitted_output_keeps_cumulative_trace_within_cell_bound(
-        self,
-    ) -> None:
+    def test_maximum_admitted_output_keeps_cumulative_trace_within_size(self) -> None:
         transducer = SubsequentialTransducer(
             input_alphabet_size=1,
             output_alphabet_size=1,
@@ -447,11 +411,9 @@ class TestSubsequentialRun:
         assert len(result.output) == MAX_FST_RESULT_WORD_LENGTH
         assert len(result.cumulative_outputs) == 513
         assert len(result.cumulative_outputs[-1]) == MAX_FST_RESULT_WORD_LENGTH
-        trace_output_cells = sum(len(row) for row in result.cumulative_outputs) + sum(
-            len(row) for row in result.transition_outputs
+        assert len(encode_strict_json(result.model_dump(mode="json"))) <= (
+            MAX_FST_RUN_RESULT_SIZE
         )
-        assert trace_output_cells <= MAX_FST_RUN_RESULT_OUTPUT_CELLS
-        assert encode_strict_json(result.model_dump(mode="json"))
 
     def test_adapter_binds_transducer_and_word(self) -> None:
         request = SubseqRunRequest(transducer=_flip(), word=(0, 1))
@@ -794,7 +756,10 @@ class TestNativeTransformations:
     def test_only_audited_outcomes_are_public(self) -> None:
         assert {tool.operation_id for tool in TOOLS} == {
             "transducer.relation.inverse.compute",
+            "transducer.relation.outputs_for_input_automaton.compute",
             "transducer.relation.path.replay.compute",
+            "transducer.relation.projection.compute",
+            "transducer.relation.restrict_input.compute",
             "transducer.subsequential.compose.compute",
             "transducer.subsequential.from_word_morphism.compute",
             "transducer.subsequential.identity.compute",

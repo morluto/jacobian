@@ -169,6 +169,21 @@ def _factorization(request: AffineFactorizationRequest) -> AffineFactorization:
             code="affine_semigroup.factorization",
             message=str(exc),
         ) from exc
+def _factorization(r: AffineFactorizationRequest) -> AffineFactorization:
+    try:
+        return _evaluate_factorization(
+            r.semigroup, r.coordinates, validate_parent=False
+        )
+    except OperationResourceAdmissionError:
+        raise
+    except OperationDomainValidationError:
+        raise
+    except (TypeError, ValueError, IndexError, OverflowError) as e:
+        raise OperationDomainValidationError(
+            location=("coordinates",),
+            code="affine_semigroup.factorization",
+            message=str(e),
+        ) from e
 
 
 def _membership(r: AffineMembershipRequest) -> AffineMembershipResult:
@@ -314,6 +329,8 @@ _FUNDAMENTAL_HOLES_TOOL = MathTool(
         ),
     ),
 )
+def _group_lattice(r: AffineGroupLatticeRequest) -> AffineGroupLattice:
+    return compute_group_lattice(r.configuration)
 
 TOOLS = (
     _FUNDAMENTAL_HOLES_TOOL,
@@ -556,6 +573,165 @@ TOOLS = (
         ),
     ),
     MathTool(
+        operation_id="affine_semigroup.factorization_count.compute",
+        title="Count a finite affine-semigroup fiber exactly",
+        description=(
+            "Return the exact number of nonnegative factorizations Au=b for any "
+            "admitted positive affine semigroup. The positive grading makes each "
+            "fiber finite. One-row fibers use a gcd-normalized generating-function "
+            "dynamic program; higher-row fibers are counted directly inside the "
+            "admitted target-derived coefficient box without materializing the "
+            "factorization set. State, work, and count-digit bounds are checked first."
+        ),
+        request_type=AffineFactorizationCountRequest,
+        result_type=AffineFactorizationCount,
+        run=_factorization_count,
+        tags=("affine-semigroup", "factorization-count", "fiber", "exact"),
+        discovery_terms=(
+            "count the nonnegative factorizations of a target",
+            "exact cardinality of an affine-semigroup fiber",
+            "number of solutions to Au=b in nonnegative integers",
+            "factorization count without listing the entire fiber",
+        ),
+        examples=(
+            OperationExample(
+                name="two_unit_weights_target_four",
+                description=(
+                    "Count the five factorizations of 4 using two distinct "
+                    "generators of weight 1."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["degree"],
+                            "generator_labels": ["a", "b"],
+                            "entries": [["1", "1"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}],
+                    },
+                    "target": ["4"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.factorization.evaluate",
+        title="Evaluate a parent-bound affine-semigroup factorization",
+        description=(
+            "Evaluate one nonnegative coefficient vector on the retained "
+            "generator axis and return an AffineFactorization carrying its "
+            "positive semigroup parent and exact ambient target. This is a "
+            "single O(rows x generators) matrix product; it does not enumerate "
+            "a fiber or claim that the factorization is unique. Admission limits "
+            "coefficients to 32 decimal digits and preflights arithmetic and output size."
+        ),
+        request_type=AffineFactorizationRequest,
+        result_type=AffineFactorization,
+        run=_factorization,
+        discovery_terms=(
+            "evaluate affine semigroup factorization coordinates",
+            "map a nonnegative generator vector to its exact semigroup element",
+            "parent-bound affine semigroup element from factorization",
+        ),
+        tags=("affine-semigroup", "factorization", "exact"),
+        examples=(
+            OperationExample(
+                name="quadrant_factorization",
+                description=(
+                    "Evaluate (2,3) on generators (1,0),(0,1), returning "
+                    "the parent-bound element (2,3)."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["a", "b"],
+                            "entries": [["1", "0"], ["0", "1"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+                    },
+                    "coordinates": ["2", "3"],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.hilbert_basis.compute",
+        title="Compute a complete two-dimensional affine Hilbert basis",
+        description=(
+            "Return the complete Hilbert basis of the cone generated by a "
+            "labelled configuration in the ambient lattice Z^2. The cone must "
+            "be full-dimensional and pointed; the primitive extreme-ray "
+            "determinant is at most 1,000. This is the Hilbert basis of the "
+            "cone, not a basis of the possibly smaller semigroup generated by "
+            "the supplied columns."
+        ),
+        request_type=AffineHilbertBasisRequest,
+        result_type=AffineHilbertBasis,
+        run=_hilbert_basis,
+        discovery_terms=(
+            "Hilbert basis of a pointed rational cone in Z^2",
+            "minimal additive generators of a two-dimensional saturated affine semigroup",
+            "indecomposable lattice points in a rational cone",
+        ),
+        tags=("affine-semigroup", "hilbert-basis", "cone", "exact"),
+        examples=(
+            OperationExample(
+                name="determinant_three_cone",
+                description=(
+                    "Compute the Hilbert basis of the cone with primitive rays "
+                    "(1,0) and (1,3)."
+                ),
+                input={
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["u", "v"],
+                        "entries": [["1", "1"], ["0", "3"]],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.normalization.compute",
+        title="Compute the normalization of a two-dimensional affine semigroup",
+        description=(
+            "Return the minimal generators of cone(S) intersect gp(S) for a "
+            "positive, full-rank affine semigroup in Z^2. Computation is in the "
+            "lattice generated by S, then transported back to the retained "
+            "ambient row axes. The cone Hilbert determinant is at most 1,000."
+        ),
+        request_type=AffineSemigroupNormalizationRequest,
+        result_type=AffineSemigroupNormalization,
+        run=_normalization,
+        discovery_terms=(
+            "normalization of a two-dimensional affine semigroup",
+            "integral closure in the group lattice",
+            "minimal generators of cone(S) intersect gp(S)",
+        ),
+        tags=("affine-semigroup", "normalization", "hilbert-basis", "exact"),
+        examples=(
+            OperationExample(
+                name="diagonal_submonoid",
+                description=(
+                    "Normalize the semigroup generated by (2,0), (0,2), and "
+                    "(2,2). Its generated group is 2Z^2, so the normalization "
+                    "generators are (0,2) and (2,0), in canonical order."
+                ),
+                input={
+                    "semigroup": {
+                        "configuration": {
+                            "row_labels": ["x", "y"],
+                            "generator_labels": ["a", "b", "c"],
+                            "entries": [["2", "0", "2"], ["0", "2", "2"]],
+                        },
+                        "grading": [{"num": "1", "den": "1"}, {"num": "1", "den": "1"}],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="integer_configuration.positive_grading.compute",
         title="Find an exact positive grading",
         description="Find an exact rational covector positive on every labelled generator; bounded search exhaustion is an admission failure, not a nonmembership claim.",
@@ -682,6 +858,34 @@ TOOLS = (
                     },
                     "target": ["2"],
                     "moves": [["1", "-1", "0"]],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="affine_semigroup.group_lattice.compute",
+        title="Compute the generated ambient lattice",
+        description=(
+            "Return the canonical exact integer lattice generated by the labelled "
+            "columns of a bounded affine configuration, retaining its source "
+            "configuration and ambient coordinate dimension."
+        ),
+        request_type=AffineGroupLatticeRequest,
+        result_type=AffineGroupLattice,
+        run=_group_lattice,
+        tags=("affine-semigroup", "lattice", "integer", "exact"),
+        examples=(
+            OperationExample(
+                name="even_axis_lattice",
+                description=(
+                    "Compute the subgroup generated by (2,0), (0,2), and (2,2)."
+                ),
+                input={
+                    "configuration": {
+                        "row_labels": ["x", "y"],
+                        "generator_labels": ["a", "b", "c"],
+                        "entries": [["2", "0", "2"], ["0", "2", "2"]],
+                    }
                 },
             ),
         ),

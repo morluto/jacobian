@@ -4,12 +4,28 @@ from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialRequest,
     AlexanderPolynomialResult,
+    BlackboardGraphRequest,
     BraidArtinActionResult,
     BraidClosureResult,
     BraidPermutationResult,
+    BraidProductRequest,
+    BraidWord,
     BraidWordRequest,
+    ConwayPolynomialRequest,
+    ConwayPolynomialResult,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkBlackboardGraph,
+    LinkCrossingProfileRequest,
+    LinkCrossingProfileResult,
+    LinkDeterminantRequest,
+    LinkDeterminantResult,
+    LinkDisjointUnionRequest,
+    LinkDisjointUnionResult,
+    LinkSignatureRequest,
+    LinkSignatureResult,
+    LinkStateCirclesRequest,
+    LinkStateCirclesResult,
     SeifertCircleRequest,
     SeifertCircleResult,
     WirtingerPresentationRequest,
@@ -18,10 +34,19 @@ from jacobian.math.topology.links._extensions_models import (
 from jacobian.math.topology.links.extensions import (
     braid_artin_action,
     braid_closure,
+    braid_inverse,
+    braid_multiply,
     braid_permutation,
     link_alexander_polynomial,
+    link_blackboard_graph,
+    link_conway_polynomial,
+    link_crossing_profile,
+    link_determinant,
+    link_disjoint_union,
     link_goeritz_data,
     link_seifert_circles,
+    link_signature,
+    link_state_circles,
     wirtinger_presentation,
 )
 
@@ -38,12 +63,46 @@ def _braid_closure(request: BraidWordRequest) -> BraidClosureResult:
     return braid_closure(request.word)
 
 
+def _braid_inverse(request: BraidWordRequest) -> BraidWord:
+    return braid_inverse(request.word)
+
+
+def _braid_multiply(request: BraidProductRequest) -> BraidWord:
+    return braid_multiply(request.left, request.right)
+
+
 def _alexander(request: AlexanderPolynomialRequest) -> AlexanderPolynomialResult:
     return link_alexander_polynomial(request.diagram)
 
 
+def _conway(request: ConwayPolynomialRequest) -> ConwayPolynomialResult:
+    return link_conway_polynomial(request.diagram)
+
+
+def _crossing_profile(
+    request: LinkCrossingProfileRequest,
+) -> LinkCrossingProfileResult:
+    return link_crossing_profile(request.diagram)
+
+
+def _state_circles(request: LinkStateCirclesRequest) -> LinkStateCirclesResult:
+    return link_state_circles(request.state)
+
+
 def _goeritz(request: GoeritzDataRequest) -> GoeritzDataResult:
-    return link_goeritz_data(request.diagram)
+    return link_goeritz_data(request.blackboard_graph)
+
+
+def _blackboard_graph(request: BlackboardGraphRequest) -> LinkBlackboardGraph:
+    return link_blackboard_graph(request.diagram)
+
+
+def _signature(request: LinkSignatureRequest) -> LinkSignatureResult:
+    return link_signature(request.diagram)
+
+
+def _determinant(request: LinkDeterminantRequest) -> LinkDeterminantResult:
+    return link_determinant(request.diagram)
 
 
 def _seifert(request: SeifertCircleRequest) -> SeifertCircleResult:
@@ -56,6 +115,32 @@ def _wirtinger(
     return wirtinger_presentation(request.diagram)
 
 
+_POSITIVE_HOPF_DIAGRAM = {
+    "crossings": [
+        {
+            "crossing_id": crossing_id,
+            "half_edges": [
+                f"{crossing_id}:dart_0",
+                f"{crossing_id}:dart_3",
+                f"{crossing_id}:dart_2",
+                f"{crossing_id}:dart_1",
+            ],
+            "over_pair": [0, 2],
+            "under_pair": [1, 3],
+            "sign": 1,
+        }
+        for crossing_id in ("crossing_000", "crossing_001")
+    ],
+    "arcs": [
+        {"tail": "crossing_000:dart_2", "head": "crossing_001:dart_1"},
+        {"tail": "crossing_000:dart_3", "head": "crossing_001:dart_0"},
+        {"tail": "crossing_001:dart_2", "head": "crossing_000:dart_1"},
+        {"tail": "crossing_001:dart_3", "head": "crossing_000:dart_0"},
+    ],
+    "free_loops": 0,
+}
+
+
 _SIGMA_ONE_CUBED = {
     "strand_count": 2,
     "letters": [
@@ -64,6 +149,10 @@ _SIGMA_ONE_CUBED = {
         {"generator": 1, "exponent": 1},
     ],
 }
+
+
+def _disjoint_union(request: LinkDisjointUnionRequest) -> LinkDisjointUnionResult:
+    return link_disjoint_union(request.diagrams)
 
 
 TOOLS: MathTools = (
@@ -99,6 +188,95 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="link_diagram.state_circles.compute",
+        title="Compute the circles of a complete smoothing state",
+        description=(
+            "Return the exact cyclic dart partition for one complete A/B smoothing "
+            "state. Choices follow the diagram crossing order and the canonical "
+            "counterclockwise dart convention. One state is processed in linear "
+            "work; diagrams are bounded to 64 crossings and output to 8 MiB."
+        ),
+        request_type=LinkStateCirclesRequest,
+        result_type=LinkStateCirclesResult,
+        run=_state_circles,
+        tags=("link-diagram", "smoothing", "state-circles", "exact"),
+        discovery_terms=(
+            "link smoothing state circles",
+            "Kauffman state circles",
+            "A/B smoothing of link diagram",
+        ),
+        examples=(
+            OperationExample(
+                name="curl_a_smoothing_circles",
+                description=(
+                    "Resolve the single crossing of an oriented curl using the A "
+                    "smoothing and return its exact cyclic dart circle."
+                ),
+                input={
+                    "state": {
+                        "diagram": {
+                            "crossings": [
+                                {
+                                    "crossing_id": "c0",
+                                    "half_edges": ["h0", "h1", "h2", "h3"],
+                                    "over_pair": [0, 2],
+                                    "under_pair": [1, 3],
+                                    "sign": -1,
+                                }
+                            ],
+                            "arcs": [
+                                {"tail": "h0", "head": "h3"},
+                                {"tail": "h1", "head": "h2"},
+                            ],
+                        },
+                        "choices": ["A"],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.crossing_profile.compute",
+        title="Compute a link diagram's crossing profile",
+        description=(
+            "Return every source crossing in order with its checked sign and the "
+            "ordered over/under component IDs, plus the total writhe. Equal role "
+            "component IDs identify self-crossings; distinct IDs identify mixed "
+            "crossings. Diagram admission allows at most 64 crossings and 128 arcs."
+        ),
+        request_type=LinkCrossingProfileRequest,
+        result_type=LinkCrossingProfileResult,
+        run=_crossing_profile,
+        tags=("link-diagram", "crossing-profile", "writhe", "exact"),
+        discovery_terms=("link crossing profile", "self and mixed crossings", "writhe"),
+        examples=(
+            OperationExample(
+                name="crossing_curl_profile",
+                description=(
+                    "Classify the single crossing of an oriented curl; its over- and "
+                    "under-passing strands belong to the same component."
+                ),
+                input={
+                    "diagram": {
+                        "crossings": [
+                            {
+                                "crossing_id": "c0",
+                                "half_edges": ["h0", "h1", "h2", "h3"],
+                                "over_pair": [0, 2],
+                                "under_pair": [1, 3],
+                                "sign": -1,
+                            }
+                        ],
+                        "arcs": [
+                            {"tail": "h0", "head": "h3"},
+                            {"tail": "h1", "head": "h2"},
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="link_diagram.alexander_polynomial.compute",
         title="Compute a knot diagram's Alexander polynomial",
         description=(
@@ -128,13 +306,137 @@ TOOLS: MathTools = (
         ),
     ),
     MathTool(
+        operation_id="link_diagram.conway_polynomial.compute",
+        title="Compute a knot diagram's Conway polynomial",
+        description=(
+            "Return the exact knot Conway polynomial in z, normalized by Delta(1)=1, "
+            "from the source-bound Alexander polynomial. The result retains the "
+            "sign and Laurent power applied to that shifted polynomial, so callers "
+            "can reconstruct the exact substitution relation. Alexander symmetry "
+            "and integral coefficients are required before the recurrence; this "
+            "knot-only contract accepts at most eight crossings."
+        ),
+        request_type=ConwayPolynomialRequest,
+        result_type=ConwayPolynomialResult,
+        run=_conway,
+        tags=("link-diagram", "knot", "Conway-polynomial", "exact"),
+        discovery_terms=(
+            "Conway polynomial of knot diagram",
+            "Alexander-Conway polynomial",
+            "Conway polynomial from Alexander polynomial",
+        ),
+        examples=(
+            OperationExample(
+                name="unknot_conway_polynomial",
+                description=(
+                    "The crossing-free unknot has normalized Conway polynomial 1."
+                ),
+                input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.determinant.compute",
+        title="Compute a knot determinant from its Alexander polynomial",
+        description=(
+            "For a classical knot diagram, evaluate the normalized Alexander "
+            "polynomial at -1 to obtain the nonnegative knot invariant, with its "
+            "source-bound polynomial and signed evaluation. Inherits the "
+            "eight-crossing exact Alexander bound; it is a knot invariant, not a "
+            "general matrix operation."
+        ),
+        request_type=LinkDeterminantRequest,
+        result_type=LinkDeterminantResult,
+        run=_determinant,
+        tags=("link-diagram", "knot", "alexander", "exact"),
+        discovery_terms=(
+            "knot invariant",
+            "Alexander polynomial evaluation",
+            "knot Alexander invariant",
+        ),
+        examples=(
+            OperationExample(
+                name="unknot_determinant",
+                description="The crossing-free unknot has determinant 1.",
+                input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.blackboard_graph.compute",
+        title="Construct a link diagram's signed checkerboard graph",
+        description=(
+            "Return the signed Tait graph by coloring the face of least boundary "
+            "dart shaded and alternating colors across projection arcs. Each shaded "
+            "region is a vertex; each crossing is an edge joining its shaded corner "
+            "regions. Its Tait sign is +1 exactly when those corners are the "
+            "overpassing pair. Retain all checkerboard region boundaries and "
+            "crossing-to-edge identities, including loops and parallel edges. "
+            "Connected nonempty crossing projections are admitted through 64 "
+            "crossings; the value does not decide diagram or link equivalence."
+        ),
+        request_type=BlackboardGraphRequest,
+        result_type=LinkBlackboardGraph,
+        run=_blackboard_graph,
+        tags=("link-diagram", "Tait-graph", "checkerboard", "exact"),
+        discovery_terms=(
+            "link diagram Tait graph",
+            "signed checkerboard graph",
+            "black graph of link diagram",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_hopf_tait_graph",
+                description=(
+                    "Construct the signed two-vertex Tait graph of the positive "
+                    "Hopf diagram; its crossing projection must be connected."
+                ),
+                input={"diagram": _POSITIVE_HOPF_DIAGRAM},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.signature.compute",
+        title="Compute an oriented link diagram's signature",
+        description=(
+            "Return the exact Gordon-Litherland link signature from a reduced "
+            "Goeritz matrix and its type-II correction. A crossing is type II "
+            "when its checked oriented crossing sign times the Tait incidence "
+            "(+1 when the shaded corners are the overpassing pair) is -1. "
+            "Exact rational inertia determines the matrix signature. The bounded "
+            "contract accepts crossing-free unlinks and connected crossing "
+            "projections with at most 32 crossings; it does not decide link "
+            "equivalence."
+        ),
+        request_type=LinkSignatureRequest,
+        result_type=LinkSignatureResult,
+        run=_signature,
+        tags=("link-diagram", "signature", "Goeritz", "exact"),
+        discovery_terms=(
+            "oriented link signature",
+            "Gordon-Litherland signature",
+            "signature from Goeritz matrix",
+        ),
+        examples=(
+            OperationExample(
+                name="positive_hopf_link_signature",
+                description=(
+                    "Compute the exact signature of the positive Hopf link; "
+                    "the bounded projection has two crossings."
+                ),
+                input={"diagram": _POSITIVE_HOPF_DIAGRAM},
+            ),
+        ),
+    ),
+    MathTool(
         operation_id="link_diagram.goeritz_matrix.compute",
         title="Construct a link diagram's Goeritz matrix",
         description=(
             "Enumerate the planar projection regions, choose the checkerboard "
             "shading containing the least boundary dart, assign incidence +1 "
-            "when the shaded corners are the overpassing pair and -1 otherwise, "
-            "and delete the last shaded region from the signed Laplacian. Return "
+            "(the Tait sign) when the shaded corners are the overpassing pair "
+            "and -1 otherwise. Delete the last shaded region from the signed "
+            "Laplacian, then return "
             "that exact reduced integral Goeritz matrix and its absolute "
             "determinant. This slice requires a connected "
             "nonempty projection with at most 32 crossings; it does not claim a "
@@ -150,59 +452,86 @@ TOOLS: MathTools = (
         ),
         examples=(
             OperationExample(
-                name="positive_hopf_goeritz_matrix",
+                name="curl_goeritz_matrix",
                 description=(
-                    "Construct the one-by-one Goeritz matrix of the positive "
-                    "two-crossing braid closure; the projection must be planar and "
-                    "connected."
+                    "Construct the one-by-one Goeritz matrix of a single "
+                    "negative curl from its Tait graph; the graph is the "
+                    "blackboard graph of that curl."
                 ),
                 input={
-                    "diagram": {
-                        "crossings": [
+                    "blackboard_graph": {
+                        "diagram": {
+                            "crossings": [
+                                {
+                                    "crossing_id": "c0",
+                                    "half_edges": [
+                                        "h0",
+                                        "h1",
+                                        "h2",
+                                        "h3",
+                                    ],
+                                    "over_pair": [
+                                        0,
+                                        2,
+                                    ],
+                                    "under_pair": [
+                                        1,
+                                        3,
+                                    ],
+                                    "sign": -1,
+                                },
+                            ],
+                            "arcs": [
+                                {
+                                    "tail": "h0",
+                                    "head": "h3",
+                                },
+                                {
+                                    "tail": "h1",
+                                    "head": "h2",
+                                },
+                            ],
+                            "free_loops": 0,
+                        },
+                        "regions": [
                             {
-                                "crossing_id": "crossing_000",
-                                "half_edges": [
-                                    "crossing_000:dart_0",
-                                    "crossing_000:dart_1",
-                                    "crossing_000:dart_2",
-                                    "crossing_000:dart_3",
+                                "region_id": "region_000",
+                                "boundary_darts": [
+                                    "h0",
                                 ],
-                                "over_pair": [0, 2],
-                                "under_pair": [1, 3],
-                                "sign": 1,
+                                "shaded": True,
                             },
                             {
-                                "crossing_id": "crossing_001",
-                                "half_edges": [
-                                    "crossing_001:dart_0",
-                                    "crossing_001:dart_1",
-                                    "crossing_001:dart_2",
-                                    "crossing_001:dart_3",
+                                "region_id": "region_001",
+                                "boundary_darts": [
+                                    "h1",
+                                    "h3",
                                 ],
-                                "over_pair": [0, 2],
-                                "under_pair": [1, 3],
-                                "sign": 1,
+                                "shaded": False,
+                            },
+                            {
+                                "region_id": "region_002",
+                                "boundary_darts": [
+                                    "h2",
+                                ],
+                                "shaded": True,
                             },
                         ],
-                        "arcs": [
+                        "shaded_region_ids": [
+                            "region_000",
+                            "region_002",
+                        ],
+                        "edges": [
                             {
-                                "first": "crossing_001:dart_3",
-                                "second": "crossing_000:dart_0",
-                            },
-                            {
-                                "first": "crossing_001:dart_2",
-                                "second": "crossing_000:dart_1",
-                            },
-                            {
-                                "first": "crossing_000:dart_2",
-                                "second": "crossing_001:dart_1",
-                            },
-                            {
-                                "first": "crossing_000:dart_3",
-                                "second": "crossing_001:dart_0",
+                                "crossing_id": "c0",
+                                "first_region_id": "region_000",
+                                "second_region_id": "region_002",
+                                "first_corner_index": 0,
+                                "second_corner_index": 2,
+                                "tait_sign": 1,
                             },
                         ],
-                    }
+                    },
                 },
             ),
         ),
@@ -211,7 +540,7 @@ TOOLS: MathTools = (
         operation_id="link_diagram.seifert_circles.compute",
         title="Construct a knot diagram's Seifert circles",
         description=(
-            "Choose the canonical direction of the unique link component, apply "
+            "Use the encoded component orientation to apply "
             "the oriented smoothing at every crossing, and return every Seifert "
             "circle with source darts plus the disk-band surface Euler "
             "characteristic and genus. The genus belongs to this constructed "
@@ -233,6 +562,57 @@ TOOLS: MathTools = (
                     "this knot-first operation requires one component."
                 ),
                 input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="braid.word.multiply.compute",
+        title="Multiply braid words in one braid group",
+        description=(
+            "Concatenate two signed Artin presentation words in B_n, requiring "
+            "the same explicit strand count. The 64-letter result bound is "
+            "checked before construction; no braid-word reduction is performed."
+        ),
+        request_type=BraidProductRequest,
+        result_type=BraidWord,
+        run=_braid_multiply,
+        tags=("braid", "group-operation", "word", "exact"),
+        discovery_terms=("multiply braid words", "braid group product"),
+        examples=(
+            OperationExample(
+                name="braid_word_product",
+                description="Concatenate sigma_1 and its inverse in B_2.",
+                input={
+                    "left": {
+                        "strand_count": 2,
+                        "letters": [{"generator": 1, "exponent": 1}],
+                    },
+                    "right": {
+                        "strand_count": 2,
+                        "letters": [{"generator": 1, "exponent": -1}],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="braid.word.inverse.compute",
+        title="Invert a braid word",
+        description=(
+            "Return the inverse presentation word in the same B_n by reversing "
+            "letter order and negating each exponent. Strand count is retained "
+            "exactly; the operation is linear in the bounded word length."
+        ),
+        request_type=BraidWordRequest,
+        result_type=BraidWord,
+        run=_braid_inverse,
+        tags=("braid", "group-operation", "inverse", "exact"),
+        discovery_terms=("inverse braid word", "braid group inverse"),
+        examples=(
+            OperationExample(
+                name="inverse_trefoil_braid_word",
+                description="Invert sigma_1 cubed in B_2.",
+                input={"word": _SIGMA_ONE_CUBED},
             ),
         ),
     ),
@@ -323,6 +703,35 @@ TOOLS: MathTools = (
                     "crossing unknot; every free loop contributes one meridian."
                 ),
                 input={"diagram": {"free_loops": 1}},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="link_diagram.disjoint_union.compute",
+        title="Form a tagged disjoint union of link diagrams",
+        description=(
+            "Combine one to 64 classical oriented link diagrams by relabelling "
+            "their crossings and darts into disjoint source-indexed axes. Return "
+            "complete crossing, dart, arc, and crossing-free loop transport. "
+            "The total union is admitted before construction at 64 crossings, "
+            "64 free loops, and an estimated 8 MiB serialized output."
+        ),
+        request_type=LinkDisjointUnionRequest,
+        result_type=LinkDisjointUnionResult,
+        run=_disjoint_union,
+        tags=("link-diagram", "disjoint-union", "exact"),
+        discovery_terms=(
+            "disjoint union of link diagrams",
+            "combine classical link diagrams",
+        ),
+        examples=(
+            OperationExample(
+                name="disjoint_union_of_unlinked_unknots",
+                description=(
+                    "Combine two crossing-free unknots and preserve their separate "
+                    "source identities as two free-loop targets."
+                ),
+                input={"diagrams": [{"free_loops": 1}, {"free_loops": 1}]},
             ),
         ),
     ),

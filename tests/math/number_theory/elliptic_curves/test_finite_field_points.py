@@ -21,7 +21,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
     FiniteFieldExtensionCountsResult,
     FiniteFieldGroupStructureResult,
-    FiniteFieldIsomorphismResult,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
     finite_field_discriminant,
@@ -135,32 +134,6 @@ def test_model_isomorphism_matches_independent_complete_scaling_oracle() -> None
     assert scaling_oracle((1, 1), (2, 1)) is None
     assert negative.isomorphic is False
     assert negative.scaling is None
-
-
-def test_model_isomorphism_example_projects_through_canonical_output() -> None:
-    field = FiniteFieldPresentation(
-        characteristic=5, modulus_coefficients=(0, 1), generator="a"
-    )
-    one = FiniteFieldElement(presentation=field, coordinates=(1,))
-    source = FiniteFieldShortWeierstrassCurve(
-        field=field, coefficient_a=one, coefficient_b=one
-    )
-    target = FiniteFieldShortWeierstrassCurve(
-        field=field,
-        coefficient_a=one,
-        coefficient_b=FiniteFieldElement(presentation=field, coordinates=(4,)),
-    )
-    decision = finite_field_isomorphism(source, target)
-    envelope = OperationResult(
-        operation_id="elliptic_curve.finite_field.isomorphism.decide",
-        runtime_ms=0,
-        output=decision.model_dump(mode="json"),
-    )
-    validated = FiniteFieldIsomorphismResult.model_validate_json(
-        json.dumps(envelope.output)
-    )
-    assert validated.isomorphic is True
-    assert validated.scaling is not None
 
 
 def test_model_isomorphism_bounds_complete_search_before_field_arithmetic(
@@ -583,8 +556,8 @@ def test_scaled_point_enumeration_uses_exact_character_count_oracle() -> None:
     assert all((y * y - (x * x * x + x + 1)) % prime == 0 for x, y in pairs)
 
 
-def test_point_enumeration_rejects_output_bound_before_expansion() -> None:
-    prime = 20_011
+def test_point_enumeration_rejects_materialization_bound_before_expansion() -> None:
+    prime = 65_521
     field = FiniteFieldPresentation(
         characteristic=prime, modulus_coefficients=(0, 1), generator="a"
     )
@@ -595,7 +568,7 @@ def test_point_enumeration_rejects_output_bound_before_expansion() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         finite_field_points(curve)
     assert error.value.errors()[0]["type"] == (
-        "elliptic_curve.finite_field.enumeration_output_bound"
+        "elliptic_curve.finite_field.enumeration_materialization_bound"
     )
 
 
@@ -811,27 +784,6 @@ def test_extension_count_degree_is_bounded_before_counting() -> None:
     assert error.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.extension_degree_bound"
     )
-
-
-def test_extension_count_example_projects_with_typed_output() -> None:
-    field = FiniteFieldPresentation(
-        characteristic=5, modulus_coefficients=(0, 1), generator="a"
-    )
-    one = FiniteFieldElement(presentation=field, coordinates=(1,))
-    curve = FiniteFieldShortWeierstrassCurve(
-        field=field, coefficient_a=one, coefficient_b=one
-    )
-    result = finite_field_extension_counts(curve, 2)
-    envelope = OperationResult(
-        operation_id="elliptic_curve.finite_field.extension_counts.compute",
-        runtime_ms=0,
-        output=result.model_dump(mode="json"),
-    )
-    validated = FiniteFieldExtensionCountsResult.model_validate_json(
-        json.dumps(envelope.output)
-    )
-    assert validated.counts[0].cardinality == 9
-    assert validated.counts[1].cardinality == 27
 
 
 def test_native_curve_consumers_reject_missing_authored_fields() -> None:

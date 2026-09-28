@@ -3,8 +3,10 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
     DFinitePowerSeries,
+    DFinitePowerSeriesPrefixRequest,
     DFinitePowerSeriesRequest,
     DifferentialOperatorAddRequest,
     DifferentialOperatorAddResult,
@@ -35,6 +37,7 @@ from jacobian.math.ore_algebras.operations import (
     differential_operator_multiply,
     differential_operator_normalize_polynomial_coefficients,
     differential_series_construct,
+    differential_series_generate_prefix,
     polynomial_recurrence_generate_prefix,
     shift_operator_add,
     shift_operator_apply_to_sequence_prefix,
@@ -106,6 +109,51 @@ _DIFF_ONE = _rf_num_den([(1, [0])], [(1, [0])], "x")
 _DIFF_X = _rf_num_den([(1, [1])], [(1, [0])], "x")
 
 TOOLS: tuple[MathTool[Any, Any], ...] = (
+    MathTool(
+        operation_id="holonomic.differential_series.generate_finite_prefix.compute",
+        title="Generate a finite Taylor prefix from a D-finite series",
+        description=(
+            "Compute the first count Taylor coefficients at x=0 from an "
+            "ordinary-point D-finite series and its differential equation. "
+            "The input's initial data are derivatives; output entries are "
+            "Taylor coefficients, so the i-th initial derivative is divided "
+            "by i!. This bounded operation currently accepts polynomial "
+            "differential coefficients in QQ[x] and returns a finite rational "
+            "sequence without asserting convergence or an infinite-domain result."
+        ),
+        request_type=DFinitePowerSeriesPrefixRequest,
+        result_type=FiniteRationalSequence,
+        run=lambda request: differential_series_generate_prefix(
+            request.series, request.count
+        ),
+        tags=("holonomic", "d-finite", "formal-power-series", "prefix", "exact"),
+        discovery_terms=(
+            "generate D-finite Taylor coefficients",
+            "finite power series prefix from an ODE",
+            "compute holonomic series coefficients",
+        ),
+        examples=(
+            OperationExample(
+                name="sinh_taylor_prefix",
+                description=(
+                    "Generate the first six Taylor coefficients from "
+                    "y''-y=0, y(0)=0, y'(0)=1."
+                ),
+                input={
+                    "series": {
+                        "operator": _differential_operator(
+                            [
+                                (0, _rf_num_den([(-1, [0])], [(1, [0])], "x")),
+                                (2, _DIFF_ONE),
+                            ]
+                        ),
+                        "initial_derivatives": {"values": ["0", "1"]},
+                    },
+                    "count": 6,
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="holonomic.differential_series.construct",
         title="Represent a D-finite formal power series",

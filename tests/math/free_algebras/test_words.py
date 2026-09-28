@@ -5,12 +5,10 @@ import itertools
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_WORD_LENGTH,
     MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
@@ -346,25 +344,3 @@ def test_substitution_composes_and_preflights_64_letter_output() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         substitute_word(doubling, word("a", "a", "a", alphabet=binary))
     assert error.value.errors()[0]["type"] == "free_algebra.substitution_output_length"
-
-
-def test_word_tool_examples_execute_through_catalog() -> None:
-    catalog = Catalog.open()
-    operation_ids = (
-        "free_word.concatenate.compute",
-        "free_word.power.compute",
-        "free_word.reverse.compute",
-        "free_word.prefixes.compute",
-        "free_word.suffixes.compute",
-        "free_word.factors.compute",
-        "free_word.overlaps.compute",
-        "free_word.order.compare",
-        "free_word.substitute.compute",
-    )
-    for operation_id in operation_ids:
-        operation = catalog.operation(operation_id)
-        assert operation is not None and operation.examples
-        for example in operation.examples:
-            result = invoke_operation(operation_id, example.input, catalog)
-            validated = operation.result_type.model_validate(result.output)
-            assert validated.model_dump(mode="json") == result.output

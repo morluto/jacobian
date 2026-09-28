@@ -93,13 +93,16 @@ MAX_FREE_ALGEBRA_GS_REDUCTION_STEPS = (
 )
 MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_CANDIDATES = 16_384
 MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_CELLS = 150_000
-MAX_FREE_ALGEBRA_QUOTIENT_PROFILE_OUTPUT_BYTES = 2_000_000
 # Truncated quotient multiplication is dense in its basis-pair axis and can
 # have a full basis expansion at each pair. Keep its exact table bounded
 # independently from the much larger quotient prefix word-profile envelope.
 MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS = 65_536
 MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK = 8_000_000
-MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES = 2_000_000
+# One cell is one word letter or one rational component of the exact
+# truncated-quotient value. The bound admits the value's own cardinality
+# before the table is built, so admission never depends on a serialized
+# transport size that a consumer's decoder may choose differently.
+MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS = 6_000_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -1154,7 +1157,7 @@ __all__ = [
     "MAX_FREE_ALGEBRA_RESULT_TERMS",
     "MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH",
     "MAX_FREE_ALGEBRA_TERM_PAIRS",
-    "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES",
+    "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS",
     "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS",
     "MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK",
     "MAX_FREE_ALGEBRA_WORD_LENGTH",

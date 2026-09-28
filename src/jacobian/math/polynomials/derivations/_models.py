@@ -293,28 +293,6 @@ class GaActionRequest(StrictModel):
     )
 
 
-class DerivationFromVectorFieldRequest(StrictModel):
-    """Convert a polynomial vector field to its induced QQ-derivation."""
-
-    components: Annotated[
-        tuple[RationalPolynomial, ...], Field(min_length=1, max_length=8)
-    ]
-
-    @model_validator(mode="after")
-    def require_vector_field_axis(self) -> Self:
-        variables = self.components[0].variables
-        if len(self.components) != len(variables):
-            raise _validation_error(
-                "vector_field_component_count",
-                "a vector field needs one polynomial component per ordered variable",
-            )
-        if any(component.variables != variables for component in self.components):
-            raise _validation_error(
-                "ordered_ring", "vector-field components must share one ordered QQ ring"
-            )
-        return self
-
-
 class DerivationApplyResult(StrictModel):
     """The exact derivation image with its per-variable contribution ledger."""
 

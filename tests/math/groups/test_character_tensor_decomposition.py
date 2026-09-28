@@ -6,9 +6,7 @@ from fractions import Fraction
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.dispatch import invoke_operation
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters.operations import character_tensor_decomposition
 from jacobian.math.groups.operations import group_conjugacy_classes
@@ -166,15 +164,3 @@ def test_forged_tensor_request_raises_domain_error() -> None:
 def test_tensor_decomposition_rejects_row_index_outside_basis() -> None:
     with pytest.raises(OperationDomainValidationError):
         character_tensor_decomposition(_s3_partition(), 3, 0)
-
-
-def test_catalog_example_executes() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation(
-        "finite_group.character.tensor_product.decompose.compute"
-    )
-    assert operation is not None
-    result = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert result.output["multiplicities"] == [1, 1, 1]

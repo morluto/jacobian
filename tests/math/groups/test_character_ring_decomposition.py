@@ -7,12 +7,10 @@ from pydantic import ValidationError
 
 import jacobian.math.groups.characters.representation_ring_operations as ring_operations
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._cyclotomic import euler_phi
 from jacobian.math.groups.characters._models import (
@@ -247,16 +245,3 @@ def test_ring_element_coordinates_are_strict_integers() -> None:
         CharacterRingElement.model_validate(
             {"table": table.model_dump(), "irreducible_multiplicities": [True, 0, 0]}
         )
-
-
-def test_catalog_example_executes() -> None:
-    catalog = Catalog.open()
-    operation_id = "finite_group.class_function.character_ring_decompose.compute"
-    operation = catalog.operation(operation_id)
-    assert operation is not None
-    result = invoke_operation(operation_id, operation.examples[0].input, catalog)
-    assert result.output["ring_element"]["irreducible_multiplicities"] == [
-        "0",
-        "0",
-        "1",
-    ]

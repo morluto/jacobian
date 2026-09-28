@@ -948,7 +948,9 @@ class CSSNonOrthogonalWitness(StrictModel):
 
     model_config = ConfigDict(populate_by_name=True)
 
-    qubit_register: QubitRegister = Field(alias="register", serialization_alias="register")
+    qubit_register: QubitRegister = Field(
+        alias="register", serialization_alias="register"
+    )
     x_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     z_row: StrictInt = Field(ge=0, lt=MAX_CHECK_ROWS)
     x_bits: tuple[StrictInt, ...] = Field(min_length=1, max_length=MAX_QUBITS)
@@ -958,8 +960,10 @@ class CSSNonOrthogonalWitness(StrictModel):
     @model_validator(mode="after")
     def require_structural_rows(self) -> Self:
         width = len(self.qubit_register.qubit_ids)
-        if len(self.x_bits) != width or len(self.z_bits) != width or any(
-            bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits)
+        if (
+            len(self.x_bits) != width
+            or len(self.z_bits) != width
+            or any(bit not in (0, 1) for bit in (*self.x_bits, *self.z_bits))
         ):
             raise _validation_error(
                 "css_witness_shape",
@@ -986,7 +990,6 @@ class CSSNonOrthogonalWitness(StrictModel):
             z_bits=z_bits,
             dot_product=1,
         )
-        return self
 
 
 class CSSCheckSpaceValue(StrictModel):

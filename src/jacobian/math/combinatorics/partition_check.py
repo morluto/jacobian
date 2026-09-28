@@ -6,14 +6,16 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics._partition_models import (
     MAX_PARTITION_ITEM,
-    MAX_PARTITION_SIZE,
     IncreasingPartsObstruction,
     NonpositivePartObstruction,
     PartitionCheckResult,
     PartitionFound,
     PartitionRejected,
 )
-from jacobian.math.combinatorics.symmetric_functions.values import IntegerPartition
+from jacobian.math.combinatorics.symmetric_functions.values import (
+    MAX_PARTITION_SIZE,
+    IntegerPartition,
+)
 
 
 def check_integer_partition(parts: tuple[int, ...]) -> PartitionCheckResult:

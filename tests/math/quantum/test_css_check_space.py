@@ -121,8 +121,6 @@ def test_all_binary_check_families_match_independent_css_oracle(n: int) -> None:
             assert distance.z_representative.z_bits == expected_z
 
 
-
-
 def test_css_logical_frames_exhaust_small_quotients_independently() -> None:
     for n in (1, 2):
         rows = tuple(tuple(bits) for bits in product((0, 1), repeat=n))
@@ -218,8 +216,6 @@ def test_css_logical_frames_exhaust_small_quotients_independently() -> None:
                     for i, xrow in enumerate(x_basis)
                     for j, zrow in enumerate(z_basis)
                 )
-
-
 
 
 def test_css_distance_search_envelope_admits_nineteen_and_rejects_twenty() -> None:

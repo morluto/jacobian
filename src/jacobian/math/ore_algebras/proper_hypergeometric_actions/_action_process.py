@@ -82,11 +82,10 @@ def run_action_worker(
     except OSError as exc:
         raise RuntimeError("hypergeometric action worker could not be started") from exc
 
-    if response.get("ok") is True and isinstance(
-        response.get("relative_multiplier"), str
-    ):
+    relative_multiplier = response.get("relative_multiplier")
+    if response.get("ok") is True and isinstance(relative_multiplier, str):
         try:
-            return RationalFunction.model_validate_json(response["relative_multiplier"])
+            return RationalFunction.model_validate_json(relative_multiplier)
         except (TypeError, ValueError) as exc:
             from jacobian._execution import BackendFailureReason, OperationBackendError
 

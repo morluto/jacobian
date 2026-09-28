@@ -26,7 +26,7 @@ from jacobian.math.polynomials._conversions import (
     rational_function_to_sympy,
     symbols_for_variables,
 )
-from jacobian.math.polynomials.values import RationalFunction
+from jacobian.math.polynomials.values import RationalFunction, SparseRationalPolynomial
 
 _VARIABLES = ("n", "k")
 _MAX_ACTION_TERMS = 256
@@ -207,7 +207,9 @@ def _coefficient_digits(value: RationalFunction) -> int:
 
 
 def _digit_bound(operator: ShiftOreOperator, n_ratio: RationalFunction) -> int:
-    def shifted_polynomial_digits(polynomial, amount: int) -> int:
+    def shifted_polynomial_digits(
+        polynomial: SparseRationalPolynomial, amount: int
+    ) -> int:
         if not polynomial.terms:
             return 1
         common_denominator = prod(

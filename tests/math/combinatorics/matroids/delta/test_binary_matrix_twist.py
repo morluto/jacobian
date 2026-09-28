@@ -169,8 +169,6 @@ def test_matrix_axes_are_bounded_by_the_schema_and_during_json_parsing() -> None
         )
 
 
-
-
 @pytest.mark.parametrize("entry", [True, "1", 1.0])
 def test_native_twist_rejects_forged_coerced_matrix_entries(entry: object) -> None:
     matrix = BinarySymmetricMatrix.model_construct(ground=("e0",), entries=((entry,),))

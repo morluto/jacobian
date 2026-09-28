@@ -7,7 +7,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -200,8 +199,6 @@ def test_pairing_rejects_incomplete_ledger() -> None:
         OperationDomainValidationError, match="one entry per computed facet"
     ):
         _pair(request)
-
-
 
 
 def test_unit_square_is_fundamental_domain_including_boundary_only_contacts() -> None:

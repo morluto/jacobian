@@ -7,9 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-import pytest
-from pydantic import ValidationError
-
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -41,19 +38,6 @@ from jacobian.math.combinatorics.matroids.delta.extra_ops import (
     loop_complement,
     twist_polynomial,
 )
-from jacobian.math.combinatorics.matroids.delta.relabel import (
-    MAX_DELTA_RELABEL_GROUND,
-    MAX_DELTA_RELABEL_OUTPUT_CELLS,
-    MAX_DELTA_RELABEL_TRANSPORT_WORK,
-    MAX_DELTA_RELABEL_WORK,
-    DeltaMatroidRelabelling,
-    DeltaMatroidRelabelRequest,
-    relabel,
-)
-from jacobian.math.combinatorics.matroids.delta.values import (
-    MAX_DELTA_EXCHANGE_CANDIDATE_CHECKS,
-)
-from jacobian.math.combinatorics.matroids.delta.extra_ops import binary
 from jacobian.math.combinatorics.matroids.delta.relabel import (
     MAX_DELTA_RELABEL_GROUND,
     MAX_DELTA_RELABEL_OUTPUT_CELLS,

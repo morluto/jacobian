@@ -17,7 +17,6 @@ from jacobian.math.combinatorics.symmetric_functions._models import (
     IntegerPartition as RequestIntegerPartition,
 )
 
-
 _EXPECTED_ALL = (
     "IntegerPartition",
     "SemistandardYoungTableau",

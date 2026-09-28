@@ -152,8 +152,6 @@ def test_empty_ground_profile_and_json_round_trip() -> None:
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
-
-
 def test_native_malformed_profile_source_is_domain_error() -> None:
     from jacobian.math.combinatorics.matroids.delta.operations import distance_profile
 

@@ -287,5 +287,3 @@ def test_newton_edge_roots_cover_linear_and_repeated_rational_roots() -> None:
     assert len(repeated.roots) == 1
     assert repeated.roots[0].value.as_fraction() == Fraction(1)
     assert repeated.roots[0].multiplicity == 2
-
-

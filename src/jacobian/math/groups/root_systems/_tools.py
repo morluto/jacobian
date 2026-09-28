@@ -490,7 +490,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_root_to_weight_inclusion",
                 description="Express the first A2 simple root in fundamental weights.",
-                input={"vector": {"datum": _A2_LATTICE_DATUM, "coordinates": ["1", "0"]}},
+                input={
+                    "vector": {"datum": _A2_LATTICE_DATUM, "coordinates": ["1", "0"]}
+                },
             ),
         ),
     ),
@@ -514,7 +516,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="a2_coroot_to_coweight_inclusion",
                 description="Express the first A2 simple coroot in fundamental coweights.",
-                input={"vector": {"datum": _A2_LATTICE_DATUM, "coordinates": ["1", "0"]}},
+                input={
+                    "vector": {"datum": _A2_LATTICE_DATUM, "coordinates": ["1", "0"]}
+                },
             ),
         ),
     ),

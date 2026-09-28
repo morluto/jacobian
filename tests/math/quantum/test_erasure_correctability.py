@@ -10,9 +10,11 @@ from jacobian.math.quantum import (
     CheckSpaceValue,
     PhaseFreeQubitPauli,
     QubitRegister,
-    StabilizerErasureCorrectabilityRequest,
     StabilizerErasureCorrectabilityResult,
     stabilizer_erasure_correctability,
+)
+from jacobian.math.quantum._models import (
+    StabilizerErasureCorrectabilityRequest,
 )
 
 

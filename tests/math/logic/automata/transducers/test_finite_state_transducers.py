@@ -10,7 +10,6 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.automata.transducers import (
     RationalEdge,
     RationalTransducer,
@@ -53,6 +52,7 @@ from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_RESULT_WORD_LENGTH,
     MAX_FST_RUN_RESULT_BYTES,
 )
+from jacobian.math.logic.finite_alphabet import FiniteAlphabet
 from jacobian.math.logic.languages.words.operations import apply_morphism
 from jacobian.math.logic.languages.words.values import FiniteWord, WordMorphism
 

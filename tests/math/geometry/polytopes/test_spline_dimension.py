@@ -3,7 +3,7 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import decimal_digit_width, encode_strict_json
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -16,7 +16,6 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.complexes import _spline as spline_kernel
 from jacobian.math.geometry.polytopes.complexes._models import (
     SplineDimensionRequest,
-    SplineDimensionResult,
     SplineEvaluationRequest,
 )
 from jacobian.math.geometry.polytopes.complexes.operations import (
@@ -123,8 +122,6 @@ def test_spline_dimension_matches_interval_derivative_oracle_and_full_space():
     assert result.nullity == 2 * (degree + 1) - oracle_rank == full.nullity
     assert result.compatibility_matrix == full.compatibility_matrix
     assert result.coefficient_axis == full.coefficient_axis
-
-
 
 
 def test_dimension_output_bound_is_conservative_at_its_boundary(monkeypatch):

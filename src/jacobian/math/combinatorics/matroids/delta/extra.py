@@ -606,6 +606,7 @@ __all__ = [
     "DeltaMatroidTwistWidthProfileResult",
 ]
 
+
 class BinaryMatrixTwistRequest(StrictModel):
     """Present a binary delta-matroid with a supplied twist subset."""
 

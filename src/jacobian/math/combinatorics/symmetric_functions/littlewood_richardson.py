@@ -37,11 +37,11 @@ def _admit_native_request[RequestT: BaseModel](
     model: type[RequestT], values: dict[str, object]
 ) -> RequestT:
     try:
-        if any(type(value) is not IntegerPartition for value in values.values()):
-            raise TypeError("native LR arguments must be IntegerPartition values")
-        native_values = {
-            key: value.model_dump(mode="python") for key, value in values.items()
-        }
+        native_values: dict[str, object] = {}
+        for key, value in values.items():
+            if not isinstance(value, IntegerPartition):
+                raise TypeError("native LR arguments must be IntegerPartition values")
+            native_values[key] = value.model_dump(mode="python")
         request = model.model_validate(native_values)
     except (ValidationError, AttributeError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(

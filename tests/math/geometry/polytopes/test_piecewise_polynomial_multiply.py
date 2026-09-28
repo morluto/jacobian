@@ -1,4 +1,3 @@
-import json
 from fractions import Fraction
 
 import pytest
@@ -157,8 +156,6 @@ def test_piecewise_product_preflights_aggregate_convolution_work():
         piecewise_polynomial_multiply(
             PiecewisePolynomialMultiplicationRequest(left=function, right=function)
         )
-
-
 
 
 def test_native_multiplication_rejects_a_forged_request_with_a_typed_error():

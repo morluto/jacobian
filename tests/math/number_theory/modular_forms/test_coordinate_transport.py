@@ -3,7 +3,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.number_theory.modular_forms import (
     ModularFormCoordinates,
@@ -14,7 +13,6 @@ from jacobian.math.number_theory.modular_forms import (
     modular_form_coordinates_transport,
     modular_form_space_inclusion,
 )
-from jacobian.math.number_theory.modular_forms._tools import TOOLS
 
 
 def _coordinates(
@@ -125,8 +123,6 @@ def test_transport_rejects_nontrivial_character_target() -> None:
     target = ModularFormSpace(level=4, weight=4, kind="M", character=character)
     with pytest.raises(OperationDomainValidationError, match="trivial-character QQ"):
         modular_form_space_inclusion(source.space, target)
-
-
 
 
 def test_transport_rejects_forged_inclusion_and_source_mismatch() -> None:

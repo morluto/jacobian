@@ -11,9 +11,8 @@ from math import factorial
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.models import OperationResourceAdmissionError
-
 import jacobian.math.combinatorics.symmetric_functions.littlewood_richardson as lr_operations
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.combinatorics.symmetric_functions._models import (
     MAX_LR_SEARCH_STATES,
     MAX_LR_SKEW_CELLS,

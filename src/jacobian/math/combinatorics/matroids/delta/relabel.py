@@ -246,9 +246,11 @@ def relabel(
             message="relabeling request is malformed",
         ) from exc
     label_sizes = tuple(_bounded_utf8_length(label) for label in request.target_ground)
-    if any(size is not None for size in label_sizes) and sum(
-        size for size in label_sizes if size is not None
-    ) > MAX_DELTA_LABEL_BYTES:
+    if (
+        any(size is not None for size in label_sizes)
+        and sum(size for size in label_sizes if size is not None)
+        > MAX_DELTA_LABEL_BYTES
+    ):
         raise OperationResourceAdmissionError(
             location=("target_ground",),
             code="delta_matroid.relabel_target_bytes",

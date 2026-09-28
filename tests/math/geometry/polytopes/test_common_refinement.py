@@ -187,5 +187,3 @@ def test_common_refinement_rejects_vertex_coordinates_with_wrong_ambient_width()
         match="complex ambient coordinate axes",
     ):
         polytopal_complex_common_refinement(malformed_square, right)
-
-

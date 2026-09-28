@@ -23,7 +23,6 @@ from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.dispatch import invoke_operation, parse_operation_input
 from jacobian.math.combinatorics.matroids.delta.extra import (
     BinaryMatrixResult,
-    BinarySymmetricMatrix,
 )
 from jacobian.math.geometry.polytopes._models import (
     RationalCoordinateSpace,
@@ -33,11 +32,11 @@ from jacobian.math.geometry.polytopes._models import (
 from jacobian.math.geometry.polytopes.complexes import (
     polytopal_complex_affine_transform,
     polytopal_complex_closure,
+    spline_dimension,
 )
 from jacobian.math.geometry.polytopes.complexes import (
     polytopal_complex_affine_transform as exported_affine_transform,
 )
-from jacobian.math.geometry.polytopes.complexes import spline_dimension
 from jacobian.math.geometry.polytopes.complexes._models import (
     PiecewisePolynomialResult,
     SplineDimensionRequest,
@@ -48,24 +47,23 @@ from jacobian.math.matrices.cyclic_linear import (
     RationalCyclotomicElement,
     RationalCyclotomicField,
 )
-from jacobian.math.number_theory.modular_forms import (
-    cyclotomic,
-    modular_character_coordinates_u_prime,
-    modular_form_space_inclusion,
-)
-from jacobian.math.number_theory.modular_forms.character_basis_models import (
-    ModularCharacterUPrimeRequest,
-)
 from jacobian.math.number_theory.characters.operations import (
     character_group,
     dirichlet_character,
     dirichlet_character_value,
 )
-from jacobian.math.number_theory.characters.values import DirichletCharacter
+from jacobian.math.number_theory.modular_forms import (
+    cyclotomic,
+    modular_character_coordinates_u_prime,
+    modular_form_space_inclusion,
+)
 from jacobian.math.number_theory.modular_forms._tools import TOOLS
 from jacobian.math.number_theory.modular_forms.character_basis import (
     _character_sturm_precision,
     modular_character_basis_q_expansions,
+)
+from jacobian.math.number_theory.modular_forms.character_basis_models import (
+    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -83,7 +81,6 @@ from jacobian.math.quantum import (
     css_logical_pauli_frame,
 )
 from jacobian.math.quantum._models import ExactStabilizerGroup
-
 
 _FIELD = RationalCyclotomicField(order=6)
 
@@ -247,7 +244,6 @@ def test_affine_transform_catalog_example_roundtrips():
 _OPERATION_ID = "polytope.face_lattice.compute"
 
 
-
 def test_face_lattice_operation_is_catalogued_and_runs_its_example() -> None:
     catalog = Catalog.open()
     operation = catalog.operation(_OPERATION_ID)
@@ -265,7 +261,6 @@ def _coefficient_map(polynomial: RationalPolynomial) -> dict[tuple[int, ...], Fr
         term.exponents: term.coefficient.as_fraction()
         for term in polynomial.polynomial.terms
     }
-
 
 
 def test_catalog_addition_example_executes_through_typed_contract():
@@ -288,7 +283,6 @@ def _coefficient_map(polynomial: RationalPolynomial):
         term.exponents: term.coefficient.as_fraction()
         for term in polynomial.polynomial.terms
     }
-
 
 
 def test_catalog_piecewise_multiplication_example_executes():
@@ -320,7 +314,6 @@ def _interval(left: int, right: int, prefix: str) -> RationalVPolytope:
             for index, value in enumerate((left, right))
         ),
     )
-
 
 
 def test_one_cell_zero_row_dimension_roundtrips_and_catalog_invokes():
@@ -358,7 +351,6 @@ def test_forged_catalog_request_missing_card_order_is_a_domain_error() -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         tool.run(forged)
     assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_order_invalid"
-
 
 
 def test_catalog_publishes_anonymous_cards_as_distinct_from_realizable_decks() -> None:
@@ -407,7 +399,6 @@ def test_tool_is_discoverable_and_has_a_valid_example() -> None:
 _GENERIC_BASIS = "gamma0-cyclotomic-character-sturm-rref-v1"
 
 
-
 _EXPECTED = {
     (2, 26, 2): (((0, 0), (0, -2)), ((1, 0), (-1, -1))),
     (10, 26, 2): (((0, 0), (-2, 2)), ((1, 0), (-2, 1))),
@@ -436,7 +427,6 @@ _EXPECTED = {
 }
 
 
-
 def _space(coordinate: int, level: int) -> ModularFormSpace:
     return ModularFormSpace(
         level=level,
@@ -447,10 +437,8 @@ def _space(coordinate: int, level: int) -> ModularFormSpace:
     )
 
 
-
 def _numerators(value: RationalCyclotomicElement) -> tuple[int, ...]:
     return tuple(int(coefficient.num) for coefficient in value.coefficients_ascending)
-
 
 
 @pytest.mark.parametrize("character_coordinate,level,prime", tuple(_EXPECTED))
@@ -498,7 +486,6 @@ def test_u_prime_matches_independent_q_prefix_action_and_target_coordinates(
     assert tool.run(request).space == space
 
 
-
 def _sum(values):
     result = _zero(_FIELD)
     for value in values:
@@ -517,7 +504,6 @@ def _transport_coordinates(
         basis_id=basis_id,  # type: ignore[arg-type]
         coordinates=tuple(CanonicalRational(num=value, den=1) for value in values),
     )
-
 
 
 def test_transport_catalog_operation_round_trips_target_coordinates() -> None:
@@ -589,7 +575,6 @@ def test_catalog_example_serializes_into_existing_stabilizer_consumers() -> None
     from jacobian.catalog.catalog import Catalog
     from jacobian.dispatch import invoke_operation
     from jacobian.math.quantum import (
-        CheckSpaceValue,
         PhaseFreeQubitPauli,
         stabilizer_error_equivalence,
         stabilizer_syndrome,
@@ -615,7 +600,6 @@ def test_catalog_example_serializes_into_existing_stabilizer_consumers() -> None
     assert stabilizer_error_equivalence(
         check_space, error, error
     ).equivalent_mod_stabilizers
-
 
 
 def test_catalog_css_logical_frame_and_steane_parameter_fixture() -> None:
@@ -693,7 +677,6 @@ def _pauli(
         phase_free=PhaseFreeQubitPauli(register=register, x_bits=x_bits, z_bits=z_bits),
         phase=phase,
     )
-
 
 
 def test_exact_group_is_available_through_catalog_dispatch() -> None:
@@ -835,7 +818,6 @@ def test_catalog_example_runs_and_returns_source_bound_result() -> None:
         output["representative"]["qubit_register"]
         == output["check_space"]["qubit_register"]
     )
-
 
 
 # --- relocated from tests/math/geometry/crystallographic/extensions/test_polytope_facet_pairings.py

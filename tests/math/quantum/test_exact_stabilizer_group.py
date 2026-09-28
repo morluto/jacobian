@@ -5,12 +5,13 @@ import pytest
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.quantum import (
     ExactQubitPauli,
-    ExactStabilizerGroup,
-    ExactStabilizerGroupRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_multiply,
     stabilizer_group_from_generators,
+)
+from jacobian.math.quantum._models import (
+    ExactStabilizerGroupRequest,
 )
 
 
@@ -96,5 +97,3 @@ def test_rejects_exact_generators_from_another_ordered_register() -> None:
         stabilizer_group_from_generators(
             ExactStabilizerGroupRequest(register=register, generators=(z0, z_foreign))
         )
-
-

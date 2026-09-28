@@ -170,5 +170,3 @@ def test_max_admitted_source_order_composes_with_equality() -> None:
     result = vertex_deck_anonymous_multiset(vertex_deletion_family(graph))
     comparison = anonymous_deck_equality(result, result)
     assert comparison.equal
-
-

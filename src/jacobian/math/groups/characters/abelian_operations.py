@@ -31,6 +31,8 @@ def finite_abelian_character_table(
     try:
         from jacobian.math.groups.finite_abelian import FiniteAbelianProductGroup
 
+        if not isinstance(group, FiniteAbelianProductGroup):
+            raise TypeError("character table group must satisfy its typed contract")
         group = FiniteAbelianProductGroup.model_validate(
             group.model_dump(mode="python"), strict=True
         )

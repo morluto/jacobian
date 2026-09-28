@@ -14,16 +14,16 @@ from jacobian.math.number_theory.quadratic_forms.integral.modular import (
     ModularQuadraticPolynomial,
     evaluate_modular_form,
 )
+from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
+    ModularCoordinateVector,
+    ModularQuadraticCrossTerm,
+)
 from jacobian.math.number_theory.quadratic_forms.integral.modular.fiber import (
     ModularQuadraticFiber,
     compute_modular_quadratic_fiber,
 )
 from jacobian.math.number_theory.quadratic_forms.integral.modular.fiber._models import (
     ModularQuadraticFiberRequest,
-)
-from jacobian.math.number_theory.quadratic_forms.integral.modular._models import (
-    ModularCoordinateVector,
-    ModularQuadraticCrossTerm,
 )
 
 

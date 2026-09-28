@@ -90,5 +90,3 @@ def test_stabilizer_distance_rejects_search_beyond_ten_qubits() -> None:
     value = CheckSpaceValue(register=register, basis=())
     with pytest.raises(OperationResourceAdmissionError, match="complete mixed-Pauli"):
         stabilizer_exact_distance(value)
-
-

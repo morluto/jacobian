@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from itertools import combinations
 
-import pytest
-from pydantic import ValidationError
-
 from jacobian.math.quantum import (
     CheckSpaceValue,
     LogicalPauliFrame,
@@ -85,5 +82,3 @@ def test_logical_frames_exhaust_all_two_qubit_isotropic_subspaces() -> None:
         )
         assert _span((*stabilizer, *x_rows, *z_rows)) == orthogonal
         assert all(row not in stabilizer for row in (*x_rows, *z_rows))
-
-

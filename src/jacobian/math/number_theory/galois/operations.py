@@ -885,11 +885,16 @@ def galois_subgroup(
 ) -> GaloisAutomorphismSubgroup:
     """Admit a complete subgroup of the exact supported automorphism group."""
     try:
-        request = (
-            field
-            if isinstance(field, GaloisSubgroupRequest)
-            else GaloisSubgroupRequest(field=field, elements=elements)
-        )
+        if isinstance(field, GaloisSubgroupRequest):
+            request = field
+        else:
+            if elements is None:
+                raise OperationDomainValidationError(
+                    location=("subgroup",),
+                    code="galois_theory.invalid_subgroup_request",
+                    message="subgroup request must retain one exact supported field",
+                )
+            request = GaloisSubgroupRequest(field=field, elements=elements)
         canonical_request = GaloisSubgroupRequest.model_validate(request.model_dump())
         field = _canonical_splitting_field(canonical_request.field, location=("field",))
         candidate = GaloisAutomorphismSubgroup(
@@ -1082,11 +1087,18 @@ def intermediate_field_stabilizer(
 ) -> IntermediateFieldStabilizerResult:
     """Return automorphisms fixing a supplied embedded intermediate field."""
     try:
-        request = (
-            field
-            if isinstance(field, IntermediateFieldStabilizerRequest)
-            else IntermediateFieldStabilizerRequest(field=field, inclusion=inclusion)
-        )
+        if isinstance(field, IntermediateFieldStabilizerRequest):
+            request = field
+        else:
+            if inclusion is None:
+                raise OperationDomainValidationError(
+                    location=("inclusion",),
+                    code="galois_theory.invalid_intermediate_field_request",
+                    message="stabilizer request must contain a typed field inclusion",
+                )
+            request = IntermediateFieldStabilizerRequest(
+                field=field, inclusion=inclusion
+            )
         canonical_request = IntermediateFieldStabilizerRequest.model_validate(
             request.model_dump()
         )

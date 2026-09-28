@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from itertools import product
 
 import pytest
@@ -191,5 +190,3 @@ def test_product_larger_than_result_carrier_is_refused_exactly() -> None:
     assert error.value.errors()[0]["type"] == (
         "finite_state_transducer.domain_restriction_state_bound_exceeded"
     )
-
-

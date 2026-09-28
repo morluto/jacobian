@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Literal, NoReturn
 
 from pydantic import ValidationError
 
@@ -13,10 +13,12 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.combinatorics.greedoids.values import FiniteFeasibleSetSystem
 from jacobian.math.combinatorics.matroids.delta._models import (
-    DeltaMatroidDistanceRequest,
     DeltaMatroidDistanceResult,
     DeltaMatroidRecognitionResult,
     require_twist_subset,
+)
+from jacobian.math.combinatorics.matroids.delta.extra import (
+    DeltaMatroidDirectSumResult,
 )
 from jacobian.math.combinatorics.matroids.delta.values import (
     MAX_DELTA_DISTANCE_PROFILE_EVALUATIONS,
@@ -66,6 +68,7 @@ def _raise_direct_sum_admission(
         code=f"delta_matroid.{exc.reason}",
         message=str(exc),
     ) from exc
+
 
 def from_feasible_sets(
     system: FiniteFeasibleSetSystem,
@@ -547,8 +550,6 @@ def direct_sum(
     label envelopes rather than replaying the recognition axiom.
     """
     from jacobian.math.combinatorics.matroids.delta.extra import (
-    DeltaMatroidDirectSumRequest,
-    DeltaMatroidDirectSumResult,
         MAX_DIRECT_SUM_FEASIBLE_PAIRS,
         MAX_DIRECT_SUM_GROUND,
     )

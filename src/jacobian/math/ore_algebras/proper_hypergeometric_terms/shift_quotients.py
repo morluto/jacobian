@@ -111,8 +111,10 @@ def _admit_quotient(term: ProperHypergeometricTerm, axis: int) -> None:
                 return support
         return support
 
-    original = {monomial.exponents for monomial in polynomial.terms}
-    shifted_support = set().union(
+    original: set[tuple[int, int]] = {
+        (monomial.exponents[0], monomial.exponents[1]) for monomial in polynomial.terms
+    }
+    shifted_support: set[tuple[int, int]] = set().union(
         *(
             {
                 (

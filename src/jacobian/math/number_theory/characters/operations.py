@@ -1355,9 +1355,9 @@ def require_complete_character_group(
             code="dirichlet_character.group.coordinate_range",
             message="generator coordinates must lie in their canonical order ranges",
         )
-    if math.prod(orders) != len(expected_units) or len(set(
-        cast(tuple[tuple[int, ...], ...], unit_coordinates)
-    )) != len(expected_units):
+    if math.prod(orders) != len(expected_units) or len(
+        set(cast(tuple[tuple[int, ...], ...], unit_coordinates))
+    ) != len(expected_units):
         raise OperationDomainValidationError(
             location=("group", "unit_coordinates"),
             code="dirichlet_character.group.coordinate_bijection",

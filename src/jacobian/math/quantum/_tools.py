@@ -68,9 +68,7 @@ def _run_canonicalize_check_space(
 
 
 def _run_css_check_space(request: CSSCheckSpaceRequest) -> CSSCheckSpaceResult:
-    return css_check_space(
-        request.qubit_register, request.x_checks, request.z_checks
-    )
+    return css_check_space(request.qubit_register, request.x_checks, request.z_checks)
 
 
 def _run_css_logical_frame(value: CSSCheckSpaceValue) -> CSSLogicalPauliFrame:
@@ -121,9 +119,7 @@ def _run_inverse(request: PauliInverseRequest) -> PauliInverseResult:
 def _run_from_labels(request: PauliFromLabelsRequest) -> PauliFromLabelsResult:
     return PauliFromLabelsResult(
         source=request,
-        pauli=pauli_from_labels(
-            request.qubit_register, request.labels, request.phase
-        ),
+        pauli=pauli_from_labels(request.qubit_register, request.labels, request.phase),
     )
 
 

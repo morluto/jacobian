@@ -21,7 +21,6 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldEllipticPoint,
     FiniteFieldExtensionCountsResult,
     FiniteFieldGroupStructureResult,
-    FiniteFieldIsomorphismResult,
     FiniteFieldShortWeierstrassCurve,
     finite_field_cardinality,
     finite_field_discriminant,

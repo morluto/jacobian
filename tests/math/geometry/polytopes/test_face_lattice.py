@@ -299,5 +299,3 @@ def test_face_lattice_admits_postprocessing_before_facet_expansion(
     assert (
         error.value.errors()[0]["type"] == "polytope.face_lattice.work_budget_exceeded"
     )
-
-

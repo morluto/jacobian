@@ -235,7 +235,6 @@ class SpectralPageStatus(StrEnum):
     TRUNCATED = "TRUNCATED"
 
 
-
 class FilteredChainComplexRequest(StrictModel):
     """Request wrapper binding one filtered chain complex to its carrier."""
 
@@ -510,14 +509,14 @@ class SpectralPageResult(StrictModel):
 
 
 __all__ = [
-    "FilteredChainComplexRequest",
-    "FilteredChainMapRequest",
     "MAX_FILTER_AMBIENT_DIMENSION",
     "MAX_FILTER_LEVELS",
     "MAX_FILTER_VECTORS_PER_GROUP",
     "MAX_SPECTRAL_PAGE",
     "AssociatedGradedResult",
     "FilteredChainComplex",
+    "FilteredChainComplexRequest",
+    "FilteredChainMapRequest",
     "FilteredSubspace",
     "FiltrationLevel",
     "GradedSquareLedgerEntry",

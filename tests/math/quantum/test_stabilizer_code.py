@@ -174,5 +174,3 @@ def test_dependent_group_with_inconsistent_character_is_rejected() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="independent generator"):
         stabilizer_code_compute(request)
-
-

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from fractions import Fraction
 from itertools import product
 from typing import Annotated, Any, Literal, Self
 
@@ -703,7 +704,9 @@ class FilteredCubicalComplex(StrictModel):
                 "cell bases must be the canonical degree partition of the source complex",
             )
         _require_filtered_cubical_chain_binding(
-            self.filtered_chain_complex, expected_groups, self.cell_births,
+            self.filtered_chain_complex,
+            expected_groups,
+            self.cell_births,
             self.critical_values,
         )
         if tuple(entry.cell for entry in self.cell_births) != self.complex.cells:
@@ -864,9 +867,11 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
                 )
         basis_sizes = tuple(len(basis.cells) for basis in self.cell_bases)
         expected_groups = _cubical_cell_groups(self.complex.cells)
-        if tuple(basis.dimension for basis in self.cell_bases) != tuple(
-            range(len(self.cell_bases))
-        ) or tuple(basis.cells for basis in self.cell_bases) != expected_groups:
+        if (
+            tuple(basis.dimension for basis in self.cell_bases)
+            != tuple(range(len(self.cell_bases)))
+            or tuple(basis.cells for basis in self.cell_bases) != expected_groups
+        ):
             raise _validation_error(
                 "top_cell_basis_not_bound",
                 "cell bases must be the canonical degree partition of the source complex",
@@ -877,7 +882,9 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
                 "filtered chains must retain the cubical degree-basis sizes",
             )
         _require_filtered_cubical_chain_binding(
-            self.filtered_chain_complex, expected_groups, self.cell_births,
+            self.filtered_chain_complex,
+            expected_groups,
+            self.cell_births,
             self.critical_values,
         )
         if self.filtered_chain_complex.complex.prime is None:
@@ -888,7 +895,9 @@ class FilteredCubicalComplexFromTopCells(StrictModel):
         return self
 
 
-def _cubical_cell_groups(cells: tuple[CubicalCell, ...]) -> tuple[tuple[CubicalCell, ...], ...]:
+def _cubical_cell_groups(
+    cells: tuple[CubicalCell, ...],
+) -> tuple[tuple[CubicalCell, ...], ...]:
     top = max(cell.dimension for cell in cells)
     groups: list[list[CubicalCell]] = [[] for _ in range(top + 1)]
     for cell in cells:
@@ -896,10 +905,10 @@ def _cubical_cell_groups(cells: tuple[CubicalCell, ...]) -> tuple[tuple[CubicalC
     return tuple(tuple(group) for group in groups)
 
 
-def _rank_mod_prime(rows: tuple[tuple[int, ...], ...], prime: int) -> int:
+def _rank_mod_prime(rows: tuple[tuple[int | Fraction, ...], ...], prime: int) -> int:
     if not rows:
         return 0
-    matrix = [[entry % prime for entry in row] for row in rows]
+    matrix = [[int(entry) % prime for entry in row] for row in rows]
     pivot_row = 0
     for column in range(len(matrix[0])):
         pivot = next(
@@ -943,14 +952,18 @@ def _require_filtered_cubical_chain_binding(
         )
     prime = chain.prime
     if prime is None:
-        raise _validation_error("chain_field_missing", "filtered cubical chains require a prime field")
+        raise _validation_error(
+            "chain_field_missing", "filtered cubical chains require a prime field"
+        )
     expected_differentials = []
     for degree in range(1, len(groups)):
         row_for = {cell: index for index, cell in enumerate(groups[degree - 1])}
         matrix = [[0] * len(groups[degree]) for _ in groups[degree - 1]]
         for column, cell in enumerate(groups[degree]):
             intervals = cell.intervals
-            axes = [axis for axis, (lower, upper) in enumerate(intervals) if upper > lower]
+            axes = [
+                axis for axis, (lower, upper) in enumerate(intervals) if upper > lower
+            ]
             for position, axis in enumerate(axes):
                 lower, upper = intervals[axis]
                 sign = 1 if position % 2 == 0 else -1
@@ -977,11 +990,9 @@ def _require_filtered_cubical_chain_binding(
                 if birth_by_cell[cell] <= bound
             )
             combined = (*expected, *subspace.vectors)
-            if (
-                _rank_mod_prime(expected, prime)
-                != _rank_mod_prime(subspace.vectors, prime)
-                or _rank_mod_prime(combined, prime) != len(expected)
-            ):
+            if _rank_mod_prime(expected, prime) != _rank_mod_prime(
+                subspace.vectors, prime
+            ) or _rank_mod_prime(combined, prime) != len(expected):
                 raise _validation_error(
                     "filtration_not_bound",
                     "filtration levels must span exactly the cells born by each critical value",

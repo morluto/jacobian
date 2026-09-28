@@ -5,11 +5,9 @@ from __future__ import annotations
 from itertools import product
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian.math.quantum import (
     ExactQubitPauli,
-    PauliFromLabelsRequest,
     PhaseFreeQubitPauli,
     QubitRegister,
     pauli_from_labels,

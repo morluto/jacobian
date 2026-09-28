@@ -6,7 +6,6 @@ from itertools import product
 from math import gcd
 
 import pytest
-from pydantic import TypeAdapter
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.matrices.cyclic_linear._models import (
@@ -21,12 +20,8 @@ from jacobian.math.number_theory.characters.operations import (
 from jacobian.math.number_theory.modular_forms import character_basis as basis_module
 from jacobian.math.number_theory.modular_forms import cyclotomic
 from jacobian.math.number_theory.modular_forms.character_basis import (
-    _character_sturm_precision,
     modular_character_basis_q_expansions,
     modular_character_coordinates_u_prime,
-)
-from jacobian.math.number_theory.modular_forms.character_basis_models import (
-    ModularCharacterUPrimeRequest,
 )
 from jacobian.math.number_theory.modular_forms.values import (
     ModularFormCoordinates,
@@ -130,8 +125,6 @@ def _numerators(value: RationalCyclotomicElement) -> tuple[int, ...]:
 
 
 @pytest.mark.parametrize("character_coordinate,level,prime", tuple(_EXPECTED))
-
-
 def _sum(values):
     result = _zero(_FIELD)
     for value in values:

@@ -153,8 +153,6 @@ def test_malformed_constructed_card_order_is_a_domain_error(
     assert exc_info.value.errors()[0]["type"] == "graph_deck.anonymous_order_invalid"
 
 
-
-
 def test_card_order_above_supported_bound_is_resource_error() -> None:
     from jacobian.math.graphs.decks._models import MAX_UNLABELLED_DECK_VERTICES
 
@@ -295,5 +293,3 @@ def test_tied_order_eight_candidates_pay_for_full_vector_comparison() -> None:
     decoded = AnonymousGraphCardMultiset.model_validate(payload)
     assert decoded.card_order == 8
     assert decoded.classes[0].representative.edges == ()
-
-

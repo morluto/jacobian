@@ -1,4 +1,3 @@
-import json
 from fractions import Fraction
 
 import pytest
@@ -75,7 +74,7 @@ def _function(complex_value, coefficients: dict[tuple[int, ...], int]):
     )
     return piecewise_polynomial_from_maximal_pieces(complex_value, pieces)
 
-
+    left = _function(complex_value, {(1,): 1})
     right = _function(complex_value, {(2,): 1, (0,): 1})
 
     result = piecewise_polynomial_add(
@@ -229,8 +228,6 @@ def test_addition_admits_exact_cancellation_before_the_coefficient_growth_bound(
     )
     assert result.status == "COMPATIBLE"
     assert all(_coefficient_map(piece.polynomial) == {} for piece in result.pieces)
-
-
 
 
 def test_native_addition_rejects_a_forged_request_with_a_typed_error():

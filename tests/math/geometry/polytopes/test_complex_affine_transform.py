@@ -12,9 +12,6 @@ from jacobian.math.geometry.polytopes._models import (
     RationalPolytopeVertex,
     RationalVPolytope,
 )
-from jacobian.math.geometry.polytopes.complexes import (
-    polytopal_complex_affine_transform as exported_affine_transform,
-)
 from jacobian.math.geometry.polytopes.complexes._models import (
     PolytopalComplexClosureResult,
 )
@@ -153,5 +150,3 @@ def test_affine_transform_admits_result_coordinate_growth_before_target_closure(
         polytopal_complex_affine_transform(
             source, *_bound_map(((base, 0), (0, 1)), (0, 0))
         )
-
-

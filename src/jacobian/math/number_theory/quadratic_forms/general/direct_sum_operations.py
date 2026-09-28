@@ -129,7 +129,7 @@ def quadratic_form_direct_sum(
         cross_terms=tuple(cross_terms),
     )
     return QuadraticFormDirectSumResult._from_kernel(
-        source_forms=forms,
+        source_forms=tuple(forms),
         form=result_form,
         coordinate_inclusions=tuple(inclusions),
         coordinate_projections=tuple(projections),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
-from pydantic import StrictInt, Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
@@ -242,32 +242,6 @@ __all__ = [
     "require_delta_matroid_exchange_work",
     "require_delta_matroid_source_size",
 ]
-
-
-def require_delta_matroid_source_size(system: FiniteFeasibleSetSystem) -> int:
-    """Bound memberships, require UTF-8 labels, and return their byte count.
-
-    Operations that retain the ground axis and bound their own work and result
-    cardinalities use this instead of the full recognition envelope, whose
-    2,048-byte label cap belongs to the recognition result rather than to every
-    consumer of a canonical ``FiniteDeltaMatroid``. A non-UTF-8 label is still
-    rejected because a retained ground axis must remain serializable.
-    """
-
-    memberships = sum(len(row) for row in system.feasible)
-    if memberships > MAX_DELTA_MEMBERSHIPS:
-        raise DeltaMatroidAdmissionError(
-            "memberships_exceeded",
-            "delta-matroid feasible-family memberships exceed the "
-            f"{MAX_DELTA_MEMBERSHIPS}-entry envelope",
-        )
-    try:
-        return sum(len(label.encode("utf-8")) for label in system.ground)
-    except UnicodeEncodeError:
-        raise DeltaMatroidAdmissionError(
-            "labels_not_utf8",
-            "delta-matroid ground labels must be UTF-8-representable",
-        ) from None
 
 
 class DeltaMatroidDistanceProfile(StrictModel):

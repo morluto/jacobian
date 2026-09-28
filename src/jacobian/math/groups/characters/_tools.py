@@ -183,7 +183,8 @@ def _s3_standard_class_function() -> dict[str, Any]:
     }
 
 
-def _s3_ring_element(coordinates: list[int]) -> dict[str, Any]:
+def _s3_ring_element(coordinates: list[str]) -> dict[str, Any]:
+    """Wire form: ring coordinates are exact integers encoded as decimal strings."""
     return {
         "table": _s3_character_table(),
         "irreducible_multiplicities": coordinates,
@@ -323,8 +324,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "with itself decomposes as trivial plus sign plus standard."
                 ),
                 input={
-                    "left": _s3_ring_element([0, 0, 1]),
-                    "right": _s3_ring_element([0, 0, 1]),
+                    "left": _s3_ring_element(["0", "0", "1"]),
+                    "right": _s3_ring_element(["0", "0", "1"]),
                 },
             ),
         ),

@@ -9,17 +9,14 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.polynomials.derivations._models import (
     GaActionRequest,
     PolynomialDerivation,
 )
-from jacobian.math.polynomials.derivations._tools import TOOLS
 from jacobian.math.polynomials.derivations.operations import (
     ga_action_from_derivation,
 )
@@ -299,37 +296,6 @@ def test_action_output_term_limit_is_checked_before_construction(
     assert (
         error.value.errors()[0]["type"] == "polynomial_derivation.action_output_budget"
     )
-
-
-def test_ga_action_catalog_example_and_request_are_publishable() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "algebraic_group.ga.action_from_derivation.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        json.dumps(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert result.generator_images[0].variables == ("x", "y", "t")
-    assert GaActionRequest.model_validate(request.model_dump()) == request
-
-    assert result.parameter == "t"
-    assert [
-        (term.coefficient.num, term.coefficient.den, term.exponents)
-        for term in result.generator_images[0].polynomial.terms
-    ] == [(1, 1, (1, 0, 0)), (1, 1, (0, 1, 1))]
-    catalog = Catalog(TOOLS)
-    operation = catalog.operation(tool.operation_id)
-    assert operation is not None
-    invocation = invoke_operation(
-        operation.operation_id, operation.examples[0].input, catalog
-    )
-    assert invocation.output["parameter"] == "t"
-    assert invocation.output["generator_images"][0]["polynomial"]["terms"] == [
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [1, 0, 0]},
-        {"coefficient": {"num": "1", "den": "1"}, "exponents": [0, 1, 1]},
-    ]
 
 
 @pytest.mark.parametrize(

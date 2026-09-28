@@ -1,7 +1,6 @@
 """Exact finite bottom-up tree automata."""
 
 from jacobian.math.logic.automata.tree._models import (
-    TreeLanguageProfile,
     AcceptedTreeHeightProfileResult,
     NondeterministicRunCountsResult,
     RankedTreePositionsResult,
@@ -15,6 +14,7 @@ from jacobian.math.logic.automata.tree._models import (
     TreeContextStateMapResult,
     TreeContextTransformation,
     TreeContextTransformationMonoidResult,
+    TreeLanguageProfile,
 )
 from jacobian.math.logic.automata.tree.contexts import (
     FiniteTreeContext,

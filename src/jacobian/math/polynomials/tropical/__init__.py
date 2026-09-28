@@ -1,11 +1,8 @@
 """Exact tropical semiring scalars and idempotent addition."""
 
 from jacobian.math.polynomials.tropical._models import (
-    MatrixMinorAssignmentsRequest,
     MatrixMinorAssignmentsResult,
-    PolynomialActiveTermsRequest,
     PolynomialActiveTermsResult,
-    PolynomialSubstituteRequest,
     ScalarAddResult,
     ScalarDualResult,
     TropicalActiveTerm,
@@ -67,11 +64,8 @@ from jacobian.math.polynomials.tropical.values import (
 )
 
 __all__ = [
-    "MatrixMinorAssignmentsRequest",
     "MatrixMinorAssignmentsResult",
-    "PolynomialActiveTermsRequest",
     "PolynomialActiveTermsResult",
-    "PolynomialSubstituteRequest",
     "ScalarAddResult",
     "ScalarDualResult",
     "TropicalActiveTerm",

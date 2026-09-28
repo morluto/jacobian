@@ -176,7 +176,7 @@ def test_adams_work_bound_rejects_huge_bit_length_before_class_expansion(
 
 
 def test_cyclic_order_eleven_zero_character_is_admitted() -> None:
-    generator = tuple(range(1, 11)) + (0,)
+    generator = (*tuple(range(1, 11)), 0)
     source = PermutationGroup(degree=11, generators=(generator,))
     classes = group_conjugacy_classes(11, [list(generator)])
     partition = GroupConjugacyClassesResult._from_kernel(

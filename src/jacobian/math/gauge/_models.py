@@ -15,7 +15,7 @@ from pydantic import (
 )
 from pydantic_core import PydanticCustomError
 
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.groups._table_models import (
     MAX_FINITE_TABLE_GROUP_ORDER,
     FiniteGroupTable,
@@ -40,47 +40,6 @@ def _has_canonical_path_steps(path: object) -> bool:
 def _has_valid_permutation_degree(field: object) -> bool:
     degree = getattr(field, "degree", None)
     return type(degree) is int and 1 <= degree <= 8
-
-
-def _json_arrays_to_tuples(value: object) -> object:
-    """Decode only declared JSON array fields as tuples for strict round trips."""
-    if not isinstance(value, dict):
-        return value
-    result = dict(value)
-    lattice = result.get("lattice")
-    if isinstance(lattice, dict):
-        lattice = dict(lattice)
-        for key in ("vertices", "edges"):
-            if isinstance(lattice.get(key), (list, tuple)):
-                lattice[key] = tuple(lattice[key])
-        result["lattice"] = lattice
-    group = result.get("group")
-    if isinstance(group, dict):
-        group = dict(group)
-        multiplication = group.get("multiplication")
-        if isinstance(multiplication, (list, tuple)):
-            group["multiplication"] = tuple(
-                tuple(row) if isinstance(row, (list, tuple)) else row
-                for row in multiplication
-            )
-        if isinstance(group.get("inverse"), (list, tuple)):
-            group["inverse"] = tuple(group["inverse"])
-        result["group"] = group
-    faces = result.get("faces")
-    if isinstance(faces, (list, tuple)):
-        normalized_faces = []
-        for face in faces:
-            if isinstance(face, dict):
-                face = dict(face)
-                boundary = face.get("boundary")
-                if isinstance(boundary, dict):
-                    boundary = dict(boundary)
-                    if isinstance(boundary.get("steps"), (list, tuple)):
-                        boundary["steps"] = tuple(boundary["steps"])
-                    face["boundary"] = boundary
-            normalized_faces.append(face)
-        result["faces"] = tuple(normalized_faces)
-    return result
 
 
 def _check_raw_complex_shape(value: object) -> None:
@@ -451,8 +410,7 @@ class FiniteGroupGaugeComplex(StrictModel):
     @classmethod
     def canonicalize_json_arrays(cls, value: object) -> object:
         _check_raw_complex_shape(value)
-        value = _json_arrays_to_tuples(value)
-        return value
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_closed_source_bound_faces(self) -> Self:
@@ -545,7 +503,7 @@ class FiniteGroupGaugeComplexRequest(StrictModel):
     @classmethod
     def admit_raw_face_growth(cls, value: object) -> object:
         _check_raw_complex_shape(value)
-        return _json_arrays_to_tuples(value)
+        return canonicalize_json_containers(value)
 
 
 class FiniteGroupGaugeCurvatureRequest(StrictModel):

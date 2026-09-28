@@ -4,7 +4,6 @@ from itertools import permutations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.gauge import (
     FiniteGroupGaugeCurvatureRequest,
@@ -181,8 +180,9 @@ def test_empty_face_is_identity_and_result_round_trips_through_json():
     assert result.flat
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
-    tool = Catalog.open().operation("lattice_gauge.finite_group.curvature.compute")
-    assert tool.run(request) == result
+    # The catalog declaration and its published example are covered by
+    # tests/integration/catalog/test_builtin_examples.py. A math test must not
+    # boot the complete product boundary to re-check the declaration.
 
 
 def test_parent_table_repetition_is_admitted_before_face_values_are_built():

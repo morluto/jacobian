@@ -4,7 +4,6 @@ from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightAction,
     PolynomialWeightActionResult,
     PolynomialWeightInvariantResult,
-    PolynomialWeightSubrepresentationRequest,
     PolynomialWeightSubrepresentationResult,
 )
 from jacobian.math.polynomials.derivations._weight_operations import (
@@ -25,7 +24,6 @@ __all__ = [
     "PolynomialWeightAction",
     "PolynomialWeightActionResult",
     "PolynomialWeightInvariantResult",
-    "PolynomialWeightSubrepresentationRequest",
     "PolynomialWeightSubrepresentationResult",
     "apply_derivation",
     "construct_locally_nilpotent_certificate",

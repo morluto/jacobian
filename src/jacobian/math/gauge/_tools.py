@@ -31,7 +31,6 @@ from jacobian.math.gauge.finite_group import (
 from jacobian.math.gauge.finite_group_complex import (
     construct_finite_group_gauge_complex,
 )
-from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
     path_holonomy,

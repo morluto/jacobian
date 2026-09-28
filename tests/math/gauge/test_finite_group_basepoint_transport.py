@@ -12,7 +12,6 @@ from jacobian.math.gauge import (
     FiniteGroupGaugeBasepointTransportRequest,
     FiniteGroupGaugeEdgeLabel,
     FiniteGroupGaugeField,
-    FiniteGroupGaugeHolonomyRequest,
     GaugeEdge,
     GaugeLattice,
     GaugePathStep,
@@ -122,9 +121,7 @@ def test_nonabelian_transport_is_exact_conjugation_and_composes_after_json() -> 
 
     decoded = type(result).model_validate_json(result.model_dump_json())
     consumer_value = finite_group_gauge_holonomy(
-        FiniteGroupGaugeHolonomyRequest(
-            field=decoded.field, path=decoded.transported_loop
-        )
+        decoded.field, decoded.transported_loop
     )
     assert consumer_value.holonomy == decoded.transported_holonomy
 

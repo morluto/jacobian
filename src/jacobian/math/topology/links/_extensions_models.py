@@ -8,8 +8,10 @@ from typing import Literal, Self
 from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
+from jacobian._exact import CanonicalRational
 from jacobian._models import StrictModel
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.analysis._models import InertiaResult
+from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
 from jacobian.math.polynomials.values import RationalLaurentPolynomial
 from jacobian.math.topology.edge_paths._models import (
     FiniteGroupPresentation,
@@ -29,6 +31,7 @@ MAX_WIRTINGER_GENERATORS = 64
 MAX_STATE_CIRCLE_CROSSINGS = MAX_LINK_CROSSINGS
 MAX_CONWAY_CENTERED_DEGREE = 64
 MAX_CONWAY_COEFFICIENT_DIGITS = 4_096
+MAX_LINK_SIGNATURE_CROSSINGS = 32
 
 # Output bounds are materialization CELL counts derived from the link-diagram
 # domain maxima (crossings, arcs, free loops, darts, and label characters), not
@@ -63,6 +66,283 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
 
 
 MAX_LINK_DISJOINT_UNION_OUTPUT_BYTES = 8 * 1024 * 1024
+MAX_LINK_SIGNATURE_OUTPUT_BYTES = 2 * 1024 * 1024
+MAX_LINK_SIGNATURE_WORK = 50_000_000
+
+
+class CheckerboardRegion(StrictModel):
+    region_id: LinkLabel
+    boundary_darts: tuple[LinkLabel, ...] = Field(
+        min_length=1, max_length=4 * MAX_LINK_CROSSINGS
+    )
+    shaded: bool
+
+
+class LinkBlackboardEdge(StrictModel):
+    """One crossing edge in the canonical shaded-region Tait graph.
+
+    Equal endpoints are permitted: they are loops. Repeated endpoint pairs
+    retain distinct crossing IDs and therefore remain parallel edges.
+    """
+
+    crossing_id: LinkLabel
+    first_region_id: LinkLabel
+    second_region_id: LinkLabel
+    first_corner_index: StrictInt = Field(ge=0, le=3)
+    second_corner_index: StrictInt = Field(ge=0, le=3)
+    tait_sign: Literal[-1, 1]
+
+    @model_validator(mode="after")
+    def require_opposite_corner_transport(self) -> Self:
+        if (
+            self.first_corner_index >= self.second_corner_index
+            or (self.first_corner_index - self.second_corner_index) % 2
+        ):
+            raise _validation_error(
+                "blackboard_edge_corners",
+                "edge endpoints must retain the ordered opposite shaded corners",
+            )
+        return self
+
+
+class LinkBlackboardGraph(StrictModel):
+    """Source-bound signed Tait graph and its complete planar region data."""
+
+    diagram: OrientedLinkDiagram
+    regions: tuple[CheckerboardRegion, ...] = Field(
+        min_length=2, max_length=MAX_LINK_CROSSINGS + 2
+    )
+    shaded_region_ids: tuple[LinkLabel, ...] = Field(
+        min_length=1, max_length=MAX_LINK_CROSSINGS + 1
+    )
+    edges: tuple[LinkBlackboardEdge, ...] = Field(max_length=MAX_LINK_CROSSINGS)
+
+    @model_validator(mode="after")
+    def require_source_axes(self) -> Self:
+        """Validate the graph's own axes and authored incidence structurally."""
+        if (
+            not self.diagram.crossings
+            or self.diagram.free_loops
+            or len(self.regions) != len(self.diagram.crossings) + 2
+        ):
+            raise _validation_error(
+                "blackboard_diagram_axis",
+                "graph must retain a nonempty connected crossing projection and its sphere face count",
+            )
+        region_ids = tuple(region.region_id for region in self.regions)
+        if region_ids != tuple(
+            f"region_{index:03d}" for index in range(len(region_ids))
+        ):
+            raise _validation_error(
+                "blackboard_region_axis", "region IDs must be in canonical face order"
+            )
+        if len(set(region_ids)) != len(region_ids):
+            raise _validation_error(
+                "blackboard_region_ids", "region IDs must be unique"
+            )
+        darts = tuple(
+            dart for crossing in self.diagram.crossings for dart in crossing.half_edges
+        )
+        covered = tuple(
+            dart for region in self.regions for dart in region.boundary_darts
+        )
+        if sorted(covered) != sorted(darts) or len(covered) != len(set(covered)):
+            raise _validation_error(
+                "blackboard_region_darts",
+                "region boundaries must partition source darts",
+            )
+        expected_shaded = tuple(
+            region.region_id for region in self.regions if region.shaded
+        )
+        if not self.regions[0].shaded:
+            raise _validation_error(
+                "blackboard_color_seed",
+                "the least canonical face must use the deterministic shaded color",
+            )
+        if self.shaded_region_ids != expected_shaded:
+            raise _validation_error(
+                "blackboard_shaded_axis", "shaded vertices must retain region order"
+            )
+        if tuple(edge.crossing_id for edge in self.edges) != tuple(
+            crossing.crossing_id for crossing in self.diagram.crossings
+        ):
+            raise _validation_error(
+                "blackboard_crossing_axis", "edges must cover crossings in source order"
+            )
+        shaded = set(self.shaded_region_ids)
+        region_of_dart = {
+            dart: region.region_id
+            for region in self.regions
+            for dart in region.boundary_darts
+        }
+        for edge, crossing in zip(self.edges, self.diagram.crossings, strict=True):
+            corner_regions = tuple(region_of_dart[dart] for dart in crossing.half_edges)
+            shaded_corners = tuple(
+                index
+                for index, region_id in enumerate(corner_regions)
+                if region_id in shaded
+            )
+            if (
+                len(shaded_corners) != 2
+                or (shaded_corners[0] - shaded_corners[1]) % 2
+                or shaded_corners != (edge.first_corner_index, edge.second_corner_index)
+                or (
+                    corner_regions[shaded_corners[0]],
+                    corner_regions[shaded_corners[1]],
+                )
+                != (edge.first_region_id, edge.second_region_id)
+            ):
+                raise _validation_error(
+                    "blackboard_edge_endpoints",
+                    "crossing edge endpoints must match its opposite shaded source corners",
+                )
+        return self
+
+
+class BlackboardGraphRequest(StrictModel):
+    diagram: OrientedLinkDiagram = Field(
+        description=(
+            "A classical oriented diagram with a connected nonempty crossing "
+            "projection and at most 64 crossings; crossing-free loops are not "
+            "part of a Tait graph."
+        )
+    )
+
+
+class GoeritzDataRequest(StrictModel):
+    blackboard_graph: LinkBlackboardGraph
+
+
+class GoeritzDataResult(StrictModel):
+    """A reduced Goeritz matrix derived from one typed checkerboard graph."""
+
+    blackboard_graph: LinkBlackboardGraph
+    deleted_region_id: LinkLabel
+    reduced_matrix: IntegerMatrix
+    absolute_determinant: StrictInt = Field(ge=0)
+
+    @model_validator(mode="after")
+    def require_goeritz_axes(self) -> Self:
+        if self.deleted_region_id not in self.blackboard_graph.shaded_region_ids:
+            raise _validation_error(
+                "goeritz_deleted_region",
+                "deleted region must belong to the shaded region axis",
+            )
+        expected_order = len(self.blackboard_graph.shaded_region_ids) - 1
+        if (
+            self.reduced_matrix.row_count != expected_order
+            or self.reduced_matrix.column_count != expected_order
+        ):
+            raise _validation_error(
+                "goeritz_matrix_shape",
+                "reduced Goeritz matrix order must be shaded region count minus one",
+            )
+        return self
+
+
+class GoeritzCorrectionContribution(StrictModel):
+    """One crossing's oriented type and Gordon-Litherland correction value."""
+
+    crossing_id: LinkLabel
+    crossing_sign: Literal[-1, 1]
+    incidence_number: Literal[-1, 1]
+    crossing_type: Literal["TYPE_I", "TYPE_II"]
+    correction_contribution: StrictInt
+
+
+class LinkSignatureRequest(StrictModel):
+    """Compute the oriented link signature from one bounded diagram."""
+
+    diagram: OrientedLinkDiagram
+
+
+class LinkSignatureResult(StrictModel):
+    """Gordon-Litherland signature with its exact matrix and correction data."""
+
+    diagram: OrientedLinkDiagram
+    goeritz_data: GoeritzDataResult | None
+    goeritz_inertia: InertiaResult
+    correction_contributions: tuple[GoeritzCorrectionContribution, ...] = Field(
+        max_length=MAX_LINK_SIGNATURE_CROSSINGS
+    )
+    correction_term: StrictInt
+    signature: StrictInt
+
+    @model_validator(mode="after")
+    def require_source_bound_signature(self) -> Self:
+        goeritz_data = self.goeritz_data
+        graph = goeritz_data.blackboard_graph if goeritz_data is not None else None
+        if graph is None:
+            if self.diagram.crossings or not self.diagram.free_loops:
+                raise _validation_error(
+                    "signature_empty_projection",
+                    "only crossing-free unlinks may omit Goeritz data",
+                )
+            matrix_entries: tuple[tuple[int, ...], ...] = ()
+        else:
+            if graph.diagram != self.diagram:
+                raise _validation_error(
+                    "signature_diagram_source",
+                    "Goeritz data must retain the exact signature source diagram",
+                )
+            assert goeritz_data is not None
+            matrix_entries = goeritz_data.reduced_matrix.entries
+        expected_rational = RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational(num=value, den=1) for value in row)
+                for row in matrix_entries
+            ),
+            row_count=len(matrix_entries),
+            column_count=len(matrix_entries),
+        )
+        if self.goeritz_inertia.matrix != expected_rational:
+            raise _validation_error(
+                "signature_inertia_source",
+                "inertia must retain the exact reduced Goeritz matrix over QQ",
+            )
+        if len(self.correction_contributions) != len(self.diagram.crossings) or tuple(
+            row.crossing_id for row in self.correction_contributions
+        ) != tuple(crossing.crossing_id for crossing in self.diagram.crossings):
+            raise _validation_error(
+                "signature_correction_axis",
+                "correction rows must cover the complete diagram crossing axis",
+            )
+        correction = 0
+        edges = () if graph is None else graph.edges
+        for crossing, edge, row in zip(
+            self.diagram.crossings, edges, self.correction_contributions, strict=True
+        ):
+            crossing_type = (
+                "TYPE_I" if crossing.sign * edge.tait_sign == 1 else "TYPE_II"
+            )
+            if (
+                row.crossing_sign != crossing.sign
+                or row.incidence_number != edge.tait_sign
+                or row.crossing_type != crossing_type
+                or row.correction_contribution
+                != (edge.tait_sign if crossing_type == "TYPE_II" else 0)
+            ):
+                raise _validation_error(
+                    "signature_correction_source",
+                    "crossing type and incidence must match source orientation and shading",
+                )
+            correction += row.correction_contribution
+        if correction != self.correction_term:
+            raise _validation_error(
+                "signature_correction_sum",
+                "correction term must sum incidence numbers at type-II crossings",
+            )
+        expected_signature = (
+            self.goeritz_inertia.n_positive
+            - self.goeritz_inertia.n_negative
+            - correction
+        )
+        if self.signature != expected_signature:
+            raise _validation_error(
+                "signature_identity",
+                "link signature must equal Goeritz inertia signature minus correction",
+            )
+        return self
 
 
 class LinkDisjointUnionRequest(StrictModel):
@@ -284,12 +564,6 @@ class LinkDisjointUnionResult(StrictModel):
         return self
 
 
-class LinkSignatureRequest(StrictModel):
-    """Compute the oriented link signature from one bounded diagram."""
-
-    diagram: OrientedLinkDiagram
-
-
 class AlexanderPolynomialRequest(StrictModel):
     diagram: OrientedLinkDiagram
 
@@ -507,73 +781,6 @@ class LinkStateCirclesResult(StrictModel):
         if self.circles != tuple(sorted(self.circles, key=lambda circle: circle.darts)):
             raise _validation_error(
                 "state_circle_order", "circles must use canonical lexicographic order"
-            )
-        return self
-
-
-class GoeritzRegion(StrictModel):
-    region_id: LinkLabel
-    boundary_darts: tuple[LinkLabel, ...] = Field(min_length=1)
-    shaded: bool
-
-
-class GoeritzCrossingContribution(StrictModel):
-    crossing_id: LinkLabel
-    first_region_id: LinkLabel
-    second_region_id: LinkLabel
-    incidence: Literal[-1, 1]
-
-
-class GoeritzDataRequest(StrictModel):
-    diagram: OrientedLinkDiagram
-
-
-class GoeritzDataResult(StrictModel):
-    """A deterministic checkerboard shading and its reduced Goeritz matrix."""
-
-    diagram: OrientedLinkDiagram
-    regions: tuple[GoeritzRegion, ...] = Field(min_length=2)
-    shaded_region_ids: tuple[LinkLabel, ...] = Field(min_length=1)
-    crossing_contributions: tuple[GoeritzCrossingContribution, ...]
-    deleted_region_id: LinkLabel
-    reduced_matrix: IntegerMatrix
-    absolute_determinant: StrictInt = Field(ge=0)
-
-    @model_validator(mode="after")
-    def require_goeritz_axes(self) -> Self:
-        region_ids = tuple(region.region_id for region in self.regions)
-        if len(set(region_ids)) != len(region_ids):
-            raise _validation_error(
-                "goeritz_region_ids", "checkerboard region IDs must be unique"
-            )
-        expected_shaded = tuple(
-            region.region_id for region in self.regions if region.shaded
-        )
-        if self.shaded_region_ids != expected_shaded:
-            raise _validation_error(
-                "goeritz_shaded_axis",
-                "shaded region axis must equal the retained checkerboard shading",
-            )
-        if self.deleted_region_id not in self.shaded_region_ids:
-            raise _validation_error(
-                "goeritz_deleted_region",
-                "deleted region must belong to the shaded region axis",
-            )
-        expected_order = len(self.shaded_region_ids) - 1
-        if (
-            self.reduced_matrix.row_count != expected_order
-            or self.reduced_matrix.column_count != expected_order
-        ):
-            raise _validation_error(
-                "goeritz_matrix_shape",
-                "reduced Goeritz matrix order must be shaded region count minus one",
-            )
-        if tuple(row.crossing_id for row in self.crossing_contributions) != tuple(
-            crossing.crossing_id for crossing in self.diagram.crossings
-        ):
-            raise _validation_error(
-                "goeritz_crossing_axis",
-                "crossing contributions must retain the complete source axis",
             )
         return self
 
@@ -824,20 +1031,28 @@ __all__ = [
     "MAX_BRAID_STRANDS",
     "MAX_BRAID_WORD_LENGTH",
     "MAX_LINK_CROSSINGS",
+    "MAX_LINK_SIGNATURE_CROSSINGS",
+    "MAX_LINK_SIGNATURE_OUTPUT_BYTES",
+    "MAX_LINK_SIGNATURE_WORK",
     "MAX_WIRTINGER_GENERATORS",
     "AlexanderPolynomialRequest",
     "AlexanderPolynomialResult",
+    "BlackboardGraphRequest",
     "BraidClosureResult",
     "BraidLetter",
     "BraidPermutationResult",
     "BraidWord",
     "BraidWordRequest",
-    "GoeritzCrossingContribution",
+    "CheckerboardRegion",
+    "GoeritzCorrectionContribution",
     "GoeritzDataRequest",
     "GoeritzDataResult",
-    "GoeritzRegion",
+    "LinkBlackboardEdge",
+    "LinkBlackboardGraph",
     "LinkDeterminantRequest",
     "LinkDeterminantResult",
+    "LinkSignatureRequest",
+    "LinkSignatureResult",
     "SeifertCircle",
     "SeifertCircleRequest",
     "SeifertCircleResult",

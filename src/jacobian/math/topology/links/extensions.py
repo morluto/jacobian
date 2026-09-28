@@ -13,7 +13,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.matrices.analysis._models import InertiaResult
+from jacobian.math.matrices.analysis.operations import compute_inertia
+from jacobian.math.matrices.values import IntegerMatrix, RationalMatrix
 from jacobian.math.polynomials.values import (
     RationalLaurentPolynomial,
     RationalLaurentPolynomialTerm,
@@ -28,6 +30,9 @@ from jacobian.math.topology.links._extensions_models import (
     MAX_CONWAY_COEFFICIENT_DIGITS,
     MAX_CONWAY_OUTPUT_CELLS,
     MAX_LINK_CROSSINGS,
+    MAX_LINK_SIGNATURE_CROSSINGS,
+    MAX_LINK_SIGNATURE_OUTPUT_BYTES,
+    MAX_LINK_SIGNATURE_WORK,
     MAX_STATE_CIRCLE_CROSSINGS,
     MAX_STATE_CIRCLE_OUTPUT_CELLS,
     MAX_WIRTINGER_GENERATORS,
@@ -37,10 +42,12 @@ from jacobian.math.topology.links._extensions_models import (
     BraidLetter,
     BraidPermutationResult,
     BraidWord,
+    CheckerboardRegion,
     ConwayPolynomialResult,
-    GoeritzCrossingContribution,
+    GoeritzCorrectionContribution,
     GoeritzDataResult,
-    GoeritzRegion,
+    LinkBlackboardEdge,
+    LinkBlackboardGraph,
     LinkCrossingProfileEntry,
     LinkCrossingProfileResult,
     LinkDeterminantResult,
@@ -50,6 +57,7 @@ from jacobian.math.topology.links._extensions_models import (
     LinkDisjointUnionDartMap,
     LinkDisjointUnionFreeLoopMap,
     LinkDisjointUnionResult,
+    LinkSignatureResult,
     LinkSmoothedCircle,
     LinkStateCirclesResult,
     SeifertCircle,
@@ -491,34 +499,44 @@ def _checkerboard_colors(adjacency: dict[int, set[int]]) -> dict[int, int]:
     return colors
 
 
-def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
-    """Construct a deterministic checkerboard shading and reduced Goeritz matrix."""
-
-    admitted = _admit_diagram(diagram)
+def _construct_blackboard_graph(
+    admitted: OrientedLinkDiagram,
+) -> LinkBlackboardGraph:
+    """Construct a Tait graph from one already-admitted source diagram."""
     crossing_count = len(admitted.crossings)
     if crossing_count == 0 or admitted.free_loops:
         _domain_error(
             ("diagram",),
-            "goeritz_crossing_projection",
+            "blackboard_graph_crossing_projection",
             "Goeritz data requires a nonempty crossing projection without free loops",
         )
-    if crossing_count > 32:
+    if crossing_count > MAX_LINK_CROSSINGS:
         raise OperationResourceAdmissionError(
             location=("diagram",),
-            code="link_diagram.goeritz_matrix_bound",
-            message="Goeritz matrices are admitted for at most 32 crossings",
+            code="link_diagram.blackboard_graph_bound",
+            message="blackboard graphs are admitted for at most 64 crossings",
+        )
+    # A returned value repeats each bounded source label in crossing/arc rows,
+    # face cycles, and crossing-edge transport. This conservative bound is
+    # checked before computing any face permutation or result objects.
+    output_bound = 8192 + crossing_count * 6000 + (crossing_count + 2) * 1024
+    if output_bound > 512 * 1024:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.blackboard_graph_output_bound",
+            message="checkerboard graph result exceeds its 512 KiB output envelope",
         )
 
     faces, face_of, adjacency = _projection_faces(admitted)
     if len(faces) != crossing_count + 2:
         _domain_error(
             ("diagram",),
-            "goeritz_planar_projection",
+            "blackboard_graph_planar_projection",
             "connected crossing projection must satisfy the sphere Euler identity",
         )
     colors = _checkerboard_colors(adjacency)
     regions = tuple(
-        GoeritzRegion(
+        CheckerboardRegion(
             region_id=f"region_{index:03d}",
             boundary_darts=face,
             shaded=colors[index] == 0,
@@ -526,11 +544,7 @@ def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
         for index, face in enumerate(faces)
     )
     shaded_indices = tuple(index for index in range(len(faces)) if colors[index] == 0)
-    shaded_positions = {
-        region: position for position, region in enumerate(shaded_indices)
-    }
-    contributions: list[GoeritzCrossingContribution] = []
-    matrix = [[0 for _ in shaded_indices] for _ in shaded_indices]
+    edges: list[LinkBlackboardEdge] = []
     for crossing in admitted.crossings:
         corner_regions = tuple(face_of[dart] for dart in crossing.half_edges)
         shaded_corners = tuple(
@@ -539,29 +553,74 @@ def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
         if len(shaded_corners) != 2 or (shaded_corners[0] - shaded_corners[1]) % 2:
             _domain_error(
                 ("diagram",),
-                "goeritz_crossing_shading",
+                "blackboard_graph_crossing_shading",
                 "checkerboard shading must occupy opposite corners at each crossing",
             )
         first_region = corner_regions[shaded_corners[0]]
         second_region = corner_regions[shaded_corners[1]]
-        incidence: Literal[-1, 1] = (
+        tait_sign: Literal[-1, 1] = (
             1 if set(shaded_corners) == set(crossing.over_pair) else -1
         )
-        contributions.append(
-            GoeritzCrossingContribution(
+        edges.append(
+            LinkBlackboardEdge(
                 crossing_id=crossing.crossing_id,
                 first_region_id=regions[first_region].region_id,
                 second_region_id=regions[second_region].region_id,
-                incidence=incidence,
+                first_corner_index=shaded_corners[0],
+                second_corner_index=shaded_corners[1],
+                tait_sign=tait_sign,
             )
         )
-        first_position = shaded_positions[first_region]
-        second_position = shaded_positions[second_region]
+    return LinkBlackboardGraph(
+        diagram=admitted,
+        regions=regions,
+        shaded_region_ids=tuple(regions[index].region_id for index in shaded_indices),
+        edges=tuple(edges),
+    )
+
+
+def link_blackboard_graph(diagram: OrientedLinkDiagram) -> LinkBlackboardGraph:
+    """Construct the canonical signed Tait graph with source region transport."""
+    return _construct_blackboard_graph(_admit_diagram(diagram))
+
+
+def link_goeritz_data(graph: LinkBlackboardGraph) -> GoeritzDataResult:
+    """Construct the reduced Goeritz matrix from an admitted Tait graph."""
+    if not isinstance(graph, LinkBlackboardGraph):
+        _domain_error(
+            ("blackboard_graph",),
+            "goeritz_graph_type",
+            "graph must be a LinkBlackboardGraph",
+        )
+    try:
+        graph = LinkBlackboardGraph.model_validate_json(
+            graph.model_dump_json(warnings=False)
+        )
+    except (AttributeError, TypeError, ValidationError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("blackboard_graph",),
+            code="link_diagram.goeritz_graph_shape",
+            message="graph must satisfy the bounded checkerboard graph contract",
+        ) from exc
+    if len(graph.diagram.crossings) > 32:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.goeritz_matrix_bound",
+            message="Goeritz matrices are admitted for at most 32 crossings",
+        )
+    shaded_indices = graph.shaded_region_ids
+    shaded_positions = {
+        region: position for position, region in enumerate(shaded_indices)
+    }
+    matrix = [[0 for _ in shaded_indices] for _ in shaded_indices]
+    for edge in graph.edges:
+        first_position = shaded_positions[edge.first_region_id]
+        second_position = shaded_positions[edge.second_region_id]
         if first_position != second_position:
-            matrix[first_position][first_position] += incidence
-            matrix[second_position][second_position] += incidence
-            matrix[first_position][second_position] -= incidence
-            matrix[second_position][first_position] -= incidence
+            matrix[first_position][first_position] += edge.tait_sign
+            matrix[second_position][second_position] += edge.tait_sign
+            matrix[first_position][second_position] -= edge.tait_sign
+            matrix[second_position][first_position] -= edge.tait_sign
     deleted_position = len(shaded_indices) - 1
     reduced_entries = tuple(
         tuple(value for column, value in enumerate(row) if column != deleted_position)
@@ -574,13 +633,109 @@ def link_goeritz_data(diagram: OrientedLinkDiagram) -> GoeritzDataResult:
         column_count=len(reduced_entries),
     )
     return GoeritzDataResult(
-        diagram=admitted,
-        regions=regions,
-        shaded_region_ids=tuple(regions[index].region_id for index in shaded_indices),
-        crossing_contributions=tuple(contributions),
-        deleted_region_id=regions[shaded_indices[deleted_position]].region_id,
+        blackboard_graph=graph,
+        deleted_region_id=shaded_indices[deleted_position],
         reduced_matrix=reduced,
         absolute_determinant=abs(_integer_determinant(reduced_entries)),
+    )
+
+
+def link_signature(diagram: OrientedLinkDiagram) -> LinkSignatureResult:
+    """Return the exact Gordon-Litherland signature for a bounded diagram.
+
+    This uses Jacobian's Tait convention: an edge incidence is +1 when its
+    shaded corners are the overpassing pair. Thus the source Goeritz matrix is
+    the signed Laplacian with those incidences, and a crossing is type II when
+    its oriented crossing sign times its incidence is -1. The link signature
+    is the Goeritz matrix signature minus the sum of type-II incidences.
+    A crossing-free unlink has signature zero and uses the zero-dimensional
+    inertia convention.
+    """
+    admitted = _admit_diagram(diagram)
+    crossing_count = len(admitted.crossings)
+    if crossing_count > MAX_LINK_SIGNATURE_CROSSINGS:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.signature_crossing_bound",
+            message="exact link signatures are admitted for at most 32 crossings",
+        )
+
+    # A connected c-crossing plane graph has at most c+2 regions, so its
+    # reduced Goeritz order is at most c. Each entry has magnitude at most c.
+    # For integer entries of at most two digits and denominator 1, the exact
+    # inertia owner's Hadamard/minor estimate is bounded by 10*n+4 digits.
+    dimension = crossing_count
+    minor_digits_bound = 10 * dimension + 4
+    inertia_work_bound = 4 * dimension**3 * minor_digits_bound
+    if inertia_work_bound > MAX_LINK_SIGNATURE_WORK:
+        raise RuntimeError("link signature inertia envelope is inconsistent")
+    diagram_bytes = len(admitted.model_dump_json(warnings=False).encode("utf-8"))
+    output_bound = 4 * diagram_bytes + 1_024 * crossing_count**2 + 4_096
+    if output_bound > MAX_LINK_SIGNATURE_OUTPUT_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("diagram",),
+            code="link_diagram.signature_output_bound",
+            message="link signature result exceeds its conservative output envelope",
+        )
+
+    goeritz_data = (
+        link_goeritz_data(_construct_blackboard_graph(admitted))
+        if crossing_count
+        else None
+    )
+    integer_matrix = goeritz_data.reduced_matrix if goeritz_data is not None else None
+    rational_matrix = (
+        RationalMatrix(
+            entries=tuple(
+                tuple(CanonicalRational(num=value, den=1) for value in row)
+                for row in integer_matrix.entries
+            ),
+            row_count=integer_matrix.row_count,
+            column_count=integer_matrix.column_count,
+        )
+        if integer_matrix is not None
+        else RationalMatrix(entries=(), row_count=0, column_count=0)
+    )
+    if rational_matrix.row_count == 0:
+        inertia = InertiaResult._from_kernel(
+            matrix=rational_matrix,
+            n_positive=0,
+            n_negative=0,
+            n_zero=0,
+        )
+    else:
+        inertia = compute_inertia(rational_matrix)
+    contributions = (
+        tuple(
+            GoeritzCorrectionContribution(
+                crossing_id=crossing.crossing_id,
+                crossing_sign=crossing.sign,
+                incidence_number=edge.tait_sign,
+                crossing_type=(
+                    "TYPE_I" if crossing.sign * edge.tait_sign == 1 else "TYPE_II"
+                ),
+                correction_contribution=(
+                    edge.tait_sign if crossing.sign * edge.tait_sign == -1 else 0
+                ),
+            )
+            for crossing, edge in zip(
+                goeritz_data.blackboard_graph.diagram.crossings,
+                goeritz_data.blackboard_graph.edges,
+                strict=True,
+            )
+        )
+        if goeritz_data is not None
+        else ()
+    )
+    correction_term = sum(row.correction_contribution for row in contributions)
+    signature = inertia.n_positive - inertia.n_negative - correction_term
+    return LinkSignatureResult(
+        diagram=admitted,
+        goeritz_data=goeritz_data,
+        goeritz_inertia=inertia,
+        correction_contributions=contributions,
+        correction_term=correction_term,
+        signature=signature,
     )
 
 

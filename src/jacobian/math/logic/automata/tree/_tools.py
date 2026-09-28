@@ -306,6 +306,7 @@ def _run_context_state_map(
 ) -> TreeContextStateMapResult:
     return map_tree_context_states(request.automaton, request.context)
 
+
 TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="ranked_tree.context.plug.compute",

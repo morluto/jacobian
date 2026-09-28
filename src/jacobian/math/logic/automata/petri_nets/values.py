@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -27,6 +27,12 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"petri_net.{reason}", message)
 
 
+PetriTransitionRow = Annotated[tuple[int, ...], Field(max_length=MAX_PETRI_TRANSITIONS)]
+PetriArcMatrix = Annotated[
+    tuple[PetriTransitionRow, ...], Field(max_length=MAX_PETRI_PLACES)
+]
+
+
 class PetriNet(StrictModel):
     """A weighted place/transition Petri net.
 
@@ -45,8 +51,8 @@ class PetriNet(StrictModel):
         default=None,
         description="Optional canonical transition labels; equal-shaped foreign axes remain distinct.",
     )
-    pre: tuple[tuple[int, ...], ...]
-    post: tuple[tuple[int, ...], ...]
+    pre: PetriArcMatrix
+    post: PetriArcMatrix
 
     @model_validator(mode="after")
     def require_valid_matrices(self) -> Self:
@@ -109,7 +115,7 @@ class Marking(StrictModel):
     length.
     """
 
-    tokens: tuple[int, ...]
+    tokens: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
     net: PetriNet | None = None
 
     @model_validator(mode="after")
@@ -129,8 +135,8 @@ class Marking(StrictModel):
 class PetriMarkingState(StrictModel):
     """A reachability vertex with its stable state and place axes."""
 
-    state_index: int = Field(ge=0)
-    place_axis: tuple[int, ...]
+    state_index: int = Field(ge=0, lt=MAX_REACHABILITY_STATES)
+    place_axis: tuple[int, ...] = Field(max_length=MAX_PETRI_PLACES)
     marking: Marking
 
     @model_validator(mode="after")
@@ -147,9 +153,9 @@ class PetriMarkingState(StrictModel):
 class PetriReachabilityEdge(StrictModel):
     """One transition edge between indexed markings."""
 
-    source_state: int = Field(ge=0)
-    transition: int = Field(ge=0)
-    target_state: int = Field(ge=0)
+    source_state: int = Field(ge=0, lt=MAX_REACHABILITY_STATES)
+    transition: int = Field(ge=0, lt=MAX_PETRI_TRANSITIONS)
+    target_state: int = Field(ge=0, lt=MAX_REACHABILITY_STATES)
 
 
 class PetriPlaceSubset(StrictModel):

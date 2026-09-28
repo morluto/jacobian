@@ -147,6 +147,42 @@ def _require_distinct_alphabet(alphabet: tuple[str, ...]) -> None:
         )
 
 
+MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT = 64
+
+
+class FreeAlgebraPolynomialHomomorphismCompositionRequest(StrictModel):
+    """Maps ``f:A→B`` and ``g:B→C`` in the order used by ``g ∘ f``."""
+
+    f: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The first map f:A→B, applied before g. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+    g: FreeAlgebraPolynomialHomomorphism = Field(
+        description=(
+            "The second map g:B→C, applied after f. Each generator image is "
+            "limited at execution to 64 terms and words of at most 32 letters."
+        )
+    )
+
+    @model_validator(mode="after")
+    def require_matching_intermediate_alphabet(self) -> Self:
+        if self.f.target_alphabet != self.g.source_alphabet:
+            raise _validation_error(
+                "homomorphism_composition_alphabet",
+                "f target alphabet must equal g source alphabet in the same order",
+            )
+        return self
+
+
+class FreeAlgebraPolynomialPowerRequest(StrictModel):
+    """A bounded nonnegative power of one canonical free-algebra polynomial."""
+
+    polynomial: FreeAlgebraPolynomial
+    exponent: int = Field(ge=0, le=MAX_FREE_ALGEBRA_POLYNOMIAL_POWER_EXPONENT)
+
+
 class FreeAlgebraWord(StrictModel):
     """One bounded word over an explicitly ordered generator alphabet.
 
@@ -539,8 +575,10 @@ class FreeAlgebraPolynomial(StrictModel):
 class TermPairMultiplicationLedger(StrictModel):
     """Bounded accounting for one distributive noncommutative product."""
 
-    left_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_OPERAND_TERMS)
-    right_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_OPERAND_TERMS)
+    # Power operations use the same kernel for admitted intermediate values,
+    # whose support can exceed the public product's 64-term operand limit.
+    left_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
+    right_term_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
     term_pair_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_TERM_PAIRS)
     distinct_product_word_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_RESULT_TERMS)
     collected_pair_count: int = Field(ge=0, le=MAX_FREE_ALGEBRA_TERM_PAIRS)

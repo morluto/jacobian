@@ -29,6 +29,7 @@ from jacobian.math.number_theory.elliptic_curves.finite_field import (
     finite_field_isogeny_class,
     finite_field_isomorphism,
     finite_field_point_add,
+    finite_field_point_membership_in_generated_subgroup,
     finite_field_point_negate,
     finite_field_point_order,
     finite_field_point_scalar,
@@ -898,3 +899,101 @@ def test_generic_quadratic_twist_stays_non_isomorphic_with_negated_trace() -> No
     twist_count = finite_field_cardinality(twist)
     assert source_count.trace == -twist_count.trace
     assert source_count.cardinality + twist_count.cardinality == 2 * (5 + 1)
+
+
+def test_generated_subgroup_membership_matches_hand_computed_f5_subgroup() -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+
+    def point(x: int, y: int) -> FiniteFieldEllipticPoint:
+        return FiniteFieldEllipticPoint.affine(
+            curve,
+            FiniteFieldElement(presentation=field, coordinates=(x,)),
+            FiniteFieldElement(presentation=field, coordinates=(y,)),
+        )
+
+    # Direct chord-and-tangent arithmetic gives 2(2,1)=(2,4) and
+    # (2,1)+(2,4)=O, so these three points are precisely the subgroup.
+    generator = point(2, 1)
+    member = point(2, 4)
+    outside = point(0, 1)
+    yes = finite_field_point_membership_in_generated_subgroup(
+        curve, (generator,), member
+    )
+    no = finite_field_point_membership_in_generated_subgroup(
+        curve, (generator,), outside
+    )
+    trivial_member = finite_field_point_membership_in_generated_subgroup(
+        curve, (), FiniteFieldEllipticPoint.infinity(curve)
+    )
+    trivial_nonmember = finite_field_point_membership_in_generated_subgroup(
+        curve, (), outside
+    )
+
+    assert yes.belongs is True
+    assert no.belongs is False
+    assert trivial_member.belongs is True
+    assert trivial_nonmember.belongs is False
+    assert yes.generators == (generator,)
+    assert yes.candidate == member
+
+
+def test_subgroup_membership_checks_cancellation_during_closure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    generator = FiniteFieldEllipticPoint.affine(
+        curve,
+        FiniteFieldElement(presentation=field, coordinates=(2,)),
+        FiniteFieldElement(presentation=field, coordinates=(1,)),
+    )
+
+    class CancelledError(Exception):
+        pass
+
+    checkpoints: list[str] = []
+
+    def cancel(message: str) -> None:
+        checkpoints.append(message)
+        raise CancelledError
+
+    monkeypatch.setattr(finite_field_module, "request_checkpoint", cancel)
+    with pytest.raises(CancelledError):
+        finite_field_point_membership_in_generated_subgroup(
+            curve, (generator,), generator
+        )
+    assert checkpoints == ["during finite-field subgroup closure"]
+
+
+def test_empty_subgroup_membership_presolves_before_hasse_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    field = FiniteFieldPresentation(
+        characteristic=5003, modulus_coefficients=(0, 1), generator="a"
+    )
+    one = FiniteFieldElement(presentation=field, coordinates=(1,))
+    curve = FiniteFieldShortWeierstrassCurve(
+        field=field, coefficient_a=one, coefficient_b=one
+    )
+    identity = FiniteFieldEllipticPoint.infinity(curve)
+    monkeypatch.setattr(
+        finite_field_module,
+        "_add_points_admitted",
+        lambda *_args: pytest.fail("work admission must precede closure expansion"),
+    )
+
+    result = finite_field_point_membership_in_generated_subgroup(curve, (), identity)
+    assert result.generators == ()
+    assert result.candidate == identity
+    assert result.belongs

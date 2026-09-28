@@ -103,3 +103,4 @@ that need more context than an operation card:
 - [Prime-field quotient spaces](prime-field-quotient-spaces.md)
 - [Petri-net reachable dead markings](petri-net-reachable-dead-markings.md)
 - [Petri-net terminal SCC profiles](petri-net-terminal-scc-profile.md)
+- [Exact tropical operations](tropical-algebra.md)

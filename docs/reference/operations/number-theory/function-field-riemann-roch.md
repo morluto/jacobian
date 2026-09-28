@@ -3,9 +3,11 @@
 [Number theory operations](index.md) · [Tool surface](../../tools.md)
 
 `function_field.riemann_roch_space.compute` returns the complete space `L(D)`
-for a finite divisor over the rational function field `GF(p)(x)`. The divisor
-must have a prime characteristic, at most 256 distinct support places, and
-multiplicities of at most 4096 bits. A nontrivial algebraic extension is
+for a finite divisor over the rational function field `GF(p)(x)`, or the space
+`L(m P_infinity)` for the unique degree-one infinity place of an odd-degree
+squarefree hyperelliptic model `y^2 = f(x)`. The divisor must have a prime
+characteristic, at most 256 distinct support places, and multiplicities of at
+most 4096 bits. For the rational field a nontrivial algebraic extension is
 rejected even when it is represented by an otherwise valid field carrier.
 
 Write
@@ -43,5 +45,26 @@ empty basis without constructing `h`.
 
 The implementation's supported places and divisor values do not yet describe
 places of algebraic extension fields. Genus computation for those extensions,
-differential spaces, canonical divisors, and Riemann–Roch spaces on them remain
-unsupported.
+differential spaces, canonical divisors, and Riemann–Roch spaces on arbitrary
+extension divisors remain unsupported.
+
+## Hyperelliptic infinity slice
+
+For an odd-degree squarefree model `d = deg(f) = 2g + 1`, the unique place at
+infinity is the only extension-field divisor accepted by this operation. It is
+carried by the same `FunctionFieldDivisor`/`FunctionFieldPlace` values used by
+the rational case, with `kind = "INFINITE"` and `degree = 1`. Write the divisor
+as `m P_infinity`. Since `v_infinity(x) = -2` and `v_infinity(y) = -d`, every
+function has a unique form `A(x) + B(x)y` whose even and odd pole orders cannot
+cancel, so a basis is exactly
+
+```text
+x^i       for 0 <= 2i <= m
+x^j * y   for 0 <= 2j + d <= m
+```
+
+The result uses the same `FunctionFieldRiemannRochSpace` schema as the rational
+case. The basis dimension, coefficient degree, estimated construction work, and
+serialized result size are admitted before basis construction. Even-degree
+models, where infinity is not one rational place, and arbitrary hyperelliptic
+divisors are rejected.

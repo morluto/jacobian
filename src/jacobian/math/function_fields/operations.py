@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from itertools import product
+from collections.abc import Iterable
+from itertools import permutations, product
 
 from pydantic import ValidationError
 
@@ -49,6 +50,7 @@ from jacobian.math.function_fields._models import (
     MAX_FIELD_ADMISSION_WORK,
     MAX_INVERSION_WORK,
     MAX_MULTIPLICATION_WORK,
+    MAX_NORM_WORK,
     MAX_POLYNOMIAL_X_DEGREE,
     MAX_RATIONAL_PLACE_CANDIDATES,
     MAX_RATIONAL_PLACE_DEGREE,
@@ -68,6 +70,7 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisorTerm,
     FunctionFieldElementMultiplyResult,
     FunctionFieldGenusResult,
+    FunctionFieldNormResult,
     FunctionFieldPlace,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPrincipalDivisorResult,
@@ -125,6 +128,39 @@ def _from_internal_rational_function(
         numerator=_from_internal_polynomial(value[0], prime),
         denominator=_from_internal_polynomial(value[1], prime),
     )
+
+
+def _bounded_element_coordinates(
+    values: Iterable[RF],
+    prime: int,
+    location: tuple[str | int, ...],
+) -> tuple[PrimeFieldRationalFunction, ...]:
+    """Build canonical coordinates, reporting coefficient growth as admission.
+
+    ``_admit_multiplication_resources`` bounds the product with a cheap
+    estimate that cannot account for every accumulated contribution of a
+    chained reduction, so a genuinely oversized product can still reach
+    construction. ``_from_internal_rational_function`` validates for real, and
+    its raw ``ValidationError`` would otherwise escape an operation that
+    promises a typed resource rejection, and the product is assembled through
+    ``model_construct``, so an out-of-schema value would be returned as
+    canonical and could neither round-trip nor compose.
+    """
+
+    coordinates: list[PrimeFieldRationalFunction] = []
+    for value in values:
+        try:
+            coordinates.append(_from_internal_rational_function(value, prime))
+        except ValidationError as error:
+            raise OperationResourceAdmissionError(
+                location=location,
+                code="function_field.coefficient_growth_exceeds_envelope",
+                message=(
+                    "the exact reduced product exceeds the "
+                    f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+                ),
+            ) from error
+    return tuple(coordinates)
 
 
 def _canonical_field(field: FiniteFunctionField) -> FiniteFunctionField:
@@ -785,8 +821,8 @@ def function_field_element_multiply(
     )
     product = FiniteFunctionFieldElement.model_construct(
         field=field,
-        coordinates=tuple(
-            _from_internal_rational_function(value, prime) for value in reduced
+        coordinates=_bounded_element_coordinates(
+            reduced, prime, ("left", "coordinates")
         ),
     )
     return FunctionFieldElementMultiplyResult._from_kernel(
@@ -816,6 +852,169 @@ def function_field_element_multiply(
         ),
         product=product,
     )
+
+
+def _admit_norm_growth(
+    field: FiniteFunctionField, element: FiniteFunctionFieldElement
+) -> tuple[int, int]:
+    """Bound multiplication-matrix determinant growth before RF arithmetic."""
+
+    degree = field.degree
+    coordinates = tuple(
+        _trace_degree(_to_internal_rational_function(value))
+        for value in element.coordinates
+    )
+    if degree == 1:
+        return coordinates[0]
+    canonical_field = _canonical_field(field)
+    coefficients = tuple(
+        _trace_degree(_to_internal_rational_function(value))
+        for value in canonical_field.defining_polynomial
+    )
+    work = 0
+
+    def admit(value: tuple[int, int]) -> None:
+        nonlocal work
+        if value == (-1, 0):
+            return
+        size = max(value)
+        # Matrix entries are intermediates, not returned coefficients. Permit
+        # their bounded growth here; the determinant's output degree is checked
+        # separately below. Work remains charged for each intermediate.
+        if size > 4 * MAX_POLYNOMIAL_X_DEGREE:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.norm_work_exceeds_envelope",
+                message="function-field norm intermediate exceeds the work envelope",
+            )
+        work += 3 * (size + 1) ** 3
+        if work > MAX_NORM_WORK:
+            raise OperationResourceAdmissionError(
+                location=("element", "coordinates"),
+                code="function_field.norm_work_exceeds_envelope",
+                message=f"function-field norm work exceeds the {MAX_NORM_WORK} unit envelope",
+            )
+
+    matrix_columns: list[tuple[tuple[int, int], ...]] = []
+    column = coordinates
+    for column_index in range(degree):
+        matrix_columns.append(column)
+        if column_index == degree - 1:
+            break
+        next_column = [(-1, 0), *column[:-1]]
+        for row in range(degree):
+            product_degree = _trace_multiply_degree(column[-1], coefficients[row])
+            admit(product_degree)
+            next_column[row] = _trace_add_degree(next_column[row], product_degree)
+            admit(next_column[row])
+        column = tuple(next_column)
+
+    determinant_degree = (-1, 0)
+    for ordering in permutations(range(degree)):
+        term = (0, 0)
+        for row, column_index in enumerate(ordering):
+            term = _trace_multiply_degree(term, matrix_columns[column_index][row])
+            admit(term)
+        determinant_degree = _trace_add_degree(determinant_degree, term)
+        admit(determinant_degree)
+    # This is only a cancellation-blind growth bound. Do not treat it as the
+    # degree of the reduced determinant; the exact carrier limit is checked on
+    # the normalized result once determinant cancellation has been computed.
+    return determinant_degree
+
+
+def function_field_element_norm(
+    element: FiniteFunctionFieldElement,
+) -> FunctionFieldNormResult:
+    """Compute the exact relative norm to the rational function field GF(p)(x)."""
+
+    field, canonical = _preflight_inverse_operand(element)
+    _admit_field(field)
+    _admit_norm_growth(field, canonical)
+    prime = field.characteristic
+    if field.degree == 1:
+        norm = _to_internal_rational_function(canonical.coordinates[0])
+    elif all(
+        coordinate == (-1, 0)
+        for coordinate in (
+            _trace_degree(_to_internal_rational_function(value))
+            for value in canonical.coordinates
+        )
+    ):
+        norm = ZERO_RF
+    else:
+        coefficients = _field_kpoly(field)
+        degree = field.degree
+        columns: list[tuple[RF, ...]] = []
+        column = list(_internal_coordinates(canonical))
+        for column_index in range(degree):
+            columns.append(tuple(column))
+            if column_index == degree - 1:
+                break
+            next_column = [ZERO_RF, *column[:-1]]
+            for row in range(degree):
+                next_column[row] = rf_sub(
+                    next_column[row],
+                    rf_mul(column[-1], coefficients[row], prime),
+                    prime,
+                )
+            column = next_column
+        norm = ZERO_RF
+        for ordering in permutations(range(degree)):
+            term: RF = ((1,), (1,))
+            inversions = sum(
+                ordering[left] > ordering[right]
+                for left in range(degree)
+                for right in range(left + 1, degree)
+            )
+            for row, column_index in enumerate(ordering):
+                term = rf_mul(term, columns[column_index][row], prime)
+                if rf_is_zero(term):
+                    break
+            norm = rf_add(
+                norm,
+                term if inversions % 2 == 0 else rf_sub(ZERO_RF, term, prime),
+                prime,
+            )
+    if (
+        len(norm[0]) - 1 > MAX_POLYNOMIAL_X_DEGREE
+        or len(norm[1]) - 1 > MAX_POLYNOMIAL_X_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
+    norm_value = _from_internal_rational_function(norm, prime)
+    if (
+        norm_value.numerator.degree > MAX_POLYNOMIAL_X_DEGREE
+        or norm_value.denominator.degree > MAX_POLYNOMIAL_X_DEGREE
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_coefficient_growth_exceeds_envelope",
+            message=(
+                "the exact function-field norm exceeds the "
+                f"{MAX_POLYNOMIAL_X_DEGREE}-degree coefficient envelope"
+            ),
+        )
+    result = FunctionFieldNormResult(field=field, element=canonical, norm=norm_value)
+    if (
+        len(encode_strict_json(result.model_dump(mode="json")))
+        > MAX_ELEMENT_VALUE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("element", "coordinates"),
+            code="function_field.norm_output_exceeds_envelope",
+            message=(
+                "the exact function-field norm result exceeds the "
+                f"{MAX_ELEMENT_VALUE_BYTES}-byte output envelope"
+            ),
+        )
+    return result
 
 
 def function_field_element_add(

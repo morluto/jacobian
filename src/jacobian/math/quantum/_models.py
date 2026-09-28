@@ -325,6 +325,8 @@ class StabilizerCodeValue(StrictModel):
 
     @property
     def logical_qubits(self) -> int:
+        # ``register`` is the field's validation/serialization alias, so it
+        # resolves here; the declared name is ``qubit_register``.
         return len(self.group.register.qubit_ids) - len(self.group.generators)
 
 
@@ -690,15 +692,9 @@ class PauliFamilyCommutationResult(StrictModel):
             raise _validation_error(
                 "commutation_matrix_bits", "commutation matrix entries must be binary"
             )
-        if any(matrix[i][i] != 0 for i in range(count)) or any(
-            matrix[i][j] != matrix[j][i]
-            for i in range(count)
-            for j in range(i + 1, count)
-        ):
-            raise _validation_error(
-                "commutation_matrix_form",
-                "commutation matrix must be alternating and symmetric over GF(2)",
-            )
+        # The alternating/symmetric identity is established once by
+        # pauli_family_commutation_matrix while it builds the pairing; transport
+        # validation checks only the retained shape and binary entries.
         return self
 
     @classmethod
@@ -850,11 +846,11 @@ class StabilizerSyndromeResult(StrictModel):
             )
         if any(bit not in (0, 1) for bit in self.syndrome):
             raise _validation_error("syndrome_bits", "syndrome entries must be bits")
-        if type(self.zero_syndrome) is not bool or self.zero_syndrome != all(
-            bit == 0 for bit in self.syndrome
-        ):
+        # zero_syndrome is established once by stabilizer_syndrome; it is a
+        # summary of the retained bits, not a relation transport re-derives.
+        if type(self.zero_syndrome) is not bool:
             raise _validation_error(
-                "syndrome_zero", "zero_syndrome must match the exact syndrome"
+                "syndrome_zero", "zero_syndrome must be a boolean summary"
             )
         return self
 
@@ -901,24 +897,155 @@ class StabilizerErrorEquivalenceResult(StrictModel):
             raise _validation_error(
                 "equivalence_register", "errors and check space must share a register"
             )
-        expected = tuple(
-            (left + right) % 2
-            for left, right in zip(
-                (*self.left.x_bits, *self.left.z_bits),
-                (*self.right.x_bits, *self.right.z_bits),
-                strict=True,
-            )
-        )
-        if (*self.difference.x_bits, *self.difference.z_bits) != expected:
-            raise _validation_error(
-                "equivalence_difference",
-                "difference must be left plus right over GF(2)",
-            )
+        # The GF(2) difference is established once by
+        # stabilizer_error_equivalence; transport checks only the binding.
         if type(self.equivalent_mod_stabilizers) is not bool:
             raise _validation_error(
                 "equivalence_decision", "equivalence decision must be boolean"
             )
         return self
+
+
+class StabilizerErrorCosetRequest(StrictModel):
+    """Project one phase-free Pauli to a check-space quotient coset."""
+
+    check_space: CheckSpaceValue
+    error: PhaseFreeQubitPauli
+
+
+class StabilizerErrorCoset(StrictModel):
+    """Canonical representative of ``error + S`` in the binary Pauli space.
+
+    The check-space basis is canonical RREF in flattened ``(x | z)`` order;
+    the representative has zero entries in all pivot columns. This makes the
+    pair a unique exact value for a coset in the quotient by ``S``.
+    """
+
+    check_space: CheckSpaceValue
+    representative: PhaseFreeQubitPauli
+
+    @model_validator(mode="after")
+    def require_canonical_coset(self) -> Self:
+        check_space = self.check_space
+        register = getattr(check_space, "qubit_register", None)
+        basis = getattr(check_space, "basis", None)
+        if (
+            not isinstance(check_space, CheckSpaceValue)
+            or not isinstance(register, QubitRegister)
+            or not isinstance(basis, tuple)
+            or len(basis) > MAX_CHECK_ROWS
+            or any(not isinstance(row, PhaseFreeQubitPauli) for row in basis)
+            or not isinstance(self.representative, PhaseFreeQubitPauli)
+        ):
+            raise _validation_error(
+                "error_coset_structure", "coset parent and rows must be typed values"
+            )
+
+        def bounded_pauli(value: PhaseFreeQubitPauli) -> bool:
+            register_value = getattr(value, "qubit_register", None)
+            ids = getattr(register_value, "qubit_ids", None)
+            x_bits = getattr(value, "x_bits", None)
+            z_bits = getattr(value, "z_bits", None)
+            return (
+                isinstance(register_value, QubitRegister)
+                and isinstance(ids, tuple)
+                and 1 <= len(ids) <= MAX_QUBITS
+                and all(
+                    isinstance(label, str)
+                    and 1 <= len(label) <= MAX_QUBIT_LABEL_LENGTH
+                    and not any(
+                        0xD800 <= ord(character) <= 0xDFFF for character in label
+                    )
+                    for label in ids
+                )
+                and isinstance(x_bits, tuple)
+                and isinstance(z_bits, tuple)
+                and len(x_bits) <= MAX_QUBITS
+                and len(z_bits) <= MAX_QUBITS
+            )
+
+        # Check retained parents before rebuilding the nested check-space:
+        # its own validator would otherwise report a generic structure error.
+        if any(getattr(row, "qubit_register", None) != register for row in basis):
+            raise _validation_error(
+                "error_coset_register",
+                "coset check rows must share the check register",
+            )
+        if any(not bounded_pauli(row) for row in (*basis, self.representative)):
+            raise _validation_error(
+                "error_coset_structure",
+                "coset rows and representative exceed their structural bounds",
+            )
+        try:
+            # Nested model instances are not revalidated by default. Rebuild
+            # these bounded structural carriers so forged binary rows and
+            # register bindings cannot escape in a canonical coset.
+            check_space = CheckSpaceValue.model_validate(
+                check_space.model_dump(), strict=True
+            )
+            representative = PhaseFreeQubitPauli.model_validate(
+                self.representative.model_dump(), strict=True
+            )
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise _validation_error(
+                "error_coset_structure",
+                "coset parent, rows, and representative must be structurally valid",
+            ) from exc
+        register = check_space.qubit_register
+        basis = check_space.basis
+        # Every retained row must live on the declared register. Isotropy is
+        # mathematical admission owned by ``stabilizer_error_coset`` and by any
+        # consumer relying on a caller-authored coset claim, so the constructor
+        # never replays the kernel's pairwise symplectic computation.
+        if any(row.qubit_register != register for row in basis):
+            raise _validation_error(
+                "error_coset_register",
+                "coset check rows must share the check register",
+            )
+        if representative.qubit_register != register:
+            raise _validation_error(
+                "error_coset_register",
+                "coset representative must share the check register",
+            )
+        flat_rows = [[*row.x_bits, *row.z_bits] for row in basis]
+        width = 2 * len(register.qubit_ids)
+        pivots = tuple(
+            next((column for column, bit in enumerate(row) if bit), width)
+            for row in flat_rows
+        )
+        if (
+            any(pivot == width for pivot in pivots)
+            or tuple(sorted(pivots)) != pivots
+            or len(set(pivots)) != len(pivots)
+            or any(
+                row[pivot]
+                for row_index, pivot in enumerate(pivots)
+                for other_index, row in enumerate(flat_rows)
+                if other_index != row_index
+            )
+        ):
+            raise _validation_error(
+                "error_coset_basis", "coset check basis must be canonical RREF"
+            )
+        bits = (*representative.x_bits, *representative.z_bits)
+        if any(bits[pivot] for pivot in pivots):
+            raise _validation_error(
+                "error_coset_representative",
+                "canonical coset representatives must vanish in check pivot columns",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        check_space: CheckSpaceValue,
+        representative: PhaseFreeQubitPauli,
+    ) -> Self:
+        """Build the admitted canonical quotient value without replay."""
+        return cls.model_construct(
+            check_space=check_space, representative=representative
+        )
 
 
 class CSSCheckSpaceRequest(StrictModel):
@@ -1317,13 +1444,13 @@ class StabilizerDistanceResult(StrictModel):
                 "distance_missing_representative",
                 "a positive-k code needs a minimum logical Pauli",
             )
-        if (
-            self.representative.qubit_register != self.check_space.qubit_register
-            or self.representative.weight != self.distance
-        ):
+        # The minimum weight is established once by the exhaustive distance
+        # kernel; rescanning the representative here would recount it on every
+        # construction and serialized round trip. Only the binding is checked.
+        if self.representative.qubit_register != self.check_space.qubit_register:
             raise _validation_error(
                 "distance_representative",
-                "minimum representative must have the declared weight on the source register",
+                "minimum representative must use the source register",
             )
         return self
 

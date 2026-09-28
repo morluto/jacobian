@@ -1,7 +1,6 @@
 # Standard cyclotomic field inclusions
 
-The operations `matrix.cyclic.cyclotomic_inclusion.compute`,
-`matrix.cyclic.cyclotomic_inclusion.compose`, and
+The operations `matrix.cyclic.cyclotomic_inclusion.compute` and
 `matrix.cyclic.cyclotomic_element.map` expose the standard inclusion
 
 ```text

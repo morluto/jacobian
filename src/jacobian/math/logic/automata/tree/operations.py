@@ -28,7 +28,6 @@ from jacobian.math.logic.automata.tree._models import (
     TreeAutomatonTrimResult,
     TreeDeterminizeResult,
     TreeLanguageProfile,
-    TreeLanguageProfileRequest,
     TreeRunResult,
 )
 from jacobian.math.logic.automata.tree.values import (
@@ -953,7 +952,9 @@ def reachable_state_profile(
     return _build_reachable_state_profile(automaton)
 
 
-def tree_language_profile(request: TreeLanguageProfileRequest) -> TreeLanguageProfile:
+def tree_language_profile(
+    automaton: BottomUpTreeAutomaton,
+) -> TreeLanguageProfile:
     """Project the admitted state-reachability value to reachable finals.
 
     The saturation, its admission, and the canonical minimum-node witnesses are
@@ -963,14 +964,14 @@ def tree_language_profile(request: TreeLanguageProfileRequest) -> TreeLanguagePr
     state survives the reachability filter.
     """
 
-    if type(request) is not TreeLanguageProfileRequest:
+    if type(automaton) is not BottomUpTreeAutomaton:
         raise OperationDomainValidationError(
-            location=("request",),
-            code="tree_automata.language_profile.request_type",
-            message="request must be a canonical tree-language profile request",
+            location=("automaton",),
+            code="tree_automata.language_profile.value_type",
+            message="automaton must be a canonical bottom-up tree automaton",
         )
-    profile = _build_reachable_state_profile(request.automaton)
-    final_states = set(request.automaton.final_states)
+    profile = _build_reachable_state_profile(automaton)
+    final_states = set(automaton.final_states)
     accepting = tuple(
         state for state in profile.reachable_states if state in final_states
     )
@@ -978,7 +979,7 @@ def tree_language_profile(request: TreeLanguageProfileRequest) -> TreeLanguagePr
         witness for witness in profile.witnesses if witness.state in final_states
     )
     return TreeLanguageProfile._from_kernel(
-        automaton=request.automaton,
+        automaton=automaton,
         reachable_states=profile.reachable_states,
         unreachable_states=profile.unreachable_states,
         reachable_final_states=accepting,

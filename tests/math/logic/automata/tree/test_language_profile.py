@@ -5,7 +5,6 @@ from pydantic import ValidationError
 
 from jacobian.math.logic.automata.tree._models import (
     TreeLanguageProfile,
-    TreeLanguageProfileRequest,
 )
 from jacobian.math.logic.automata.tree.operations import (
     accepted_tree_count,
@@ -31,7 +30,7 @@ def test_language_profile_returns_minimum_witness_per_reachable_final():
         final_states=(1, 2),
     )
 
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
 
     assert profile.reachable_states == (0, 1, 2)
     assert profile.reachable_final_states == (1, 2)
@@ -55,7 +54,7 @@ def test_language_profile_identifies_empty_language_without_tree_enumeration():
         final_states=(1,),
     )
 
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
 
     assert profile.reachable_states == (0,)
     assert profile.unreachable_states == (1,)
@@ -73,7 +72,7 @@ def test_deserialized_profile_rejects_witness_outside_ranked_alphabet():
         ),
         final_states=(0,),
     )
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
     payload = profile.model_dump()
     payload["witnesses"][0]["tree"]["symbol"] = 1
 
@@ -95,7 +94,7 @@ def test_deserialized_profile_rejects_witness_arity_mismatch():
         ),
         final_states=(1,),
     )
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
     payload = profile.model_dump()
     payload["witnesses"][0]["tree"]["children"] = []
 
@@ -117,7 +116,7 @@ def test_deserialized_profile_rejects_missing_witness_for_reachable_final():
         ),
         final_states=(1,),
     )
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
     payload = profile.model_dump()
     payload["witnesses"] = []
 
@@ -135,7 +134,7 @@ def test_deserialized_profile_rejects_false_empty_flag():
         ),
         final_states=(0,),
     )
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
     payload = profile.model_dump()
     payload["empty"] = True
 
@@ -159,7 +158,7 @@ def test_nondeterministic_runs_do_not_change_language_profile_or_tree_count():
     leaf = RankedTree(symbol=0)
     accepted = (RankedTree(symbol=1, children=(leaf,)),)
 
-    profile = tree_language_profile(TreeLanguageProfileRequest(automaton=machine))
+    profile = tree_language_profile(machine)
     enumerated = tuple(
         tree for tree in accepted if set(run_tree_automaton(machine, tree)) & {2}
     )

@@ -4,6 +4,7 @@ from typing import Any
 
 from jacobian.catalog.models import (
     MathTool,
+    OperationDomainValidationError,
     OperationExample,
 )
 from jacobian.math.logic.automata.tree._models import (
@@ -175,7 +176,15 @@ def compute_tree_language_profile(
 ) -> TreeLanguageProfile:
     """Project the admitted reachability profile onto the final states."""
 
-    return tree_language_profile(request)
+    # The wire carrier is this layer's boundary; the shared reachability pass
+    # admits the canonical automaton before the projection runs.
+    if type(request) is not TreeLanguageProfileRequest:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="tree_automata.language_profile.request_type",
+            message="request must be a canonical tree-language profile request",
+        )
+    return tree_language_profile(request.automaton)
 
 
 def compute_tree_automaton_trim(

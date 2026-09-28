@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Annotated, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StrictInt, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, ExactInteger
@@ -859,6 +859,186 @@ class CharacterTensorDecompositionResult(StrictModel):
         )
 
 
+class ClassMultiplicationConstantsRequest(StrictModel):
+    """Complete conjugacy-class partition for a bounded class algebra."""
+
+    partition: GroupConjugacyClassesResult = Field(
+        description="Complete canonical conjugacy partition of the source group."
+    )
+
+
+class ClassMultiplicationConstantsResult(StrictModel):
+    """Structure constants of the integral conjugacy-class algebra.
+
+    ``constants[i][j][k]`` is the coefficient of class sum ``k`` in the
+    product of class sums ``i`` and ``j``.
+    """
+
+    partition: ConjugacyClassPartition
+    constants: Annotated[
+        tuple[
+            Annotated[
+                tuple[
+                    Annotated[
+                        tuple[StrictInt, ...],
+                        Field(min_length=1, max_length=MAX_CLASS_COUNT),
+                    ],
+                    ...,
+                ],
+                Field(min_length=1, max_length=MAX_CLASS_COUNT),
+            ],
+            ...,
+        ],
+        Field(min_length=1, max_length=MAX_CLASS_COUNT),
+    ]
+
+    @model_validator(mode="after")
+    def require_complete_tensor(self) -> Self:
+        class_count = len(self.partition.classes)
+        if (
+            len(self.constants) != class_count
+            or any(len(row) != class_count for row in self.constants)
+            or any(
+                len(coefficients) != class_count
+                for row in self.constants
+                for coefficients in row
+            )
+        ):
+            raise _validation_error(
+                "class_algebra_shape",
+                "class multiplication constants must be a complete cubic tensor",
+            )
+        if any(
+            value < 0 for row in self.constants for values in row for value in values
+        ):
+            raise _validation_error(
+                "class_algebra_coefficient",
+                "class multiplication constants must be nonnegative integers",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        partition: ConjugacyClassPartition,
+        constants: tuple[tuple[tuple[int, ...], ...], ...],
+    ) -> Self:
+        return cls.model_construct(partition=partition, constants=constants)
+
+
+class CharacterLambdaSquareRequest(StrictModel):
+    """Compute one second lambda operation on a table-bound virtual character."""
+
+    character: CharacterRingElement
+
+
+class CharacterSymmetricSquareRequest(CharacterLambdaSquareRequest):
+    """Compute the second symmetric power of a virtual character."""
+
+
+class CharacterExteriorSquareRequest(CharacterLambdaSquareRequest):
+    """Compute the second exterior power of a virtual character."""
+
+
+class CharacterKernelRequest(StrictModel):
+    """Compute the kernel subgroup of an ordinary finite-group character."""
+
+    character: CharacterRingElement
+
+
+class CharacterKernel(StrictModel):
+    """A computed character kernel retained inside its ambient group."""
+
+    ambient_group: PermutationGroup
+    subgroup: PermutationGroup
+
+    @model_validator(mode="after")
+    def require_same_action_domain(self) -> Self:
+        if self.subgroup.degree != self.ambient_group.degree:
+            raise _validation_error(
+                "kernel_domain",
+                "kernel subgroup and ambient group must share an action domain",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        ambient_group: PermutationGroup,
+        subgroup: PermutationGroup,
+    ) -> Self:
+        return cls.model_construct(ambient_group=ambient_group, subgroup=subgroup)
+
+
+class CharacterCenterRequest(StrictModel):
+    """Compute the scalar-action subgroup of an ordinary character."""
+
+    character: CharacterRingElement
+
+
+class CharacterCenter(StrictModel):
+    """The subgroup on which a retained character acts by scalars.
+
+    ``scalar_class_indices`` and ``scalar_values`` are parallel selections
+    from the retained character table. Each selected value divided by the
+    character degree is a root of unity.
+    """
+
+    character: CharacterRingElement
+    subgroup: PermutationGroup
+    scalar_class_indices: tuple[int, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+    scalar_values: tuple[CyclotomicValue, ...] = Field(
+        min_length=1, max_length=MAX_CLASS_COUNT
+    )
+
+    @model_validator(mode="after")
+    def require_character_parent_and_class_values(self) -> Self:
+        table = self.character.table
+        if self.subgroup.degree != table.partition.source.degree:
+            raise _validation_error(
+                "center_domain",
+                "character center subgroup must share the ambient action domain",
+            )
+        if (
+            len(self.scalar_class_indices) != len(self.scalar_values)
+            or tuple(sorted(set(self.scalar_class_indices)))
+            != self.scalar_class_indices
+            or any(
+                not 0 <= index < len(table.partition.classes)
+                for index in self.scalar_class_indices
+            )
+            or any(
+                value.order != table.axis.cyclotomic_order
+                for value in self.scalar_values
+            )
+        ):
+            raise _validation_error(
+                "center_class_values",
+                "scalar values must bind in order to selected source classes",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        character: CharacterRingElement,
+        subgroup: PermutationGroup,
+        scalar_class_indices: tuple[int, ...],
+        scalar_values: tuple[CyclotomicValue, ...],
+    ) -> Self:
+        return cls.model_construct(
+            character=character,
+            subgroup=subgroup,
+            scalar_class_indices=scalar_class_indices,
+            scalar_values=scalar_values,
+        )
+
+
 __all__ = [
     "MAX_CHARACTER_TABLE_CELLS",
     "MAX_CLASS_COUNT",
@@ -866,7 +1046,14 @@ __all__ = [
     "MAX_GROUP_ORDER",
     "MAX_INNER_PRODUCT_WORK",
     "MAX_VALUE_COEFFICIENT_DIGITS",
+    "CharacterCenter",
+    "CharacterCenterRequest",
+    "CharacterExteriorSquareRequest",
+    "CharacterKernel",
+    "CharacterKernelRequest",
+    "CharacterLambdaSquareRequest",
     "CharacterRow",
+    "CharacterSymmetricSquareRequest",
     "CharacterTableRequest",
     "CharacterTableResult",
     "ClassAxis",
@@ -879,6 +1066,8 @@ __all__ = [
     "ClassFunctionPointwiseProductRequest",
     "ClassFunctionRestrictionRequest",
     "ClassFunctionRestrictionResult",
+    "ClassMultiplicationConstantsRequest",
+    "ClassMultiplicationConstantsResult",
     "ClassPowerMapRequest",
     "ClassPowerMapResult",
     "ConjugacyClassPartition",

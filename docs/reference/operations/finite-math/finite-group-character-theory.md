@@ -99,3 +99,40 @@ compare each target value with its mapped source value; for induction,
 check each mapped subgroup class lies in the stated parent class and the
 induced values satisfy the class-sum formula. The operations construct these
 relations directly from admitted canonical class partitions.
+
+## Class multiplication constants
+
+`group.class_multiplication_constants.compute` returns the multiplication
+constants of the class algebra: the number of pairs of class elements whose
+product lands in a given class. The result stays exact for every admitted
+constant. This is group data, not a convolution of a particular character, so a
+consumer combining it with a class function must check the class axis it uses.
+
+## Character kernel
+
+`character.kernel.compute` returns the virtual character whose value at `g` is
+the sum of `chi(h)` over every `h` in the kernel class of `g`. A character whose
+values are all nonconstant averages to zero on the identity's class, and the
+result reports that exactly rather than asserting the character is trivial.
+
+## Character center
+
+`character.center.compute` returns the virtual character whose value at `g` is
+the average of `chi(h)` over the centralizer of `g`. A nonconstant irreducible
+character has value zero wherever the centralizer is smaller than the group, so
+this is a genuinely different projection from the class-algebra kernel.
+
+## Symmetric and exterior squares
+
+`character.symmetric_square.compute` and `character.exterior_square.compute`
+return the virtual characters for the symmetric and exterior square
+representations, in the same irreducible basis as their input. Their sum is the
+tensor square, so a consumer can cross-check a symmetric/exterior pair against
+`character.tensor_product.compute`.
+
+## Adams operations
+
+`character.adams_operation.compute` returns the virtual character whose value at
+`g` is `chi(g**k)` for a positive exponent `k`, computed from the class-power map
+of the canonical complete conjugacy partition. See
+[Finite-group Adams operations](../finite-group-adams-operation.md).

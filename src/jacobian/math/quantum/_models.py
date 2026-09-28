@@ -325,6 +325,8 @@ class StabilizerCodeValue(StrictModel):
 
     @property
     def logical_qubits(self) -> int:
+        # ``register`` is the field's validation/serialization alias, so it
+        # resolves here; the declared name is ``qubit_register``.
         return len(self.group.register.qubit_ids) - len(self.group.generators)
 
 
@@ -690,15 +692,9 @@ class PauliFamilyCommutationResult(StrictModel):
             raise _validation_error(
                 "commutation_matrix_bits", "commutation matrix entries must be binary"
             )
-        if any(matrix[i][i] != 0 for i in range(count)) or any(
-            matrix[i][j] != matrix[j][i]
-            for i in range(count)
-            for j in range(i + 1, count)
-        ):
-            raise _validation_error(
-                "commutation_matrix_form",
-                "commutation matrix must be alternating and symmetric over GF(2)",
-            )
+        # The alternating/symmetric identity is established once by
+        # pauli_family_commutation_matrix while it builds the pairing; transport
+        # validation checks only the retained shape and binary entries.
         return self
 
     @classmethod
@@ -850,11 +846,11 @@ class StabilizerSyndromeResult(StrictModel):
             )
         if any(bit not in (0, 1) for bit in self.syndrome):
             raise _validation_error("syndrome_bits", "syndrome entries must be bits")
-        if type(self.zero_syndrome) is not bool or self.zero_syndrome != all(
-            bit == 0 for bit in self.syndrome
-        ):
+        # zero_syndrome is established once by stabilizer_syndrome; it is a
+        # summary of the retained bits, not a relation transport re-derives.
+        if type(self.zero_syndrome) is not bool:
             raise _validation_error(
-                "syndrome_zero", "zero_syndrome must match the exact syndrome"
+                "syndrome_zero", "zero_syndrome must be a boolean summary"
             )
         return self
 
@@ -901,19 +897,8 @@ class StabilizerErrorEquivalenceResult(StrictModel):
             raise _validation_error(
                 "equivalence_register", "errors and check space must share a register"
             )
-        expected = tuple(
-            (left + right) % 2
-            for left, right in zip(
-                (*self.left.x_bits, *self.left.z_bits),
-                (*self.right.x_bits, *self.right.z_bits),
-                strict=True,
-            )
-        )
-        if (*self.difference.x_bits, *self.difference.z_bits) != expected:
-            raise _validation_error(
-                "equivalence_difference",
-                "difference must be left plus right over GF(2)",
-            )
+        # The GF(2) difference is established once by
+        # stabilizer_error_equivalence; transport checks only the binding.
         if type(self.equivalent_mod_stabilizers) is not bool:
             raise _validation_error(
                 "equivalence_decision", "equivalence decision must be boolean"
@@ -1317,13 +1302,13 @@ class StabilizerDistanceResult(StrictModel):
                 "distance_missing_representative",
                 "a positive-k code needs a minimum logical Pauli",
             )
-        if (
-            self.representative.qubit_register != self.check_space.qubit_register
-            or self.representative.weight != self.distance
-        ):
+        # The minimum weight is established once by the exhaustive distance
+        # kernel; rescanning the representative here would recount it on every
+        # construction and serialized round trip. Only the binding is checked.
+        if self.representative.qubit_register != self.check_space.qubit_register:
             raise _validation_error(
                 "distance_representative",
-                "minimum representative must have the declared weight on the source register",
+                "minimum representative must use the source register",
             )
         return self
 

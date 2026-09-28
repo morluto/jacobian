@@ -2705,17 +2705,9 @@ def _falling_factorial_polynomial(offset: int, order: int) -> _Poly:
     return result
 
 
-@dataclass(frozen=True)
-class _ShiftProductCell:
-    left_exponent: int
-    right_exponent: int
-    shifted: tuple[_Poly, _Poly]
-    contribution: tuple[_Poly, _Poly]
-
-
 def _differential_coefficient_input(
     operator: DifferentialOreOperator | Mapping[str, Any],
-) -> tuple[DifferentialOreOperator, list[tuple[int, _Poly]], int, int, int]:
+) -> tuple[DifferentialOreOperator, list[tuple[int, _Poly]], int, int]:
     """Canonicalize the ODE and collect its bounded polynomial coefficients."""
     try:
         value = (

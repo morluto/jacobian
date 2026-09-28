@@ -10,8 +10,7 @@ from jacobian.catalog.models import (
 )
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.ore_algebras._models import (
-    CoefficientRecurrenceBoundaryRow,
-    DifferentialCoefficientRecurrence,
+    MAX_SHIFT_ORDER,
     DifferentialOreOperator,
     PolynomialRecurrencePrefixRequest,
 )
@@ -211,8 +210,17 @@ def test_multiple_mixed_boundary_rows_match_direct_coefficient_extraction() -> N
 
 
 def test_boundary_work_is_admitted_before_any_boundary_expansion() -> None:
-    coefficient = [(degree, 1) for degree in range(1, 65)]
-    operator = _operator(*((order, coefficient) for order in range(5)))
+    """The work bound is enforced, so it has to be reachable.
+
+    This input keeps the shift span at the carrier's limit while the expansion
+    work still exceeds the budget. Realistic ODEs span only a few, so an input
+    built from a wide coefficient range is rejected by the shift check first
+    and never reaches this bound.
+    """
+
+    operator = _operator(
+        *((order, [(order + step, 1) for step in range(17)]) for order in range(16))
+    )
     with pytest.raises(OperationResourceAdmissionError, match="work budget"):
         differential_operator_to_coefficient_recurrence(operator)
 
@@ -257,10 +265,18 @@ def test_generated_coefficients_stay_within_downstream_shift_envelope() -> None:
 
 
 def test_output_uses_canonical_shift_operator_through_maximum_shift_span() -> None:
+    """The result is a canonical shift operator at its widest reachable span.
+
+    The order of the returned shift operator is the full shift span, which the
+    shared ``ShiftOreOperator`` envelope caps at ``MAX_SHIFT_ORDER``. The
+    recurrence consumer inherits that cap, so a wider recurrence could not be
+    generated usefully. This case sits exactly at the limit.
+    """
+
     result = differential_operator_to_coefficient_recurrence(
-        _operator((0, [(64, 1)]), (16, [(0, 1)]))
+        _operator((0, [(8, 1)]), (8, [(0, 1)]))
     )
-    assert result.recurrence.order == 80
+    assert result.recurrence.order == MAX_SHIFT_ORDER
     assert (
         type(result.recurrence).model_validate_json(result.recurrence.model_dump_json())
         == result.recurrence

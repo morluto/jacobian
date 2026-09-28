@@ -23,7 +23,6 @@ from jacobian.math.number_theory.sequences.core.values import (
     MAX_SEQUENCE_TOTAL_DIGITS,
 )
 from jacobian.math.ore_algebras._models import (
-    MAX_COEFFICIENT_RECURRENCE_OUTPUT_WEIGHT,
     MAX_COEFFICIENT_RECURRENCE_WORK_CELLS,
     MAX_DFINITE_PREFIX_OUTPUT_WEIGHT,
     MAX_DFINITE_PREFIX_SCALAR_BITS,
@@ -41,6 +40,7 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_LEDGER_ROWS,
     MAX_SHIFT_ORDER,
     MAX_SHIFT_POWER_EXPONENT,
+    MAX_SHIFT_POWER_RESULT_ORDER,
     MAX_SHIFT_POWER_WORK_CELLS,
     MAX_SHIFT_PREFIX_EVALUATION_CELLS,
     MAX_SHIFT_PREFIX_INDEX,
@@ -52,7 +52,6 @@ from jacobian.math.ore_algebras._models import (
     MAX_SHIFT_TERMS,
     CoefficientRecurrenceBoundaryRow,
     CoefficientRecurrenceBoundaryTerm,
-    CoefficientRecurrenceTerm,
     DFinitePowerSeries,
     DFinitePowerSeriesPrefixRequest,
     DFinitePowerSeriesRequest,
@@ -750,7 +749,7 @@ def shift_operator_power(
                 f"0..{MAX_SHIFT_POWER_EXPONENT}"
             ),
         )
-    if value.order >= 0 and value.order * exponent > MAX_SHIFT_ORDER:
+    if value.order >= 0 and value.order * exponent > MAX_SHIFT_POWER_RESULT_ORDER:
         raise OperationResourceAdmissionError(
             location=("exponent",),
             code="ore_algebra.shift_power_order",
@@ -2302,13 +2301,13 @@ def _differential_coefficient_input(
             if isinstance(operator, DifferentialOreOperator)
             else DifferentialOreOperator.model_validate(operator)
         )
-        value = _admit_differential_operator(value)
     except Exception as exc:
         raise OperationDomainValidationError(
             location=("operator",),
             code="ore_algebra.coefficient_recurrence_operator",
             message="the input must be a valid differential Ore operator over QQ(x)",
         ) from exc
+    value = _admit_differential_operator(value)
 
     polynomials: list[tuple[int, _Poly]] = []
     maximum_degree = 0
@@ -2329,8 +2328,8 @@ def _differential_coefficient_input(
         polynomial = _decode_poly(term.coefficient.numerator.terms)
         maximum_degree = max(maximum_degree, max(polynomial))
         work_bound += len(polynomial) * (term.order + 1) ** 2
-        byte_bound += 256 + sum(
-            96
+        byte_bound += 384 + sum(
+            192
             + len(str(abs(coefficient.numerator)))
             + len(str(coefficient.denominator))
             for coefficient in polynomial.values()
@@ -2342,7 +2341,11 @@ def _differential_coefficient_input(
             code="ore_algebra.coefficient_recurrence_zero_operator",
             message="the zero differential operator has no coefficient recurrence",
         )
-    return value, polynomials, maximum_degree, work_bound, byte_bound
+    boundary_work = maximum_degree * sum(
+        len(polynomial) * (order + 1) for order, polynomial in polynomials
+    )
+    boundary_work += maximum_degree * (MAX_SHIFT_ORDER + 1) * 8
+    return value, polynomials, maximum_degree, work_bound + boundary_work, byte_bound
 
 
 def _coefficient_recurrence_boundary_rows(
@@ -2404,7 +2407,7 @@ def differential_operator_to_coefficient_recurrence(
     ]
     minimum_slope = min(slopes)
     maximum_shift = max(slopes) - minimum_slope
-    if maximum_shift > 80:
+    if maximum_shift > MAX_SHIFT_ORDER:
         raise OperationResourceAdmissionError(
             location=("operator",),
             code="ore_algebra.coefficient_recurrence_shift",
@@ -2422,7 +2425,7 @@ def differential_operator_to_coefficient_recurrence(
         (abs(value.numerator).bit_length() for value in input_values), default=1
     )
     output_numerator_digits = _digits_for_bit_bound(
-        maximum_numerator_bits + common_denominator_bits + 7 * value.order + 18
+        maximum_numerator_bits + common_denominator_bits + 8 * value.order + 18
     )
     output_denominator_digits = _digits_for_bit_bound(common_denominator_bits)
     if (
@@ -2434,6 +2437,15 @@ def differential_operator_to_coefficient_recurrence(
             code="ore_algebra.coefficient_recurrence_coefficient_digits",
             message="a coefficient recurrence coefficient may exceed the exact rational carrier",
         )
+    coefficient_digits = max(output_numerator_digits, output_denominator_digits)
+    projected_output_bytes = byte_bound
+    projected_output_bytes += (MAX_SHIFT_ORDER + 1) * (
+        256 + 17 * (2 * coefficient_digits + 128)
+    )
+    projected_output_bytes += maximum_degree * 256
+    projected_output_bytes += (
+        maximum_degree * (MAX_SHIFT_ORDER + 1) * (2 * coefficient_digits + 128)
+    )
     # The largest possible product is bounded by the input term count times
     # the falling-factorial degree. Admit that construction before expansion.
     recurrence_polynomials: dict[int, _Poly] = {}
@@ -2450,30 +2462,23 @@ def differential_operator_to_coefficient_recurrence(
                 if target[power] == 0:
                     del target[power]
 
-    recurrence_terms = tuple(
-        CoefficientRecurrenceTerm(
-            shift=shift,
-            coefficient=_encode_rf((polynomial, {0: Fraction(1)}), "n"),
-        )
-        for shift, polynomial in sorted(recurrence_polynomials.items())
-        if polynomial
+    recurrence_operator = ShiftOreOperator.model_validate(
+        {
+            "variable": "n",
+            "terms": [
+                {
+                    "exponent": shift,
+                    "coefficient": _encode_rf((polynomial, {0: Fraction(1)}), "n"),
+                }
+                for shift, polynomial in sorted(recurrence_polynomials.items())
+                if polynomial
+            ],
+        }
     )
     boundary_rows = _coefficient_recurrence_boundary_rows(polynomials, maximum_degree)
-    byte_bound += len(recurrence_terms) * 512 + len(boundary_rows) * 256
-    byte_bound += (
-        maximum_degree
-        * 80
-        * (2 * max(output_numerator_digits, output_denominator_digits) + 128)
-    )
-    if byte_bound > MAX_COEFFICIENT_RECURRENCE_OUTPUT_WEIGHT:
-        raise OperationResourceAdmissionError(
-            location=("result",),
-            code="ore_algebra.coefficient_recurrence_output",
-            message="coefficient recurrence exceeds its serialized output budget",
-        )
     return DifferentialCoefficientRecurrence(
         operator=value,
-        recurrence=recurrence_terms,
+        recurrence=recurrence_operator,
         valid_from=maximum_degree + minimum_slope,
         boundary_rows=boundary_rows,
     )

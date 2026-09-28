@@ -12,8 +12,8 @@ from jacobian._models import StrictModel
 from jacobian.math.number_theory.sequences.core._models import FiniteRationalSequence
 from jacobian.math.polynomials.values import RationalFunction
 
-MAX_SHIFT_ORDER = 16
-MAX_SHIFT_TERMS = 16
+MAX_SHIFT_ORDER = 80
+MAX_SHIFT_TERMS = 81
 MAX_SHIFT_COEFFICIENT_TERMS = 64
 MAX_SHIFT_COEFFICIENT_DEGREE = 64
 MAX_SHIFT_COEFFICIENT_DIGITS = 64
@@ -37,12 +37,12 @@ MAX_SHIFT_PREFIX_OUTPUT_WEIGHT = 8 * 1024 * 1024
 MAX_SHIFT_ADDITIVE_WORK_CELLS = 4_096
 MAX_SHIFT_ADDITIVE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 MAX_SHIFT_POWER_EXPONENT = 16
+MAX_SHIFT_POWER_RESULT_ORDER = 16
 MAX_SHIFT_POWER_WORK_CELLS = 4_096
 MAX_RECURRENCE_PREFIX_STEPS = 512
 MAX_RECURRENCE_PREFIX_INDEX = 100_000
 MAX_RECURRENCE_PREFIX_WORK_CELLS = 1_000_000
 MAX_COEFFICIENT_RECURRENCE_WORK_CELLS = 100_000
-MAX_COEFFICIENT_RECURRENCE_OUTPUT_WEIGHT = 2 * 1024 * 1024
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -107,26 +107,10 @@ class DifferentialCoefficientRecurrenceRequest(StrictModel):
     operator: DifferentialOreOperator
 
 
-class CoefficientRecurrenceTerm(StrictModel):
-    """One coefficient p(n) multiplying a_(n+shift) in a recurrence."""
-
-    shift: StrictInt = Field(ge=0, le=80)
-    coefficient: RationalFunction
-
-    @model_validator(mode="after")
-    def require_polynomial_coefficient(self) -> Self:
-        if not _is_polynomial_coefficient(self.coefficient):
-            raise _validation_error(
-                "coefficient_recurrence_coefficient",
-                "recurrence coefficients must be nonzero polynomials in QQ[n]",
-            )
-        return self
-
-
 class CoefficientRecurrenceBoundaryTerm(StrictModel):
     """One exact coefficient of a_k in an exceptional initial row."""
 
-    index: StrictInt = Field(ge=0, le=80)
+    index: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
     coefficient: CanonicalRational
 
 
@@ -143,36 +127,6 @@ class CoefficientRecurrenceBoundaryRow(StrictModel):
             raise _validation_error(
                 "coefficient_recurrence_boundary_order",
                 "boundary row indices must be strictly increasing",
-            )
-        return self
-
-
-class DifferentialCoefficientRecurrence(StrictModel):
-    """Exact coefficient equations for an ODE at x=0, including boundary rows."""
-
-    operator: DifferentialOreOperator
-    recurrence: tuple[CoefficientRecurrenceTerm, ...] = Field(max_length=81)
-    valid_from: StrictInt = Field(ge=0, le=80)
-    boundary_rows: tuple[CoefficientRecurrenceBoundaryRow, ...] = Field(max_length=64)
-
-    @model_validator(mode="after")
-    def require_recurrence_order(self) -> Self:
-        shifts = tuple(term.shift for term in self.recurrence)
-        degrees = tuple(row.degree for row in self.boundary_rows)
-        if shifts != tuple(sorted(shifts)) or len(set(shifts)) != len(shifts):
-            raise _validation_error(
-                "coefficient_recurrence_order",
-                "coefficient recurrence shifts must be strictly increasing",
-            )
-        if degrees != tuple(range(len(degrees))):
-            raise _validation_error(
-                "coefficient_recurrence_boundary_order",
-                "boundary rows must include consecutive degrees starting at zero",
-            )
-        if not self.recurrence:
-            raise _validation_error(
-                "coefficient_recurrence_empty",
-                "a nonzero differential operator must produce a nonzero recurrence",
             )
         return self
 
@@ -381,6 +335,36 @@ class ShiftOreOperator(StrictModel):
         """Highest shift exponent, or -1 for the zero operator."""
 
         return max((term.exponent for term in self.terms), default=-1)
+
+
+class DifferentialCoefficientRecurrence(StrictModel):
+    """Exact coefficient equations for an ODE at x=0, including boundary rows."""
+
+    operator: DifferentialOreOperator
+    recurrence: ShiftOreOperator
+    valid_from: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
+    boundary_rows: tuple[CoefficientRecurrenceBoundaryRow, ...] = Field(max_length=64)
+
+    @model_validator(mode="after")
+    def require_recurrence_order(self) -> Self:
+        degrees = tuple(row.degree for row in self.boundary_rows)
+        if degrees != tuple(range(len(degrees))):
+            raise _validation_error(
+                "coefficient_recurrence_boundary_order",
+                "boundary rows must include consecutive degrees starting at zero",
+            )
+        if not self.recurrence.terms:
+            raise _validation_error(
+                "coefficient_recurrence_empty",
+                "a nonzero differential operator must produce a nonzero recurrence",
+            )
+        for term in self.recurrence.terms:
+            if not _is_polynomial_coefficient(term.coefficient):
+                raise _validation_error(
+                    "coefficient_recurrence_coefficient",
+                    "recurrence coefficients must be nonzero polynomials in QQ[n]",
+                )
+        return self
 
 
 class ShiftOperatorMultiplyRequest(StrictModel):

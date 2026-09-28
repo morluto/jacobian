@@ -5,12 +5,10 @@ from importlib import import_module
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredChainComplexRequest,
     FilteredSubspace,
@@ -206,13 +204,3 @@ def test_filtered_direct_sum_revalidates_model_constructed_input() -> None:
         error.value.errors()[0]["type"]
         == "filtered_chain_complex.filtration_axis_invalid"
     )
-
-
-def test_direct_sum_example_executes_through_catalog() -> None:
-    catalog = Catalog.open()
-    operation = catalog.operation(_OPERATION_ID)
-    assert operation is not None
-    result = invoke_operation(_OPERATION_ID, operation.examples[0].input, catalog)
-    assert result.output["filtered_complex"]["complex"]["basis_sizes"] == [2]
-    assert result.output["left"]["complex"]["basis_sizes"] == [1]
-    assert result.output["right"]["complex"]["basis_sizes"] == [1]

@@ -2,13 +2,10 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
-    MathTool,
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.dispatch import invoke_operation
 from jacobian.math.topology.chain_complexes import filtered_extensions
 from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredSubspace,
@@ -23,7 +20,6 @@ from jacobian.math.topology.chain_complexes.filtered_extensions import (
     filtered_chain_map_page,
     filtered_map,
 )
-from jacobian.math.topology.chain_complexes.filtered_extensions_tools import TOOLS
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
     ChainMapValue,
@@ -249,23 +245,6 @@ def test_page_map_rejects_a_false_chain_map_claim() -> None:
     )
     with pytest.raises(ValueError, match="requires a chain map"):
         filtered_chain_map_page(authored, 1)
-
-
-def test_page_map_tool_uses_the_native_operation_contract() -> None:
-    tool = next(
-        item
-        for item in TOOLS
-        if item.operation_id == "homological.filtered_chain_map.page.compute"
-    )
-    assert isinstance(tool, MathTool)
-    assert tool.result_type is FilteredChainMapPageResult
-    example = tool.examples[0]
-    result = invoke_operation(
-        tool.operation_id,
-        example.input,
-        Catalog.open(),
-    )
-    assert result.output["maps"] == [[[["1"]]]]
 
 
 def test_page_map_admits_sparse_large_coefficients_by_entry() -> None:

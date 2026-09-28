@@ -114,4 +114,5 @@ that need more context than an operation card:
 - [Finite relational carrier relabeling](relational-carrier-relabeling.md)
 - [Finite CSP assignment profiles](csp-assignment-profiles.md)
 - [CSP instances as source structures](csp-instance-to-source-structure.md)
+- [Generalized arc consistency for finite CSPs](csp-generalized-arc-consistency.md)
 - [Exact tropical operations](tropical-algebra.md)

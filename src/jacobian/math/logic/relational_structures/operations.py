@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from itertools import product
 from math import lcm
 from typing import Literal, NoReturn
@@ -21,7 +21,10 @@ from jacobian.math.logic.relational_structures._admission import (
     admit_homomorphism_enumeration,
     admit_homomorphism_search,
     admit_induced_substructure,
+    admit_invariant_relation_closure,
     admit_polymorphism_check,
+    admit_polymorphism_family,
+    admit_pp_evaluation,
     admit_relational_disjoint_union,
     admit_relational_product,
     admit_relational_reduct,
@@ -47,8 +50,12 @@ from jacobian.math.logic.relational_structures._models import (
     InducedRelationProfile,
     InducedSubstructureResult,
     RelationalDisjointUnionResult,
+    RelationalInvariantClosure,
+    RelationalInvariantClosureRequest,
     RelationalPolymorphism,
     RelationalPolymorphismCheckResult,
+    RelationalPolymorphismEnumerationRequest,
+    RelationalPolymorphismFamily,
     RelationalPolymorphismRelationProfile,
     RelationalPolymorphismStatus,
     RelationalPolymorphismWitness,
@@ -65,6 +72,9 @@ from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
     FiniteRelationSymbol,
+    PPDefinedRelation,
+    PPRelationAtom,
+    PrimitivePositiveFormula,
     RelationalHomomorphism,
 )
 
@@ -1329,3 +1339,290 @@ __all__ = [
     "search_embedding",
     "search_homomorphism",
 ]
+
+
+def evaluate_pp_formula(
+    structure: FiniteRelationalStructure,
+    formula: PrimitivePositiveFormula,
+) -> PPDefinedRelation:
+    """Return the exact free-variable relation defined by a pp formula."""
+
+    structure = _admit_structure(structure, "structure")
+    if not isinstance(formula, PrimitivePositiveFormula):
+        raise OperationDomainValidationError(
+            location=("formula",),
+            code="relational.pp.formula_type",
+            message="formula must be a typed primitive-positive formula",
+        )
+    try:
+        formula = PrimitivePositiveFormula.model_validate(
+            formula.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("formula",),
+            code="relational.pp.formula_shape",
+            message="formula must have bounded declared variables and valid atoms",
+        ) from exc
+    admit_pp_evaluation(structure, formula)
+
+    relation_index = {
+        symbol.symbol_id: index for index, symbol in enumerate(structure.signature)
+    }
+    relation_tables = tuple(map(set, structure.relation_tables))
+    defined: set[tuple[int, ...]] = set()
+    carrier_size = structure.carrier_size
+    # itertools.product over a zero-length variable list yields its one empty
+    # assignment. Over an empty carrier with any variables, it yields none.
+    for assignment_index, assignment in enumerate(
+        product(range(carrier_size), repeat=formula.variable_count)
+    ):
+        if assignment_index % 1024 == 0:
+            request_checkpoint("during primitive-positive formula evaluation")
+        for atom in formula.atoms:
+            if isinstance(atom, PPRelationAtom):
+                target_tuple = tuple(assignment[v] for v in atom.variables)
+                if target_tuple not in relation_tables[relation_index[atom.symbol_id]]:
+                    break
+            elif assignment[atom.left] != assignment[atom.right]:
+                break
+        else:
+            defined.add(tuple(assignment[v] for v in formula.free_variables))
+    tuples = tuple(sorted(defined))
+    # The kernel has already established the exact relation and the model's
+    # bounded structural shape, so do not replay the evaluation in validation.
+    return PPDefinedRelation.model_construct(
+        structure=structure, formula=formula, tuples=tuples
+    )
+
+
+def enumerate_polymorphisms(
+    structure: FiniteRelationalStructure,
+    arity: int,
+) -> RelationalPolymorphismFamily:
+    """Return every fixed-arity polymorphism of one exact structure."""
+
+    source = _admit_structure(structure, "source")
+    try:
+        admitted = RelationalPolymorphismEnumerationRequest.model_validate(
+            {"source": source.model_dump(), "arity": arity},
+            strict=True,
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.polymorphism.enumeration_request_shape",
+            message="request must contain a bounded positive arity and exact structure",
+        ) from exc
+
+    table_cells, candidate_count, _work, _output_bound = admit_polymorphism_family(
+        source, admitted.arity
+    )
+
+    # Admission precedes candidate generation. Membership uses binary search
+    # over the canonical sorted relation rows, so its comparison and coordinate
+    # work has a deterministic bound included in the admission estimate.
+    carrier_size = source.carrier_size
+    polymorphisms: list[tuple[int, ...]] = []
+    combinations_checked = 0
+    candidates_scanned = 0
+    for operation_table in _candidate_operation_tables(carrier_size, table_cells):
+        candidates_scanned += 1
+        if candidates_scanned % 256 == 1:
+            request_checkpoint("during complete polymorphism family enumeration")
+        preserved = True
+        for symbol, relation in zip(
+            source.signature, source.relation_tables, strict=True
+        ):
+            for input_rows in product(relation, repeat=admitted.arity):
+                combinations_checked += 1
+                if combinations_checked % 4_096 == 0:
+                    request_checkpoint(
+                        "during complete polymorphism preservation checks"
+                    )
+                output_row = tuple(
+                    operation_table[
+                        _operation_table_index(
+                            tuple(row[column] for row in input_rows), carrier_size
+                        )
+                    ]
+                    for column in range(symbol.arity)
+                )
+                if not _contains_sorted_relation_row(relation, output_row):
+                    preserved = False
+                    break
+            if not preserved:
+                break
+        if preserved:
+            polymorphisms.append(operation_table)
+
+    if candidates_scanned != candidate_count:
+        raise RuntimeError(
+            "polymorphism family did not scan its admitted function space"
+        )
+    operation_tables = tuple(polymorphisms)
+    return RelationalPolymorphismFamily._from_kernel(
+        source=source,
+        arity=admitted.arity,
+        operation_tables=operation_tables,
+    )
+
+
+def close_relation_under_polymorphisms(
+    structure: FiniteRelationalStructure,
+    relation_arity: int,
+    generator_tuples: tuple[tuple[int, ...], ...],
+    polymorphism_family: tuple[RelationalPolymorphism, ...],
+) -> RelationalInvariantClosure:
+    """Return the least relation containing the seeds and closed under ops.
+
+    Supplied operation tables are first checked against every relation of the
+    exact source structure. Closure is then computed as the generated
+    subalgebra of the finite power ``A^r`` using an incremental work queue.
+    """
+
+    source = _admit_structure(structure, "source")
+    try:
+        admitted = RelationalInvariantClosureRequest.model_validate(
+            {
+                "source": source.model_dump(),
+                "relation_arity": relation_arity,
+                "generator_tuples": generator_tuples,
+                "polymorphisms": tuple(
+                    operation.model_dump() for operation in polymorphism_family
+                ),
+            },
+            strict=True,
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="relational.invariant_closure.request_shape",
+            message="request must contain canonical source-bound tuples and operations",
+        ) from exc
+
+    state_count, _work = admit_invariant_relation_closure(
+        source,
+        admitted.relation_arity,
+        admitted.generator_tuples,
+        admitted.polymorphisms,
+    )
+    carrier_size = source.carrier_size
+
+    # A supplied operation is a claim. Recheck the entire defining preservation
+    # relation here because this operation relies on it to call the closure
+    # polymorphism-invariant.
+    for operation_index, operation in enumerate(admitted.polymorphisms):
+        checked = 0
+        for symbol, relation in zip(
+            source.signature, source.relation_tables, strict=True
+        ):
+            relation_set = set(relation)
+            for input_rows in product(relation, repeat=operation.arity):
+                checked += 1
+                if checked % 4_096 == 0:
+                    request_checkpoint(
+                        "during relational operation preservation checks"
+                    )
+                output = tuple(
+                    operation.operation_table[
+                        _operation_table_index(
+                            tuple(row[coordinate] for row in input_rows),
+                            carrier_size,
+                        )
+                    ]
+                    for coordinate in range(symbol.arity)
+                )
+                if output not in relation_set:
+                    raise OperationDomainValidationError(
+                        location=("polymorphisms", operation_index),
+                        code="relational.invariant_closure.not_polymorphism",
+                        message=(
+                            f"operation fails to preserve relation {symbol.symbol_id}: "
+                            f"input {tuple(input_rows)} maps to absent row {output}"
+                        ),
+                    )
+
+    closure = set(admitted.generator_tuples)
+    pending = sorted(closure)
+    cursor = 0
+    generated_steps = 0
+    while cursor < len(pending):
+        newest = pending[cursor]
+        cursor += 1
+        available = tuple(sorted(closure))
+        for operation in admitted.polymorphisms:
+            for position in range(operation.arity):
+                for remaining in product(available, repeat=operation.arity - 1):
+                    arguments = list(remaining)
+                    arguments.insert(position, newest)
+                    output = tuple(
+                        operation.operation_table[
+                            _operation_table_index(
+                                tuple(argument[coordinate] for argument in arguments),
+                                carrier_size,
+                            )
+                        ]
+                        for coordinate in range(admitted.relation_arity)
+                    )
+                    generated_steps += 1
+                    if generated_steps % 4_096 == 0:
+                        request_checkpoint("during relational invariant closure")
+                    if output not in closure:
+                        closure.add(output)
+                        pending.append(output)
+        if len(closure) > state_count:
+            raise RuntimeError("generated relation exceeded its admitted power")
+
+    result_tuples = tuple(sorted(closure))
+    return RelationalInvariantClosure._from_kernel(
+        source=source,
+        relation_arity=admitted.relation_arity,
+        generator_tuples=admitted.generator_tuples,
+        polymorphisms=admitted.polymorphisms,
+        tuples=result_tuples,
+    )
+
+
+def _candidate_operation_tables(
+    carrier_size: int, table_cells: int
+) -> Iterable[tuple[int, ...]]:
+    """Yield complete function tables in lexicographic value order."""
+
+    return product(range(carrier_size), repeat=table_cells)
+
+
+def _contains_sorted_relation_row(
+    relation: tuple[tuple[int, ...], ...], target: tuple[int, ...]
+) -> bool:
+    """Check membership with a deterministic scan of the canonical rows."""
+
+    low = 0
+    high = len(relation)
+    while low < high:
+        middle = (low + high) // 2
+        row = relation[middle]
+        order = 0
+        for left, right in zip(row, target, strict=True):
+            if left < right:
+                order = -1
+                break
+            if left > right:
+                order = 1
+                break
+        if order < 0:
+            low = middle + 1
+        elif order > 0:
+            high = middle
+        else:
+            return True
+    return False
+
+
+def _operation_table_index(inputs: tuple[int, ...], carrier_size: int) -> int:
+    """Index an operation table by one lexicographically ordered input tuple."""
+
+    index = 0
+    for value in inputs:
+        index = index * carrier_size + value
+    return index

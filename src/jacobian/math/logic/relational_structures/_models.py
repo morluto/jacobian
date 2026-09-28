@@ -13,11 +13,14 @@ from jacobian._models import StrictModel
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_ARITY,
     MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
+    PrimitivePositiveFormula,
     RelationalHomomorphism,
     RelationSymbolId,
 )
@@ -1830,6 +1833,214 @@ class RelationalPolymorphismCheckResult(StrictModel):
             witness=witness,
             relation_profiles=relation_profiles,
         )
+
+
+class RelationalPolymorphismEnumerationRequest(StrictModel):
+    """Enumerate every polymorphism of one fixed arity on a structure."""
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(
+        ge=1,
+        le=MAX_RELATIONAL_POLYMORPHISM_ARITY,
+        description=(
+            "Positive operation arity. The complete function-space size is "
+            "|A|^(|A|^arity), so the owner admits only bounded instances."
+        ),
+    )
+
+
+class RelationalPolymorphismFamily(StrictModel):
+    """The complete fixed-arity polymorphism family of one exact structure.
+
+    Each table uses lexicographic inputs from ``A^arity``; rows in
+    ``operation_tables`` are complete operation tables, sorted
+    lexicographically. The family retains the structure once rather than
+    repeating it in every member.
+    """
+
+    source: FiniteRelationalStructure
+    arity: StrictInt = Field(ge=1, le=MAX_RELATIONAL_POLYMORPHISM_ARITY)
+    operation_tables: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
+        description=(
+            "Every relation-preserving operation table of the declared arity, "
+            "in lexicographic table order. Each table has |A|^arity values."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_operation_tables(self) -> Self:
+        table_cells = self.source.carrier_size**self.arity
+        previous: tuple[int, ...] | None = None
+        for table in self.operation_tables:
+            if len(table) != table_cells or any(
+                not 0 <= value < self.source.carrier_size for value in table
+            ):
+                raise _polymorphism_validation_error(
+                    "family.operation_table",
+                    "each table must be a complete function on the exact carrier",
+                )
+            if previous is not None and table <= previous:
+                raise _polymorphism_validation_error(
+                    "family.canonical_order",
+                    "operation tables must be unique and lexicographically ordered",
+                )
+            previous = table
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        arity: int,
+        operation_tables: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        """Build after complete admitted operation-space enumeration."""
+
+        return cls.model_construct(
+            source=source,
+            arity=arity,
+            operation_tables=operation_tables,
+        )
+
+
+class RelationalInvariantClosureRequest(StrictModel):
+    """Generate a finite relation under supplied polymorphism operations.
+
+    The seed rows have one common relation arity. Each supplied operation is
+    checked against every basic relation of ``source`` before it is used.
+    """
+
+    source: FiniteRelationalStructure
+    relation_arity: StrictInt = Field(ge=0, le=MAX_RELATIONAL_ARITY)
+    generator_tuples: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES
+    )
+    polymorphisms: tuple[RelationalPolymorphism, ...] = Field(
+        min_length=1, max_length=8
+    )
+
+    @model_validator(mode="after")
+    def require_source_bound_generators(self) -> Self:
+        object.__setattr__(
+            self,
+            "generator_tuples",
+            tuple(sorted(set(self.generator_tuples))),
+        )
+        if any(
+            len(row) != self.relation_arity
+            or any(not 0 <= value < self.source.carrier_size for value in row)
+            for row in self.generator_tuples
+        ):
+            raise _polymorphism_validation_error(
+                "closure.generator_tuple",
+                "every generator tuple must lie on the declared source carrier axes",
+            )
+        if any(operation.source != self.source for operation in self.polymorphisms):
+            raise _polymorphism_validation_error(
+                "closure.operation_source",
+                "every supplied operation must be bound to the exact source structure",
+            )
+        operation_by_key = {
+            (operation.arity, operation.operation_table): operation
+            for operation in self.polymorphisms
+        }
+        object.__setattr__(
+            self,
+            "polymorphisms",
+            tuple(operation_by_key[key] for key in sorted(operation_by_key)),
+        )
+        return self
+
+
+class RelationalInvariantClosure(StrictModel):
+    """The generated subalgebra of ``source^relation_arity``.
+
+    ``tuples`` is the least relation containing ``generator_tuples`` and closed
+    under coordinatewise application of every retained polymorphism.
+    """
+
+    source: FiniteRelationalStructure
+    relation_arity: StrictInt = Field(ge=0, le=MAX_RELATIONAL_ARITY)
+    generator_tuples: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES
+    )
+    polymorphisms: tuple[RelationalPolymorphism, ...] = Field(
+        min_length=1, max_length=8
+    )
+    tuples: tuple[tuple[StrictInt, ...], ...] = Field(
+        max_length=MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES
+    )
+
+    @model_validator(mode="after")
+    def require_canonical_result_shape(self) -> Self:
+        if self.generator_tuples != tuple(sorted(set(self.generator_tuples))) or any(
+            len(row) != self.relation_arity
+            or any(not 0 <= value < self.source.carrier_size for value in row)
+            for row in self.generator_tuples
+        ):
+            raise _polymorphism_validation_error(
+                "closure.result_generator_shape",
+                "retained generators must be canonical rows on the declared axes",
+            )
+        if self.tuples != tuple(sorted(set(self.tuples))):
+            raise _polymorphism_validation_error(
+                "closure.result_order", "closure tuples must be unique and ordered"
+            )
+        if any(
+            len(row) != self.relation_arity
+            or any(not 0 <= value < self.source.carrier_size for value in row)
+            for row in self.tuples
+        ):
+            raise _polymorphism_validation_error(
+                "closure.result_tuple",
+                "every closure tuple must lie on its source axes",
+            )
+        if not set(self.generator_tuples).issubset(self.tuples):
+            raise _polymorphism_validation_error(
+                "closure.result_generators", "the closure must contain every generator"
+            )
+        if any(operation.source != self.source for operation in self.polymorphisms):
+            raise _polymorphism_validation_error(
+                "closure.result_operation_source",
+                "every retained operation must be bound to the exact source structure",
+            )
+        operation_keys = tuple(
+            (operation.arity, operation.operation_table)
+            for operation in self.polymorphisms
+        )
+        if operation_keys != tuple(sorted(set(operation_keys))):
+            raise _polymorphism_validation_error(
+                "closure.result_operation_order",
+                "retained operations must be in canonical unique order",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        source: FiniteRelationalStructure,
+        relation_arity: int,
+        generator_tuples: tuple[tuple[int, ...], ...],
+        polymorphisms: tuple[RelationalPolymorphism, ...],
+        tuples: tuple[tuple[int, ...], ...],
+    ) -> Self:
+        return cls.model_construct(
+            source=source,
+            relation_arity=relation_arity,
+            generator_tuples=generator_tuples,
+            polymorphisms=polymorphisms,
+            tuples=tuples,
+        )
+
+
+class PPFormulaEvaluationRequest(StrictModel):
+    """Evaluate a finite pp formula on one finite relational structure."""
+
+    structure: FiniteRelationalStructure
+    formula: PrimitivePositiveFormula
 
 
 __all__ = [

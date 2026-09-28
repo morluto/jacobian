@@ -17,15 +17,26 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.logic.relational_structures._models import RelationalPolymorphism
 from jacobian.math.logic.relational_structures.values import (
+    MAX_PP_DEFINED_TUPLES,
+    MAX_PP_EVALUATION_ASSIGNMENTS,
+    MAX_PP_EVALUATION_ATOM_CHECKS,
+    MAX_PP_EVALUATION_COORDINATE_WORK,
     MAX_RELATIONAL_ARITY,
     MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_WORK,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     MAX_RELATIONAL_TRANSPORT_TUPLES,
     FiniteRelationalStructure,
+    PPRelationAtom,
+    PrimitivePositiveFormula,
     RelationalHomomorphism,
 )
 
@@ -66,6 +77,14 @@ MAX_RELATIONAL_DISJOINT_UNION_WORK = MAX_RELATIONAL_CARRIER + MAX_RELATIONAL_SYM
     * (MAX_RELATIONAL_ARITY + 1 + MAX_RELATIONAL_TABLE_ROWS.bit_length())
     + MAX_RELATIONAL_TABLE_ROWS * MAX_RELATIONAL_ARITY
 )
+
+
+# Bounds for the PP-formula, polymorphism-family, and invariant-closure
+# kernels. The RESULT_CELLS envelopes count retained entries, not bytes.
+MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
+MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
+MAX_POLYMORPHISM_FAMILY_WORK = 8_388_608
+MAX_POLYMORPHISM_FAMILY_RESULT_CELLS = 4 * 1_048_576
 
 
 def admit_binary_relation_transpose(
@@ -768,3 +787,306 @@ __all__ = [
     "core_search_work",
     "embedding_reflection_cells",
 ]
+
+
+def admit_polymorphism_family(
+    source: FiniteRelationalStructure, arity: int
+) -> tuple[int, int, int, int]:
+    """Preflight the complete function family, preservation replay, and output.
+
+    Returns table cells per operation, total candidate tables, aggregate work,
+    and a conservative serialized-output bound. No function table or relation
+    membership index is constructed before this succeeds.
+    """
+
+    if not 1 <= arity <= MAX_RELATIONAL_POLYMORPHISM_ARITY:
+        raise OperationDomainValidationError(
+            location=("arity",),
+            code="relational.polymorphism.arity",
+            message=(
+                f"polymorphism arity must lie in 1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
+            ),
+        )
+    carrier_size = source.carrier_size
+    table_cells = carrier_size**arity
+    if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operation_table",),
+            code="relational.polymorphism.table_bound",
+            message=(
+                f"each complete operation table has {table_cells} cells, exceeding "
+                f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
+            ),
+        )
+
+    # A positive-arity operation on the empty carrier is the unique empty
+    # function. For other carriers, stop multiplying as soon as the family cap
+    # is crossed so rejection never formats or retains an enormous n^(n^m).
+    candidate_tables = (
+        1
+        if carrier_size == 0
+        else _capped_power(
+            carrier_size, table_cells, MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE
+        )
+    )
+    if candidate_tables > MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("arity",),
+            code="relational.polymorphism.family_candidate_bound",
+            message=(
+                "the complete function space exceeds the "
+                f"{MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE}-candidate envelope"
+            ),
+        )
+
+    work_per_candidate = table_cells + carrier_size + 1 + len(source.signature)
+    for symbol, relation in zip(source.signature, source.relation_tables, strict=True):
+        combinations = len(relation) ** arity
+        # itertools.product copies one relation pool and initializes its
+        # arity-sized odometer for each candidate. The loop then materializes
+        # each m-row input tuple. Charge both before admitting enumeration.
+        work_per_candidate += len(relation) + arity
+        search_depth = len(relation).bit_length()
+        per_combination_work = (
+            arity
+            + 1
+            + symbol.arity * (3 * arity + 2)
+            + search_depth * 4 * (symbol.arity + 1)
+        )
+        work_per_candidate += combinations * per_combination_work
+    work = candidate_tables * work_per_candidate
+    if work > MAX_POLYMORPHISM_FAMILY_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source", "relation_tables"),
+            code="relational.polymorphism.family_work_bound",
+            message=(
+                f"complete family enumeration requires at most {work} table-generation, "
+                f"relation-check, and coordinate steps, exceeding the "
+                f"{MAX_POLYMORPHISM_FAMILY_WORK}-step envelope"
+            ),
+        )
+
+    # The result retains the source structure and, for each candidate operation
+    # table, one entry per table cell plus a frame. Scalar magnitudes stay
+    # exact and unbounded, so the bound counts these retained entries rather
+    # than their encoded size.
+    source_cells = (
+        1
+        + carrier_size
+        + len(source.signature)
+        + sum(len(table) for table in source.relation_tables)
+    )
+    output_bound = source_cells + candidate_tables * (table_cells + 1) + 1
+    if output_bound > MAX_POLYMORPHISM_FAMILY_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("operation_tables",),
+            code="relational.polymorphism.family_result_bound",
+            message=(
+                f"the complete family retains {output_bound} entries, exceeding "
+                f"the {MAX_POLYMORPHISM_FAMILY_RESULT_CELLS}-cell envelope"
+            ),
+        )
+    return table_cells, candidate_tables, work, output_bound
+
+
+def admit_invariant_relation_closure(
+    source: FiniteRelationalStructure,
+    relation_arity: int,
+    generator_tuples: Sequence[tuple[int, ...]],
+    polymorphisms: Sequence[RelationalPolymorphism],
+) -> tuple[int, int]:
+    """Preflight closure state cardinality and full preservation/closure work.
+
+    The returned values are (relation-state bound, coordinate-work bound).
+    Every supplied operation is required to preserve the source relations;
+    this check is charged here before any relation or power is expanded.
+    """
+
+    if not 0 <= relation_arity <= 4:
+        raise OperationDomainValidationError(
+            location=("relation_arity",),
+            code="relational.invariant_closure.arity",
+            message="the generated relation arity must be between 0 and 4",
+        )
+    state_count = source.carrier_size**relation_arity
+    if state_count > MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES:
+        raise OperationResourceAdmissionError(
+            location=("relation_arity",),
+            code="relational.invariant_closure.state_bound",
+            message=(
+                f"the generated relation has at most {state_count} tuples, exceeding "
+                f"the {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES}-tuple envelope"
+            ),
+        )
+
+    # With no seeds, positive-arity operations cannot produce a tuple, so the
+    # closure kernel returns immediately without scanning the ambient power.
+    empty_closure = not generator_tuples
+
+    # The queue sorts the current tuple set once per discovered row. The
+    # factor eight covers up to log2(4096) comparisons for every row reference.
+    work = 0 if empty_closure else 8 * state_count * state_count
+    for operation in polymorphisms:
+        arity = operation.arity
+        table_cells, check_work = admit_polymorphism_check(
+            source, arity, operation.operation_table
+        )
+        del table_cells
+        preservation_combinations = sum(
+            len(table) ** arity for table in source.relation_tables
+        )
+        # Each discovered tuple is combined with every possible tuple in the
+        # other m-1 coordinates, in each argument position. This bounds the
+        # incremental fixed-point algorithm without rescanning old products.
+        closure_work = (
+            0 if empty_closure else arity * arity * relation_arity * state_count**arity
+        )
+        work += check_work + preservation_combinations + closure_work
+    # The result retains the source structure, the polymorphism family, the
+    # generator tuples, and one closure row per discovered state, each row
+    # carrying `relation_arity` coordinates. Scalar magnitudes stay exact and
+    # unbounded, so the bound counts these retained entries.
+    retained_source_cells = (
+        1 + source.carrier_size + len(source.signature) + relation_arity
+    )
+    operation_cells = sum(1 + operation.arity for operation in polymorphisms)
+    generator_cells = sum(len(row) for row in generator_tuples)
+    closure_cells = state_count * (relation_arity + 1) + 1
+    result_cells = (
+        retained_source_cells + operation_cells + generator_cells + closure_cells
+    )
+    if result_cells > MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("polymorphisms",),
+            code="relational.invariant_closure.result_bound",
+            message=(
+                f"the complete closure result retains {result_cells} entries, "
+                f"exceeding the {MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS}-cell envelope"
+            ),
+        )
+    if work > MAX_RELATIONAL_INVARIANT_CLOSURE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("polymorphisms",),
+            code="relational.invariant_closure.work_bound",
+            message=(
+                "complete operation-preservation and generated-relation closure "
+                f"requires at most {work} coordinate steps, exceeding the "
+                f"{MAX_RELATIONAL_INVARIANT_CLOSURE_WORK}-step envelope"
+            ),
+        )
+    return state_count, work
+
+
+def admit_pp_evaluation(
+    structure: FiniteRelationalStructure, formula: PrimitivePositiveFormula
+) -> None:
+    """Admit exhaustive pp assignment replay and output materialization."""
+
+    symbol_arities = {symbol.symbol_id: symbol.arity for symbol in structure.signature}
+    for index, atom in enumerate(formula.atoms):
+        if isinstance(atom, PPRelationAtom):
+            arity = symbol_arities.get(atom.symbol_id)
+            if arity is None:
+                raise OperationDomainValidationError(
+                    location=("formula", "atoms", index, "symbol_id"),
+                    code="relational.pp.unknown_symbol",
+                    message="every relation atom must name a symbol of the structure",
+                )
+            if len(atom.variables) != arity:
+                raise OperationDomainValidationError(
+                    location=("formula", "atoms", index, "variables"),
+                    code="relational.pp.atom_arity",
+                    message="relation atom variables must match the symbol arity",
+                )
+
+    size = structure.carrier_size
+    assignments = 1 if formula.variable_count == 0 else size**formula.variable_count
+    output_tuples = (
+        1 if len(formula.free_variables) == 0 else size ** len(formula.free_variables)
+    )
+    # Every satisfying assignment must satisfy each atom. Relation atoms bound
+    # their participating coordinates by the table cardinality; unconstrained
+    # coordinates remain free. This is a sound upper bound on distinct output
+    # tuples, since projection cannot increase satisfying assignments.
+    satisfying_bound = assignments
+    for atom in formula.atoms:
+        if isinstance(atom, PPRelationAtom):
+            table_size = len(
+                structure.relation_tables[
+                    next(
+                        i
+                        for i, symbol in enumerate(structure.signature)
+                        if symbol.symbol_id == atom.symbol_id
+                    )
+                ]
+            )
+            constrained = len(set(atom.variables))
+            satisfying_bound = min(
+                satisfying_bound,
+                table_size * (size ** (formula.variable_count - constrained)),
+            )
+        else:
+            if atom.left != atom.right:
+                # Equality identifies two coordinates; it removes one free
+                # choice rather than imposing inequality.
+                satisfying_bound = min(
+                    satisfying_bound,
+                    size ** (formula.variable_count - 1),
+                )
+    output_tuples = min(output_tuples, satisfying_bound)
+    atom_checks = assignments * len(formula.atoms)
+    coordinate_work = assignments * formula.variable_count
+    coordinate_work += assignments * sum(
+        len(atom.variables) if isinstance(atom, PPRelationAtom) else 2
+        for atom in formula.atoms
+    )
+    # The kernel projects every satisfying full assignment before set
+    # deduplication, so charge the worst-case projection on all assignments.
+    coordinate_work += assignments * len(formula.free_variables)
+    if assignments > MAX_PP_EVALUATION_ASSIGNMENTS:
+        raise OperationResourceAdmissionError(
+            location=("formula", "variable_count"),
+            code="relational.pp.assignment_bound",
+            message=(
+                f"complete formula evaluation has {assignments} assignments, "
+                f"exceeding the {MAX_PP_EVALUATION_ASSIGNMENTS}-assignment envelope"
+            ),
+        )
+    if atom_checks > MAX_PP_EVALUATION_ATOM_CHECKS:
+        raise OperationResourceAdmissionError(
+            location=("formula", "atoms"),
+            code="relational.pp.atom_check_bound",
+            message=(
+                f"complete formula evaluation has {atom_checks} atom checks, "
+                f"exceeding the {MAX_PP_EVALUATION_ATOM_CHECKS}-check envelope"
+            ),
+        )
+    if coordinate_work > MAX_PP_EVALUATION_COORDINATE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("formula",),
+            code="relational.pp.coordinate_work_bound",
+            message=(
+                f"complete formula evaluation has {coordinate_work} coordinate "
+                f"steps, exceeding the {MAX_PP_EVALUATION_COORDINATE_WORK}-step envelope"
+            ),
+        )
+    if output_tuples > MAX_PP_DEFINED_TUPLES:
+        raise OperationResourceAdmissionError(
+            location=("formula", "free_variables"),
+            code="relational.pp.output_bound",
+            message=(
+                f"the defined relation has at most {output_tuples} tuples, "
+                f"exceeding the {MAX_PP_DEFINED_TUPLES}-tuple envelope"
+            ),
+        )
+
+
+def _capped_power(base: int, exponent: int, cap: int) -> int:
+    """Return ``base**exponent`` exactly through cap, else ``cap + 1``."""
+
+    result = 1
+    for _ in range(exponent):
+        result *= base
+        if result > cap:
+            return cap + 1
+    return result

@@ -21,6 +21,8 @@ from jacobian.math.function_fields._models import (
     FunctionFieldElementMultiplyResult,
     FunctionFieldGenusRequest,
     FunctionFieldGenusResult,
+    FunctionFieldNormRequest,
+    FunctionFieldNormResult,
     FunctionFieldPlaceEnumerationRequest,
     FunctionFieldPlaceEnumerationResult,
     FunctionFieldPlaceValuationRequest,
@@ -47,6 +49,7 @@ from jacobian.math.function_fields.operations import (
     function_field_element_add,
     function_field_element_inverse,
     function_field_element_multiply,
+    function_field_element_norm,
     function_field_element_trace,
     function_field_genus,
     function_field_place_residue,
@@ -80,10 +83,23 @@ def _run_element_trace(request: FunctionFieldTraceRequest) -> FunctionFieldTrace
     return function_field_element_trace(request.element)
 
 
+def _run_element_norm(request: FunctionFieldNormRequest) -> FunctionFieldNormResult:
+    return function_field_element_norm(request.element)
+
+
 def _rational_function(numerator: list[int], denominator: list[int]) -> dict[str, Any]:
     return {
         "numerator": {"characteristic": 2, "coefficients": numerator},
         "denominator": {"characteristic": 2, "coefficients": denominator},
+    }
+
+
+def _gf5_rational_function(
+    numerator: list[int], denominator: list[int]
+) -> dict[str, Any]:
+    return {
+        "numerator": {"characteristic": 5, "coefficients": numerator},
+        "denominator": {"characteristic": 5, "coefficients": denominator},
     }
 
 
@@ -788,6 +804,54 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "y and y+1, so their sum and the field trace are 1."
                 ),
                 input={"element": _GF2_Y},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="function_field.element.norm.compute",
+        title="Compute the relative norm of a function-field element",
+        description=(
+            "Compute the exact field norm from a presented finite separable "
+            "extension GF(p)(x)[y]/(f) to GF(p)(x), retaining the source field "
+            "and element alongside the rational-function result. The norm is "
+            "the determinant of multiplication by the element. Coefficient "
+            "degree, intermediate work, and output size are admitted before "
+            "exact rational-function expansion."
+        ),
+        request_type=FunctionFieldNormRequest,
+        result_type=FunctionFieldNormResult,
+        run=_run_element_norm,
+        tags=("algebra", "function-field", "norm", "exact"),
+        discovery_terms=(
+            "function field norm",
+            "relative norm to GF(p)(x)",
+            "norm of algebraic function",
+        ),
+        examples=(
+            OperationExample(
+                name="norm_of_one_plus_y_in_y_squared_equals_x",
+                description=(
+                    "In GF(5)(x)[y]/(y^2-x), the multiplication matrix of "
+                    "1+y has determinant 1-x."
+                ),
+                input={
+                    "element": {
+                        "field": {
+                            "characteristic": 5,
+                            "variable": "x",
+                            "generator": "y",
+                            "defining_polynomial": [
+                                _gf5_rational_function([0, 4], [1]),
+                                _gf5_rational_function([0], [1]),
+                                _gf5_rational_function([1], [1]),
+                            ],
+                        },
+                        "coordinates": [
+                            _gf5_rational_function([1], [1]),
+                            _gf5_rational_function([1], [1]),
+                        ],
+                    }
+                },
             ),
         ),
     ),

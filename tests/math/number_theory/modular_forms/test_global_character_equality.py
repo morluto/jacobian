@@ -168,7 +168,6 @@ def test_global_equality_compares_nonzero_cross_embeddings():
         left, _embedding(), right, _conjugate_embedding()
     )
 
-
     # Independently realize each source coordinate with the exact character
     # q-expansion API, then compare after applying the declared embeddings.
     left_q = modular_character_coordinates_q_expansion(left).coefficients

@@ -230,6 +230,29 @@ correctness thresholds.
 
 ## What to test
 
+### Test lane ownership
+
+`tests/math` boots kernels. A module under `tests/math` must not import
+`jacobian.catalog.catalog`, `jacobian.dispatch`, `jacobian.cli`, or
+`jacobian.mcp`; those start the catalog, bootstrap every declaration, and cost
+far more than the math it would exercise. Drive the kernel directly instead, and
+pass canonical values rather than a request model when the kernel's signature
+takes them.
+
+A test that opens a catalog, dispatches by operation ID, or decodes a published
+example in its wire encoding belongs in `tests/catalog/`. That includes a test
+that merely asserts a published example executes, and a test that compares a
+kernel result against the same operation reached through dispatch. Math-lane and
+catalog-lane tests may assert the same mathematical fact; the lane follows what
+the test *calls*, not what it concludes.
+
+`test_math_tests_do_not_boot_complete_product_boundaries` enforces this. It has
+caught the same mistake on six separate re-lands, so treat a failure there as a
+lane placement problem rather than a tooling defect: move the test, do not relax
+the gate.
+
+### What an operation's tests should cover
+
 For an operation, test the typed request boundary, the domain result, and a
 real caller-visible invocation when the MCP projection changed. The integration
 catalog test executes every advertised invocation example. When one result feeds

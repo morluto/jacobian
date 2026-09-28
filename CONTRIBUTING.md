@@ -105,6 +105,13 @@ Commands for each stage:
 | Broad ordinary validation requested or needed for cross-cutting evidence | `make check` once on the frozen tree |
 | Add ordinary integration or reproduce all local semantic test lanes | `make check-all` or `make test-full` |
 
+`tests/math` boots kernels and must not import `jacobian.catalog.catalog`,
+`jacobian.dispatch`, `jacobian.cli`, or `jacobian.mcp`. A test that opens a
+catalog, dispatches by operation ID, or decodes a published example in its wire
+encoding belongs in `tests/catalog/`. The
+[test lane ownership](docs/reference/testing-strategy.md#test-lane-ownership)
+section states the rule and the enforcement gate.
+
 `make check` and `make check-all` take the worktree-local broad-validation
 lease. Run `make validation-status` if one is already running. The
 [testing strategy](docs/reference/testing-strategy.md) owns lane selection,

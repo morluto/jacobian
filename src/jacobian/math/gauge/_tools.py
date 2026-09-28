@@ -2,6 +2,8 @@
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.gauge._models import (
+    FiniteGroupGaugeComplex,
+    FiniteGroupGaugeComplexRequest,
     FiniteGroupGaugeHolonomyRequest,
     FiniteGroupGaugeHolonomyResult,
     GaugeTransformRequest,
@@ -18,6 +20,10 @@ from jacobian.math.gauge._su2_models import (
     SU2HolonomyResult,
 )
 from jacobian.math.gauge.finite_group import finite_group_gauge_holonomy
+from jacobian.math.gauge.finite_group_complex import (
+    construct_finite_group_gauge_complex,
+)
+from jacobian.math.gauge.observables import permutation_wilson_trace
 from jacobian.math.gauge.operations import (
     gauge_transform,
     path_holonomy,
@@ -53,6 +59,12 @@ def _run_su2_transform(request: SU2GaugeTransformRequest) -> SU2GaugeTransformRe
 
 def _run_su2_holonomy(request: SU2HolonomyRequest) -> SU2HolonomyResult:
     return su2_path_holonomy(request.field, request.path)
+
+
+def _run_finite_group_complex(
+    request: FiniteGroupGaugeComplexRequest,
+) -> FiniteGroupGaugeComplex:
+    return construct_finite_group_gauge_complex(request)
 
 
 _TRIANGLE_FIELD = {
@@ -302,6 +314,56 @@ TOOLS = (
                     "oriented edge; the ordered product is that element."
                 ),
                 input={"field": _FINITE_GROUP_FIELD, "path": _FINITE_GROUP_PATH},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="lattice_gauge.finite_group.complex.construct.compute",
+        title="Construct a source-bound finite-group gauge 2-complex",
+        description=(
+            "Retain oriented 2-cells as ordered closed attaching walks over one "
+            "finite lattice and finite multiplication-table group. Empty walks "
+            "name their attachment vertex; reversing orientation reverses the "
+            "walk and each edge direction. This constructs topology for later "
+            "curvature operations and does not compute curvature."
+        ),
+        request_type=FiniteGroupGaugeComplexRequest,
+        result_type=FiniteGroupGaugeComplex,
+        run=_run_finite_group_complex,
+        tags=("lattice-gauge", "finite-group", "2-complex", "exact"),
+        discovery_terms=(
+            "oriented plaquette boundary for finite group gauge field",
+            "finite lattice gauge 2-complex attaching word",
+        ),
+        examples=(
+            OperationExample(
+                name="loop_lattice_degenerate_faces",
+                description=(
+                    "A backtracking attaching walk and a constant attaching map "
+                    "are distinct source-bound oriented 2-cells."
+                ),
+                input={
+                    "lattice": {
+                        "vertices": ["v"],
+                        "edges": [{"edge_id": "loop", "tail": "v", "head": "v"}],
+                    },
+                    "group": {"multiplication": [[0]], "identity": 0, "inverse": [0]},
+                    "faces": [
+                        {
+                            "face_id": "backtrack",
+                            "boundary": {
+                                "steps": [
+                                    {"edge_id": "loop", "forward": True},
+                                    {"edge_id": "loop", "forward": False},
+                                ]
+                            },
+                        },
+                        {
+                            "face_id": "constant",
+                            "boundary": {"steps": [], "basepoint": "v"},
+                        },
+                    ],
+                },
             ),
         ),
     ),

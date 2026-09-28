@@ -13,6 +13,9 @@ from jacobian.canonical import format_canonical_integer
 from jacobian.math.combinatorics.posets.core._models import FinitePoset
 from jacobian.math.number_theory.number_fields._field_embedding import (
     SimpleNumberFieldEmbedding,
+    SimpleNumberFieldEmbeddingRequest,
+    SimpleNumberFieldEmbeddingResult,
+    apply_simple_number_field_embedding,
 )
 from jacobian.math.number_theory.number_fields.values import (
     SimpleNumberFieldElement,
@@ -695,6 +698,25 @@ class GaloisSubgroupRequest(StrictModel):
 
     field: QQSplittingField
     elements: tuple[QQFieldAutomorphism, ...] = Field(min_length=1, max_length=2)
+
+
+def _applied_inclusion_image(
+    inclusion: SimpleNumberFieldEmbedding, element: SimpleNumberFieldElement
+) -> SimpleNumberFieldEmbeddingResult:
+    """Transport one element through the exact field-map contract.
+
+    The typed field-map request belongs to its owning contract module, so this
+    private adapter is the single place where the Galois domain reaches it.
+    """
+
+    return apply_simple_number_field_embedding(
+        SimpleNumberFieldEmbeddingRequest(
+            source=inclusion.source,
+            target=inclusion.target,
+            generator_image=inclusion.generator_image,
+            element=element,
+        )
+    )
 
 
 class GaloisFixedFieldRequest(StrictModel):

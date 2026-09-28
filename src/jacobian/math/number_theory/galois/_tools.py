@@ -3,6 +3,9 @@
 from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.math.number_theory.galois._compositum import (
+    galois_compositum,
+)
 from jacobian.math.number_theory.galois._models import (
     AutomorphismApplyRequest,
     AutomorphismApplyResult,
@@ -16,6 +19,8 @@ from jacobian.math.number_theory.galois._models import (
     FrobeniusCycleRequest,
     FrobeniusCycleResult,
     GaloisAutomorphismSubgroup,
+    GaloisCompositumRequest,
+    GaloisCompositumResult,
     GaloisCorrespondenceRequest,
     GaloisCorrespondenceResult,
     GaloisFactorRequest,
@@ -54,6 +59,10 @@ from jacobian.math.number_theory.galois.operations import (
     splitting_field,
 )
 from jacobian.math.number_theory.number_fields.values import SimpleNumberFieldElement
+
+
+def _compositum(request: GaloisCompositumRequest) -> GaloisCompositumResult:
+    return galois_compositum(request.left, request.right)
 
 
 def _galois_factor(request: GaloisFactorRequest) -> GaloisFactorResult:
@@ -107,7 +116,7 @@ def _apply_element(
 def _element_orbit(
     request: ElementEmbeddingOrbitRequest,
 ) -> ElementEmbeddingOrbitResult:
-    return element_embedding_orbit(request)
+    return element_embedding_orbit(request.field, request.element)
 
 
 def _subgroup(request: GaloisSubgroupRequest) -> GaloisAutomorphismSubgroup:
@@ -148,6 +157,18 @@ _SPLIT_X2 = {
     }
 }
 
+_SPLIT_X3 = {
+    "polynomial": {
+        "variables": ["x"],
+        "polynomial": {
+            "terms": [
+                {"coefficient": {"num": "1", "den": "1"}, "exponents": [2]},
+                {"coefficient": {"num": "-3", "den": "1"}, "exponents": [0]},
+            ]
+        },
+    }
+}
+
 
 _X2_EXTENSION = {"domain": "QQ", "coefficients_descending": ["1", "0", "-2"]}
 _QQ_EXTENSION = {"domain": "QQ", "coefficients_descending": ["1", "0"]}
@@ -176,6 +197,38 @@ _FIELD_X2 = {
     "source": _SPLIT_X2["polynomial"],
     "extension": _X2_EXTENSION,
     "root_values": [_X2_ALPHA, _X2_NEG_ALPHA],
+    "root_multiplicities": [1, 1],
+}
+
+_X3_EXTENSION = {"domain": "QQ", "coefficients_descending": ["1", "0", "-3"]}
+_X3_ALPHA = {
+    "presentation": _X3_EXTENSION,
+    "coefficients_ascending": [
+        {"num": "0", "den": "1"},
+        {"num": "1", "den": "1"},
+    ],
+}
+
+_X3_ALPHA = {
+    "presentation": _X3_EXTENSION,
+    "coefficients_ascending": [
+        {"num": "0", "den": "1"},
+        {"num": "1", "den": "1"},
+    ],
+}
+
+_X3_NEG_ALPHA = {
+    "presentation": _X3_EXTENSION,
+    "coefficients_ascending": [
+        {"num": "0", "den": "1"},
+        {"num": "-1", "den": "1"},
+    ],
+}
+
+_FIELD_X3 = {
+    "source": _SPLIT_X3["polynomial"],
+    "extension": _X3_EXTENSION,
+    "root_values": [_X3_ALPHA, _X3_NEG_ALPHA],
     "root_multiplicities": [1, 1],
 }
 _AUT_X2_ID = {
@@ -618,6 +671,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                         },
                     }
                 },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="number_field.galois.compositum.compute",
+        title="Compute the compositum of two small splitting fields",
+        description=(
+            "Compute the compositum of two exact QQ splitting fields of degree "
+            "at most two. The source-bound result retains both exact inclusions; "
+            "its degree is at most four."
+        ),
+        request_type=GaloisCompositumRequest,
+        result_type=GaloisCompositumResult,
+        run=_compositum,
+        tags=("galois-theory", "compositum", "exact"),
+        examples=(
+            OperationExample(
+                name="compositum_of_sqrt2_and_sqrt3",
+                description=(
+                    "The two quadratic splitting fields generate a degree-four "
+                    "field with primitive element sqrt(8)+sqrt(12)."
+                ),
+                input={"left": _FIELD_X2, "right": _FIELD_X3},
             ),
         ),
     ),

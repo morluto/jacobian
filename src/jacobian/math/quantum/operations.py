@@ -25,11 +25,9 @@ from jacobian.math.quantum._models import (
     CSSNonOrthogonalWitness,
     ExactQubitPauli,
     ExactStabilizerGroup,
-    ExactStabilizerGroupRequest,
     LogicalPauliFrame,
     NonCommutingWitness,
     NormalizerResult,
-    PauliFamilyCommutationRequest,
     PauliFamilyCommutationResult,
     PauliFamilyEntry,
     PauliInverseResult,
@@ -37,15 +35,14 @@ from jacobian.math.quantum._models import (
     PauliProductResult,
     PauliToLabelsResult,
     PhaseFreeQubitPauli,
+    QubitId,
     QubitRegister,
-    StabilizerCodeRequest,
     StabilizerCodeValue,
     StabilizerDistanceResult,
-    StabilizerErasureCorrectabilityRequest,
     StabilizerErasureCorrectabilityResult,
+    StabilizerErrorCoset,
     StabilizerErrorEquivalenceResult,
     StabilizerMeasurementBranch,
-    StabilizerStatePauliMeasurementRequest,
     StabilizerStatePauliMeasurementResult,
     StabilizerSyndromeResult,
 )
@@ -348,13 +345,11 @@ def pauli_to_labels(pauli: ExactQubitPauli) -> PauliToLabelsResult:
 
 
 def pauli_family_commutation_matrix(
-    family: PauliFamilyCommutationRequest | tuple[PauliFamilyEntry, ...],
+    family: tuple[PauliFamilyEntry, ...],
 ) -> PauliFamilyCommutationResult:
     """Return all pairwise symplectic pairings on an explicitly named axis."""
     entries: list[tuple[str, PhaseFreeQubitPauli]] = []
-    rows: tuple[PauliFamilyEntry, ...] = (
-        family.family if isinstance(family, PauliFamilyCommutationRequest) else family
-    )
+    rows: tuple[PauliFamilyEntry, ...] = family
     if not isinstance(rows, tuple) or not 1 <= len(rows) <= MAX_CHECK_ROWS:
         _reject(
             "family",
@@ -420,10 +415,7 @@ def pauli_family_commutation_matrix(
         )
         for _, first in entries
     )
-    return PauliFamilyCommutationResult(
-        source=PauliFamilyCommutationRequest(family=rows),
-        commutation_matrix=matrix,
-    )
+    return PauliFamilyCommutationResult._from_kernel(rows, commutation_matrix=matrix)
 
 
 def pauli_multiply(left: ExactQubitPauli, right: ExactQubitPauli) -> PauliProductResult:
@@ -490,7 +482,7 @@ def pauli_inverse(value: ExactQubitPauli) -> PauliInverseResult:
 
 
 def stabilizer_group_from_generators(
-    request: ExactStabilizerGroupRequest,
+    qubit_register: QubitRegister, generators: tuple[ExactQubitPauli, ...]
 ) -> ExactStabilizerGroup:
     """Validate exact stabilizer generators and retain an independent basis.
 
@@ -500,14 +492,14 @@ def stabilizer_group_from_generators(
     the selected Hermitian generators that cancel its vector. A zero vector
     must then have phase zero: phase two would put ``-I`` in the group.
     """
-    if not isinstance(request, ExactStabilizerGroupRequest):
+    if not isinstance(qubit_register, QubitRegister):
         _reject(
-            "request",
+            "register",
             "quantum.stabilizer.exact_group.invalid_request",
             "request must contain a register and exact Pauli generators",
         )
-    register = _admit_register(getattr(request, "qubit_register", None), "register")
-    values = getattr(request, "generators", None)
+    register = _admit_register(qubit_register, "register")
+    values = generators
     if not isinstance(values, tuple) or len(values) > MAX_CHECK_ROWS:
         _reject(
             "generators",
@@ -535,7 +527,7 @@ def stabilizer_group_from_generators(
             message="exact generator validation exceeds its work envelope",
         )
 
-    generators: list[ExactQubitPauli] = []
+    admitted_generators: list[ExactQubitPauli] = []
     for index, value in enumerate(values):
         pauli = _admit_exact(value, f"generators[{index}]")
         if pauli.register != register:
@@ -558,10 +550,10 @@ def stabilizer_group_from_generators(
                 "quantum.stabilizer.exact_group.non_hermitian_generator",
                 "stabilizer generators must be Hermitian Paulis",
             )
-        generators.append(pauli)
+        admitted_generators.append(pauli)
 
-    for i, first in enumerate(generators):
-        for second in generators[i + 1 :]:
+    for i, first in enumerate(admitted_generators):
+        for second in admitted_generators[i + 1 :]:
             if _symplectic_pairing(
                 (*first.phase_free.x_bits, *first.phase_free.z_bits),
                 (*second.phase_free.x_bits, *second.phase_free.z_bits),
@@ -578,7 +570,7 @@ def stabilizer_group_from_generators(
     # multiplication, so a dependent row detects the actual scalar relation.
     echelon: dict[int, ExactQubitPauli] = {}
     independent: list[ExactQubitPauli] = []
-    for generator in generators:
+    for generator in admitted_generators:
         reduced = generator
         vector = (*reduced.phase_free.x_bits, *reduced.phase_free.z_bits)
         for taken in sorted(echelon):
@@ -604,17 +596,10 @@ def stabilizer_group_from_generators(
     return ExactStabilizerGroup(register=register, generators=tuple(independent))
 
 
-def _admit_stabilizer_code_request(
-    request: object,
+def _admit_stabilizer_code_inputs(
+    group: object, generator_eigenvalues: object
 ) -> tuple[QubitRegister, tuple[ExactQubitPauli, ...], tuple[int, ...]]:
     """Validate a code's group, character, axes, and complete admitted work."""
-    if not isinstance(request, StabilizerCodeRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer.code.invalid_request",
-            "code construction requires a typed group and character",
-        )
-    group = getattr(request, "group", None)
     if not isinstance(group, ExactStabilizerGroup):
         _reject(
             "group",
@@ -623,7 +608,7 @@ def _admit_stabilizer_code_request(
         )
     register = _admit_register(getattr(group, "qubit_register", None), "group")
     generators = getattr(group, "generators", None)
-    eigenvalues = getattr(request, "generator_eigenvalues", None)
+    eigenvalues = generator_eigenvalues
     if not isinstance(generators, tuple) or len(generators) > MAX_CHECK_ROWS:
         _reject(
             "group",
@@ -702,7 +687,9 @@ def _admit_stabilizer_code_request(
     return register, generators, eigenvalues
 
 
-def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeValue:
+def stabilizer_code_compute(
+    group: ExactStabilizerGroup, generator_eigenvalues: tuple[int, ...]
+) -> StabilizerCodeValue:
     """Canonicalize an exact group together with its one-dimensional character.
 
     Each input generator ``g`` with eigenvalue ``lambda`` is replaced by
@@ -710,7 +697,9 @@ def stabilizer_code_compute(request: StabilizerCodeRequest) -> StabilizerCodeVal
     space with eigenvalue +1. Row operations carry their exact Pauli products,
     so RREF canonicalizes the subgroup without losing scalar signs.
     """
-    register, generators, eigenvalues = _admit_stabilizer_code_request(request)
+    register, generators, eigenvalues = _admit_stabilizer_code_inputs(
+        group, generator_eigenvalues
+    )
     width = len(register.qubit_ids)
 
     # Replace each generator g with chi(g) g. The resulting operators have
@@ -833,25 +822,13 @@ def _measurement_post_state(
     group = ExactStabilizerGroup(
         register=state.group.register, generators=tuple(updated)
     )
-    return stabilizer_code_compute(
-        StabilizerCodeRequest(
-            group=group,
-            generator_eigenvalues=(1,) * len(updated),
-        )
-    )
+    return stabilizer_code_compute(group, (1,) * len(updated))
 
 
 def stabilizer_state_measure_pauli(
-    request: StabilizerStatePauliMeasurementRequest,
+    state: StabilizerCodeValue, observable: ExactQubitPauli
 ) -> StabilizerStatePauliMeasurementResult:
     """Measure one exact Hermitian Pauli on a pure stabilizer state."""
-    if not isinstance(request, StabilizerStatePauliMeasurementRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer.measurement.invalid_request",
-            "Pauli measurement requires a typed stabilizer-state request",
-        )
-    state = request.state
     if not isinstance(state, StabilizerCodeValue) or not isinstance(
         state.group, ExactStabilizerGroup
     ):
@@ -869,7 +846,7 @@ def stabilizer_state_measure_pauli(
             "quantum.stabilizer.measurement.state_not_pure",
             "measurement requires a maximal rank-n stabilizer state",
         )
-    observable = _admit_exact(request.observable, "observable")
+    observable = _admit_exact(observable, "observable")
     if observable.register != register:
         _reject(
             "observable",
@@ -901,15 +878,17 @@ def stabilizer_state_measure_pauli(
         + 3 * n * n * (MAX_QUBIT_LABEL_LENGTH + 4)
         + n * n
     )
-    state_bytes = (
+    # Representation-size units: retained tableau and observable scalars
+    # charged their maximum label width, not an encoded transport measurement.
+    state_size = (
         (n + 1) * (n * (12 * MAX_QUBIT_LABEL_LENGTH + 3) + 128)
         + n * (4 * n + 128)
         + 512
     )
-    observable_bytes = n * (12 * MAX_QUBIT_LABEL_LENGTH + 3) + 512
+    observable_size = n * (12 * MAX_QUBIT_LABEL_LENGTH + 3) + 512
     admitted_work = 3 * code_work + 8 * n * n + 2 * n
-    output_bytes = 3 * state_bytes + observable_bytes + 2048
-    if admitted_work > 2_000_000 or output_bytes > 4_000_000:
+    output_size = 3 * state_size + observable_size + 2048
+    if admitted_work > 2_000_000 or output_size > 4_000_000:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="quantum.stabilizer.measurement.over_envelope",
@@ -918,9 +897,7 @@ def stabilizer_state_measure_pauli(
 
     # Revalidate/canonicalize the authored state once; all subsequent tableau
     # updates use the resulting independent +1 group on the same register.
-    canonical_state = stabilizer_code_compute(
-        StabilizerCodeRequest(group=state.group, generator_eigenvalues=(1,) * n)
-    )
+    canonical_state = stabilizer_code_compute(state.group, (1,) * n)
     canonical_generators = canonical_state.group.generators
     observable_vector = (
         *observable.phase_free.x_bits,
@@ -1272,6 +1249,86 @@ def stabilizer_syndrome(
         check_space=CheckSpaceValue(register=register, basis=canonical_basis),
         error=error,
         syndrome=syndrome,
+    )
+
+
+def stabilizer_error_coset(
+    check_space: CheckSpaceValue,
+    error: PhaseFreeQubitPauli,
+) -> StabilizerErrorCoset:
+    """Return the unique RREF-reduced representative of ``error + S``."""
+    if not isinstance(check_space, CheckSpaceValue):
+        _reject(
+            "check_space",
+            "quantum.stabilizer.not_a_check_space",
+            "error-coset projection requires a typed register-bound check space",
+        )
+    register = _admit_register(
+        getattr(check_space, "qubit_register", None), "check_space"
+    )
+    basis_value = getattr(check_space, "basis", None)
+    if not isinstance(basis_value, tuple) or len(basis_value) > MAX_CHECK_ROWS:
+        _reject(
+            "check_space",
+            "quantum.stabilizer.invalid_basis",
+            "check-space basis is malformed",
+        )
+    basis = tuple(basis_value)
+    rows: list[list[int]] = []
+    for check_row in basis:
+        _admit_phase_free(check_row, "check_space")
+        if check_row.qubit_register != register:
+            _reject(
+                "check_space",
+                "quantum.stabilizer.parent_mismatch",
+                "all check rows must use the declared register",
+            )
+        rows.append([*check_row.x_bits, *check_row.z_bits])
+    n = len(register.qubit_ids)
+    for i, left_bits in enumerate(rows):
+        for right_bits in rows[i + 1 :]:
+            if _symplectic_pairing(left_bits, right_bits, n):
+                _reject(
+                    "check_space",
+                    "quantum.stabilizer.not_isotropic",
+                    "error-coset check space must be symplectically isotropic",
+                )
+    if not isinstance(error, PhaseFreeQubitPauli):
+        _reject(
+            "error",
+            "quantum.pauli.not_a_pauli",
+            "error must be a typed phase-free Pauli",
+        )
+    _admit_phase_free(error, "error")
+    if error.qubit_register != register:
+        _reject(
+            "error",
+            "quantum.pauli.register_mismatch",
+            "error and check space must use the identical ordered register",
+        )
+    canonical, pivots = _gf2_rref(rows, 2 * n)
+    residual = [*error.x_bits, *error.z_bits]
+    for basis_row, pivot in zip(canonical, pivots, strict=True):
+        if residual[pivot]:
+            residual = [(a + b) % 2 for a, b in zip(residual, basis_row, strict=True)]
+    canonical_space = CheckSpaceValue(
+        register=register,
+        basis=tuple(
+            PhaseFreeQubitPauli(
+                register=register,
+                x_bits=tuple(canonical_row[:n]),
+                z_bits=tuple(canonical_row[n:]),
+            )
+            for canonical_row in canonical
+        ),
+    )
+    representative = PhaseFreeQubitPauli(
+        register=register,
+        x_bits=tuple(residual[:n]),
+        z_bits=tuple(residual[n:]),
+    )
+    return StabilizerErrorCoset._from_kernel(
+        check_space=canonical_space, representative=representative
     )
 
 
@@ -1835,20 +1892,22 @@ def stabilizer_exact_distance(value: CheckSpaceValue) -> StabilizerDistanceResul
     )
 
 
-def _erasure_result_bytes_upper_bound(
-    qubit_ids: tuple[str, ...], row_count: int, erasure_size: int
-) -> int:
-    """Conservatively bound serialized source and optional Pauli witness bytes."""
-    register_bytes = 64 + sum(6 * len(qubit_id) + 3 for qubit_id in qubit_ids)
-    row_bytes = register_bytes + 64 + 6 * len(qubit_ids)
-    source_bytes = (
+def _erasure_result_size_upper_bound(qubit_ids: tuple[str, ...], row_count: int) -> int:
+    """Conservatively bound the retained source and optional Pauli witness.
+
+    The units are retained scalars and label characters charged a fixed
+    per-entry allowance, not an encoded transport measurement.
+    """
+    register_size = 64 + sum(6 * len(qubit_id) + 3 for qubit_id in qubit_ids)
+    row_size = register_size + 64 + 6 * len(qubit_ids)
+    source_size = (
         256
-        + register_bytes
+        + register_size
         + sum(6 * len(qubit_id) + 3 for qubit_id in qubit_ids)
-        + row_count * (row_bytes + 1)
+        + row_count * (row_size + 1)
     )
-    # The result may add one witness, its register, and fixed JSON/model keys.
-    return source_bytes + register_bytes + 6 * len(qubit_ids) + 1024
+    # The result may add one witness, its register, and fixed per-field overhead.
+    return source_size + register_size + 6 * len(qubit_ids) + 1024
 
 
 def _supported_stabilizer_dimension(
@@ -1894,7 +1953,7 @@ def _find_supported_logical_witness(
 
 
 def stabilizer_erasure_correctability(
-    request: StabilizerErasureCorrectabilityRequest,
+    check_space: CheckSpaceValue, erased_qubit_ids: tuple[QubitId, ...]
 ) -> StabilizerErasureCorrectabilityResult:
     """Decide whether an erasure set supports a nontrivial logical Pauli.
 
@@ -1902,20 +1961,13 @@ def stabilizer_erasure_correctability(
     X/Z coordinates on E. Erasure is correctable exactly when this supported
     normalizer is contained in the stabilizer row space.
     """
-    if not isinstance(request, StabilizerErasureCorrectabilityRequest):
-        _reject(
-            "request",
-            "quantum.stabilizer.erasure.invalid_request",
-            "erasure correctability requires a typed request",
-        )
-    check_space = getattr(request, "check_space", None)
-    erased = getattr(request, "erased_qubit_ids", None)
     if not isinstance(check_space, CheckSpaceValue):
         _reject(
             "check_space",
             "quantum.stabilizer.not_a_check_space",
             "erasure correctability requires a typed check space",
         )
+    erased = erased_qubit_ids
     supplied_register = getattr(check_space, "qubit_register", None)
     supplied_basis = getattr(check_space, "basis", None)
     if supplied_register is None or supplied_basis is None:
@@ -1972,8 +2024,8 @@ def stabilizer_erasure_correctability(
         + (2 * e) ** 2
         + (2 * e) * m * (2 * n)
     )
-    output_bytes = _erasure_result_bytes_upper_bound(register.qubit_ids, m, e)
-    if admitted_work > 2_000_000 or output_bytes > 1_000_000:
+    output_size = _erasure_result_size_upper_bound(register.qubit_ids, m)
+    if admitted_work > 2_000_000 or output_size > 1_000_000:
         raise OperationResourceAdmissionError(
             location=("request",),
             code="quantum.stabilizer.erasure.over_admitted_envelope",
@@ -1999,10 +2051,6 @@ def stabilizer_erasure_correctability(
         for row in canonical_rows
     )
     canonical_space = CheckSpaceValue(register=register, basis=canonical_basis)
-    source = StabilizerErasureCorrectabilityRequest(
-        check_space=canonical_space,
-        erased_qubit_ids=tuple(register.qubit_ids[index] for index in positions),
-    )
 
     # Each row gives the symplectic commutation functional on the 2|E|
     # coordinates (x_E | z_E). Its kernel is the supported normalizer.
@@ -2019,8 +2067,9 @@ def stabilizer_erasure_correctability(
     )
     normalizer_dimension = len(local_basis)
     logical_dimension = normalizer_dimension - stabilizer_dimension
-    return StabilizerErasureCorrectabilityResult(
-        source=source,
+    return StabilizerErasureCorrectabilityResult._from_kernel(
+        canonical_space,
+        erased_qubit_ids=tuple(register.qubit_ids[index] for index in positions),
         supported_normalizer_dimension=normalizer_dimension,
         supported_stabilizer_dimension=stabilizer_dimension,
         supported_logical_dimension=logical_dimension,

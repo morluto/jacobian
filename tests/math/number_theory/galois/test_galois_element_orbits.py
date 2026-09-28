@@ -57,9 +57,7 @@ def test_element_orbit_retains_exact_maps_stabilizer_and_minimal_polynomial() ->
     field = splitting_field(_poly((-2, 0, 1))).field
     alpha = _element(field, 0, 1)
 
-    result = element_embedding_orbit(
-        ElementEmbeddingOrbitRequest(field=field, element=alpha)
-    )
+    result = element_embedding_orbit(field, alpha)
 
     assert result.source_element == alpha
     assert len(result.action) == 2
@@ -85,9 +83,7 @@ def test_rational_element_has_singleton_orbit_and_full_stabilizer() -> None:
     field = splitting_field(_poly((-2, 0, 1))).field
     three = _element(field, 3, 0)
 
-    result = element_embedding_orbit(
-        ElementEmbeddingOrbitRequest(field=field, element=three)
-    )
+    result = element_embedding_orbit(field, three)
 
     assert result.orbit == (three,)
     assert result.orbit_size == 1
@@ -102,9 +98,7 @@ def test_degree_one_qq_field_has_identity_orbit_and_stabilizer() -> None:
     field = splitting_field(_poly((-1, 1))).field
     five = _element(field, 5)
 
-    result = element_embedding_orbit(
-        ElementEmbeddingOrbitRequest(field=field, element=five)
-    )
+    result = element_embedding_orbit(field, five)
 
     assert result.orbit == (five,)
     assert result.orbit_size == 1
@@ -131,9 +125,7 @@ def test_orbit_accepts_wide_coordinates_when_zero_products_preserve_them() -> No
         ),
     )
 
-    result = element_embedding_orbit(
-        ElementEmbeddingOrbitRequest(field=field, element=element)
-    )
+    result = element_embedding_orbit(field, element)
 
     assert len(result.orbit) == 2
     assert {
@@ -156,9 +148,7 @@ def test_orbit_accepts_rational_carrier_boundary_without_a_zero_addend() -> None
         ),
     )
 
-    result = element_embedding_orbit(
-        ElementEmbeddingOrbitRequest(field=field, element=element)
-    )
+    result = element_embedding_orbit(field, element)
 
     assert result.orbit == (element,)
     assert result.orbit_size == 1
@@ -172,9 +162,7 @@ def test_orbit_accepts_rational_carrier_boundary_without_a_zero_addend() -> None
 
 def test_orbit_minimal_polynomial_uses_monic_carrier() -> None:
     field = splitting_field(_poly((-2, 0, 1))).field
-    result = element_embedding_orbit(
-        ElementEmbeddingOrbitRequest(field=field, element=_element(field, 0, 1))
-    )
+    result = element_embedding_orbit(field, _element(field, 0, 1))
 
     assert isinstance(result.minimal_polynomial, MonicPolynomial)
 
@@ -207,4 +195,4 @@ def test_operation_is_published_with_a_valid_example() -> None:
 
 def test_native_call_rejects_non_field_request_shape() -> None:
     with pytest.raises(OperationDomainValidationError):
-        element_embedding_orbit(None)  # type: ignore[arg-type]
+        element_embedding_orbit(None, None)  # type: ignore[arg-type]

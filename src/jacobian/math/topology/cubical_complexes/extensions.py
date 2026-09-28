@@ -30,7 +30,7 @@ from jacobian.math.topology.cubical_complexes._models import (
     MAX_CUBICAL_BITMAP_RESULT_SIZE,
     MAX_CUBICAL_BITMAP_SIDE,
     MAX_CUBICAL_CHAIN_GROUP,
-    MAX_CUBICAL_TRIANGULATION_RESULT_BYTES,
+    MAX_CUBICAL_TRIANGULATION_RESULT_SIZE,
     MAX_DIM,
     MAX_TRIANGULATION_FACE_CANDIDATES,
     MAX_TRIANGULATION_POINTS,
@@ -631,13 +631,13 @@ def _admit_triangulation_input(
         + MAX_TOPOLOGY_FACETS * (ambient_dimension * (2 * 64 + 12) + 64)
         + MAX_TOPOLOGY_VERTICES * (ambient_dimension * (64 + 8) + 32)
     )
-    if output_bytes_bound > MAX_CUBICAL_TRIANGULATION_RESULT_BYTES:
+    if output_bytes_bound > MAX_CUBICAL_TRIANGULATION_RESULT_SIZE:
         raise OperationResourceAdmissionError(
             location=("cells",),
             code="cubical_complex.triangulation_result_size",
             message=(
                 "the conservative cubical and simplicial result estimate exceeds "
-                f"{MAX_CUBICAL_TRIANGULATION_RESULT_BYTES} bytes"
+                f"{MAX_CUBICAL_TRIANGULATION_RESULT_SIZE}-unit representation-size bound"
             ),
         )
     if any(cell.dimension > 7 for cell in request.cells):

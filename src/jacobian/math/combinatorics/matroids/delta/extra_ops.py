@@ -684,18 +684,21 @@ def binary_matrix_twist(
             message="twist indices must be sorted, distinct, and in range",
         )
     principal_work = _admit_binary_matrix(matrix)
-    label_bytes = sum(len(label.encode("utf-8")) for label in matrix.ground)
+    # Ground-label representation size in UTF-8 code units, doubled for the
+    # retained source and twist labels; this bounds native label retention, not
+    # an encoded transport payload.
+    label_size = sum(len(label.encode("utf-8")) for label in matrix.ground)
     states = 1 << n
     max_output_memberships = (n * states) // 2
     transport_work = states * (1 + 2 * n + n**2)
     output_cells = n**2 + states + max_output_memberships + 4 * n
-    output_label_bytes = 2 * label_bytes
+    output_label_size = 2 * label_size
     if (
         states > MAX_BINARY_TWIST_STATES
         or max_output_memberships > MAX_BINARY_TWIST_OUTPUT_MEMBERSHIPS
         or transport_work > MAX_BINARY_TWIST_TRANSPORT_WORK
         or output_cells > MAX_BINARY_TWIST_OUTPUT_CELLS
-        or output_label_bytes > 2 * MAX_BINARY_LABEL_BYTES
+        or output_label_size > 2 * MAX_BINARY_LABEL_BYTES
         or principal_work > MAX_BINARY_PRINCIPAL_MINOR_WORK
     ):
         raise OperationResourceAdmissionError(

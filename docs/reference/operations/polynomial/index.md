@@ -126,3 +126,4 @@ to another polynomial operation.
 - [Finite prefixes of smooth local branches](local-series-smooth-branch-prefix.md)
 - [First order lifting of a smooth local branch](local-series-smooth-branch-first-jet.md)
 - [Exact root--critical-point distance profiles](root-critical-distance-profile.md)
+- [Active terms of a tropical polynomial](tropical-active-terms.md)

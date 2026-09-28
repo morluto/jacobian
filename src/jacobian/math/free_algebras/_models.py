@@ -109,6 +109,17 @@ MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS = 6_000_000
 # a serialized transport size.
 MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_WORK = 4_000_000
 MAX_FREE_ALGEBRA_ANTIAUTOMORPHISM_OUTPUT_CELLS = 2_000_000
+# A factor-avoidance DFA is an aggregate automaton carrier. Its envelope counts
+# states, transitions, pattern letters, and per-record allowances as canonical
+# value cells, not transport bytes.
+MAX_FREE_ALGEBRA_FORBIDDEN_WORDS = 32
+MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS = 2_048
+MAX_FREE_ALGEBRA_FACTOR_DFA_STATES = 64
+MAX_FREE_ALGEBRA_FACTOR_DFA_PREFIX_CANDIDATES = (
+    MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS + 1
+)
+MAX_FREE_ALGEBRA_FACTOR_DFA_WORK = 15_000_000
+MAX_FREE_ALGEBRA_FACTOR_DFA_OUTPUT_CELLS = 150_000
 
 
 def _validation_error(reason: str, message: str) -> PydanticCustomError:
@@ -1020,6 +1031,54 @@ class TruncatedFreeAlgebraQuotient(StrictModel):
             raise _validation_error(
                 "truncated_quotient_unit",
                 "a nonzero quotient unit is the canonical empty-word basis vector",
+            )
+        return self
+
+
+class FreeAlgebraFactorAvoidanceRequest(StrictModel):
+    """A finite family of forbidden contiguous factors over one alphabet."""
+
+    alphabet: tuple[FreeAlgebraLetter, ...] = Field(
+        max_length=MAX_FREE_ALGEBRA_GENERATORS
+    )
+    forbidden_factors: tuple[
+        Annotated[
+            tuple[FreeAlgebraLetter, ...],
+            Field(max_length=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH),
+        ],
+        ...,
+    ] = Field(
+        max_length=MAX_FREE_ALGEBRA_FORBIDDEN_WORDS,
+        description="At most 32 factors, each at most 64 letters; aggregate at most 2,048 letters.",
+    )
+
+    @model_validator(mode="after")
+    def require_bounded_factors_over_alphabet(self) -> Self:
+        _require_distinct_alphabet(self.alphabet)
+        if any(
+            len(word) > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+            for word in self.forbidden_factors
+        ):
+            raise _validation_error(
+                "factor_avoidance_word_length",
+                "forbidden factors may contain at most 64 letters",
+            )
+        if any(
+            letter not in self.alphabet
+            for word in self.forbidden_factors
+            for letter in word
+        ):
+            raise _validation_error(
+                "factor_avoidance_alphabet",
+                "every forbidden factor must use the declared alphabet",
+            )
+        if (
+            sum(map(len, self.forbidden_factors))
+            > MAX_FREE_ALGEBRA_FORBIDDEN_WORD_LETTERS
+        ):
+            raise _validation_error(
+                "factor_avoidance_input_size",
+                "forbidden-factor input exceeds its total letter bound",
             )
         return self
 

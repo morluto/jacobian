@@ -6,6 +6,7 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.free_algebras._models import (
+    FreeAlgebraFactorAvoidanceRequest,
     FreeAlgebraIdealDegreeComponentRequest,
     FreeAlgebraIdealDegreeComponentResult,
     FreeAlgebraIdealMembershipRequest,
@@ -45,6 +46,7 @@ from jacobian.math.free_algebras.operations import (
     compare_words,
     compose_polynomial_homomorphisms,
     concatenate_words,
+    factor_avoidance_dfa,
     groebner_shirshov_through_degree,
     ideal_degree_component,
     ideal_generated_prefix,
@@ -63,6 +65,7 @@ from jacobian.math.free_algebras.operations import (
     word_prefixes,
     word_suffixes,
 )
+from jacobian.math.logic.languages.regular.values import DFA
 
 
 def _run_multiply(
@@ -133,6 +136,12 @@ def _run_polynomial_substitute(
     request: FreeAlgebraPolynomialSubstitutionRequest,
 ) -> FreeAlgebraPolynomial:
     return substitute_polynomial(request.substitution, request.polynomial)
+
+
+def _run_factor_avoidance(
+    request: FreeAlgebraFactorAvoidanceRequest,
+) -> DFA:
+    return factor_avoidance_dfa(request.alphabet, request.forbidden_factors)
 
 
 _EXAMPLE_ALPHABET = ["x", "y"]
@@ -1164,6 +1173,43 @@ TOOLS = (
                             },
                         ],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="free_algebra.factor_avoidance.dfa.compute",
+        title="Build a DFA for avoiding finite free-word factors",
+        description=(
+            "Build the exact total DFA accepting words over the declared ordered "
+            "generator alphabet that contain none of the supplied forbidden "
+            "contiguous factors. The result is a canonical DFA whose named "
+            "alphabet maps generator labels to integer symbols by alphabet rank. "
+            "A bounded leading-word prefix from an ideal is finite input "
+            "data only; this operation does not claim that it describes the "
+            "quotient's globally complete normal-word language. The DFA is "
+            "limited to 64 states and all transitions and output cells are "
+            "admitted before construction."
+        ),
+        request_type=FreeAlgebraFactorAvoidanceRequest,
+        result_type=DFA,
+        run=_run_factor_avoidance,
+        tags=("free-algebra", "words", "regular-language", "automaton", "exact"),
+        discovery_terms=(
+            "free word factor avoidance automaton",
+            "forbidden contiguous words DFA",
+            "noncommutative monomial language automaton",
+        ),
+        examples=(
+            OperationExample(
+                name="avoid_xy_factor",
+                description=(
+                    "Over x<y, accept exactly words containing no adjacent xy; "
+                    "the empty word and yx are accepted, while xy is rejected."
+                ),
+                input={
+                    "alphabet": ["x", "y"],
+                    "forbidden_factors": [["x", "y"]],
                 },
             ),
         ),

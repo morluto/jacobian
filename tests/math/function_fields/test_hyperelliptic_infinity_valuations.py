@@ -143,3 +143,25 @@ def test_native_request_allows_equivalent_unreduced_parent_spellings():
         place=_place(field), element=element
     )
     assert request.place.field != request.element.field
+
+
+def test_infinity_valuation_canonicalizes_equivalent_shared_parent_presentations():
+    canonical = _field()
+    scaled_field = canonical.model_copy(
+        update={
+            "defining_polynomial": (
+                # (2x^3-2x)/2 is the same rational function as x^3-x.
+                _rf((0, 3, 0, 2), (2,)),
+                _rf((0,)),
+                _rf((1,)),
+            )
+        }
+    )
+    place = _place(scaled_field)
+    element = _element((0,), (1,)).model_copy(update={"field": scaled_field})
+    assert place.field != canonical
+
+    result = function_field_hyperelliptic_infinity_valuation(place, element)
+
+    assert result.place.field == canonical
+    assert result.element.field == canonical

@@ -584,7 +584,8 @@ def _admit_multiplication_resources(
                 location=("left", "coordinates"),
                 code="function_field.coefficient_growth_exceeds_envelope",
                 message="the rational-function product exceeds the coefficient envelope",
-            )        return
+            )
+        return
     max_terms = 1
     total_degree = 0
     max_numerator_degree = 0
@@ -1779,7 +1780,7 @@ def function_field_hyperelliptic_affine_valuation(
             code="function_field.invalid_affine_place",
             message="affine place has malformed parent, coordinates, or residue data",
         ) from exc
-    field = _validated_field(place.field)
+    field = _canonical_field(_validated_field(place.field))
     _admit_field(field)
     branch = _hyperelliptic_branch_polynomial(field)
     if branch is None:
@@ -1831,6 +1832,10 @@ def function_field_hyperelliptic_affine_valuation(
             message="element has malformed coordinate data",
         ) from exc
     element_field = _canonical_field(_validated_field(element.field))
+    # Equivalent presentations of one rational field are the same parent, so
+    # normalize both carriers to the canonical form before pairing or returning.
+    place = place.model_copy(update={"field": field})
+    element = element.model_copy(update={"field": element_field})
     if element_field != field:
         raise OperationDomainValidationError(
             location=("element", "field"),
@@ -1938,7 +1943,7 @@ def function_field_hyperelliptic_infinity_valuation(
             code="function_field.invalid_infinity_place",
             message="infinity place has malformed field or residue-parent data",
         ) from exc
-    field = _validated_field(place.field)
+    field = _canonical_field(_validated_field(place.field))
     _admit_field(field)
     branch = _hyperelliptic_branch_polynomial(field)
     if branch is None or (len(branch) - 1) % 2 == 0:
@@ -1964,7 +1969,12 @@ def function_field_hyperelliptic_infinity_valuation(
             code="function_field.invalid_element",
             message="element has malformed coordinate data",
         ) from exc
-    if element.field != field:
+    # Equivalent presentations of one rational field are the same parent, so
+    # normalize both carriers to the canonical form before pairing or returning.
+    element_field = _canonical_field(_validated_field(element.field))
+    place = place.model_copy(update={"field": field})
+    element = element.model_copy(update={"field": element_field})
+    if element_field != field:
         raise OperationDomainValidationError(
             location=("element", "field"),
             code="function_field.parent_mismatch",
@@ -2344,7 +2354,8 @@ def function_field_divisor_add(
                     kind=place.kind,
                     prime_polynomial=canonical_polynomial,
                     degree=canonical_polynomial.degree,
-                )            key = place.model_dump_json()
+                )
+            key = place.model_dump_json()
             previous = raw_support.get(key)
             raw_support[key] = (
                 place,

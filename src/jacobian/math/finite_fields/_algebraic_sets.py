@@ -21,7 +21,9 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.finite_fields._admission import require_field
 from jacobian.math.finite_fields.values import (
+    MAX_FINITE_FIELD_PRESENTATION_ORDER,
     Axis,
     FiniteFieldElement,
     FiniteFieldPresentation,
@@ -37,6 +39,9 @@ MAX_ALGEBRAIC_SET_DEGREE = 32
 # are bounded by evaluation work instead of this materialization ceiling.
 MAX_ALGEBRAIC_SET_POINTS = 65_536
 MAX_ALGEBRAIC_SET_WORK = 1_000_000
+MAX_ALGEBRAIC_SET_COUNT_DIGITS = len(
+    str(MAX_FINITE_FIELD_PRESENTATION_ORDER**MAX_ALGEBRAIC_SET_VARS)
+)
 
 
 def _error(code: str, message: str) -> PydanticCustomError:
@@ -273,10 +278,15 @@ def _admit_enumeration(
     ):
         if projective:
             _require_homogeneous(system)
-        # Every affine point or projective scalar class is a zero. The count
-        # fits comfortably in a native integer under the carrier's q <= 2^16
-        # and n <= 8 bounds, so no candidate traversal or point materialization
-        # is needed.
+        # Every affine point or projective scalar class is a zero. The exact
+        # integer is bounded by the presentation-order and variable-axis caps;
+        # no candidate traversal or point materialization is needed.
+        if len(str(candidate_count)) > MAX_ALGEBRAIC_SET_COUNT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("presentation", "variable_axis"),
+                code="finite_field.algebraic_set_count_output_bound",
+                message="zero-set count exceeds its exact integer output bound",
+            )
         return int(candidate_count)
     if materialize and candidate_count > MAX_ALGEBRAIC_SET_POINTS:
         raise OperationResourceAdmissionError(
@@ -548,6 +558,39 @@ def _embed_element(
     )
 
 
+def embed_field_element(
+    element: FiniteFieldElement, embedding: FieldEmbedding
+) -> FiniteFieldElement:
+    """Map one element along an admitted explicit finite-field embedding.
+
+    The source parent and source-generator root relation are checked here;
+    callers never infer an inclusion from presentation names or moduli.
+    """
+    try:
+        element = FiniteFieldElement.model_validate(element.model_dump())
+        embedding = FieldEmbedding.model_validate(embedding.model_dump())
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element", "embedding"),
+            code="finite_field.embedding_value_invalid",
+            message="element and embedding must be canonical finite-field values",
+        ) from exc
+    require_field(embedding.source)
+    require_field(embedding.target)
+    if element.presentation != embedding.source:
+        raise OperationDomainValidationError(
+            location=("element", "embedding"),
+            code="finite_field.embedding_source_mismatch",
+            message="element presentation must equal the embedding source",
+        )
+    _check_embedding_root(embedding)
+    from jacobian.math.finite_fields import _flint as flint
+
+    return _embed_element(
+        element, embedding, target_context=flint.context(embedding.target)
+    )
+
+
 def base_change_system(
     system: PolynomialSystem, embedding: FieldEmbedding
 ) -> PolynomialSystem:
@@ -609,6 +652,7 @@ def verify_affine_zero_set(
 
 
 __all__ = [
+    "MAX_ALGEBRAIC_SET_COUNT_DIGITS",
     "MAX_ALGEBRAIC_SET_DEGREE",
     "MAX_ALGEBRAIC_SET_EQUATIONS",
     "MAX_ALGEBRAIC_SET_POINTS",
@@ -623,6 +667,7 @@ __all__ = [
     "affine_zero_count",
     "affine_zero_set",
     "base_change_system",
+    "embed_field_element",
     "projective_zero_count",
     "projective_zero_set",
     "verify_affine_zero_set",

@@ -8,7 +8,6 @@ from jacobian.math.logic.automata import transducers as finite_state_transducers
 def test_exact_public_api_symbols() -> None:
     """Exact owner-local contract for the finite_state_transducers public API."""
     expected = (
-        "FiniteAlphabet",
         "RationalEdge",
         "RationalTransducer",
         "SubseqFinalOutput",
@@ -19,13 +18,18 @@ def test_exact_public_api_symbols() -> None:
         "identity_transducer",
         "invert_rational",
         "minimize_subsequential",
+        "project_rational_relation",
+        "rational_relation_outputs_for_input",
+        "reachable_state_witnesses",
         "reachable_states",
         "replay_rational_path",
+        "restrict_rational_input",
         "run_subsequential",
         "trim_subsequential",
         "verify_composition",
         "verify_minimization",
         "verify_subsequential_run",
+        "word_morphism_to_subsequential",
     )
     assert tuple(finite_state_transducers.__all__) == expected
     assert len(finite_state_transducers.__all__) == len(

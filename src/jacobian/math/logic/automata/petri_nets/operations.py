@@ -3,29 +3,66 @@
 from __future__ import annotations
 
 from collections import deque
+from itertools import combinations
+from typing import Literal
 
+from jacobian.canonical import strict_json_object_size
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
 from jacobian.math.lattices.operations import hermite_normal_form
 from jacobian.math.logic.automata.petri_nets._models import (
+    MAX_CONCURRENT_STEP_OCCURRENCES,
     MAX_FIRING_SEQUENCE_LENGTH,
+    MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES,
+    MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES,
+    MAX_MARKING_COMMUTATION_PROFILE_WORK,
+    MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES,
+    MAX_PUMPING_WITNESS_MATERIALIZED_BYTES,
+    MAX_REACHABLE_DEAD_MARKINGS_MATERIALIZED_BYTES,
+    MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES,
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
+    MAX_STATE_EQUATION_OCCURRENCES,
+    MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES,
+    MAX_TERMINAL_SCC_PROFILE_WORK,
+    ConcurrentStepResult,
     EnabledTransitionsResult,
     FireTransitionResult,
     FiringSequenceReplayResult,
     IncidenceMatrixResult,
+    MarkingCommutationProfileResult,
+    MarkingConflictProfileResult,
+    MarkingReachabilityLimit,
+    MarkingReachabilityResult,
     PetriInvariantsResult,
     PetriMarkingState,
+    PetriNetDisjointUnionResult,
     PetriPlaceSubset,
     PetriReachabilityEdge,
+    PlaceSetInitialMarkingProfileResult,
+    PlaceSetSupportResult,
+    PumpingWitnessResult,
     ReachabilityResult,
+    ReachabilityTerminalSCCProfileResult,
+    ReachableDeadMarkingsResult,
+    SiphonTrapFamilyResult,
     SiphonTrapResult,
+    StateEquationResult,
+    _firing_sequence_replay_output_bound,
+    _marking_commutation_profile_output_bound,
+    _marking_conflict_profile_output_bound,
+    _pumping_witness_output_bound,
 )
 from jacobian.math.logic.automata.petri_nets.values import (
+    MAX_PETRI_ARC_WEIGHT,
     MAX_PETRI_MARKING,
+    MAX_PETRI_PLACES,
+    MAX_PETRI_TRANSITIONS,
+    MAX_REACHABILITY_FIRING_RECORDS,
+    MAX_REACHABILITY_STATES,
+    FiringSequence,
     Marking,
     PetriNet,
     require_reachability_bounds,
@@ -39,23 +76,301 @@ from jacobian.math.matrices.certified_snf.values import (
 from jacobian.math.matrices.values import IntegerMatrix
 
 __all__ = [
+    "check_pumping_witness",
     "compute_incidence_matrix",
+    "concurrent_step",
+    "disjoint_union",
     "enabled_transitions",
     "find_minimal_siphons",
     "find_minimal_traps",
     "fire_transition",
+    "marking_commutation_profile",
+    "marking_conflict_profile",
+    "marking_reachability",
     "petri_invariants",
+    "place_set_initial_marking_profile",
+    "place_set_support",
     "reachability_graph",
+    "reachable_dead_markings",
     "replay_firing_sequence",
+    "reverse_petri_net",
     "siphon_trap",
+    "siphon_trap_family",
+    "state_equation_target",
     "verify_enabled_transitions",
     "verify_fire_transition",
-    "verify_firing_sequence_replay",
     "verify_incidence_matrix",
     "verify_invariants",
     "verify_reachability_graph",
     "verify_siphon_trap",
 ]
+
+MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_SIZE = 10 * 1024 * 1024
+MAX_PETRI_NET_DISJOINT_UNION_WORK = 2 * MAX_PETRI_PLACES * MAX_PETRI_TRANSITIONS
+
+
+def _petri_net_union_output_size_bound(
+    left: PetriNet, right: PetriNet, *, include_markings: bool
+) -> tuple[int, int]:
+    """Conservatively admit the retained result and matrix-entry work.
+
+    The units are entry counts times a fixed per-entry scalar allowance, not
+    an encoded transport measurement.
+    """
+
+    def matrix_bound(rows: int, columns: int) -> int:
+        row = 2 + max(0, columns - 1) + 4 * columns
+        return 2 + max(0, rows - 1) + rows * row
+
+    def raw_ids_bound(ids: tuple[str, ...] | None) -> int:
+        if ids is None:
+            return 4
+        return 2 + max(0, len(ids) - 1) + sum(6 * len(item) + 2 for item in ids)
+
+    def source_bound(net: PetriNet) -> int:
+        return (
+            256
+            + 2 * matrix_bound(net.place_count, net.transition_count)
+            + raw_ids_bound(net.place_ids)
+            + raw_ids_bound(net.transition_ids)
+        )
+
+    def union_ids_bound(
+        left_ids: tuple[str, ...] | None,
+        right_ids: tuple[str, ...] | None,
+        left_count: int,
+        right_count: int,
+    ) -> int:
+        if left_ids is None and right_ids is None:
+            return 8
+        size = 2 + max(0, left_count + right_count - 1)
+        for side, ids, count in (
+            ("L", left_ids, left_count),
+            ("R", right_ids, right_count),
+        ):
+            for index in range(count):
+                identifier = "" if ids is None else ids[index]
+                label_length = (
+                    len(side)
+                    + 1
+                    + len(str(index))
+                    + (1 + len(identifier) if ids is not None else 0)
+                )
+                size += 6 * label_length + 2
+        return size
+
+    places = left.place_count + right.place_count
+    transitions = left.transition_count + right.transition_count
+    union_bound = (
+        256
+        + 2 * matrix_bound(places, transitions)
+        + union_ids_bound(
+            left.place_ids, right.place_ids, left.place_count, right.place_count
+        )
+        + union_ids_bound(
+            left.transition_ids,
+            right.transition_ids,
+            left.transition_count,
+            right.transition_count,
+        )
+    )
+    mappings_bound = 128 + 12 * (places + transitions)
+    # Markings serialize their parent net recursively. The result retains two
+    # source markings (each with its source net) and one union marking (with the
+    # union net), in addition to the explicit net fields above.
+    markings_bound = (
+        128 + 15 * places + source_bound(left) + source_bound(right) + union_bound
+        if include_markings
+        else 0
+    )
+    output_bound = (
+        source_bound(left)
+        + source_bound(right)
+        + union_bound
+        + mappings_bound
+        + markings_bound
+    )
+    return output_bound, 2 * places * transitions
+
+
+def disjoint_union(
+    left_net: PetriNet,
+    right_net: PetriNet,
+    left_marking: Marking | None = None,
+    right_marking: Marking | None = None,
+) -> PetriNetDisjointUnionResult:
+    """Return the block-disjoint union of two weighted place/transition nets.
+
+    The place and transition axes are concatenated in left-then-right order.
+    Each source marking may be supplied as a pair; the result then includes
+    their concatenation on the union place axis.
+    """
+
+    left_net = _admit_net(left_net)
+    right_net = _admit_net(right_net)
+    if (left_marking is None) != (right_marking is None):
+        raise OperationDomainValidationError(
+            location=("marking",),
+            code="petri_net.union_marking_pair",
+            message="both source markings must be supplied together",
+        )
+    if left_marking is not None and right_marking is not None:
+        left_marking = _require_marking_size(left_net, left_marking)
+        right_marking = _require_marking_size(right_net, right_marking)
+
+    # Complete canonical validation before any resource envelope is applied, so
+    # the same malformed axis no longer changes error category with its length.
+    _require_valid_axis_encoding(left_net)
+    _require_valid_axis_encoding(right_net)
+
+    place_count = left_net.place_count + right_net.place_count
+    transition_count = left_net.transition_count + right_net.transition_count
+    if place_count > MAX_PETRI_PLACES or transition_count > MAX_PETRI_TRANSITIONS:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_axis_bound",
+            message=(
+                "disjoint union exceeds the "
+                f"{MAX_PETRI_PLACES}-place or {MAX_PETRI_TRANSITIONS}-transition carrier bound"
+            ),
+        )
+    output_size_bound, work = _petri_net_union_output_size_bound(
+        left_net, right_net, include_markings=left_marking is not None
+    )
+    if work > MAX_PETRI_NET_DISJOINT_UNION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_work_bound",
+            message="disjoint-union matrix expansion exceeds its admitted work bound",
+        )
+    if output_size_bound > MAX_PETRI_NET_DISJOINT_UNION_OUTPUT_SIZE:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.union_output_bound",
+            message="disjoint-union result exceeds its admitted result representation-size bound",
+        )
+
+    def combine_ids(
+        left_ids: tuple[str, ...] | None,
+        right_ids: tuple[str, ...] | None,
+        left_count: int,
+        right_count: int,
+    ) -> tuple[str, ...] | None:
+        if left_ids is None and right_ids is None:
+            return None
+        left_names = tuple(
+            f"L:{index}:{identifier}" if left_ids is not None else f"L:{index}"
+            for index, identifier in enumerate(left_ids or range(left_count))
+        )
+        right_names = tuple(
+            f"R:{index}:{identifier}" if right_ids is not None else f"R:{index}"
+            for index, identifier in enumerate(right_ids or range(right_count))
+        )
+        return left_names + right_names
+
+    left_zeroes = (0,) * left_net.transition_count
+    right_zeroes = (0,) * right_net.transition_count
+    pre = tuple(
+        tuple(left_net.pre[row]) + right_zeroes for row in range(left_net.place_count)
+    ) + tuple(
+        left_zeroes + tuple(right_net.pre[row]) for row in range(right_net.place_count)
+    )
+    post = tuple(
+        tuple(left_net.post[row]) + right_zeroes for row in range(left_net.place_count)
+    ) + tuple(
+        left_zeroes + tuple(right_net.post[row]) for row in range(right_net.place_count)
+    )
+    union_net = PetriNet(
+        place_count=place_count,
+        transition_count=transition_count,
+        place_ids=combine_ids(
+            left_net.place_ids,
+            right_net.place_ids,
+            left_net.place_count,
+            right_net.place_count,
+        ),
+        transition_ids=combine_ids(
+            left_net.transition_ids,
+            right_net.transition_ids,
+            left_net.transition_count,
+            right_net.transition_count,
+        ),
+        pre=pre,
+        post=post,
+    )
+    union_marking = None
+    if left_marking is not None and right_marking is not None:
+        union_marking = Marking(
+            tokens=left_marking.tokens + right_marking.tokens, net=union_net
+        )
+    return PetriNetDisjointUnionResult(
+        left_net=left_net,
+        right_net=right_net,
+        net=union_net,
+        left_place_embedding=tuple(range(left_net.place_count)),
+        right_place_embedding=tuple(range(left_net.place_count, place_count)),
+        left_transition_embedding=tuple(range(left_net.transition_count)),
+        right_transition_embedding=tuple(
+            range(left_net.transition_count, transition_count)
+        ),
+        left_marking=left_marking,
+        right_marking=right_marking,
+        marking=union_marking,
+    )
+
+
+def _petri_net_reverse_output_bound(net: PetriNet) -> int:
+    """Compute the exact canonical JSON size without materializing the net."""
+
+    def array_size(item_sizes: list[int]) -> int:
+        return 2 + max(0, len(item_sizes) - 1) + sum(item_sizes)
+
+    def string_size(value: str) -> int:
+        size = 2  # surrounding quotes
+        short_escapes = {"\b", "\t", "\n", "\f", "\r"}
+        for character in value:
+            codepoint = ord(character)
+            if character in ('"', "\\") or character in short_escapes:
+                size += 2
+            elif codepoint <= 0x1F:
+                size += 6  # RFC 8785 uses a \u00xx escape for other controls.
+            elif 0xD800 <= codepoint <= 0xDFFF:
+                # RFC 8785 cannot encode unpaired UTF-16 surrogates.
+                raise OperationDomainValidationError(
+                    location=("net",),
+                    code="petri_net.net_axis_encoding",
+                    message="place and transition IDs must be valid Unicode strings",
+                )
+            elif codepoint <= 0x7F:
+                size += 1
+            elif codepoint <= 0x7FF:
+                size += 2
+            elif codepoint <= 0xFFFF:
+                size += 3
+            else:
+                size += 4
+        return size
+
+    def ids_size(ids: tuple[str, ...] | None) -> int:
+        return 4 if ids is None else array_size([string_size(item) for item in ids])
+
+    def matrix_size(matrix: tuple[tuple[int, ...], ...]) -> int:
+        return array_size(
+            [array_size([len(str(entry)) for entry in row]) for row in matrix]
+        )
+
+    return strict_json_object_size(
+        (
+            ("place_count", len(str(net.place_count))),
+            ("transition_count", len(str(net.transition_count))),
+            ("place_ids", ids_size(net.place_ids)),
+            ("transition_ids", ids_size(net.transition_ids)),
+            # Swapping the matrices preserves their combined serialized size.
+            ("pre", matrix_size(net.pre)),
+            ("post", matrix_size(net.post)),
+        )
+    )
 
 
 def _admit_net(net: object) -> PetriNet:
@@ -73,6 +388,48 @@ def _admit_net(net: object) -> PetriNet:
             code="petri_net.net_shape",
             message="net must satisfy its complete canonical matrix and axis shape",
         ) from exc
+
+
+def _require_valid_axis_encoding(net: PetriNet) -> None:
+    """Reject unpaired surrogates before resource admission and label synthesis.
+
+    Canonical JSON cannot encode unpaired UTF-16 surrogates.  This is a domain
+    property of the representation, so it must be decided independently of any
+    serialized-size or work envelope.
+    """
+
+    for ids in (net.place_ids, net.transition_ids):
+        if ids is not None and any(
+            0xD800 <= ord(character) <= 0xDFFF for item in ids for character in item
+        ):
+            raise OperationDomainValidationError(
+                location=("net", "axis_ids"),
+                code="petri_net.net_axis_encoding",
+                message="place and transition IDs must be valid Unicode strings",
+            )
+
+
+def reverse_petri_net(net: PetriNet) -> PetriNet:
+    """Reverse every transition by exchanging its input and output arcs."""
+
+    admitted = _admit_net(net)
+    materialized_bytes = _petri_net_reverse_output_bound(admitted)
+    if materialized_bytes > MAX_PETRI_NET_REVERSE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.reverse_output_bound",
+            message="reversed Petri net exceeds the serialized output bound",
+        )
+    # The matrices have identical shape and limits. Reversal swaps canonical
+    # immutable tuples, so no expanded matrix or second validation pass is needed.
+    return PetriNet.model_construct(
+        place_count=admitted.place_count,
+        transition_count=admitted.transition_count,
+        place_ids=admitted.place_ids,
+        transition_ids=admitted.transition_ids,
+        pre=admitted.post,
+        post=admitted.pre,
+    )
 
 
 def _admit_marking(marking: object, net: PetriNet) -> Marking:
@@ -119,8 +476,7 @@ def _bound_marking(net: PetriNet, marking: Marking, tokens: tuple[int, ...]) -> 
 
 
 def _enabled_transition_indices(net: PetriNet, marking: Marking) -> list[int]:
-    """Return indices of all transitions enabled at the given marking."""
-    marking = _require_marking_size(net, marking)
+    """Return indices of all transitions enabled at an admitted marking."""
     result: list[int] = []
     for t in range(net.transition_count):
         enabled = True
@@ -145,6 +501,55 @@ def enabled_transitions(net: PetriNet, marking: Marking) -> EnabledTransitionsRe
     )
 
 
+def marking_conflict_profile(
+    net: PetriNet, marking: Marking
+) -> MarkingConflictProfileResult:
+    """Partition individually enabled transition pairs by step compatibility.
+
+    This is a local resource-conflict profile, not a claim about sequential
+    commutation: both transitions can be individually enabled while aggregate
+    simultaneous consumption is impossible.
+    """
+
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
+    enabled = tuple(_enabled_transition_indices(net, marking))
+    pair_count = len(enabled) * (len(enabled) - 1) // 2
+    work = pair_count * net.place_count
+    if work > 150_000:
+        raise OperationResourceAdmissionError(
+            location=("net", "marking"),
+            code="petri_net.conflict_profile_bound",
+            message="pairwise marking conflict profile exceeds its work bound",
+        )
+    output_bound = _marking_conflict_profile_output_bound(
+        net, marking, enabled_count=len(enabled), pair_count=pair_count
+    )
+    if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "marking"),
+            code="petri_net.conflict_profile_output_bound",
+            message="marking conflict profile exceeds the serialized result bound",
+        )
+    jointly_enabled: list[tuple[int, int]] = []
+    conflicts: list[tuple[int, int]] = []
+    for left, right in combinations(enabled, 2):
+        if all(
+            marking.tokens[place] >= net.pre[place][left] + net.pre[place][right]
+            for place in range(net.place_count)
+        ):
+            jointly_enabled.append((left, right))
+        else:
+            conflicts.append((left, right))
+    return MarkingConflictProfileResult._from_kernel(
+        net=net,
+        marking=marking,
+        enabled_transitions=enabled,
+        jointly_enabled_pairs=tuple(jointly_enabled),
+        conflicting_pairs=tuple(conflicts),
+    )
+
+
 def _fire_transition_tokens(
     net: PetriNet,
     marking: Marking,
@@ -152,7 +557,6 @@ def _fire_transition_tokens(
 ) -> tuple[bool, tuple[int, ...]]:
     """Return whether a transition fired and its successor token tuple."""
 
-    _require_marking_size(net, marking)
     if not 0 <= transition < net.transition_count:
         raise OperationDomainValidationError(
             location=("transition",),
@@ -196,9 +600,119 @@ def fire_transition(
     )
 
 
+def _require_step_container(transition_counts: object, code: str) -> tuple[int, ...]:
+    """Require the canonical tuple container before inspecting its length."""
+
+    if type(transition_counts) is not tuple:
+        raise OperationDomainValidationError(
+            location=("transition_counts",),
+            code=code,
+            message="transition counts must be a tuple on the net transition axis",
+        )
+    return transition_counts
+
+
+def concurrent_step(
+    net: PetriNet, marking: Marking, transition_counts: tuple[int, ...]
+) -> ConcurrentStepResult:
+    """Fire a multiset simultaneously, requiring all consumed resources up front.
+
+    This is step semantics: aggregate consumption is checked against the source
+    marking before aggregate production is applied. It makes no claim that any
+    sequential ordering of the multiset is fireable.
+    """
+
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
+    counts = _require_step_container(
+        transition_counts, "petri_net.step_transition_axis"
+    )
+    if len(counts) != net.transition_count or any(
+        type(count) is not int or count < 0 for count in counts
+    ):
+        raise OperationDomainValidationError(
+            location=("transition_counts",),
+            code="petri_net.step_transition_axis",
+            message="transition counts must be nonnegative integers on the net axis",
+        )
+    total = sum(counts)
+    if total > MAX_CONCURRENT_STEP_OCCURRENCES:
+        raise OperationResourceAdmissionError(
+            location=("transition_counts",),
+            code="petri_net.step_occurrence_bound",
+            message="simultaneous step exceeds the admitted total multiplicity",
+        )
+    required = tuple(
+        sum(
+            net.pre[place][transition] * counts[transition]
+            for transition in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    deficit = tuple(
+        max(0, need - have) for need, have in zip(required, marking.tokens, strict=True)
+    )
+    if any(deficit):
+        return ConcurrentStepResult(
+            net=net,
+            marking=marking,
+            transition_counts=counts,
+            required=required,
+            deficit=deficit,
+            status="NOT_ENABLED",
+        )
+    target = tuple(
+        marking.tokens[place]
+        + sum(
+            (net.post[place][transition] - net.pre[place][transition])
+            * counts[transition]
+            for transition in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    if any(token > MAX_PETRI_MARKING for token in target):
+        return ConcurrentStepResult(
+            net=net,
+            marking=marking,
+            transition_counts=counts,
+            required=required,
+            deficit=deficit,
+            status="ESCAPES_DECLARED_ENVELOPE",
+            envelope_escape=target,
+        )
+    derived_bytes = len(marking.model_dump_json().encode("utf-8")) + 3 * net.place_count
+    output_bound = (
+        3 * len(net.model_dump_json().encode("utf-8"))
+        + 2 * derived_bytes
+        + 10 * (net.place_count + net.transition_count)
+        + 1024
+    )
+    if output_bound > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.concurrent_step_output_bound",
+            message="concurrent step result exceeds its output bound",
+        )
+    return ConcurrentStepResult(
+        net=net,
+        marking=marking,
+        transition_counts=counts,
+        required=required,
+        deficit=deficit,
+        status="FIRED",
+        new_marking=_bound_marking(net, marking, target),
+    )
+
+
 def _require_sequence_axes(net: PetriNet, sequence: tuple[int, ...]) -> None:
     """Share the catalog sequence-axis admission with native callers."""
 
+    if type(sequence) is not tuple:
+        raise OperationDomainValidationError(
+            location=("sequence",),
+            code="petri_net.firing_sequence_container",
+            message="firing sequence must be a tuple",
+        )
     if len(sequence) > MAX_FIRING_SEQUENCE_LENGTH:
         raise OperationResourceAdmissionError(
             location=("sequence",),
@@ -222,6 +736,23 @@ def replay_firing_sequence(
     net = _admit_net(net)
     marking = _require_marking_size(net, marking)
     _require_sequence_axes(net, sequence)
+    return _replay_firing_sequence_admitted(net, marking, sequence)
+
+
+def _replay_firing_sequence_admitted(
+    net: PetriNet, marking: Marking, sequence: tuple[int, ...]
+) -> FiringSequenceReplayResult:
+    """Replay a sequence after the shared net, marking, and axis admission."""
+
+    # Every retained prefix serializes its source context, so the whole
+    # ledger is admitted before the first prefix marking is constructed.
+    output_bound = _firing_sequence_replay_output_bound(net, marking, len(sequence))
+    if output_bound > MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "sequence"),
+            code="petri_net.firing_sequence_output_bound",
+            message="firing-sequence replay ledger exceeds the serialized output bound",
+        )
     current = list(marking.tokens)
     prefix: list[Marking] = []
     parikh = [0] * net.transition_count
@@ -297,15 +828,138 @@ def replay_firing_sequence(
     )
 
 
-def verify_firing_sequence_replay(claim: FiringSequenceReplayResult) -> bool:
-    """Verify a firing-sequence replay against its retained source context."""
+def check_pumping_witness(
+    net: PetriNet, marking: Marking, sequence: tuple[int, ...]
+) -> PumpingWitnessResult:
+    """Check a concrete replay M ->* M' with M' >= M and M' != M.
 
-    try:
-        return replay_firing_sequence(claim.net, claim.marking, claim.sequence) == claim
-    except OperationResourceAdmissionError:
-        raise
-    except OperationDomainValidationError:
-        return False
+    Ordinary P/T transition maps are monotone: the same sequence remains
+    enabled from any marking above M, and its final marking is shifted by the
+    same nonnegative delta. Repeating strict growth therefore proves unboundedness.
+    """
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
+    _require_sequence_axes(net, sequence)
+    # The retained ledger serializes its source context once per step, so the
+    # outer result and every retained prefix are admitted before replay.
+    output_bound = _pumping_witness_output_bound(net, marking, len(sequence))
+    if output_bound > MAX_PUMPING_WITNESS_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "sequence"),
+            code="petri_net.pumping_witness_output_bound",
+            message="pumping witness replay ledger exceeds the serialized output bound",
+        )
+    replay = _replay_firing_sequence_admitted(net, marking, sequence)
+    if replay.status == "BLOCKED":
+        return PumpingWitnessResult(
+            net=net,
+            marking=marking,
+            sequence=sequence,
+            replay=replay,
+            status="BLOCKED",
+        )
+    if replay.final_marking is None:  # pragma: no cover - kernel invariant.
+        raise OperationDomainValidationError(
+            location=("net", "sequence"),
+            code="petri_net.pumping_witness_missing_final",
+            message="a firing replay must retain its final marking",
+        )
+    delta = tuple(
+        final - initial
+        for initial, final in zip(
+            marking.tokens, replay.final_marking.tokens, strict=True
+        )
+    )
+    grows = any(delta) and all(value >= 0 for value in delta)
+    return PumpingWitnessResult(
+        net=net,
+        marking=marking,
+        sequence=sequence,
+        replay=replay,
+        status="PUMPING_WITNESS" if grows else "FIRES_WITHOUT_GROWTH",
+        growth=delta if grows else None,
+    )
+
+
+def _admit_commutation_pair(
+    net: PetriNet, transitions: tuple[int, int]
+) -> tuple[int, int]:
+    """Validate the distinct, ordered transition pair on one admitted net."""
+
+    if not isinstance(transitions, tuple) or len(transitions) != 2:
+        raise OperationDomainValidationError(
+            location=("transitions",),
+            code="petri_net.commutation_transition_pair",
+            message="commutation profiling requires an ordered pair of transitions",
+        )
+    first, second = transitions
+    if (
+        type(first) is not int
+        or type(second) is not int
+        or first == second
+        or not 0 <= first < net.transition_count
+        or not 0 <= second < net.transition_count
+    ):
+        raise OperationDomainValidationError(
+            location=("transitions",),
+            code="petri_net.commutation_transition_pair",
+            message="commutation profiling requires two distinct transitions on the net axis",
+        )
+    return first, second
+
+
+def marking_commutation_profile(
+    net: PetriNet, marking: Marking, transitions: tuple[int, int]
+) -> MarkingCommutationProfileResult:
+    """Replay both orders of a distinct transition pair from one marking.
+
+    Each order is an exact two-step sequential replay. Simultaneous enabledness
+    is a separate operation, and neither result says anything about global
+    confluence or other reachable markings.
+    """
+
+    admitted_net = _admit_net(net)
+    admitted_marking = _require_marking_size(admitted_net, marking)
+    first, second = _admit_commutation_pair(admitted_net, transitions)
+    output_bound = _marking_commutation_profile_output_bound(
+        admitted_net, admitted_marking
+    )
+    if output_bound > MAX_MARKING_COMMUTATION_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "marking"),
+            code="petri_net.commutation_profile_output_bound",
+            message="marking commutation profile exceeds the serialized output bound",
+        )
+    # Two length-two replays each compare deficits and update a marking per
+    # selected transition, then compute one place-by-transition residual.
+    work_bound = 2 * (
+        4 * admitted_net.place_count
+        + admitted_net.place_count * admitted_net.transition_count
+    )
+    if work_bound > MAX_MARKING_COMMUTATION_PROFILE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net", "transitions"),
+            code="petri_net.commutation_profile_work_bound",
+            message="marking commutation profile exceeds the replay work bound",
+        )
+
+    first_then_second = _replay_firing_sequence_admitted(
+        admitted_net, admitted_marking, (first, second)
+    )
+    second_then_first = _replay_firing_sequence_admitted(
+        admitted_net, admitted_marking, (second, first)
+    )
+    both_orders_fire = first_then_second.status == second_then_first.status == "FIRES"
+    same_target = bool(
+        both_orders_fire
+        and first_then_second.final_marking == second_then_first.final_marking
+    )
+    return MarkingCommutationProfileResult._from_kernel(
+        first_then_second=first_then_second,
+        second_then_first=second_then_first,
+        both_orders_fire=both_orders_fire,
+        same_target=same_target,
+    )
 
 
 def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
@@ -326,19 +980,55 @@ def compute_incidence_matrix(net: PetriNet) -> IncidenceMatrixResult:
     )
 
 
-def reachability_graph(
+def state_equation_target(
+    net: PetriNet, marking: Marking, transition_counts: tuple[int, ...]
+) -> StateEquationResult:
+    """Compute M0 + (Post - Pre)y over Z, without asserting reachability."""
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
+    counts = _require_step_container(
+        transition_counts, "petri_net.state_equation_transition_axis"
+    )
+    if len(counts) != net.transition_count or any(
+        type(count) is not int or count < 0 for count in counts
+    ):
+        raise OperationDomainValidationError(
+            location=("transition_counts",),
+            code="petri_net.state_equation_transition_axis",
+            message="transition counts must be nonnegative integers on the net axis",
+        )
+    if sum(counts) > MAX_STATE_EQUATION_OCCURRENCES:
+        raise OperationResourceAdmissionError(
+            location=("transition_counts",),
+            code="petri_net.state_equation_occurrence_bound",
+            message="total transition count exceeds the admitted bound",
+        )
+    # At most 64 places, 64 transitions, 1000 occurrences, and arc weights
+    # of 1000 yield target magnitudes below 64,001,000 and a tiny exact result.
+    target = tuple(
+        marking.tokens[place]
+        + sum(
+            (net.post[place][transition] - net.pre[place][transition])
+            * counts[transition]
+            for transition in range(net.transition_count)
+        )
+        for place in range(net.place_count)
+    )
+    return StateEquationResult(
+        net=net,
+        marking=marking,
+        transition_counts=counts,
+        target=target,
+    )
+
+
+def _explore_reachability(
     net: PetriNet,
     initial_marking: Marking,
-    max_states: int = 10000,
-) -> ReachabilityResult:
-    """Compute the bounded reachability graph via BFS.
-
-    Returns (states, edges, truncated).
-    Each edge is (source_index, transition, target_index).
-    """
-    net = _admit_net(net)
-    initial_marking = _require_marking_size(net, initial_marking)
-    require_reachability_bounds(net, max_states)
+    max_states: int,
+    *,
+    collect_edges: bool = True,
+) -> tuple[list[tuple[int, ...]], list[tuple[int, int, int]], bool]:
     initial = tuple(initial_marking.tokens)
     state_list: list[tuple[int, ...]] = [initial]
     state_index: dict[tuple[int, ...], int] = {initial: 0}
@@ -363,7 +1053,23 @@ def reachability_graph(
                 state_index[new_tokens] = len(state_list)
                 state_list.append(new_tokens)
                 queue.append(len(state_list) - 1)
-            edges.append((idx, t, state_index[new_tokens]))
+            if collect_edges:
+                edges.append((idx, t, state_index[new_tokens]))
+    return state_list, edges, truncated
+
+
+def reachability_graph(
+    net: PetriNet,
+    initial_marking: Marking,
+    max_states: int = 10000,
+) -> ReachabilityResult:
+    """Compute the bounded reachability graph via BFS."""
+    net = _admit_net(net)
+    initial_marking = _require_marking_size(net, initial_marking)
+    require_reachability_bounds(net, max_states)
+    state_list, edges, truncated = _explore_reachability(
+        net, initial_marking, max_states
+    )
     return ReachabilityResult(
         net=net,
         initial_marking=initial_marking,
@@ -383,6 +1089,771 @@ def reachability_graph(
             for source, transition, target in edges
         ),
         truncated=truncated,
+    )
+
+
+def reachable_dead_markings(
+    net: PetriNet,
+    initial_marking: Marking,
+    max_states: int = 10000,
+) -> ReachableDeadMarkingsResult:
+    """List dead markings among states found by bounded reachability.
+
+    Deadness is checked from transition enabledness, not inferred from absent
+    edges: a firing can be omitted when a state or marking limit truncates the
+    reachability exploration.
+    """
+
+    net = _admit_net(net)
+    initial_marking = _require_marking_size(net, initial_marking)
+    require_reachability_bounds(net, max_states)
+    output_bound = (
+        len(net.model_dump_json().encode("utf-8"))
+        + len(initial_marking.model_dump_json().encode("utf-8"))
+        + max_states * (5 * net.place_count + 3)
+        + 1024
+    )
+    if output_bound > MAX_REACHABLE_DEAD_MARKINGS_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net", "max_states"),
+            code="petri_net.dead_markings_output_bound",
+            message="reachable dead-marking profile exceeds the serialized output bound",
+        )
+
+    state_list, _, truncated = _explore_reachability(
+        net, initial_marking, max_states, collect_edges=False
+    )
+    dead = tuple(
+        sorted(
+            tokens
+            for tokens in state_list
+            if not _enabled_transition_indices(
+                net, _bound_marking(net, initial_marking, tokens)
+            )
+        )
+    )
+    return ReachableDeadMarkingsResult._from_kernel(
+        net=net,
+        initial_marking=initial_marking,
+        max_states=max_states,
+        dead_markings=dead,
+        truncated=truncated,
+    )
+
+
+def _terminal_scc_graph_output_bound(
+    graph: ReachabilityResult, net: PetriNet, initial: Marking
+) -> int:
+    """Return the exact encoded source-plus-worst-case-profile size."""
+
+    def array_size(parts: list[int]) -> int:
+        return 2 + max(0, len(parts) - 1) + sum(parts)
+
+    def json_string_size(value: str) -> int:
+        size = 2
+        for character in value:
+            codepoint = ord(character)
+            if character in ('"', "\\") or character in "\b\t\n\f\r":
+                size += 2
+            elif codepoint <= 0x1F:
+                size += 6
+            elif 0xD800 <= codepoint <= 0xDFFF:
+                raise OperationDomainValidationError(
+                    location=("source_graph", "net"),
+                    code="petri_net.terminal_scc.axis_encoding",
+                    message="Petri net axis IDs must be valid Unicode strings",
+                )
+            elif codepoint <= 0x7F:
+                size += 1
+            elif codepoint <= 0x7FF:
+                size += 2
+            elif codepoint <= 0xFFFF:
+                size += 3
+            else:
+                size += 4
+        return size
+
+    def net_size(value: PetriNet) -> int:
+        def ids_size(ids: tuple[str, ...] | None) -> int:
+            return (
+                4
+                if ids is None
+                else array_size([json_string_size(item) for item in ids])
+            )
+
+        def matrix_size(matrix: tuple[tuple[int, ...], ...]) -> int:
+            return array_size(
+                [array_size([len(str(entry)) for entry in row]) for row in matrix]
+            )
+
+        return strict_json_object_size(
+            (
+                ("place_count", len(str(value.place_count))),
+                ("transition_count", len(str(value.transition_count))),
+                ("place_ids", ids_size(value.place_ids)),
+                ("transition_ids", ids_size(value.transition_ids)),
+                ("pre", matrix_size(value.pre)),
+                ("post", matrix_size(value.post)),
+            )
+        )
+
+    def marking_size(value: Marking) -> int:
+        return strict_json_object_size(
+            (
+                ("tokens", array_size([len(str(token)) for token in value.tokens])),
+                ("net", 4 if value.net is None else net_size(value.net)),
+            )
+        )
+
+    states_size = array_size(
+        [
+            strict_json_object_size(
+                (
+                    ("state_index", len(str(state.state_index))),
+                    (
+                        "place_axis",
+                        array_size([len(str(place)) for place in state.place_axis]),
+                    ),
+                    ("marking", marking_size(state.marking)),
+                )
+            )
+            for state in graph.states
+        ]
+    )
+    edges_size = array_size(
+        [
+            strict_json_object_size(
+                (
+                    ("source_state", len(str(edge.source_state))),
+                    ("transition", len(str(edge.transition))),
+                    ("target_state", len(str(edge.target_state))),
+                )
+            )
+            for edge in graph.edges
+        ]
+    )
+    graph_size = strict_json_object_size(
+        (
+            ("net", net_size(net)),
+            ("initial_marking", marking_size(initial)),
+            ("max_states", len(str(graph.max_states))),
+            ("states", states_size),
+            ("edges", edges_size),
+            ("truncated", 4 if graph.truncated else 5),
+        )
+    )
+    state_count = len(graph.states)
+    # In the worst case each state is a singleton terminal component.
+    profile_size = (
+        2
+        + max(0, state_count - 1)
+        + sum(len(str(state)) + 2 for state in range(state_count))
+    )
+    return strict_json_object_size(
+        (("source_graph", graph_size), ("terminal_components", profile_size))
+    )
+
+
+def _preflight_terminal_scc_net_shape(
+    net: object, checked_nets: dict[int, tuple[int, int, int]]
+) -> tuple[int, int, int]:
+    """Cheaply bound a raw/model_construct net before any model dump."""
+    if not isinstance(net, PetriNet):
+        raise OperationDomainValidationError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.net_type",
+            message="source graph must contain a PetriNet",
+        )
+    if (
+        type(net.place_count) is not int
+        or not 0 <= net.place_count <= MAX_PETRI_PLACES
+        or type(net.transition_count) is not int
+        or not 0 <= net.transition_count <= MAX_PETRI_TRANSITIONS
+    ):
+        raise OperationDomainValidationError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.net_axes",
+            message="source net axes exceed the admitted place/transition bounds",
+        )
+    cached = checked_nets.get(id(net))
+    if cached is not None:
+        return cached
+    if (
+        not isinstance(net.pre, tuple)
+        or not isinstance(net.post, tuple)
+        or len(net.pre) != net.place_count
+        or len(net.post) != net.place_count
+        or any(
+            not isinstance(row, tuple) or len(row) != net.transition_count
+            for row in (*net.pre, *net.post)
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.net_shape",
+            message="source net arc matrices must have bounded declared axes",
+        )
+    label_characters = 0
+    for ids, expected_length in (
+        (net.place_ids, net.place_count),
+        (net.transition_ids, net.transition_count),
+    ):
+        if ids is None:
+            continue
+        if (
+            not isinstance(ids, tuple)
+            or len(ids) != expected_length
+            or any(not isinstance(label, str) for label in ids)
+        ):
+            raise OperationDomainValidationError(
+                location=("source_graph", "net"),
+                code="petri_net.terminal_scc.net_labels",
+                message="source net labels must match their bounded axes",
+            )
+        label_characters += sum(len(label) for label in ids)
+    if label_characters * 6 > MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.output_bound",
+            message="source net labels exceed the profile output byte bound",
+        )
+    shape = (net.place_count, net.transition_count, label_characters)
+    checked_nets[id(net)] = shape
+    return shape
+
+
+def _preflight_terminal_scc_graph_shape(
+    graph: object,
+) -> tuple[int, int, int, int]:
+    """Bound raw graph axes before model_dump/model_validate can copy them."""
+    if not isinstance(graph, ReachabilityResult):
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_type",
+            message="source_graph must be a ReachabilityResult",
+        )
+    checked_nets: dict[int, tuple[int, int, int]] = {}
+    place_count, transition_count, label_characters = _preflight_terminal_scc_net_shape(
+        graph.net, checked_nets
+    )
+    if (
+        type(graph.max_states) is not int
+        or not 1 <= graph.max_states <= MAX_REACHABILITY_STATES
+        or type(graph.truncated) is not bool
+        or not isinstance(graph.states, tuple)
+        or not isinstance(graph.edges, tuple)
+        or not 1 <= len(graph.states) <= min(graph.max_states, MAX_REACHABILITY_STATES)
+        or len(graph.edges) > MAX_REACHABILITY_FIRING_RECORDS
+    ):
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_shape",
+            message="source graph state/edge counts exceed their declared bounds",
+        )
+    if not isinstance(graph.initial_marking, Marking):
+        raise OperationDomainValidationError(
+            location=("source_graph", "initial_marking"),
+            code="petri_net.terminal_scc.marking_type",
+            message="source graph initial marking must be a Marking",
+        )
+
+    def admit_marking_shape(marking: Marking) -> int:
+        if (
+            not isinstance(marking.tokens, tuple)
+            or len(marking.tokens) != place_count
+            or any(
+                type(token) is not int or not 0 <= token <= MAX_PETRI_MARKING
+                for token in marking.tokens
+            )
+        ):
+            raise OperationDomainValidationError(
+                location=("source_graph", "marking"),
+                code="petri_net.terminal_scc.marking_shape",
+                message="source graph markings must use bounded nonnegative token vectors",
+            )
+        if marking.net is not None:
+            nonlocal label_characters
+            parent_places, parent_transitions, parent_label_characters = (
+                _preflight_terminal_scc_net_shape(marking.net, checked_nets)
+            )
+            label_characters += parent_label_characters
+            # Charge the parent's own matrix cells, not the source net's, so a
+            # foreign parent cannot hide unadmitted traversal/output work.
+            return parent_places * max(1, parent_transitions)
+        return 0
+
+    parent_marking_work = admit_marking_shape(graph.initial_marking)
+    for expected_index, state in enumerate(graph.states):
+        if (
+            not isinstance(state, PetriMarkingState)
+            or type(state.state_index) is not int
+            or state.state_index != expected_index
+            or not isinstance(state.place_axis, tuple)
+            or state.place_axis != tuple(range(place_count))
+            or not isinstance(state.marking, Marking)
+        ):
+            raise OperationDomainValidationError(
+                location=("source_graph", "states"),
+                code="petri_net.terminal_scc.state_axis",
+                message="source graph states must use canonical bounded axes",
+            )
+        parent_marking_work += admit_marking_shape(state.marking)
+    for edge in graph.edges:
+        if (
+            not isinstance(edge, PetriReachabilityEdge)
+            or type(edge.source_state) is not int
+            or type(edge.transition) is not int
+            or type(edge.target_state) is not int
+            or not 0 <= edge.source_state < len(graph.states)
+            or not 0 <= edge.target_state < len(graph.states)
+            or not 0 <= edge.transition < transition_count
+        ):
+            raise OperationDomainValidationError(
+                location=("source_graph", "edges"),
+                code="petri_net.terminal_scc.edge_axis",
+                message="source graph edges must use its bounded state and transition axes",
+            )
+    return place_count, transition_count, label_characters, parent_marking_work
+
+
+def _validate_terminal_scc_net_values(graph: ReachabilityResult) -> None:
+    """Check raw bounded arc scalars after work admission, before JSON sizing."""
+    nets = {id(graph.net): graph.net}
+    markings = (graph.initial_marking, *(state.marking for state in graph.states))
+    for marking in markings:
+        if marking.net is not None:
+            nets[id(marking.net)] = marking.net
+    for net in nets.values():
+        if any(
+            type(weight) is not int or not 0 <= weight <= MAX_PETRI_ARC_WEIGHT
+            for row in (*net.pre, *net.post)
+            for weight in row
+        ):
+            raise OperationDomainValidationError(
+                location=("source_graph", "net"),
+                code="petri_net.terminal_scc.net_weights",
+                message="source net arc weights must be bounded nonnegative integers",
+            )
+
+
+def _terminal_scc_adjacency(
+    graph: ReachabilityResult, net: PetriNet, state_indices: dict[tuple[int, ...], int]
+) -> tuple[list[list[int]], list[list[int]]]:
+    """Admit the represented edges and build its two bounded adjacency axes."""
+    state_count = len(graph.states)
+    edges = {
+        (edge.source_state, edge.transition, edge.target_state) for edge in graph.edges
+    }
+    if len(edges) != len(graph.edges):
+        raise OperationDomainValidationError(
+            location=("source_graph", "edges"),
+            code="petri_net.terminal_scc.duplicate_edge",
+            message="source graph must not repeat a transition edge",
+        )
+    adjacency: list[list[int]] = [[] for _ in range(state_count)]
+    reverse_adjacency: list[list[int]] = [[] for _ in range(state_count)]
+    for source, transition, target in edges:
+        success, tokens = _fire_tokens_admitted(
+            net, graph.states[source].marking.tokens, transition
+        )
+        if not success or tokens != graph.states[target].marking.tokens:
+            raise OperationDomainValidationError(
+                location=("source_graph", "edges"),
+                code="petri_net.terminal_scc.invalid_edge",
+                message="each source edge must be the exact firing of its transition",
+            )
+        adjacency[source].append(target)
+        reverse_adjacency[target].append(source)
+
+    reached = {0}
+    pending = [0]
+    while pending:
+        for target in adjacency[pending.pop()]:
+            if target not in reached:
+                reached.add(target)
+                pending.append(target)
+    if len(reached) != state_count:
+        raise OperationDomainValidationError(
+            location=("source_graph", "states"),
+            code="petri_net.terminal_scc.unreachable_state",
+            message="every source graph state must be reachable from its initial state",
+        )
+
+    if not graph.truncated:
+        edges = {
+            (edge.source_state, edge.transition, edge.target_state)
+            for edge in graph.edges
+        }
+        for source, state in enumerate(graph.states):
+            for transition in range(net.transition_count):
+                if any(
+                    state.marking.tokens[place] < net.pre[place][transition]
+                    for place in range(net.place_count)
+                ):
+                    continue
+                success, tokens = _fire_tokens_admitted(
+                    net, state.marking.tokens, transition
+                )
+                successor_index = state_indices.get(tokens) if success else None
+                if (
+                    successor_index is None
+                    or (
+                        source,
+                        transition,
+                        successor_index,
+                    )
+                    not in edges
+                ):
+                    raise OperationDomainValidationError(
+                        location=("source_graph", "edges"),
+                        code="petri_net.terminal_scc.incomplete_graph",
+                        message="an untruncated source graph must contain every enabled successor",
+                    )
+    return adjacency, reverse_adjacency
+
+
+def _fire_tokens_admitted(
+    net: PetriNet, tokens: tuple[int, ...], transition: int
+) -> tuple[bool, tuple[int, ...]]:
+    """Fire one transition on an already-admitted net and token vector."""
+    if any(
+        tokens[place] < net.pre[place][transition] for place in range(net.place_count)
+    ):
+        return False, tokens
+    return True, tuple(
+        tokens[place] - net.pre[place][transition] + net.post[place][transition]
+        for place in range(net.place_count)
+    )
+
+
+def _terminal_scc_components(
+    adjacency: list[list[int]], reverse_adjacency: list[list[int]]
+) -> tuple[tuple[int, ...], ...]:
+    """Find sink SCCs using iterative Kosaraju traversal."""
+    state_count = len(adjacency)
+    visited: set[int] = set()
+    finish_order: list[int] = []
+    for root in range(state_count):
+        if root in visited:
+            continue
+        visited.add(root)
+        stack: list[tuple[int, int]] = [(root, 0)]
+        while stack:
+            vertex, offset = stack[-1]
+            if offset < len(adjacency[vertex]):
+                neighbor = adjacency[vertex][offset]
+                stack[-1] = (vertex, offset + 1)
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    stack.append((neighbor, 0))
+            else:
+                finish_order.append(vertex)
+                stack.pop()
+
+    component_of = [-1] * state_count
+    components: list[tuple[int, ...]] = []
+    for root in reversed(finish_order):
+        if component_of[root] >= 0:
+            continue
+        component_index = len(components)
+        members: list[int] = []
+        pending = [root]
+        component_of[root] = component_index
+        while pending:
+            vertex = pending.pop()
+            members.append(vertex)
+            for neighbor in reverse_adjacency[vertex]:
+                if component_of[neighbor] < 0:
+                    component_of[neighbor] = component_index
+                    pending.append(neighbor)
+        components.append(tuple(sorted(members)))
+
+    terminal = [True] * len(components)
+    for source, targets in enumerate(adjacency):
+        source_component = component_of[source]
+        if any(component_of[target] != source_component for target in targets):
+            terminal[source_component] = False
+    return tuple(
+        sorted(
+            (
+                component
+                for index, component in enumerate(components)
+                if terminal[index]
+            ),
+            key=lambda component: component[0],
+        )
+    )
+
+
+def _terminal_scc_ordering_work(state_count: int) -> int:
+    """Conservatively charge the two canonical comparison sorts.
+
+    Sorting all component members and then the terminal components costs at
+    most two comparison sorts over at most ``state_count`` items. Four times
+    n*ceil(log2(n)) covers the comparison bound with slack for Timsort's
+    merge bookkeeping; each compared key is a bounded integer index.
+    """
+    if state_count < 2:
+        return 0
+    levels = (state_count - 1).bit_length()
+    return 4 * state_count * levels
+
+
+def reachability_terminal_scc_profile(
+    source_graph: ReachabilityResult,
+) -> ReachabilityTerminalSCCProfileResult:
+    """Return sink SCCs of one bounded Petri reachability graph.
+
+    For a truncated graph, the result describes sink components only in the
+    represented partial graph; it makes no claim about omitted successors.
+    """
+    if not isinstance(source_graph, ReachabilityResult):
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_type",
+            message="source_graph must be a ReachabilityResult",
+        )
+    raw_net = source_graph.net
+    if not isinstance(raw_net, PetriNet):
+        raise OperationDomainValidationError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.net_type",
+            message="source graph must contain a PetriNet",
+        )
+    if (
+        type(raw_net.place_count) is not int
+        or type(raw_net.transition_count) is not int
+        or raw_net.place_count < 0
+        or raw_net.transition_count < 0
+    ):
+        raise OperationDomainValidationError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.net_axes",
+            message="source net axes exceed the admitted place/transition bounds",
+        )
+    if not isinstance(source_graph.states, tuple) or not isinstance(
+        source_graph.edges, tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_shape",
+            message="source graph state/edge counts exceed their declared bounds",
+        )
+    if (
+        raw_net.place_count > MAX_PETRI_PLACES
+        or raw_net.transition_count > MAX_PETRI_TRANSITIONS
+        or len(source_graph.states) > MAX_REACHABILITY_STATES
+        or len(source_graph.edges) > MAX_REACHABILITY_FIRING_RECORDS
+    ):
+        raise OperationResourceAdmissionError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_size_bound",
+            message="source graph axes, states, or edges exceed their admitted bounds",
+        )
+    cheap_work = (
+        len(source_graph.states)
+        * max(1, raw_net.transition_count)
+        * max(1, raw_net.place_count)
+        + len(source_graph.edges) * max(1, raw_net.place_count)
+        + len(source_graph.states)
+        + len(source_graph.edges)
+    )
+    if cheap_work > MAX_TERMINAL_SCC_PROFILE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.work_bound",
+            message="terminal SCC validation exceeds its admitted work bound",
+        )
+    place_count, transition_count, label_characters, parent_marking_work = (
+        _preflight_terminal_scc_graph_shape(source_graph)
+    )
+    state_count = len(source_graph.states)
+    edge_count = len(source_graph.edges)
+    work = (
+        state_count * max(1, transition_count) * max(1, place_count)
+        + edge_count * max(1, place_count)
+        + state_count
+        + edge_count
+        + max(1, place_count) * max(1, transition_count)
+        + parent_marking_work
+        + _terminal_scc_ordering_work(state_count)
+    )
+    if work > MAX_TERMINAL_SCC_PROFILE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.work_bound",
+            message="terminal SCC validation exceeds its admitted work bound",
+        )
+    _validate_terminal_scc_net_values(source_graph)
+    if label_characters * 6 > MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("source_graph", "net"),
+            code="petri_net.terminal_scc.output_bound",
+            message="source graph labels exceed the profile output byte bound",
+        )
+    output_bound = _terminal_scc_graph_output_bound(
+        source_graph, source_graph.net, source_graph.initial_marking
+    )
+    if output_bound > MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.output_bound",
+            message="terminal SCC profile exceeds the serialized output bound",
+        )
+    try:
+        graph = ReachabilityResult.model_validate(
+            source_graph.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("source_graph",),
+            code="petri_net.terminal_scc.graph_shape",
+            message="source graph must satisfy its bounded state and transition axes",
+        ) from exc
+
+    net = graph.net
+    initial = graph.initial_marking
+    if (
+        state_count == 0
+        or state_count > graph.max_states
+        or graph.states[0].marking.tokens != initial.tokens
+    ):
+        raise OperationDomainValidationError(
+            location=("source_graph", "states"),
+            code="petri_net.terminal_scc.state_axis",
+            message="source graph must begin with its initial marking and fit its state limit",
+        )
+    state_indices: dict[tuple[int, ...], int] = {}
+    for state in graph.states:
+        tokens = state.marking.tokens
+        if tokens in state_indices:
+            raise OperationDomainValidationError(
+                location=("source_graph", "states"),
+                code="petri_net.terminal_scc.duplicate_state",
+                message="source graph must contain each marking exactly once",
+            )
+        state_indices[tokens] = state.state_index
+    adjacency, reverse_adjacency = _terminal_scc_adjacency(graph, net, state_indices)
+    terminal_components = _terminal_scc_components(adjacency, reverse_adjacency)
+    return ReachabilityTerminalSCCProfileResult.model_construct(
+        source_graph=graph,
+        terminal_components=terminal_components,
+    )
+
+
+def marking_reachability(
+    net: PetriNet,
+    initial_marking: Marking,
+    target_marking: Marking,
+    max_states: int = 10000,
+) -> MarkingReachabilityResult:
+    """Search for one executable sequence to a target marking.
+
+    BFS retains only visited markings and predecessor pairs. A found sequence
+    is an exact positive witness even if another branch was cut. A negative
+    conclusion is returned only when the queue is exhausted without crossing
+    either the state or token envelope.
+    """
+
+    net = _admit_net(net)
+    initial_marking = _require_marking_size(net, initial_marking)
+    target_marking = _require_marking_size(net, target_marking)
+    require_reachability_bounds(net, max_states)
+
+    initial = tuple(initial_marking.tokens)
+    target = tuple(target_marking.tokens)
+    if initial == target:
+        return MarkingReachabilityResult(
+            net=net,
+            initial_marking=initial_marking,
+            target_marking=target_marking,
+            max_states=max_states,
+            status="REACHABLE",
+            sequence=FiringSequence(transitions=()),
+            explored_state_count=1,
+        )
+    states: list[tuple[int, ...]] = [initial]
+    state_index = {initial: 0}
+    # Each entry stores (parent state index, transition fired).
+    predecessor: list[tuple[int, int] | None] = [None]
+    queue: deque[int] = deque([0])
+    incomplete_reasons: set[MarkingReachabilityLimit] = set()
+
+    def witness(state: int) -> tuple[int, ...]:
+        transitions: list[int] = []
+        entry = predecessor[state]
+        while entry is not None:
+            parent, transition = entry
+            transitions.append(transition)
+            entry = predecessor[parent]
+        transitions.reverse()
+        return tuple(transitions)
+
+    while queue:
+        source_index = queue.popleft()
+        source = _bound_marking(net, initial_marking, states[source_index])
+        for transition in _enabled_transition_indices(net, source):
+            _, successor = _fire_transition_tokens(net, source, transition)
+            if any(token > MAX_PETRI_MARKING for token in successor):
+                incomplete_reasons.add("MARKING_LIMIT")
+                continue
+            target_index = state_index.get(successor)
+            if target_index is None:
+                if len(states) >= max_states:
+                    incomplete_reasons.add("STATE_LIMIT")
+                    continue
+                target_index = len(states)
+                state_index[successor] = target_index
+                states.append(successor)
+                predecessor.append((source_index, transition))
+                queue.append(target_index)
+            if successor == target:
+                transitions = witness(target_index)
+                replay_bound = _firing_sequence_replay_output_bound(
+                    net, initial_marking, len(transitions)
+                )
+                if replay_bound > MAX_FIRING_SEQUENCE_REPLAY_MATERIALIZED_BYTES:
+                    incomplete_reasons.add("SEQUENCE_LIMIT")
+                    return MarkingReachabilityResult(
+                        net=net,
+                        initial_marking=initial_marking,
+                        target_marking=target_marking,
+                        max_states=max_states,
+                        status="INCOMPLETE",
+                        sequence=None,
+                        explored_state_count=len(states),
+                        incomplete_reasons=tuple(sorted(incomplete_reasons)),
+                    )
+                if len(transitions) > MAX_FIRING_SEQUENCE_LENGTH:
+                    incomplete_reasons.add("SEQUENCE_LIMIT")
+                    return MarkingReachabilityResult(
+                        net=net,
+                        initial_marking=initial_marking,
+                        target_marking=target_marking,
+                        max_states=max_states,
+                        status="INCOMPLETE",
+                        sequence=None,
+                        explored_state_count=len(states),
+                        incomplete_reasons=tuple(sorted(incomplete_reasons)),
+                    )
+                return MarkingReachabilityResult(
+                    net=net,
+                    initial_marking=initial_marking,
+                    target_marking=target_marking,
+                    max_states=max_states,
+                    status="REACHABLE",
+                    sequence=FiringSequence(transitions=transitions),
+                    explored_state_count=len(states),
+                )
+
+    return MarkingReachabilityResult(
+        net=net,
+        initial_marking=initial_marking,
+        target_marking=target_marking,
+        max_states=max_states,
+        status="INCOMPLETE" if incomplete_reasons else "UNREACHABLE",
+        explored_state_count=len(states),
+        incomplete_reasons=tuple(sorted(incomplete_reasons)),
     )
 
 
@@ -544,6 +2015,194 @@ def siphon_trap(net: PetriNet) -> SiphonTrapResult:
     )
 
 
+def siphon_trap_family(net: PetriNet) -> SiphonTrapFamilyResult:
+    """Enumerate every nonempty siphon and trap by exact support semantics.
+
+    The complete subset scan is intentionally limited by both its transition
+    work and a conservative serialized-family upper bound before enumeration.
+    """
+    net = _admit_net(net)
+    places = net.place_count
+    subsets = (1 << places) - 1
+    work = places * net.transition_count + subsets * (
+        2 * net.transition_count + 3 * places + 1
+    )
+    if work > MAX_SIPHON_TRAP_WORK:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.siphon_trap_family_work_bound",
+            message="complete siphon/trap subset scan exceeds the admitted work bound",
+        )
+    index_digits = max(1, len(str(max(0, places - 1))))
+    bytes_per_subset = 32 + places * (index_digits + 1)
+    materialized_bytes = (
+        2 * subsets * bytes_per_subset
+        + len(net.model_dump_json().encode("utf-8"))
+        + 256
+    )
+    if materialized_bytes > MAX_SIPHON_TRAP_FAMILY_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.siphon_trap_family_output_bound",
+            message="complete siphon/trap families exceed the admitted output bound",
+        )
+
+    input_support = [0] * net.transition_count
+    output_support = [0] * net.transition_count
+    for place in range(places):
+        bit = 1 << place
+        for transition in range(net.transition_count):
+            if net.pre[place][transition] > 0:
+                input_support[transition] |= bit
+            if net.post[place][transition] > 0:
+                output_support[transition] |= bit
+
+    siphons: list[PetriPlaceSubset] = []
+    traps: list[PetriPlaceSubset] = []
+    for size in range(1, places + 1):
+        for members in combinations(range(places), size):
+            mask = sum(1 << place for place in members)
+            is_siphon = all(
+                not (mask & output) or (mask & source)
+                for source, output in zip(input_support, output_support, strict=True)
+            )
+            is_trap = all(
+                not (mask & source) or (mask & output)
+                for source, output in zip(input_support, output_support, strict=True)
+            )
+            if is_siphon:
+                siphons.append(PetriPlaceSubset(places=members))
+            if is_trap:
+                traps.append(PetriPlaceSubset(places=members))
+    return SiphonTrapFamilyResult(net=net, siphons=tuple(siphons), traps=tuple(traps))
+
+
+def place_set_support(net: PetriNet, places: PetriPlaceSubset) -> PlaceSetSupportResult:
+    """Return the exact producer/consumer profile of a declared place set.
+
+    Here a transition produces into a set when it has a positive Post arc to
+    any place in the set, and consumes from it when it has a positive Pre arc
+    from any place in the set. Thus the siphon predicate is
+    ``producers_into <= consumers_from`` and the trap predicate is the reverse
+    inclusion.
+    """
+    net = _admit_net(net)
+    if not isinstance(places, PetriPlaceSubset):
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_subset_type",
+            message="places must be a PetriPlaceSubset value",
+        )
+    try:
+        admitted_places = PetriPlaceSubset.model_validate(
+            places.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_subset_shape",
+            message="places must be a canonical PetriPlaceSubset value",
+        ) from exc
+    if any(place >= net.place_count for place in admitted_places.places):
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_axis",
+            message="subset must use the net place axis",
+        )
+    return _place_set_support_admitted(net, admitted_places)
+
+
+def _place_set_support_admitted(
+    net: PetriNet, places: PetriPlaceSubset
+) -> PlaceSetSupportResult:
+    """Compute a support profile after net and subset axes are admitted."""
+
+    selected = set(places.places)
+    producers = tuple(
+        transition
+        for transition in range(net.transition_count)
+        if any(net.post[place][transition] > 0 for place in selected)
+    )
+    consumers = tuple(
+        transition
+        for transition in range(net.transition_count)
+        if any(net.pre[place][transition] > 0 for place in selected)
+    )
+    siphon_offenders = tuple(t for t in producers if t not in consumers)
+    trap_offenders = tuple(t for t in consumers if t not in producers)
+    return PlaceSetSupportResult(
+        net=net,
+        places=places,
+        producers_into=producers,
+        consumers_from=consumers,
+        siphon_offenders=siphon_offenders,
+        trap_offenders=trap_offenders,
+        is_siphon=not siphon_offenders,
+        is_trap=not trap_offenders,
+    )
+
+
+def place_set_initial_marking_profile(
+    net: PetriNet,
+    places: PetriPlaceSubset,
+    marking: Marking,
+) -> PlaceSetInitialMarkingProfileResult:
+    """Return selected token count and applicable siphon/trap persistence laws."""
+
+    net = _admit_net(net)
+    marking = _require_marking_size(net, marking)
+    if not isinstance(places, PetriPlaceSubset):
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_subset_type",
+            message="places must be a PetriPlaceSubset value",
+        )
+    try:
+        places = PetriPlaceSubset.model_validate(places.model_dump(), strict=True)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_subset_shape",
+            message="places must be a canonical PetriPlaceSubset value",
+        ) from exc
+    if any(place >= net.place_count for place in places.places):
+        raise OperationDomainValidationError(
+            location=("places",),
+            code="petri_net.place_axis",
+            message="subset must use the net place axis",
+        )
+
+    # The result may retain the net directly, in the source marking, and in
+    # the nested support profile. Account for the parent convention explicitly.
+    nested_net_bytes = len(net.model_dump_json().encode("utf-8"))
+    marking_parent_copies = 1 if marking.net is not None else 0
+    if (
+        2 + marking_parent_copies
+    ) * nested_net_bytes + 2048 > MAX_MARKING_CONFLICT_PROFILE_MATERIALIZED_BYTES:
+        raise OperationResourceAdmissionError(
+            location=("net",),
+            code="petri_net.initial_profile_output_bound",
+            message="initial marking profile exceeds its output bound",
+        )
+    support = _place_set_support_admitted(net, places)
+    total = sum(marking.tokens[place] for place in places.places)
+    implications: list[
+        Literal["EMPTY_SIPHON_REMAINS_EMPTY", "MARKED_TRAP_REMAINS_MARKED"]
+    ] = []
+    if support.is_siphon and total == 0:
+        implications.append("EMPTY_SIPHON_REMAINS_EMPTY")
+    if support.is_trap and total > 0:
+        implications.append("MARKED_TRAP_REMAINS_MARKED")
+    return PlaceSetInitialMarkingProfileResult(
+        net=net,
+        places=places,
+        marking=marking,
+        selected_token_total=total,
+        support_profile=support,
+        preservation_implications=tuple(implications),
+    )
+
+
 def verify_enabled_transitions(claim: EnabledTransitionsResult) -> bool:
     """Verify enabledness against the retained net and marking."""
 
@@ -675,36 +2334,12 @@ def _canonicalize_invariant_basis(
     return tuple(sorted(set(canonical)))
 
 
-def _replay_invariants(
-    incidence: list[list[int]],
-    p_invariants: tuple[tuple[int, ...], ...],
-    t_invariants: tuple[tuple[int, ...], ...],
-) -> None:
-    """Replay every invariant against the incidence matrix in the kernel."""
-
-    places = len(incidence)
-    transitions = len(incidence[0]) if incidence else 0
-    for vector in t_invariants:
-        if any(
-            sum(incidence[place][t] * vector[t] for t in range(transitions))
-            for place in range(places)
-        ):
-            raise RuntimeError("a T-invariant escapes the incidence kernel")
-    for vector in p_invariants:
-        if any(
-            sum(vector[place] * incidence[place][t] for place in range(places))
-            for t in range(transitions)
-        ):
-            raise RuntimeError("a P-invariant escapes the left incidence kernel")
-
-
 def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
     """Compute P-invariants and T-invariants as exact integer modules.
 
     P-invariants span ``ker_Z(C^T)`` and T-invariants span ``ker_Z(C)``
     for the incidence matrix ``C``. Kernel bases come from the certified
     Smith owner kernel, canonicalized through the Hermite owner kernel;
-    every returned vector is replayed against ``C`` inside this kernel.
     """
 
     net = _admit_net(net)
@@ -747,14 +2382,12 @@ def petri_invariants(net: PetriNet) -> PetriInvariantsResult:
         rank = min(places, transitions) - min(len(p_basis), len(t_basis))
         if len(t_basis) != transitions - rank or len(p_basis) != places - rank:
             raise RuntimeError("invariant bases disagree with the Smith rank")
-    _replay_invariants(incidence, p_basis, t_basis)
     return PetriInvariantsResult._from_kernel(
         net=net,
         incidence=incidence_matrix,
         incidence_rank=rank,
         p_invariants=p_basis,
         t_invariants=t_basis,
-        replayed=True,
     )
 
 

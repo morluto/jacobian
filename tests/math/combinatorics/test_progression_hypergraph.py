@@ -23,7 +23,9 @@ def _group(*moduli: int) -> FiniteAbelianProductGroup:
     return FiniteAbelianProductGroup(moduli=moduli)
 
 
-def _exhaustive_3term_edge_count(moduli: tuple[int, ...]) -> int:
+def _exhaustive_3term_edges(
+    moduli: tuple[int, ...],
+) -> set[frozenset[tuple[int, ...]]]:
     """Independently enumerate unordered nondegenerate 3-AP vertex sets."""
 
     elements = tuple(product(*(range(modulus) for modulus in moduli)))
@@ -38,27 +40,7 @@ def _exhaustive_3term_edge_count(moduli: tuple[int, ...]) -> int:
         for start in elements
         for step in elements
     }
-    return sum(len(edge) == 3 for edge in edges)
-
-
-def test_z3() -> None:
-    """Z/3Z has 3 vertices. The only 3-AP is {0,1,2}."""
-    result = progression_hypergraph(_group(3))
-    assert len(result.hypergraph.vertices) == 3
-    assert len(result.hypergraph.edges) == 1
-
-
-def test_z5() -> None:
-    """Z/5Z has 5 vertices and 10 edges (C(5,3) = 10, all triples are 3-APs)."""
-    result = progression_hypergraph(_group(5))
-    assert len(result.hypergraph.vertices) == 5
-    assert len(result.hypergraph.edges) == 10
-
-
-def test_z7_count() -> None:
-    """Z/7Z: n*(n-1)/2 = 21 edges."""
-    result = progression_hypergraph(_group(7))
-    assert len(result.hypergraph.edges) == 21
+    return {edge for edge in edges if len(edge) == 3}
 
 
 def test_all_edges_are_3_uniform() -> None:
@@ -96,16 +78,36 @@ def test_product_group_progressions_are_complete() -> None:
 
 @pytest.mark.parametrize(
     "moduli",
-    ((2, 2), (2, 3), (3, 3), (4, 3), (5, 5), (2, 2, 3), (4, 4)),
+    (
+        (2, 2),
+        (2, 3),
+        (3,),
+        (5,),
+        (7,),
+        (3, 3),
+        (4, 3),
+        (5, 5),
+        (2, 2, 3),
+        (4, 4),
+    ),
 )
-def test_product_group_edge_bound_matches_independent_enumeration(
+def test_progression_hypergraph_matches_independent_edge_enumeration(
     moduli: tuple[int, ...],
 ) -> None:
     """Mixed 2- and 3-torsion groups distinguish the edge multiplicities."""
 
-    assert progression_edge_bound(_group(*moduli)) == _exhaustive_3term_edge_count(
-        moduli
+    expected = _exhaustive_3term_edges(moduli)
+    group = _group(*moduli)
+    result = progression_hypergraph(group)
+    binding = {row.vertex: row.element.coordinates for row in result.vertex_elements}
+    actual_rows = tuple(
+        frozenset(binding[vertex] for vertex in members)
+        for _, members in result.hypergraph.edges
     )
+
+    assert progression_edge_bound(group) == len(expected)
+    assert len(actual_rows) == len(set(actual_rows))
+    assert set(actual_rows) == expected
 
 
 def test_elementary_two_group_at_vertex_boundary_is_admitted_and_composable() -> None:

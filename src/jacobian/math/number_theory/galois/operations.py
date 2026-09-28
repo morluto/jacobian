@@ -3,45 +3,127 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from fractions import Fraction
+from math import gcd, isqrt
 from typing import TYPE_CHECKING, cast
 
 from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
-from jacobian.catalog.models import OperationDomainValidationError
+from jacobian._exact import (
+    CanonicalRational,
+    canonical_rational_component_digits,
+)
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.galois._factor_process import factor_mod_prime
 
 if TYPE_CHECKING:
     from sympy.combinatorics.perm_groups import PermutationGroup
 
+from jacobian.math.combinatorics.posets.core._models import (
+    FinitePoset,
+    PresentationPair,
+    ReflexivePairPolicy,
+    RelationInterpretation,
+)
+from jacobian.math.combinatorics.posets.core.operations import materialize_finite_poset
 from jacobian.math.number_theory.galois._models import (
     MAX_FACTOR_DEGREE,
     MAX_FIELD_ORDER,
     AutomorphismResult,
+    ElementAutomorphismImage,
+    ElementEmbeddingOrbitResult,
     FiniteFieldFactor,
     FinitePermutationGroup,
     FrobeniusCycleResult,
+    GaloisAutomorphismSubgroup,
+    GaloisCorrespondencePair,
+    GaloisCorrespondenceResult,
     GaloisFactorResult,
+    GaloisFixedFieldResult,
     GaloisGroupResult,
     GaloisRootAxis,
+    IntermediateFieldStabilizerResult,
+    PolynomialDiscriminantResult,
     QQFieldAutomorphism,
     QQRoot,
     QQSplittingField,
     SolvableResult,
     SplittingFieldResult,
+    _applied_inclusion_image,
+    _discriminant_coefficients,
     _require_prime,
     _supported_galois_polynomial,
+    _supported_splitting_field_polynomial,
 )
-from jacobian.math.polynomials.values import RationalPolynomial
+from jacobian.math.number_theory.number_fields._field_embedding import (
+    SimpleNumberFieldEmbedding,
+)
+from jacobian.math.number_theory.number_fields.values import (
+    MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS,
+    SimpleNumberFieldElement,
+    SimpleNumberFieldPresentation,
+)
+from jacobian.math.polynomials.values import MonicPolynomial, RationalPolynomial
+
+MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS = 1100
+MAX_ELEMENT_ORBIT_RESULT_DIGITS = 32_768
+MAX_GALOIS_CORRESPONDENCE_WORK = 512
+MAX_GALOIS_CORRESPONDENCE_ALLOCATION_UNITS = 32
 
 
-def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
+def _admit_value[AdmittedT](
+    operation: Callable[[], AdmittedT], *, location: tuple[str | int, ...]
+) -> AdmittedT:
     try:
-        operation()
+        return operation()
     except PydanticCustomError as exc:
         raise OperationDomainValidationError(
             location=location, code=exc.type, message=exc.message()
         ) from exc
+
+
+def _admit(operation: Callable[[], None], *, location: tuple[str | int, ...]) -> None:
+    _admit_value(operation, location=location)
+
+
+def polynomial_discriminant(
+    polynomial: RationalPolynomial,
+) -> PolynomialDiscriminantResult:
+    """Compute a bounded exact integer polynomial discriminant over QQ."""
+    try:
+        canonical_polynomial = RationalPolynomial.model_validate(
+            polynomial.model_dump()
+        )
+    except ValidationError as exc:
+        details = exc.errors(include_url=False, include_context=False)[0]
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code=str(details["type"]),
+            message=str(details["msg"]),
+        ) from exc
+    coefficients = _admit_value(
+        lambda: _discriminant_coefficients(canonical_polynomial),
+        location=("polynomial",),
+    )
+    # A Sylvester determinant for f and f' has size at most 11. Hadamard's
+    # bound with entry magnitude <= degree * 10^12 proves the discriminant
+    # has fewer than 160 decimal digits throughout the admitted domain.
+    from sympy import Poly, Symbol
+
+    poly = Poly.from_list(list(reversed(coefficients)), Symbol("x"), domain="QQ")
+    discriminant = int(poly.discriminant())
+    from math import isqrt
+
+    is_square = discriminant >= 0 and isqrt(discriminant) ** 2 == discriminant
+    return PolynomialDiscriminantResult(
+        polynomial=canonical_polynomial,
+        discriminant=discriminant,
+        is_rational_square=is_square,
+    )
 
 
 def _admit_factor(field_order: int, coefficients: tuple[int, ...]) -> None:
@@ -256,200 +338,420 @@ def solvable(coefficients: tuple[int, ...]) -> SolvableResult:
     )
 
 
-def _canonical_splitting_field(
-    field: QQSplittingField, *, location: tuple[str | int, ...]
-) -> QQSplittingField:
-    """Re-admit a possibly model-constructed field before any backend work."""
-
-    if not isinstance(field, QQSplittingField):
-        raise OperationDomainValidationError(
-            location=location,
-            code="galois_theory.splitting_field_type",
-            message="field must be a QQ splitting-field value",
-        )
-    # These checks are deliberately strict for native callers: model_construct
-    # must not turn a list, bool, or malformed axis into a trusted carrier.
-    degree = getattr(field, "degree", None)
-    basis_labels = getattr(field, "basis_labels", None)
-    root_labels = getattr(field, "root_labels", None)
-    if (
-        type(degree) is not int
-        or type(basis_labels) is not tuple
-        or type(root_labels) is not tuple
-        or any(type(label) is not str for label in basis_labels)
-        or any(type(label) is not str for label in root_labels)
-    ):
-        raise OperationDomainValidationError(
-            location=location,
-            code="galois_theory.splitting_field_shape",
-            message="splitting-field axes and degree must retain their canonical types",
-        )
-    try:
-        # Re-run the structural model boundary for nested model_construct values.
-        return QQSplittingField.model_validate(field.model_dump())
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=location,
-            code="galois_theory.invalid_splitting_field",
-            message="splitting field has malformed source or axes",
-        ) from exc
-
-
-def _canonical_automorphism(
-    automorphism: QQFieldAutomorphism,
-) -> tuple[QQFieldAutomorphism, QQSplittingField]:
-    """Validate a root permutation before constructing a backend permutation."""
-
-    if not isinstance(automorphism, QQFieldAutomorphism):
-        raise OperationDomainValidationError(
-            location=("automorphism",),
-            code="galois_theory.automorphism_type",
-            message="automorphism must be a QQ field automorphism value",
-        )
-    field = _canonical_splitting_field(
-        cast(QQSplittingField, getattr(automorphism, "field", None)),
-        location=("automorphism", "field"),
+def _field_element(
+    presentation: SimpleNumberFieldPresentation,
+    coefficients: tuple[Fraction, ...],
+) -> SimpleNumberFieldElement:
+    from jacobian.math.number_theory.number_fields.values import (
+        SimpleNumberFieldElement,
     )
-    permutation = getattr(automorphism, "root_permutation", None)
-    axis = tuple(range(len(field.root_labels)))
-    if type(permutation) is not tuple or any(
-        type(value) is not int for value in permutation
-    ):
-        raise OperationDomainValidationError(
-            location=("automorphism", "root_permutation"),
-            code="galois_theory.automorphism_axis",
-            message="automorphism must carry a strict integer root permutation",
-        )
-    if len(permutation) != len(axis) or tuple(sorted(permutation)) != axis:
-        raise OperationDomainValidationError(
-            location=("automorphism", "root_permutation"),
-            code="galois_theory.automorphism_axis",
-            message="automorphism must carry a complete root permutation",
-        )
-    return (
-        QQFieldAutomorphism(field=field, root_permutation=permutation),
-        field,
+
+    if len(coefficients) != presentation.degree:
+        raise ValueError("field coordinates must be reduced to the power basis")
+    return SimpleNumberFieldElement(
+        presentation=presentation,
+        coefficients_ascending=tuple(
+            CanonicalRational.from_fraction(value) for value in coefficients
+        ),
     )
 
 
-def _require_splitting_field(field: QQSplittingField) -> tuple[int, PermutationGroup]:
-    """Re-establish the source/action relation at every public consumer."""
+def _coords(element: SimpleNumberFieldElement) -> tuple[Fraction, ...]:
+    return tuple(value.as_fraction() for value in element.coefficients_ascending)
 
-    field = _canonical_splitting_field(field, location=("field",))
-    try:
-        coefficients = _coefficients_from_polynomial(field.source)
-        _supported_galois_polynomial(coefficients)
-        group = _galois_group_from_coeffs(coefficients)
-    except (
-        ArithmeticError,
-        IndexError,
-        PydanticCustomError,
-        AttributeError,
-        TypeError,
-        ValueError,
-    ) as exc:
-        code = getattr(exc, "type", "galois_theory.invalid_splitting_field")
-        message = exc.message() if isinstance(exc, PydanticCustomError) else str(exc)
-        raise OperationDomainValidationError(
-            location=("field",), code=code, message=message
-        ) from exc
-    source_degree = len(coefficients) - 1
-    expected_degree = int(group.order())
-    if (
-        len(field.root_labels) != source_degree
-        or len(field.basis_labels) != expected_degree
-        or field.degree != expected_degree
+
+def _zero(presentation: SimpleNumberFieldPresentation) -> SimpleNumberFieldElement:
+    return _field_element(presentation, (Fraction(0),) * presentation.degree)
+
+
+def _one(presentation: SimpleNumberFieldPresentation) -> SimpleNumberFieldElement:
+    return _field_element(
+        presentation,
+        (Fraction(1),) + (Fraction(0),) * (presentation.degree - 1),
+    )
+
+
+def _add_elements(
+    left: SimpleNumberFieldElement, right: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
+    if left.presentation != right.presentation:
+        raise ValueError("number-field element parents must agree")
+    return _field_element(
+        left.presentation,
+        tuple(a + b for a, b in zip(_coords(left), _coords(right), strict=True)),
+    )
+
+
+def _scale_element(
+    element: SimpleNumberFieldElement, scalar: Fraction
+) -> SimpleNumberFieldElement:
+    return _field_element(
+        element.presentation, tuple(scalar * c for c in _coords(element))
+    )
+
+
+def _multiply_elements(
+    left: SimpleNumberFieldElement, right: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
+    presentation = left.presentation
+    if right.presentation != presentation:
+        raise ValueError("number-field element parents must agree")
+    a = _coords(left)
+    b = _coords(right)
+    if presentation.degree == 1:
+        return _field_element(presentation, (a[0] * b[0],))
+    leading, linear, constant = map(Fraction, presentation.coefficients_descending)
+    product = [Fraction(0)] * 3
+    for i, x in enumerate(a):
+        for j, y in enumerate(b):
+            product[i + j] += x * y
+    # The quotient relation is leading*alpha^2 + linear*alpha + constant = 0.
+    product[1] += product[2] * (-linear / leading)
+    product[0] += product[2] * (-constant / leading)
+    return _field_element(presentation, (product[0], product[1]))
+
+
+def _source_coefficients(polynomial: RationalPolynomial) -> tuple[int, ...]:
+    if len(polynomial.variables) != 1 or not polynomial.polynomial.terms:
+        raise ValueError(
+            "splitting-field source must be a nonzero univariate polynomial"
+        )
+    degree = polynomial.polynomial.terms[0].exponents[0]
+    values = [0] * (degree + 1)
+    for term in polynomial.polynomial.terms:
+        if term.coefficient.den != 1:
+            raise ValueError("splitting-field source coefficients must be integers")
+        values[term.exponents[0]] = term.coefficient.num
+    return tuple(values)
+
+
+def _linear_factor_coefficients(
+    field: QQSplittingField,
+) -> tuple[SimpleNumberFieldElement, ...]:
+    presentation = field.extension
+    coefficients = [_one(presentation)]
+    for root, multiplicity in zip(
+        field.root_values, field.root_multiplicities, strict=True
     ):
+        for _ in range(multiplicity):
+            updated = [_zero(presentation) for _ in range(len(coefficients) + 1)]
+            for power, coefficient in enumerate(coefficients):
+                updated[power] = _add_elements(
+                    updated[power],
+                    _multiply_elements(coefficient, _scale_element(root, Fraction(-1))),
+                )
+                updated[power + 1] = _add_elements(updated[power + 1], coefficient)
+            coefficients = updated
+    return tuple(coefficients)
+
+
+def _construct_splitting_field(source: RationalPolynomial) -> SplittingFieldResult:
+    from jacobian.math.number_theory.number_fields.values import (
+        SimpleNumberFieldPresentation,
+    )
+
+    coefficients = _source_coefficients(source)
+    degree = len(coefficients) - 1
+    if degree not in (1, 2) or coefficients[-1] == 0:
         raise OperationDomainValidationError(
-            location=("field",),
-            code="galois_theory.splitting_field_axis_mismatch",
-            message="field axes do not match the source polynomial and exact group degree",
+            location=("polynomial",),
+            code="galois_theory.splitting_field_degree_bound",
+            message="exact splitting fields currently admit degree one or two",
         )
-    return source_degree, group
-
-
-def _require_automorphism(automorphism: QQFieldAutomorphism) -> PermutationGroup:
-    canonical, field = _canonical_automorphism(automorphism)
-    _degree, group = _require_splitting_field(field)
-    from sympy.combinatorics import Permutation
-
-    try:
-        permutation = Permutation(canonical.root_permutation)
-    except (TypeError, ValueError) as exc:
-        # Keep malformed authored values in the owner domain even if a backend
-        # changes its exception class or diagnostics.
+    if any(type(value) is not int or abs(value) > 10**12 for value in coefficients):
         raise OperationDomainValidationError(
-            location=("automorphism", "root_permutation"),
-            code="galois_theory.automorphism_axis",
-            message="automorphism must carry a complete root permutation",
-        ) from exc
-    if not group.contains(permutation):
-        raise OperationDomainValidationError(
-            location=("automorphism", "root_permutation"),
-            code="galois_theory.automorphism_not_in_group",
-            message="root permutation is not an automorphism of the source field",
+            location=("polynomial",),
+            code="galois_theory.splitting_field_coefficient_bound",
+            message="splitting-field coefficients must be integers of magnitude at most 10^12",
         )
-    return group
 
+    if degree == 1:
+        extension = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
+        root = _field_element(extension, (Fraction(-coefficients[0], coefficients[1]),))
+        root_values: tuple[SimpleNumberFieldElement, ...] = (root,)
+        multiplicities: tuple[int, ...] = (1,)
+    else:
+        c, b, a = coefficients
+        discriminant = b * b - 4 * a * c
+        square_root = isqrt(discriminant) if discriminant >= 0 else -1
+        if discriminant >= 0 and square_root * square_root == discriminant:
+            extension = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
+            rational_roots = sorted(
+                {
+                    Fraction(-b - square_root, 2 * a),
+                    Fraction(-b + square_root, 2 * a),
+                }
+            )
+            root_values = tuple(
+                _field_element(extension, (rational_root,))
+                for rational_root in rational_roots
+            )
+            multiplicities = (2,) if square_root == 0 else (1, 1)
+        else:
+            content = gcd(gcd(abs(a), abs(b)), abs(c))
+            normalized = [a // content, b // content, c // content]
+            if normalized[0] < 0:
+                normalized = [-value for value in normalized]
+            extension = SimpleNumberFieldPresentation(
+                coefficients_descending=tuple(normalized)
+            )
+            alpha = _field_element(extension, (Fraction(0), Fraction(1)))
+            conjugate = _field_element(
+                extension,
+                (Fraction(-b, a), Fraction(-1)),
+            )
+            root_values = (alpha, conjugate)
+            multiplicities = (1, 1)
 
-def splitting_field(coefficients: tuple[int, ...]) -> SplittingFieldResult:
-    """Construct a bounded exact carrier for an irreducible QQ polynomial."""
-    if type(coefficients) is not tuple or any(
-        type(value) is not int for value in coefficients
-    ):
-        raise OperationDomainValidationError(
-            location=("coefficients",),
-            code="galois_theory.splitting_field_coefficients",
-            message="splitting-field coefficients must be a tuple of integers",
-        )
-    try:
-        _supported_galois_polynomial(coefficients)
-    except PydanticCustomError as exc:
-        raise OperationDomainValidationError(
-            location=("coefficients",), code=exc.type, message=exc.message()
-        ) from exc
-    group = _galois_group_from_coeffs(coefficients)
-    degree = int(group.order())
-    source = _polynomial_from_coefficients(coefficients)
-    source_degree = len(coefficients) - 1
     field = QQSplittingField(
         source=source,
-        basis_labels=tuple(f"b_{i}" for i in range(degree)),
-        root_labels=tuple(f"root_{i}" for i in range(source_degree)),
-        degree=degree,
+        extension=extension,
+        root_values=root_values,
+        root_multiplicities=multiplicities,
     )
+    factor_reconstruction = _linear_factor_coefficients(field)
+    reconstructed_source = tuple(
+        _scale_element(value, Fraction(coefficients[-1]))
+        for value in factor_reconstruction
+    )
+    expected_source = tuple(
+        _field_element(
+            extension, (Fraction(value),) + (Fraction(0),) * (extension.degree - 1)
+        )
+        for value in coefficients
+    )
+    if reconstructed_source != expected_source:
+        raise ArithmeticError(
+            "exact root factors do not reconstruct the source polynomial"
+        )
     roots = tuple(
-        QQRoot(field=field, index=i, multiplicity=1) for i in range(source_degree)
+        QQRoot(
+            field=field,
+            index=index,
+            multiplicity=multiplicity,
+            value=value,
+        )
+        for index, (value, multiplicity) in enumerate(
+            zip(root_values, multiplicities, strict=True)
+        )
     )
     return SplittingFieldResult(
         field=field,
         roots=roots,
         source_coefficients=coefficients,
-        factor_reconstruction=coefficients,
+        factor_reconstruction=factor_reconstruction,
+    )
+
+
+def _canonical_splitting_field(
+    field: QQSplittingField, *, location: tuple[str | int, ...]
+) -> QQSplittingField:
+    if not isinstance(field, QQSplittingField):
+        raise OperationDomainValidationError(
+            location=location,
+            code="galois_theory.splitting_field_type",
+            message="field must be an exact bounded QQ splitting-field value",
+        )
+    try:
+        canonical = QQSplittingField.model_validate(field.model_dump())
+        expected = _construct_splitting_field(canonical.source).field
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=location,
+            code="galois_theory.invalid_splitting_field",
+            message="splitting field has malformed source or exact root coordinates",
+        ) from exc
+    if canonical != expected:
+        raise OperationDomainValidationError(
+            location=location,
+            code="galois_theory.splitting_field_claim_mismatch",
+            message="splitting-field extension, roots, or multiplicities do not match the exact source construction",
+        )
+    return canonical
+
+
+def _canonical_automorphism(
+    automorphism: QQFieldAutomorphism,
+) -> tuple[QQFieldAutomorphism, QQSplittingField]:
+    if not isinstance(automorphism, QQFieldAutomorphism):
+        raise OperationDomainValidationError(
+            location=("automorphism",),
+            code="galois_theory.automorphism_type",
+            message="automorphism must be an exact QQ field map",
+        )
+    field = _canonical_splitting_field(
+        cast(QQSplittingField, getattr(automorphism, "field", None)),
+        location=("automorphism", "field"),
+    )
+    try:
+        canonical = QQFieldAutomorphism.model_validate(
+            {**automorphism.model_dump(), "field": field.model_dump()}
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("automorphism",),
+            code="galois_theory.invalid_automorphism",
+            message="automorphism has malformed basis images or root permutation",
+        ) from exc
+    _require_automorphism(canonical, field)
+    return canonical, field
+
+
+def _map_element(
+    automorphism: QQFieldAutomorphism, element: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
+    presentation = automorphism.field.extension
+    coords = _coords(element)
+    value = _zero(presentation)
+    power = _one(presentation)
+    generator_image = automorphism.basis_images[1] if presentation.degree == 2 else None
+    for coefficient in coords:
+        value = _add_elements(value, _scale_element(power, coefficient))
+        if generator_image is not None:
+            power = _multiply_elements(power, generator_image)
+    return value
+
+
+def _automorphism_for_generator_image(
+    field: QQSplittingField, generator_image: SimpleNumberFieldElement
+) -> QQFieldAutomorphism:
+    presentation = field.extension
+    basis_images = (
+        (_one(presentation),)
+        if presentation.degree == 1
+        else (_one(presentation), generator_image)
+    )
+    permutation = []
+    for root in field.root_values:
+        image = _map_element(
+            QQFieldAutomorphism.model_construct(
+                field=field,
+                root_permutation=tuple(range(len(field.root_values))),
+                basis_images=basis_images,
+            ),
+            root,
+        )
+        try:
+            permutation.append(field.root_values.index(image))
+        except ValueError as exc:
+            raise ArithmeticError(
+                "field map does not preserve the exact root family"
+            ) from exc
+    return QQFieldAutomorphism(
+        field=field,
+        root_permutation=tuple(permutation),
+        basis_images=basis_images,
+    )
+
+
+def _require_automorphism(
+    automorphism: QQFieldAutomorphism, field: QQSplittingField
+) -> None:
+    presentation = field.extension
+    if automorphism.basis_images[0] != _one(presentation):
+        raise OperationDomainValidationError(
+            location=("automorphism", "basis_images", 0),
+            code="galois_theory.automorphism_not_unital",
+            message="a QQ-field automorphism must fix one",
+        )
+    if presentation.degree == 2:
+        image = automorphism.basis_images[1]
+        a, b, c = map(Fraction, presentation.coefficients_descending)
+        relation = _add_elements(
+            _add_elements(
+                _scale_element(_multiply_elements(image, image), a),
+                _scale_element(image, b),
+            ),
+            _field_element(presentation, (c, Fraction(0))),
+        )
+        if relation != _zero(presentation):
+            raise OperationDomainValidationError(
+                location=("automorphism", "basis_images", 1),
+                code="galois_theory.automorphism_not_homomorphism",
+                message="the generator image must satisfy the defining field relation",
+            )
+        if image not in field.root_values:
+            raise OperationDomainValidationError(
+                location=("automorphism", "basis_images", 1),
+                code="galois_theory.automorphism_not_surjective",
+                message="the generator image must be a root in the exact source root family",
+            )
+    for index, root in enumerate(field.root_values):
+        image = _map_element(automorphism, root)
+        expected_index = automorphism.root_permutation[index]
+        if image != field.root_values[expected_index]:
+            raise OperationDomainValidationError(
+                location=("automorphism", "root_permutation", index),
+                code="galois_theory.automorphism_action_mismatch",
+                message="the root permutation must agree with the exact field map",
+            )
+
+
+def splitting_field(polynomial: RationalPolynomial) -> SplittingFieldResult:
+    """Build the exact splitting field for every rational polynomial of degree <=2."""
+    try:
+        canonical_polynomial = RationalPolynomial.model_validate(
+            polynomial.model_dump()
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        details = (
+            exc.errors(include_url=False, include_context=False)[0]
+            if isinstance(exc, ValidationError)
+            else None
+        )
+        raise OperationDomainValidationError(
+            location=("polynomial",),
+            code=str(details["type"])
+            if details
+            else "galois_theory.invalid_splitting_field_request",
+            message=str(details["msg"])
+            if details
+            else "invalid splitting-field request",
+        ) from exc
+    _admit(
+        lambda: _supported_splitting_field_polynomial(canonical_polynomial),
+        location=("polynomial",),
+    )
+    return _construct_splitting_field(canonical_polynomial)
+
+
+def _automorphisms_of_canonical_field(
+    canonical_field: QQSplittingField,
+) -> AutomorphismResult:
+    presentation = canonical_field.extension
+    candidates = (
+        [_automorphism_for_generator_image(canonical_field, _one(presentation))]
+        if presentation.degree == 1
+        else [
+            _automorphism_for_generator_image(
+                canonical_field,
+                _field_element(presentation, (Fraction(0), Fraction(1))),
+            ),
+            *(
+                _automorphism_for_generator_image(canonical_field, root)
+                for root in canonical_field.root_values
+                if root != _field_element(presentation, (Fraction(0), Fraction(1)))
+            ),
+        ]
+    )
+    # On a degree-two field the generator's conjugate is the only other image;
+    # rational-root polynomials have the degree-one QQ presentation.
+    unique = {auto.root_permutation: auto for auto in candidates}
+    return AutomorphismResult(
+        field=canonical_field,
+        automorphisms=tuple(unique[key] for key in sorted(unique)),
     )
 
 
 def automorphisms(field: QQSplittingField) -> AutomorphismResult:
     canonical_field = _canonical_splitting_field(field, location=("field",))
-    _degree, group = _require_splitting_field(canonical_field)
-    autos = tuple(
-        QQFieldAutomorphism(
-            field=canonical_field,
-            root_permutation=tuple(
-                int(g(i)) for i in range(len(canonical_field.root_labels))
-            ),
-        )
-        for g in group.generators
-    )
-    identity = tuple(range(len(canonical_field.root_labels)))
-    if not autos:
-        autos = (QQFieldAutomorphism(field=canonical_field, root_permutation=identity),)
-    return AutomorphismResult(field=canonical_field, automorphisms=autos)
+    return _automorphisms_of_canonical_field(canonical_field)
 
 
 def compose_automorphisms(
     first: QQFieldAutomorphism, second: QQFieldAutomorphism
 ) -> QQFieldAutomorphism:
+    """Return ``first ∘ second`` on the exact field and root axis."""
     canonical_first, first_field = _canonical_automorphism(first)
     canonical_second, second_field = _canonical_automorphism(second)
     if first_field != second_field:
@@ -458,53 +760,407 @@ def compose_automorphisms(
             code="galois_theory.parent_mismatch",
             message="automorphisms must share the exact splitting field",
         )
-    _require_automorphism(canonical_first)
-    _require_automorphism(canonical_second)
-    composed = tuple(
-        canonical_first.root_permutation[canonical_second.root_permutation[i]]
-        for i in range(len(canonical_first.root_permutation))
+    images = tuple(
+        _map_element(canonical_first, image) for image in canonical_second.basis_images
     )
-    # The result is checked again so this remains true for model-constructed
-    # values and for any future change to the composition convention.
-    result = QQFieldAutomorphism(field=first_field, root_permutation=composed)
-    _require_automorphism(result)
+    provisional = QQFieldAutomorphism.model_construct(
+        field=first_field,
+        root_permutation=tuple(range(len(first_field.root_values))),
+        basis_images=images,
+    )
+    permutation = tuple(
+        first_field.root_values.index(_map_element(provisional, root))
+        for root in first_field.root_values
+    )
+    return QQFieldAutomorphism(
+        field=first_field,
+        root_permutation=permutation,
+        basis_images=images,
+    )
+
+
+def inverse_automorphism(
+    automorphism: QQFieldAutomorphism,
+) -> QQFieldAutomorphism:
+    """Return the exact inverse map on a supported splitting field."""
+    canonical, field = _canonical_automorphism(automorphism)
+    inverse_permutation = [0] * len(canonical.root_permutation)
+    for source, target in enumerate(canonical.root_permutation):
+        inverse_permutation[target] = source
+    if field.degree == 1:
+        return _automorphism_for_generator_image(field, _one(field.extension))
+
+    try:
+        generator = _field_element(field.extension, (Fraction(0), Fraction(1)))
+        generator_index = field.root_values.index(generator)
+        inverse_generator = field.root_values[inverse_permutation[generator_index]]
+    except ValueError as exc:
+        raise ArithmeticError(
+            "automorphism generator image is absent from root axis"
+        ) from exc
+    result = _automorphism_for_generator_image(field, inverse_generator)
+    if result.root_permutation != tuple(inverse_permutation):
+        raise ArithmeticError("inverse field map and root permutation disagree")
     return result
 
 
-def _canonical_root(root: QQRoot) -> tuple[QQRoot, QQSplittingField]:
-    """Validate a root index before it can be used for Python indexing."""
+def _canonical_automorphism_subgroup(
+    subgroup: GaloisAutomorphismSubgroup,
+) -> GaloisAutomorphismSubgroup:
+    """Replay field membership and subgroup closure for a supplied value."""
+    if not isinstance(subgroup, GaloisAutomorphismSubgroup):
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.subgroup_type",
+            message="subgroup must be a typed exact automorphism subgroup",
+        )
+    try:
+        field = _canonical_splitting_field(
+            subgroup.field, location=("subgroup", "field")
+        )
+        candidate = GaloisAutomorphismSubgroup.model_validate(
+            {**subgroup.model_dump(), "field": field.model_dump()}
+        )
+        elements = tuple(
+            _canonical_automorphism(element)[0] for element in candidate.elements
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.invalid_subgroup",
+            message="subgroup has malformed field or exact automorphism values",
+        ) from exc
+    if any(element.field != field for element in elements):
+        raise OperationDomainValidationError(
+            location=("subgroup", "elements"),
+            code="galois_theory.subgroup_parent_mismatch",
+            message="every subgroup element must belong to the same exact field",
+        )
 
+    full_group = _automorphisms_of_canonical_field(field).automorphisms
+    full_by_action = {element.root_permutation: element for element in full_group}
+    by_action = {element.root_permutation: element for element in elements}
+    if len(by_action) != len(elements) or any(
+        action not in full_by_action for action in by_action
+    ):
+        raise OperationDomainValidationError(
+            location=("subgroup", "elements"),
+            code="galois_theory.subgroup_not_in_parent_group",
+            message="subgroup elements must be distinct members of the complete automorphism group",
+        )
+    identity = tuple(range(len(field.root_values)))
+    if identity not in by_action:
+        raise OperationDomainValidationError(
+            location=("subgroup", "elements"),
+            code="galois_theory.subgroup_missing_identity",
+            message="a subgroup must contain the identity automorphism",
+        )
+    for left in elements:
+        inverse = inverse_automorphism(left)
+        if inverse.root_permutation not in by_action:
+            raise OperationDomainValidationError(
+                location=("subgroup", "elements"),
+                code="galois_theory.subgroup_not_closed",
+                message="the supplied automorphisms are not closed under inverses",
+            )
+        for right in elements:
+            product = compose_automorphisms(left, right)
+            if product.root_permutation not in by_action:
+                raise OperationDomainValidationError(
+                    location=("subgroup", "elements"),
+                    code="galois_theory.subgroup_not_closed",
+                    message="the supplied automorphisms are not closed under composition",
+                )
+    return GaloisAutomorphismSubgroup(
+        field=field,
+        elements=tuple(by_action[key] for key in sorted(by_action)),
+    )
+
+
+def galois_subgroup(
+    field: QQSplittingField,
+    elements: tuple[QQFieldAutomorphism, ...] | None = None,
+) -> GaloisAutomorphismSubgroup:
+    """Admit a complete subgroup of the exact supported automorphism group."""
+    try:
+        if elements is None:
+            raise OperationDomainValidationError(
+                location=("subgroup",),
+                code="galois_theory.invalid_subgroup_request",
+                message="subgroup request must retain one exact supported field",
+            )
+        canonical_field = _canonical_splitting_field(field, location=("field",))
+        candidate = GaloisAutomorphismSubgroup(
+            field=canonical_field,
+            elements=tuple(
+                sorted(elements, key=lambda element: element.root_permutation)
+            ),
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.invalid_subgroup_request",
+            message="subgroup request must retain one exact supported field",
+        ) from exc
+    return _canonical_automorphism_subgroup(candidate)
+
+
+def galois_fixed_field(
+    subgroup: GaloisAutomorphismSubgroup,
+) -> GaloisFixedFieldResult:
+    """Return the exact embedded fixed field of a supported QQ subgroup."""
+    try:
+        if not isinstance(subgroup, GaloisAutomorphismSubgroup):
+            raise TypeError("subgroup must be a typed automorphism subgroup")
+        canonical_subgroup = GaloisAutomorphismSubgroup.model_validate(
+            subgroup.model_dump()
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("subgroup",),
+            code="galois_theory.invalid_fixed_field_request",
+            message="fixed-field request must contain one typed automorphism subgroup",
+        ) from exc
+    return _fixed_field_for_canonical_subgroup(
+        _canonical_automorphism_subgroup(canonical_subgroup)
+    )
+
+
+def _fixed_field_for_canonical_subgroup(
+    subgroup: GaloisAutomorphismSubgroup,
+) -> GaloisFixedFieldResult:
+    """Compute the fixed field once its exact parent subgroup is admitted."""
+    extension = subgroup.field.extension
+    if len(subgroup.elements) == 1:
+        # The trivial subgroup fixes all of L. Its canonical primitive element
+        # maps to itself, including when L=QQ has degree one.
+        fixed = extension
+        image = (
+            _field_element(extension, (Fraction(0), Fraction(1)))
+            if extension.degree == 2
+            else _field_element(extension, (Fraction(0),))
+        )
+    else:
+        if extension.degree != 2:
+            raise ArithmeticError("a nontrivial automorphism subgroup cannot act on QQ")
+        fixed = SimpleNumberFieldPresentation(coefficients_descending=(1, 0))
+        # The canonical degree-one presentation is QQ[x]/(x), so its generator
+        # is the zero element of the target field.
+        image = _zero(extension)
+    inclusion = SimpleNumberFieldEmbedding(
+        source=fixed, target=extension, generator_image=image
+    )
+    return GaloisFixedFieldResult(
+        subgroup=subgroup, fixed_field=fixed, inclusion=inclusion
+    )
+
+
+def _correspondence_poset(
+    elements: tuple[str, ...], relations: tuple[tuple[str, str], ...]
+) -> FinitePoset:
+    return materialize_finite_poset(
+        elements,
+        tuple(PresentationPair(lower=lower, upper=upper) for lower, upper in relations),
+        RelationInterpretation.COMPARABLE_PAIRS,
+        ReflexivePairPolicy.FORBIDDEN,
+    )
+
+
+def galois_correspondence(
+    field: QQSplittingField,
+) -> GaloisCorrespondenceResult:
+    """Materialize the full subgroup/fixed-field correspondence for degree <= 2."""
+    field = _canonical_splitting_field(field, location=("field",))
+
+    # A degree-one or separable quadratic extension has respectively one or
+    # two subgroups. Bound both posets, every embedded field, and repeated
+    # field/automorphism data before constructing the complete output.
+    node_count = field.degree
+    estimated_work = 64 * node_count**2
+    subgroup_size_sum = node_count + int(node_count == 2)
+    estimated_allocation_units = (
+        2 * subgroup_size_sum
+        + 2 * node_count
+        + 2 * node_count * (node_count - 1)
+        + node_count**2
+        + node_count
+        + 1
+    )
+    if estimated_work > MAX_GALOIS_CORRESPONDENCE_WORK:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="galois_theory.correspondence_work_bound",
+            message="complete subgroup and intermediate-field lattices exceed the admitted work envelope",
+        )
+    if estimated_allocation_units > MAX_GALOIS_CORRESPONDENCE_ALLOCATION_UNITS:
+        raise OperationResourceAdmissionError(
+            location=("field",),
+            code="galois_theory.correspondence_allocation_bound",
+            message="complete subgroup/fixed-field correspondence exceeds its admitted exact-value allocation envelope",
+        )
+
+    automorphism_family = _automorphisms_of_canonical_field(field).automorphisms
+    if len(automorphism_family) != field.degree:
+        raise ArithmeticError(
+            "the supported splitting-field automorphisms must have order equal to the field degree"
+        )
+    identity_permutation = tuple(range(len(field.root_values)))
+    identity = next(
+        automorphism
+        for automorphism in automorphism_family
+        if automorphism.root_permutation == identity_permutation
+    )
+    subgroup_families = (
+        (automorphism_family, (identity,))
+        if field.degree == 2
+        else (automorphism_family,)
+    )
+
+    pairs: list[GaloisCorrespondencePair] = []
+    for index, elements in enumerate(subgroup_families):
+        subgroup = GaloisAutomorphismSubgroup(field=field, elements=elements)
+        fixed = _fixed_field_for_canonical_subgroup(subgroup)
+        stabilizer = tuple(
+            automorphism
+            for automorphism in automorphism_family
+            if _map_element(automorphism, fixed.inclusion.generator_image)
+            == fixed.inclusion.generator_image
+        )
+        if tuple(auto.root_permutation for auto in stabilizer) != tuple(
+            auto.root_permutation for auto in subgroup.elements
+        ):
+            raise ArithmeticError(
+                "fixed-field and pointwise-stabilizer maps do not compose to the identity"
+            )
+        stabilizer_subgroup = GaloisAutomorphismSubgroup(
+            field=field, elements=stabilizer
+        )
+        subgroup_order = len(subgroup.elements)
+        fixed_field_degree = fixed.fixed_field.degree
+        subgroup_index = field.degree // subgroup_order
+        pairs.append(
+            GaloisCorrespondencePair(
+                subgroup_label=f"H{index}",
+                field_label=f"F{index}",
+                subgroup=subgroup,
+                inclusion=fixed.inclusion,
+                stabilizer=stabilizer_subgroup,
+                subgroup_order=subgroup_order,
+                subgroup_index=subgroup_index,
+                fixed_field_degree=fixed_field_degree,
+                relative_field_degree=field.degree // fixed_field_degree,
+                normal=True,
+            )
+        )
+
+    subgroup_labels = tuple(pair.subgroup_label for pair in pairs)
+    field_labels = tuple(pair.field_label for pair in pairs)
+    subgroup_relations = (("H1", "H0"),) if field.degree == 2 else ()
+    field_relations = (("F0", "F1"),) if field.degree == 2 else ()
+    result = GaloisCorrespondenceResult(
+        field=field,
+        pairs=tuple(pairs),
+        subgroup_inclusion_poset=_correspondence_poset(
+            subgroup_labels, subgroup_relations
+        ),
+        intermediate_field_inclusion_poset=_correspondence_poset(
+            field_labels, field_relations
+        ),
+        normal_subgroup_labels=subgroup_labels,
+    )
+    return result
+
+
+def intermediate_field_stabilizer(
+    field: QQSplittingField,
+    inclusion: SimpleNumberFieldEmbedding | None = None,
+) -> IntermediateFieldStabilizerResult:
+    """Return automorphisms fixing a supplied embedded intermediate field."""
+    try:
+        if inclusion is None:
+            raise OperationDomainValidationError(
+                location=("inclusion",),
+                code="galois_theory.invalid_intermediate_field_request",
+                message="stabilizer request must contain a typed field inclusion",
+            )
+        canonical_field = _canonical_splitting_field(field, location=("field",))
+        canonical_inclusion = SimpleNumberFieldEmbedding.model_validate(
+            inclusion.model_dump()
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.invalid_intermediate_field_request",
+            message="stabilizer request must contain a typed field inclusion",
+        ) from exc
+    field = canonical_field
+    inclusion = canonical_inclusion
+    if inclusion.target != field.extension or inclusion.source.degree > field.degree:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.intermediate_field_parent_mismatch",
+            message="the intermediate-field map must land in the retained extension and cannot increase degree",
+        )
+    source_one = _field_element(
+        inclusion.source,
+        (Fraction(1),) + (Fraction(0),) * (inclusion.source.degree - 1),
+    )
+    try:
+        mapped_one = _applied_inclusion_image(inclusion, source_one)
+    except (
+        OperationDomainValidationError,
+        ValidationError,
+        TypeError,
+        ValueError,
+    ) as exc:
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.invalid_intermediate_field_embedding",
+            message="intermediate-field inclusion must be an exact injective QQ-field map",
+        ) from exc
+    if mapped_one.image != _one(field.extension):
+        raise OperationDomainValidationError(
+            location=("inclusion",),
+            code="galois_theory.intermediate_field_nonunital",
+            message="intermediate-field inclusion must preserve one",
+        )
+    fixed_elements = tuple(
+        automorphism
+        for automorphism in automorphisms(field).automorphisms
+        if _map_element(automorphism, inclusion.generator_image)
+        == inclusion.generator_image
+    )
+    subgroup = _canonical_automorphism_subgroup(
+        GaloisAutomorphismSubgroup(field=field, elements=fixed_elements)
+    )
+    return IntermediateFieldStabilizerResult(inclusion=inclusion, subgroup=subgroup)
+
+
+def _canonical_root(root: QQRoot) -> tuple[QQRoot, QQSplittingField]:
     if not isinstance(root, QQRoot):
         raise OperationDomainValidationError(
             location=("root",),
             code="galois_theory.root_type",
-            message="root must be a QQ splitting-field root value",
+            message="root must be an exact QQ splitting-field root value",
         )
     field = _canonical_splitting_field(
         cast(QQSplittingField, getattr(root, "field", None)),
         location=("root", "field"),
     )
-    index = getattr(root, "index", None)
-    multiplicity = getattr(root, "multiplicity", None)
-    if type(index) is not int or type(multiplicity) is not int:
+    try:
+        canonical = QQRoot.model_validate(
+            {**root.model_dump(), "field": field.model_dump()}
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
         raise OperationDomainValidationError(
             location=("root",),
-            code="galois_theory.root_axis_mismatch",
-            message="root index and multiplicity must be strict integers",
-        )
-    if multiplicity != 1 or not 0 <= index < len(field.root_labels):
-        raise OperationDomainValidationError(
-            location=("root",),
-            code="galois_theory.root_axis_mismatch",
-            message="root must be a simple root on the complete source axis",
-        )
-    return QQRoot(field=field, index=index, multiplicity=1), field
+            code="galois_theory.invalid_root",
+            message="root does not match the field's exact root and multiplicity axes",
+        ) from exc
+    return canonical, field
 
 
 def apply_automorphism(automorphism: QQFieldAutomorphism, root: QQRoot) -> QQRoot:
-    # Both carriers are admitted structurally before the source Galois group or
-    # any root-axis indexing is touched.  This is the native analogue of wire
-    # model validation for model_construct-authored values.
     canonical_root, root_field = _canonical_root(root)
     canonical_automorphism, automorphism_field = _canonical_automorphism(automorphism)
     if root_field != automorphism_field:
@@ -513,11 +1169,228 @@ def apply_automorphism(automorphism: QQFieldAutomorphism, root: QQRoot) -> QQRoo
             code="galois_theory.parent_mismatch",
             message="root must belong to the automorphism field",
         )
-    _require_automorphism(canonical_automorphism)
+    image = _map_element(canonical_automorphism, canonical_root.value)
+    index = canonical_automorphism.root_permutation[canonical_root.index]
+    if image != root_field.root_values[index]:
+        raise ArithmeticError("exact field action and root permutation disagree")
     return QQRoot(
-        field=automorphism_field,
-        index=canonical_automorphism.root_permutation[canonical_root.index],
-        multiplicity=1,
+        field=root_field,
+        index=index,
+        multiplicity=root_field.root_multiplicities[index],
+        value=image,
+    )
+
+
+def apply_automorphism_to_element(
+    automorphism: QQFieldAutomorphism, element: SimpleNumberFieldElement
+) -> SimpleNumberFieldElement:
+    """Apply an exact field automorphism to any element in its source field."""
+    canonical_automorphism, field = _canonical_automorphism(automorphism)
+    try:
+        canonical_element = SimpleNumberFieldElement.model_validate(
+            element.model_dump()
+        )
+    except (ValidationError, AttributeError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="galois_theory.invalid_field_element",
+            message="element must be a canonical exact element of the simple field",
+        ) from exc
+    if canonical_element.presentation != field.extension:
+        raise OperationDomainValidationError(
+            location=("element", "presentation"),
+            code="galois_theory.parent_mismatch",
+            message="element must belong to the automorphism field",
+        )
+
+    _admit_element_image(canonical_automorphism, canonical_element)
+    image = _map_element(canonical_automorphism, canonical_element)
+    return _field_element(field.extension, _coords(image))
+
+
+def _admit_element_image(
+    automorphism: QQFieldAutomorphism, element: SimpleNumberFieldElement
+) -> None:
+    """Bound the exact rational coordinate arithmetic before map expansion."""
+    if automorphism.field.extension.degree != 2:
+        return
+    # For a quadratic field, the image of a+b*alpha is a+b*u+b*v*alpha.
+    element_coords = _coords(element)
+    scalar, alpha = element_coords
+    image_scalar, image_alpha = _coords(automorphism.basis_images[1])
+
+    def product_digit_pair(left: Fraction, right: Fraction) -> tuple[int, int] | None:
+        # A zero factor contributes no numerator or denominator growth. Returning
+        # ``None`` keeps that exact cancellation out of the downstream sum instead
+        # of fabricating a 1/1 factor whose denominator inflates the bound.
+        if left == 0 or right == 0:
+            return None
+        return (
+            len(str(abs(left.numerator))) + len(str(abs(right.numerator))),
+            len(str(left.denominator)) + len(str(right.denominator)),
+        )
+
+    def sum_digit_bound(
+        left: Fraction, right_digits: tuple[int, int] | None
+    ) -> tuple[int, int]:
+        left_numerator = len(str(abs(left.numerator)))
+        left_denominator = len(str(left.denominator))
+        if right_digits is None:
+            # The addend is exactly zero, so the sum is ``left`` unchanged.
+            return left_numerator, left_denominator
+        product_numerator, product_denominator = right_digits
+        return max(
+            left_numerator + product_denominator,
+            product_numerator + left_denominator,
+        ) + 1, max(left_denominator + product_denominator, 1)
+
+    scalar_sum_bounds = sum_digit_bound(scalar, product_digit_pair(alpha, image_scalar))
+    alpha_bounds = product_digit_pair(alpha, image_alpha)
+    scalar_bound = max(scalar_sum_bounds)
+    alpha_bound = 1 if alpha_bounds is None else max(alpha_bounds)
+    if max(scalar_bound, alpha_bound) > MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS:
+        raise OperationDomainValidationError(
+            location=("element",),
+            code="galois_theory.element_image_over_envelope",
+            message=(
+                "the conservative exact automorphism-image coordinate bound "
+                f"exceeds {MAX_SIMPLE_NUMBER_FIELD_ELEMENT_DIGITS} digits"
+            ),
+        )
+
+
+def _admit_element_orbit_output(
+    field: QQSplittingField, element: SimpleNumberFieldElement
+) -> None:
+    """Preflight polynomial coordinate growth and the fixed-size result shape."""
+    element_digits = max(
+        canonical_rational_component_digits(coefficient)
+        for coefficient in element.coefficients_ascending
+    )
+    field_coefficient_digits = max(
+        len(str(abs(value))) for value in field.extension.coefficients_descending
+    )
+    # The quadratic trace/norm formulas use at most four element coordinates
+    # and four defining-polynomial coefficient factors before rational
+    # reduction; the extra eight digits cover additions and signs.
+    polynomial_digits = 4 * element_digits + 4 * field_coefficient_digits + 8
+    if polynomial_digits > MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="galois_theory.element_orbit_polynomial_over_envelope",
+            message=(
+                "the conservative minimal-polynomial coefficient bound exceeds "
+                f"{MAX_ELEMENT_ORBIT_POLYNOMIAL_DIGITS} digits"
+            ),
+        )
+
+    # The output repeats at most five field elements (source, two images,
+    # two orbit values), three polynomial coefficients, and a bounded field/map
+    # envelope. This estimate is evaluated before constructing any images. The
+    # units are retained scalars charged their maximum decimal width, so the
+    # total is a digit budget rather than an encoded transport measurement.
+    element_digits_payload = 5 * field.extension.degree * 2 * element_digits
+    polynomial_digits_payload = 3 * 2 * polynomial_digits
+    estimated_result_digits = (
+        2 * (element_digits_payload + polynomial_digits_payload) + 8_192
+    )
+    if estimated_result_digits > MAX_ELEMENT_ORBIT_RESULT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("element",),
+            code="galois_theory.element_orbit_output_over_envelope",
+            message=(
+                "the conservative exact orbit result estimate exceeds "
+                f"{MAX_ELEMENT_ORBIT_RESULT_DIGITS} retained decimal digits"
+            ),
+        )
+
+
+def element_embedding_orbit(
+    field: QQSplittingField, element: SimpleNumberFieldElement
+) -> ElementEmbeddingOrbitResult:
+    """Return the complete element orbit under the bounded QQ automorphism group."""
+    try:
+        field = _canonical_splitting_field(field, location=("field",))
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("field",),
+            code="galois_theory.invalid_element_orbit_request",
+            message="orbit input must bind one exact element to its QQ splitting field",
+        ) from exc
+
+    # Each coordinate has at most 256 decimal digits and the field degree and
+    # complete automorphism count are at most two. Automorphism image admission
+    # is checked for every map before any image is expanded; the orbit polynomial
+    # uses a fixed number of products/sums, with fewer than 1100 digits per
+    # rational coordinate under these input and defining-coefficient bounds.
+    _admit_element_orbit_output(field, element)
+    group = _automorphisms_of_canonical_field(field).automorphisms
+    for automorphism in group:
+        _admit_element_image(automorphism, element)
+    action: list[ElementAutomorphismImage] = []
+    images: list[SimpleNumberFieldElement] = []
+    stabilizers: list[QQFieldAutomorphism] = []
+    for automorphism in group:
+        image = _field_element(
+            field.extension, _coords(_map_element(automorphism, element))
+        )
+        action.append(ElementAutomorphismImage(automorphism=automorphism, image=image))
+        if image == element:
+            stabilizers.append(automorphism)
+        if image not in images:
+            images.append(image)
+
+    orbit_size = len(images)
+    coordinates = _coords(element)
+    polynomial_coefficients: tuple[Fraction, ...]
+    if field.extension.degree == 1 or coordinates[1] == 0:
+        polynomial_coefficients = (-coordinates[0], Fraction(1))
+    elif orbit_size == 2:
+        scalar, radical = coordinates
+        leading, linear, constant = map(
+            Fraction, field.extension.coefficients_descending
+        )
+        generator_trace = -linear / leading
+        generator_norm = constant / leading
+        trace = 2 * scalar + radical * generator_trace
+        norm = (
+            scalar * scalar
+            + scalar * radical * generator_trace
+            + radical * radical * generator_norm
+        )
+        polynomial_coefficients = (norm, -trace, Fraction(1))
+    else:
+        # A quadratic element fixed by its complete QQ automorphism group is rational.
+        polynomial_coefficients = (-coordinates[0], Fraction(1))
+
+    polynomial = MonicPolynomial.model_validate(
+        {
+            "variables": ["x"],
+            "polynomial": {
+                "terms": [
+                    {
+                        "coefficient": {
+                            "num": value.numerator,
+                            "den": value.denominator,
+                        },
+                        "exponents": [degree],
+                    }
+                    for degree, value in reversed(
+                        tuple(enumerate(polynomial_coefficients))
+                    )
+                    if value
+                ]
+            },
+        }
+    )
+    return ElementEmbeddingOrbitResult(
+        field=field,
+        source_element=element,
+        action=tuple(action),
+        orbit=tuple(images),
+        stabilizer=GaloisAutomorphismSubgroup(field=field, elements=tuple(stabilizers)),
+        orbit_size=orbit_size,
+        minimal_polynomial=polynomial,
     )
 
 
@@ -605,6 +1478,8 @@ __all__ = [
     "frobenius_cycle",
     "galois_factor",
     "galois_group",
+    "inverse_automorphism",
+    "polynomial_discriminant",
     "solvable",
     "verify_galois_group",
     "verify_solvable",

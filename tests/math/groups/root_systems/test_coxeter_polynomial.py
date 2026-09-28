@@ -1,4 +1,3 @@
-import json
 from itertools import permutations
 from math import prod
 
@@ -6,7 +5,6 @@ import pytest
 
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.groups.root_systems import coxeter_polynomial
-from jacobian.math.groups.root_systems._models import CartanMatrixRequest
 from jacobian.math.groups.root_systems._tools import TOOLS
 
 
@@ -72,16 +70,17 @@ def test_known_coxeter_polynomials_and_direct_determinant(cartan, coefficients):
         assert evaluated == _determinant(characteristic_matrix)
 
 
-def test_manifest_example_projects_the_canonical_integer_polynomial():
+def test_catalog_example_returns_the_canonical_integer_polynomial():
     operation = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "root_system.coxeter_polynomial.compute"
+        t for t in TOOLS if t.operation_id == "root_system.coxeter_polynomial.compute"
     )
-    request = CartanMatrixRequest.model_validate_json(
-        json.dumps(operation.examples[0].input), strict=True
+    result = operation.run(
+        operation.request_type.model_validate_json(
+            __import__(
+                "jacobian.canonical", fromlist=["encode_strict_json"]
+            ).encode_strict_json(operation.examples[0].input)
+        )
     )
-    result = operation.run(request)
     assert result.coefficients == (1, 1, 1)
 
 

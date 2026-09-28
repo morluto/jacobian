@@ -59,8 +59,11 @@ test-dispatch: ## Strict parsing and direct dispatch behavior (2 workers, 120s).
 		$(if $(TESTS),$(TESTS),tests/dispatch) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)
 
-test-cli: ## Command-line boundary behavior (2 workers, 30s).
-	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=30 \
+test-cli: ## Command-line boundary behavior (2 workers, 180s).
+	@# `catalog` emits every installed operation, so one CLI test legitimately
+	@# builds all schemas. The per-test budget must absorb a loaded runner
+	@# without turning real catalog construction into a spurious timeout.
+	$(UV_RUN) pytest -n 2 --dist worksteal --timeout=180 \
 		-m "$(ORDINARY_MARKER_EXPRESSION)" \
 		$(if $(TESTS),$(TESTS),tests/cli) \
 		$(PYTEST_DIAGNOSTIC_ARGS) $(PYTEST_ARGS)

@@ -780,6 +780,7 @@ class TestRejection:
                 )
             )
         )
+        assert result.volume == CanonicalRational(num=5 * 10**19999, den=1)
         assert len(format_canonical_integer(result.volume.num)) == 20_000
 
     def test_request_schema_advertises_representation_size_bounds(self) -> None:
@@ -1064,6 +1065,46 @@ class TestTriangulationWideDenominatorBound:
                 )
             )
         result = _volume_via_vertices(tuple(vertices))
+        exact_vertices = tuple(
+            tuple(
+                Fraction(coordinate.num, coordinate.den) for coordinate in v.coordinates
+            )
+            for v in vertices
+        )
+
+        def turn(
+            origin: tuple[Fraction, Fraction],
+            first: tuple[Fraction, Fraction],
+            second: tuple[Fraction, Fraction],
+        ) -> Fraction:
+            return (first[0] - origin[0]) * (second[1] - origin[1]) - (
+                first[1] - origin[1]
+            ) * (second[0] - origin[0])
+
+        ordered = sorted(set(exact_vertices))
+        lower: list[tuple[Fraction, Fraction]] = []
+        for point in ordered:
+            while len(lower) >= 2 and turn(lower[-2], lower[-1], point) <= 0:
+                lower.pop()
+            lower.append(point)
+        upper: list[tuple[Fraction, Fraction]] = []
+        for point in reversed(ordered):
+            while len(upper) >= 2 and turn(upper[-2], upper[-1], point) <= 0:
+                upper.pop()
+            upper.append(point)
+        hull = (*lower[:-1], *upper[:-1])
+        expected_area = (
+            abs(
+                sum(
+                    x * next_y - next_x * y
+                    for (x, y), (next_x, next_y) in zip(
+                        hull, (*hull[1:], hull[0]), strict=True
+                    )
+                )
+            )
+            / 2
+        )
+        assert Fraction(result.volume.num, result.volume.den) == expected_area
         assert result.volume.num > 0
         assert len(format_canonical_integer(result.volume.den)) < 32_768
 
@@ -1175,6 +1216,7 @@ class TestNativeApiAdmission:
                 (Fraction(0), big),
             )
         )
+        assert area == CanonicalRational(num=5 * 10**19999, den=1)
         assert len(format_canonical_integer(area.num)) == 20_000
 
     def test_native_accepts_large_affinely_degenerate_family(self) -> None:

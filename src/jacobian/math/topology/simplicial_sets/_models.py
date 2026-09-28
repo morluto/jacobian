@@ -32,10 +32,10 @@ def _require_label_table(
         )
     sizes: list[int] = []
     for degree, level in enumerate(sets):
-        if not 1 <= len(level) <= MAX_SIMPLICES_PER_DEGREE:
+        if not 0 <= len(level) <= MAX_SIMPLICES_PER_DEGREE:
             raise _validation_error(
                 "degree_size_out_of_bounds",
-                f"degree {degree} must hold between 1 and "
+                f"degree {degree} must hold between 0 and "
                 f"{MAX_SIMPLICES_PER_DEGREE} simplices",
             )
         if len(set(level)) != len(level):
@@ -153,7 +153,7 @@ class FiniteTruncatedSimplicialSet(StrictModel):
     sets: tuple[tuple[str, ...], ...] = Field(min_length=1, max_length=8)
     face_maps: tuple[tuple[tuple[int, ...], ...], ...] = ()
     degeneracy_maps: tuple[tuple[tuple[int, ...], ...], ...] = ()
-    total_simplices: int = Field(ge=1, le=MAX_TOTAL_SIMPLICES)
+    total_simplices: int = Field(ge=0, le=MAX_TOTAL_SIMPLICES)
     checked_identities: int = Field(ge=0)
 
     @model_validator(mode="after")

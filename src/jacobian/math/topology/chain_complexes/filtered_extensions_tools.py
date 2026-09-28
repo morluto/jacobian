@@ -6,10 +6,33 @@ from jacobian.math.topology.chain_complexes._filtered_models import (
     FilteredChainComplex,
 )
 from jacobian.math.topology.chain_complexes.filtered_extensions import *
+from jacobian.math.topology.chain_complexes.filtered_extensions import (
+    FilteredChainMapCompositionRequest,
+    FilteredChainMapPageRequest,
+    FilteredChainMapPageResult,
+    FilteredChainMapPageZeroResult,
+    filtered_chain_map_compose,
+    filtered_chain_map_page,
+    filtered_chain_map_page_zero,
+)
 
 
 def _map(r: Any) -> Any:
     return filtered_map(r)
+
+
+def _page_zero_map(r: Any) -> Any:
+    return filtered_chain_map_page_zero(
+        r.chain_map, r.source_filtration, r.target_filtration
+    )
+
+
+def _page_map(r: Any) -> Any:
+    return filtered_chain_map_page(r.map, r.page)
+
+
+def _compose_map(r: Any) -> Any:
+    return filtered_chain_map_compose(r.first, r.second)
 
 
 def _pages(r: Any) -> Any:
@@ -41,6 +64,113 @@ _CHAIN_MAP = {
     "map_matrices": [[["1"]], [["1"]]],
 }
 TOOLS = (
+    MathTool(
+        operation_id="homological.filtered_chain_map.page_zero.compute",
+        title="Induce a map on the associated graded",
+        description=(
+            "For a filtration-preserving chain map, compute its exact E0 map "
+            "in the quotient bases of the source and target associated-graded "
+            "complexes. The result retains both original complexes and "
+            "filtrations and the selected source and target quotient "
+            "representatives as the explicit matrix axes, and the induced maps "
+            "are checked against the E0 differentials."
+        ),
+        request_type=FilteredChainMapRequest,
+        result_type=FilteredChainMapPageZeroResult,
+        run=_page_zero_map,
+        tags=("homological", "filtered", "spectral-sequence", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_on_associated_graded",
+                description="The identity filtered chain map induces an identity on each associated-graded summand.",
+                input={
+                    "chain_map": _CHAIN_MAP,
+                    "source_filtration": _F,
+                    "target_filtration": _F,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.filtered_chain_map.page.compute",
+        title="Induce a map on a spectral-sequence page",
+        description=(
+            "For an exact filtration-preserving chain map, compute the map "
+            "on a requested bounded E^r page. The result retains both "
+            "source-bound page values and quotient-coordinate matrices; "
+            "representative transport and commutation with d^r are checked."
+        ),
+        request_type=FilteredChainMapPageRequest,
+        result_type=FilteredChainMapPageResult,
+        run=_page_map,
+        tags=("homological", "filtered", "spectral-sequence", "chain-map", "exact"),
+        examples=(
+            OperationExample(
+                name="identity_on_e1",
+                description="The identity map on a one-term zero-differential filtered complex induces the identity on E1.",
+                input={
+                    "map": {
+                        "chain_map": {
+                            "source": {
+                                "coefficient_ring": "QQ",
+                                "degree_min": 0,
+                                "degree_max": 0,
+                                "basis_sizes": [1],
+                                "differential_matrices": [],
+                            },
+                            "target": {
+                                "coefficient_ring": "QQ",
+                                "degree_min": 0,
+                                "degree_max": 0,
+                                "basis_sizes": [1],
+                                "differential_matrices": [],
+                            },
+                            "map_matrices": [[["1"]]],
+                        },
+                        "source_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "target_filtration": [{"subspaces": [{"vectors": [["1"]]}]}],
+                        "filtration_preserving": True,
+                        "is_chain_map": True,
+                    },
+                    "page": 1,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="homological.filtered_chain_map.compose.compute",
+        title="Compose two filtered chain maps",
+        description=(
+            "Revalidate two exact filtration-preserving chain maps with matching "
+            "middle complex and filtration, then return their degreewise composite."
+        ),
+        request_type=FilteredChainMapCompositionRequest,
+        result_type=FilteredChainMapResult,
+        run=_compose_map,
+        tags=("homological", "filtered", "chain-map", "composition", "exact"),
+        examples=(
+            OperationExample(
+                name="compose_identity_maps",
+                description="Compose the identity filtered chain map with itself.",
+                input={
+                    "first": {
+                        "chain_map": _CHAIN_MAP,
+                        "source_filtration": _F,
+                        "target_filtration": _F,
+                        "filtration_preserving": True,
+                        "is_chain_map": True,
+                    },
+                    "second": {
+                        "chain_map": _CHAIN_MAP,
+                        "source_filtration": _F,
+                        "target_filtration": _F,
+                        "filtration_preserving": True,
+                        "is_chain_map": True,
+                    },
+                },
+            ),
+        ),
+    ),
     MathTool(
         operation_id="homological.filtered_chain_complex.homology_filtration.compute",
         title="Compute the induced filtration on homology",

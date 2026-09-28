@@ -6,8 +6,8 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
-from jacobian.dispatch import parse_operation_input
 from jacobian.math.geometry.crystallographic.extensions._models import (
     BieberbachFaceOrbitComplex,
     CrystallographicPolytopePairingRequest,
@@ -175,6 +175,10 @@ def test_face_orbit_operation_is_discoverable_and_recomputes_source() -> None:
         if item.operation_id == "crystallographic.quotient_face_orbits.compute"
     )
     source = _compute(klein=False).source
-    parsed = parse_operation_input(tool.request_type, source.model_dump(mode="json"))
+    # ``dispatch.parse_operation_input`` is exactly this projection, inlined so a
+    # math test does not import the product dispatch boundary.
+    parsed = tool.request_type.model_validate_json(
+        encode_strict_json(source.model_dump(mode="json")), strict=True
+    )
 
     assert tool.run(parsed).quotient_chain_complex.basis_sizes == (1, 2, 1)

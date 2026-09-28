@@ -19,7 +19,7 @@ def _coefficient(terms: list[tuple[int, int]]) -> dict[str, Any]:
         "numerator": {
             "terms": [
                 {
-                    "coefficient": {"num": value, "den": 1},
+                    "coefficient": {"num": str(value), "den": "1"},
                     "exponents": [degree],
                 }
                 for degree, value in sorted(terms, reverse=True)
@@ -27,7 +27,7 @@ def _coefficient(terms: list[tuple[int, int]]) -> dict[str, Any]:
             ]
         },
         "denominator": {
-            "terms": [{"coefficient": {"num": 1, "den": 1}, "exponents": [0]}]
+            "terms": [{"coefficient": {"num": "1", "den": "1"}, "exponents": [0]}]
         },
     }
 

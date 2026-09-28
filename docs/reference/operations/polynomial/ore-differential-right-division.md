@@ -25,4 +25,4 @@ For example, with `A=D^2+x` and `B=D+x`, right division gives
 `Q=D-x`, `R=x^2+x-1`. The opposite factor order gives
 `(D+x)D=D^2+xD`, which is not `A`; left and right division are distinct.
 
-[Operation references](index.md) · [Tool surface](../tools.md)
+[Polynomial operations](index.md) · [Operation catalog](../../tools.md)

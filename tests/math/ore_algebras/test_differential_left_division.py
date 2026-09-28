@@ -1,3 +1,5 @@
+import json
+
 import pytest
 import sympy as sp
 
@@ -149,5 +151,7 @@ def test_manifest_exposes_typed_left_division() -> None:
     assert tool.operation_id == "ore.differential.operator.left_division.compute"
     assert tool.request_type is DifferentialLeftDivisionRequest
     assert tool.result_type.__name__ == "DifferentialLeftDivisionResult"
-    result = tool.run(tool.request_type.model_validate(tool.examples[0].input))
+    result = tool.run(
+        tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
+    )
     assert result.quotient == _operator((0, [(0, 1)]), (1, [(1, 1)]))

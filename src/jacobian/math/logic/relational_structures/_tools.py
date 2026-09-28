@@ -6,6 +6,8 @@ from jacobian.math.logic.relational_structures._admission import (
     MAX_HOMOMORPHISM_COMPOSITION_TUPLE_REPLAYS,
     MAX_HOMOMORPHISM_ENUMERATION_MAP_LABELS,
     MAX_POLYMORPHISM_COORDINATE_WORK,
+    MAX_POLYMORPHISM_FAMILY_RESULT_CELLS,
+    MAX_POLYMORPHISM_FAMILY_WORK,
     MAX_POLYMORPHISM_RELATION_COMBINATIONS,
     MAX_RELATIONAL_DISJOINT_UNION_WORK,
     MAX_SEARCH_CANDIDATES,
@@ -30,11 +32,16 @@ from jacobian.math.logic.relational_structures._models import (
     HomomorphismSearchResult,
     InducedSubstructureRequest,
     InducedSubstructureResult,
+    PPFormulaEvaluationRequest,
     RelationalDisjointUnionRequest,
     RelationalDisjointUnionResult,
     RelationalHomomorphismCompositionRequest,
     RelationalHomomorphismIdentityRequest,
+    RelationalInvariantClosure,
+    RelationalInvariantClosureRequest,
     RelationalPolymorphismCheckResult,
+    RelationalPolymorphismEnumerationRequest,
+    RelationalPolymorphismFamily,
     RelationalPolymorphismRequest,
     RelationalProductRequest,
     RelationalProductResult,
@@ -46,6 +53,7 @@ from jacobian.math.logic.relational_structures._models import (
 from jacobian.math.logic.relational_structures.operations import (
     check_homomorphism,
     check_polymorphism,
+    close_relation_under_polymorphisms,
     compose_homomorphisms,
     compute_core,
     count_homomorphisms,
@@ -54,6 +62,8 @@ from jacobian.math.logic.relational_structures.operations import (
     disjoint_union_structure,
     enumerate_csp_solutions,
     enumerate_homomorphisms,
+    enumerate_polymorphisms,
+    evaluate_pp_formula,
     homomorphism_identity,
     induced_substructure,
     profile_csp_assignment,
@@ -65,11 +75,16 @@ from jacobian.math.logic.relational_structures.operations import (
 from jacobian.math.logic.relational_structures.values import (
     MAX_RELATIONAL_ARITY,
     MAX_RELATIONAL_CARRIER,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES,
+    MAX_RELATIONAL_INVARIANT_CLOSURE_WORK,
     MAX_RELATIONAL_OPERATION_TABLE_CELLS,
     MAX_RELATIONAL_POLYMORPHISM_ARITY,
+    MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE,
     MAX_RELATIONAL_SYMBOLS,
     MAX_RELATIONAL_TABLE_ROWS,
     FiniteRelationalStructure,
+    PPDefinedRelation,
     RelationalHomomorphism,
 )
 
@@ -219,6 +234,27 @@ _EDGE_INTO_CYCLE_EXAMPLE = {
     "source": _DIRECTED_EDGE_STRUCTURE,
     "target": _THREE_CYCLE,
 }
+
+
+def _pp_formula_evaluation(request: PPFormulaEvaluationRequest) -> PPDefinedRelation:
+    return evaluate_pp_formula(request.structure, request.formula)
+
+
+def _polymorphism_enumeration(
+    request: RelationalPolymorphismEnumerationRequest,
+) -> RelationalPolymorphismFamily:
+    return enumerate_polymorphisms(request.source, request.arity)
+
+
+def _invariant_relation_closure(
+    request: RelationalInvariantClosureRequest,
+) -> RelationalInvariantClosure:
+    return close_relation_under_polymorphisms(
+        request.source,
+        request.relation_arity,
+        request.generator_tuples,
+        request.polymorphisms,
+    )
 
 
 TOOLS: MathTools = (
@@ -942,6 +978,148 @@ TOOLS: MathTools = (
                         "signature": [_DIRECTED_EDGE],
                         "relation_tables": [[[0, 1]]],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="pp_formula.evaluate_relation.compute",
+        title="Evaluate a primitive-positive formula on a finite structure",
+        description=(
+            "Return the complete exact relation of free-variable tuples "
+            "satisfying a conjunction of relation and equality atoms, with "
+            "all other declared variables existentially quantified. The "
+            "result retains the interpreted structure, formula, and ordered "
+            "free-variable axes. Formula construction sorts and deduplicates "
+            "conjuncts and orders equality endpoints. Relation symbols and arities must match the "
+            "structure's exact signature. Complete assignment, atom-check, "
+            "and output-relation bounds are checked before enumeration; "
+            "coordinate extraction work is bounded separately; "
+            "resource refusal is not a partial relation."
+        ),
+        request_type=PPFormulaEvaluationRequest,
+        result_type=PPDefinedRelation,
+        run=_pp_formula_evaluation,
+        tags=("relational-structures", "finite-model-theory", "csp", "exact"),
+        discovery_terms=(
+            "primitive positive formula",
+            "conjunctive query evaluation",
+            "pp-defined relation",
+            "finite relational formula semantics",
+            "CSP solution relation",
+        ),
+        examples=(
+            OperationExample(
+                name="directed_two_step_reachability",
+                description=(
+                    "The formula exists y with E(x,y) and E(y,z), returning "
+                    "the exact two-step relation while retaining x,z axis order."
+                ),
+                input={
+                    "structure": {
+                        "carrier_size": 3,
+                        "signature": [_DIRECTED_EDGE],
+                        "relation_tables": [[[0, 1], [1, 2]]],
+                    },
+                    "formula": {
+                        "variable_count": 3,
+                        "free_variables": [0, 2],
+                        "atoms": [
+                            {"kind": "relation", "symbol_id": "E", "variables": [0, 1]},
+                            {"kind": "relation", "symbol_id": "E", "variables": [1, 2]},
+                        ],
+                    },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relational.polymorphisms.arity.enumerate",
+        title="Enumerate every polymorphism of one finite arity",
+        description=(
+            "Return every complete relation-preserving operation table "
+            "f:A^m→A exactly once, in lexicographic table order, bound to "
+            "the exact finite structure and arity. This enumerates one arity "
+            "slice, not the full clone across all arities. Admission bounds "
+            "the complete function space to "
+            f"{MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE} candidates, aggregate "
+            f"table-generation/preservation work to {MAX_POLYMORPHISM_FAMILY_WORK} "
+            "steps, and the complete serialized result to "
+            f"{MAX_POLYMORPHISM_FAMILY_RESULT_CELLS} bytes before allocating "
+            "candidate tables; canonical relation-row membership scans are "
+            "included in the work bound."
+        ),
+        request_type=RelationalPolymorphismEnumerationRequest,
+        result_type=RelationalPolymorphismFamily,
+        run=_polymorphism_enumeration,
+        tags=("relational-structures", "polymorphism", "csp", "exact"),
+        discovery_terms=(
+            "all finite relational polymorphisms",
+            "complete polymorphism family of fixed arity",
+            "enumerate polymorphism operation tables",
+            "finite clone arity slice",
+        ),
+        examples=(
+            OperationExample(
+                name="unary_maps_preserving_singleton",
+                description=(
+                    "Enumerate unary maps preserving P={0}; the source carrier "
+                    "is {0,1} and the unary relation is exactly {(0,)}."
+                ),
+                input={
+                    "source": {
+                        "carrier_size": 2,
+                        "signature": [{"symbol_id": "P", "arity": 1}],
+                        "relation_tables": [[[0]]],
+                    },
+                    "arity": 1,
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="relation.closure_under_operations.compute",
+        title="Close a finite relation under supplied polymorphisms",
+        description=(
+            "Return the least subset of A^r containing the supplied seed rows "
+            "and closed under coordinatewise application of every supplied "
+            "operation. Every operation table is checked against every basic "
+            "relation of the exact source before closure. Admission bounds the "
+            f"power to {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES} rows, all "
+            f"preservation and incremental closure work to {MAX_RELATIONAL_INVARIANT_CLOSURE_WORK} "
+            "steps, and a conservative result size to "
+            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS} bytes before expansion. This "
+            "computes closure under the supplied finite operations; it does not "
+            "claim the input is a complete polymorphism clone."
+        ),
+        request_type=RelationalInvariantClosureRequest,
+        result_type=RelationalInvariantClosure,
+        run=_invariant_relation_closure,
+        tags=("relational-structures", "polymorphism", "invariant-relation", "exact"),
+        discovery_terms=(
+            "polymorphism invariant relation",
+            "relation closure under polymorphisms",
+            "generated subalgebra of a finite power",
+            "coordinatewise operation closure",
+        ),
+        examples=(
+            OperationExample(
+                name="constant_operation_generates_full_unary_relation",
+                description=(
+                    "On the empty-signature two-element structure, closure of "
+                    "{0} under the constant-one operation is {0,1}."
+                ),
+                input={
+                    "source": {"carrier_size": 2},
+                    "relation_arity": 1,
+                    "generator_tuples": [[0]],
+                    "polymorphisms": [
+                        {
+                            "source": {"carrier_size": 2},
+                            "arity": 1,
+                            "operation_table": [1, 1],
+                        }
+                    ],
                 },
             ),
         ),

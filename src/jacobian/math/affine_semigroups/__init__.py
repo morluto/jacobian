@@ -5,7 +5,6 @@ from jacobian.math.affine_semigroups._models import (
 )
 from jacobian.math.affine_semigroups.atoms import (
     AffineMinimalGenerators,
-    AffineMinimalGeneratorsRequest,
     minimal_generators,
 )
 from jacobian.math.affine_semigroups.factorization_count import (
@@ -14,7 +13,6 @@ from jacobian.math.affine_semigroups.factorization_count import (
 )
 from jacobian.math.affine_semigroups.fundamental_holes import (
     AffineSemigroupFundamentalHoles,
-    AffineSemigroupFundamentalHolesRequest,
     fundamental_holes,
 )
 from jacobian.math.affine_semigroups.graver import (
@@ -32,7 +30,6 @@ from jacobian.math.affine_semigroups.group_lattice import (
 )
 from jacobian.math.affine_semigroups.holes import (
     AffineSemigroupHoleProfile,
-    AffineSemigroupHolesRequest,
     holes_through_degree,
 )
 from jacobian.math.affine_semigroups.operations import (
@@ -69,11 +66,8 @@ __all__ = [
     "AffineHilbertBasis",
     "AffineMembershipResult",
     "AffineMinimalGenerators",
-    "AffineMinimalGeneratorsRequest",
     "AffineSemigroupFundamentalHoles",
-    "AffineSemigroupFundamentalHolesRequest",
     "AffineSemigroupHoleProfile",
-    "AffineSemigroupHolesRequest",
     "AffineSemigroupNormalization",
     "IntegerConfigurationCircuitsResult",
     "IntegerConfigurationGraverBasis",

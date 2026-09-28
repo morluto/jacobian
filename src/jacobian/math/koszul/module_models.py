@@ -635,6 +635,255 @@ class ModuleKoszulDifferentialRequest(StrictModel):
         return self
 
 
+class ModuleChainMapMatrix(StrictModel):
+    """A sparse exact matrix on one pair of module-wedge axes."""
+
+    row_count: int = Field(ge=0)
+    column_count: int = Field(ge=0)
+    entries: tuple[tuple[int, int, CanonicalRational], ...] = ()
+
+    @model_validator(mode="after")
+    def entry_shape(self) -> Self:
+        keys = tuple((row, column) for row, column, _ in self.entries)
+        if (
+            keys != tuple(sorted(set(keys)))
+            or any(
+                row < 0
+                or row >= self.row_count
+                or column < 0
+                or column >= self.column_count
+                for row, column, _ in self.entries
+            )
+            or any(value.num == 0 for _, _, value in self.entries)
+        ):
+            raise _err(
+                "chain_map_entries", "chain-map entries must be sorted and in range"
+            )
+        return self
+
+
+class ModuleKoszulChainMap(StrictModel):
+    """The Koszul chain map induced by a supplied module homomorphism.
+
+    Decoding checks only axes. A future consumer that relies on this map must
+    check module-linearity and the chain-map relation against the retained
+    complexes; the producer establishes both before returning it.
+    """
+
+    algebra: FiniteCommutativeAlgebra
+    source: BasedFiniteModule
+    target: BasedFiniteModule
+    sequence: tuple[tuple[CanonicalRational, ...], ...]
+    module_map: tuple[tuple[CanonicalRational, ...], ...]
+    source_complex: ModuleKoszulComplex
+    target_complex: ModuleKoszulComplex
+    degree_maps: tuple[ModuleChainMapMatrix, ...]
+
+    @model_validator(mode="after")
+    def map_axes(self) -> Self:
+        if (
+            self.source.algebra != self.algebra
+            or self.target.algebra != self.algebra
+            or self.source_complex.algebra != self.algebra
+            or self.target_complex.algebra != self.algebra
+            or self.source_complex.module != self.source
+            or self.target_complex.module != self.target
+            or self.source_complex.sequence != self.sequence
+            or self.target_complex.sequence != self.sequence
+            or len(self.module_map) != len(self.target.basis)
+            or any(len(row) != len(self.source.basis) for row in self.module_map)
+            or len(self.degree_maps) != len(self.sequence) + 1
+        ):
+            raise _err(
+                "chain_map_binding", "chain map must retain compatible source axes"
+            )
+        for degree, matrix in enumerate(self.degree_maps):
+            if (matrix.row_count, matrix.column_count) != (
+                self.target_complex.basis_sizes[degree],
+                self.source_complex.basis_sizes[degree],
+            ):
+                raise _err("chain_map_axes", "degree maps must match complex axes")
+        return self
+
+
+class ModuleKoszulHomologyMap(StrictModel):
+    """The induced exact matrices in the canonical retained homology bases."""
+
+    chain_map: ModuleKoszulChainMap
+    source_homology: ModuleKoszulHomology
+    target_homology: ModuleKoszulHomology
+    # Rows are target homology coordinates, columns are source coordinates.
+    degree_maps: tuple[tuple[tuple[CanonicalRational, ...], ...], ...]
+
+    @model_validator(mode="after")
+    def map_axes(self) -> Self:
+        if (
+            self.source_homology.complex != self.chain_map.source_complex
+            or self.target_homology.complex != self.chain_map.target_complex
+            or len(self.degree_maps) != len(self.chain_map.degree_maps)
+        ):
+            raise _err(
+                "homology_map_binding",
+                "homology maps must retain their chain-map complexes",
+            )
+        for degree, matrix in enumerate(self.degree_maps):
+            if len(matrix) != self.target_homology.dimensions[degree] or any(
+                len(row) != self.source_homology.dimensions[degree] for row in matrix
+            ):
+                raise _err(
+                    "homology_map_axes",
+                    "induced matrices must use canonical homology axes",
+                )
+        return self
+
+
+class ModuleKoszulHomologyMapRequest(StrictModel):
+    """A supplied module-induced Koszul chain map whose homology map is wanted."""
+
+    chain_map: ModuleKoszulChainMap
+
+
+class ModuleKoszulMapRequest(StrictModel):
+    """An exact algebra-linear map between modules on the same sequence."""
+
+    algebra: FiniteCommutativeAlgebra
+    source: BasedFiniteModule
+    target: BasedFiniteModule
+    sequence: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        max_length=MAX_MODULE_SEQUENCE_LENGTH
+    )
+    # Rows are target coordinates, columns are source coordinates.
+    map_matrix: tuple[tuple[CanonicalRational, ...], ...]
+
+    @model_validator(mode="after")
+    def map_axes(self) -> Self:
+        rows, columns = len(self.target.basis), len(self.source.basis)
+        if (
+            self.source.algebra != self.algebra
+            or self.target.algebra != self.algebra
+            or len(self.map_matrix) != rows
+            or any(len(row) != columns for row in self.map_matrix)
+            or any(len(element) != len(self.algebra.basis) for element in self.sequence)
+        ):
+            raise _err(
+                "map_axes",
+                "module map, algebra, and sequence must use their declared axes",
+            )
+        return self
+
+
+class ModuleKoszulSequenceLinearChange(StrictModel):
+    """Two Koszul complexes and inverse maps for a linear sequence change."""
+
+    source_complex: ModuleKoszulComplex
+    target_complex: ModuleKoszulComplex
+    change_matrix: tuple[tuple[CanonicalRational, ...], ...]
+    source_to_target: tuple[ModuleDifferential, ...]
+    target_to_source: tuple[ModuleDifferential, ...]
+
+    @model_validator(mode="after")
+    def isomorphism_axes(self) -> Self:
+        length = len(self.source_complex.sequence)
+        if (
+            self.target_complex.algebra != self.source_complex.algebra
+            or self.target_complex.module != self.source_complex.module
+            or self.target_complex.basis_sizes != self.source_complex.basis_sizes
+            or len(self.target_complex.sequence) != length
+            or len(self.change_matrix) != length
+            or any(len(row) != length for row in self.change_matrix)
+            or len(self.source_to_target) != length + 1
+            or len(self.target_to_source) != length + 1
+            or any(
+                (forward.row_count, forward.column_count)
+                != (
+                    self.target_complex.basis_sizes[degree],
+                    self.source_complex.basis_sizes[degree],
+                )
+                or (backward.row_count, backward.column_count)
+                != (
+                    self.source_complex.basis_sizes[degree],
+                    self.target_complex.basis_sizes[degree],
+                )
+                for degree, (forward, backward) in enumerate(
+                    zip(self.source_to_target, self.target_to_source, strict=True)
+                )
+            )
+        ):
+            raise _err(
+                "sequence_change_result_axes",
+                "linear-change complexes and maps must use the retained sequence axes",
+            )
+        return self
+
+
+class ModuleKoszulSequenceLinearChangeRequest(StrictModel):
+    """Replace a rational sequence by an invertible rational linear change."""
+
+    complex: ModuleKoszulComplex
+    # target_sequence[j] = sum_i change_matrix[j][i] * source_sequence[i]
+    change_matrix: tuple[tuple[CanonicalRational, ...], ...]
+
+    @model_validator(mode="after")
+    def matrix_axes(self) -> Self:
+        length = len(self.complex.sequence)
+        if len(self.change_matrix) != length or any(
+            len(row) != length for row in self.change_matrix
+        ):
+            raise _err(
+                "sequence_change_shape",
+                "the sequence change matrix must be square on the sequence axis",
+            )
+        return self
+
+
+class ModuleKoszulTopHomology(StrictModel):
+    """Top cycles identified with the simultaneous annihilator in the module."""
+
+    algebra: FiniteCommutativeAlgebra
+    module: BasedFiniteModule
+    sequence: tuple[tuple[CanonicalRational, ...], ...] = Field(
+        max_length=MAX_MODULE_SEQUENCE_LENGTH
+    )
+    top_differential: ModuleDifferential | None
+    annihilator_basis: tuple[tuple[CanonicalRational, ...], ...]
+    top_homology_basis: tuple[tuple[CanonicalRational, ...], ...]
+
+    @model_validator(mode="after")
+    def top_axes(self) -> Self:
+        dimension = len(self.module.basis)
+        length = len(self.sequence)
+        if (
+            self.module.algebra != self.algebra
+            or length > MAX_MODULE_SEQUENCE_LENGTH
+            or any(len(element) != len(self.algebra.basis) for element in self.sequence)
+            or (self.top_differential is None) != (length == 0)
+            or (
+                self.top_differential is not None
+                and (
+                    self.top_differential.row_count != dimension * length
+                    or self.top_differential.column_count != dimension
+                )
+            )
+            or len(self.annihilator_basis) != len(self.top_homology_basis)
+            or any(
+                len(vector) != dimension
+                for basis in (self.annihilator_basis, self.top_homology_basis)
+                for vector in basis
+            )
+        ):
+            raise _err(
+                "top_homology_axes",
+                "top homology must retain compatible parents, sequence, differential, and bases",
+            )
+        return self
+
+
+class ModuleKoszulTopHomologyRequest(StrictModel):
+    """Compute the top Koszul homology and its module-annihilator model."""
+
+    complex: ModuleKoszulComplex
+
+
 class ModuleKoszulDifferentialValue(StrictModel):
     algebra: FiniteCommutativeAlgebra
     module: BasedFiniteModule

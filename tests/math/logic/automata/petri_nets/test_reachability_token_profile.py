@@ -4,7 +4,6 @@ from collections import deque
 
 import pytest
 
-from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -282,7 +281,8 @@ def test_output_bound_covers_the_retained_profile_cells(
         + 5 * net.place_count
         + 5
     )
-    assert _token_profile_output_bound(
-        graph, net.transition_count, net.place_count
-    ) >= retained
+    assert (
+        _token_profile_output_bound(graph, net.transition_count, net.place_count)
+        >= retained
+    )
     assert result.completeness is not None

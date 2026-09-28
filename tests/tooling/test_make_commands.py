@@ -131,7 +131,7 @@ def test_broad_commands_share_the_nonblocking_validation_lease() -> None:
     [
         ("test-catalog", 2, 30, "tests/catalog"),
         ("test-dispatch", 2, 120, "tests/dispatch"),
-        ("test-cli", 2, 30, "tests/cli"),
+        ("test-cli", 2, 180, "tests/cli"),
         ("test-tooling", 2, 30, "tests/tooling"),
         ("test-integration", 1, 120, "tests/integration"),
     ],

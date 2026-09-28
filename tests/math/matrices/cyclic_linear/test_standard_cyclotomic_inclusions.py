@@ -150,10 +150,35 @@ def test_standard_inclusions_compose_and_apply_after_json_round_trip() -> None:
     )
 
 
+def test_composition_is_native_only_and_not_a_catalog_operation() -> None:
+    """Composition is a call-order helper, not a distinct postcondition.
+
+    ``cyclotomic_field_inclusion(first.source, second.target)`` already
+    publishes the same canonical inclusion, so a catalog entry for
+    composition would add a redundant discovery target that describes a
+    call order rather than a mathematical relation.
+    """
+
+    assert all(
+        tool.operation_id != "matrix.cyclic.cyclotomic_inclusion.compose"
+        for tool in TOOLS
+    )
+    first = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=3), RationalCyclotomicField(order=6)
+    )
+    second = cyclotomic_field_inclusion(
+        RationalCyclotomicField(order=6), RationalCyclotomicField(order=12)
+    )
+    assert compose_cyclotomic_field_inclusions(first, second) == (
+        cyclotomic_field_inclusion(
+            RationalCyclotomicField(order=3), RationalCyclotomicField(order=12)
+        )
+    )
+
+
 def test_catalog_examples_run_and_results_pass_strict_json_validation() -> None:
     for operation_id in (
         "matrix.cyclic.cyclotomic_inclusion.compute",
-        "matrix.cyclic.cyclotomic_inclusion.compose",
         "matrix.cyclic.cyclotomic_element.map",
     ):
         operation = next(t for t in TOOLS if t.operation_id == operation_id)

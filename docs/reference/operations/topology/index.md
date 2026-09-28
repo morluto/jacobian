@@ -17,6 +17,7 @@ reference.
 
 - [Link diagram disjoint union](link-diagram-disjoint-union.md)
 - [Cubical face posets](cubical-face-posets.md)
+- [Finite-poset order complex](order-complex.md)
 - [Cubical standard triangulation](cubical-triangulation.md)
 - [Recurrences and rational generating series](recurrences-and-generating-series.md)
 - [Normalized chains of a finite simplicial set](simplicial-set-normalized-chains.md)

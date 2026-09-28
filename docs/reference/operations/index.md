@@ -80,3 +80,4 @@ that need more context than an operation card:
 - [Finite-dimensional Lie algebra semisimplicity decision](lie-algebra-semisimplicity-decision.md)
 - [Stabilizer erasure correctability](quantum-stabilizer-erasure-correctability.md)
 - [Prime-field quotient spaces](prime-field-quotient-spaces.md)
+- [Petri-net reachable dead markings](petri-net-reachable-dead-markings.md)

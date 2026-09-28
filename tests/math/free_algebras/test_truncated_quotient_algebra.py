@@ -183,7 +183,7 @@ def test_nonhomogeneous_ideal_is_rejected() -> None:
         truncated_quotient_algebra(_ideal(alphabet, (nonhomogeneous,)), 2)
 
 
-def test_output_bound_precedes_multiplication_table_construction(
+def test_output_cell_bound_precedes_multiplication_table_construction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import jacobian.math.free_algebras.operations as operations
@@ -195,7 +195,7 @@ def test_output_bound_precedes_multiplication_table_construction(
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         truncated_quotient_algebra(_ideal(("x",), ()), 32)
     assert exc_info.value.errors()[0]["type"] == (
-        "free_algebra.truncated_quotient_output_bytes"
+        "free_algebra.truncated_quotient_output_cells"
     )
 
 

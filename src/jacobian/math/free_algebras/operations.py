@@ -6,7 +6,6 @@ constructs the canonical result without replaying the computed mathematics.
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from fractions import Fraction
 from itertools import product
@@ -15,7 +14,7 @@ from typing import Any, Literal, cast
 
 from jacobian._exact import CanonicalRational, canonical_rational_component_digits
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import CanonicalLimits, format_canonical_integer
+from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -45,7 +44,7 @@ from jacobian.math.free_algebras._models import (
     MAX_FREE_ALGEBRA_SUBSTITUTION_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_SUBSTITUTION_WORK,
     MAX_FREE_ALGEBRA_TERM_PAIRS,
-    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES,
+    MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS,
     MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_TABLE_TERMS,
     MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK,
     MAX_FREE_ALGEBRA_WORD_LENGTH,
@@ -2025,55 +2024,18 @@ def _admit_truncated_table(
             f"exceeding {MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_WORK}",
         )
 
-    ideal_bytes = len(
-        json.dumps(
-            ideal.model_dump(mode="json"), ensure_ascii=True, separators=(",", ":")
-        )
-    )
-    completion_bytes = len(
-        json.dumps(
-            completion.model_dump(mode="json"),
-            ensure_ascii=True,
-            separators=(",", ":"),
-        ).encode("utf-8")
-    )
-    basis_bytes = len(
-        json.dumps(basis, ensure_ascii=True, separators=(",", ":")).encode("utf-8")
-    )
-    alphabet_bytes = (
-        sum(
-            len(json.dumps(letter, ensure_ascii=True).encode("utf-8")) + 1
-            for letter in ideal.alphabet
-        )
-        + 2
-    )
-    max_letter_bytes = max(
-        (
-            len(json.dumps(letter, ensure_ascii=True).encode("utf-8"))
-            for letter in ideal.alphabet
-        ),
-        default=2,
-    )
-    term_bytes = 256 + degree * (max_letter_bytes + 3)
-    output_bound = (
-        ideal_bytes
-        + completion_bytes
-        + basis_bytes
-        + pair_count * (256 + alphabet_bytes)
-        + term_count_bound * term_bytes
-        + term_bytes
-        + 2_048
-    )
-    output_limit = min(
-        MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_BYTES,
-        CanonicalLimits().max_output_bytes,
-    )
-    if output_bound > output_limit:
+    # Bound the dense multiplication table by allocated cells rather than
+    # serialized transport bytes: each basis pair contributes one coordinate
+    # per surviving table term, and admission must not inherit a deployment's
+    # wire-byte ceiling.
+    table_cells = pair_count * term_count_bound + term_count_bound
+    if table_cells > MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS:
         _reject_resource(
             ("degree",),
-            "truncated_quotient_output_bytes",
-            f"truncated quotient needs at most {output_bound} serialized bytes, "
-            f"exceeding the {output_limit}-byte output bound",
+            "truncated_quotient_output_cells",
+            f"truncated quotient needs at most {table_cells} table cells, "
+            f"exceeding the {MAX_FREE_ALGEBRA_TRUNCATED_QUOTIENT_OUTPUT_CELLS}"
+            "-cell output bound",
         )
     return frozenset(reducible_pairs)
 

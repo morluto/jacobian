@@ -212,5 +212,5 @@ def test_output_size_is_admitted_before_aggregation(
     with pytest.raises(OperationResourceAdmissionError) as exc_info:
         add(left, right)
     assert exc_info.value.errors()[0]["type"] == (
-        "free_algebra.addition_output_bytes_budget"
+        "free_algebra.addition_output_cells_budget"
     )

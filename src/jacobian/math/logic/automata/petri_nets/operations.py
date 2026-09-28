@@ -25,7 +25,7 @@ from jacobian.math.logic.automata.petri_nets._models import (
     MAX_SIPHON_TRAP_PLACES,
     MAX_SIPHON_TRAP_WORK,
     MAX_STATE_EQUATION_OCCURRENCES,
-    MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES,
+    MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES,
     MAX_TERMINAL_SCC_PROFILE_WORK,
     ConcurrentStepResult,
     EnabledTransitionsResult,
@@ -1311,7 +1311,7 @@ def _preflight_terminal_scc_net_shape(
                 message="source net labels must match their bounded axes",
             )
         label_characters += sum(len(label) for label in ids)
-    if label_characters * 6 > MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES:
+    if label_characters * 6 > MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("source_graph", "net"),
             code="petri_net.terminal_scc.output_bound",
@@ -1685,7 +1685,7 @@ def reachability_terminal_scc_profile(
             message="terminal SCC validation exceeds its admitted work bound",
         )
     _validate_terminal_scc_net_values(source_graph)
-    if label_characters * 6 > MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES:
+    if label_characters * 6 > MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("source_graph", "net"),
             code="petri_net.terminal_scc.output_bound",
@@ -1694,7 +1694,7 @@ def reachability_terminal_scc_profile(
     output_bound = _terminal_scc_graph_output_bound(
         source_graph, source_graph.net, source_graph.initial_marking
     )
-    if output_bound > MAX_TERMINAL_SCC_PROFILE_OUTPUT_BYTES:
+    if output_bound > MAX_TERMINAL_SCC_PROFILE_MATERIALIZED_BYTES:
         raise OperationResourceAdmissionError(
             location=("source_graph",),
             code="petri_net.terminal_scc.output_bound",

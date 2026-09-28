@@ -657,6 +657,8 @@ class ReachabilityResult(StrictModel):
 
 
 MarkingReachabilityLimit = Literal["MARKING_LIMIT", "SEQUENCE_LIMIT", "STATE_LIMIT"]
+
+
 class ReachableDeadMarkingsRequest(StrictModel):
     """List dead markings found in the bounded reachability exploration."""
 

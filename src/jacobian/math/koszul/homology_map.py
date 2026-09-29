@@ -147,8 +147,7 @@ def koszul_homology_map(
             location=("chain_map", "source_complex"),
             code="koszul.module.homology_map_chain_relation",
             message=(
-                "serialized source complex differs from its canonical "
-                "reconstruction"
+                "serialized source complex differs from its canonical reconstruction"
             ),
         )
     if within_basis_envelope and supplied.target_complex != verified.target_complex:
@@ -156,8 +155,7 @@ def koszul_homology_map(
             location=("chain_map", "target_complex"),
             code="koszul.module.homology_map_chain_relation",
             message=(
-                "serialized target complex differs from its canonical "
-                "reconstruction"
+                "serialized target complex differs from its canonical reconstruction"
             ),
         )
     if within_basis_envelope and supplied.degree_maps != verified.degree_maps:

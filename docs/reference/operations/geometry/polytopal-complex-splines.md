@@ -67,9 +67,9 @@ before rebuilding the geometry. The transformed coordinates must also fit the
 polytopal-complex construction envelope. Singular matrices are a mathematical
 domain error.
 
-The `polytopal_complex.spline.evaluate.compute` operation evaluates one exact
+The `polyhedral_complex.spline.evaluate.compute` operation evaluates one exact
 rational linear combination of the canonical basis returned by
-`polytopal_complex.spline.space.compute`. Supply the same closed complex,
+`polyhedral_complex.spline.space.compute`. Supply the same closed complex,
 degree, and smoothness, then give one rational coefficient for each basis row
 and a point on the complex's labelled coordinate axes. The result reports all
 containing cell IDs and the exact value. A point outside the complex returns

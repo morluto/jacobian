@@ -9,8 +9,6 @@ exact direct operations:
 - `topology.simplicial_complex.chain_complex.compute`
 - `topology.simplicial_complex.induced_subcomplex.compute`
 - `topology.simplicial_complex.f_vector.compute`
-- `topology.simplicial_complex.face_enumerator.compute`
-- `topology.simplicial_complex.g_vector.compute`
 - `topology.simplicial_complex.clique_from_graph.compute`
 - `topology.simplicial_homology.compute`
 - `topology.simplicial_homology.integral.compute`
@@ -25,19 +23,13 @@ session.
 
 The `f_vector` operation uses the convention `(f_-1, f_0, ..., f_d)`, with
 `f_-1 = 1` for the empty face. It also returns the corresponding `h`-vector and
-Euler characteristic. The `g_vector` operation returns `g_0 = 1` and
-`g_i = h_i - h_(i-1)` through `i = floor((d+1)/2)`, along with the exact
-f- and h-vectors it uses. These are finite transforms of face counts; neither
-operation asserts that the complex is a sphere or manifold, or that g-vector
-entries are nonnegative.
-
-The `face_enumerator` returns the canonical `IntegerPolynomial`
-`F_K(t) = sum_{sigma in K} t^|sigma|`, including the empty face as constant
-term one. Its descending-degree coefficients are the reversed nonempty
-f-vector followed by that constant term, so the result composes directly with
-integer-polynomial operations. Candidate subface generation is admitted before
-expansion; a unique-face counter stops insertion at the finite-complex face
-ceiling and the admitted closure is reused to construct the polynomial.
+Euler characteristic. Internally it computes the `g`-vector (`g_0 = 1` and
+`g_i = h_i - h_(i-1)` through `i = floor((d+1)/2)`) and the face enumerator
+(the canonical `IntegerPolynomial` `F_K(t) = sum_{sigma in K} t^|sigma|`,
+including the empty face as constant term one) alongside the exact f- and
+h-vectors. These are finite transforms of face counts; neither computation
+asserts that the complex is a sphere or manifold, or that g-vector entries
+are nonnegative.
 
 `clique_from_graph.compute` accepts an indexed simple graph and returns its
 flag complex as the existing `CliqueResult`, including isolated vertices as

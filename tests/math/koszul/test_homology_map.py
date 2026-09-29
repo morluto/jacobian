@@ -151,3 +151,52 @@ def test_catalog_example_runs() -> None:
     )
     result = tool.run(request)
     assert result.degree_maps == (((q(1),),),)
+
+
+def test_forged_retained_complex_is_rejected() -> None:
+    """Every retained claim is held to the canonical reconstruction.
+
+    `module_map` and `degree_maps` were compared but the two complexes were
+    not, so a chain map carrying altered differentials was accepted and the
+    operation silently substituted its own reconstruction. That produced no
+    false homology, but it left one retained field trusted while its siblings
+    were checked, so all three are now compared under the same basis envelope.
+    """
+    algebra = _dual_numbers()
+    module = BasedFiniteModule(
+        algebra=algebra,
+        basis=("1", "e"),
+        action=(
+            ((q(1), q(0)), (q(0), q(1))),
+            ((q(0), q(0)), (q(1), q(0))),
+        ),
+    )
+    chain_map = module_koszul_map(
+        ModuleKoszulMapRequest(
+            algebra=algebra,
+            source=module,
+            target=module,
+            sequence=((q(0), q(1)),),
+            map_matrix=((q(1), q(0)), (q(0), q(1))),
+        )
+    )
+    payload = chain_map.model_dump(mode="json")
+    for side in ("source_complex", "target_complex"):
+        payload[side]["differentials"] = [
+            {
+                "row_count": differential["row_count"],
+                "column_count": differential["column_count"],
+                "entries": [],
+            }
+            for differential in payload[side]["differentials"]
+        ]
+    forged = ModuleKoszulChainMap.model_validate_json(
+        encode_strict_json(payload), strict=True
+    )
+    assert forged.source_complex != chain_map.source_complex
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        koszul_homology_map(ModuleKoszulHomologyMapRequest(chain_map=forged))
+    assert error.value.errors()[0]["type"] == (
+        "koszul.module.homology_map_chain_relation"
+    )

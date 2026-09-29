@@ -11,6 +11,7 @@ from jacobian._exact import (
     CanonicalRational,
     require_bounded_rational,
 )
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -135,6 +136,7 @@ def _face_cells(
                     add_faces(tuple(face))
 
     for cell in cells:
+        request_checkpoint("during cubical face-closure expansion")
         add_faces(cell.intervals)
     return tuple(CubicalCell(intervals=intervals) for intervals in sorted(all_cells))
 
@@ -273,6 +275,7 @@ def _face_poset_cover_pairs(
     cell_intervals = {cell.intervals for cell in complex_.cells}
     cover_pairs: set[tuple[str, str]] = set()
     for upper in complex_.cells:
+        request_checkpoint("during cubical face-poset incidence construction")
         upper_label = label_by_cell[upper]
         for axis, (start, end) in enumerate(upper.intervals):
             if start == end:
@@ -1797,6 +1800,7 @@ def boundary_subcomplex(
 
     facet_incidence: dict[tuple[tuple[int, int], ...], int] = {}
     for cell in top_cells:
+        request_checkpoint("during cubical boundary-subcomplex facet incidence")
         active_axes = tuple(
             axis for axis, (lower, upper) in enumerate(cell.intervals) if upper > lower
         )

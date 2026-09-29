@@ -14,6 +14,7 @@ from jacobian._exact import (
     CanonicalRational,
     canonical_rational_component_digits,
 )
+from jacobian._execution import request_checkpoint
 from jacobian.canonical import format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -200,6 +201,7 @@ def _substitute_basis(
     images = tuple(_term_map(image) for image in action.generator_images)
     result: _Terms = {}
     for term in polynomial.polynomial.terms:
+        request_checkpoint("during stable-subrepresentation basis substitution")
         product_terms = dict(one)
         for image, exponent in zip(images, term.exponents, strict=True):
             for _ in range(exponent):
@@ -221,6 +223,7 @@ def _admit_and_verify_ga_action(action: PolynomialGaAction) -> None:
     lhs_terms = 0
     rhs_terms = 0
     for image in action_terms:
+        request_checkpoint("during stable-subrepresentation action admission")
         for exponents in image:
             factor = prod(
                 max(1, len(generator_image)) ** exponent
@@ -465,6 +468,7 @@ def _coordinates(
     )
     reconstructed: dict[tuple[int, ...], Fraction] = {}
     for value, coordinate in zip(basis, coordinates, strict=True):
+        request_checkpoint("during stable-subrepresentation coordinate reconstruction")
         for term in value.polynomial.terms:
             exponents = tuple(term.exponents)
             reconstructed[exponents] = (
@@ -991,6 +995,7 @@ def _fixed_polynomial_basis(
 
     output = []
     for vector in coordinates:
+        request_checkpoint("during fixed-subspace polynomial reconstruction")
         grouped: dict[tuple[int, ...], list[Fraction]] = {}
         for coordinate, polynomial in zip(vector, representation.basis, strict=True):
             for term in polynomial.polynomial.terms:

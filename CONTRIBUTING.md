@@ -145,7 +145,7 @@ option.
 
 On macOS, read the
 [Z3 installation guide](docs/how-to/troubleshoot-z3-macos.md) before
-troubleshooting a source-build failure from `uv sync --dev`.
+troubleshooting a source-build failure from `uv sync --locked --dev`.
 
 For focused test syntax and specialist lanes, use the
 [testing strategy](docs/reference/testing-strategy.md). Default `uv run pytest`

@@ -69,7 +69,7 @@ domain error.
 
 The `polyhedral_complex.spline.evaluate.compute` operation evaluates one exact
 rational linear combination of the canonical basis returned by
-`polyhedral_complex.spline.space.compute`. Supply the same closed complex,
+`polyhedral_complex.spline_space.compute`. Supply the same closed complex,
 degree, and smoothness, then give one rational coefficient for each basis row
 and a point on the complex's labelled coordinate axes. The result reports all
 containing cell IDs and the exact value. A point outside the complex returns

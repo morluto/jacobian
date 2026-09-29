@@ -673,6 +673,32 @@ def _admit_factor_avoidance_inputs(
             code="free_algebra.factor_avoidance_shape",
             message="the avoidance alphabet is not canonical",
         )
+    # The request model caps the alphabet at MAX_FREE_ALGEBRA_GENERATORS and
+    # validates each letter as a unicode scalar. Native callers bypass both, so
+    # re-admit the same domain here: without this, 27..32 distinct generators
+    # returned a DFA for an alphabet the published operation refuses, 33+ escaped
+    # as a raw pydantic error while building transitions, and a surrogate label
+    # bypassed the scalar check entirely.
+    if len(alphabet) > MAX_FREE_ALGEBRA_GENERATORS:
+        raise OperationDomainValidationError(
+            location=("alphabet",),
+            code="free_algebra.factor_avoidance_shape",
+            message=(
+                "the avoidance alphabet may contain at most "
+                f"{MAX_FREE_ALGEBRA_GENERATORS} distinct generators"
+            ),
+        )
+    for letter in alphabet:
+        try:
+            letter.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise OperationDomainValidationError(
+                location=("alphabet",),
+                code="free_algebra.factor_avoidance_shape",
+                message=(
+                    "the avoidance alphabet may contain only unicode scalar values"
+                ),
+            ) from exc
     if type(forbidden_factors) is not tuple or any(
         type(word) is not tuple or any(type(letter) is not str for letter in word)
         for word in forbidden_factors
@@ -2871,5 +2897,23 @@ def _multiply_for_power(
         operand_term_limit=MAX_FREE_ALGEBRA_RESULT_TERMS,
         operand_word_length_limit=MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH,
     )
+    # The operand limit admits words up to the result bound, but concatenation
+    # adds their lengths. Without this preflight a 33-letter monomial squared
+    # passes both operand checks, `multiply_sparse` expands it to 66 letters,
+    # and FreeAlgebraTerm raises a pydantic ValidationError instead of the
+    # operation returning a bounded resource refusal.
+    result_word_length = max(
+        (len(term.word) for term in left.terms),
+        default=0,
+    ) + max((len(term.word) for term in right.terms), default=0)
+    if result_word_length > MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH:
+        _reject_resource(
+            ("f",),
+            "power_result_word_length_budget",
+            (
+                "the product's result word exceeds "
+                f"{MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH} letters"
+            ),
+        )
     product, _ledger = multiply_sparse(left, right)
     return product

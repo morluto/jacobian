@@ -12,6 +12,7 @@ from jacobian.canonical import encode_strict_json
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.free_algebras import operations
 from jacobian.math.free_algebras._models import (
+    MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH,
     FreeAlgebraPolynomial,
     FreeAlgebraPolynomialPowerRequest,
     FreeAlgebraTerm,
@@ -195,3 +196,40 @@ def test_power_operation_json_and_catalog_result_round_trip() -> None:
         ("x", "y"): Fraction(1),
         ("x", "x"): Fraction(1),
     }
+
+
+def test_result_word_length_is_preflighted_before_expansion() -> None:
+    """A product's word length is the sum of its operands' lengths.
+
+    The operand limit admits words up to the result bound, but concatenation
+    adds them. Without a preflight a 33-letter monomial squared passed both
+    operand checks, `multiply_sparse` expanded it to 66 letters, and
+    `FreeAlgebraTerm` raised a pydantic `ValidationError` instead of the
+    operation returning a bounded resource refusal.
+    """
+
+    def _power(word_length: int):
+        return FreeAlgebraPolynomial(
+            alphabet=("a", "b"),
+            terms=(
+                FreeAlgebraTerm(
+                    coefficient=CanonicalRational.from_fraction(Fraction(1)),
+                    word=("a",) * word_length,
+                ),
+            ),
+        )
+
+    # 32 + 32 = 64 is exactly the result bound and is admitted
+    admitted = power_polynomial(_power(32), 2)
+    assert all(
+        len(term.word) <= MAX_FREE_ALGEBRA_RESULT_WORD_LENGTH for term in admitted.terms
+    )
+
+    # 33 + 33 = 66 exceeds it and is refused as a resource, not a pydantic error
+    overlong = _power(33)
+    assert FreeAlgebraPolynomialPowerRequest(
+        polynomial=overlong, exponent=2
+    )  # the request model accepts the source
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        power_polynomial(overlong, 2)
+    assert error.value.errors()[0]["type"].endswith("power_result_word_length_budget")

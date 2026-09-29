@@ -1,6 +1,7 @@
 """Cubical complex operations."""
 
 from jacobian.math.topology.cubical_complexes._models import (
+    CubicalBoundarySubcomplexResult,
     CubicalChainCell,
     CubicalChainTerm,
     CubicalChainValue,
@@ -15,6 +16,7 @@ from jacobian.math.topology.cubical_complexes.extensions import (
     triangulate,
 )
 from jacobian.math.topology.cubical_complexes.operations import (
+    boundary_subcomplex,
     chain_complex,
     chain_product,
     closed_star,
@@ -31,6 +33,7 @@ from jacobian.math.topology.cubical_complexes.operations import (
 )
 
 __all__ = [
+    "CubicalBoundarySubcomplexResult",
     "CubicalChainCell",
     "CubicalChainTerm",
     "CubicalChainValue",
@@ -39,6 +42,7 @@ __all__ = [
     "CubicalVertexMap",
     "bitmap_to_complex",
     "boundary",
+    "boundary_subcomplex",
     "chain_complex",
     "chain_product",
     "closed_star",

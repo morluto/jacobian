@@ -35,7 +35,10 @@ def test_rational_riemann_roch_is_the_published_operation() -> None:
     operation_id = "function_field.riemann_roch_space.compute"
 
     assert operation_id in operation_ids
-    assert "function_field.hyperelliptic_infinity_riemann_roch_space.compute" not in operation_ids
+    assert (
+        "function_field.hyperelliptic_infinity_riemann_roch_space.compute"
+        not in operation_ids
+    )
 
     result = _run_example(operation_id)
     assert result.dimension == 3

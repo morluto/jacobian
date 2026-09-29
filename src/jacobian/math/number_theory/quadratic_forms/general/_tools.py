@@ -31,6 +31,13 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     coefficient_matrix,
     evaluate_rational_quadratic_form,
 )
+from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
+    QuadraticFormScaleRequest,
+    QuadraticFormScaleResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.scaling_operations import (
+    scale_rational_quadratic_form,
+)
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
     MAX_QUADRATIC_EVALUATION_SUPPORT_TERMS,
@@ -110,6 +117,12 @@ def compute_modular_profile(request: ModularProfileRequest) -> ModularProfileRes
 
 def compute_finite_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSumResult:
     return finite_quadratic_gauss_sum(request.form, request.modulus)
+
+
+def compute_scale(
+    request: QuadraticFormScaleRequest,
+) -> QuadraticFormScaleResult:
+    return scale_rational_quadratic_form(request.form, request.factor)
 
 
 def compute_direct_sum(
@@ -514,6 +527,53 @@ TOOLS = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="quadratic_form.scale.compute",
+        title="Scale a rational quadratic form by an exact rational factor",
+        description=(
+            "Multiply every diagonal and cross coefficient of a rational form by "
+            "one exact rational factor on the same ordered coordinate axis. A "
+            "cross term whose scaled numerator cancels to zero is dropped, the "
+            "only way the result can have fewer cross terms than the source. "
+            "The axis, the retained coefficient support, the factor width, and "
+            "the exact numerator and denominator growth of every product are "
+            "admitted before any product is formed."
+        ),
+        request_type=QuadraticFormScaleRequest,
+        result_type=QuadraticFormScaleResult,
+        run=compute_scale,
+        tags=("quadratic-form", "scaling", "exact"),
+        discovery_terms=(
+            "scale a rational quadratic form",
+            "multiply a quadratic form by a rational",
+            "coefficientwise quadratic form scaling",
+        ),
+        examples=(
+            OperationExample(
+                name="scale_a_binary_form_by_three_halves",
+                description=(
+                    "Scale 2x^2 + 3xy by 3/2, giving 3x^2 + 9/2 xy on the same axis."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "2", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "3", "den": "1"},
+                            }
+                        ],
+                    },
+                    "factor": {"num": "3", "den": "2"},
+                },
+            ),
+        ),
+    ),
 )
 
 
@@ -529,6 +589,7 @@ __all__ = [
     "compute_modular_profile",
     "compute_pullback",
     "compute_radical",
+    "compute_scale",
     "compute_signature",
     "evaluate_form",
 ]

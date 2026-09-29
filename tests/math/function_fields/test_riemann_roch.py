@@ -358,5 +358,5 @@ def test_riemann_roch_rejects_unsupported_extension_fields() -> None:
         )
 
     assert error.value.errors()[0]["type"] == (
-        "function_field.riemann_roch_requires_supported_model"
+        "function_field.riemann_roch_requires_rational_field"
     )

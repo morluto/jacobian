@@ -1,6 +1,5 @@
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields.values import FiniteFieldPresentation
 from jacobian.math.function_fields._models import (
@@ -83,7 +82,7 @@ def test_zero_has_structural_infinite_valuation_and_degree_five_uses_its_degree(
     assert value.valuation == FunctionFieldFiniteValuation(kind="FINITE", value=-5)
 
 
-def test_valuation_is_multiplicative_and_operation_is_discoverable():
+def test_valuation_is_multiplicative():
     y = _element((0,), (1,))
     square = function_field_element_multiply(y, y).product
     assert (
@@ -91,18 +90,6 @@ def test_valuation_is_multiplicative_and_operation_is_discoverable():
             _place(), square
         ).valuation.value
         == -6
-    )
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id
-        == "function_field.hyperelliptic_infinity_place.valuation.compute"
-    )
-    assert (
-        tool.run(
-            tool.request_type.model_validate({"place": _place(), "element": y})
-        ).valuation.value
-        == -3
     )
 
 

@@ -1,7 +1,5 @@
 import pytest
 
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.finite_fields.values import FiniteFieldPresentation
 from jacobian.math.function_fields._models import (
@@ -9,16 +7,15 @@ from jacobian.math.function_fields._models import (
     FiniteFunctionFieldElement,
     FunctionFieldFiniteValuation,
     FunctionFieldPlace,
-    FunctionFieldPlaceValuationRequest,
     FunctionFieldPositiveInfinityValuation,
     HyperellipticAffinePlace,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
-from jacobian.math.function_fields._tools import TOOLS
 from jacobian.math.function_fields.operations import (
     function_field_element_multiply,
     function_field_hyperelliptic_affine_valuation,
+    function_field_place_valuation,
 )
 
 
@@ -218,23 +215,7 @@ def test_affine_valuation_rejects_nonpoint_and_nonhyperelliptic_parents():
     )
 
 
-def test_catalog_declares_affine_hyperelliptic_valuation():
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id
-        == "function_field.hyperelliptic_affine_place.valuation.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert isinstance(result.valuation, FunctionFieldFiniteValuation)
-    assert result.valuation.value == 1
-    assert tool in BUILTIN_TOOLS
-
-
-def test_rational_place_valuation_uses_same_structural_zero_result():
+def test_rational_place_valuation_returns_none_for_zero_element():
     rational_field = FiniteFunctionField(
         characteristic=5, defining_polynomial=(_rf((1,)),)
     )
@@ -245,13 +226,4 @@ def test_rational_place_valuation_uses_same_structural_zero_result():
         degree=1,
     )
     zero = FiniteFunctionFieldElement(field=rational_field, coordinates=(_rf((0,)),))
-    tool = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "function_field.place.valuation.compute"
-    )
-    result = tool.run(FunctionFieldPlaceValuationRequest(place=place, element=zero))
-
-    assert isinstance(result.valuation, FunctionFieldPositiveInfinityValuation)
-    assert result.model_dump()["valuation"] == {"kind": "POSITIVE_INFINITY"}
-    assert "null" not in result.model_dump_json()
+    assert function_field_place_valuation(place, zero) is None

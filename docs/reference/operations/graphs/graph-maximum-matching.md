@@ -8,6 +8,7 @@ edges together with the domain evidence carried by that result. It is a direct
 typed computation: the graph and matching are supplied and returned inline.
 It creates no graph record and requires no follow-up checker call.
 
-A solver-internal `graph.matching.maximal.minimum.compute` (minimum size of a
-maximal matching) exists in the finite-optimization backend but is not
-published to the catalog; do not look for it via `math.find`.
+`graph.matching.maximal.minimum.compute` is a separate published operation
+that computes the minimum size of a maximal matching. It differs from maximum
+cardinality matching above: the former minimizes over maximal matchings, while
+the latter finds a matching of maximum cardinality.

@@ -23,13 +23,13 @@ session.
 
 The `f_vector` operation uses the convention `(f_-1, f_0, ..., f_d)`, with
 `f_-1 = 1` for the empty face. It also returns the corresponding `h`-vector and
-Euler characteristic. Internally it computes the `g`-vector (`g_0 = 1` and
-`g_i = h_i - h_(i-1)` through `i = floor((d+1)/2)`) and the face enumerator
-(the canonical `IntegerPolynomial` `F_K(t) = sum_{sigma in K} t^|sigma|`,
-including the empty face as constant term one) alongside the exact f- and
-h-vectors. These are finite transforms of face counts; neither computation
-asserts that the complex is a sphere or manifold, or that g-vector entries
-are nonnegative.
+Euler characteristic. The native-only `compute_g_vector` helper separately
+returns `g_0 = 1` and `g_i = h_i - h_(i-1)` through `i = floor((d+1)/2)`.
+The native-only `compute_face_enumerator` helper separately returns the
+canonical `IntegerPolynomial` `F_K(t) = sum_{sigma in K} t^|sigma|`, including
+the empty face as constant term one. Neither helper is a catalog operation or
+part of `f_vector.compute`. These transforms do not assert that the complex is
+a sphere or manifold, or that g-vector entries are nonnegative.
 
 `clique_from_graph.compute` accepts an indexed simple graph and returns its
 flag complex as the existing `CliqueResult`, including isolated vertices as

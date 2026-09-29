@@ -71,3 +71,4 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Dirichlet character coordinate-basis transport](dirichlet-character-coordinate-basis.md)
 - [Exact relative norm of a function-field element](function-field-element-norm.md)
 - [Cyclotomic character coordinates and equality](modular-forms-cyclotomic-character-coordinates.md)
+- [Rational quadratic-form scaling](quadratic-form-scale.md)

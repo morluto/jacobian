@@ -110,7 +110,12 @@ def transition_liveness_profile(
         + edge_count * max(1, place_count)
         + state_count
         + edge_count
-        + (parented_markings + 1) * place_count * transition_count
+        # The preflight's fourth value already accumulates the total matrix-cell
+        # work of every parent-bound marking, so add it directly. Multiplying it
+        # by the source dimensions again squared that cost and refused graphs
+        # that need only bounded validation, while a degenerate empty source
+        # axis zeroed it before the forged parent nets were copied.
+        + parented_markings
         + transition_count * (state_count + edge_count)
         + label_characters
     )

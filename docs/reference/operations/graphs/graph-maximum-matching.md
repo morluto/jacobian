@@ -6,7 +6,8 @@
 maximum-cardinality matching of a bounded simple graph and returns its matching
 edges together with the domain evidence carried by that result. It is a direct
 typed computation: the graph and matching are supplied and returned inline.
+It creates no graph record and requires no follow-up checker call.
 
-`graph.matching.maximal.minimum.compute` is a different operation for the
-minimum size of a maximal matching. Neither operation creates a graph record or
-requires a follow-up checker call.
+A solver-internal `graph.matching.maximal.minimum.compute` (minimum size of a
+maximal matching) exists in the finite-optimization backend but is not
+published to the catalog; do not look for it via `math.find`.

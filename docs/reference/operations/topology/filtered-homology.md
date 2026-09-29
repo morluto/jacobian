@@ -1,5 +1,7 @@
 # Induced filtration on homology
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `homological.filtered_chain_complex.homology_filtration.compute` returns

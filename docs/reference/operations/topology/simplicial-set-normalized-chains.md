@@ -1,5 +1,7 @@
 # Normalized chains of a finite simplicial set
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.normalized_chains.compute` returns the normalized
 chain complex of a complete table based finite simplicial set prefix
 `X_0,...,X_N`. In degree `n`, its ordered basis consists of the source labels

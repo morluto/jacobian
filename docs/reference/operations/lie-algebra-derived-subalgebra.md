@@ -1,5 +1,7 @@
 # Lie algebra derived subalgebra
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lie_algebra.derived_subalgebra.compute` returns
 
 \[

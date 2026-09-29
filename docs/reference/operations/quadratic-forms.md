@@ -1,6 +1,6 @@
 # Exact quadratic forms
 
-[Documentation home](../../index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `quadratic_form.evaluate.compute` accepts one canonical rational quadratic form
 and one rational coordinate vector on exactly the same ordered axis. It returns

@@ -1,6 +1,6 @@
 # Petri-net state equation
 
-[Documentation home](../../index.md) · [Operation references](index.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `petri_net.state_equation.target.compute` computes the formal integer vector
 

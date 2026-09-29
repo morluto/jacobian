@@ -1,6 +1,6 @@
 # Disjoint Greene witnesses
 
-[Documentation home](../../../index.md) · [Operation references](../index.md) · [Combinatorics](index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `word.greene_witnesses.compute` returns one disjoint subsequence family for
 each Greene index `1..k`. Positions are zero-based indices into the exact

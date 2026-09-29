@@ -1,5 +1,7 @@
 # Finite-field elliptic zeta numerator
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 For a nonsingular short-Weierstrass curve over a supported finite field, the
 zeta function is
 

@@ -1,5 +1,7 @@
 # Exact rational H-to-V polyhedron conversion
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `polytope.rational.h_to_v.compute` converts a rational H-presentation
 `{x : a_i · x <= b_i}` into a serializable V-presentation. A nonempty result
 represents

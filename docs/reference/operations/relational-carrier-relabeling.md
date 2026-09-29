@@ -1,5 +1,7 @@
 # Relational carrier relabeling
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The `relational.structure.relabel_carrier.compute` operation applies an
 explicit bijection to the finite carrier of a relational structure. Its map is
 listed by source label: `old_to_new[i]` is the new label of old element `i`.

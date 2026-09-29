@@ -1,6 +1,6 @@
 # Maximum induced matching
 
-[Documentation home](../../../index.md) · [Graph operations](index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.induced_matching.maximum.compute` computes a bounded exact maximum
 induced matching of a finite simple graph. It returns the incumbent cardinality

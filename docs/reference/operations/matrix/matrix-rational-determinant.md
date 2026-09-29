@@ -1,6 +1,6 @@
 # Exact rational matrix determinants
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `matrix.determinant.compute` computes the determinant of a bounded square
 matrix over ℚ. Its request owns matrix validation; its response returns the

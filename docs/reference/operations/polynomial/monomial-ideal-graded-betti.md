@@ -1,6 +1,7 @@
 # Monomial-ideal graded Betti profiles
 
-[Documentation home](../../../index.md) · [Polynomial operations](index.md) ·
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Tool surface](../../tools.md)
 
 `polynomial.monomial_ideal.graded_betti_table.compute` returns the complete

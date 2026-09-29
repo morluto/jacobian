@@ -1,5 +1,7 @@
 # Active terms of a tropical polynomial
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `tropical.polynomial.active_terms.compute` evaluates a canonical sparse
 tropical polynomial at one exact labelled point and returns every source term
 attaining the result. `MIN_PLUS` selects the minimum and `MAX_PLUS` selects the

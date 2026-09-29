@@ -1,5 +1,7 @@
 # Restricting a rational transducer's output language
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `transducer.relation.restrict_output.compute` intersects a finite rational
 relation `R ⊆ A* × B*` with the regular output language recognized by a total
 DFA `L ⊆ B*`. Its result recognizes exactly `R ∩ (A* × L)`.

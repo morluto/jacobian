@@ -1,5 +1,7 @@
 # Petri-net axis relabeling
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.relabel.compute` applies explicit bijections to the ordered place
 and transition axes of a weighted place/transition net. Each map sends a source
 index to its target index:

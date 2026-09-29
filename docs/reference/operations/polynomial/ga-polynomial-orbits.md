@@ -1,5 +1,7 @@
 # Additive-group polynomial orbits
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `algebraic_group.ga.polynomial_orbit.compute` applies a checked polynomial
 `G_a` coaction to any source polynomial in the action's ordered `QQ` ring. If
 the action parameter is `t`, the result is the exact polynomial

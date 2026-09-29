@@ -1,5 +1,7 @@
 # Normalized chain map induced by a finite simplicial map
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.map.induced_chain_map.compute` constructs the chain
 map on normalized integral chains induced by a finite truncated simplicial map.
 It returns a reusable `ChainMapValue` whose source and target are the exact

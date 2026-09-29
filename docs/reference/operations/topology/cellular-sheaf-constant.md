@@ -1,6 +1,6 @@
 # Constant cellular sheaves
 
-[Documentation home](../../../index.md) · [Topology operations](index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `cellular_sheaf.constant.compute` copies one exact based vector space to every
 nonempty simplex in a finite simplicial complex. It returns the canonical

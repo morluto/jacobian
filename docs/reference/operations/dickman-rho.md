@@ -1,6 +1,6 @@
 # Certified Dickman rho enclosures
 
-[Documentation home](../../index.md) · [Operation references](index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `number_theory.dickman_rho.piecewise_enclosure.compute` returns a reusable
 pointwise enclosure of the Dickman--de Bruijn function through a requested

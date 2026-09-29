@@ -1,5 +1,7 @@
 # Free associative algebra homomorphism composition
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.homomorphism.compose.compute` composes two supplied maps in
 input order: `f:A→B`, then `g:B→C`, returning `g∘f:A→C`. The intermediate
 ordered generator alphabets must agree exactly. Composition returns the

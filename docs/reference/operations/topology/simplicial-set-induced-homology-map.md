@@ -1,5 +1,7 @@
 # Induced map on normalized integral homology
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.map.induced_homology.compute` computes the homology
 map induced by a degreewise simplicial map between finite truncated
 simplicial sets.

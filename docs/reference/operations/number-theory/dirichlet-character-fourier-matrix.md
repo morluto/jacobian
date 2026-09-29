@@ -1,5 +1,7 @@
 # Exact Dirichlet-character Fourier matrix
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.group.fourier_matrix.compute` returns the complete finite
 Fourier matrix for one admitted `DirichletCharacterGroup`. Its rows use every
 dual character coordinate once in lexicographic order; columns use the group's

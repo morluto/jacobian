@@ -1,5 +1,7 @@
 # Petri-net marking conflict profile
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.marking.conflict_profile.compute` partitions every unordered pair
 of distinct transitions enabled individually at a supplied marking. A pair is
 jointly enabled as a simultaneous step exactly when its aggregate input demand

@@ -1,5 +1,7 @@
 # Degree-truncated free-algebra quotients
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.two_sided_quotient.truncated_algebra.compute` constructs the
 finite-dimensional algebra
 

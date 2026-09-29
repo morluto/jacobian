@@ -1,6 +1,6 @@
 # Petri-net reachability token profile
 
-[Documentation home](../../index.md) · [Operation references](index.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `petri_net.reachability.token_profile.compute` reports the minimum and maximum
 token count for each place, plus the minimum and maximum total token count, over

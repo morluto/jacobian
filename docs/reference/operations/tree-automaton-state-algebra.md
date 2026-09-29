@@ -1,5 +1,7 @@
 # Deterministic tree-automaton state algebra
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `tree_automaton.deterministic.state_algebra.compute` returns the finite
 single-sorted algebra defined by a complete deterministic bottom-up tree
 automaton's transition functions. Its carrier position `i` is automaton state

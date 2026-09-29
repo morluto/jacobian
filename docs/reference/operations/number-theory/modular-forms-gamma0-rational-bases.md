@@ -1,5 +1,7 @@
 # Rational Gamma0 modular-form bases
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `modular_form.space.basis_q_expansions.compute` also returns exact
 q-expansion bases for bounded rational, trivial-character spaces
 `M_k(Gamma0(N))` and `S_k(Gamma0(N))` beyond the formula-based levels already

@@ -1,5 +1,7 @@
 # Finite relational polymorphism families
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `relational.polymorphisms.arity.enumerate` returns the complete set of
 relation-preserving `m`-ary operation tables on one exact finite relational
 structure. Each operation table has one value for every lexicographically

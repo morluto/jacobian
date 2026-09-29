@@ -1,5 +1,7 @@
 # Finite simplicial subset prefixes
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `topology.simplicial_set.subset.from_degree_families.compute` constructs a
 subobject of one complete finite truncated simplicial set. The request gives
 one strictly increasing list of source simplex indices in each degree. The

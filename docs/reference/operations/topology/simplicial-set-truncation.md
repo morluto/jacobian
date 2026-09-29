@@ -1,5 +1,7 @@
 # Finite simplicial-set truncation
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool reference](../../tools.md)
 
 `topology.simplicial_set.truncate.compute` retains the exact prefix in degrees

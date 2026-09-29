@@ -1,5 +1,7 @@
 # Koszul homology exact-rank admission
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The finite-module Koszul homology operation returns the source complex along
 with three integer profiles. Its exact linear algebra uses rational
 Gauss-Jordan rank, and it validates the source action and `d^2=0` before the

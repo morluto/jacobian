@@ -1,5 +1,7 @@
 # Exact Dirichlet character Gauss sum
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.gauss_sum.compute` returns
 
 \[

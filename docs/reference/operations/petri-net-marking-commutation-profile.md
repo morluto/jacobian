@@ -1,5 +1,7 @@
 # Petri-net sequential commutation profile
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.marking.commutation_profile.compute` takes a marking and an
 ordered pair of distinct transitions, then replays both two-step orders:
 

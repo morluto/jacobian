@@ -1,5 +1,7 @@
 # Three-dimensional polytope face lattices
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `polytope.face_lattice.compute` accepts a labelled rational V-representation
 whose convex hull is full-dimensional in three-space. It recomputes the complete
 exact facet incidence from the source vertices, identifies the extreme source

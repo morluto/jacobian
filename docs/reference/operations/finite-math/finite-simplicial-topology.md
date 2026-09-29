@@ -1,6 +1,6 @@
 # Finite simplicial topology
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 The topology family owns bounded finite simplicial-complex values and their
 exact direct operations:

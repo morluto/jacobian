@@ -1,5 +1,7 @@
 # Finite-dimensional Lie algebra adjoint representation
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lie_algebra.adjoint_representation.compute` returns the matrices of the
 adjoint action for a finite-dimensional Lie algebra over `QQ`. The request uses
 the same ordered basis and sparse structure constants as the other

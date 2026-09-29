@@ -1,5 +1,7 @@
 # Highest positive coroots
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.highest_coroots.compute` returns one highest positive coroot for
 each connected Cartan component. In a component with ordered simple-coroot
 basis `alpha_i^vee`, coroot dominance means

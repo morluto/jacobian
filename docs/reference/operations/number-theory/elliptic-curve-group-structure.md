@@ -1,5 +1,7 @@
 # Finite-field elliptic-curve group structure
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.group_structure.compute` returns the invariant
 factor presentation of (E(\mathbb F_q)) and one exact point generator for
 each nontrivial factor. The result uses the shared `AbelianPresentation`

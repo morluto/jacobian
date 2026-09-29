@@ -1,6 +1,6 @@
 # Exact bounded Gaussian polynomial moments
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `probability.gaussian_polynomial.moment.compute` computes one stated exact
 moment of a bounded sparse complex-rational polynomial in independent standard

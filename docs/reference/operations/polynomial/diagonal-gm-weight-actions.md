@@ -1,5 +1,7 @@
 # Diagonal multiplicative-group actions
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `algebraic_group.gm.diagonal_weight_action.compute` acts on one exact ordered
 polynomial ring over `QQ` by a closed diagonal integer-weight action
 

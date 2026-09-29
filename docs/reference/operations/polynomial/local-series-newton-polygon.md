@@ -1,5 +1,7 @@
 # Newton polygons for local-series polynomials
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `local_series.polynomial.newton_polygon.compute` computes the exact lower convex
 hull of the points `(j, v(a_j))` for a sparse polynomial
 `F(y) = sum_j a_j(t) y^j`. Each coefficient is a finite Laurent prefix over

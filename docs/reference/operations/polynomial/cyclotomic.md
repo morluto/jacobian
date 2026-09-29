@@ -1,5 +1,7 @@
 # Exact cyclotomic polynomials
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `polynomial.cyclotomic.compute` constructs the primitive integer polynomial
 `Phi_n(x)` for one positive integer index. The result retains the source index,
 the degree `phi(n)`, and a dense `ZZ[x]` polynomial whose coefficients are in

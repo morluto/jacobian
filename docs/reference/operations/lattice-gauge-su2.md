@@ -1,5 +1,7 @@
 # Rational SU(2) lattice gauge operations
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The gauge catalog has a distinct exact SU(2) carrier built from rational unit
 quaternions. `lattice_gauge.su2.gauge_transform.compute` applies
 \(U'_{u\to v}=g_u U_{u\to v}g_v^{-1}\) to every oriented edge and preserves

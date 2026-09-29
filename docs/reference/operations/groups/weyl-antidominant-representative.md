@@ -1,5 +1,7 @@
 # Antidominant Weyl representatives
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `weyl_group.antidominant_representative.compute` returns the unique
 antidominant weight in the finite Weyl orbit of an integral weight, together
 with an exact Weyl element carrying the source weight to that representative.

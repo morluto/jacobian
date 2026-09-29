@@ -1,5 +1,7 @@
 # Exact root--critical-point distance profiles
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `polynomial.root_critical_distance_profile.compute` returns the complete
 Cartesian relation between the distinct complex roots of a bounded nonconstant
 univariate polynomial `p` over `QQ` and the distinct roots of `p'`. Each axis

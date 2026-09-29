@@ -1,6 +1,6 @@
 # Real-embedded binary power-sum gap profiles
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `number_field.real_embedding.binary_power_sum_gap_profile.compute` returns the
 complete finite family

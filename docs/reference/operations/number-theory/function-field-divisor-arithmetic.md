@@ -1,5 +1,7 @@
 # Rational function-field divisor arithmetic
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.divisor.add.compute`, `function_field.divisor.negate.compute`,
 and `function_field.divisor.scale.compute` implement the additive group and
 integer scaling on finite divisors of the explicitly represented rational

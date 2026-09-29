@@ -1,6 +1,6 @@
 # Applying an exact number-field embedding
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `number_field.embedding.apply_exact.compute` transports one element under a
 specified embedding between two simple extensions of `QQ`. Each field uses

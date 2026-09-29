@@ -1,5 +1,7 @@
 # Transpose a finite binary relation
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The native Python helper
 `jacobian.math.logic.relational_structures.transpose_binary_relation`
 returns a canonical finite relational structure with one selected binary

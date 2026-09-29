@@ -1,5 +1,7 @@
 # Bounded regular plane-curve arclength
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `real_algebraic.plane_curve.arclength.enclose` returns a source-bound rational
 interval containing
 

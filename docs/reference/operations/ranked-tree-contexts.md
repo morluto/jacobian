@@ -1,5 +1,7 @@
 # One-hole ranked-tree contexts
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `ranked_tree.context.plug.compute` substitutes a ranked ground tree into the
 unique hole of a finite tree context. A context is represented canonically by
 its exact ranked alphabet and the root-to-hole spine. Each spine frame stores

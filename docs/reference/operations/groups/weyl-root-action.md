@@ -1,5 +1,7 @@
 # Weyl action on root-lattice vectors
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `weyl_group.element.act_on_root.compute` applies one canonical finite Weyl
 element to a `RootLatticeVector` in the same ordered Cartan datum. It returns
 the resulting `RootLatticeVector` directly, preserving the simple-root basis

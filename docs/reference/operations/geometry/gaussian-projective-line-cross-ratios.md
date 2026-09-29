@@ -1,5 +1,7 @@
 # Gaussian-rational projective-line cross-ratios
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `geometry.projective_line.cross_ratio.gaussian_rational.compute` returns the
 exact cross-ratio of an ordered quadruple of pairwise distinct points of
 `P^1(Q(i))`. Here `Q(i)` is the fixed Gaussian-rational field with

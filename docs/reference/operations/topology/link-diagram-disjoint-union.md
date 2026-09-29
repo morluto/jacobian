@@ -1,5 +1,7 @@
 # Link diagram disjoint union
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `link_diagram.disjoint_union.compute` forms a tagged disjoint union of oriented
 link diagrams.
 

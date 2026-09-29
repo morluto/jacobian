@@ -1,5 +1,7 @@
 # Exact relative trace of a function-field element
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.element.trace.compute` returns the field trace
 
 ```text
@@ -27,4 +29,3 @@ different base field.
 For finite separable extensions, the trace equals the sum over base-field
 embeddings; see [Sharifi, *Abstract Algebra*, Chapter 10](https://math.ucla.edu/~sharifi/notes/algebra-ch10.html).
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)

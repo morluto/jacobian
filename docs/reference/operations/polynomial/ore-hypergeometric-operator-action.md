@@ -1,5 +1,7 @@
 # Proper-hypergeometric shift-operator action
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.proper_hypergeometric.apply_shift_operator.compute` applies a bounded
 left-coefficient shift Ore operator
 

@@ -1,5 +1,7 @@
 # Finite delta-matroids
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Finite mathematics operations](index.md) · [Tool surface](../../tools.md)
 
 `delta_matroid.from_feasible_sets.compute` recognizes one complete bounded

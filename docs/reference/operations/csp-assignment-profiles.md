@@ -1,5 +1,7 @@
 # Finite CSP assignment profiles
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 [Operation references](index.md) · [Tool surface](../tools.md)
 
 `csp.assignment.profile.compute` evaluates one total map from the instance's

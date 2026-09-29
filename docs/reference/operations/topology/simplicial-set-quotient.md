@@ -1,5 +1,7 @@
 # Finite simplicial-set congruence quotient
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.quotient_by_congruence.compute` forms the degreewise
 quotient of a finite truncated simplicial set. Each `degree_class_ids[n]` row
 has one nonnegative class ID for every simplex in degree `n`; equal IDs define

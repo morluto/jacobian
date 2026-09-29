@@ -1,5 +1,7 @@
 # Rational functions to Laurent prefixes
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `local_series.from_rational_function_at_point.compute` expands a canonical
 univariate rational function over `QQ` around a rational point `a`, using
 `t = x - a`. Its `precision` is the exclusive exponent cutoff: the returned

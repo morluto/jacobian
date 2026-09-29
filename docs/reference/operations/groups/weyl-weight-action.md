@@ -1,5 +1,7 @@
 # Weyl action on weight-lattice vectors
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `weyl_group.element.act_on_weight.compute` applies a canonical finite Weyl
 element to a `WeightLatticeVector` in the same ordered Cartan datum. It returns
 the resulting `WeightLatticeVector` directly, so the image can be supplied to

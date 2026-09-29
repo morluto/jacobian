@@ -1,6 +1,6 @@
 # Integer Hermite normal form
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `lattice.hermite_normal_form.compute` accepts one bounded integer matrix and
 returns its row Hermite normal form (H) and the unimodular transformation (U)

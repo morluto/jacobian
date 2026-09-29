@@ -1,5 +1,7 @@
 # Root, coroot, weight, and coweight vectors
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 The four vector operations return distinct immutable values, each bound to a
 canonical finite Cartan datum:
 

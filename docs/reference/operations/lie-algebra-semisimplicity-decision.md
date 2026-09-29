@@ -1,5 +1,7 @@
 # Lie algebra semisimplicity decision
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lie_algebra_is_semisimple` is a native convenience projection over the
 published `lie_algebra.killing_form.radical.compute` operation: over `QQ`,
 Cartan's criterion says the algebra is semisimple exactly when the Killing form

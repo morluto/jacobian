@@ -1,6 +1,6 @@
 # Prime-field homogeneous fixed subspaces
 
-[Documentation home](../../index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `finite_field.prime_linear_action.homogeneous_fixed_subspace.compute` computes
 the simultaneous fixed subspace of one homogeneous polynomial component under

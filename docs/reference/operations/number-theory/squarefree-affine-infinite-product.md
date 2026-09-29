@@ -1,5 +1,7 @@
 # Square-free affine infinite product enclosure
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `number_theory.squarefree_affine_forms.infinite_product.enclose` returns an
 exact rational interval containing the convergent product of local square-free
 densities for a finite family of integer affine forms.

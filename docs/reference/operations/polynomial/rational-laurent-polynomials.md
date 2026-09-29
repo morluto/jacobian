@@ -1,6 +1,7 @@
 # Exact rational Laurent-polynomial multiplication
 
-[Documentation home](../../../index.md) · [Polynomial operations](index.md) ·
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Tool surface](../../tools.md)
 
 `polynomial.laurent.rational.multiply.compute` multiplies two finite sparse

@@ -1,5 +1,7 @@
 # Finite-group Adams operation
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `character.adams_operation.compute` accepts a virtual character expressed in
 the canonical irreducible basis of its retained finite-group character table
 and a positive integer `k`. It returns the exact table-bound virtual character

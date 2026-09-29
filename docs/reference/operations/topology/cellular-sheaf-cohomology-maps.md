@@ -1,5 +1,7 @@
 # Cellular sheaf cohomology maps
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `cellular_sheaf.morphism.cohomology_map.compute` derives the linear maps on
 cellular sheaf cohomology induced by a natural stalk morphism. It first
 re-establishes naturality, builds the corresponding cochain map, and computes

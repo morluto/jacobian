@@ -1,5 +1,7 @@
 # Arithmetic progressions in Kempner digit sets
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `number_theory.kempner_set.arithmetic_progression.decide` decides whether the
 positive integers whose canonical base-`b` digits all lie in a proper subset
 `S` contain a nontrivial progression of the requested fixed arity.

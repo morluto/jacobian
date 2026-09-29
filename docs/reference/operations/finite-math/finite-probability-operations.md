@@ -1,6 +1,6 @@
 # Finite probability operations
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 Finite distributions are canonical bounded rational values. Jacobian provides
 direct operations for conditioning, convolution, i.i.d. convolution powers,

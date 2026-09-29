@@ -1,6 +1,6 @@
 # Regular-language operations
 
-[Documentation home](../../index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 ## Ranked tree languages
 

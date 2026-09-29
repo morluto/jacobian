@@ -1,5 +1,7 @@
 # Coxeter polynomials
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.coxeter_polynomial.compute` returns the characteristic polynomial
 `det(tI-c)` of the Coxeter element on the simple-root lattice. For the ordered
 simple-root axis `0,...,r-1`, the operation applies `s_0`, then `s_1`, through

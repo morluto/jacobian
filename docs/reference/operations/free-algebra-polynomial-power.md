@@ -1,5 +1,7 @@
 # Free associative algebra polynomial powers
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.polynomial.power.compute` returns the exact nonnegative integer
 power of one sparse `QQ`-linear polynomial in the free associative algebra. The
 result is a canonical `FreeAlgebraPolynomial` over the input alphabet. At

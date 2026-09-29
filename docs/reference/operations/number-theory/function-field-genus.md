@@ -1,5 +1,7 @@
 # Function-field genus
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Number theory operations](index.md) · [Tool surface](../../tools.md)
 
 `function_field.genus.compute` returns the genus of either `GF(p)(x)` or a

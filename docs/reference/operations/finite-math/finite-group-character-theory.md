@@ -1,5 +1,7 @@
 # Finite-group character operations
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Finite mathematics operations](index.md) · [Tool surface](../../tools.md)
 
 ## Bounded complete character tables

@@ -1,5 +1,7 @@
 # Exact Dirichlet-character parity
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.parity.compute` returns the exact value \(\chi(-1)\) in
 the source character's cyclotomic parent. Since \(-1\) has order at most two
 in the unit group, this value is exactly `1` or `-1`; the result labels those

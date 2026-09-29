@@ -1,5 +1,7 @@
 # Finite cubical face posets
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `topology.cubical_complex.face_poset.compute` closes a finite family of

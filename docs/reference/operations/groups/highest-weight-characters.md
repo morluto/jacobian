@@ -1,5 +1,7 @@
 # Type-A highest-weight characters
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.highest_weight_character.compute` returns the complete weight and
 multiplicity table for an irreducible representation of the irreducible finite
 Cartan type `A_n`, with dominant highest weight in fundamental-weight

@@ -1,5 +1,7 @@
 # Stabilizer code spaces
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.code.compute` accepts an exact qubit stabilizer group and
 one strict `+1` or `-1` eigenvalue for each independent generator. It absorbs
 the selected character into the exact Pauli phases and returns the canonical

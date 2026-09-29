@@ -1,5 +1,7 @@
 # Integral quadratic forms
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `IntegralQuadraticForm` is the canonical polynomial carrier over `ZZ`:
 
 ```text

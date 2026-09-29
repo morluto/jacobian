@@ -1,5 +1,7 @@
 # Monic left division of differential Ore operators
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.differential.operator.left_division.compute` returns exact operators
 `Q` and `R` satisfying `A = B*Q + R`, with `order(R) < order(B)`, in
 `QQ(x)<D>` under the Weyl rule `D*a = a*D + a'`. The factor order is part of

@@ -1,5 +1,7 @@
 # Complete finite CSP solution enumeration
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 [Operation references](index.md) · [Tool surface](../tools.md)
 
 `csp.solutions.enumerate.compute` returns every satisfying assignment of one

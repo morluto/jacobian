@@ -1,5 +1,7 @@
 # Simultaneous square-free affine interval counts
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 For a bounded family of integer affine forms \(L_j(n)=a_jn+b_j\), this
 operation counts integers \(n\in[\ell,u]\) for which every \(L_j(n)\) is
 square-free. An optional ledger lists matching integers and the least prime

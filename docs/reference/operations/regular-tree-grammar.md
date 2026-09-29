@@ -1,5 +1,7 @@
 # Regular tree grammars and bottom-up automata
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `regular_tree_grammar.to_automaton.compute` converts a finite unit-free
 regular tree grammar into the existing nondeterministic bottom-up tree
 automaton value. The convention is the standard ranked production

@@ -1,6 +1,6 @@
 # Petri-net reachable dead markings
 
-[Documentation home](../../index.md) · [Operation references](index.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `petri_net.reachable_dead_markings.compute` explores the bounded reachable
 state space and returns the discovered markings at which no transition is

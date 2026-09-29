@@ -1,5 +1,7 @@
 # Discrete Morse chain contractions
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.discrete_morse.chain_contraction.compute` returns an integral strong
 deformation retraction from the oriented simplicial chain complex to the Morse
 chain complex of one supplied acyclic matching. Its exact simplex bases,

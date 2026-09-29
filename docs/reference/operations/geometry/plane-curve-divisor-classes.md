@@ -1,5 +1,7 @@
 # Plane-curve strict-transform divisor classes
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `algebraic_geometry.plane_curve.strict_transform_class.compute` maps a
 nonzero homogeneous polynomial `F` of degree `d` and a labelled blow-up
 surface of the projective plane to the existing exact `BlowupDivisorClass`

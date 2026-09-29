@@ -1,6 +1,6 @@
 # Linear matroid optimization
 
-[Documentation home](../../../index.md) · [Operation references](../index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 These operations consume a canonical `LinearMatroid` represented by the
 columns of a prime-field matrix. Weights are exact integers attached to those

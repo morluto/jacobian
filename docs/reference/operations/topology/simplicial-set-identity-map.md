@@ -1,5 +1,7 @@
 # Identity map of a finite simplicial set
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.map.identity.compute` takes a complete
 `FiniteTruncatedSimplicialSet` prefix and returns a `TruncatedSimplicialMap`
 whose source and target are that same prefix. In degree `n`, its row is the

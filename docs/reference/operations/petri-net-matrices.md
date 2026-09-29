@@ -1,5 +1,7 @@
 # Petri-net matrices
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.matrices.compute` returns the exact precondition matrix `Pre`,
 postcondition matrix `Post`, and incidence matrix `C = Post - Pre` for one finite
 ordinary weighted place/transition net. Rows follow the net's ordered place

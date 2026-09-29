@@ -1,5 +1,7 @@
 # Exact homogeneous free-algebra ideal components
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.two_sided_ideal.degree_component.compute` returns the exact
 degree-`n` vector subspace of a finitely generated homogeneous two-sided ideal
 in `QQ<X>`, represented by its canonical reduced row-echelon basis in the

@@ -1,5 +1,7 @@
 # Boolean products of deterministic tree automata
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `tree_automaton.boolean_product.compute` constructs the synchronous product of
 two complete deterministic bottom-up tree automata over the same ordered
 ranked signature. The `connective` selects intersection, union, left

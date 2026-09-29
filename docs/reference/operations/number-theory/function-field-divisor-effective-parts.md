@@ -1,5 +1,7 @@
 # Function-field divisor effective parts
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Number theory operations](index.md) · [Tool surface](../../tools.md)
 
 `function_field.divisor.effective_parts.compute` accepts a finite divisor over

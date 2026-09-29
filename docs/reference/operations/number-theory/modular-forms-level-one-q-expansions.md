@@ -1,5 +1,7 @@
 # Level-one named modular-form q-expansions
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `modular_form.level_one.named_q_expansion.compute` constructs a complete exact
 prefix of one closed normalized family in `QQ[[q]]`: `E4`, `E6`, or Ramanujan
 `DELTA`. The returned value retains the level-one `SL2Z` parent, weight,

@@ -1,5 +1,7 @@
 # Finite CSP instances and source structures
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `csp.instance.to_source_structure.compute` converts a finite CSP instance to
 the canonical finite relational structure on its variables. Each named
 constraint occurrence retains its relation symbol and ordered variable scope.

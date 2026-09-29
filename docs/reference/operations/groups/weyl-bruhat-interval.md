@@ -1,5 +1,7 @@
 # Weyl Bruhat intervals
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `weyl_group.bruhat_interval.compute` returns the complete closed interval
 `[u,v] = {x : u <= x <= v}` in the strong Bruhat order of a finite
 crystallographic Weyl group. Both endpoints are canonical `WeylElement`

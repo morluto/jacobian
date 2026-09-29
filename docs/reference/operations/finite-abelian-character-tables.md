@@ -1,5 +1,7 @@
 # Finite Abelian character tables
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `finite_abelian_group.character_table.compute` returns the full Fourier table
 for an explicit product `G = C_m1 x ... x C_mr`. Both rows (dual frequencies)
 and columns (group elements) use lexicographic coordinate order. For a row

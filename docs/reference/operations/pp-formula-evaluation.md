@@ -1,5 +1,7 @@
 # Primitive positive formula evaluation
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `pp_formula.evaluate_relation.compute` evaluates one typed primitive-positive
 formula on one finite relational structure and returns its complete defined
 relation. Formulas are conjunctions of relation atoms and logical equality

@@ -1,6 +1,6 @@
 # Petri-net target marking reachability
 
-[Documentation home](../../index.md) · [Operation references](index.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `petri_net.marking.reachability.compute` searches for a firing sequence from
 an initial marking to a selected target marking. `REACHABLE` returns a

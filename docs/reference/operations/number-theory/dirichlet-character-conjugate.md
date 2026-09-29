@@ -1,5 +1,7 @@
 # Exact conjugation of a Dirichlet character
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.conjugate.compute` returns the complex conjugate of one
 canonical exact character, preserving its exact modulus and unit-group parent.
 For a unit `a`, the output satisfies `conj(chi)(a) = conjugate(chi(a))`; for a

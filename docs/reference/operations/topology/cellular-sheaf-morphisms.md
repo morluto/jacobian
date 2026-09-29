@@ -1,5 +1,7 @@
 # Cellular-sheaf morphisms
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 The `cellular_sheaf.morphism.compute` operation checks a pointwise map between
 two checked finite cellular sheaves on the same simplicial complex and exact
 coefficient field. Supply one exact matrix

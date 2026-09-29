@@ -1,5 +1,7 @@
 # Binary CSS stabilizer check spaces
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.css_check_space.compute` accepts separate binary X- and
 Z-check matrices on one ordered qubit register. It row-reduces each family over
 GF(2) and checks every cross inner product. If `H_X H_Z^T = 0`, it returns a

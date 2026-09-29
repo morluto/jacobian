@@ -1,5 +1,7 @@
 # Exact generalized Bernoulli number for a Dirichlet character
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.generalized_bernoulli.compute` returns
 
 \[

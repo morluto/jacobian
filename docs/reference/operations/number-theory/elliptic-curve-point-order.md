@@ -1,5 +1,7 @@
 # Finite-field elliptic-curve point order
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.point.order.compute` returns the exact additive
 order of one curve-bound point. It first computes the curve cardinality by an
 exact quadratic-character sum over the base field, then removes prime factors

@@ -1,5 +1,7 @@
 # Ranked-tree positions
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `ranked_tree.positions.compute` returns one zero-based child-index path for
 every node of a finite ranked tree. The root has position `[]`; child `i` of a
 node at `p` has position `p + [i]`. Rows are ordered in root-first preorder.

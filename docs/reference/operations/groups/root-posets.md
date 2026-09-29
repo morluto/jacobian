@@ -1,5 +1,7 @@
 # Positive-root posets
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.root_poset.compute` returns the complete poset on a finite
 crystallographic root system's positive roots. The result includes a canonical
 `FinitePoset`, its positive-root coordinate axis, and the finite Cartan datum

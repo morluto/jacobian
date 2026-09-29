@@ -1,6 +1,6 @@
 # Exact symbolic matrix products
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `matrix.symbolic.multiply.compute` returns the exact row-by-column product of
 two bounded matrices over one explicitly ordered field

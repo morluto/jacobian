@@ -1,6 +1,6 @@
 # Simple number-field embeddings
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `number_field.embeddings.compute` returns every Archimedean embedding of one
 bounded presentation

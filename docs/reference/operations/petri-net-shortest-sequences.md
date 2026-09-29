@@ -1,6 +1,6 @@
 # Petri-net all-shortest firing sequences
 
-[Documentation home](../../index.md) · [Operation references](index.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `petri_net.reachability.shortest_sequences.compute` takes a complete finite
 reachability graph and target marking. It returns the minimum firing count and

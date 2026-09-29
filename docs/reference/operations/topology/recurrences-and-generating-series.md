@@ -1,6 +1,6 @@
 # Recurrences and generating series
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 Exact recurrence and generating-function operations belong to the
 combinatorics domain:

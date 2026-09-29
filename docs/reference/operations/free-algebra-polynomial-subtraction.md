@@ -1,5 +1,7 @@
 # Free associative algebra polynomial subtraction
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.polynomial.subtract.compute` computes the exact difference of
 two sparse polynomials over `QQ`. Both operands must use the identical ordered
 generator alphabet. Coefficients on equal words are subtracted; zero

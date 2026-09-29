@@ -1,6 +1,6 @@
 # Maximum matching
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.invariant.maximum_matching.compute` computes an exact
 maximum-cardinality matching of a bounded simple graph and returns its matching

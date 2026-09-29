@@ -1,5 +1,7 @@
 # Weyl-group Poincare polynomial
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.weyl_poincare_polynomial.compute` returns the exact length
 generating polynomial
 

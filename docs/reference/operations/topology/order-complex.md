@@ -1,5 +1,7 @@
 # Finite-poset order complex
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `topology.poset.order_complex.compute` takes an existing canonical

@@ -1,5 +1,7 @@
 # Complete sunflower hypergraphs
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `set_system.sunflower_family.construct` receives an indexed finite family
 
 \[

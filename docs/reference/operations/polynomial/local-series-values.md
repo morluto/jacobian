@@ -1,5 +1,7 @@
 # Exact Puiseux window values
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `TruncatedPuiseuxWindow` is the typed value carrier for a finite local prefix
 with rational exponents. It stores a rational center, a rational retained lower
 bound, a rational exclusive precision, and nonzero coefficient terms in

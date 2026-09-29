@@ -1,5 +1,7 @@
 # Free-algebra polynomial scalar multiplication
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.polynomial.scalar_multiply.compute` multiplies every
 coefficient of a sparse noncommutative polynomial by one exact rational. It
 returns the canonical `FreeAlgebraPolynomial` directly, preserving the ordered

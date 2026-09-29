@@ -1,5 +1,7 @@
 # Rational base inclusion into a function-field extension
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.base_embedding.construct` returns the canonical embedding
 `GF(p)(x) -> GF(p)(x)[y]/(f)` for one admitted finite separable extension. The
 source uses the target's characteristic and rational-variable name; because
@@ -33,4 +35,3 @@ For `GF(2)(x)[y]/(y^2+y+x)`, the operation returns the source rational field
 `GF(2)(x)` and the exact extension field as the target. Both carry the same
 named `x`; the inclusion is fixed by that data.
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)

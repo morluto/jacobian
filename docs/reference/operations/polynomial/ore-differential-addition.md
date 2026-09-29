@@ -1,5 +1,7 @@
 # Differential Ore operator addition
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.differential.operator.add.compute` adds operators in the left-coefficient
 normal form
 

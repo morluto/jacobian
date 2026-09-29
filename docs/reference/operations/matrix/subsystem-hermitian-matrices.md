@@ -1,6 +1,7 @@
 # Exact subsystem-aware Hermitian matrices
 
-[Documentation home](../../../index.md) · [Matrix operations](index.md) ·
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Tool surface](../../tools.md)
 
 `FactorizedHermitianMatrix` binds one square rational symmetric matrix to an

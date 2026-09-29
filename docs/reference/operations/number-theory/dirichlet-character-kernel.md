@@ -1,5 +1,7 @@
 # Exact Dirichlet-character kernel
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.kernel.compute` returns the complete subgroup
 \(\ker(\chi)=\{a\in(\mathbb Z/N\mathbb Z)^*: \chi(a)=1\}\) as increasing
 canonical residue representatives. The result retains the source character

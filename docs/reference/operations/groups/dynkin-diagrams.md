@@ -1,5 +1,7 @@
 # Finite Dynkin diagrams
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.dynkin_diagram.compute` returns a complete labeled graph together
 with its finite Cartan datum. The node axis contains every simple-root index,
 including isolated nodes in a reducible datum. An edge joining `i < j` stores

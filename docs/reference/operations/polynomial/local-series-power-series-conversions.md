@@ -1,5 +1,7 @@
 # Power-series and Laurent conversions
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `local_series.from_power_series.compute` embeds the exact #1713
 `TruncatedSeries` value in `TruncatedLaurentWindow` at finite center zero. It
 preserves the variable and exclusive precision. Known leading zeros are

@@ -1,5 +1,7 @@
 # Affine-semigroup holes through degree
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 [`affine_semigroup.holes_through_degree.compute`](../tools.md) returns the complete
 set
 

@@ -1,5 +1,7 @@
 # Finite-field elliptic zeta function
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.zeta.compute` returns the full Hasse-Weil zeta
 function of an admitted nonsingular short-Weierstrass curve over a finite
 field `F_q`:

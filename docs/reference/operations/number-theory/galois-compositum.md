@@ -1,5 +1,7 @@
 # Composita of quadratic splitting fields
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `number_field.galois.compositum.compute` computes the compositum of two
 source-bound splitting fields over `QQ`, each of degree at most two. The result
 is one exact simple-field presentation together with an embedding of each

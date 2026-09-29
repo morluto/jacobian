@@ -1,5 +1,7 @@
 # Subsequence-transducer coaccessibility witnesses
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `transducer.subsequential.coaccessible_states.compute` returns one witness for
 each state from which a function-domain word can finish. It selects a suffix
 with minimum input length, then the lexicographically first suffix in the

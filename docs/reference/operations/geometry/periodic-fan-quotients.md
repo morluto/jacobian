@@ -1,5 +1,7 @@
 # Periodic fan quotient validation
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `periodic_fan.quotient.validate` validates a bounded lattice-periodic cell
 presentation and returns its exact quotient face incidence, face-orbit map,
 period index, and translation stabilizers. The validated finite cells represent

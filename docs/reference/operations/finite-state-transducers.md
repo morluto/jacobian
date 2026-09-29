@@ -1,6 +1,6 @@
 # Finite-state transducer operations
 
-[Documentation home](../../index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `transducer.subsequential.run.compute` executes one bounded partial function
 realized by a deterministic subsequential transducer. A successful result

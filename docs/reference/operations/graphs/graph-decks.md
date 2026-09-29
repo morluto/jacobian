@@ -1,5 +1,7 @@
 # Exact graph deletion decks
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `graph.deck.vertex_deleted.compute` and `graph.deck.edge_deleted.compute`
 construct complete source-bound deletion families. A vertex card omits exactly
 its bound vertex. An edge card retains the entire source vertex domain,

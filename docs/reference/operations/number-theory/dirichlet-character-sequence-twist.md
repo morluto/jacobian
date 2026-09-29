@@ -1,5 +1,7 @@
 # Exact finite sequence twist by a Dirichlet character
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `sequence.dirichlet_character_twist.compute` accepts an exact finite integer,
 rational, or cyclotomic sequence and one canonical Dirichlet character. Integer
 and rational inputs require the first index `index_origin`; an existing

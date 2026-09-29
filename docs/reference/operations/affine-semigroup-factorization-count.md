@@ -1,5 +1,7 @@
 # Exact affine-semigroup factorization counts
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `affine_semigroup.factorization_count.compute` returns the exact cardinality
 of
 

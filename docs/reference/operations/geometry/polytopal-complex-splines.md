@@ -1,5 +1,7 @@
 # Rational polytopal complexes and splines
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Geometry operations](index.md) · [Tool surface](../../tools.md)
 
 ## Piecewise-polynomial smoothness profile

@@ -1,5 +1,7 @@
 # Standard Young tableau enumeration
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `combinatorics.standard_young_tableaux.enumerate` returns every standard
 Young tableau of one partition shape, in lexicographic order on the tuple of
 rows. Entries are exactly `1, ..., n`, each occurs once, and rows and columns

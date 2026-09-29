@@ -1,6 +1,6 @@
 # Strict longest increasing subsequence
 
-[Documentation home](../../../index.md) · [Operation references](../index.md) · [Combinatorics](index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `word.longest_increasing_subsequence.compute` accepts a bounded `FiniteWord`
 and returns its exact strict-LIS length, one tuple of zero-based source

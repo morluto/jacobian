@@ -1,5 +1,7 @@
 # Pauli family commutation matrix
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.pauli.family.commutation_matrix.compute` accepts an ordered family
 of named phase-free Pauli values and returns its complete binary symplectic
 pairing matrix. The result retains the original family, including its row and

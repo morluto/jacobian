@@ -1,6 +1,6 @@
 # Diameter and radius
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.distance_matrix.compute` exposes the complete distance value for a
 bounded connected graph. A disconnected input has a typed non-applicability

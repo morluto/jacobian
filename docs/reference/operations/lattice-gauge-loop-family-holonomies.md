@@ -1,5 +1,7 @@
 # Finite lattice loop-family holonomies
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lattice_gauge.loop_family.holonomies.compute` evaluates an explicitly
 supplied finite tuple of based closed paths over one permutation-valued gauge
 field. Each output entry retains its path, basepoint, and exact holonomy. The

@@ -1,5 +1,7 @@
 # Induced edge-deletion profiles
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `graph.coloring.induced_edge_deletion_profile.compute` returns the exact
 source-bound distance from every induced subgraph to `r`-colourability. For a
 finite simple graph `G` and target `r >= 1`, each row is

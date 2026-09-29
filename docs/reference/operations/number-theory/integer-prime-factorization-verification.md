@@ -1,6 +1,6 @@
 # Integer prime factorization
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `integer.compute.prime_factorization` returns the complete prime-power
 factorization of one bounded integer. The result uses canonical signed integer

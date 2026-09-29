@@ -1,5 +1,7 @@
 # Parent-bound affine-semigroup factorizations
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `affine_semigroup.factorization.evaluate` maps one nonnegative coefficient
 vector on a positive affine semigroup's ordered generator axis to its exact
 ambient vector. Its result is an `AffineFactorization` that retains the

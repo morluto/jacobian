@@ -1,5 +1,7 @@
 # Littlewood–Richardson coefficients
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `symmetric_function.littlewood_richardson.coefficient.compute` computes the
 Schur structure constant
 

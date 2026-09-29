@@ -1,5 +1,7 @@
 # Polynomial-coefficient shift-operator addition and scaling
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 The two operations use left-coefficient normal form
 
 \[

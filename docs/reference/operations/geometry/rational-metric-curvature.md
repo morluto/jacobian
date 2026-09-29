@@ -1,6 +1,6 @@
 # Exact rational metric curvature profiles
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `differential_geometry.rational_metric.curvature_profile.compute` computes the
 complete exact curvature profile of one symmetric rational coordinate metric.

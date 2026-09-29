@@ -1,5 +1,7 @@
 # Restricting a cellular sheaf to a subcomplex
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `cellular_sheaf.subcomplex.restrict` restricts a checked cellular sheaf to a
 finite simplicial subcomplex. The requested complex must be a genuine
 subcomplex of the sheaf's complex: every vertex and every nonempty simplex must

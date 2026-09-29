@@ -1,5 +1,7 @@
 # Exact Dirichlet-character order
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.order.compute` returns the multiplicative order of one
 character in the finite dual group. For a cyclic coordinate axis of order
 `m`, coordinate `c` has order `m / gcd(c,m)`; the character order is the least

@@ -1,5 +1,7 @@
 # Native root-lattice presentation inside the weight lattice
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_weight_lattice_presentation(datum)` is a native representation helper
 that packages the simple-root lattice `Q` as an exact `IntegerLattice`
 sublattice of the fundamental-weight lattice `P`. It is not a catalog

@@ -1,5 +1,7 @@
 # Cubic resolvent of a monic quartic
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 For a monic quartic
 
 \[f(T)=T^4+aT^3+bT^2+cT+d\]

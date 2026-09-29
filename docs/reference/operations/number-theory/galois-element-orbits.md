@@ -1,5 +1,7 @@
 # Exact element orbits in supported quadratic splitting fields
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `number_field.element.embedding_orbit.compute` takes an exact element of a
 retained splitting field over `QQ` and returns its complete action under every
 `QQ`-automorphism supported by that field. The current field carrier is limited

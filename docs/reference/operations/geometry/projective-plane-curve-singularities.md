@@ -1,6 +1,6 @@
 # Projective plane-curve singularity profiles
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `algebraic_geometry.projective_plane_curve.singularity_profile.compute`
 computes the complete projective singular locus of one bounded homogeneous

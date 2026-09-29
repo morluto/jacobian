@@ -1,5 +1,7 @@
 # Weyl dimensions
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.weyl_dimension.compute` returns the exact dimension of the
 irreducible finite-dimensional representation with a supplied dominant integral
 highest weight. Weight coordinates are pairings against the ordered simple

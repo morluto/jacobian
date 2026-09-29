@@ -1,5 +1,7 @@
 # Rational discrete antiderivatives
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `polynomial.rational.discrete_antiderivative.compute` returns the unique
 canonical polynomial `Q` satisfying
 

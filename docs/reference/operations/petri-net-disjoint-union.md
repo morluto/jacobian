@@ -1,5 +1,7 @@
 # Petri-net disjoint union
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.disjoint_union.compute` forms the disjoint union of two weighted
 place/transition nets. It concatenates the source place and transition axes,
 placing the left axes first, then the right axes. The input and output arc

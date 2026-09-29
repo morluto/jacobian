@@ -1,5 +1,7 @@
 # Exact Dirichlet-character powers
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.power.compute` returns \(\chi^k\) in the identical
 finite unit-group parent for a bounded signed integer `k`. On a dual cyclic
 axis of order `m`, the output coordinate is `k*c mod m`; thus `k=0` gives the

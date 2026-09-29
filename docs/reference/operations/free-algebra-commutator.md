@@ -1,5 +1,7 @@
 # Free-algebra polynomial commutator
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `free_algebra.polynomial.commutator.compute` returns the exact associative
 commutator `[f,g] = fg - gf` for two sparse `QQ`-linear polynomials over the
 same ordered free-generator alphabet. It retains both source polynomials and

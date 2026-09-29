@@ -1,5 +1,7 @@
 # Weyl-element order
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `weyl_group.element.order.compute` returns the exact multiplicative order of
 the finite Weyl-group element represented by a bounded word in simple
 reflections. The word uses the same left-to-right convention as

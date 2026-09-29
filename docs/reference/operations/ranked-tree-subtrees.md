@@ -1,5 +1,7 @@
 # Ranked-tree subtrees
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `ranked_tree.subtree.compute` selects a node by its zero-based child-index
 position and returns the rooted subtree at that node. The empty position `[]`
 selects the root, while an address that chooses a missing child is a domain

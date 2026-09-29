@@ -1,5 +1,7 @@
 # Exact rational polytope joins and prisms
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Geometry operations](index.md) · [Tool surface](../../tools.md)
 
 \`polytope.rational.prism.compute\` and \`polytope.rational.join.compute\`

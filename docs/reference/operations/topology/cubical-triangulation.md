@@ -1,5 +1,7 @@
 # Cubical standard triangulation
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.cubical_complex.standard_triangulation.compute` converts a finite
 integer-lattice cubical complex to Jacobian's canonical
 `FiniteSimplicialComplex` value using the Freudenthal (staircase) triangulation.

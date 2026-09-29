@@ -1,5 +1,7 @@
 # Function-field place uniformizer
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.place.uniformizer.compute` returns an exact element bound to the
 requested place and having valuation one there. In `GF(p)(x)`, a finite place
 defined by a monic irreducible polynomial `q(x)` uses `q(x)` as its

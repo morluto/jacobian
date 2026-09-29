@@ -1,5 +1,7 @@
 # First-order differential GCRD
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.operator.gcrd.compute` accepts two operators in the existing
 `QQ(x)<D>` carrier, restricted to differential order at most one and rational
 constant coefficients. It returns their monic greatest common right divisor,

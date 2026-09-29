@@ -1,4 +1,6 @@
 # Cyclotomic character coordinates and equality
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 # Cyclotomic character-space bases
 
 `ModularFormCoordinates` can represent a vector in the canonical q-Sturm RREF

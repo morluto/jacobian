@@ -1,5 +1,7 @@
 # Semistandard Young tableau enumeration
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `combinatorics.semistandard_young_tableaux.enumerate` returns the complete
 family for a straight shape `lambda` and entries in `{1,...,k}`. Rows are
 weakly increasing and columns are strictly increasing. Results are ordered

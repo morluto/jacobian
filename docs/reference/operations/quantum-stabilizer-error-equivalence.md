@@ -1,5 +1,7 @@
 # Quantum stabilizer error equivalence
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.error_equivalence.compute` compares two phase-free qubit
 Pauli errors on the same ordered register modulo a supplied isotropic check
 space. It returns their binary difference and whether that difference belongs

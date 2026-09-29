@@ -1,5 +1,7 @@
 # Image factorization of a finite simplicial map
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.map.image.compute` takes a complete finite-prefix
 `TruncatedSimplicialMap` and returns its image in each degree, the induced
 surjection onto that image, and the inclusion of the image into the target.

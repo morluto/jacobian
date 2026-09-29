@@ -1,5 +1,7 @@
 # Dirichlet-character conductors
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.conductor.compute` returns the exact conductor of a
 character whose finite unit-group parent has been supplied explicitly. The
 result is the least positive divisor `d` of the source modulus `N` through

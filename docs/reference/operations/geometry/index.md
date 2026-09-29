@@ -16,3 +16,6 @@
 - [Periodic-fan quotients](periodic-fan-quotients.md)
 - [Two-dimensional Bieberbach polygon quotient chains](bieberbach-polygon-quotient-chains.md)
 - [Translation torus quotient chains](bieberbach-translation-torus-chains.md)
+- [One-chart affine plane-curve blow-up](plane-curve-blowups.md)
+- [Plane-curve strict-transform divisor classes](plane-curve-divisor-classes.md)
+- [Rational polytopal complex adjacency graph](polyhedral-complex-adjacency-graph.md)

@@ -1,6 +1,6 @@
 # Graph metric operations
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 Jacobian exposes the complete bounded distance matrix of a typed finite graph.
 `graph.distance_matrix.compute` returns every exact unweighted shortest-path

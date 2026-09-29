@@ -1,5 +1,7 @@
 # One-chart affine plane-curve blow-up
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `algebraic_geometry.plane_curve.blowup_chart.compute` takes a nonzero bounded
 affine curve polynomial over `QQ` and a rational point on the curve. For source
 coordinates `(x,y)` and center `(a,b)`, it uses the chart

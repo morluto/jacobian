@@ -1,6 +1,6 @@
 # Homogeneous monomial systems on algebraic tori
 
-[Documentation home](../../index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `algebraic_torus.monomial_system.solution_subgroup.compute` returns the exact
 subgroup

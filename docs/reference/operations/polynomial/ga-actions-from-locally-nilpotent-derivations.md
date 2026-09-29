@@ -1,5 +1,7 @@
 # Additive-group actions from locally nilpotent derivations
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `algebraic_group.ga.action_from_derivation.compute` constructs the additive
 group action on a bounded rational polynomial ring from a derivation and exact
 iterate chains for every generator.

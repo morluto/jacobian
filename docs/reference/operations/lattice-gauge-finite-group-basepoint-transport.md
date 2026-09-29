@@ -1,5 +1,7 @@
 # Finite-group loop basepoint transport
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lattice_gauge.finite_group.basepoint_transport.compute` accepts an exact
 finite-table gauge field, a loop based at `s`, and a connector path `gamma`
 from `s` to `t`. It returns the loop at `t` with path

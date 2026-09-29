@@ -1,5 +1,7 @@
 # Generalized arc consistency for finite CSPs
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `relational.csp.generalized_arc_consistency.compute` prunes the domain of every
 variable until each surviving value is supported by every constraint in which
 that variable occurs. It is a fixpoint computation, not a search: it reports

@@ -1,6 +1,6 @@
 # Plactic normal forms of words
 
-[Documentation home](../../../index.md) · [Operation references](../index.md) · [Combinatorics](index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `word.plactic_normal_form.compute` applies ordinary row-insertion RSK under
 `ROW_INSERTION_RSK_V1`, retaining the source word's explicit ordered alphabet.

@@ -1,5 +1,7 @@
 # Lie algebra common centralizer
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lie_algebra.subalgebra.centralizer.compute` takes a finite-dimensional Lie
 algebra over `QQ` and at most `dim(g)` exact vectors on its ordered basis axis.
 It returns

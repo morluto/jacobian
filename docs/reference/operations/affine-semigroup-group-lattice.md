@@ -1,5 +1,7 @@
 # Affine semigroup group lattice
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `affine_semigroup.group_lattice.compute` returns the integer subgroup generated
 by the labelled columns of a bounded affine configuration
 `A ∈ ZZ^(d×n)`. Its `IntegerLattice` result is the canonical row-Hermite basis

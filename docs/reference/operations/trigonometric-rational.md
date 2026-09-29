@@ -1,6 +1,6 @@
 # Exact trigonometric-rational normalization
 
-[Documentation home](../../index.md) · [Operation references](index.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `algebra.trigonometric_rational.normalize` maps a bounded typed expression in
 integer-affine sines and cosines to a reduced Laurent rational function over

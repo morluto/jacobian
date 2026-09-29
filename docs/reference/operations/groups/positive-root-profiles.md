@@ -1,5 +1,7 @@
 # Positive-root height and support profiles
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.positive_root_profile.compute` returns every positive root in the
 existing canonical lexicographic order of its simple-root coordinates. Each
 row gives the root's height (the sum of those coordinates), the indices of the

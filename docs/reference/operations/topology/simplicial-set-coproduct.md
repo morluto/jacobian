@@ -1,5 +1,7 @@
 # Finite simplicial-set coproducts
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.coproduct.compute` constructs the degreewise disjoint
 union of two finite truncated simplicial-set prefixes. Both inputs must cover
 the same maximum degree `N`; in every retained degree it forms

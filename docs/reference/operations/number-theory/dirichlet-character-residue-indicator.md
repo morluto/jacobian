@@ -1,5 +1,7 @@
 # Dirichlet-character residue-class indicator expansion
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.residue_class_indicator_expansion.compute` returns the
 exact expansion of the point indicator at one unit residue `a` in the character
 basis of `U_N = (Z/NZ)^*`:

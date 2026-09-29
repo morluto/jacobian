@@ -1,5 +1,7 @@
 # Finite permutation characters
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `group.permutation_character.compute` accepts a bounded finite permutation
 action and returns its exact permutation character on the generated group's
 complete conjugacy-class partition. Each class value is the number of domain

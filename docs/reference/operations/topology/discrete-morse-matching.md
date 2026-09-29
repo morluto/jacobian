@@ -1,5 +1,7 @@
 # Discrete Morse matching
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `topology.discrete_morse.matching.minimum.compute` takes a finite simplicial

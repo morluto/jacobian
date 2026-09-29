@@ -1,6 +1,6 @@
 # Rational coordinate covariant derivatives
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `differential_geometry.rational_tensor.covariant_derivative.compute` applies
 the Levi--Civita connection of one exact rational coordinate metric to one

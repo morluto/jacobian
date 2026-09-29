@@ -1,5 +1,7 @@
 # Modular-form spaces, bases, and coordinates
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `modular_form.space.basis_q_expansions.compute` returns the complete
 deterministic basis of a supported rational modular-form space through a finite
 precision. For `M_k(SL2Z)`, the basis is the ordered family
@@ -260,7 +262,6 @@ form closure in the target space; the separate formal q-series transforms
 remain finite series operations and do not assert modularity. Unsupported
 characters, coefficient fields, target levels, or basis kinds are rejected
 before coefficient expansion.
-
 
 ### Gamma0(3) trivial-character spaces
 

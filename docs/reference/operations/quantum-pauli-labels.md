@@ -1,5 +1,7 @@
 # Exact qubit Pauli label conversion
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.pauli.qubit.from_labels.compute` and
 `quantum.pauli.qubit.to_labels.compute` convert between a complete ordered
 `I`/`X`/`Y`/`Z` row and the register-bound exact value

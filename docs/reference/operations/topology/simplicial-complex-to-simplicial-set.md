@@ -1,5 +1,7 @@
 # Finite simplicial complex to simplicial set
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.from_simplicial_complex.compute` constructs the
 degree-truncated simplicial set associated with a finite abstract simplicial
 complex. It takes the canonical complex and a maximum degree `N` and returns a

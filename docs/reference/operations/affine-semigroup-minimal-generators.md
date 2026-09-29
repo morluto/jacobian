@@ -1,5 +1,7 @@
 # Minimal generators of a positive affine semigroup
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 [`affine_semigroup.minimal_generators.compute`](../tools.md) returns the unique
 set of atoms (irreducible nonzero elements) of a finitely generated positive
 affine semigroup. The result is itself a positive affine semigroup on the same

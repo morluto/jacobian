@@ -1,5 +1,7 @@
 # Complementing a deterministic bottom-up tree automaton
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `tree_automaton.complement.compute` complements a complete deterministic
 bottom-up tree automaton over its existing finite ranked signature. The
 `arity` tuple is the ordered signature: symbol IDs are its indices, and each

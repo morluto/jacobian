@@ -1,5 +1,7 @@
 # Bounded finite groups from multiplication tables
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `finite_group.table.construct.compute` admits an indexed multiplication table
 of order at most 24 after checking its proposed two-sided identity, unique
 two-sided inverses, and associativity. It returns a `FiniteGroupTable` with a

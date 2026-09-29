@@ -1,5 +1,7 @@
 # Finite-field elliptic model isomorphism
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.isomorphism.decide` compares two nonsingular
 short-Weierstrass models over the same exact finite-field presentation. In the
 admitted characteristic greater than three, every isomorphism between these

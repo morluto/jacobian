@@ -1,5 +1,7 @@
 # Finite module Koszul complexes and homology
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The `homological.koszul.complex.compute` operation constructs the full sequence
 derived Koszul complex of a finite based module `M` over a finite dimensional
 commutative `QQ` algebra `A`. In degree `k`, the basis is ordered as module

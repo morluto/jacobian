@@ -1,5 +1,7 @@
 # Finite Dirichlet-character group enumeration
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.group.enumerate.compute` takes one canonical finite unit-
 group value, rechecks its modulus, generators, orders, and unit-coordinate
 table, and returns the complete dual group as one shared parent plus ordered

@@ -1,5 +1,7 @@
 # Finite relational direct products
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `relational.structure.direct_product.compute` forms the categorical direct
 product of two finite relational structures when their ranked signatures agree
 symbol for symbol and in order. The carrier label `i * |B| + j` represents the

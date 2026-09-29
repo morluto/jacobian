@@ -1,5 +1,7 @@
 # Shift Ore operator on a finite sequence prefix
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.shift.operator.apply_to_sequence_prefix.compute` evaluates
 
 \[

@@ -1,5 +1,7 @@
 # D-finite Taylor prefix
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `holonomic.differential_series.generate_finite_prefix.compute` computes the
 first `count` Taylor coefficients at the ordinary point (x=0) from a
 `DFinitePowerSeries` value. The output is the ordinary

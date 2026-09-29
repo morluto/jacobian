@@ -1,5 +1,7 @@
 # Stabilizer erasure correctability
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.erasure_correctability.compute` decides whether an explicit
 set `E` of qubit axes is correctable for a supplied phase-free isotropic check
 space `S`. It returns the dimensions of the supported normalizer

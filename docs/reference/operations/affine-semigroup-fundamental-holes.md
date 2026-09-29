@@ -1,5 +1,7 @@
 # Fundamental holes of a positive affine semigroup
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 [`affine_semigroup.fundamental_holes.compute`](../tools.md) returns the
 `Q`-minimal elements of the saturation difference
 

@@ -1,5 +1,7 @@
 # Exact fixed fields in supported quadratic splitting fields
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 These operations connect an exact subgroup of a supported splitting-field
 automorphism group with its embedded fixed field. The current field carrier
 supports splitting fields over `QQ` of degree at most two, so its Galois groups

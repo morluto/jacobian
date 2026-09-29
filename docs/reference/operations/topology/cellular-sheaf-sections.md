@@ -1,5 +1,7 @@
 # Exact global sections of a cellular sheaf
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `cellular_sheaf.sections.compute` returns the global sections of a checked

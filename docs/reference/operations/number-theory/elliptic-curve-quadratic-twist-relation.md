@@ -1,5 +1,7 @@
 # Finite-field elliptic quadratic-twist relation
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.quadratic_twist_relation.compute` returns the
 canonical nontrivial quadratic twist together with the exact source model and
 the chosen parameter `d`. For a source curve

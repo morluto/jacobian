@@ -1,6 +1,6 @@
 # Full graph automorphism group
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.symmetry.automorphism_group.compute` computes the complete
 color-preserving automorphism group of one finite simple undirected graph with

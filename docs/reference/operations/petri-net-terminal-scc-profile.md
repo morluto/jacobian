@@ -1,5 +1,7 @@
 # Petri-net terminal SCC profiles
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.reachability.terminal_scc_profile.compute` takes one bounded
 reachability graph and returns the state-index sets of its sink strongly
 connected components. The input graph is checked for unique reachable states,

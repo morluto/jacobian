@@ -1,5 +1,7 @@
 # Positive-root length profiles
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.root_length_profile.compute` returns every positive root grouped by
 its exact squared length, separately within each irreducible component. Each
 component's positive symmetrizer is normalized so its first simple root has

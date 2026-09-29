@@ -26,6 +26,10 @@ Native Python callers can use domain functions without a catalog or server.
 - [Product model](explanation/product-blueprint.md) — caller/server ownership and
   public contract boundaries.
 - [Architecture](explanation/architecture.md) — the responsibility map for
+- [Classical matrix groups](explanation/classical-matrix-groups-research.md) —
+  which classical families are deferred and what each one would require.
+- [Classical matrix groups](explanation/classical-matrix-groups-research.md) —
+  which classical families are deferred and what each one would require.
   library, publication, and delivery; values versus requests; trust and limit
   ownership; package organization; and a worked operation path.
 
@@ -57,6 +61,10 @@ Native Python callers can use domain functions without a catalog or server.
   complete-basis carrier and exact basis-exchange contract.
 - [Rational Bernstein coordinates](reference/polynomial-bernstein.md) — exact
   polynomial basis conversion on boxes, admission bounds, and evidence.
+- [Berry--Esseen operation](reference/probability-berry-esseen.md) — the
+  i.i.d. finite-sum constant 14/25 with its exact error form.
+- [Berry--Esseen operation](reference/probability-berry-esseen.md) — the
+  i.i.d. finite-sum constant 14/25 with its exact error form.
 - [Testing strategy](reference/testing-strategy.md) — validation ownership and
   focused test lanes.
 

@@ -1,5 +1,7 @@
 # Rational function-field place enumeration
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.places.degree_bounded.enumerate` returns the complete set of
 places of `GF(p)(x)` of degree at most `d`. The result includes the unique
 infinite place of degree one and every finite place represented by its unique

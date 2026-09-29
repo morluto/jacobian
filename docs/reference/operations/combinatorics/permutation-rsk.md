@@ -1,6 +1,6 @@
 # Permutation RSK and its inverse
 
-[Documentation home](../../../index.md) · [Operation references](../index.md) · [Combinatorics](index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `FinitePermutation` stores the one-line images of a bijection of `1..n`; the
 empty tuple is the permutation of the empty set. The operation

@@ -1,5 +1,7 @@
 # Polynomials over rational cyclotomic fields
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `CyclotomicPolynomial` represents a sparse polynomial over the explicitly
 declared field `QQ(zeta_n) = QQ[x]/(Phi_n(x))`. Its coefficients reuse
 `RationalCyclotomicElement`, with exactly `phi(n)` ascending power-basis

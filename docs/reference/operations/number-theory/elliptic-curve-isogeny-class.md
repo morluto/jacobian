@@ -1,5 +1,7 @@
 # Finite-field elliptic-curve isogeny classes
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.isogeny_class.decide` compares two nonsingular
 short-Weierstrass curves over the same exact finite-field presentation. It
 computes each point count by an exact quadratic-character sum, derives the

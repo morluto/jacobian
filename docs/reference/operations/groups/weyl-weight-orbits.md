@@ -1,5 +1,7 @@
 # Integral weight orbits
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `weyl_group.weight.orbit.compute` returns the complete orbit of an integral
 weight under the finite Weyl group of the supplied Cartan matrix. Coordinates
 are in the ordered fundamental-weight basis, equivalently the integer

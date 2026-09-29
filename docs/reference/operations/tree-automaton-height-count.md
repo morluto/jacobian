@@ -1,6 +1,6 @@
 # Accepted ranked trees by height
 
-[Documentation home](../../index.md) · [Tool surface](../tools.md)
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
 `tree_automaton.accepted_tree_height_profile.compute` returns the exact number
 of distinct accepted ranked trees of height at most `h`, for every `h` from

@@ -1,5 +1,7 @@
 # Finite-field elliptic-curve twist-class decision
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.twist_class.decide` compares nonsingular short
 Weierstrass curves over the same exact finite-field presentation, in
 characteristic greater than three.

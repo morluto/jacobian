@@ -1,5 +1,7 @@
 # Fixed-content semistandard tableau counts
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `combinatorics.semistandard_young_tableaux.fixed_content_count` returns the
 number of semistandard Young tableaux of a straight shape `lambda` with one
 specified sparse content map. Rows are weakly increasing and columns are

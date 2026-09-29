@@ -1,5 +1,7 @@
 # Exact three-character Jacobi convolution
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.mixed_jacobi_sum.compute` returns
 
 ```text

@@ -1,5 +1,7 @@
 # Generate a finite prefix from a polynomial recurrence
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.shift.recurrence.generate_finite_prefix.compute` solves a polynomial
 coefficient recurrence
 

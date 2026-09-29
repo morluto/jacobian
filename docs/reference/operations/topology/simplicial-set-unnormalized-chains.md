@@ -1,5 +1,7 @@
 # Unnormalized chains of a finite simplicial set
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.unnormalized_chain_complex.compute` turns a checked
 table-based simplicial-set prefix `X_0,...,X_N` into the canonical based chain
 complex over `ZZ`, `QQ`, or a bounded prime field `GF(p)`

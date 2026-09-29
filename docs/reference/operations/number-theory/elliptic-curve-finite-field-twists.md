@@ -1,5 +1,7 @@
 # Elliptic curve quadratic twists over finite fields
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.quadratic_twist.compute` takes a nonsingular
 short-Weierstrass curve
 \(E:y^2=x^3+Ax+B\) over a finite field of characteristic greater than three.

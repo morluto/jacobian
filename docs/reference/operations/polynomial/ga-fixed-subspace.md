@@ -1,5 +1,7 @@
 # Fixed subspaces of finite additive-group representations
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `algebraic_group.ga.fixed_subspace.compute` takes a finite-dimensional
 polynomial `G_a` subrepresentation and returns a deterministic basis of its
 fixed vectors. Each output row also gives coordinates in the supplied ordered

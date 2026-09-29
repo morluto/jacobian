@@ -1,5 +1,7 @@
 # Complete fixed-length cycle families
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Graph operations](index.md) · [Tool surface](../../tools.md)
 
 The catalog exposes two exact operations for a canonical finite simple

@@ -1,5 +1,7 @@
 # Disjoint union of finite relational structures
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `relational_structure.disjoint_union.compute` takes two canonical
 `FiniteRelationalStructure` values over the same ordered ranked signature. It
 returns their disjoint union as another canonical structure and includes both

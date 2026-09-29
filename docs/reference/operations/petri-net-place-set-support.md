@@ -1,5 +1,7 @@
 # Petri-net place-set support profiles
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.place_set.support_profile.compute` takes a finite ordinary weighted
 place/transition net and a subset `S` of its place axis. It returns the exact
 sets

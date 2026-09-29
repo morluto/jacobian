@@ -1,6 +1,6 @@
 # Finite posets
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 Finite-poset operations use one typed finite-poset value throughout. The live
 operations are:

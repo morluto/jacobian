@@ -1,5 +1,7 @@
 # Exact qubit stabilizer groups
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.exact_group.from_generators.compute` accepts exact Pauli
 values under the convention
 

@@ -1,5 +1,7 @@
 # Deterministic bottom-up tree-automaton minimization
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `tree_automaton.deterministic.minimize.compute` returns the smallest
 deterministic quotient over the source ranked signature. It accepts partial or
 complete deterministic bottom-up automata. The result retains partiality:

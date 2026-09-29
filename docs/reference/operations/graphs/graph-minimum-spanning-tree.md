@@ -1,6 +1,6 @@
 # Exact weighted minimum spanning tree
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.spanning_tree.minimum.compute` accepts a bounded labelled simple graph
 with exact rational edge weights. It returns one deterministic minimum-total-

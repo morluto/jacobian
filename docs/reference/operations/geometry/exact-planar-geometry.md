@@ -1,6 +1,6 @@
 # Exact planar geometry
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 Planar geometry operations accept bounded exact rational points, segments,
 lines, triangles, and polygons. The catalog includes direct computations for

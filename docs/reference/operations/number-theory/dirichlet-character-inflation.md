@@ -1,5 +1,7 @@
 # Inflation of a Dirichlet character
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.inflate.compute` induces a character from source modulus
 `d` to a target modulus `m` when `d` divides `m`. On target units it composes
 the source character with the reduction map

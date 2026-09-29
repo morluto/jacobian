@@ -1,5 +1,7 @@
 # First order lifting of a smooth local branch
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `local_series.polynomial.smooth_branch_first_jet.compute` accepts a polynomial
 in `y` whose coefficients are exact finite-center power-series prefixes in the
 local parameter `t`, together with a rational value `c` satisfying
@@ -31,4 +33,3 @@ series coefficients, 64-digit rational initial roots, and a 4096-digit bound
 on every rational evaluation intermediate and output coefficient. The source
 windows must provide at least precision two and contain no negative powers.
 
-[Documentation home](../../../index.md) · [Polynomial operations](index.md) · [Tool surface](../../tools.md)

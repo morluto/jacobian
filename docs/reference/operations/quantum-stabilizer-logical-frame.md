@@ -1,5 +1,7 @@
 # General stabilizer logical Pauli frame
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.logical_frame.compute` accepts a register-bound isotropic
 phase-free qubit check space `S`, with arbitrary mixed X/Z rows. It computes
 the symplectic orthogonal `S^perp` and returns `k = n - rank(S)` pairs of

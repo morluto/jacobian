@@ -1,5 +1,7 @@
 # Exact inversion of function-field elements
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.element.inverse.compute` returns the multiplicative inverse of
 a nonzero element of the presented finite function field
 `GF(p)(x)[y]/(f(y))`. The returned `FiniteFunctionFieldElement` retains the
@@ -20,4 +22,3 @@ In `GF(2)(x)[y]/(y^2+y+x)`, the inverse of `y` is `(y+1)/x`, since
 `y(y+1)=x`. Multiplying the returned inverse by `y` gives the unit with the
 same field parent.
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)

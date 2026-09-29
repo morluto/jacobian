@@ -1,5 +1,7 @@
 # Pairwise contact profiles of finite Puiseux prefixes
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `local_series.puiseux.contact_profile.compute` compares a bounded family of
 `TruncatedPuiseuxWindow` values at one center and on one shared known exponent
 window. For each pair it returns the least rational exponent where the exact

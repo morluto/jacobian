@@ -1,5 +1,7 @@
 # Exact tropical operations
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The tropical domain supports distinct `MIN_PLUS` and `MAX_PLUS` semirings over
 exact `ZZ` and `QQ` values. Scalar, vector, sparse polynomial, matrix,
 assignment, and finite matrix-power operations return exact results. These

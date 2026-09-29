@@ -1,5 +1,7 @@
 # Translation torus quotient chains
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `crystallographic.translation_torus.quotient_chains.compute` returns the
 integral product cellular chain complex of a torus from a checked fundamental
 parallelepiped for a pure translation group.

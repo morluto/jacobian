@@ -1,5 +1,7 @@
 # Counting nondeterministic tree-automaton runs
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `tree_automaton.nondeterministic.run_counts.compute` returns the exact number
 of accepting runs for each tree size from one through `max_size`. A run is a
 ranked tree together with one state assignment at every node such that every

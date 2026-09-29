@@ -1,5 +1,7 @@
 # Preimage of a finite simplicial subobject
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.map.preimage.compute` takes a complete finite-prefix
 simplicial map `f : X -> Y` and a subobject `A -> Y`, and returns the
 degreewise inverse image `f^-1(A) -> X` together with the restricted map

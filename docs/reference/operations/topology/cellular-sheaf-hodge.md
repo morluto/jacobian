@@ -1,5 +1,7 @@
 # Exact cellular-sheaf Hodge Laplacians
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [`cellular_sheaf.hodge_laplacians.compute`](../../tools.md) computes the exact
 degreewise Hodge Laplacian of a finite cellular sheaf over `QQ`. Each stalk
 uses its standard coordinate inner product, represented by the identity Gram

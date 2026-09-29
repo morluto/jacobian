@@ -1,5 +1,7 @@
 # Dirichlet character coordinate-basis transport
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.change_coordinate_basis.compute` changes the coordinates
 of a character when the same finite unit group is presented using a different
 generator basis. It keeps the value of the character at each residue fixed.

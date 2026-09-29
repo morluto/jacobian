@@ -1,5 +1,7 @@
 # Exact relative norm of a function-field element
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.element.norm.compute` returns the field norm
 
 ```text
@@ -24,4 +26,3 @@ The contract covers the current prime-constant-field carrier and its bounded
 single extension. It does not construct an extension tower or a map to a
 different base field.
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)

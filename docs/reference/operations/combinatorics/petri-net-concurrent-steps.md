@@ -1,6 +1,6 @@
 # Simultaneous steps in weighted Petri nets
 
-[Documentation home](../../../index.md) · [Combinatorics operations](index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `petri_net.marking.concurrent_step.compute` applies a transition multiset in
 one atomic step. If `x[t]` is the multiplicity of transition `t`, the step is

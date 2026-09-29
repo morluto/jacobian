@@ -1,5 +1,7 @@
 # Two-dimensional affine-semigroup normalization
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `affine_semigroup.normalization.compute` returns the minimal generators of
 `cone(S) ∩ gp(S)` for a positive, full-rank affine semigroup `S` in `Z^2`.
 The result retains the source semigroup and expresses every normalization

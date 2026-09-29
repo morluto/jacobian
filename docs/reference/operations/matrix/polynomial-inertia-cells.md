@@ -1,6 +1,7 @@
 # Exact inertia cells for polynomial matrices
 
-[Documentation home](../../../index.md) · [Matrix operations](index.md) ·
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Tool surface](../../tools.md)
 
 `matrix.polynomial.inertia_cells.compute` returns the complete exact inertia

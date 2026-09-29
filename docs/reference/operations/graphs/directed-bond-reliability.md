@@ -1,6 +1,6 @@
 # Exact finite directed bond reliability
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `probability.digraph_bond_reliability.connection_probability.compute` computes
 the exact probability that a directed open-arc path exists from one stated

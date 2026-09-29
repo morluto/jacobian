@@ -1,5 +1,7 @@
 # Finite simplicial-set products
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `topology.simplicial_set.product.compute` constructs the degreewise Cartesian
 product of two finite truncated simplicial sets. Both inputs must cover the
 same maximum degree `N`; in each retained degree it forms

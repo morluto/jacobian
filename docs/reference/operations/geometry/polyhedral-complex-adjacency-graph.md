@@ -1,5 +1,7 @@
 # Rational polytopal complex adjacency graph
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `polyhedral_complex.adjacency_graph.compute` takes a finite family of bounded
 rational maximal cells and returns their exact facet-adjacency graph. It first
 uses the canonical face-closure operation, so the cells must share one labelled

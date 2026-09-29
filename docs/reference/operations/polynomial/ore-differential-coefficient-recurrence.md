@@ -1,5 +1,7 @@
 # Differential equation to Taylor coefficient recurrence
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `holonomic.differential_operator.to_coefficient_recurrence.compute` converts
 an operator
 

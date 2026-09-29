@@ -15,3 +15,4 @@ results.
 - [Finite Abelian character tables](../finite-abelian-character-tables.md)
 - [Finite delta-matroids](finite-delta-matroids.md)
 - [Finite simplicial topology](finite-simplicial-topology.md)
+- [Finite permutation characters](permutation-characters.md)

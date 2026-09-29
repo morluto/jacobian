@@ -1,5 +1,7 @@
 # Rational coordinate-map composition
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Polynomial operations](index.md) · [Operation references](../index.md)
 
 `rational_function_map.compose.compute` returns the exact composite of two

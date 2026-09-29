@@ -1,6 +1,6 @@
 # Powerful-number decision
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `integer.decide.powerful` decides whether every prime divisor of one positive
 integer has exponent at least two. It accepts canonical decimal integers from

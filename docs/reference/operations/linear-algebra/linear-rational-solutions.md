@@ -1,6 +1,6 @@
 # Exact rational linear systems
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `linear.rational_solution.compute` returns one exact bounded rational solution
 candidate for a supplied system. `linear.rational_inconsistency.compute` returns

@@ -1,5 +1,7 @@
 # Binary stabilizer syndromes
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer.syndrome.compute` accepts an isotropic check space and a
 phase-free Pauli error bound to the same ordered qubit register. It returns one
 binary coordinate for each row in the check space's canonical GF(2) RREF basis:

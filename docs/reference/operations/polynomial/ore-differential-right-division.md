@@ -1,5 +1,7 @@
 # Monic right division of differential Ore operators
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.differential.operator.right_division.compute` returns `Q` and `R` with
 
 \[

@@ -1,6 +1,7 @@
 # Elementary-symmetric polynomial families
 
-[Documentation home](../../../index.md) · [Polynomial operations](index.md) ·
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Tool surface](../../tools.md)
 
 `polynomial.symmetric.elementary_family.compute` returns the complete family

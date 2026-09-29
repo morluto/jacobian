@@ -1,6 +1,6 @@
 # Small exact graph reliability
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `probability.graph_reliability.connection_probability.compute` computes the
 exact probability that two stated terminals are connected in a bounded

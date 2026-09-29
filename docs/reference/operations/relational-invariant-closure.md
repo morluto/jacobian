@@ -1,5 +1,7 @@
 # Finite polymorphism-invariant relation closure
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `relation.closure_under_operations.compute` returns the least relation on
 the selected power `A^r` that contains the supplied generator tuples and is
 closed under coordinatewise application of each supplied operation. The

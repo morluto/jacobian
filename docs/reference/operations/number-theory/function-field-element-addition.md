@@ -1,5 +1,7 @@
 # Exact addition of function-field elements
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `function_field.element.add.compute` adds two elements in the same presented
 finite function field
 
@@ -34,4 +36,3 @@ In characteristic two, `y + (y + x) = x` in
 `GF(2)(x)[y]/(y^2 + y + x)`. The result is the one-coordinate rational
 function-field element for `x`, bound to the original field.
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)

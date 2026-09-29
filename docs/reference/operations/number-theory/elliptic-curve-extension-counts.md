@@ -1,5 +1,7 @@
 # Finite-field elliptic-curve extension counts
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.extension_counts.compute` returns the exact
 cardinality of a nonsingular short-Weierstrass curve over each field
 `F_(q^n)` for `1 <= n <= max_degree`. It obtains the base trace from the

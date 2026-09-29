@@ -1,5 +1,7 @@
 # Finite lattice gauge transport
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The current exact group carrier is the permutation group `S_d` for bounded
 `1 <= d <= 8`. Edges have canonical orientations; backward path traversal uses
 the exact inverse permutation. Holonomy multiplies contributions in path order

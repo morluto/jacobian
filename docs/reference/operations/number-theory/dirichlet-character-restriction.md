@@ -1,5 +1,7 @@
 # Restriction of a Dirichlet character to a divisor modulus
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `dirichlet_character.restrict_modulus.compute` asks whether a source character
 modulo `m` factors through the reduction of unit groups
 `(Z/mZ)^* -> (Z/dZ)^*`, for one positive divisor `d` of `m`.

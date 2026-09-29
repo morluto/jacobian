@@ -1,5 +1,7 @@
 # Complete Galois correspondence for supported quadratic splitting fields
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `number_field.galois_correspondence.compute` returns the complete
 subgroup/intermediate-field correspondence for an exact splitting field over
 `QQ` whose degree is at most two. The degree-one case has one subgroup and one

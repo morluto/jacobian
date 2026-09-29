@@ -1,5 +1,7 @@
 # Maximum-cardinality weighted matroid intersection
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Combinatorics operations](index.md) · [Operation references](../index.md)
 
 `matroid.intersection.maximum_cardinality_weighted.compute` takes two linear

@@ -1,5 +1,7 @@
 # Finite-poset order complex
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `topology.poset.order_complex.compute` takes an existing canonical
@@ -31,4 +33,4 @@ Note that the maximal chains of a face poset are maximal *flags*, not faces: a
 subdivided triangle has six maximal chains, one per small triangle. Build the
 face poset yourself from a complex's faces when you need the barycentric
 subdivision, and compare it against
-`topology.simplicial.barycentric_subdivision.compute`.
+`topology.simplicial_complex.barycentric_subdivision.compute`.

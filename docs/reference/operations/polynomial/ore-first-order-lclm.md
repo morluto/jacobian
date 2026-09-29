@@ -1,5 +1,7 @@
 # First-order differential-operator least common left multiple
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.differential.operator.first_order_lclm.compute` accepts two first-order
 differential Ore operators over `QQ(x)` with bounded polynomial coefficients
 in `QQ[x]`. It returns a common left multiple `C` and left multipliers `U,V`

@@ -1,5 +1,7 @@
 # Weyl exponents
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.weyl_exponents.compute` returns the exact exponent sequence of
 each connected component of a finite crystallographic Cartan datum. Each
 component retains its simple-root indices, so reducible data preserve their

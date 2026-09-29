@@ -1,5 +1,7 @@
 # Finite prefixes of smooth local branches
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `local_series.polynomial.smooth_branch_prefix.compute` computes the unique
 formal series `y(t) = c + c_1 t + ... + c_(N-1) t^(N-1) + O(t^N)` satisfying
 `F(t, y(t)) = O(t^N)`, when the input supplies a rational simple root `c` of
@@ -26,4 +28,3 @@ coefficients to 256 digits, the initial root to 64 digits, and every predicted
 Hensel coefficient/intermediate to 4096 digits. A conservative rational-height
 recurrence and the full Horner work bound are checked before branch expansion.
 
-[Documentation home](../../../index.md) · [Polynomial operations](index.md) · [Tool surface](../../tools.md)

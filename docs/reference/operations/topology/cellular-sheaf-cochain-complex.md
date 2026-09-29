@@ -1,5 +1,7 @@
 # Cellular sheaf cochain complexes
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 The `cellular_sheaf.cochain_complex.compute` operation assembles the cochain
 complex of one checked finite cellular sheaf on a finite simplicial complex and
 exact coefficient field. It establishes one postcondition: the returned

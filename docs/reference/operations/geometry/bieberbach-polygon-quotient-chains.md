@@ -1,5 +1,7 @@
 # Two-dimensional Bieberbach polygon quotient chains
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `crystallographic.quotient_face_orbits.compute` accepts a positive result from
 `crystallographic.extension.fundamental_domain.check`. It rechecks that result
 before using its fundamental-domain claim, then derives the quotient face

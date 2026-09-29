@@ -1,5 +1,7 @@
 # Positive roots and coroots
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `root_system.coroots.compute` returns each positive root together with its
 coordinates in the matching simple-coroot basis and its exact squared length.
 The result carries a canonical finite Cartan datum, so the ordered root and

@@ -1,5 +1,7 @@
 # Finite-field elliptic curve base change
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `elliptic_curve.finite_field.base_change.compute` transports a nonsingular
 short-Weierstrass curve, and optionally one of its points, along an explicit
 `FieldEmbedding`. The consumer checks that the curve uses the embedding source

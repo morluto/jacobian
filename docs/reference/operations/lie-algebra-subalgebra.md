@@ -1,5 +1,7 @@
 # Induced Lie algebra on a subalgebra
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `lie_algebra.subalgebra.compute` takes a finite-dimensional Lie algebra over
 `QQ`, a canonical RREF subspace on its ordered basis, and labels for the
 candidate rows. It checks that the subspace is bracket-closed, then returns

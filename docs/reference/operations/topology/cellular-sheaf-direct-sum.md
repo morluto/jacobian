@@ -1,5 +1,7 @@
 # Cellular sheaf direct sum
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `cellular_sheaf.direct_sum.compute` forms the pointwise direct sum of two
 checked cellular sheaves on the same finite simplicial complex and over the
 same exact field (`QQ` or the identical `GF(p)`). At each simplex `sigma`, the

@@ -1,5 +1,7 @@
 # Homogeneous components of free-algebra polynomials
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 The native `homogeneous_component` helper projects a sparse
 `QQ<X>` polynomial onto one total word degree. The free associative algebra is
 graded by word length, so the degree-`d` component is the sum of exactly those

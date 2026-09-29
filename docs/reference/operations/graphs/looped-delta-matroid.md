@@ -1,5 +1,7 @@
 # Delta-matroids from looped graphs
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 The `graph.looped_adjacency_delta_matroid.compute` operation constructs a delta-matroid
 from a graph that may carry loops, by way of its binary adjacency matrix.
 

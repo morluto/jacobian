@@ -1,5 +1,7 @@
 # Pauli measurement on stabilizer states
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `quantum.stabilizer_state.measure_pauli.compute` measures one Hermitian exact
 Pauli on a pure stabilizer state: an exact stabilizer code value with `n`
 independent generators on `n` ordered qubits. The Pauli and state must use the

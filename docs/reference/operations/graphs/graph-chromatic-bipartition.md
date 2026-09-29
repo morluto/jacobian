@@ -1,6 +1,6 @@
 # Chromatic bipartition feasibility
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.chromatic_bipartition.find` decides the finite `(s,t)`-splittability
 predicate for one canonical simple graph. It searches unordered nonempty proper

@@ -1,5 +1,7 @@
 # Check an integer partition candidate
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `combinatorics.partition.check` classifies one bounded sequence of exact
 integers under the canonical convention that the empty sequence is the
 partition of zero and nonempty parts are positive and weakly decreasing.

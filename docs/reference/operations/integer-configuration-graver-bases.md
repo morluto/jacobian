@@ -1,5 +1,7 @@
 # Integer-configuration Graver bases
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `integer_configuration.graver_basis.compute` returns the complete sign-normalized
 Graver basis in either of two exact slices:
 

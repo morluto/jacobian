@@ -1,5 +1,7 @@
 # Finite-category nerve prefixes
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Topology operations](index.md) · [Tool surface](../../tools.md)
 
 `category.finite.nerve_prefix.compute` constructs the nerve of a finite category

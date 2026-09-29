@@ -1,5 +1,7 @@
 # Shift Ore operator powers
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 `ore.shift.operator.power.compute` returns the exact nonnegative power
 `P^m` of a shift operator in left-coefficient normal form
 

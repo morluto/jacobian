@@ -1,6 +1,6 @@
 # Declared graph-symmetry orbits
 
-[Documentation home](../../../index.md) · [Tool surface](../../tools.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `graph.symmetry.generator_orbits.compute` validates the submitted
 color-preserving automorphism generators of a bounded graph and computes the

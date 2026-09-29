@@ -1,5 +1,7 @@
 # Petri-net transition liveness
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.transition_liveness.profile.compute` classifies each transition of a
 Petri net as live, not live, or unknown, given a complete finite reachability
 graph.

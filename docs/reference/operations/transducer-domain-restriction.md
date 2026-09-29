@@ -1,5 +1,7 @@
 # Restrict a subsequential transducer to a regular domain
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `transducer.subsequential.restrict_domain.compute` accepts a canonical partial
 subsequential transducer `T : A* -> B*` and a total DFA `D` over the exact same
 ordered alphabet `A`. It returns the subsequential transducer for the partial

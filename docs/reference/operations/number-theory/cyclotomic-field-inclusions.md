@@ -1,5 +1,7 @@
 # Standard cyclotomic field inclusions
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 The operations `matrix.cyclic.cyclotomic_inclusion.compute` and
 `matrix.cyclic.cyclotomic_element.map` expose the standard inclusion
 

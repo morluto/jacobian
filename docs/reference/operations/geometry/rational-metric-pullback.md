@@ -1,5 +1,7 @@
 # Rational metric pullback
 
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
+
 [Geometry operation references](index.md) · [Operation references](../index.md)
 
 The `differential_geometry.rational_metric.pullback.compute` operation returns

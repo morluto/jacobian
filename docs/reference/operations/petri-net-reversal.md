@@ -1,5 +1,7 @@
 # Petri net reversal
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `petri_net.reverse.compute` returns the Petri net on the same ordered place and
 transition axes with each transition's input and output arcs exchanged:
 

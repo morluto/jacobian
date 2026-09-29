@@ -21,3 +21,4 @@ hypergraphs.
 - [Littlewood–Richardson tableaux](littlewood-richardson-coefficients.md#complete-tableau-enumeration)
 - [Semistandard Young tableau enumeration](semistandard-young-tableau-enumeration.md)
 - [Fixed-content semistandard tableau counts](kostka-numbers.md) — exact Kostka counts for a shape and sparse labeled content.
+- [Standard Young tableau enumeration](standard-young-tableau-enumeration.md)

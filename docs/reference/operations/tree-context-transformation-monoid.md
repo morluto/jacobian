@@ -1,5 +1,7 @@
 # Tree context transformation monoid
 
+[Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
+
 `tree_automaton.context.transformation_monoid.compute` takes a complete
 deterministic bottom-up tree automaton and returns every state map induced by
 one-hole ranked-tree contexts. The result includes the finite multiplication

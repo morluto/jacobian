@@ -64,9 +64,10 @@ def test_closed_cubical_surface_has_an_empty_boundary_value():
 
     assert result.boundary.cells == ()
     assert result.boundary.ambient_dimension == 3
-    assert CubicalBoundarySubcomplexResult.model_validate_json(
-        result.model_dump_json()
-    ) == result
+    assert (
+        CubicalBoundarySubcomplexResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_impure_zero_dimensional_and_mixed_axis_sources_are_rejected():
@@ -78,13 +79,26 @@ def test_impure_zero_dimensional_and_mixed_axis_sources_are_rejected():
     )
 
     with pytest.raises(OperationDomainValidationError) as zero_dimensional:
-        operations.boundary_subcomplex((_cell((2, 2),),))
+        operations.boundary_subcomplex(
+            (
+                _cell(
+                    (2, 2),
+                ),
+            )
+        )
     assert zero_dimensional.value.errors()[0]["type"] == (
         "cubical_complex.boundary_subcomplex_dimension"
     )
 
     with pytest.raises(OperationDomainValidationError) as axes:
-        operations.boundary_subcomplex((square, _cell((0, 1),)))
+        operations.boundary_subcomplex(
+            (
+                square,
+                _cell(
+                    (0, 1),
+                ),
+            )
+        )
     assert axes.value.errors()[0]["type"] == (
         "cubical_complex.boundary_subcomplex_ambient_axis"
     )
@@ -140,9 +154,10 @@ def test_non_pure_check_uses_exact_face_closure_and_roundtrips_result():
     square = _cell((0, 1), (0, 1))
     result = operations.boundary_subcomplex((square,))
     assert result.complex.cells == operations.face_closure((square,)).complex.cells
-    assert CubicalBoundarySubcomplexResult.model_validate_json(
-        result.model_dump_json()
-    ) == result
+    assert (
+        CubicalBoundarySubcomplexResult.model_validate_json(result.model_dump_json())
+        == result
+    )
 
 
 def test_all_square_subfamilies_match_an_independent_incidence_oracle():
@@ -224,8 +239,7 @@ def test_tool_is_published_with_a_real_square_example():
     tool = next(
         tool
         for tool in TOOLS
-        if tool.operation_id
-        == "topology.cubical_complex.boundary_subcomplex.compute"
+        if tool.operation_id == "topology.cubical_complex.boundary_subcomplex.compute"
     )
     request = CubicalComplexRequest.model_validate_json(
         json.dumps(tool.examples[0].input)

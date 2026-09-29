@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 from collections import deque
 from itertools import product
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -152,22 +150,6 @@ def test_two_column_exact_kernel_avoids_coordinate_box_expansion() -> None:
     assert _exponent_coefficients(ideal) == ((((32_767, 0), 1), ((0, 32_768), -1)),)
     scaled = toric_ideal(_configuration((99_999_999, 99_999_999), ("r", "s")))
     assert _exponent_coefficients(scaled) == ((((1, 0), 1), ((0, 1), -1)),)
-
-
-def test_catalog_example_runs_and_json_roundtrips() -> None:
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "integer_configuration.toric_ideal.compute"
-    )
-    request = IntegerConfigurationToricIdealRequest.model_validate_json(
-        json.dumps(dict(tool.examples[0].input))
-    )
-    result = tool.run(request)
-
-    assert isinstance(result, RationalPolynomialIdeal)
-    decoded = RationalPolynomialIdeal.model_validate_json(result.model_dump_json())
-    assert decoded == result
 
 
 def test_toric_request_schema_publishes_its_representable_input_bounds() -> None:

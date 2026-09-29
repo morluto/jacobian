@@ -5,7 +5,6 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
@@ -91,8 +90,3 @@ def test_admission_returns_source_order_indices_and_copy_work() -> None:
     # unary P table of one row (1 + 1*(1+1) = 3).
     assert work == 7
     assert work <= MAX_RELATIONAL_REDUCT_WORK
-
-
-def test_operation_is_published_in_the_catalog() -> None:
-    ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-    assert OPERATION_ID in ids

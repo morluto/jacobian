@@ -6,7 +6,6 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -101,20 +100,3 @@ def test_coefficient_growth_is_rejected_before_multiplication(
     monkeypatch.setattr(operations, "multiply_values", forbidden)
     with pytest.raises(OperationResourceAdmissionError):
         class_function_scale(function, _value(1, (2,)))
-
-
-def test_catalog_scale_declaration_executes_example() -> None:
-    tool = next(
-        candidate
-        for candidate in BUILTIN_TOOLS
-        if candidate.operation_id == "class_function.scale.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert tuple(value.coefficients[0].as_fraction() for value in result.values) == (
-        Fraction(-4),
-        Fraction(0),
-        Fraction(2),
-    )

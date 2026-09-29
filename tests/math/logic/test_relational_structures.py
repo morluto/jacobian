@@ -7,7 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -63,10 +62,6 @@ def _loop_point() -> FiniteRelationalStructure:
 
 def _edgeless_two() -> FiniteRelationalStructure:
     return _structure(2, _EDGE, ((),))
-
-
-def _catalog_tool():
-    return next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
 
 
 def _wire_payload(
@@ -267,30 +262,6 @@ def test_malformed_carrier_maps_are_boundary_invalid() -> None:
     )
 
 
-def test_native_and_catalog_paths_agree() -> None:
-    tool = _catalog_tool()
-    payload = _wire_payload(_three_cycle(), _directed_triangle(), (0, 1, 2))
-    catalog_result = tool.run(tool.request_type.model_validate(payload))
-    native_result = check_homomorphism(_three_cycle(), _directed_triangle(), (0, 1, 2))
-    assert catalog_result == native_result
-
-    negative_payload = _wire_payload(_directed_triangle(), _three_cycle(), (0, 1, 2))
-    catalog_negative = tool.run(tool.request_type.model_validate(negative_payload))
-    assert catalog_negative == check_homomorphism(
-        _directed_triangle(), _three_cycle(), (0, 1, 2)
-    )
-    assert catalog_negative.status is HomomorphismStatus.NOT_HOMOMORPHISM
-
-
-def test_catalog_example_executes() -> None:
-    tool = _catalog_tool()
-    for example in tool.examples:
-        result = tool.run(
-            tool.request_type.model_validate(json.loads(json.dumps(example.input)))
-        )
-        assert result.status is HomomorphismStatus.HOMOMORPHISM
-
-
 def test_serialization_round_trips() -> None:
     structure = _three_cycle()
     assert (
@@ -388,8 +359,3 @@ def test_transport_envelope_admits_boundary_and_rejects_above() -> None:
     assert (
         admission.value.errors()[0]["type"] == "relational.homomorphism.transport_bound"
     )
-
-
-def test_operation_is_published_in_the_catalog() -> None:
-    ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-    assert OPERATION_ID in ids

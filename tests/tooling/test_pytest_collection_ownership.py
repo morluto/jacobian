@@ -121,6 +121,10 @@ def test_nested_test_function_check_rejects_an_uncollected_definition(
 
 def test_math_tests_do_not_boot_complete_product_boundaries() -> None:
     forbidden = (
+        # `jacobian.catalog.builtins` walks every owner-local `._tools` module
+        # and compiles the whole declaration set, so importing it is exactly
+        # the catalog boot this gate exists to keep out of the math lane.
+        "jacobian.catalog.builtins",
         "jacobian.catalog.catalog",
         "jacobian.cli",
         "jacobian.dispatch",

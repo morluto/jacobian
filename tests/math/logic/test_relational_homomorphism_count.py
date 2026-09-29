@@ -7,7 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -220,7 +219,3 @@ class TestCountComposition:
         native = count_homomorphisms(payload.source, payload.target)
         assert tool.run(payload) == native
         assert native.count == 3
-
-    def test_operation_is_published_in_the_catalog(self) -> None:
-        operation_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-        assert OPERATION_ID in operation_ids

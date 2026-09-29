@@ -144,15 +144,6 @@ def test_embedding_declaration_is_native_only_with_a_supported_symbol() -> None:
     assert callable(quadratic.real_quadratic_embeddings)
 
 
-def test_embedding_profile_is_served_by_the_public_catalog() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-
-    assert "arithmetic.real_quadratic.embeddings.compute" in ids
-    assert "arithmetic.real_quadratic.order.compute" in ids
-
-
 def test_fractional_trace_and_norm_are_exact() -> None:
     element = RealQuadraticValue(
         rational_part=_r(1, 2),

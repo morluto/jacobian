@@ -16,6 +16,27 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     ThetaSelectedCoefficientsResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
+from jacobian.math.number_theory.quadratic_forms.general.characteristic_two import (
+    FiniteFieldQuadraticPairingRequest,
+    FiniteFieldQuadraticPairingResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.characteristic_two_operations import (
+    polar_pairing_finite_field_quadratic_form,
+)
+from jacobian.math.number_theory.quadratic_forms.general.determinant_discriminant._models import (
+    MAX_POLAR_DETERMINANT_AXIS,
+    MAX_POLAR_DETERMINANT_INTERMEDIATE_DIGITS,
+    MAX_POLAR_DETERMINANT_MATRIX_ENTRIES,
+    MAX_POLAR_DETERMINANT_OUTPUT_DIGITS,
+    MAX_POLAR_DETERMINANT_RETAINED_SOURCE_DIGITS,
+    MAX_POLAR_DETERMINANT_SUPPORT_TERMS,
+    MAX_POLAR_DETERMINANT_WORK,
+    DeterminantDiscriminantRequest,
+    DeterminantDiscriminantResult,
+)
+from jacobian.math.number_theory.quadratic_forms.general.determinant_discriminant.operations import (
+    polar_gram_determinant_discriminant,
+)
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
     QuadraticFormDirectSumRequest,
     QuadraticFormDirectSumResult,
@@ -34,6 +55,7 @@ from jacobian.math.number_theory.quadratic_forms.general.operations import (
     bilinear_pairing,
     coefficient_matrix,
     evaluate_rational_quadratic_form,
+    integral_coefficient_content,
 )
 from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
     QuadraticFormScaleRequest,
@@ -65,6 +87,20 @@ def compute_bilinear_pairing(
     return BilinearPairingResult._from_kernel(
         request,
         value=bilinear_pairing(request.form, request.left, request.right),
+    )
+
+
+def compute_integral_content(
+    request: IntegralContentRequest,
+) -> IntegralContentResult:
+    return integral_coefficient_content(request.form)
+
+
+def compute_characteristic_two_pairing(
+    request: FiniteFieldQuadraticPairingRequest,
+) -> FiniteFieldQuadraticPairingResult:
+    return polar_pairing_finite_field_quadratic_form(
+        request.form, request.left, request.right
     )
 
 
@@ -157,6 +193,12 @@ def compute_coordinate_restriction(
     return quadratic_form_restrict_coordinates(request.form, request.selected_axis)
 
 
+def compute_determinant_discriminant(
+    request: DeterminantDiscriminantRequest,
+) -> DeterminantDiscriminantResult:
+    return polar_gram_determinant_discriminant(request.form)
+
+
 def compute_finite_box_profile(
     request: FiniteBoxProfileRequest,
 ) -> FiniteBoxProfileResult:
@@ -169,6 +211,61 @@ def _form_example() -> dict[str, object]:
         "diagonal_coefficients": [{"num": "2", "den": "1"}, {"num": "5", "den": "1"}],
         "cross_terms": [
             {"left": 0, "right": 1, "coefficient": {"num": "3", "den": "1"}}
+        ],
+    }
+
+
+_F2_FORM = {
+    "field": {
+        "characteristic": "2",
+        "modulus_coefficients": ["0", "1"],
+        "generator": "a",
+    },
+    "axis": ["x", "y"],
+    "diagonal_coefficients": [
+        {
+            "presentation": {
+                "characteristic": "2",
+                "modulus_coefficients": ["0", "1"],
+                "generator": "a",
+            },
+            "coordinates": ["1"],
+        },
+        {
+            "presentation": {
+                "characteristic": "2",
+                "modulus_coefficients": ["0", "1"],
+                "generator": "a",
+            },
+            "coordinates": ["0"],
+        },
+    ],
+    "cross_terms": [
+        {
+            "left": 0,
+            "right": 1,
+            "coefficient": {
+                "presentation": {
+                    "characteristic": "2",
+                    "modulus_coefficients": ["0", "1"],
+                    "generator": "a",
+                },
+                "coordinates": ["1"],
+            },
+        }
+    ],
+}
+
+
+def _f2_vector(x: str, y: str) -> dict[str, object]:
+    field = _F2_FORM["field"]
+    presentation = {"presentation": field}
+    return {
+        "field": field,
+        "axis": ["x", "y"],
+        "coordinates": [
+            {**presentation, "coordinates": [x]},
+            {**presentation, "coordinates": [y]},
         ],
     }
 
@@ -203,6 +300,29 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                             {"num": "2", "den": "1"},
                         ],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.characteristic_two.polar_pairing.compute",
+        title="Compute the polar pairing of a characteristic-two quadratic form",
+        description=(
+            "Return B_Q(x,y)=Q(x+y)-Q(x)-Q(y) over GF(2^d). "
+            "Square terms cancel in this pairing; mixed terms contribute in both orders."
+        ),
+        request_type=FiniteFieldQuadraticPairingRequest,
+        result_type=FiniteFieldQuadraticPairingResult,
+        run=compute_characteristic_two_pairing,
+        tags=("quadratic-form", "finite-field", "characteristic-two", "exact"),
+        examples=(
+            OperationExample(
+                name="mixed-term-polarization",
+                description="For Q(x,y)=x^2+xy over GF(2), B_Q((1,0),(0,1))=1.",
+                input={
+                    "form": _F2_FORM,
+                    "left": _f2_vector("1", "0"),
+                    "right": _f2_vector("0", "1"),
                 },
             ),
         ),
@@ -403,6 +523,42 @@ TOOLS = (
                             {"num": "-1", "den": "1"},
                         ],
                     },
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.integral_content.compute",
+        title="Compute integral quadratic-form content",
+        description=(
+            "For an integral polynomial quadratic form, return the nonnegative "
+            "gcd of all diagonal and cross-term coefficients and the quotient "
+            "primitive form. The zero polynomial has content zero and remains "
+            "zero. Retained support is capped at 4,096 coefficients."
+        ),
+        request_type=IntegralContentRequest,
+        result_type=IntegralContentResult,
+        run=compute_integral_content,
+        tags=("quadratic-form", "integral", "exact"),
+        examples=(
+            OperationExample(
+                name="content",
+                description="Divide the coefficients of 6*x^2 + 9*x*y by their gcd 3.",
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "6", "den": "1"},
+                            {"num": "0", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "9", "den": "1"},
+                            }
+                        ],
+                    }
                 },
             ),
         ),
@@ -683,18 +839,69 @@ TOOLS = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="quadratic_form.determinant_discriminant.compute",
+        title="Compute a rational quadratic form determinant and signed discriminant",
+        description=(
+            "Return det(G) and (-1)^(n(n-1)/2) det(G), where G is the full "
+            "polar Gram matrix of Q(x)=sum a_i*x_i^2+sum c_ij*x_i*x_j: "
+            "G_ii=2*a_i and G_ij=c_ij. This differs from the coefficient "
+            "matrix A in Q=x^T A x, whose off-diagonal entries are c_ij/2. "
+            "The signed value is a rational representative; only its square "
+            "class is basis invariant, and that class requires nondegeneracy. "
+            f"Dimension is at most {MAX_POLAR_DETERMINANT_AXIS}; exact Bareiss "
+            f"matrix entries and stored form support are each at most "
+            f"{MAX_POLAR_DETERMINANT_MATRIX_ENTRIES}/{MAX_POLAR_DETERMINANT_SUPPORT_TERMS}; "
+            f"work is at most {MAX_POLAR_DETERMINANT_WORK}; intermediate and "
+            f"output heights are bounded by {MAX_POLAR_DETERMINANT_INTERMEDIATE_DIGITS} "
+            f"and {MAX_POLAR_DETERMINANT_OUTPUT_DIGITS} decimal digits, with "
+            f"{MAX_POLAR_DETERMINANT_RETAINED_SOURCE_DIGITS} retained source digits."
+        ),
+        request_type=DeterminantDiscriminantRequest,
+        result_type=DeterminantDiscriminantResult,
+        run=compute_determinant_discriminant,
+        tags=("quadratic-form", "determinant", "discriminant", "exact"),
+        examples=(
+            OperationExample(
+                name="binary-sign-convention",
+                description=(
+                    "For Q=x^2+xy+y^2, det of the full polar Gram matrix is 3 "
+                    "and the signed discriminant is -3, matching b^2-4ac."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    }
+                },
+            ),
+        ),
+    ),
 )
 
 
 __all__ = [
     "TOOLS",
     "compute_bilinear_pairing",
+    "compute_characteristic_two_pairing",
     "compute_coefficient_matrix",
     "compute_coordinate_restriction",
+    "compute_determinant_discriminant",
     "compute_diagonalization",
     "compute_direct_sum",
     "compute_finite_box_profile",
     "compute_finite_gauss_sum",
+    "compute_integral_content",
     "compute_modular_profile",
     "compute_pullback",
     "compute_radical",

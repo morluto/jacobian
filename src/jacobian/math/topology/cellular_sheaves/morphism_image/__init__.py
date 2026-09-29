@@ -22,6 +22,7 @@ from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_MORPHISM_OUTPUT_DIGIT_WORK,
     MAX_SHEAF_MORPHISM_PARENT_CELLS,
     MAX_SHEAF_MORPHISM_WORK,
+    MAX_SHEAF_SIMPLICES,
     MAX_SHEAF_STALK_RANK,
     FiniteCellularSheaf,
     SheafField,
@@ -122,6 +123,40 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
         code=f"topology.cellular_sheaf.morphism_image.{code}",
         message=message,
     )
+
+
+def _reject_oversized_parent_container(parent: object, role: str) -> None:
+    """Refuse an over-envelope parent container before any recursive copy.
+
+    ``MAX_SHEAF_SIMPLICES`` bounds the simplices a canonical cellular sheaf may
+    retain, and each stalk basis and restriction row is separately bounded. A
+    ``model_construct`` or ``model_copy`` value bypasses those declared bounds,
+    so check the container lengths here rather than discovering them after the
+    payload has been rebuilt.
+    """
+    stalks = getattr(parent, "stalks", None)
+    if isinstance(stalks, (tuple, list)) and len(stalks) > MAX_SHEAF_SIMPLICES:
+        raise _resource(
+            "parent_simpices",
+            f"{role} morphism parent retains more than {MAX_SHEAF_SIMPLICES} simplices",
+        )
+    for attribute in ("cover_restrictions", "derived_restrictions", "diamonds"):
+        container = getattr(parent, attribute, None)
+        if (
+            isinstance(container, (tuple, list))
+            and len(container) > MAX_SHEAF_SIMPLICES
+        ):
+            raise _resource(
+                "parent_cells",
+                f"{role} morphism parent retains too many {attribute} rows",
+            )
+    for stalk in stalks if isinstance(stalks, (tuple, list)) else ():
+        basis = getattr(stalk, "basis", None)
+        if isinstance(basis, (tuple, list)) and len(basis) > MAX_SHEAF_STALK_RANK:
+            raise _resource(
+                "parent_stalk_rank",
+                f"{role} morphism parent retains a stalk above the rank envelope",
+            )
 
 
 def _unvalidated_payload(value: object) -> object:
@@ -320,6 +355,14 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
             "parent_type", "morphism parents must be typed finite cellular sheaves"
         )
     source, target = value.source, value.target
+    # Bound the parent container sizes before the recursive rebuild below. A
+    # `model_construct` carrier can hold an arbitrarily large `stalks`, basis, or
+    # restriction container, and `_unvalidated_payload` copies every nested
+    # element before any rank, cell-count, work, or output admission runs, so
+    # malformed input could force unbounded CPU and memory merely to reach
+    # validation. One `len()` per container is enough.
+    _reject_oversized_parent_container(source, "source")
+    _reject_oversized_parent_container(target, "target")
     try:
         source = FiniteCellularSheaf.model_validate(_unvalidated_payload(source))
         target = FiniteCellularSheaf.model_validate(_unvalidated_payload(target))

@@ -36,6 +36,7 @@ from jacobian.math.topology.links._extensions_models import (
     BraidWordRequest,
     GoeritzDataRequest,
     GoeritzDataResult,
+    LinkBlackboardGraph,
     LinkDeterminantRequest,
     LinkDeterminantResult,
     SeifertCircleRequest,
@@ -165,6 +166,69 @@ class TestGoeritzData:
         assert result.absolute_determinant == link_determinant(diagram).determinant == 3
         assert len(result.blackboard_graph.edges) == 3
         assert GoeritzDataResult.model_validate_json(result.model_dump_json()) == result
+
+    def test_forged_tait_sign_is_rejected_before_a_wrong_determinant(self) -> None:
+        """A caller-authored Tait sign must be recomputed, not trusted.
+
+        The Goeritz matrix and the incidence numbers are built straight from it,
+        so flipping one sign on a trefoil returned determinant 1 instead of 3.
+        """
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        edges = list(graph.edges)
+        edges[0] = edges[0].model_copy(update={"tait_sign": -edges[0].tait_sign})
+        forged = graph.model_copy(update={"edges": tuple(edges)})
+
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate(forged.model_dump())
+        assert error.value.errors()[0]["type"] == "link_diagram.blackboard_tait_sign"
+
+    def test_fabricated_region_incidence_is_rejected(self) -> None:
+        """Region boundaries must be the diagram's own face cycles.
+
+        Attributing a dart to the wrong region produced a Goeritz determinant of
+        2 for a trefoil, and reversing a region's cyclic order was accepted too.
+        """
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+
+        # swap one dart between two regions
+        first, second = graph.regions[0], graph.regions[1]
+        regions = [r.model_copy() for r in graph.regions]
+        regions[0] = first.model_copy(
+            update={
+                "boundary_darts": first.boundary_darts[1:] + first.boundary_darts[:1]
+            }
+        )
+        regions[1] = second.model_copy(
+            update={"boundary_darts": second.boundary_darts + first.boundary_darts[:1]}
+        )
+        regions[0] = regions[0].model_copy(
+            update={"boundary_darts": first.boundary_darts[1:]}
+        )
+        forged = graph.model_copy(update={"regions": tuple(regions)})
+        # Depending on which dart moves, the first structural check to fire is
+        # the edge-endpoint one or the face-cycle one; both are the point here,
+        # since before the fix neither fired and the Goeritz matrix was built
+        # from data the diagram does not support.
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate(forged.model_dump())
+        assert error.value.errors()[0]["type"] in {
+            "link_diagram.blackboard_edge_endpoints",
+            "link_diagram.blackboard_region_faces",
+        }
+
+    def test_reversed_region_boundary_order_is_rejected(self) -> None:
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        region = next(r for r in graph.regions if len(r.boundary_darts) > 1)
+        regions = tuple(
+            r.model_copy(update={"boundary_darts": tuple(reversed(r.boundary_darts))})
+            if r.region_id == region.region_id
+            else r
+            for r in graph.regions
+        )
+        forged = graph.model_copy(update={"regions": regions})
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate(forged.model_dump())
+        assert error.value.errors()[0]["type"] == "link_diagram.blackboard_region_faces"
 
     def test_mirror_negates_matrix_and_preserves_absolute_determinant(self) -> None:
         right = link_goeritz_data(

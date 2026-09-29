@@ -937,27 +937,77 @@ def _compose_relator_images(
     return tuple(composed)
 
 
+def _compose_mixed_carrier(
+    first: FundamentalGroupMapResult,
+    second: FundamentalGroupMapResult,
+    first_is_path: bool,
+) -> SimplicialMap:
+    """Compose one basepoint path with one simplicial map.
+
+    A basepoint path records a change of basepoint inside a single complex, so
+    composing it with a simplicial map yields that same map; the composite is
+    well defined and induces the same pi_1 homomorphism. Both operands must bind
+    the path's complex.
+    """
+    mapped = second.map if first_is_path else first.map
+    path = first.map if first_is_path else second.map
+    if not isinstance(mapped, SimplicialMap) or not isinstance(
+        path, PresentationBasepointChangePath
+    ):
+        raise OperationDomainValidationError(
+            location=("second", "map"),
+            code="fundamental_group_map.composition_carrier_kind",
+            message="composition requires two simplicial maps or two basepoint paths",
+        )
+    for operand, location in (
+        (first, ("first", "map")),
+        (second, ("second", "map")),
+    ):
+        if (
+            path.complex != operand.source_presentation.complex
+            or path.complex != operand.target_presentation.complex
+        ):
+            raise OperationDomainValidationError(
+                location=location,
+                code="fundamental_group_map.composition_path_carrier",
+                message=(
+                    "each basepoint path must match its enclosing source and target "
+                    "presentations"
+                ),
+            )
+    if first.source_presentation.complex != second.source_presentation.complex:
+        raise OperationDomainValidationError(
+            location=("first", "map"),
+            code="fundamental_group_map.composition_complex",
+            message="composition requires a common middle complex shared by the path",
+        )
+    return SimplicialMap(
+        source=mapped.source,
+        target=mapped.target,
+        vertex_map=mapped.vertex_map,
+    )
+
+
 def _compose_simplicial_map(
     first: FundamentalGroupMapResult,
     second: FundamentalGroupMapResult,
 ) -> SimplicialMap | PresentationBasepointChangePath:
     """Compose two compatible presentation-map carriers."""
-
-    if isinstance(first.map, PresentationBasepointChangePath) or isinstance(
-        second.map, PresentationBasepointChangePath
-    ):
-        if not (
-            isinstance(first.map, PresentationBasepointChangePath)
-            and isinstance(second.map, PresentationBasepointChangePath)
-        ):
+    first_is_path = isinstance(first.map, PresentationBasepointChangePath)
+    second_is_path = isinstance(second.map, PresentationBasepointChangePath)
+    if first_is_path != second_is_path:
+        return _compose_mixed_carrier(first, second, first_is_path)
+    if first_is_path and second_is_path:
+        first_path = first.map
+        second_path = second.map
+        if not isinstance(
+            first_path, PresentationBasepointChangePath
+        ) or not isinstance(second_path, PresentationBasepointChangePath):
             raise OperationDomainValidationError(
                 location=("second", "map"),
                 code="fundamental_group_map.composition_carrier_kind",
-                message=(
-                    "composition requires two simplicial maps or two basepoint paths"
-                ),
+                message="composition requires two simplicial maps or two basepoint paths",
             )
-        first_path, second_path = first.map, second.map
         for operand, path, location in (
             (first, first_path, ("first", "map")),
             (second, second_path, ("second", "map")),

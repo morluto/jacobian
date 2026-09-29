@@ -163,6 +163,8 @@ def _admit_box_and_output(
     cofactor_work: int,
     determinant: int,
     diagonal_cofactors: tuple[int, ...],
+    *,
+    retained_values: int | None = None,
 ) -> tuple[int, ...]:
     radii = tuple(
         isqrt((2 * cutoff * cofactor) // determinant) for cofactor in diagonal_cofactors
@@ -186,7 +188,12 @@ def _admit_box_and_output(
             code="quadratic_form.theta_work_bound",
             message="theta enumeration exceeds the operation work envelope",
         )
-    count_digits = len(str(vector_count))
+    # A dense prefix retains every value from 0 through cutoff, so bound that
+    # many. A caller that selects a few indices retains only those, so charge
+    # the selected count instead of the whole dense prefix; otherwise a sparse
+    # request is refused for coefficients it never returns.
+    retained = cutoff + 1 if retained_values is None else retained_values
+    count_digits = max(1, len(str(vector_count)))
     # The result retains the source form and the coefficient prefix. Bound
     # both by their aggregate decimal digits; per-entry serialization
     # structure scales with the already bounded coefficient count.
@@ -197,7 +204,7 @@ def _admit_box_and_output(
             *(term.coefficient for term in form.cross_terms),
         )
     )
-    output_digits = source_digits + (cutoff + 1) * (count_digits + 1)
+    output_digits = source_digits + retained * (count_digits + 1)
     if output_digits > MAX_THETA_PREFIX_OUTPUT_DIGITS:
         raise OperationResourceAdmissionError(
             location=("cutoff",),
@@ -282,7 +289,9 @@ def theta_selected_coefficients(
     number of representations retained. ``_admit_box_and_output`` charges
     ``prod(2 * radius + 1) * support`` evaluations before enumeration begins, so
     a request that would enumerate too much is refused even when its result
-    would be small or empty.
+    would be small or empty. The retained *output* is bounded separately by the
+    selected indices rather than the whole prefix, since the other values in
+    the range are computed but never returned.
     """
 
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
@@ -295,6 +304,7 @@ def theta_selected_coefficients(
         cofactor_work,
         determinant,
         diagonal_cofactors,
+        retained_values=len(indices),
     )
 
     wanted = set(indices)

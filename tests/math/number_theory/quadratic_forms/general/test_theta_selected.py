@@ -145,3 +145,42 @@ def test_too_many_selected_indices_are_refused() -> None:
         ThetaSelectedCoefficientsRequest(
             form=UNARY, indices=tuple(range(MAX_THETA_SELECTED_INDICES + 1))
         )
+
+
+def test_sparse_high_index_is_admitted_without_charging_the_dense_prefix() -> None:
+    """A selected-index request retains only the selected rows.
+
+    It reused the dense-prefix output estimate `(cutoff + 1) * (count_digits + 1)`,
+    so a single index at 20000 charged for 20,001 coefficients that are computed
+    but never returned, and the request was refused even though the box holds
+    only 401 vectors and one coefficient is retained.
+    """
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+        MAX_THETA_PREFIX_OUTPUT_DIGITS,
+        _admit_box_and_output,
+    )
+
+    square = _form((1,))
+
+    # one index high enough that the dense charge would exceed the envelope
+    dense_charge = 1 + (20000 + 1) * (3 + 1)
+    assert dense_charge > MAX_THETA_PREFIX_OUTPUT_DIGITS
+
+    result = theta_selected_coefficients(square, (20000,))
+
+    assert tuple(row.index for row in result.coefficients) == (20000,)
+    # r(x^2 = 20000) is 0; the search is still complete, not truncated.
+    assert result.coefficients[0].coefficient == 0
+
+    # the dense-prefix operation still charges the whole prefix
+    with pytest.raises(OperationResourceAdmissionError):
+        _admit_box_and_output(
+            square,
+            20000,
+            1,
+            0,
+            0,
+            1,
+            (1,),
+        )

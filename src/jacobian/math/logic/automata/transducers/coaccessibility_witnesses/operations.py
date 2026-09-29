@@ -17,7 +17,18 @@ from jacobian.math.logic.automata.transducers.values import (
     SubsequentialTransducer,
 )
 
-MAX_COACCESSIBLE_OUTPUT_SYMBOLS = MAX_FST_STATES * MAX_FST_RESULT_WORD_LENGTH
+MAX_COACCESSIBLE_WITNESS_OUTPUT_SYMBOLS = MAX_FST_STATES * MAX_FST_RESULT_WORD_LENGTH
+"""Maximum output symbols in one coaccessible continuation witness."""
+
+# One witness is a shortest path of at most MAX_FST_STATES states, so it emits
+# at most (MAX_FST_STATES - 1) edge outputs plus one terminal output. The
+# aggregate is charged separately: reusing the per-witness constant for the sum
+# refused a 32-state chain whose individual witnesses were all 16,384 symbols
+# but whose aggregate was 270,336, even though the carrier-wide worst case is
+# still intrinsically bounded at states * states * result-word-length.
+MAX_COACCESSIBLE_OUTPUT_SYMBOLS = (
+    MAX_FST_STATES * MAX_FST_STATES * MAX_FST_RESULT_WORD_LENGTH
+)
 
 
 def _resource_error(code: str, message: str) -> OperationResourceAdmissionError:
@@ -91,7 +102,7 @@ def coaccessible_state_witnesses(
         terminal_output = finals[state]
         parts.append(terminal_output)
         output_length = sum(map(len, parts))
-        if output_length > MAX_COACCESSIBLE_OUTPUT_SYMBOLS:
+        if output_length > MAX_COACCESSIBLE_WITNESS_OUTPUT_SYMBOLS:
             raise _resource_error(
                 "coaccessible_witness_output_exceeded",
                 "a successful continuation output exceeds the witness symbol bound",

@@ -72,3 +72,4 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Exact relative norm of a function-field element](function-field-element-norm.md)
 - [Cyclotomic character coordinates and equality](modular-forms-cyclotomic-character-coordinates.md)
 - [Rational quadratic-form scaling](quadratic-form-scale.md)
+- [Positive-definite representation numbers and fibers](quadratic-form-theta-selected.md)

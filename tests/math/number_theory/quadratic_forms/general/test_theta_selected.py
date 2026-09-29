@@ -1,0 +1,147 @@
+"""Exact representation numbers and fibers of positive-definite forms."""
+
+from __future__ import annotations
+
+from itertools import product
+
+import pytest
+from pydantic import ValidationError
+
+from jacobian._exact import CanonicalRational as Q
+from jacobian.catalog.models import OperationDomainValidationError
+from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
+    MAX_THETA_SELECTED_INDICES,
+    ThetaRepresentingVectorsRequest,
+    ThetaSelectedCoefficientsRequest,
+)
+from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_representing_vectors,
+    theta_selected_coefficients,
+)
+from jacobian.math.number_theory.quadratic_forms.general.values import (
+    QuadraticCrossTerm,
+    RationalQuadraticForm,
+)
+
+
+def _form(
+    diagonal: tuple[int, ...], cross: tuple[tuple[int, int, int], ...] = ()
+) -> RationalQuadraticForm:
+    return RationalQuadraticForm(
+        axis=tuple("xyz"[: len(diagonal)]),
+        diagonal_coefficients=tuple(Q.from_integer_ratio(d, 1) for d in diagonal),
+        cross_terms=tuple(
+            QuadraticCrossTerm(
+                left=left, right=right, coefficient=Q.from_integer_ratio(c, 1)
+            )
+            for left, right, c in cross
+        ),
+    )
+
+
+def _brute_force(form: RationalQuadraticForm, radius: int, indices: tuple[int, ...]):
+    """Independent oracle: enumerate a large box directly and count.
+
+    Deliberately shares nothing with the adjugate bound in the kernel, so it
+    checks the bound rather than re-deriving it.
+    """
+
+    diagonal = tuple(c.num for c in form.diagonal_coefficients)
+    crosses = tuple((t.left, t.right, t.coefficient.num) for t in form.cross_terms)
+    wanted = set(indices)
+    counts = dict.fromkeys(indices, 0)
+    fibers: dict[int, list[tuple[int, ...]]] = {index: [] for index in indices}
+    ranges = [range(-radius, radius + 1)] * len(diagonal)
+    for vector in product(*ranges):
+        value = sum(a * x * x for a, x in zip(diagonal, vector, strict=True))
+        value += sum(c * vector[left] * vector[right] for left, right, c in crosses)
+        if value in wanted:
+            counts[value] += 1
+            fibers[value].append(vector)
+    return counts, {k: sorted(v) for k, v in fibers.items()}
+
+
+HEXAGONAL = _form((1, 1), ((0, 1, 1),))
+UNARY = _form((1,))
+
+
+def test_selected_coefficients_match_an_independent_box_enumeration() -> None:
+    indices = (0, 3, 4, 7, 12)
+    result = theta_selected_coefficients(HEXAGONAL, indices)
+    expected, _ = _brute_force(HEXAGONAL, radius=12, indices=indices)
+    assert tuple(row.coefficient for row in result.coefficients) == tuple(
+        expected[index] for index in indices
+    )
+    # the requested index axis, not a positional one
+    assert tuple(row.index for row in result.coefficients) == indices
+
+
+def test_representation_fibers_match_an_independent_box_enumeration() -> None:
+    indices = (0, 3, 4)
+    result = theta_representing_vectors(HEXAGONAL, indices)
+    _, expected = _brute_force(HEXAGONAL, radius=12, indices=indices)
+    for row in result.rows:
+        assert [tuple(c.num for c in v.coordinates) for v in row.vectors] == (
+            expected[row.index]
+        )
+
+
+def test_a_non_positive_definite_form_is_refused_not_truncated() -> None:
+    """The unsound case from the withdrawn surface: a truncated table."""
+    indefinite = _form((1, 1), ((0, 1, -3),))
+    for call in (
+        lambda: theta_selected_coefficients(indefinite, (1,)),
+        lambda: theta_representing_vectors(indefinite, (1,)),
+    ):
+        with pytest.raises(OperationDomainValidationError) as error:
+            call()
+        assert (
+            error.value.errors()[0]["type"]
+            == "quadratic_form.theta_requires_positive_definite"
+        )
+
+
+def test_degenerate_form_is_refused() -> None:
+    # A zero diagonal coefficient makes the polar matrix singular, which is
+    # degenerate rather than positive-definite. (Zero *cross* terms are not
+    # representable in the carrier at all.)
+    degenerate = _form((1, 0))
+    with pytest.raises(OperationDomainValidationError) as error:
+        theta_selected_coefficients(degenerate, (1,))
+    assert (
+        error.value.errors()[0]["type"]
+        == "quadratic_form.theta_requires_positive_definite"
+    )
+
+
+def test_unary_representation_counts_are_the_sum_of_two_squares_ones() -> None:
+    """r_{x^2}(n) is 2 when n is a nonzero square and 1 at zero, else 0."""
+    indices = (0, 1, 2, 3, 4, 9)
+    result = theta_selected_coefficients(UNARY, indices)
+    assert [row.coefficient for row in result.coefficients] == [1, 2, 0, 0, 2, 2]
+
+
+def test_empty_fiber_is_reported_as_zero_not_omitted() -> None:
+    result = theta_selected_coefficients(UNARY, (1, 2))
+    assert [row.coefficient for row in result.coefficients] == [2, 0]
+    fibers = theta_representing_vectors(UNARY, (1, 2))
+    assert [len(row.vectors) for row in fibers.rows] == [2, 0]
+
+
+def test_request_requires_strictly_increasing_indices() -> None:
+    with pytest.raises(ValidationError) as decreasing:
+        ThetaSelectedCoefficientsRequest(form=UNARY, indices=(3, 1))
+    assert decreasing.value.errors()[0]["type"] == (
+        "quadratic_form.theta_indices_not_increasing"
+    )
+    with pytest.raises(ValidationError):
+        ThetaRepresentingVectorsRequest(form=UNARY, indices=(1, 1))
+    with pytest.raises(ValidationError):
+        ThetaSelectedCoefficientsRequest(form=UNARY, indices=())
+
+
+def test_too_many_selected_indices_are_refused() -> None:
+    with pytest.raises(ValidationError):
+        ThetaSelectedCoefficientsRequest(
+            form=UNARY, indices=tuple(range(MAX_THETA_SELECTED_INDICES + 1))
+        )

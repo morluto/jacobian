@@ -16,6 +16,8 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     MAX_THETA_PREFIX_OUTPUT_DIGITS,
     MAX_THETA_PREFIX_VECTORS,
     MAX_THETA_PREFIX_WORK,
+    ThetaRepresentingVectorsResult,
+    ThetaSelectedCoefficientsResult,
     ThetaSeriesPrefixResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
@@ -258,4 +260,112 @@ def theta_series_prefix(
     return ThetaSeriesPrefixResult(form=form, cutoff=cutoff, coefficients=tuple(table))
 
 
-__all__ = ["theta_series_prefix"]
+__all__ = [
+    "theta_representing_vectors",
+    "theta_selected_coefficients",
+    "theta_series_prefix",
+]
+
+
+def theta_selected_coefficients(
+    form: RationalQuadraticForm, indices: tuple[int, ...]
+) -> ThetaSelectedCoefficientsResult:
+    """Return the exact representation numbers ``r_Q(n)`` at selected indices.
+
+    For a positive-definite form, ``r_Q(n)`` is finite and the set of
+    representing vectors is bounded by the adjugate coordinate bound, so the
+    enumeration below is complete. Negative-definite, indefinite, and degenerate
+    forms are refused by :func:`_positive_definite_matrix` rather than given a
+    truncated table.
+
+    Because the box is searched in full, the *work* is the box volume, not the
+    number of representations retained. ``_admit_box_and_output`` charges
+    ``prod(2 * radius + 1) * support`` evaluations before enumeration begins, so
+    a request that would enumerate too much is refused even when its result
+    would be small or empty.
+    """
+
+    dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
+    _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
+    radii = _admit_box_and_output(
+        form,
+        indices[-1],
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
+    )
+
+    wanted = set(indices)
+    counts = dict.fromkeys(indices, 0)
+    diagonal = tuple(value.num for value in form.diagonal_coefficients)
+    crosses = tuple(
+        (term.left, term.right, term.coefficient.num) for term in form.cross_terms
+    )
+    for vector in product(*(range(-radius, radius + 1) for radius in radii)):
+        value = sum(
+            coefficient * coordinate * coordinate
+            for coefficient, coordinate in zip(diagonal, vector, strict=True)
+        )
+        value += sum(
+            coefficient * vector[left] * vector[right]
+            for left, right, coefficient in crosses
+        )
+        if value in wanted:
+            counts[value] += 1
+    return ThetaSelectedCoefficientsResult._from_kernel(
+        form=form,
+        indices=indices,
+        coefficients=tuple(counts[index] for index in indices),
+    )
+
+
+def theta_representing_vectors(
+    form: RationalQuadraticForm, indices: tuple[int, ...]
+) -> ThetaRepresentingVectorsResult:
+    """Return every integer vector representing each selected index.
+
+    This is the fiber behind :func:`theta_selected_coefficients`: where that
+    operation counts, this one lists. The same proved positive-definite box is
+    searched, so both are complete for the indices they are given and both
+    refuse a non-positive-definite form.
+    """
+
+    dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
+    _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
+    radii = _admit_box_and_output(
+        form,
+        indices[-1],
+        support,
+        determinant_work,
+        cofactor_work,
+        determinant,
+        diagonal_cofactors,
+    )
+
+    vectors_by_value: dict[int, list[tuple[int, ...]]] = {
+        index: [] for index in indices
+    }
+    diagonal = tuple(value.num for value in form.diagonal_coefficients)
+    crosses = tuple(
+        (term.left, term.right, term.coefficient.num) for term in form.cross_terms
+    )
+    for vector in product(*(range(-radius, radius + 1) for radius in radii)):
+        value = sum(
+            coefficient * coordinate * coordinate
+            for coefficient, coordinate in zip(diagonal, vector, strict=True)
+        )
+        value += sum(
+            coefficient * vector[left] * vector[right]
+            for left, right, coefficient in crosses
+        )
+        selected = vectors_by_value.get(value)
+        if selected is not None:
+            selected.append(vector)
+    return ThetaRepresentingVectorsResult._from_kernel(
+        form=form,
+        rows=tuple(
+            (index, tuple(sorted(vectors_by_value[index]))) for index in indices
+        ),
+    )

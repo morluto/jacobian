@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations, product
-from math import comb
+from math import comb, gcd
 from typing import Any, NoReturn
 
 import sympy as sp
@@ -1494,10 +1494,46 @@ def _canonical_spline_evaluation_inputs(
 
 
 def _decimal_digits_upper(value: int) -> int:
-    if value == 0:
-        return 1
-    # log10(2) < 30103/100000, so avoid stringifying caller-sized integers.
-    return (abs(value).bit_length() * 30_103) // 100_000 + 1
+    return decimal_digit_width(value)
+
+
+def _scaled_component_width(value: int) -> int:
+    """Return the decimal width one factor adds to an exact product.
+
+    A unit factor is exact and contributes nothing to a product, so charging
+    its single digit rejected products whose reduced result stays exactly
+    inside the canonical envelope.
+    """
+
+    magnitude = abs(value)
+    if magnitude == 1:
+        return 0
+    return decimal_digit_width(magnitude)
+
+
+def _cancelled_component_widths(
+    numerator_factors: list[int], denominator_factors: list[int]
+) -> tuple[int, int]:
+    """Return a reduced-product numerator and denominator width bound.
+
+    Exact factors cross-cancel before the product is formed, so a coefficient
+    of ``1/N`` against a basis entry of ``N`` is exactly ``1`` and a unit basis
+    entry widens nothing. Cancelling the factors pairwise bounds the reduced
+    product without ever materializing it.
+    """
+
+    numerators = [value for value in numerator_factors if value]
+    denominators = [value for value in denominator_factors if value]
+    for index, numerator in enumerate(numerators):
+        for other, denominator in enumerate(denominators):
+            common = gcd(abs(numerator), denominator)
+            if common > 1:
+                numerators[index] = numerator // common
+                denominators[other] = denominator // common
+    return (
+        sum(_scaled_component_width(value) for value in numerators),
+        sum(_scaled_component_width(value) for value in denominators),
+    )
 
 
 def _containing_cell_ids(
@@ -1517,13 +1553,20 @@ def _admit_spline_evaluation_growth(
     point: ComplexPoint,
     containing_ids: frozenset[str],
 ) -> None:
-    """Bound the full rational sum before constructing its products."""
+    """Bound the full rational sum before constructing its products.
 
-    estimated_digits = 0
+    Each summand is a product of exact rational factors, so its own numerator
+    and denominator cross-cancel before they ever meet the sum. A sum of
+    ``k`` reduced fractions over a common denominator bounded by the sum of
+    their denominator widths has a numerator bounded by the widest term's
+    numerator measured against that common denominator, plus the digits needed
+    to add ``k`` numerators. Charging each factor's width unreduced, and
+    charging a coefficient's denominator to the numerator, refused sums whose
+    exact result was inside the envelope.
+    """
+
+    term_bounds: list[tuple[int, int]] = []
     for basis_index, scalar in enumerate(coefficients):
-        scalar_digits = _decimal_digits_upper(scalar.num) + _decimal_digits_upper(
-            scalar.den
-        )
         if not scalar.num:
             continue
         for column, (cell_id, exponents) in enumerate(spline.coefficient_axis):
@@ -1532,20 +1575,35 @@ def _admit_spline_evaluation_growth(
             basis_scalar = spline.nullspace_basis.entries[basis_index][column]
             if not basis_scalar.num:
                 continue
-            numerator_digits = scalar_digits + _decimal_digits_upper(basis_scalar.num)
-            denominator_digits = _decimal_digits_upper(basis_scalar.den)
+            numerator_factors = [scalar.num, basis_scalar.num]
+            denominator_factors = [scalar.den, basis_scalar.den]
             for coordinate, power in zip(point.coordinates, exponents, strict=True):
-                numerator_digits += power * _decimal_digits_upper(coordinate.num)
-                denominator_digits += power * _decimal_digits_upper(coordinate.den)
-            estimated_digits += numerator_digits + denominator_digits + 1
-            if estimated_digits > MAX_CANONICAL_RATIONAL_DIGITS:
-                raise OperationResourceAdmissionError(
-                    location=("basis_coefficients",),
-                    code="polytopal_complex.spline_evaluation_growth",
-                    message=(
-                        "spline evaluation exceeds the canonical rational output envelope"
-                    ),
-                )
+                numerator_factors.extend([coordinate.num] * power)
+                denominator_factors.extend([coordinate.den] * power)
+            term_bounds.append(
+                _cancelled_component_widths(numerator_factors, denominator_factors)
+            )
+    if not term_bounds:
+        return
+    denominator_digits = sum(bound[1] for bound in term_bounds)
+    # A single summand is the whole sum, and the least common denominator of
+    # one denominator is that denominator, so it needs neither the carry for
+    # adding several numerators nor the extra digit the multi-term form allows.
+    term_count = len(term_bounds)
+    carry = 0 if term_count == 1 else len(str(term_count - 1)) + 1
+    numerator_digits = (
+        max(
+            numerator + denominator_digits - denominator
+            for numerator, denominator in term_bounds
+        )
+        + carry
+    )
+    if max(numerator_digits, denominator_digits) > MAX_CANONICAL_RATIONAL_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("basis_coefficients",),
+            code="polytopal_complex.spline_evaluation_growth",
+            message="spline evaluation exceeds the canonical rational output envelope",
+        )
 
 
 def _evaluate_spline_basis_combination(

@@ -5,6 +5,7 @@ import json
 import pytest
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
 from jacobian.math.polynomials._multiply_ops import (
@@ -101,11 +102,55 @@ def test_dense_backend_accepts_former_convolution_limit() -> None:
     assert result.polynomial.terms[1024].coefficient.num == 1025
 
 
-def test_rejects_accumulated_coefficient_growth() -> None:
+def test_accumulated_coefficients_grow_by_the_collected_products_not_their_widths() -> (
+    None
+):
+    """Collecting 64 products of 1/10^255 widens a coefficient by 510 digits.
+
+    The old bound charged each collected product the *sum* of both operands'
+    component widths, so this request was refused on a 32,770-digit estimate
+    while every exact result here is a 511-digit rational, well inside the
+    32,768-digit envelope. The exact product is what must be measured.
+    """
     coefficient = {"num": "1", "den": "1" + "0" * 255}
     terms = [
         {"coefficient": coefficient, "exponents": [index]}
         for index in range(63, -1, -1)
+    ]
+    polynomial = {
+        "domain": "QQ",
+        "variables": ["x"],
+        "polynomial": {"terms": terms},
+    }
+
+    request = RationalPolynomialMultiplyRequest.model_validate_json(
+        json.dumps({"left": polynomial, "right": polynomial})
+    )
+    result = rational_polynomial_multiply(request)
+
+    # coefficient of x^63 collects exactly one product: 1/10^510
+    assert result.polynomial.terms[0].coefficient.den == 10**510
+    # coefficient of x^0 collects 64 of them: 64/10^510, reduced
+    widest = max(
+        max(
+            decimal_digit_width(term.coefficient.num),
+            decimal_digit_width(term.coefficient.den),
+        )
+        for term in result.polynomial.terms
+    )
+    assert widest == 511
+    assert widest < MAX_CANONICAL_RATIONAL_DIGITS
+
+
+def test_rejects_a_product_whose_exact_result_exceeds_the_digit_limit() -> None:
+    """Two collected products of 1/10^16384 really do exceed the envelope.
+
+    The square is 1/10^32768, one digit past the limit, so the refusal is a
+    statement about the exact result rather than about operand widths.
+    """
+    coefficient = {"num": "1", "den": "1" + "0" * 16384}
+    terms = [
+        {"coefficient": coefficient, "exponents": [index]} for index in range(1, -1, -1)
     ]
     polynomial = {
         "domain": "QQ",

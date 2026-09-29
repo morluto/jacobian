@@ -5,10 +5,12 @@
 [Number theory operations](index.md) · [Tool surface](../../tools.md)
 
 `function_field.riemann_roch_space.compute` returns the complete space `L(D)`
-for a finite divisor over the rational function field `GF(p)(x)`. The divisor
-must have a prime characteristic, at most 256 distinct support places, and
-multiplicities of at most 4096 bits. A nontrivial algebraic extension is
-rejected even when it is represented by an otherwise valid field carrier.
+for finite divisors over `GF(p)(x)`. It also supports divisors `m P∞` on the
+odd-degree hyperelliptic model `y²=f(x)` when `p` is odd, `f` is squarefree,
+and `3 ≤ deg(f) ≤ 11`. This extension-model slice accepts only the unique
+infinite place; finite places and even-degree models remain outside its
+contract. Multiplicities are limited to 4096 bits and the returned basis to
+13 elements.
 
 Write
 
@@ -25,6 +27,19 @@ For `f=g/h`, the finite-place inequalities `(f)+D ≥ 0` hold exactly when
 `g` is a polynomial, and the infinity inequality is exactly `deg(g) ≤ d`.
 Consequently `L(D) = h⁻¹ GF(p)[x]_{≤d}` when `d ≥ 0`, and `L(D)={0}` when
 `d < 0`; the canonical basis is `x^i/h` for `0≤i≤d`.
+
+For a hyperelliptic model of odd degree `d=2g+1`, the unique point at infinity
+has `v∞(x)=-2` and `v∞(y)=-d`. Therefore
+
+```text
+L(m P∞) = span {x^i : 2i≤m} ∪ {x^j y : 2j+d≤m}
+```
+
+with an empty basis for `m<0`. The two families have distinct pole-order
+parities, so their valuations establish linear independence; each listed
+element satisfies the required pole bound. This gives dimension
+`floor(m/2)+1 + max(0, floor((m-d)/2)+1)` for `m≥0`, and agrees with
+Riemann–Roch `m+1-g` for `m≥2g-1`.
 
 The result value carries the admitted divisor, its dimension, and exact
 `FiniteFunctionFieldElement` basis values. If the positive finite part of `h`
@@ -43,7 +58,6 @@ steps. Coefficients are reduced modulo `p` after each operation, so their
 height is bounded by the characteristic. If `d<0`, the operation returns the
 empty basis without constructing `h`.
 
-The implementation's supported places and divisor values do not yet describe
-places of algebraic extension fields. Genus computation for those extensions,
-differential spaces, canonical divisors, and Riemann–Roch spaces on them remain
-unsupported.
+The hyperelliptic support does not yet include finite places, arbitrary
+extension fields, or Riemann–Roch membership checks. Differential spaces and
+canonical divisors also remain unsupported.

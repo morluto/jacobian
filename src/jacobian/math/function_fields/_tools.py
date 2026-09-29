@@ -426,18 +426,19 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     ),
     MathTool(
         operation_id="function_field.riemann_roch_space.compute",
-        title="Compute a rational function-field Riemann-Roch space",
+        title="Compute a function-field Riemann-Roch space",
         description=(
-            "Return the exact basis and dimension of L(D) for a divisor over "
-            "GF(p)(x). The field must use the rational defining polynomial 1. "
-            "Support is limited to 256 places and multiplicities to 4096 bits; "
-            "positive-dimensional outputs require at most 13 basis elements "
-            "and degree-12 canonical rational-function coefficients."
+            "Return the exact basis and dimension of L(D) over GF(p)(x), or "
+            "for an odd-characteristic squarefree hyperelliptic model y^2=f(x) "
+            "with odd degree 3 through 11 and a divisor supported only at "
+            "infinity. Rational divisors admit at most 256 places; all "
+            "multiplicities are limited to 4096 bits. Basis dimension is "
+            "limited to 13 and polynomial coordinates to degree 12."
         ),
         request_type=FunctionFieldRiemannRochSpaceRequest,
         result_type=FunctionFieldRiemannRochSpace,
         run=lambda request: function_field_riemann_roch_space(request.divisor),
-        tags=("function-field", "riemann-roch", "exact", "basis"),
+        tags=("function-field", "riemann-roch", "hyperelliptic", "exact", "basis"),
         examples=(
             OperationExample(
                 name="basis_for_twice_infinity_on_projective_line",

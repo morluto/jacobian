@@ -2,6 +2,14 @@
 
 from jacobian.canonical import encode_strict_json
 from jacobian.catalog.builtins import BUILTIN_TOOLS
+from jacobian.math.function_fields._models import (
+    FiniteFunctionField,
+    FunctionFieldDivisor,
+    FunctionFieldDivisorTerm,
+    FunctionFieldPlace,
+    PrimeFieldPolynomial,
+    PrimeFieldRationalFunction,
+)
 
 
 def _tool(operation_id: str):
@@ -30,7 +38,7 @@ def test_hyperelliptic_infinity_valuation_example_is_published_and_runs() -> Non
     assert result.valuation.value == -3
 
 
-def test_rational_riemann_roch_is_the_published_operation() -> None:
+def test_riemann_roch_operation_publishes_hyperelliptic_infinity_support() -> None:
     operation_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
     operation_id = "function_field.riemann_roch_space.compute"
 
@@ -40,5 +48,33 @@ def test_rational_riemann_roch_is_the_published_operation() -> None:
         not in operation_ids
     )
 
-    result = _run_example(operation_id)
+    tool = _tool(operation_id)
+
+    def rf(coefficients):
+        return PrimeFieldRationalFunction(
+            numerator=PrimeFieldPolynomial(characteristic=5, coefficients=coefficients),
+            denominator=PrimeFieldPolynomial(characteristic=5, coefficients=(1,)),
+        )
+
+    field = FiniteFunctionField(
+        characteristic=5,
+        defining_polynomial=(rf((0, 1, 0, 4)), rf((0,)), rf((1,))),
+    )
+    request = tool.request_type.model_validate(
+        {
+            "divisor": FunctionFieldDivisor(
+                field=field,
+                terms=(
+                    FunctionFieldDivisorTerm(
+                        place=FunctionFieldPlace(
+                            field=field, kind="INFINITE", degree=1
+                        ),
+                        multiplicity=3,
+                    ),
+                ),
+            )
+        }
+    )
+    result = tool.run(request)
     assert result.dimension == 3
+    assert len(result.basis) == 3

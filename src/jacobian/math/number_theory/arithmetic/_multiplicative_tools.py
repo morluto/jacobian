@@ -87,47 +87,24 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="integer.squarefree_decomposition.compute",
         title="Compute squarefree decomposition",
-        description="Compute the unique decomposition n = s^2 * d where s >= 1 and |d| is squarefree. Zero returns a ZERO variant; otherwise the result carries the square factor, signed squarefree part, per-prime exponent rows, and exact reconstruction.",
+        description=(
+            "Compute the unique decomposition n = s^2 * d where s >= 1 and |d| is "
+            "squarefree, returning the square factor and the signed squarefree "
+            "part together with per-prime exponent rows and exact "
+            "reconstruction."
+        ),
         request_type=IntegerRequest,
         result_type=SquarefreeDecompositionResult,
         run=_compute_squarefree_decomposition,
         tags=("integer", "multiplicative", "exact"),
+        discovery_terms=(
+            "signed squarefree part",
+            "extract square factor",
+        ),
         examples=(
             OperationExample(
                 name="squarefree_72",
                 description="Compute the squarefree decomposition of 72; n must be one canonical integer.",
-                input={"value": "72"},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="integer.squarefree_part.compute",
-        title="Compute signed squarefree part",
-        description="Compute the signed squarefree part d and extracted square factor s such that n = s^2 * d with |d| squarefree. This is the compact projection of the squarefree decomposition carrying only the squarefree part and square factor.",
-        request_type=IntegerRequest,
-        result_type=SquarefreeDecompositionResult,
-        run=_compute_squarefree_decomposition,
-        tags=("integer", "multiplicative", "exact"),
-        examples=(
-            OperationExample(
-                name="squarefree_part_72",
-                description="Compute the signed squarefree part of 72; n must be one canonical integer.",
-                input={"value": "72"},
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="quadratic_radical.positive_integer.normalize.compute",
-        title="Normalize positive integer square root",
-        description="Compute the canonical positive square root sqrt(n) = s * sqrt(d) with s >= 0, d >= 1 squarefree, and s^2 * d = n. Classifies as ZERO, RATIONAL_INTEGER, or IRRATIONAL_QUADRATIC. The radicand n must be a nonnegative integer.",
-        request_type=NonnegativeIntegerRequest,
-        result_type=NormalizedQuadraticRadicalResult,
-        run=_compute_normalized_quadratic_radical,
-        tags=("integer", "multiplicative", "exact"),
-        examples=(
-            OperationExample(
-                name="radical_72",
-                description="Normalize sqrt(72) = 6*sqrt(2); n must be a nonnegative integer.",
                 input={"value": "72"},
             ),
         ),

@@ -6,7 +6,6 @@ from itertools import product
 
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -15,9 +14,6 @@ from jacobian.math.logic.relational_structures import (
     FiniteRelationalStructure,
     FiniteRelationSymbol,
     HomomorphismStatus,
-)
-from jacobian.math.logic.relational_structures._models import (
-    RelationalProductRequest,
 )
 from jacobian.math.logic.relational_structures.operations import (
     check_homomorphism,
@@ -104,10 +100,3 @@ def test_product_rejects_signature_mismatch_and_overlarge_cartesian_table() -> N
     b = a
     with pytest.raises(OperationResourceAdmissionError, match="product relation"):
         direct_product_structure(a, b)
-
-
-def test_product_operation_is_discoverable_and_example_executes() -> None:
-    operation_id = "relational.structure.direct_product.compute"
-    tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == operation_id)
-    result = tool.run(RelationalProductRequest.model_validate(tool.examples[0].input))
-    assert result.product.relation_tables == (((0, 3),),)

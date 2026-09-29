@@ -10,6 +10,10 @@ from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileResult,
     FiniteGaussSumRequest,
     FiniteGaussSumResult,
+    ThetaRepresentingVectorsRequest,
+    ThetaRepresentingVectorsResult,
+    ThetaSelectedCoefficientsRequest,
+    ThetaSelectedCoefficientsResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general._models import *  # noqa: F403
 from jacobian.math.number_theory.quadratic_forms.general.direct_sum_models import (
@@ -37,6 +41,10 @@ from jacobian.math.number_theory.quadratic_forms.general.scaling_models import (
 )
 from jacobian.math.number_theory.quadratic_forms.general.scaling_operations import (
     scale_rational_quadratic_form,
+)
+from jacobian.math.number_theory.quadratic_forms.general.theta_operations import (
+    theta_representing_vectors,
+    theta_selected_coefficients,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
     MAX_QUADRATIC_EVALUATION_DIGITS,
@@ -117,6 +125,18 @@ def compute_modular_profile(request: ModularProfileRequest) -> ModularProfileRes
 
 def compute_finite_gauss_sum(request: FiniteGaussSumRequest) -> FiniteGaussSumResult:
     return finite_quadratic_gauss_sum(request.form, request.modulus)
+
+
+def compute_theta_selected_coefficients(
+    request: ThetaSelectedCoefficientsRequest,
+) -> ThetaSelectedCoefficientsResult:
+    return theta_selected_coefficients(request.form, request.indices)
+
+
+def compute_theta_representing_vectors(
+    request: ThetaRepresentingVectorsRequest,
+) -> ThetaRepresentingVectorsResult:
+    return theta_representing_vectors(request.form, request.indices)
 
 
 def compute_scale(
@@ -574,6 +594,95 @@ TOOLS = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="quadratic_form.theta_selected_coefficients.compute",
+        title="Selected exact representation numbers of a positive-definite form",
+        description=(
+            "Return the exact representation numbers r_Q(n) at a strictly "
+            "increasing tuple of selected indices, for a positive-definite "
+            "rational form. Positivity is established exactly by Sylvester's "
+            "criterion on the integral polar matrix, so r_Q(n) is finite and "
+            "the set of representing vectors is bounded; a negative-definite, "
+            "indefinite, or degenerate form is refused rather than given a "
+            "truncated table. The proved adjugate box is searched in full, so "
+            "the charged work is the box volume, not the number of "
+            "representations retained."
+        ),
+        request_type=ThetaSelectedCoefficientsRequest,
+        result_type=ThetaSelectedCoefficientsResult,
+        run=compute_theta_selected_coefficients,
+        tags=("quadratic-form", "theta", "representations", "exact"),
+        discovery_terms=(
+            "representation numbers of a positive-definite form",
+            "selected theta coefficients",
+            "how many vectors represent n by this quadratic form",
+        ),
+        examples=(
+            OperationExample(
+                name="hexagonal_form_representation_numbers",
+                description=(
+                    "For x^2 + xy + y^2, r(0) = 1 and r(3) = 6; the six vectors "
+                    "solving x^2 + xy + y^2 = 3 are listed by the fiber operation."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x", "y"],
+                        "diagonal_coefficients": [
+                            {"num": "1", "den": "1"},
+                            {"num": "1", "den": "1"},
+                        ],
+                        "cross_terms": [
+                            {
+                                "left": 0,
+                                "right": 1,
+                                "coefficient": {"num": "1", "den": "1"},
+                            }
+                        ],
+                    },
+                    "indices": [0, 3, 4, 12],
+                },
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_form.representing_vectors.compute",
+        title="Integer vectors representing selected values of a positive-definite form",
+        description=(
+            "Return every integer vector representing each selected value of a "
+            "positive-definite rational form, in the form's ordered axis and "
+            "strictly increasing lexicographic order. This is the fiber behind "
+            "the selected representation numbers: where that operation counts, "
+            "this one lists. The same proved box is searched, so both are "
+            "complete for the indices they are given and both refuse a "
+            "non-positive-definite form."
+        ),
+        request_type=ThetaRepresentingVectorsRequest,
+        result_type=ThetaRepresentingVectorsResult,
+        run=compute_theta_representing_vectors,
+        tags=("quadratic-form", "theta", "representations", "exact"),
+        discovery_terms=(
+            "integer vectors representing a quadratic form value",
+            "representation vectors of a positive-definite form",
+            "list the solutions of q equals n over the integers",
+        ),
+        examples=(
+            OperationExample(
+                name="unary_form_representation_fibers",
+                description=(
+                    "x^2 represents 1 with the two vectors (-1) and (1), and "
+                    "4 with (-2) and (2)."
+                ),
+                input={
+                    "form": {
+                        "axis": ["x"],
+                        "diagonal_coefficients": [{"num": "1", "den": "1"}],
+                        "cross_terms": [],
+                    },
+                    "indices": [1, 4],
+                },
+            ),
+        ),
+    ),
 )
 
 
@@ -591,5 +700,7 @@ __all__ = [
     "compute_radical",
     "compute_scale",
     "compute_signature",
+    "compute_theta_representing_vectors",
+    "compute_theta_selected_coefficients",
     "evaluate_form",
 ]

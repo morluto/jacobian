@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational, ExactInteger, require_bounded_rational
 from jacobian._models import StrictModel
@@ -18,6 +19,7 @@ from jacobian.math.matrices.cyclic_linear._models import (
 )
 from jacobian.math.matrices.values import RationalMatrix, RationalVectorSpaceBasis
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    RationalCoordinateVector,
     RationalQuadraticForm,
 )
 
@@ -281,6 +283,13 @@ MAX_THETA_PREFIX_DIMENSION = 7
 MAX_THETA_PREFIX_VECTORS = 100_000
 MAX_THETA_PREFIX_WORK = 2_000_000
 MAX_THETA_PREFIX_OUTPUT_DIGITS = 64_000
+# Selected-index theta queries reuse the prefix box machinery above. The
+# selected indices may be sparse, so the cap is on the highest index rather
+# than on a dense coefficient count.
+MAX_THETA_SELECTED_INDEX = 1_000_000_000
+MAX_THETA_SELECTED_INDICES = 128
+MAX_THETA_REPRESENTATION_VECTOR_COUNT = 100_000
+MAX_THETA_REPRESENTATION_COORDINATE_ABS = 49_999
 
 
 class ThetaSeriesPrefixRequest(StrictModel):
@@ -384,7 +393,195 @@ class FiniteBoxProfileResult(StrictModel):
         )
 
 
+class ThetaSelectedCoefficient(StrictModel):
+    """One exact representation number at its requested index."""
+
+    index: int = Field(ge=0, le=MAX_THETA_SELECTED_INDEX)
+    coefficient: int = Field(ge=0, le=MAX_THETA_PREFIX_VECTORS)
+
+
+class ThetaSelectedCoefficientsRequest(StrictModel):
+    """Selected exact representation numbers of a positive-definite form."""
+
+    form: RationalQuadraticForm
+    indices: tuple[Annotated[int, Field(ge=0, le=MAX_THETA_SELECTED_INDEX)], ...] = (
+        Field(min_length=1, max_length=MAX_THETA_SELECTED_INDICES)
+    )
+
+    @model_validator(mode="after")
+    def require_strictly_increasing_indices(self) -> Self:
+        if tuple(sorted(set(self.indices))) != self.indices:
+            raise PydanticCustomError(
+                "quadratic_form.theta_indices_not_increasing",
+                "theta indices must be strictly increasing and distinct",
+            )
+        return self
+
+    @property
+    def cutoff(self) -> int:
+        return self.indices[-1]
+
+
+class ThetaSelectedCoefficientsResult(StrictModel):
+    """Exact source-bound representation numbers at the requested indices."""
+
+    form: RationalQuadraticForm
+    coefficients: tuple[ThetaSelectedCoefficient, ...] = Field(
+        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_requested_axis(self) -> Self:
+        indices = tuple(row.index for row in self.coefficients)
+        if tuple(sorted(set(indices))) != indices:
+            raise PydanticCustomError(
+                "quadratic_form.theta_result_indices",
+                "selected theta result indices must be strictly increasing",
+            )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: RationalQuadraticForm,
+        indices: tuple[int, ...],
+        coefficients: tuple[int, ...],
+    ) -> ThetaSelectedCoefficientsResult:
+        """Build a result after the admitted kernel established its values."""
+
+        return cls.model_construct(
+            form=form,
+            coefficients=tuple(
+                ThetaSelectedCoefficient.model_construct(index=index, coefficient=value)
+                for index, value in zip(indices, coefficients, strict=True)
+            ),
+        )
+
+
+class ThetaRepresentingVectorsRow(StrictModel):
+    """Every integer vector representing one selected index."""
+
+    index: int = Field(ge=0, le=MAX_THETA_SELECTED_INDEX)
+    vectors: tuple[RationalCoordinateVector, ...] = Field(
+        max_length=MAX_THETA_REPRESENTATION_VECTOR_COUNT
+    )
+
+
+class ThetaRepresentingVectorsRequest(StrictModel):
+    """Complete integer vector fibers at selected values of a positive-definite form."""
+
+    form: RationalQuadraticForm
+    indices: tuple[Annotated[int, Field(ge=0, le=MAX_THETA_SELECTED_INDEX)], ...] = (
+        Field(min_length=1, max_length=MAX_THETA_SELECTED_INDICES)
+    )
+
+    @model_validator(mode="after")
+    def require_strictly_increasing_indices(self) -> Self:
+        if tuple(sorted(set(self.indices))) != self.indices:
+            raise PydanticCustomError(
+                "quadratic_form.theta_representation_indices",
+                "representation indices must be strictly increasing and distinct",
+            )
+        return self
+
+    @property
+    def cutoff(self) -> int:
+        return self.indices[-1]
+
+
+class ThetaRepresentingVectorsResult(StrictModel):
+    """All selected vectors, with coordinates ordered by the form axis."""
+
+    form: RationalQuadraticForm
+    rows: tuple[ThetaRepresentingVectorsRow, ...] = Field(
+        min_length=1, max_length=MAX_THETA_SELECTED_INDICES
+    )
+
+    @model_validator(mode="after")
+    def require_complete_ordered_table(self) -> Self:
+        previous_index = -1
+        vector_count = 0
+        for row in self.rows:
+            if row.index <= previous_index:
+                raise PydanticCustomError(
+                    "quadratic_form.theta_representation_row_order",
+                    "representation rows must have strictly increasing indices",
+                )
+            previous_index = row.index
+            previous_coordinates: tuple[int, ...] | None = None
+            for vector in row.vectors:
+                if vector.axis != self.form.axis:
+                    raise PydanticCustomError(
+                        "quadratic_form.theta_representation_vector_axis",
+                        "representation vector axis must match the form axis",
+                    )
+                if any(value.den != 1 for value in vector.coordinates):
+                    raise PydanticCustomError(
+                        "quadratic_form.theta_representation_vector_integral",
+                        "representation coordinates must be integers",
+                    )
+                coordinates = tuple(value.num for value in vector.coordinates)
+                if any(
+                    abs(value) > MAX_THETA_REPRESENTATION_COORDINATE_ABS
+                    for value in coordinates
+                ):
+                    raise PydanticCustomError(
+                        "quadratic_form.theta_representation_coordinate_bound",
+                        "a representation coordinate exceeds its admitted bound",
+                    )
+                if (
+                    previous_coordinates is not None
+                    and coordinates <= previous_coordinates
+                ):
+                    raise PydanticCustomError(
+                        "quadratic_form.theta_representation_vector_order",
+                        "representation vectors must be unique and ordered",
+                    )
+                previous_coordinates = coordinates
+            vector_count += len(row.vectors)
+            if vector_count > MAX_THETA_REPRESENTATION_VECTOR_COUNT:
+                raise PydanticCustomError(
+                    "quadratic_form.theta_representation_vector_count",
+                    "the representation table exceeds its vector-count bound",
+                )
+        return self
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        form: RationalQuadraticForm,
+        rows: tuple[tuple[int, tuple[tuple[int, ...], ...]], ...],
+    ) -> ThetaRepresentingVectorsResult:
+        """Build a result after the admitted kernel established its values."""
+
+        return cls.model_construct(
+            form=form,
+            rows=tuple(
+                ThetaRepresentingVectorsRow.model_construct(
+                    index=index,
+                    vectors=tuple(
+                        RationalCoordinateVector.model_construct(
+                            axis=form.axis,
+                            coordinates=tuple(
+                                CanonicalRational.model_construct(num=value, den=1)
+                                for value in vector
+                            ),
+                        )
+                        for vector in vectors
+                    ),
+                )
+                for index, vectors in rows
+            ),
+        )
+
+
 __all__ = [
+    "MAX_THETA_REPRESENTATION_COORDINATE_ABS",
+    "MAX_THETA_REPRESENTATION_VECTOR_COUNT",
+    "MAX_THETA_SELECTED_INDEX",
+    "MAX_THETA_SELECTED_INDICES",
     "DiagonalizationResult",
     "FiniteBoxProfileRequest",
     "FiniteBoxProfileResult",
@@ -396,6 +593,12 @@ __all__ = [
     "PullbackResult",
     "RadicalResult",
     "SignatureResult",
+    "ThetaRepresentingVectorsRequest",
+    "ThetaRepresentingVectorsResult",
+    "ThetaRepresentingVectorsRow",
+    "ThetaSelectedCoefficient",
+    "ThetaSelectedCoefficientsRequest",
+    "ThetaSelectedCoefficientsResult",
     "ThetaSeriesPrefixRequest",
     "ThetaSeriesPrefixResult",
 ]

@@ -6,7 +6,11 @@ from collections import deque
 
 import pytest
 
-from jacobian.math.groups.root_systems._models import MAX_REFLECTION_REPRESENTABLE
+from jacobian.math.groups.root_systems._models import (
+    MAX_REFLECTION_REPRESENTABLE,
+    WeightLatticeVector,
+    WeylElementWeightActionRequest,
+)
 from jacobian.math.groups.root_systems._tools import TOOLS
 from jacobian.math.groups.root_systems.operations import (
     weyl_antidominant_representative,
@@ -99,11 +103,12 @@ def test_antidominant_representative_and_transporter_match_group_closure(
 
     result = weyl_antidominant_representative(matrix, weight)
 
-    assert result.antidominant_weight == antidominant[0]
+    # canonical parent-bound carrier, comparable by coordinates
+    assert result.antidominant_weight.coordinates == tuple(antidominant[0])
     assert result.element.matrix.entries == matrix
     assert any(
         root_action == result.element.root_action.entries
-        and _act(weight_action, weight) == result.antidominant_weight
+        and _act(weight_action, weight) == result.antidominant_weight.coordinates
         for root_action, weight_action in group
     )
 
@@ -119,7 +124,7 @@ def test_antidominant_representative_and_transporter_match_group_closure(
         weight_action = _multiply(tuple(map(tuple, reflection)), weight_action)
     assert (
         _act(weight_action, dominant.dominant_weight.coordinates)
-        == result.antidominant_weight
+        == result.antidominant_weight.coordinates
     )
 
 
@@ -129,7 +134,7 @@ def test_antidominant_input_preserves_identity_transporter(
 ) -> None:
     result = weyl_antidominant_representative(((2, -1), (-1, 2)), weight)
 
-    assert result.antidominant_weight == weight
+    assert result.antidominant_weight.coordinates == tuple(weight)
     assert result.element.root_action.entries == _identity(2)
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
@@ -152,7 +157,7 @@ def test_large_non_antidominant_g2_weight_uses_executed_path_bound() -> None:
 
     result = weyl_antidominant_representative(matrix, weight)
 
-    assert result.antidominant_weight == (-weight[0], -weight[1])
+    assert result.antidominant_weight.coordinates == (-weight[0], -weight[1])
     assert result.element.root_action.entries != _identity(2)
     assert type(result).model_validate_json(result.model_dump_json()) == result
 
@@ -164,6 +169,37 @@ def test_large_antidominant_g2_weight_skips_orbit_wide_bound() -> None:
     result = weyl_antidominant_representative(matrix, weight)
 
     assert all(abs(value) <= MAX_REFLECTION_REPRESENTABLE for value in weight)
-    assert result.antidominant_weight == weight
+    assert result.antidominant_weight.coordinates == tuple(weight)
     assert result.element.root_action.entries == _identity(2)
+    assert type(result).model_validate_json(result.model_dump_json()) == result
+
+
+def test_antidominant_result_composes_into_the_published_weight_consumer() -> None:
+    """The result must expose the domain's canonical weight carrier so a
+    producer's value feeds its sibling consumer unchanged.
+
+    It previously returned unbound integer tuples, so the serialized output of
+    `weyl_group.antidominant_representative.compute` could not be passed to
+    `weyl_group.element.act_on_weight.compute`, which requires
+    `WeightLatticeVector`; callers had to rebuild the Cartan datum by hand.
+    """
+    matrix = ((2, -1), (-1, 2))
+    result = weyl_antidominant_representative(matrix, (-1, 1))
+
+    assert isinstance(result.weight, WeightLatticeVector)
+    assert isinstance(result.antidominant_weight, WeightLatticeVector)
+    assert result.antidominant_weight.datum.cartan_matrix.entries == matrix
+
+    # Composes through the published consumer with no manual parent rebuild.
+    action_tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "weyl_group.element.act_on_weight.compute"
+    )
+    action = action_tool.run(
+        WeylElementWeightActionRequest(
+            element=result.element, weight=result.antidominant_weight
+        )
+    )
+    assert action.datum.cartan_matrix.entries == matrix
     assert type(result).model_validate_json(result.model_dump_json()) == result

@@ -235,7 +235,9 @@ def test_spline_evaluation_admits_scalars_whose_exact_result_is_at_the_limit() -
 
     # a genuinely oversized exact result is still refused: the point's own
     # denominator multiplies the coefficient's into a 65,537-digit rational
-    oversized_point = ComplexPoint(coordinates=(CanonicalRational(num=1, den=at_limit),))
+    oversized_point = ComplexPoint(
+        coordinates=(CanonicalRational(num=1, den=at_limit),)
+    )
     with pytest.raises(OperationResourceAdmissionError, match="output envelope"):
         spline_evaluate(
             SplineEvaluationRequest(

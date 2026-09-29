@@ -215,7 +215,7 @@ def test_affine_valuation_rejects_nonpoint_and_nonhyperelliptic_parents():
     )
 
 
-def test_rational_place_valuation_returns_none_for_zero_element():
+def test_rational_place_valuation_returns_structural_infinity_for_zero_element():
     rational_field = FiniteFunctionField(
         characteristic=5, defining_polynomial=(_rf((1,)),)
     )
@@ -226,4 +226,6 @@ def test_rational_place_valuation_returns_none_for_zero_element():
         degree=1,
     )
     zero = FiniteFunctionFieldElement(field=rational_field, coordinates=(_rf((0,)),))
-    assert function_field_place_valuation(place, zero) is None
+    valuation = function_field_place_valuation(place, zero)
+    assert isinstance(valuation, FunctionFieldPositiveInfinityValuation)
+    assert valuation.kind == "POSITIVE_INFINITY"

@@ -108,6 +108,28 @@ def test_genus_one_basis_has_expected_valuations_and_rr_dimensions() -> None:
         assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
+def test_riemann_roch_canonicalizes_equivalent_unreduced_field_parent() -> None:
+    canonical = _hyperelliptic_field(5, (0, 4, 0, 1))
+    equivalent = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            _rf(5, (0, 2, 0, 3), (2,)),
+            _rf(5, (0,)),
+            _rf(5, (1,)),
+        ),
+    )
+    divisor = _divisor(equivalent, 3)
+
+    result = function_field_riemann_roch_space(divisor)
+
+    assert result.dimension == 3
+    assert result.divisor.field == canonical
+    assert result.divisor.terms[0].place.field == canonical
+    assert all(element.field == canonical for element in result.basis)
+
+
 def test_membership_rejects_extension_elements_before_zero_shortcut() -> None:
     field = _hyperelliptic_field(5, (0, 4, 0, 1))
     generator_y = FiniteFunctionFieldElement(

@@ -500,7 +500,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
     MathTool(
         operation_id="function_field.place.valuation.compute",
         title="Compute a function-field valuation",
-        description="Compute the exact discrete valuation of a rational-function element at a finite or infinite place; the place and element must share the same rational function field.",
+        description=(
+            "Compute the exact discrete valuation at a finite or infinite "
+            "rational-function-field place. A nonzero element returns its "
+            "integer valuation; the zero element returns structural "
+            "POSITIVE_INFINITY."
+        ),
         request_type=FunctionFieldPlaceValuationRequest,
         result_type=FunctionFieldPlaceValuationResult,
         run=_run_place_valuation,

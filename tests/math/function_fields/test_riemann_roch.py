@@ -115,7 +115,7 @@ def test_rational_riemann_roch_basis_has_exact_dimension_and_membership() -> Non
     for element in space.basis:
         for place, multiplicity in ((x_plus_one, 2), (x_place, -1), (infinity, 1)):
             valuation = function_field_place_valuation(place, element)
-            assert valuation is not None
+            assert type(valuation) is int
             assert valuation + multiplicity >= 0
     # The only denominator is (x+1)^2, supported where D has coefficient 2;
     # each numerator is x^(i+1), so there are no further finite poles.
@@ -337,7 +337,9 @@ def test_riemann_roch_accepts_nonmonic_associate_of_x_place() -> None:
     assert space.dimension == 2
     assert len(space.basis) == 2
     for element in space.basis:
-        assert function_field_place_valuation(two_x_place, element) + 1 >= 0
+        valuation = function_field_place_valuation(two_x_place, element)
+        assert type(valuation) is int
+        assert valuation + 1 >= 0
 
 
 def test_riemann_roch_rejects_unsupported_extension_fields() -> None:

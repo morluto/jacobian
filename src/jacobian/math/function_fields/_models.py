@@ -535,7 +535,12 @@ class FunctionFieldUniformizerRequest(StrictModel):
 class FunctionFieldPlaceValuationResult(StrictModel):
     place: FunctionFieldPlace
     element: FiniteFunctionFieldElement
-    valuation: int | None
+    valuation: int | FunctionFieldPositiveInfinityValuation = Field(
+        description=(
+            "The finite integer valuation, or POSITIVE_INFINITY for the zero "
+            "function-field element."
+        )
+    )
 
 
 class FunctionFieldUniformizerResult(StrictModel):

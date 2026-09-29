@@ -8,7 +8,6 @@ from jacobian.math.function_fields._models import (
     FunctionFieldFiniteValuation,
     FunctionFieldPositiveInfinityValuation,
     HyperellipticInfinityPlace,
-    HyperellipticInfinityPlaceValuationRequest,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -105,28 +104,26 @@ def test_even_degree_models_are_not_misrepresented_as_one_rational_place():
     )
 
 
-def test_native_request_allows_equivalent_unreduced_parent_spellings():
-    field = _field()
-    equivalent = FiniteFunctionField.model_construct(
-        **{
-            **field.model_dump(),
-            "defining_polynomial": (
-                PrimeFieldRationalFunction.model_construct(
-                    numerator=PrimeFieldPolynomial.model_construct(
-                        characteristic=5, coefficients=(1,)
-                    ),
-                    denominator=PrimeFieldPolynomial.model_construct(
-                        characteristic=5, coefficients=(1, 0)
-                    ),
-                ),
-                *field.defining_polynomial[1:],
-            ),
-        }
+def test_valuation_canonicalizes_equivalent_unreduced_parent_spellings():
+    canonical = _field()
+    equivalent = FiniteFunctionField(
+        characteristic=5,
+        variable="x",
+        generator="y",
+        defining_polynomial=(
+            _rf((0, 0, 4, 0, 1), (0, 1)),
+            _rf((0,)),
+            _rf((1,)),
+        ),
     )
+    place = _place(equivalent)
     element = FiniteFunctionFieldElement(
         field=equivalent, coordinates=(_rf((1,)), _rf((0,)))
     )
-    request = HyperellipticInfinityPlaceValuationRequest(
-        place=_place(field), element=element
-    )
-    assert request.place.field != request.element.field
+
+    result = function_field_hyperelliptic_infinity_valuation(place, element)
+
+    assert result.valuation == FunctionFieldFiniteValuation(kind="FINITE", value=0)
+    assert result.place.field == canonical
+    assert result.element.field == canonical
+    assert result.place.field == result.element.field

@@ -7,6 +7,7 @@ from jacobian.math.function_fields._models import (
     FunctionFieldDivisor,
     FunctionFieldDivisorTerm,
     FunctionFieldPlace,
+    FunctionFieldPositiveInfinityValuation,
     PrimeFieldPolynomial,
     PrimeFieldRationalFunction,
 )
@@ -78,3 +79,46 @@ def test_riemann_roch_operation_publishes_hyperelliptic_infinity_support() -> No
     result = tool.run(request)
     assert result.dimension == 3
     assert len(result.basis) == 3
+
+
+def test_rational_place_valuation_publishes_structural_infinity_for_zero() -> None:
+    field = {
+        "characteristic": 5,
+        "variable": "x",
+        "generator": "y",
+        "defining_polynomial": [
+            {
+                "numerator": {"characteristic": 5, "coefficients": [1]},
+                "denominator": {"characteristic": 5, "coefficients": [1]},
+            }
+        ],
+    }
+    request = _tool(
+        "function_field.place.valuation.compute"
+    ).request_type.model_validate(
+        {
+            "place": {
+                "field": field,
+                "kind": "FINITE",
+                "prime_polynomial": {"characteristic": 5, "coefficients": [0, 1]},
+                "degree": 1,
+            },
+            "element": {
+                "field": field,
+                "coordinates": [
+                    {
+                        "numerator": {"characteristic": 5, "coefficients": [0]},
+                        "denominator": {
+                            "characteristic": 5,
+                            "coefficients": [1],
+                        },
+                    }
+                ],
+            },
+        }
+    )
+
+    result = _tool("function_field.place.valuation.compute").run(request)
+
+    assert isinstance(result.valuation, FunctionFieldPositiveInfinityValuation)
+    assert result.valuation.kind == "POSITIVE_INFINITY"

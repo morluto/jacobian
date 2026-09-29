@@ -69,7 +69,7 @@ explicit output alphabet and identity.
 The request requires the DFA alphabet and transducer input alphabet to have the
 same explicit ordered symbols and optional identity. Admission bounds the full
 product, expanded epsilon-NFA states and edges, construction work, intermediate
-allocation, and serialized output before expansion. NFA transitions have
+allocation, and the retained output bound before expansion. NFA transitions have
 contiguous IDs and use a null symbol only for epsilon; parallel paths remain
 distinct. An NFA's alphabet size, optional identity, and explicit ordered
 alphabet context define the meaning of every non-epsilon symbol index. The

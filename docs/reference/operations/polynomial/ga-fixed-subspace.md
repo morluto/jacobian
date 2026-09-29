@@ -26,9 +26,13 @@ intermediates as well: each update multiplies two minor-ratio entries and
 subtracts a third, so transient integer operands are bounded by 30,002 digits.
 Kernel coordinates are bounded to 128 digits and aggregate representative
 support to 4096 terms. Before construction the combined result is charged
-against the exact output-byte envelope using retained 128-digit terms, the full
-512-digit numerator and denominator budget of each fixed representative, and
+against `MAX_GA_ACTION_OUTPUT_CELLS`, a retained-entry envelope, together with
+the 512-digit numerator and denominator budget of each fixed representative and
 the actual admitted width of every coordinate cell.
+
+That envelope counts retained entries, not encoded bytes, so a wider exact
+coefficient does not by itself change admission: scalar magnitudes stay exact
+and unbounded, and only how much the result retains is charged.
 
 This returns the fixed subspace inside one finite subrepresentation. It does
 not find all finite subrepresentations or claim to generate the invariant ring

@@ -15,8 +15,8 @@ caller supplied simplicial identities, then checks that the normalized
 differential squares to zero before returning. It retains the formal top group
 in degree `N`; it does not infer a differential from a missing degree `N+1`.
 
-The matrix-cell and aggregate output-byte bounds are checked from the source
-degree sizes and serialized axes before identity replay or matrix construction.
+The matrix-cell and aggregate result-cell bounds are checked from the source
+degree sizes and axis sizes before identity replay or matrix construction.
 Coefficients are integral. Use the unnormalized
 chain operation when every simplex, including degenerate ones, should remain
 in the basis.

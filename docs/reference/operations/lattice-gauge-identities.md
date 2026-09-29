@@ -64,8 +64,9 @@ unique and sorted. This is the finite combinatorial form of attaching a
 Algebraic Topology, Appendix](https://pi.math.cornell.edu/~hatcher/AT/ATapp.pdf)).
 
 Construction admits at most 128 faces, 256 steps per face, 4096 aggregate
-steps, and a conservative serialized result estimate below two megabytes before
-returning the value. The value records topology only: no curvature product,
+steps, and a conservative retained result estimate of at most 1,900,000
+retained output units before returning the value. That unit counts what the
+result retains, not its encoded size. The value records topology only: no curvature product,
 flatness conclusion, or Wilson observable is computed by this constructor.
 
 `lattice_gauge.finite_group.curvature.compute` consumes that complex together

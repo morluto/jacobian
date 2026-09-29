@@ -14,6 +14,6 @@ full datum. The parent Cartan matrix is retained with the polynomial.
 
 The operation derives the exponents from positive-root heights and never
 enumerates Weyl-group elements. Rank is at most 8, degree at most 120, and work
-and serialized output are admitted before coefficient construction. For
+and retained result cells are admitted before coefficient construction. For
 validation, the coefficients sum to the Weyl-group order, and the polynomial
 is palindromic with degree equal to the number of positive roots.

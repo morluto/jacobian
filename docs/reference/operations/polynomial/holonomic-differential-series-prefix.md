@@ -36,8 +36,12 @@ then iterates conservative
 numerator and shared-denominator bit bounds derived from the displayed
 recurrence. The resulting accounting bounds coefficient multiplication,
 fraction addition and pivot division. It also checks per-rational digits,
-aggregate sequence digits, the 100,000-entry sequence limit, and serialized
-output bytes. The work budget is 100,000,000 scalar-bit units; the coefficient
-scale is limited to 131,072 bits; output is limited to 12 MiB. Empty prefixes
+aggregate sequence digits, the 100,000-entry sequence limit, and the retained
+prefix allocation. The work budget is 100,000,000 scalar-bit units; the
+coefficient scale is limited to 131,072 bits; the prefix allocation is bounded
+at 12,582,912 digit units, being two digit units per emitted digit plus a fixed
+per-value cost. That budget counts digit units, not encoded bytes, so a wider
+exact coefficient widens the arithmetic without silently reinterpreting the
+result as a size of bytes. Empty prefixes
 are valid. This result contains only the requested finite values: it does not
 assert convergence or expose an infinite sequence.

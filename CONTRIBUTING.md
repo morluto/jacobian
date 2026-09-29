@@ -315,3 +315,31 @@ actually run, optional-backend skips, and any remaining proof gap.
 The [testing strategy](docs/reference/testing-strategy.md) owns the change
 matrix, lane commands, fixture ownership, specialist escalation, and exact
 mathematical evidence. Select its sections for the behavior being changed.
+
+## Verifying what a branch actually contributes
+
+The installed catalog owns current operation membership, so membership questions
+are answered by the loaded catalog rather than by reading source. Compare
+catalogs, never operation names.
+
+A branch diffed against `main` is not a contribution list: it also carries
+whatever the branch merely inherited, and those IDs drift. Load the catalog at
+the merge base, at the branch tip, and on `main`, then compare:
+
+- branch tip minus merge base — what this branch actually adds
+- branch tip minus `main` — what is still missing
+
+Differences between the second set and the true contribution set are usually
+**renames**, not gaps. `matroid.intersection.compute` was replaced by #3849 with
+six specific operations, so a name-based audit reports it missing forever. Regex
+over `operation_id=` is worse still: it misses table-form declarations and
+double-counts re-homed ones. An audit that reports "14 unlanded operations" from
+name comparison is usually reporting fourteen renames.
+
+Also audit the non-operation content. A catalog-only sweep cannot see a missing
+documentation page, and it cannot see a test module that was never restored
+alongside code that was. Both have happened.
+
+A branch too old to import — typically predating the `_operations.py` to
+`_kernels.py` rule — cannot have its catalog loaded. Resolve it by diffing added
+declarations, and say so, because that is weaker evidence than a loaded catalog.

@@ -54,7 +54,7 @@ both retained exponent bounds by one. An input known modulo `O(t^P)` yields a
 derivative known modulo `O(t^(P-1))`. An empty retained prefix remains an
 empty prefix and does not assert that the underlying series vanishes. The
 implementation admits term work, coefficient growth, the shifted exponent
-window, and serialized output before constructing the result.
+window, and retained result cells before constructing the result.
 
 `local_series.puiseux.inverse.compute` requires a retained nonzero leading
 term. If its exponent is `v` and the source cutoff is `P`, the returned inverse

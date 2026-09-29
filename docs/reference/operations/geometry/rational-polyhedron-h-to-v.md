@@ -18,8 +18,9 @@ The conversion adapts the private homogeneous double-description kernel. Before
 the kernel expands any generators, admission checks the H-row count, the
 theorem-backed ray and candidate-pair bounds, coefficient growth, weighted
 exact-arithmetic work, affine-dimension rank work, and a conservative upper
-bound on canonical result bytes against Jacobian's 10 MiB canonical JSON
-egress limit. Requests whose exact result can exceed the serializable rational
+bound on the result's decimal digits against this operation's own
+10,485,760-digit envelope. That envelope is the operation's declared limit; it
+is not inherited from a delivery or JSON egress ceiling. Requests whose exact result can exceed the serializable rational
 envelope or the transport limit are rejected as resource refusals.
 
 The value permits zero-dimensional ambient space. Constant inequalities are

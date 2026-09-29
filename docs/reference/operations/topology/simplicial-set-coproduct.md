@@ -18,7 +18,7 @@ hold componentwise, and the inclusions are natural transformations.
 
 Admission occurs before constructing tagged axes or map tables. The operation
 bounds each degree by 32 simplices, the complete prefix by 96 simplices, map
-rows by 50,000, and conservative serialized output size by 1,000,000 bytes.
+rows by 50,000, and retained result cells by 1,000,000.
 Requests above those limits fail as resource-admission errors without
 returning a partial coproduct. The finite carrier currently requires every
 degree to be nonempty, so inputs with empty degree levels are outside its

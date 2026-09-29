@@ -21,7 +21,7 @@ arithmetic.
 Both operations admit at most 256 source terms, degree 128, coefficient
 components of at most 128 decimal digits, and 4096 output coefficients. The
 finite-point operation additionally caps each center component at 30 decimal
-digits. Recurrence coefficient height and serialized output size are admitted
+digits. Recurrence coefficient height and retained result cells are admitted
 before expansion. These operations do not expand multivariate functions or
 algebraic centers.
 

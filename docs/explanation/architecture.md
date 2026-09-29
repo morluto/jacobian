@@ -126,6 +126,32 @@ Native tests own algebraic correctness; focused codec and tool tests own
 serialized composition and delivery. A useful native helper need not become a
 published operation merely because this one is published.
 
+### Distinguishing a deliberate native helper from an omission
+
+Because publication is decided by manifest presence, a native helper that is
+correctly unpublished looks identical to one that was forgotten. Do not infer
+intent from the catalog alone. The deciding evidence is a **test that asserts
+non-publication**: a test naming the operation ID and asserting it is absent
+from the loaded catalog. `derivation_from_vector_field` is the worked example —
+`tests/math/polynomials/test_derivations.py` asserts
+`polynomial_derivation.from_vector_field.compute` is not published, because the
+binder is a copy-only projection whose result carries no postcondition beyond
+the derivation value itself.
+
+So when a re-land or audit finds a kernel, carrier, and runner on `main` with no
+declaration:
+
+- If a test asserts that operation ID is absent, the omission is deliberate.
+  Leave it unpublished, and do not add a request carrier for it either — a
+  carrier with no producer and no consumer is dead weight that implies a
+  contract the catalog does not offer.
+- If no such test exists, the omission is probably real. Confirm the operation
+  establishes a reusable postcondition, then publish it.
+
+Reaching for the catalog as the sole evidence inverts the answer in both
+directions: it manufactures work that was already decided against, and it
+leaves genuine gaps unnoticed.
+
 ## Library execution and delivery boundaries
 
 Bounded execution is part of the Jacobian library. It is not an MCP feature.

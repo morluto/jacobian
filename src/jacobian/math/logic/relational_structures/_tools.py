@@ -1124,6 +1124,46 @@ TOOLS: MathTools = (
             ),
         ),
     ),
+    MathTool(
+        operation_id="relational_structure.reduct.compute",
+        title="Take a finite relational structure reduct",
+        description=(
+            "Retain an explicit subset of a finite relational signature in "
+            "source-signature order, preserving the carrier and selected "
+            "complete relation tables. The result includes the exact reduct and "
+            "the map from reduct symbol positions to source signature "
+            "positions. Selected row and coordinate work is admitted before "
+            "construction."
+        ),
+        request_type=RelationalReductRequest,
+        result_type=RelationalReductResult,
+        run=_relational_reduct,
+        tags=("relational-structures", "reduct", "signature", "exact"),
+        discovery_terms=(
+            "finite relational structure reduct",
+            "restrict relational signature",
+        ),
+        examples=(
+            OperationExample(
+                name="retain_one_relation_from_two_symbol_structure",
+                description=(
+                    "Keep unary P from a structure whose signature is ordered "
+                    "as E, P; the reduct-to-source symbol map is [1]."
+                ),
+                input={
+                    "source": {
+                        "carrier_size": 2,
+                        "signature": [
+                            {"symbol_id": "E", "arity": 2},
+                            {"symbol_id": "P", "arity": 1},
+                        ],
+                        "relation_tables": [[[0, 1]], [[1]]],
+                    },
+                    "symbol_ids": ["P"],
+                },
+            ),
+        ),
+    ),
 )
 
 

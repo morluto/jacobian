@@ -1,7 +1,8 @@
 # Backend requirements
 
 Jacobian's maintained Python backends, including Z3, are normal package
-dependencies. `sat.solve` and `smt.solve` call those bindings in process.
+dependencies. `sat.solve` and `smt.solve` call those bindings through bounded
+owner-local worker child processes, not in process.
 
 Installing Jacobian installs its declared Python dependencies automatically.
 Importing the library and using operations backed by those dependencies does not

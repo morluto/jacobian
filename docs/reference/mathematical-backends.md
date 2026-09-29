@@ -342,7 +342,7 @@ distinct operational non-completions and never imply a topological conclusion.
 ### Maintenance and replacement
 
 QEPCAD is a legacy dependency, not an actively developed backend claim. As of
-2026-09-06, the latest commit on its upstream default branch is
+2026-09-29, the latest commit on its upstream default branch is still
 [0f570797, dated 2021-03-09](https://github.com/chriswestbrown/qepcad/commit/0f57079731afb850d0960f2265f00de8b9e213a0).
 The version pin identifies the protocol tested by this adapter; it is not
 evidence of upstream maintenance. Missing QEPCAD remains an explicit execution

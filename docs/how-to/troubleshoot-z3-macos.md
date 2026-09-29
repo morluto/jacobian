@@ -8,7 +8,7 @@ falls back to a source build that requires CMake, `make`, and a C++20 compiler.
 macOS is not currently in Jacobian's tested binary-install matrix, so this is
 upstream installation guidance rather than a supported release configuration.
 
-Install the Xcode Command Line Tools and CMake before retrying `uv sync --dev`.
+Install the Xcode Command Line Tools and CMake before retrying `uv sync --locked --dev`.
 These commands report the relevant environment without changing it:
 
 ```sh

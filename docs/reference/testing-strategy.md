@@ -247,7 +247,7 @@ catalog-lane tests may assert the same mathematical fact; the lane follows what
 the test *calls*, not what it concludes.
 
 `test_math_tests_do_not_boot_complete_product_boundaries` enforces this. It has
-caught the same mistake on six separate re-lands, so treat a failure there as a
+repeatedly caught the same mistake on re-lands, so treat a failure there as a
 lane placement problem rather than a tooling defect: move the test, do not relax
 the gate.
 

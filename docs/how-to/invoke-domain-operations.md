@@ -30,7 +30,7 @@ exact candidate:
 The optional `namespace` filter matches only the first segment of an operation
 ID. Use it only when that namespace is already known with high confidence;
 agents do not need to learn Jacobian's tags before searching. Matching returns
-10 candidates by default and accepts an explicit limit of up to 20. Read the
+5 candidates by default and accepts an explicit limit of up to 20. Read the
 `operation://catalog` resource when the complete bulk inventory is genuinely
 needed.
 

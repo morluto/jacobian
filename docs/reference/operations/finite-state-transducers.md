@@ -100,7 +100,8 @@ function on one explicitly ordered `FiniteAlphabet`. Every symbol has a
 self-loop that emits the same index, and the empty final output fixes the
 identity behavior on the empty word. Both transducer sides retain the exact
 alphabet context and optional alphabet ID. The operation admits at most 32
-symbols and estimates canonical result bytes before allocating transition rows.
+symbols and bounds the retained transition cells before allocating transition
+rows.
 
 `transducer.subsequential.reachable_states.compute` returns one shortest path
 from the initial state to every reachable state, ordered by state index. When
@@ -108,7 +109,7 @@ several shortest paths exist, it chooses the lexicographically least input
 word. Each row retains that input word, the complete state trace, and the
 concatenation of transition outputs along the path. Final outputs are excluded:
 the witness ends at a prefix state and does not assert that the state is in the
-function domain. The operation bounds the worst-case witness output and
-canonical result bytes before constructing path rows. Unreachable states have
+function domain. The operation bounds the worst-case witness word length, the composite
+state count, and the retained result size before constructing path rows. Unreachable states have
 no row. The result retains its source transducer so the witness paths keep
 their alphabet and machine context.

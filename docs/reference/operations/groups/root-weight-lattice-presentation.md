@@ -15,7 +15,7 @@ Cartan parent or its ordered axes.
 
 Rank is at most 8, matching the finite Cartan datum. The presentation carries three additional rank-square matrices beyond the three
 matrices retained by the Cartan datum, plus the Cartan datum axes. Work is cubic
-in rank and the serialized output has a quadratic cell bound, both capped by the
+in rank and the retained output has a quadratic cell bound, both capped by the
 rank envelope. The helper rejects noncanonical or
 non-finite Cartan data before materializing the lattice bases.
 

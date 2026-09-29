@@ -22,8 +22,8 @@ definition rather than replaying checks on computed rows.
 
 Admission occurs before axes and map tables are expanded. The operation bounds
 each product degree by 32 simplices, the complete prefix by 96 simplices, map
-rows by 50,000, identity work by 100,000, and conservative serialized output
-size by 1,000,000 bytes. A product exceeding a carrier or work bound is rejected
+rows by 50,000, identity work by 100,000, and retained result
+cells by 1,000,000. A product exceeding a carrier or work bound is rejected
 as a resource-admission error; no partial product is returned.
 
 The product result retains both factor values, the product carrier, exact pair

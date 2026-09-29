@@ -27,7 +27,7 @@ The current execution envelope is rank two and full rank, at most ten
 generators, at most 64 digits for the degree and grading components, generated
 lattice coordinates under the existing eight-digit Hilbert envelope, at most
 50,000 points in the containing box, at most 2,000,000 estimated work units,
-and at most 2,000,000 estimated result bytes. Admission uses the box point
+and at most 2,000,000 result cells. Admission uses the box point
 count, number of distinct generator vectors, exact output-coordinate bounds,
 and retained source label and grading sizes. Requests outside these bounds are
 resource refusals, never empty profiles.

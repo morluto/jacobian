@@ -56,12 +56,6 @@ MAX_GA_FIXED_INTERMEDIATE_DIGITS = 3 * MAX_GA_FIXED_MINOR_DIGITS + 2
 MAX_GA_FIXED_MATRIX_TERMS = MAX_GA_ACTION_OUTPUT_CELLS
 MAX_GA_FIXED_SUPPORT_TERMS = 4_096
 MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS = 512
-# A retained action-matrix or basis term carries an admitted 128-digit
-# coefficient, while a fixed representative may use the full 512-digit
-# numerator and denominator budgets. Charge the admitted widths rather than a
-# 128-digit placeholder so the estimate cannot understate the serialized size.
-MAX_GA_FIXED_RETAINED_TERM_BYTES = 384
-MAX_GA_FIXED_TERM_BYTES = 2 * MAX_GA_FIXED_OUTPUT_COEFFICIENT_DIGITS + 256
 
 
 def _integer_digits(value: int) -> int:

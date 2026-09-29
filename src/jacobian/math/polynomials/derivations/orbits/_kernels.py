@@ -21,7 +21,7 @@ from jacobian.math.polynomials.derivations._stable_kernels import (
 from jacobian.math.polynomials.derivations.orbits._models import (
     MAX_GA_ORBIT_COEFFICIENT_DIGITS,
     MAX_GA_ORBIT_EXPANSIONS,
-    MAX_GA_ORBIT_INTERMEDIATE_BYTES,
+    MAX_GA_ORBIT_INTERMEDIATE_CELLS,
     MAX_GA_ORBIT_OUTPUT_CELLS,
     MAX_GA_ORBIT_SOURCE_DEGREE,
     MAX_GA_ORBIT_SOURCE_TERMS,
@@ -318,7 +318,7 @@ def _preflight(request: GaPolynomialOrbitRequest) -> _OrbitPlan:
             ("polynomial",),
         )
     intermediate_cells = candidate_count + maximum_partial_support + pair_products
-    if intermediate_cells > MAX_GA_ORBIT_INTERMEDIATE_BYTES:
+    if intermediate_cells > MAX_GA_ORBIT_INTERMEDIATE_CELLS:
         _reject_resource(
             "intermediate_cells",
             "polynomial orbit exceeds its intermediate allocation bound",

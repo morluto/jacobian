@@ -18,6 +18,7 @@ operation returns only the structural SCC profile ([Boukala and Petrucci,
 “Towards Distributed Verification of Petri Nets Properties”](https://citeseerx.ist.psu.edu/document?doi=c625a801b8b047fc3ec68cb4ffdd5c1ebb5eb52e&repid=rep1&type=pdf)).
 
 The operation admits state/edge work, canonical ordering work for the returned
-component tuples, and worst-case output bytes before it builds adjacency or
-computes components. Its iterative SCC traversal supports large state counts
+component tuples, and a materialized label budget before it builds adjacency or
+computes components. That budget prices the label characters the component
+tuples retain, not the encoded size of the result. Its iterative SCC traversal supports large state counts
 without Python recursion depth dependence.

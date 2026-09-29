@@ -29,12 +29,12 @@ the positive root \(\zeta_d=e^{2\pi i/d}\), and coefficients are reduced in
 the power basis modulo \(\Phi_d\).
 
 Admission bounds \(k\le32\), the source-group/unit-coordinate work, field order
-\(d\le128\), coefficient digits, exact work (500,000 units), and estimated
-serialized result bytes (1,000,000) before evaluating the finite sum. For the
+\(d\le128\), coefficient digits, exact work (500,000 units), and 1,000,000
+result cells before evaluating the finite sum. For the
 coefficient preflight, \(B_j\) has denominator dividing \((j+1)!\) and
 \(|B_j|\le2j!\); hence the coefficient l1 norm of \(B_k(x)\) is less than
 \(6k!\). The exact cyclotomic polynomial's coefficient l1 norm then bounds
 the admitted power-basis reduction. Requests outside any bound are rejected
 without returning a partial value. The prefix operation admits aggregate work
-and output bytes for all (K+1) values and preflights coefficient growth at
+and result cells for all (K+1) values and preflights coefficient growth at
 every index before evaluating any value.

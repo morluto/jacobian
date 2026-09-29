@@ -21,11 +21,12 @@ normalized quotient.
 
 Admission validates the source once, derives the degeneracy images and their
 exact ranks, then bounds the ambient boundaries, degreewise inclusions,
-restricted boundaries, row scans, and complete result bytes before allocating
-chain matrices. The shared chain-result estimate includes both serialized
-copies of the simplex labels (ASCII-escaped from the label length bound), as
-well as the ambient differential; the operation adds bounds for its exact-rank
-inclusions, restricted differentials, index lists, and result envelope. A
+restricted boundaries, row scans, and retained result cells before allocating
+chain matrices. The shared chain-result estimate counts the structural cells,
+the retained label characters of both source and target axes (twice the label
+bound, not an escaped-byte length), and twelve cells per matrix entry; the
+operation adds bounds for its exact-rank inclusions, restricted differentials,
+index lists, and result envelope. A
 private constructor then builds ambient chains from this already-checked source
 without repeating source admission or `from_tables` validation. The result
 codec checks source axes and matrix shapes; it does not replay the degeneracy

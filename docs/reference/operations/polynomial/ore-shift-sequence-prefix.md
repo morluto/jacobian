@@ -19,8 +19,9 @@ supplied prefix are listed in `right_boundary_indices`.
 
 This operation checks a finite prefix only. A zero residual on these rows is
 not a global annihilation claim and does not construct a `PRecursiveSequence`.
-The index range, coefficient-evaluation work, exact rational growth, and
-serialized output are admitted before coefficient evaluation. Rational
+The index range, coefficient-evaluation work, exact rational growth, and the
+retained result digits and prefix output weight are admitted before coefficient
+evaluation. Rational
 coefficient poles remain exclusions; they are never treated as zero-valued
 coefficients.
 

@@ -20,6 +20,6 @@ contract.
 
 Generation is bounded by the step and index envelopes, coefficient-evaluation
 work, a conservative rational-height recurrence, the exact rational carrier,
-and serialized output bytes. Admission precedes recurrence expansion. The
+and the retained result digits. Admission precedes recurrence expansion. The
 growth estimate is intentionally conservative; requests exceeding it are
 rejected even when cancellation could make their actual values small.

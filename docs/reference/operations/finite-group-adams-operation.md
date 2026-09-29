@@ -18,7 +18,7 @@ output multiplicities are negative.
 
 The implementation admits the concrete permutation-group closure, repeated
 power-map work, exact character-value expansion and inner-product recovery,
-canonical table, and serialized output before conjugacy expansion. It accepts
+canonical table, and the retained result cells before conjugacy expansion. It accepts
 the current table families: the trivial group, cyclic groups through order 60,
 and `S3`. There is no fixed exponent ceiling: admission charges for the bit
 length of `k`, the number of classes, and the permutation degree, so large

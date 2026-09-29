@@ -41,7 +41,7 @@ each exponent at most 1,000,000. Thus it has at most 256 generator subsets and
 255 nonzero lcm-lattice elements. Every crosscut boundary matrix has at most 70
 rows or columns, and the returned profile has at most 255 lattice rows and
 2,040 nonzero Betti slots. These fixed limits bound subset enumeration,
-integer-matrix rank work, intermediate memory, and exact serialized output
+integer-matrix rank work, intermediate memory, and the exact retained result
 before the kernel runs.
 
 The exponential work is governed by generator count (which controls subset

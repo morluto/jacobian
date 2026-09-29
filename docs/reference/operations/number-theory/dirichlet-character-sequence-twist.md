@@ -35,7 +35,7 @@ This finite-prefix coefficientwise transform makes no claim about convergence
 or analytic properties of an associated Dirichlet series.
 
 Admission bounds the source digit total, character value order, cyclotomic
-coefficient growth, coefficient cells, work, and serialized output before
+coefficient growth, coefficient cells, work, and retained result cells before
 constructing twisted coefficients. The finite sequence length follows the
 shared sequence carrier bound; `index_origin` is a signed 32-bit integer.
 Modular-form space transport remains owned by the modular-form operations.

@@ -15,5 +15,5 @@ partition agrees with the squared lengths returned alongside roots by
 `root_system.root_to_coroot.compute`.
 
 Finite Cartan matrices through rank 8 are admitted. The complete positive-root
-family has at most 120 entries; work and worst-case serialized output are
+family has at most 120 entries; work and worst-case retained result cells are
 admitted before root enumeration. No partial profile is returned.

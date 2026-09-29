@@ -9,8 +9,8 @@ The implementation fills each shape by removing a removable corner containing
 the largest entry, recursively enumerating the smaller shape, and restoring
 that entry. The exact hook-length count is computed first. The operation admits
 the complete family only when it fits all published limits: 4,096 tableaux,
-100,000 total tableau cells, 25,000,000 construction-work cells, and an
-estimated 2,000,000 output bytes. Construction work bounds the sum of
+100,000 total tableau cells, 25,000,000 construction-work cells, and 200,000
+result cells. Construction work bounds the sum of
 corner-recursion cell copies plus worst-case tableau sorting comparisons. The
 recursion streams results without a cross-request cache. At most one partial
 tableau per level is retained, so active branch tableau data is bounded by

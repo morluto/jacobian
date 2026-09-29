@@ -17,7 +17,9 @@ derivation, whose generator images are `exp(tD)(x_i)`.
 
 Admission bounds source terms, total degree, the complete Cartesian monomial
 expansion, repeated-product work, intermediate allocation, coefficient height,
-result exponents, and serialized output before expansion. A resource refusal
+result exponents, and the retained result cells and intermediate cells before
+expansion. Those two envelopes count entries rather than encoded bytes, so a
+wider exact coefficient does not by itself change admission. A resource refusal
 does not return a truncated orbit.
 
 The algebraic basis is the coordinate-ring description of a `G_a` action as a

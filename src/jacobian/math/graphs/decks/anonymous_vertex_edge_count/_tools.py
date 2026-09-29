@@ -20,10 +20,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "validate its bounded canonical card representation and compute the "
             "Kelly edge-count quotient. For source order n >= 3, each source "
             "edge appears in exactly n-2 cards, so the total card edge count "
-            "divided by n-2 is the source edge count. Divisibility is necessary "
-            "but does not establish deck realizability. Order zero and one use "
-            "the empty-edge convention; order two is rejected because its deck "
-            "does not determine whether the source edge exists."
+            "divided by n-2 is the implied edge count. Divisibility is "
+            "necessary but does not establish deck realizability, so the result "
+            "is the quotient any realizing graph must have, not a witnessed "
+            "source graph. Order zero and one use the empty-edge convention; "
+            "order two is rejected because its deck does not determine whether "
+            "the source edge exists."
         ),
         request_type=AnonymousGraphCardMultiset,
         result_type=AnonymousVertexDeckEdgeCount,

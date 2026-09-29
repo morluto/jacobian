@@ -312,6 +312,28 @@ class TestAdversarial:
         with pytest.raises(OperationDomainValidationError):
             _native(forged)
 
+    def test_tampered_derived_restriction_is_rejected_before_assembly(self) -> None:
+        """The authored sheaf is re-admitted before the complex is assembled.
+
+        Assembly consumes only codimension-one restrictions, so an altered
+        derived restriction passed the coboundary and square-zero checks and
+        produced Betti numbers for a sheaf the diagram does not support.
+        """
+        from jacobian.catalog.models import OperationDomainValidationError
+
+        sheaf = _constant_sheaf(_TRIANGLE)
+        derived = list(sheaf.derived_restrictions)
+        tampered = derived[0].model_copy(
+            update={"entries": ((("7",),),) * len(derived[0].entries)}
+        )
+        derived[0] = tampered
+        forged = sheaf.model_copy(update={"derived_restrictions": tuple(derived)})
+
+        with pytest.raises(OperationDomainValidationError) as error:
+            _native(forged)
+        # rejected on re-admission, before any complex is assembled
+        assert "structural contract" in str(error.value)
+
     def test_stalk_rank_above_the_envelope_is_a_resource_rejection(self) -> None:
         from jacobian.catalog.models import OperationResourceAdmissionError
 

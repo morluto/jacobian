@@ -880,14 +880,22 @@ def _assemble_sheaf_cochain_complex(  # noqa: C901
 
 
 def sheaf_cochain_complex(sheaf: FiniteCellularSheaf) -> SheafCochainComplex:
-    """Return the checked signed-incidence cellular sheaf cochain complex."""
-    return _assemble_sheaf_cochain_complex(sheaf)[0]
+    """Return the checked signed-incidence cellular sheaf cochain complex.
+
+    The authored sheaf is re-admitted first, matching the subcomplex, direct
+    sum, and extensions consumers. Assembly uses only codimension-one
+    restrictions, so an inconsistent derived restriction would otherwise
+    survive the coboundary and square-zero checks and be returned as a
+    source-bound complex carrying a map the diagram does not support.
+    """
+    return _assemble_sheaf_cochain_complex(require_canonical_sheaf_admission(sheaf))[0]
 
 
 def sheaf_cohomology(
     sheaf: FiniteCellularSheaf,
 ) -> SheafCohomologyResult:
     """Compute cohomology from the checked cellular sheaf cochain complex."""
+    sheaf = require_canonical_sheaf_admission(sheaf)
     cochain_complex, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(sheaf)
     cochain_sizes = list(cochain_complex.cochain_dimensions)
     cochain_bases = [list(basis) for basis in cochain_complex.cochain_bases]
@@ -1053,6 +1061,18 @@ def require_canonical_sheaf_admission(
             "a canonical finite cellular sheaf is required",
             ("sheaf",),
         )
+    # Charge the bounded envelope before the rebuild. An over-envelope carrier
+    # is a resource refusal, not a structural complaint about restrictions that
+    # no longer match their stalks.
+    for index, stalk in enumerate(getattr(sheaf, "stalks", ()) or ()):
+        basis = getattr(stalk, "basis", None)
+        if isinstance(basis, (tuple, list)) and len(basis) > MAX_SHEAF_STALK_RANK:
+            raise _resource(
+                "admission.stalk_rank",
+                f"stalk {index} has rank {len(basis)}, above the "
+                f"{MAX_SHEAF_STALK_RANK}-dimension stalk envelope",
+                ("sheaf", "stalks", index),
+            )
     try:
         admitted = FiniteCellularSheaf.model_validate(
             sheaf.model_dump(mode="python"), strict=True

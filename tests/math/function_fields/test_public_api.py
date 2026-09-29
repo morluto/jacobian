@@ -9,7 +9,11 @@ def test_divisor_and_place_values_are_public_canonical_types() -> None:
     )
     from jacobian.math.function_fields._models import (
         FunctionFieldDivisor as CanonicalDivisor,
+    )
+    from jacobian.math.function_fields._models import (
         FunctionFieldDivisorTerm as CanonicalTerm,
+    )
+    from jacobian.math.function_fields._models import (
         FunctionFieldPlace as CanonicalPlace,
     )
 
@@ -23,7 +27,9 @@ def test_residue_operation_and_result_are_public() -> None:
         FunctionFieldResidueResult,
         function_field_place_residue,
     )
-    from jacobian.math.function_fields._models import FunctionFieldResidueResult as CanonicalResult
+    from jacobian.math.function_fields._models import (
+        FunctionFieldResidueResult as CanonicalResult,
+    )
     from jacobian.math.function_fields.operations import (
         function_field_place_residue as canonical_residue,
     )

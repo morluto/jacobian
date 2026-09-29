@@ -61,7 +61,9 @@ def _place(x: int, y: int) -> HyperellipticAffinePlace:
     )
 
 
-def _element(c0: tuple[int, ...], c1: tuple[int, ...] = (0,)) -> FiniteFunctionFieldElement:
+def _element(
+    c0: tuple[int, ...], c1: tuple[int, ...] = (0,)
+) -> FiniteFunctionFieldElement:
     return FiniteFunctionFieldElement(field=_field(), coordinates=(_rf(c0), _rf(c1)))
 
 
@@ -117,19 +119,18 @@ def test_affine_valuation_is_additive_on_products_and_handles_poles():
         place, product
     ).valuation.value
     assert product_order == 2
-    assert product_order == 2 * function_field_hyperelliptic_affine_valuation(
-        place, y
-    ).valuation.value
     assert (
-        function_field_hyperelliptic_affine_valuation(place, x).valuation.value
-        == 2
+        product_order
+        == 2 * function_field_hyperelliptic_affine_valuation(place, y).valuation.value
     )
+    assert function_field_hyperelliptic_affine_valuation(place, x).valuation.value == 2
     inverse_x = FiniteFunctionFieldElement(
         field=_field(), coordinates=(_rational((1,), (0, 1)), _rf((0,)))
     )
-    assert function_field_hyperelliptic_affine_valuation(
-        place, inverse_x
-    ).valuation.value == -2
+    assert (
+        function_field_hyperelliptic_affine_valuation(place, inverse_x).valuation.value
+        == -2
+    )
 
 
 def test_zero_element_returns_structural_positive_infinity_without_null():
@@ -177,7 +178,9 @@ def test_unramified_local_series_finds_higher_order_cancellation():
     )
 
     assert (
-        function_field_hyperelliptic_affine_valuation(place, y_minus_one).valuation.value
+        function_field_hyperelliptic_affine_valuation(
+            place, y_minus_one
+        ).valuation.value
         == 3
     )
 
@@ -205,7 +208,9 @@ def test_affine_valuation_rejects_nonpoint_and_nonhyperelliptic_parents():
         ),
     )
     rational_place = _place(0, 0).model_copy(update={"field": rational})
-    rational_element = FiniteFunctionFieldElement(field=rational, coordinates=(_rf((1,)),))
+    rational_element = FiniteFunctionFieldElement(
+        field=rational, coordinates=(_rf((1,)),)
+    )
     with pytest.raises(OperationDomainValidationError) as error:
         function_field_hyperelliptic_affine_valuation(rational_place, rational_element)
     assert error.value.errors()[0]["type"] == (
@@ -217,7 +222,8 @@ def test_catalog_declares_affine_hyperelliptic_valuation():
     tool = next(
         tool
         for tool in TOOLS
-        if tool.operation_id == "function_field.hyperelliptic_affine_place.valuation.compute"
+        if tool.operation_id
+        == "function_field.hyperelliptic_affine_place.valuation.compute"
     )
     request = tool.request_type.model_validate_json(
         encode_strict_json(tool.examples[0].input), strict=True

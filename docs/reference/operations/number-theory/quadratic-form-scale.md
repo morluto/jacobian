@@ -1,6 +1,6 @@
 # Rational quadratic-form scaling
 
-[Number theory operations](index.md) · [Operation references](../index.md)
+[Documentation home](../../../index.md) · [Tool surface](../../tools.md) · [Operation references](../index.md) · [This domain](index.md)
 
 `quadratic_form.scale.compute` multiplies every diagonal and cross coefficient of
 a rational quadratic form by one exact rational factor, on the same ordered

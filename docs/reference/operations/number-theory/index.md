@@ -76,6 +76,3 @@ and finite abelian-group decompositions are separate catalog entries.
 - [Integral quadratic-form content](quadratic-form-integral-content.md)
 - [Characteristic-two polar pairing](quadratic-form-characteristic-two-pairing.md)
 - [Rational quadratic-form determinant and signed discriminant](quadratic-form-determinant-discriminant.md)
-- [Integral quadratic-form content](quadratic-form-integral-content.md)
-- [Characteristic-two polar pairing](quadratic-form-characteristic-two-pairing.md)
-- [Rational quadratic-form determinant and signed discriminant](quadratic-form-determinant-discriminant.md)

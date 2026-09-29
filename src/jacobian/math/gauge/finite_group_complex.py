@@ -9,6 +9,11 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.gauge._models import (
+    _GAUGE_CELLS_PER_EDGE,
+    _GAUGE_CELLS_PER_FACE,
+    _GAUGE_CELLS_PER_GROUP_ELEMENT,
+    _GAUGE_CELLS_PER_VERTEX,
+    _GAUGE_COMPLEX_BASE_CELLS,
     MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS,
     MAX_GAUGE_EDGES,
     MAX_GAUGE_FACES,
@@ -83,10 +88,13 @@ def _admit_lattice(
             "edge IDs must be unique and ordered",
         )
     edge_by_id = {edge.edge_id: edge for edge in edges}
-    output_units = 2048 + sum(6 * len(value) + 32 for value in vertices)
-    output_units += sum(
-        6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80 for edge in edges
-    )
+    # Bound materialized cells, not encoded bytes. Every label is already
+    # structurally bounded by MAX_GAUGE_LABEL_LENGTH, so charging characters
+    # here would make a delivery-oriented width part of the native
+    # mathematical domain (AGENTS.md). Encoded-byte limits belong to the
+    # delivery boundary.
+    output_units = _GAUGE_COMPLEX_BASE_CELLS + len(vertices) * _GAUGE_CELLS_PER_VERTEX
+    output_units += len(edges) * _GAUGE_CELLS_PER_EDGE
     return vertices, edges, vertex_set, edge_by_id, output_units
 
 
@@ -125,7 +133,7 @@ def _admit_faces(
                 code="lattice_gauge.complex.total_face_steps",
                 message="aggregate face boundary exceeds 4096 oriented edge steps",
             )
-        output_units += 6 * len(cast(str, face_id)) + 64
+        output_units += _GAUGE_CELLS_PER_FACE
         total_steps, output_units = _admit_one_face(
             steps,
             basepoint,
@@ -160,7 +168,7 @@ def _admit_one_face(
                 "lattice_gauge.complex.empty_face_basepoint",
                 "constant face attachment must name a source lattice vertex",
             )
-        return total_steps, output_units + 6 * len(basepoint) + 16
+        return total_steps, output_units + 1
     first: str | None = None
     cursor: str | None = None
     for step in steps:
@@ -190,7 +198,7 @@ def _admit_one_face(
         if first is None:
             first = tail
         cursor = head
-        output_units += 6 * len(edge_id) + 48
+        output_units += 1
     if first != cursor or (basepoint is not None and basepoint != first):
         _reject(
             "faces",
@@ -214,7 +222,7 @@ def _admit(lattice: GaugeLattice, group: FiniteGroupTable, faces: object) -> Non
     del table, inverse, identity
     _, _, vertex_set, edge_by_id, output_units = _admit_lattice(lattice)
     face_units = _admit_faces(faces, vertex_set, edge_by_id)
-    output_units += face_units + order * order * 4 + order * 12
+    output_units += face_units + order * order + order * _GAUGE_CELLS_PER_GROUP_ELEMENT
     if output_units > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS:
         raise OperationResourceAdmissionError(
             location=("result",),

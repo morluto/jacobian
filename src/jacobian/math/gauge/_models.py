@@ -174,8 +174,28 @@ MAX_GAUGE_LOOP_FAMILY_WORK = 750_000
 
 MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS = 350_000
 """Maximum value cells and scalar text units for one loop family result."""
-MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 1_900_000
-"""Maximum conservative serialized size of one finite gauge complex."""
+MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 5_464
+"""Maximum materialized value cells retained by one finite gauge complex.
+
+This is an operation-owned structural bound, not an encoded-size estimate.
+Every label is separately bounded by ``MAX_GAUGE_LABEL_LENGTH``, so charging
+characters here would make a delivery-oriented width part of the native
+mathematical domain; encoded-byte limits belong to the delivery boundary.
+
+The value is the structural worst case of the per-component bounds
+(64 base + 64 vertices + 3*128 edges + 2*128 faces + 4096 face steps +
+24**2 table cells + 24 elements), so this aggregate check is a
+defence-in-depth guard rather than the primary limit.
+"""
+
+# Materialized-cell weights for one finite gauge complex. Each retained value
+# is one cell: a vertex, one of an edge's three label references, a face, or
+# one oriented face step.
+_GAUGE_COMPLEX_BASE_CELLS = 64
+_GAUGE_CELLS_PER_VERTEX = 1
+_GAUGE_CELLS_PER_EDGE = 3
+_GAUGE_CELLS_PER_FACE = 2
+_GAUGE_CELLS_PER_GROUP_ELEMENT = 1
 
 MAX_GAUGE_LABEL_LENGTH = 64
 """Maximum length of a vertex or edge identifier."""
@@ -467,21 +487,23 @@ class FiniteGroupGaugeComplex(StrictModel):
                 raise _validation_error(
                     "complex_face_closed", "each oriented face boundary must be closed"
                 )
-        output_units = 2048 + len(self.group.multiplication) ** 2 * 4
-        output_units += len(self.group.multiplication) * 12
-        output_units += sum(6 * len(vertex) + 32 for vertex in self.lattice.vertices)
-        output_units += sum(
-            6 * (len(edge.edge_id) + len(edge.tail) + len(edge.head)) + 80
-            for edge in self.lattice.edges
+        # Materialized cells, not encoded characters. Label widths are already
+        # bounded by MAX_GAUGE_LABEL_LENGTH, so charging characters here would
+        # make a delivery-oriented width part of the mathematical contract.
+        order = len(self.group.multiplication)
+        output_units = (
+            _GAUGE_COMPLEX_BASE_CELLS
+            + order * order
+            + order * _GAUGE_CELLS_PER_GROUP_ELEMENT
+            + len(self.lattice.vertices) * _GAUGE_CELLS_PER_VERTEX
+            + len(self.lattice.edges) * _GAUGE_CELLS_PER_EDGE
         )
         for face in self.faces:
-            output_units += 6 * len(face.face_id) + 64
+            output_units += _GAUGE_CELLS_PER_FACE
             if face.boundary.steps:
-                output_units += sum(
-                    6 * len(step.edge_id) + 48 for step in face.boundary.steps
-                )
+                output_units += len(face.boundary.steps)
             else:
-                output_units += 6 * len(face.boundary.basepoint or "") + 16
+                output_units += 1
         if output_units > MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS:
             raise _validation_error(
                 "complex_output_bound",

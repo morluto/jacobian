@@ -3,7 +3,6 @@ from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
-    OperationResourceAdmissionError,
 )
 from jacobian.math.gauge import (
     FiniteGroupGaugeComplex,
@@ -200,7 +199,15 @@ def test_exact_aggregate_face_step_bound_is_accepted():
     )
 
 
-def test_result_size_is_admitted_before_complex_result_construction():
+def test_maximum_length_labels_are_not_rejected_by_a_serialized_size_estimate():
+    """Native admission bounds materialized cells, not encoded characters.
+
+    Every label here is at the MAX_GAUGE_LABEL_LENGTH ceiling and the lattice,
+    face count, aggregate steps, work, and allocation are each independently
+    bounded, so this complex is admitted. It was previously rejected only
+    because a character-width heuristic exceeded the output-unit envelope,
+    which made a delivery-oriented width part of the mathematical domain.
+    """
     vertices = tuple(f"v{i:02}" + "x" * 61 for i in range(64))
     edges = tuple(
         GaugeEdge(
@@ -224,7 +231,39 @@ def test_result_size_is_admitted_before_complex_result_construction():
             for i in range(16)
         ),
     )
-    with pytest.raises(OperationResourceAdmissionError, match="output-unit envelope"):
-        construct_finite_group_gauge_complex(
-            request.lattice, request.group, request.faces
-        )
+    complex_ = construct_finite_group_gauge_complex(
+        request.lattice, request.group, request.faces
+    )
+    assert len(complex_.faces) == 16
+    assert complex_.lattice == request.lattice
+    assert type(complex_).model_validate_json(complex_.model_dump_json()) == complex_
+
+
+def test_output_cell_envelope_is_the_structural_worst_case() -> None:
+    """The aggregate envelope bounds materialized cells, so it must equal the
+    worst case implied by the per-component bounds. An encoded-size constant
+    here would drift silently away from the structure it claims to bound."""
+    from jacobian.math.gauge._models import (
+        _GAUGE_CELLS_PER_EDGE,
+        _GAUGE_CELLS_PER_FACE,
+        _GAUGE_CELLS_PER_GROUP_ELEMENT,
+        _GAUGE_CELLS_PER_VERTEX,
+        _GAUGE_COMPLEX_BASE_CELLS,
+        MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS,
+        MAX_GAUGE_EDGES,
+        MAX_GAUGE_FACES,
+        MAX_GAUGE_TOTAL_FACE_STEPS,
+        MAX_GAUGE_VERTICES,
+    )
+    from jacobian.math.groups._table_models import MAX_FINITE_TABLE_GROUP_ORDER
+
+    structural_worst_case = (
+        _GAUGE_COMPLEX_BASE_CELLS
+        + MAX_GAUGE_VERTICES * _GAUGE_CELLS_PER_VERTEX
+        + MAX_GAUGE_EDGES * _GAUGE_CELLS_PER_EDGE
+        + MAX_GAUGE_FACES * _GAUGE_CELLS_PER_FACE
+        + MAX_GAUGE_TOTAL_FACE_STEPS
+        + MAX_FINITE_TABLE_GROUP_ORDER**2
+        + MAX_FINITE_TABLE_GROUP_ORDER * _GAUGE_CELLS_PER_GROUP_ELEMENT
+    )
+    assert structural_worst_case == MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS

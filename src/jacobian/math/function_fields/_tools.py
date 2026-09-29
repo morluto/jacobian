@@ -853,10 +853,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Compute the exact field trace from a presented finite separable "
             "extension GF(p)(x)[y]/(f) to GF(p)(x), retaining the source field "
-            "and element alongside the rational-function result. The trace is "
-            "computed from Newton sums of the monic defining polynomial; "
-            "coefficient degree, intermediate work, and output size are "
-            "admitted before exact rational-function expansion."
+            "and element alongside the exact rational-function result. "
+            "Coefficient degree, intermediate work, and output size are admitted "
+            "before the result is constructed."
         ),
         request_type=FunctionFieldTraceRequest,
         result_type=FunctionFieldTraceResult,

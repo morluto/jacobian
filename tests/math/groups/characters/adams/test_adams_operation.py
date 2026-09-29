@@ -7,7 +7,10 @@ import pytest
 from pydantic import ValidationError
 
 import jacobian.math.groups.characters.adams.operations as adams_operations
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._models import CharacterRingElement
 from jacobian.math.groups.characters.adams._models import AdamsOperationRequest
@@ -188,3 +191,35 @@ def test_cyclic_order_eleven_zero_character_is_admitted() -> None:
     )
     result = adams_operations.character_adams_operation(zero, 1)
     assert result.irreducible_multiplicities == (0,) * len(table.rows)
+
+
+def test_forged_table_is_rejected_on_the_zero_character_path() -> None:
+    """The result contract promises a canonical retained table, so a forged
+    table must be rejected whether or not every coordinate is zero. Before the
+    fix the zero fast path returned before the canonical comparison and echoed
+    the caller's table back as canonical."""
+    table = _s3_table()
+    trivial = table.rows[0]
+    forged_rows = list(table.rows)
+    forged_rows[-1] = type(table.rows[-1])(
+        label=table.rows[-1].label,
+        degree=table.rows[-1].degree,
+        values=tuple(trivial.values),
+    )
+    forged = table.model_copy(update={"rows": tuple(forged_rows)})
+    assert forged != table
+
+    zero = CharacterRingElement(
+        table=forged, irreducible_multiplicities=(0,) * len(forged.rows)
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        adams_operations.character_adams_operation(zero, 2)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.adams_noncanonical_table"
+    )
+
+    # The same forged table is rejected for nonzero coordinates, so both paths
+    # now agree.
+    nonzero = CharacterRingElement(table=forged, irreducible_multiplicities=(1, 0, 0))
+    with pytest.raises(OperationDomainValidationError):
+        adams_operations.character_adams_operation(nonzero, 2)

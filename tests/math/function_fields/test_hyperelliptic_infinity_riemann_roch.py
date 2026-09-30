@@ -310,3 +310,27 @@ def test_non_squarefree_hyperelliptic_model_is_rejected() -> None:
     assert error.value.errors()[0]["type"] == (
         "function_field.riemann_roch_requires_supported_model"
     )
+
+
+def test_the_returned_divisor_support_composes_with_the_valuation_operation() -> None:
+    """A caller must not have to build a parallel carrier to consume the support.
+
+    The Riemann-Roch result retains its support as a generic
+    ``FunctionFieldPlace``, while the infinity valuation also accepts
+    ``HyperellipticInfinityPlace``. The native operation admits the generic form
+    deliberately, without routing it through the rational-place admission that
+    would refuse every supported ``y^2 = f(x)`` extension. This test feeds the
+    place straight back, so that composition is covered rather than assumed.
+    """
+    field = _hyperelliptic_field(5, (0, 4, 0, 1))  # y^2 = x^3 - x
+    result = function_field_riemann_roch_space(_divisor(field, 2))
+    term = result.divisor.terms[0]
+    assert isinstance(term.place, FunctionFieldPlace)
+
+    for basis_element in result.basis:
+        valuation = function_field_hyperelliptic_infinity_valuation(
+            term.place, basis_element
+        )
+        assert valuation.valuation.kind == "FINITE"
+        assert valuation.valuation.value is not None
+        assert valuation.valuation.value + 2 >= 0

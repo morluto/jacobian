@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures._admission import (
+    _bounded_sequence_snapshot,
     admit_binary_relation_transpose,
     admit_core_computation,
     admit_embedding_search,
@@ -107,9 +108,8 @@ def induced_substructure(
     """
 
     source = _admit_structure(source, "source")
-    admit_induced_substructure(source, inclusion)
-    # Admission bounds the input length before copying caller-owned sequences.
-    inclusion = tuple(inclusion)
+    inclusion, _work = admit_induced_substructure(source, inclusion)
+    # Use the admitted immutable snapshot; never iterate caller data twice.
     source_to_induced = {
         source_label: induced_label
         for induced_label, source_label in enumerate(inclusion)
@@ -307,14 +307,13 @@ def quotient_structure(
     """Form an exact quotient when every relation is saturated by a partition."""
 
     source = _admit_structure(source, "source")
-    if not isinstance(classes, Sequence) or isinstance(
-        classes, (str, bytes, bytearray)
-    ):
-        raise OperationDomainValidationError(
-            location=("classes",),
-            code="relational.quotient.partition_shape",
-            message="classes must be a finite sequence of exact integers",
-        )
+    classes = _bounded_sequence_snapshot(
+        classes,
+        source.carrier_size,
+        "classes",
+        "relational.quotient.partition_shape",
+        "classes must be a finite sequence of exact integers",
+    )
     if len(classes) != source.carrier_size:
         raise OperationDomainValidationError(
             location=("classes",),
@@ -389,8 +388,9 @@ def check_polymorphism(
     """
 
     source = _admit_structure(source, "source")
-    admit_polymorphism_check(source, arity, operation_table)
-    operation_table = tuple(operation_table)
+    operation_table, _table_cells, _work = admit_polymorphism_check(
+        source, arity, operation_table
+    )
 
     carrier_size = source.carrier_size
     relation_profiles: list[RelationalPolymorphismRelationProfile] = []

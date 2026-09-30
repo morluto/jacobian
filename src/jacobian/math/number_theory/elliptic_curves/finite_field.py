@@ -1370,6 +1370,35 @@ def _curve_admit(
     return curve
 
 
+def _admit_short_weierstrass_curve(
+    curve: FiniteFieldShortWeierstrassCurve,
+) -> FiniteFieldShortWeierstrassCurve:
+    """Re-establish a caller-authored curve's canonical structure.
+
+    A native caller can build a typed curve through ``model_construct`` whose
+    nested coefficient data is malformed even though it serializes to valid
+    JSON. Every consumer here must work from the re-established copy, including
+    the one retained in a result, so a downstream consumer never receives a
+    malformed value inside a declared typed result.
+    """
+    if not isinstance(curve, FiniteFieldShortWeierstrassCurve):
+        raise OperationDomainValidationError(
+            location=("curve",),
+            code="elliptic_curve.finite_field.curve_type",
+            message="curve must be a finite-field short-Weierstrass value",
+        )
+    try:
+        return FiniteFieldShortWeierstrassCurve.model_validate(
+            curve.model_dump(), strict=True
+        )
+    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=("curve",),
+            code="elliptic_curve.finite_field.invalid_curve",
+            message="curve has malformed field or coefficient data",
+        ) from exc
+
+
 def finite_field_quadratic_twist(
     curve: FiniteFieldShortWeierstrassCurve,
 ) -> FiniteFieldShortWeierstrassCurve:
@@ -1380,22 +1409,7 @@ def finite_field_quadratic_twist(
     ``y^2 = x^3 + d^2 A x + d^3 B``.
     """
 
-    if not isinstance(curve, FiniteFieldShortWeierstrassCurve):
-        raise OperationDomainValidationError(
-            location=("curve",),
-            code="elliptic_curve.finite_field.curve_type",
-            message="curve must be a finite-field short-Weierstrass value",
-        )
-    try:
-        admitted = FiniteFieldShortWeierstrassCurve.model_validate(
-            curve.model_dump(), strict=True
-        )
-    except (ValidationError, AttributeError, KeyError, TypeError, ValueError) as exc:
-        raise OperationDomainValidationError(
-            location=("curve",),
-            code="elliptic_curve.finite_field.invalid_curve",
-            message="curve has malformed field or coefficient data",
-        ) from exc
+    admitted = _admit_short_weierstrass_curve(curve)
     field, coefficient_a, coefficient_b = require_discriminant_admission(
         admitted.field, admitted.coefficient_a, admitted.coefficient_b
     )
@@ -1465,7 +1479,10 @@ def finite_field_quadratic_twist_relation(
     parameter is the same first nonsquare that kernel uses.
     """
 
-    twisted_curve = finite_field_quadratic_twist(curve)
+    # Retain the re-established source, not the caller-authored instance, so a
+    # value that passes admission is also the canonical value a consumer reads.
+    admitted = _admit_short_weierstrass_curve(curve)
+    twisted_curve = finite_field_quadratic_twist(admitted)
     field = twisted_curve.field
     q = field.characteristic**field.degree
     minus_one = (field.characteristic - 1,) + (0,) * (field.degree - 1)
@@ -1478,7 +1495,7 @@ def finite_field_quadratic_twist_relation(
     if parameter is None:
         raise RuntimeError("finite field has no quadratic nonsquare")
     return FiniteFieldQuadraticTwistRelation(
-        source_curve=curve,
+        source_curve=admitted,
         twisted_curve=twisted_curve,
         parameter=parameter,
     )

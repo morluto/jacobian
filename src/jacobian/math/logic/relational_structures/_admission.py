@@ -12,6 +12,8 @@ admission failure.
 from __future__ import annotations
 
 from collections.abc import Sequence
+from itertools import islice
+from typing import Any
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -85,6 +87,39 @@ MAX_POLYMORPHISM_RELATION_COMBINATIONS = 65_536
 MAX_POLYMORPHISM_COORDINATE_WORK = 1_000_000
 MAX_POLYMORPHISM_FAMILY_WORK = 8_388_608
 MAX_POLYMORPHISM_FAMILY_RESULT_CELLS = 4 * 1_048_576
+
+
+def _bounded_sequence_snapshot(
+    value: object,
+    limit: int,
+    location: str,
+    code: str,
+    message: str,
+) -> tuple[Any, ...]:
+    """Snapshot at most ``limit`` elements of a caller-supplied sequence.
+
+    ``isinstance(value, Sequence)`` admits a user-defined sequence whose
+    reported ``__len__`` disagrees with its iterator. Trusting either one lets a
+    native caller run an unbounded scan: a sequence that reports the expected
+    length but never raises ``IndexError`` makes a later ``enumerate`` or
+    membership loop run forever. The snapshot therefore reads at most
+    ``limit + 1`` elements from the iterator, so an over-long or dishonest
+    sequence is refused on its own terms instead of consuming unbounded work.
+    """
+    if not isinstance(value, Sequence) or isinstance(value, (str, bytes, bytearray)):
+        raise OperationDomainValidationError(
+            location=(location,),
+            code=code,
+            message=message,
+        )
+    snapshot = tuple(islice(iter(value), limit + 1))
+    if len(snapshot) > limit:
+        raise OperationDomainValidationError(
+            location=(location,),
+            code=f"{code.rsplit('.', 1)[0]}.bounded_length",
+            message=(f"{message.rstrip('.')} and must yield at most {limit} elements"),
+        )
+    return snapshot
 
 
 def admit_binary_relation_transpose(
@@ -205,10 +240,10 @@ def admit_polymorphism_check(
     source: FiniteRelationalStructure,
     arity: object,
     operation_table: object,
-) -> tuple[int, int]:
+) -> tuple[tuple[int, ...], int, int]:
     """Preflight one operation table and complete relation-power work.
 
-    Returns (operation table cells, coordinate work). The arity and the
+    Returns (admitted operation table, table cells, coordinate work). The arity and the
     table's totality and source binding are typed domain rejections; no
     relation product or membership index is constructed before the size
     estimates below succeed.
@@ -227,26 +262,7 @@ def admit_polymorphism_check(
                 f"1..{MAX_RELATIONAL_POLYMORPHISM_ARITY}"
             ),
         )
-    if not isinstance(operation_table, Sequence) or isinstance(
-        operation_table, (str, bytes, bytearray)
-    ):
-        raise OperationDomainValidationError(
-            location=("operation_table",),
-            code="relational.polymorphism.table_shape",
-            message=(
-                "operation table must be an ordered finite sequence of carrier labels"
-            ),
-        )
     table_cells = source.carrier_size**arity
-    if len(operation_table) != table_cells:
-        raise OperationDomainValidationError(
-            location=("operation_table",),
-            code="relational.polymorphism.table_axis",
-            message=(
-                "operation_table must contain one value for every tuple in "
-                f"A^{arity} (expected {table_cells} entries)"
-            ),
-        )
     if table_cells > MAX_RELATIONAL_OPERATION_TABLE_CELLS:
         raise OperationResourceAdmissionError(
             location=("operation_table",),
@@ -254,6 +270,22 @@ def admit_polymorphism_check(
             message=(
                 f"the complete operation table has {table_cells} cells, exceeding "
                 f"the {MAX_RELATIONAL_OPERATION_TABLE_CELLS}-cell envelope"
+            ),
+        )
+    operation_table = _bounded_sequence_snapshot(
+        operation_table,
+        MAX_RELATIONAL_OPERATION_TABLE_CELLS,
+        "operation_table",
+        "relational.polymorphism.table_shape",
+        "operation table must be an ordered finite sequence of carrier labels",
+    )
+    if len(operation_table) != table_cells:
+        raise OperationDomainValidationError(
+            location=("operation_table",),
+            code="relational.polymorphism.table_axis",
+            message=(
+                "operation_table must contain one value for every tuple in "
+                f"A^{arity} (expected {table_cells} entries)"
             ),
         )
     for position, value in enumerate(operation_table):
@@ -296,7 +328,7 @@ def admit_polymorphism_check(
                 f"{MAX_POLYMORPHISM_COORDINATE_WORK}-step envelope"
             ),
         )
-    return table_cells, coordinate_work
+    return operation_table, table_cells, coordinate_work
 
 
 def core_search_work(source_size: int, transport_tuples: int) -> int:
@@ -425,7 +457,7 @@ def embedding_reflection_cells(source: FiniteRelationalStructure) -> int:
 
 def admit_induced_substructure(
     source: FiniteRelationalStructure, inclusion: Sequence[int]
-) -> int:
+) -> tuple[tuple[int, ...], int]:
     """Preflight induced-table restriction work for one carrier selection.
 
     The ordered inclusion is the new-carrier-to-source map. Every source row
@@ -434,14 +466,13 @@ def admit_induced_substructure(
     row/coordinate visits bound the result before any row is transported.
     """
 
-    if not isinstance(inclusion, Sequence) or isinstance(
-        inclusion, (str, bytes, bytearray)
-    ):
-        raise OperationDomainValidationError(
-            location=("inclusion",),
-            code="relational.induced_substructure.inclusion_shape",
-            message="inclusion must be an ordered finite sequence of source labels",
-        )
+    inclusion = _bounded_sequence_snapshot(
+        inclusion,
+        source.carrier_size,
+        "inclusion",
+        "relational.induced_substructure.inclusion_shape",
+        "inclusion must be an ordered finite sequence of source labels",
+    )
     if len(inclusion) > source.carrier_size:
         raise OperationDomainValidationError(
             location=("inclusion",),
@@ -484,7 +515,7 @@ def admit_induced_substructure(
             ),
         )
 
-    return work
+    return tuple(inclusion), work
 
 
 def admit_relational_reduct(
@@ -498,14 +529,13 @@ def admit_relational_reduct(
     result before any table is transported.
     """
 
-    if not isinstance(symbol_ids, Sequence) or isinstance(
-        symbol_ids, (str, bytes, bytearray)
-    ):
-        raise OperationDomainValidationError(
-            location=("symbol_ids",),
-            code="relational.reduct.symbol_ids_shape",
-            message="symbol_ids must be an ordered finite sequence of relation IDs",
-        )
+    symbol_ids = _bounded_sequence_snapshot(
+        symbol_ids,
+        MAX_RELATIONAL_SYMBOLS,
+        "symbol_ids",
+        "relational.reduct.symbol_ids_shape",
+        "symbol_ids must be an ordered finite sequence of relation IDs",
+    )
     if len(symbol_ids) > MAX_RELATIONAL_SYMBOLS:
         raise OperationDomainValidationError(
             location=("symbol_ids",),
@@ -928,7 +958,7 @@ def admit_invariant_relation_closure(
     work = 0 if empty_closure else 8 * state_count * state_count
     for operation in polymorphisms:
         arity = operation.arity
-        table_cells, check_work = admit_polymorphism_check(
+        _table, table_cells, check_work = admit_polymorphism_check(
             source, arity, operation.operation_table
         )
         del table_cells

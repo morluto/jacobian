@@ -49,7 +49,7 @@ def _admit_register(value: object, location: str) -> QubitRegister:
             "quantum.stabilizer_clifford_sequence.invalid_register",
             "register must be typed",
         )
-    ids = value.qubit_ids
+    ids = getattr(value, "qubit_ids", None)
     if (
         type(ids) is not tuple
         or not 1 <= len(ids) <= MAX_QUBITS
@@ -151,9 +151,17 @@ def _resolve_gates(
 
 
 def _admitted_pauli_bits(phase_free: PhaseFreeQubitPauli, width: int) -> bool:
-    """Check binary Pauli coordinates on already-typed values."""
-    x_bits: tuple[object, ...] = phase_free.x_bits
-    z_bits: tuple[object, ...] = phase_free.z_bits
+    """Check binary Pauli coordinates on already-typed values.
+
+    The coordinates are read with ``getattr`` because a native caller can build
+    a typed value through ``model_construct`` without them. A missing
+    coordinate is a malformed value, not an implementation error, so it is
+    reported as an admission failure rather than an ``AttributeError``.
+    """
+    x_bits = getattr(phase_free, "x_bits", None)
+    z_bits = getattr(phase_free, "z_bits", None)
+    if type(x_bits) is not tuple or type(z_bits) is not tuple:
+        return False
     return (
         len(x_bits) == width
         and len(z_bits) == width

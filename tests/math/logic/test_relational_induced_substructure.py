@@ -73,5 +73,6 @@ def test_full_substructure_can_use_and_preserve_identity_axis() -> None:
 
 def test_admission_bounds_row_and_coordinate_work() -> None:
     source = _cycle()
-    work = admit_induced_substructure(source, (2, 0))
+    inclusion, work = admit_induced_substructure(source, (2, 0))
+    assert inclusion == (2, 0)
     assert work == 9  # three binary rows, each charged for its row and coordinates

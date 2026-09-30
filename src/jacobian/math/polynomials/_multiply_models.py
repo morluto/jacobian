@@ -96,11 +96,13 @@ def _maximum_product_coefficient_digits(
 ) -> int:
     """Bound each collected product coefficient before backend execution.
 
-    A coefficient can collect at most ``min(n, m)`` products.  Putting all
-    product denominators over one common denominator gives a conservative
-    component width of ``k * (left_digits + right_digits)`` plus the decimal
-    width needed to add ``k`` numerators.  Multiplication by the exact unit is
-    an identity, so it preserves the other operand's coefficient widths.
+    A coefficient can collect at most ``k = min(n, m)`` products. After
+    factoring out common content, let each product's numerator and denominator
+    widths be bounded by ``A`` and ``B``. A common denominator has width at most
+    ``k * B``; each numerator acquires at most the other ``k - 1`` denominators,
+    giving width ``A + (k - 1) * B`` before the carry for summing ``k`` terms.
+    The surviving content is charged once to each component. Multiplication by
+    the exact unit only shifts exponents and preserves coefficient widths.
 
     Common factors cross-cancel between the two operands before the product is
     formed, so ``1/N`` against ``N`` is exactly ``1`` and ``N`` against ``1`` is
@@ -132,13 +134,16 @@ def _maximum_product_coefficient_digits(
     product_denominator //= common
     left_widths = _reduced_component_widths(left, left_content)
     right_widths = _reduced_component_widths(right, right_content)
+    product_numerator_width = left_widths[0] + right_widths[0]
+    product_denominator_width = left_widths[1] + right_widths[1]
     numerator_bound = (
-        product_count * (left_widths[0] + right_widths[0])
+        product_numerator_width
+        + (product_count - 1) * product_denominator_width
         + len(str(product_count))
         + decimal_digit_width(product_numerator)
     )
     denominator_bound = (
-        product_count * (left_widths[1] + right_widths[1])
+        product_count * product_denominator_width
         + len(str(product_count))
         + decimal_digit_width(product_denominator)
     )

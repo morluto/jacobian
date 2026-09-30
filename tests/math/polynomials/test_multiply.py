@@ -1,16 +1,140 @@
 """Tests for rational polynomial multiplication."""
 
 import json
+from fractions import Fraction
 
 import pytest
 
-from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS
+from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import OperationDomainValidationError
-from jacobian.math.polynomials._multiply_models import RationalPolynomialMultiplyRequest
+from jacobian.math.polynomials._multiply_models import (
+    RationalPolynomialMultiplyRequest,
+    _maximum_product_coefficient_digits,
+)
 from jacobian.math.polynomials._multiply_ops import (
     compute_rational_polynomial_multiply as rational_polynomial_multiply,
 )
+from jacobian.math.polynomials.values import (
+    RationalPolynomial,
+    RationalPolynomialTerm,
+    SparseRationalPolynomial,
+)
+
+
+def _content_product_request(
+    content_exponent: int,
+) -> RationalPolynomialMultiplyRequest:
+    denominator_base = 10**7000
+    content = 10**content_exponent
+
+    def operand(numerator: int, offsets: tuple[int, int]) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=("x",),
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        exponents=(1 - index,),
+                        coefficient=CanonicalRational.from_fraction(
+                            Fraction(numerator, denominator_base + offset)
+                        ),
+                    )
+                    for index, offset in enumerate(offsets)
+                )
+            ),
+        )
+
+    return RationalPolynomialMultiplyRequest(
+        left=operand(content, (1, 3)), right=operand(1, (7, 9))
+    )
+
+
+def test_rejects_collected_numerator_growth_before_multiplication() -> None:
+    request = _content_product_request(20_000)
+    # The middle coefficient has 34,001 numerator digits after reduction.
+    a = 10**7000
+    expected_middle = Fraction(10**20_000, (a + 1) * (a + 9)) + Fraction(
+        10**20_000, (a + 3) * (a + 7)
+    )
+    assert (
+        decimal_digit_width(expected_middle.numerator) > MAX_CANONICAL_RATIONAL_DIGITS
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        rational_polynomial_multiply(request)
+    assert error.value.errors()[0]["type"] == "polynomial.invariant"
+
+
+def test_admits_collected_numerator_growth_near_the_carrier_limit() -> None:
+    content_exponent = MAX_CANONICAL_RATIONAL_DIGITS - 14_000 - 10
+    request = _content_product_request(content_exponent)
+    a = 10**7000
+    content = 10**content_exponent
+    expected = (
+        Fraction(content, (a + 1) * (a + 7)),
+        Fraction(content, (a + 1) * (a + 9)) + Fraction(content, (a + 3) * (a + 7)),
+        Fraction(content, (a + 3) * (a + 9)),
+    )
+
+    result = rational_polynomial_multiply(request)
+
+    assert tuple(
+        term.coefficient.as_fraction() for term in result.polynomial.terms
+    ) == (expected)
+    assert (
+        decimal_digit_width(expected[1].numerator) == MAX_CANONICAL_RATIONAL_DIGITS - 9
+    )
+    assert RationalPolynomial.model_validate_json(result.model_dump_json()) == result
+
+
+def test_collected_component_bound_dominates_exact_fraction_convolution() -> None:
+    """Check unequal denominator widths, signs, and common content independently."""
+
+    def polynomial(coefficients: list[Fraction]) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=("x",),
+            polynomial=SparseRationalPolynomial(
+                terms=tuple(
+                    RationalPolynomialTerm(
+                        exponents=(index,),
+                        coefficient=CanonicalRational.from_fraction(coefficient),
+                    )
+                    for index, coefficient in reversed(list(enumerate(coefficients)))
+                )
+            ),
+        )
+
+    for content_exponent in (0, 5, 70):
+        for denominator_exponent in (1, 8, 31):
+            for count in range(1, 5):
+                left = [
+                    Fraction(
+                        (-1) ** index * 10**content_exponent,
+                        10**denominator_exponent + 2 * index + 1,
+                    )
+                    for index in range(count)
+                ]
+                right = [
+                    Fraction(
+                        index + 1, 10 ** (denominator_exponent + 1) + 2 * index + 3
+                    )
+                    for index in range(count + 1)
+                ]
+                bound = _maximum_product_coefficient_digits(
+                    polynomial(left), polynomial(right)
+                )
+                expected = [Fraction(0) for _ in range(len(left) + len(right) - 1)]
+                for i, a in enumerate(left):
+                    for j, b in enumerate(right):
+                        expected[i + j] += a * b
+                assert all(
+                    max(
+                        decimal_digit_width(value.numerator),
+                        decimal_digit_width(value.denominator),
+                    )
+                    <= bound
+                    for value in expected
+                )
 
 
 def test_multiply_x_plus_1() -> None:

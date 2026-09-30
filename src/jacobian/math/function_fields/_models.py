@@ -9,6 +9,7 @@ from pydantic_core import PydanticCustomError
 
 from jacobian._exact import DecimalIntegerEncoding
 from jacobian._models import StrictModel
+from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.finite_fields.values import (
     FiniteFieldElement,
     FiniteFieldPresentation,
@@ -361,23 +362,32 @@ class FunctionFieldRiemannRochMembership(StrictModel):
         lands on decoding, which is where an untrusted profile actually arrives.
         """
         from jacobian.math.function_fields.valuation import (
-            place_valuation_of_rational_function,
+            membership_profile_valuations,
+            require_complete_membership_support,
         )
 
-        if self.element.coordinates[0].numerator.is_zero():
-            # The zero element has positive-infinity valuation everywhere, which
-            # the zero branch above already decided structurally.
-            return
-        for row in self.profile:
-            try:
-                derived = place_valuation_of_rational_function(
-                    self.element.coordinates[0], row.place
-                )
-            except (AttributeError, TypeError, ValueError) as exc:
-                raise _validation_error(
-                    "riemann_roch_membership_valuation",
-                    "every profile valuation must be derivable from the element",
-                ) from exc
+        try:
+            valuations = membership_profile_valuations(
+                self.element, tuple(row.place for row in self.profile)
+            )
+            require_complete_membership_support(
+                self.element,
+                self.divisor,
+                tuple(row.place for row in self.profile),
+                tuple(row.divisor_multiplicity for row in self.profile),
+                valuations,
+            )
+        except OperationResourceAdmissionError as exc:
+            raise _validation_error(
+                "riemann_roch_membership_work_exceeds_envelope",
+                "aggregate decoded profile replay exceeds the admitted work bound",
+            ) from exc
+        except (AttributeError, TypeError, ValueError) as exc:
+            raise _validation_error(
+                "riemann_roch_membership_valuation",
+                "every exact valuation and complete support must be derivable at a rational-field prime place",
+            ) from exc
+        for row, derived in zip(self.profile, valuations, strict=True):
             if derived != row.element_valuation:
                 raise _validation_error(
                     "riemann_roch_membership_valuation",

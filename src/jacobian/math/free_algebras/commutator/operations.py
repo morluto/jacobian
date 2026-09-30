@@ -6,6 +6,7 @@ from fractions import Fraction
 from math import ceil, gcd, log10
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -58,13 +59,12 @@ def _lcm(left: int, right: int) -> int:
 
 
 def _scaled_coefficients(
-    polynomial: FreeAlgebraPolynomial,
+    fractions: tuple[tuple[tuple[str, ...], Fraction], ...],
 ) -> tuple[int, tuple[tuple[tuple[str, ...], int], ...]]:
-    fractions = tuple(
-        (term.word, term.coefficient.as_fraction()) for term in polynomial.terms
-    )
     common_denominator = 1
-    for _, coefficient in fractions:
+    for index, (_, coefficient) in enumerate(fractions):
+        if index % 16 == 0:
+            request_checkpoint("during free-algebra commutator denominator admission")
         common_denominator = _lcm(common_denominator, coefficient.denominator)
     return common_denominator, tuple(
         (word, coefficient.numerator * (common_denominator // coefficient.denominator))
@@ -126,30 +126,17 @@ def _preflight(
     if pair_count == 0:
         return (), (), 1, 1
 
-    # Reduce every scalar product before word construction. This is both an
-    # admission bound and preserves cases such as (1/N)x, N*y where the raw
-    # numerator/denominator products are large but the reduced product is not.
-    # Each contribution is itself a possible output coefficient, so admitting
-    # an over-cap contribution would violate the exact-output bound during
-    # convolution even when subsequent unrelated terms happen to cancel it.
-    _reject_oversized_contributions(left, right)
-    # Admitting every pair individually does not bound their sum. Bound the
-    # accumulated width of every output word from the reduced contributions,
-    # before any concatenated word is built.
-    if (
-        _accumulated_coefficient_widths(left, right)
-        > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
-    ):
-        _reject_resource(
-            "accumulated_coefficient_growth",
-            "the commutator can exceed the accumulated coefficient digit bound",
-        )
-
+    left_fractions = tuple(
+        (term.word, term.coefficient.as_fraction()) for term in left.terms
+    )
+    right_fractions = tuple(
+        (term.word, term.coefficient.as_fraction()) for term in right.terms
+    )
     left_denominator_sizes = tuple(
-        len(str(term.coefficient.as_fraction().denominator)) for term in left.terms
+        len(str(value.denominator)) for _, value in left_fractions
     )
     right_denominator_sizes = tuple(
-        len(str(term.coefficient.as_fraction().denominator)) for term in right.terms
+        len(str(value.denominator)) for _, value in right_fractions
     )
     left_denominator_digits = sum(left_denominator_sizes)
     right_denominator_digits = sum(right_denominator_sizes)
@@ -178,8 +165,8 @@ def _preflight(
             "work_bound",
             f"common-denominator work estimate {lcm_work} exceeds {MAX_COMMUTATOR_WORK}",
         )
-    left_common, left_scaled = _scaled_coefficients(left)
-    right_common, right_scaled = _scaled_coefficients(right)
+    left_common, left_scaled = _scaled_coefficients(left_fractions)
+    right_common, right_scaled = _scaled_coefficients(right_fractions)
     left_scaled_digits = max(
         (len(str(abs(value))) for _, value in left_scaled), default=1
     )
@@ -196,13 +183,43 @@ def _preflight(
         + ceil(log10(contributions_per_word + 1))
     )
 
-    # Count decimal digit products as a conservative exact-arithmetic work
-    # proxy, plus word copying and sorting. The bound precedes convolution.
+    # Accumulate scaled integers once. Products have the operand widths above;
+    # signed partial sums add at most the admitted contribution-count width.
+    # Each final numerator is normalized once against the common denominator.
+    # Grade-school Euclidean reduction is bounded by the product of their digit
+    # widths. Actual LCM widths preserve shared-denominator cancellation cases.
+    common_denominator_digits = len(str(left_common)) + len(str(right_common))
+    normalization_work = candidate_terms * numerator_digits * common_denominator_digits
+    left_numerator_width = max(
+        len(str(abs(value.numerator))) for _, value in left_fractions
+    )
+    right_numerator_width = max(
+        len(str(abs(value.numerator))) for _, value in right_fractions
+    )
+    left_denominator_width = max(left_denominator_sizes)
+    right_denominator_width = max(right_denominator_sizes)
+    scalar_work = sum(
+        len(str(abs(value.numerator))) * len(str(value.denominator))
+        for fractions in (left_fractions, right_fractions)
+        for _, value in fractions
+    )
+    # Preserve the pair-versus-sum refusal code only for an oversized final
+    # result. Reserve that optional reduced-product classification as well.
+    classification_work = scalar_work + pair_count * (
+        left_numerator_width * right_denominator_width
+        + right_numerator_width * left_denominator_width
+        + left_numerator_width * right_numerator_width
+        + left_denominator_width * right_denominator_width
+    )
     work_bound = (
-        left_denominator_digits**2
+        lcm_work
+        + scalar_work
+        + left_denominator_digits**2
         + right_denominator_digits**2
         + 2 * pair_count * left_scaled_digits * right_scaled_digits
         + candidate_terms * numerator_digits
+        + normalization_work
+        + classification_work
         + candidate_terms * max_word_length
         + candidate_terms * max(1, candidate_terms.bit_length()) * max_word_length
     )
@@ -214,92 +231,26 @@ def _preflight(
     return left_scaled, right_scaled, left_common, right_common
 
 
-def _accumulated_coefficient_widths(
-    left: FreeAlgebraPolynomial,
-    right: FreeAlgebraPolynomial,
-) -> int:
-    """Return the widest exact coefficient any output word can accumulate.
-
-    Each contribution to an output word is a *reduced* rational, so this is a
-    sound bound on the sum that the kernel will form. It works on digit widths
-    and never materialises an accumulated value: adding ``p/q`` to a running
-    total ``S/D`` produces ``(S*q + p*D) / lcm(D, q)``, so the numerator grows to
-    at most ``max(num + q_width, p_width + den) + 1`` digits and the denominator
-    to at most ``den + q_width``, because ``lcm(D, q) <= D * q``.
-
-    Working from reduced contributions rather than raw operand widths is what
-    keeps a cancellable pair admissible: ``(1/N)x`` against ``N y`` reduces to
-    exactly 1 and widens nothing, while an input-only bound charges it two full
-    operand widths. Charging each product pair in isolation, as the preflight
-    already does, does not bound this sum, which is why it is computed here.
-    """
-
-    widths: dict[tuple[str, ...], tuple[int, int]] = {}
-    left_coefficients = tuple(
-        (term.word, term.coefficient.as_fraction()) for term in left.terms
-    )
-    right_coefficients = tuple(
-        (term.word, term.coefficient.as_fraction()) for term in right.terms
-    )
-    for left_word, left_coefficient in left_coefficients:
-        for right_word, right_coefficient in right_coefficients:
-            forward = left_word + right_word
-            backward = right_word + left_word
-            if forward == backward:
-                # The pair's two contributions land on one key with opposite
-                # signs and cancel identically.
-                continue
-            product = left_coefficient * right_coefficient
-            if not product:
-                continue
-            numerator_digits = len(str(abs(product.numerator)))
-            denominator_digits = len(str(product.denominator))
-            for word, sign in ((forward, 1), (backward, -1)):
-                current = widths.get(word)
-                if current is None:
-                    widths[word] = (numerator_digits, denominator_digits)
-                    continue
-                running_numerator, running_denominator = current
-                widened_numerator = (
-                    max(
-                        running_numerator + denominator_digits,
-                        numerator_digits + running_denominator,
-                    )
-                    + 1
-                )
-                widened_denominator = running_denominator + denominator_digits
-                if sign < 0:
-                    # A subtraction cannot widen a running total beyond the
-                    # same addition, so one width serves both signs.
-                    widened_numerator = max(widened_numerator, running_numerator)
-                    widened_denominator = max(widened_denominator, running_denominator)
-                widths[word] = (widened_numerator, widened_denominator)
-    if not widths:
-        return 1
-    return max(
-        max(numerator, denominator) for numerator, denominator in widths.values()
-    )
-
-
 def _reject_oversized_contributions(
     left: FreeAlgebraPolynomial,
     right: FreeAlgebraPolynomial,
 ) -> None:
-    """Refuse a reduced pair product that could become an output coefficient.
+    """Classify an already established oversized final output.
 
-    Each contribution is itself a possible output coefficient, so admitting an
-    over-cap contribution would violate the exact-output bound during
-    convolution even when later unrelated terms happen to cancel it. A pair
-    whose two concatenations are the same word contributes nothing at all: its
-    signed contributions cancel on one key, so charging it a coefficient would
-    refuse an identically zero result.
+    This helper runs only after exact signed accumulation has failed its final
+    cap. An oversized intermediate contribution alone is not a reason to
+    refuse: contributions from distinct pairs may cancel in the final result.
     """
+    right_coefficients = tuple(
+        (term.word, term.coefficient.as_fraction()) for term in right.terms
+    )
     for left_term in left.terms:
+        request_checkpoint("during free-algebra commutator refusal classification")
         left_coefficient = left_term.coefficient.as_fraction()
-        for right_term in right.terms:
-            if left_term.word + right_term.word == right_term.word + left_term.word:
+        for right_word, right_coefficient in right_coefficients:
+            if left_term.word + right_word == right_word + left_term.word:
                 continue
-            contribution = left_coefficient * right_term.coefficient.as_fraction()
+            contribution = left_coefficient * right_coefficient
             if (
                 max(
                     len(str(abs(contribution.numerator))),
@@ -318,8 +269,12 @@ def _commutator_numerators(
     right: tuple[tuple[tuple[str, ...], int], ...],
 ) -> dict[tuple[str, ...], int]:
     numerators: dict[tuple[str, ...], int] = {}
+    pairs = 0
     for left_word, left_coefficient in left:
         for right_word, right_coefficient in right:
+            if pairs % 256 == 0:
+                request_checkpoint("during free-algebra commutator accumulation")
+            pairs += 1
             contribution = left_coefficient * right_coefficient
             forward = left_word + right_word
             reverse = right_word + left_word
@@ -334,9 +289,10 @@ def commutator(
 ) -> FreeAlgebraCommutatorResult:
     """Return the exact associative-algebra commutator ``left*right-right*left``."""
 
+    request_checkpoint("before free-algebra commutator admission")
     left = _admit_polynomial(left, label="left")
     right = _admit_polynomial(right, label="right")
-    _preflight(left, right)
+    left_scaled, right_scaled, left_common, right_common = _preflight(left, right)
     if left == right:
         # [f, f] is identically zero, and the preflight has already decided that
         # plan. Convolving anyway would run the largest convolution the module
@@ -349,21 +305,26 @@ def commutator(
                 alphabet=left.alphabet, terms=()
             ),
         )
-    # Accumulate reduced rational contributions directly. A common product of
-    # operand denominators can exceed the result cap even when factors cancel
-    # (for example (1/N)x and N*y), so admission must bound inputs/work while
-    # the canonical reduced coefficient bound is checked after exact addition.
+    # One admitted integer convolution preserves cancellation between every
+    # term pair. Reduce only the final coefficients, then enforce their output
+    # height before constructing any canonical result terms.
+    denominator = left_common * right_common
+    numerators = _commutator_numerators(left_scaled, right_scaled)
     values: dict[tuple[str, ...], Fraction] = {}
-    for left_term in left.terms:
-        for right_term in right.terms:
-            contribution = (
-                left_term.coefficient.as_fraction()
-                * right_term.coefficient.as_fraction()
+    limit = 10**MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+    for index, (word, numerator) in enumerate(numerators.items()):
+        if index % 256 == 0:
+            request_checkpoint("during free-algebra commutator normalization")
+        if not numerator:
+            continue
+        coefficient = Fraction(numerator, denominator)
+        if abs(coefficient.numerator) >= limit or coefficient.denominator >= limit:
+            _reject_oversized_contributions(left, right)
+            _reject_resource(
+                "accumulated_coefficient_growth",
+                "the exact accumulated commutator exceeds the coefficient digit bound",
             )
-            forward = left_term.word + right_term.word
-            reverse = right_term.word + left_term.word
-            values[forward] = values.get(forward, Fraction(0)) + contribution
-            values[reverse] = values.get(reverse, Fraction(0)) - contribution
+        values[word] = coefficient
     ordered = tuple(
         sorted(
             (
@@ -375,15 +336,7 @@ def commutator(
             reverse=True,
         )
     )
-    for _, coefficient in ordered:
-        if (
-            max(len(str(abs(coefficient.numerator))), len(str(coefficient.denominator)))
-            > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
-        ):
-            _reject_resource(
-                "coefficient_growth",
-                "exact commutator coefficient exceeds the 64-digit bound",
-            )
+    request_checkpoint("before free-algebra commutator result construction")
     polynomial = FreeAlgebraPolynomial.model_construct(
         alphabet=left.alphabet,
         terms=tuple(

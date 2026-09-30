@@ -207,13 +207,12 @@ def _accumulating_pair() -> tuple[FreeAlgebraPolynomial, FreeAlgebraPolynomial]:
     return _polynomial(left), _polynomial(right)
 
 
-def test_the_accumulated_output_width_is_bounded_before_convolution() -> None:
+def test_the_accumulated_output_width_is_bounded_before_result_construction() -> None:
     """Admitting every pair individually does not bound their sum.
 
-    The preflight charged each reduced pair product against the exact-output
-    digit bound, so a word reachable from many wide pairs could accumulate past
-    that bound with every contribution inside its own limit. Rejection then
-    happened only after the full convolution.
+    Exact signed accumulation runs under its admitted integer-work envelope.
+    A word can exceed the final digit bound even when each contribution fits;
+    refuse that result before canonical term assembly.
     """
     left, right = _accumulating_pair()
     with pytest.raises(OperationResourceAdmissionError) as refusal:

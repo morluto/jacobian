@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from itertools import product
 from math import gcd
 from typing import Any, Literal, cast
@@ -25,6 +26,7 @@ from jacobian.math.number_theory.modular_forms.character_coordinates import (
 )
 from jacobian.math.number_theory.modular_forms.global_equality import (
     CyclotomicFieldEmbedding,
+    operations,
 )
 from jacobian.math.number_theory.modular_forms.global_equality.operations import (
     modular_form_coordinates_global_equal,
@@ -156,3 +158,83 @@ def test_a_narrow_coordinate_of_the_same_shape_is_unaffected() -> None:
         )
     else:
         assert isinstance(result, bool)
+
+
+@pytest.mark.parametrize("wide_on_left", (False, True))
+def test_mapped_denominator_growth_is_admitted_before_the_worker(
+    monkeypatch: pytest.MonkeyPatch, wide_on_left: bool
+) -> None:
+    first = 9 * 10**24 + 1
+    second = 9 * 10**24 + 3
+    assert gcd(first, second) == 1
+    assert len(str(first)) == len(str(second)) == 25
+    assert len(str((Fraction(1, first) + Fraction(1, second)).denominator)) == 50
+    ordinary = _coordinates(_space(13, 2, "S"), 1)
+    wide = _coordinates(_space(13, 10, "S"), 1).model_copy(
+        update={
+            "coordinates": (
+                RationalCyclotomicElement(
+                    field=_SOURCE_FIELD,
+                    coefficients_ascending=(
+                        CanonicalRational(num=1, den=first),
+                        CanonicalRational(num=1, den=second),
+                    ),
+                ),
+            )
+        }
+    )
+    calls: list[object] = []
+
+    def forbidden_worker(*args: object, **kwargs: object) -> None:
+        calls.append((args, kwargs))
+        raise AssertionError("mapped height must be admitted before the Sturm worker")
+
+    monkeypatch.setattr(operations, "pari_character_basis", forbidden_worker)
+    args = (
+        (wide, _conjugate_embedding(), ordinary, _embedding())
+        if wide_on_left
+        else (ordinary, _embedding(), wide, _conjugate_embedding())
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        modular_form_coordinates_global_equal(*args)
+    assert (
+        error.value.errors()[0]["type"] == "modular_form.global_equality_output_bound"
+    )
+    assert calls == []
+
+
+def test_cancellation_in_the_mapped_coordinate_still_admits_exact_equality() -> None:
+    denominator = 9 * 10**24 + 1
+    scalar = CanonicalRational(num=1, den=denominator)
+    left = _coordinates(_space(13, 2, "S"), 1).model_copy(
+        update={
+            "coordinates": (
+                RationalCyclotomicElement(
+                    field=_SOURCE_FIELD,
+                    coefficients_ascending=(CanonicalRational(num=0, den=1), scalar),
+                ),
+            )
+        }
+    )
+    right = _coordinates(_space(13, 10, "S"), 1).model_copy(
+        update={
+            "coordinates": (
+                RationalCyclotomicElement(
+                    field=_SOURCE_FIELD,
+                    coefficients_ascending=(
+                        scalar,
+                        CanonicalRational(num=-1, den=denominator),
+                    ),
+                ),
+            )
+        }
+    )
+    # (1-zeta_6)/D maps under conjugation to zeta_12^2/D, exactly the
+    # ordinary image of zeta_6/D. The normalized one-dimensional cusp bases
+    # are conjugate, so their mapped forms agree through the Sturm prefix.
+    assert (
+        modular_form_coordinates_global_equal(
+            left, _embedding(), right, _conjugate_embedding()
+        )
+        is True
+    )

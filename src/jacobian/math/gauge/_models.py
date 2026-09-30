@@ -530,9 +530,10 @@ class FiniteGroupGaugeComplex(StrictModel):
 
     lattice: GaugeLattice
     group: FiniteGroupTable
-    faces: tuple[FiniteGroupGaugeFace, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
-    )
+    # A complex may represent no 2-cells at all. Its curvature family is then
+    # empty and it is vacuously flat, so the empty tuple is the canonical
+    # degenerate case rather than a malformed one.
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
 
     @model_validator(mode="before")
     @classmethod
@@ -623,9 +624,10 @@ class FiniteGroupGaugeComplexRequest(StrictModel):
 
     lattice: GaugeLattice
     group: FiniteGroupTable
-    faces: tuple[FiniteGroupGaugeFace, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
-    )
+    # A complex may represent no 2-cells at all. Its curvature family is then
+    # empty and it is vacuously flat, so the empty tuple is the canonical
+    # degenerate case rather than a malformed one.
+    faces: tuple[FiniteGroupGaugeFace, ...] = Field(max_length=MAX_GAUGE_FACES)
 
     @model_validator(mode="before")
     @classmethod
@@ -737,8 +739,10 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
 
     complex: FiniteGroupGaugeComplex
     field: FiniteGroupGaugeField
+    # The empty row family is the result of a face-free complex, so it is
+    # admitted here for the same reason the complex admits no faces.
     face_values: tuple[FiniteGroupGaugeFaceCurvature, ...] = Field(
-        min_length=1, max_length=MAX_GAUGE_FACES
+        max_length=MAX_GAUGE_FACES
     )
     flat: StrictBool
 

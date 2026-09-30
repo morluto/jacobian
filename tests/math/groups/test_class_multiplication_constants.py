@@ -143,3 +143,46 @@ def test_maximum_tensor_shape_is_admitted_without_serialized_size_gate() -> None
     # previous JSON-size estimate rejected it even though the cell, work, and
     # scalar bounds admit the result.
     _admit_class_algebra_size(order=128, class_count=64, degree=8)
+
+
+def test_an_oversized_forged_partition_is_refused_before_it_is_copied() -> None:
+    """The native boundary bounds raw counts before any recursive dump.
+
+    A ``model_construct``-created request bypasses every field bound, so
+    revalidating it would first copy the whole forged structure. A
+    two-million-class partition cost 15 seconds and 5.8 GiB that way, before
+    the size admission that exists to prevent exactly that. The refusal now
+    carries the specific class-count code rather than a generic malformed one.
+    """
+    good = _partition([[1, 2, 0], [1, 0, 2]])
+    forged = GroupConjugacyClassesResult.model_construct(
+        source=good.source,
+        classes=tuple(((0, 1, 2),) for _ in range(65)),
+    )
+    request = ClassMultiplicationConstantsRequest.model_construct(partition=forged)
+
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        class_multiplication_constants(request)
+
+    assert (
+        refusal.value.errors()[0]["type"]
+        == "groups.characters.class_algebra_class_count_exceeds_envelope"
+    )
+
+
+def test_a_forged_partition_within_the_bounds_is_still_authenticated() -> None:
+    """Negative control: the raw precheck must not admit a forged partition.
+
+    Bounding counts first is not a substitute for revalidation. A
+    right-sized but false partition is still refused by the canonical check.
+    """
+    good = _partition([[1, 2, 0], [1, 0, 2]])
+    forged = GroupConjugacyClassesResult.model_construct(
+        source=good.source, classes=(((0,), (1,), (2,)),)
+    )
+    request = ClassMultiplicationConstantsRequest.model_construct(partition=forged)
+
+    with pytest.raises(
+        (OperationDomainValidationError, OperationResourceAdmissionError)
+    ):
+        class_multiplication_constants(request)

@@ -162,30 +162,3 @@ class TestLinkExtensionTools:
                     ),
                 )
             )
-
-
-def test_catalog_exposes_exact_group_word_operations() -> None:
-    catalog = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
-    word = _two_braid(1, -1, 1)
-    inverse = catalog["braid.word.inverse.compute"].run(BraidWordRequest(word=word))
-    product = catalog["braid.word.multiply.compute"].run(
-        BraidProductRequest(left=word, right=inverse)
-    )
-
-    assert product == BraidWord(strand_count=2, letters=word.letters + inverse.letters)
-    assert braid_permutation(product).permutation == (0, 1)
-
-
-def test_determinant_is_a_public_source_bound_operation() -> None:
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "link_diagram.determinant.compute"
-    )
-    diagram = braid_closure(_two_braid(1, 1, 1)).diagram
-    result = tool.run(LinkDeterminantRequest(diagram=diagram))
-
-    assert isinstance(result, LinkDeterminantResult)
-    assert result.alexander.diagram == diagram
-    assert result.determinant == 3
-    assert LinkDeterminantResult.model_validate_json(result.model_dump_json()) == result

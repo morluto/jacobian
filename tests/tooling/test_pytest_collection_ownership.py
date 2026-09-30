@@ -7,6 +7,8 @@ import tomllib
 from itertools import combinations
 from pathlib import Path, PurePosixPath
 
+import pytest
+
 ROOT = Path(__file__).parents[2]
 SPECIALIST_ROOTS = (
     PurePosixPath("tests/process"),
@@ -119,7 +121,7 @@ def test_nested_test_function_check_rejects_an_uncollected_definition(
     assert _nested_test_functions(path) == ("test_example.py:2",)
 
 
-def test_math_tests_do_not_boot_complete_product_boundaries() -> None:
+def _product_boundary_imports(path: Path) -> tuple[int, ...]:
     forbidden = (
         # `jacobian.catalog.builtins` walks every owner-local `._tools` module
         # and compiles the whole declaration set, so importing it is exactly
@@ -130,17 +132,66 @@ def test_math_tests_do_not_boot_complete_product_boundaries() -> None:
         "jacobian.dispatch",
         "jacobian.mcp",
     )
-    violations: list[str] = []
-    for path in sorted((ROOT / "tests/math").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                modules = tuple(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.module is not None:
-                modules = (node.module,)
-            else:
-                continue
-            if any(module.startswith(forbidden) for module in modules):
-                violations.append(f"{path.relative_to(ROOT)}:{node.lineno}")
+    violations: list[int] = []
+    tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            modules = tuple(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module is not None:
+            modules = (
+                node.module,
+                *(f"{node.module}.{alias.name}" for alias in node.names),
+            )
+        else:
+            continue
+        if any(module.startswith(forbidden) for module in modules):
+            violations.append(node.lineno)
+    return tuple(violations)
 
+
+def test_math_tests_do_not_boot_complete_product_boundaries() -> None:
+    violations = [
+        f"{path.relative_to(ROOT)}:{line}"
+        for path in sorted((ROOT / "tests/math").rglob("*.py"))
+        for line in _product_boundary_imports(path)
+    ]
     assert violations == []
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "import jacobian.catalog.builtins",
+        "import jacobian.catalog.builtins as builtins",
+        "from jacobian.catalog.builtins import BUILTIN_TOOLS",
+        "from jacobian.catalog import builtins",
+        "from jacobian.catalog import builtins as all_tools",
+        "from jacobian.catalog import models, builtins",
+        "from jacobian.catalog import catalog",
+        "from jacobian import cli",
+        "from jacobian import dispatch as runtime",
+        "from jacobian import mcp",
+    ],
+)
+def test_product_boundary_check_rejects_all_import_forms(
+    tmp_path: Path, statement: str
+) -> None:
+    path = tmp_path / "test_example.py"
+    path.write_text(statement + "\n", encoding="utf-8")
+    assert _product_boundary_imports(path) == (1,)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "from jacobian.catalog import models",
+        "from jacobian.catalog.models import OperationResourceAdmissionError",
+        "from jacobian.math.topology import links",
+    ],
+)
+def test_product_boundary_check_allows_contract_and_kernel_imports(
+    tmp_path: Path, statement: str
+) -> None:
+    path = tmp_path / "test_example.py"
+    path.write_text(statement + "\n", encoding="utf-8")
+    assert _product_boundary_imports(path) == ()

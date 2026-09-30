@@ -153,17 +153,40 @@ def test_orbit_bounds_repeated_image_denominator_before_expansion() -> None:
         ga_polynomial_orbit(action, source)
 
 
-def test_orbit_rejects_expansion_before_substitution(monkeypatch) -> None:
-    import jacobian.math.polynomials.derivations.orbits._kernels as operations
-
+def test_orbit_admits_a_merged_support_within_the_envelope() -> None:
+    """(x+t)**13 collapses to 14 distinct monomials, so it is admitted."""
     action = PolynomialGaAction(
         source_variables=("x",),
         parameter="t",
         generator_images=(_polynomial(("x", "t"), {(1, 0): 1, (0, 1): 1}),),
     )
-    source = _polynomial(("x",), {(13,): 1})
+    image = ga_polynomial_orbit(action, _polynomial(("x",), {(13,): 1}))
+    assert len(image.polynomial.terms) == 14
 
-    def expansion_must_not_start(*args, **kwargs):
+
+def test_orbit_rejects_expansion_before_substitution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.polynomials.derivations.orbits._kernels as operations
+
+    # Each generator is x_i + t, so a source monomial of degree d expands to
+    # the product of the two affine images and yields one distinct monomial per
+    # exponent split. Four degree-64 monomials in two variables need far more
+    # than the admitted 4,096 expansion envelope.
+    action = PolynomialGaAction(
+        source_variables=("x", "y"),
+        parameter="t",
+        generator_images=(
+            _polynomial(("x", "y", "t"), {(0, 0, 1): 1, (1, 0, 0): 1}),
+            _polynomial(("x", "y", "t"), {(0, 0, 1): 1, (0, 1, 0): 1}),
+        ),
+    )
+    source = _polynomial(
+        ("x", "y"),
+        {(32, 32): 1, (31, 33): 1, (33, 31): 1, (30, 34): 1},
+    )
+
+    def expansion_must_not_start(*args: object, **kwargs: object) -> None:
         pytest.fail("orbit expansion started before resource admission")
 
     monkeypatch.setattr(operations, "_expand", expansion_must_not_start)

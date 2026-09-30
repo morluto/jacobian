@@ -205,12 +205,15 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "the source ring and parameter axes. Generator count is at most 16, "
             "combined support at most 256 terms, output dimension at most 256, "
             "and projection row-reduction work is admitted before expansion. "
-            "The complete serialized result, including echoed inputs, is "
-            "bounded by the canonical 10 MiB output limit."
+            "Admission bounds the result's retained cells against its exact "
+            "basis-coefficient width rather than any serialized size; a delivery "
+            "byte ceiling is applied by the transport, not by this operation."
         ),
         request_type=PolynomialWeightSubrepresentationRequest,
         result_type=PolynomialWeightSubrepresentationResult,
-        run=gm_generated_subrepresentation,
+        run=lambda request: gm_generated_subrepresentation(
+            request.action, request.generators, request.parameter
+        ),
         tags=("algebraic-group", "gm", "subrepresentation", "weights", "exact"),
         discovery_terms=(
             "G_m generated finite subrepresentation",
@@ -223,7 +226,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="span_of_a_mixed_weight_generator",
                 description=(
                     "For weights (1,-1), the generated stable span of x+y has "
-                    "basis (y,x), weights (-1,1), and source coordinates (1,1)."
+                    "basis (y,x), weights (-1,1), and source coordinates (1,1). "
+                    "The generator repeats the action's variable order exactly "
+                    "and t is absent from the action variables."
                 ),
                 input={
                     "action": {"variables": ["x", "y"], "weights": [1, -1]},

@@ -15,7 +15,7 @@ from jacobian._exact import (
     canonical_rational_component_digits,
 )
 from jacobian._execution import request_checkpoint
-from jacobian.canonical import format_canonical_integer
+from jacobian.canonical import decimal_digit_width, format_canonical_integer
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -561,12 +561,26 @@ def _prepare_input(
                 code="polynomial_ga_subrepresentation.request",
                 message="basis is already carried by request",
             )
-        request = PolynomialGaStableSubrepresentationRequest.model_validate(
-            action.model_dump()
-        )
+        try:
+            request = PolynomialGaStableSubrepresentationRequest.model_validate(
+                action.model_dump()
+            )
+        except (PydanticCustomError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.request_shape",
+                message="the request must carry one checked action and an ordered basis",
+            ) from exc
         return _canonical_action(request.action), request.basis
     if isinstance(action, Mapping) and basis is None:
-        request = PolynomialGaStableSubrepresentationRequest.model_validate(action)
+        try:
+            request = PolynomialGaStableSubrepresentationRequest.model_validate(action)
+        except (PydanticCustomError, TypeError, ValueError) as exc:
+            raise OperationDomainValidationError(
+                location=("action",),
+                code="polynomial_ga_subrepresentation.request_shape",
+                message="the request must carry one checked action and an ordered basis",
+            ) from exc
         return _canonical_action(request.action), request.basis
     action_value = _canonical_action(action)
     if basis is None:
@@ -588,6 +602,32 @@ def _prepare_input(
     return action_value, basis_value
 
 
+def _image_coefficient_facts(
+    image: RationalPolynomial,
+) -> tuple[int, int]:
+    """Return the shared-denominator and widest-numerator digit widths.
+
+    Every product drawn from ``image**e`` has a denominator dividing the least
+    common multiple of ``image``'s coefficient denominators raised to ``e``,
+    because each summand picks one coefficient per factor. Bounding the
+    expansion by that shared denominator is exact for the denominator, where
+    charging the raw product count instead would admit nothing the kernel does
+    not actually form.
+    """
+    denominators = [abs(term.coefficient.den) for term in image.polynomial.terms]
+    common = 1
+    for denominator in denominators:
+        common = lcm(common, denominator)
+    numerator_width = max(
+        (
+            decimal_digit_width(abs(term.coefficient.num))
+            for term in image.polynomial.terms
+        ),
+        default=1,
+    )
+    return decimal_digit_width(common), max(numerator_width, 1)
+
+
 def _admit_basis(
     action: PolynomialGaAction, basis: tuple[RationalPolynomial, ...]
 ) -> tuple[tuple[tuple[int, ...], ...], tuple[tuple[Fraction, ...], ...]]:
@@ -600,18 +640,22 @@ def _admit_basis(
     action_term_counts = tuple(
         len(image.polynomial.terms) for image in action.generator_images
     )
-    max_action_digit = max(
-        (
-            canonical_rational_component_digits(term.coefficient)
-            for image in action.generator_images
-            for term in image.polynomial.terms
-        ),
-        default=1,
+    image_denominator_digits = tuple(
+        _image_coefficient_facts(image)[0] for image in action.generator_images
+    )
+    image_numerator_digits = tuple(
+        _image_coefficient_facts(image)[1] for image in action.generator_images
     )
     expansion_terms = 0
     expansion_work = len(basis) * sum(action_term_counts)
     max_source_digits = 1
     max_source_degree = 0
+    # The sharpest sound per-term widths. A single output coefficient sums the
+    # products of every admitted source monomial, so the shared denominators
+    # combine at most as widely as their product and the numerators share one
+    # widest product width plus the count of summed summands.
+    term_denominator_widths: list[int] = []
+    term_numerator_widths: list[int] = []
     for index, value in enumerate(basis):
         request_checkpoint("during stable-subrepresentation basis admission")
         try:
@@ -654,10 +698,24 @@ def _admit_basis(
             # Sequential multiplication costs at most degree times the final
             # monomial product bound. Charge that before performing it.
             expansion_work += max(1, degree) * factor
+            denominator_width = sum(
+                exponent * image_denominator_digits[position]
+                for position, exponent in enumerate(term.exponents)
+            )
+            numerator_width = sum(
+                exponent * image_numerator_digits[position]
+                for position, exponent in enumerate(term.exponents)
+            )
+            term_denominator_widths.append(denominator_width)
+            term_numerator_widths.append(numerator_width)
+            # The products of this one source monomial all share the common
+            # denominator of the generator images, so the reduced coefficient
+            # grows by that width rather than by the raw product count.
             coefficient_digits = canonical_rational_component_digits(
                 term.coefficient
-            ) + factor * (
-                degree * (2 * max_action_digit + 1) + len(str(max(1, factor)))
+            ) + max(
+                denominator_width,
+                numerator_width + len(str(max(1, factor))),
             )
             if coefficient_digits > MAX_DERIVATION_COEFFICIENT_DIGITS:
                 _reject(
@@ -671,12 +729,14 @@ def _admit_basis(
             "predicted basis action output exceeds the term budget",
             resource=True,
         )
-    # Terms from distinct source monomials can collide. Treat every bounded
-    # product as a possible summand of one output coefficient, so denominator
-    # growth from rational addition is also admitted before expansion.
-    aggregate_digit_bound = max_source_digits + expansion_terms * (
-        max_source_degree * (2 * max_action_digit + 1)
-        + len(str(max(1, expansion_terms)))
+    # Terms from distinct source monomials can collide, so one output
+    # coefficient sums the products of every admitted source monomial. Their
+    # shared denominators combine at most as widely as their product, and the
+    # numerators share the widest single product plus the summand count. This
+    # stays sound without charging every raw expansion product its own width.
+    aggregate_digit_bound = max_source_digits + max(
+        sum(term_denominator_widths),
+        (max(term_numerator_widths, default=0)) + len(str(max(1, expansion_terms))),
     )
     if aggregate_digit_bound > MAX_DERIVATION_COEFFICIENT_DIGITS:
         _reject(

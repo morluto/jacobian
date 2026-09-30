@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
 from fractions import Fraction
 from math import comb, lcm
 from typing import Any
@@ -24,6 +24,7 @@ from jacobian.math.polynomials.derivations._weight_models import (
     MAX_GM_INVARIANT_MONOMIALS,
     MAX_GM_SUBREP_BASIS_COEFFICIENT_DIGITS,
     MAX_GM_SUBREP_DIMENSION,
+    MAX_GM_SUBREP_GENERATORS,
     MAX_GM_SUBREP_RESULT_DIGIT_WORK,
     MAX_GM_SUBREP_TOTAL_TERMS,
     MAX_WEIGHT_ACTION_DEGREE,
@@ -34,7 +35,6 @@ from jacobian.math.polynomials.derivations._weight_models import (
     PolynomialWeightComponent,
     PolynomialWeightDegreeDimension,
     PolynomialWeightInvariantResult,
-    PolynomialWeightSubrepresentationRequest,
     PolynomialWeightSubrepresentationResult,
 )
 from jacobian.math.polynomials.values import (
@@ -312,42 +312,6 @@ def _canonical_rational(value: Fraction) -> CanonicalRational:
     return CanonicalRational(num=value.numerator, den=value.denominator)
 
 
-def _parse_subrepresentation_request(
-    request: PolynomialWeightSubrepresentationRequest | Mapping[str, Any],
-) -> tuple[
-    PolynomialWeightSubrepresentationRequest,
-    PolynomialWeightAction,
-    tuple[RationalPolynomial, ...],
-]:
-    try:
-        payload = (
-            request.model_dump()
-            if isinstance(request, PolynomialWeightSubrepresentationRequest)
-            else request
-        )
-        checked = PolynomialWeightSubrepresentationRequest.model_validate(payload)
-        action = _as_weight_action(
-            checked.action.model_dump(), code="gm_subrepresentation.request_shape"
-        )
-        generators = tuple(
-            _as_decoded_polynomial(generator.model_dump())
-            for generator in checked.generators
-        )
-    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="gm_subrepresentation.request_shape",
-            message="the request must bind polynomial generators to one diagonal G_m action",
-        ) from exc
-    if any(generator.variables != action.variables for generator in generators):
-        raise OperationDomainValidationError(
-            location=("generators",),
-            code="gm_subrepresentation.ordered_ring",
-            message="every generator must use the action's ordered polynomial ring",
-        )
-    return checked, action, generators
-
-
 def _admit_subrepresentation_support(
     action: PolynomialWeightAction,
     generators: tuple[RationalPolynomial, ...],
@@ -554,8 +518,65 @@ def _project_generators_by_weight(
     return projections
 
 
+def _parse_subrepresentation_input(
+    action: PolynomialWeightAction | Mapping[str, Any],
+    generators: Sequence[RationalPolynomial | Mapping[str, Any]],
+    parameter: PolynomialVariable,
+) -> tuple[
+    PolynomialVariable,
+    PolynomialWeightAction,
+    tuple[RationalPolynomial, ...],
+]:
+    try:
+        checked = _as_weight_action(
+            action.model_dump()
+            if isinstance(action, PolynomialWeightAction)
+            else action,
+            code="gm_subrepresentation.request_shape",
+        )
+        parsed_generators = tuple(
+            _as_decoded_polynomial(
+                generator.model_dump()
+                if isinstance(generator, RationalPolynomial)
+                else generator
+            )
+            for generator in generators
+        )
+        _WEIGHT_PARAMETER_TYPE.validate_python(parameter, strict=True)
+    except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="gm_subrepresentation.request_shape",
+            message="the request must bind polynomial generators to one diagonal G_m action",
+        ) from exc
+    if len(parsed_generators) > MAX_GM_SUBREP_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.generator_count",
+            message=(
+                "the request exceeds the admitted "
+                f"{MAX_GM_SUBREP_GENERATORS}-generator envelope"
+            ),
+        )
+    if parameter in checked.variables:
+        raise OperationDomainValidationError(
+            location=("parameter",),
+            code="gm_subrepresentation.ordered_ring",
+            message="the Laurent parameter must be distinct from ring variables",
+        )
+    if any(generator.variables != checked.variables for generator in parsed_generators):
+        raise OperationDomainValidationError(
+            location=("generators",),
+            code="gm_subrepresentation.ordered_ring",
+            message="every generator must use the action's ordered polynomial ring",
+        )
+    return parameter, checked, parsed_generators
+
+
 def gm_generated_subrepresentation(
-    request: PolynomialWeightSubrepresentationRequest | Mapping[str, Any],
+    action: PolynomialWeightAction | Mapping[str, Any],
+    generators: Sequence[RationalPolynomial | Mapping[str, Any]],
+    parameter: PolynomialVariable = "t",
 ) -> PolynomialWeightSubrepresentationResult:
     """Return the smallest G_m-stable span generated by supplied polynomials.
 
@@ -564,9 +585,11 @@ def gm_generated_subrepresentation(
     of their weight-homogeneous projections. Each character-space span is
     reduced to a deterministic RREF basis in the source monomial coordinates.
     """
-    checked, action, generators = _parse_subrepresentation_request(request)
+    parameter, action, generators = _parse_subrepresentation_input(
+        action, generators, parameter
+    )
     monomials_by_weight, sources_by_weight = _admit_subrepresentation_support(
-        action, generators, checked.parameter
+        action, generators, parameter
     )
     projections = _project_generators_by_weight(action, generators)
     coefficient_digits = _rref_coefficient_digit_bound(projections, monomials_by_weight)
@@ -587,7 +610,7 @@ def gm_generated_subrepresentation(
     result_cells = _subrepresentation_result_cell_bound(
         action,
         generators,
-        checked.parameter,
+        parameter,
         basis_terms=basis_term_bound,
         dimension=dimension_bound,
     )
@@ -646,7 +669,6 @@ def gm_generated_subrepresentation(
             )
         )
 
-    parameter = checked.parameter
     zero_entry = RationalLaurentPolynomial(variables=(parameter,), terms=())
     matrix_rows: list[tuple[RationalLaurentPolynomial, ...]] = []
     for row_index, _weight in enumerate(basis_weights):

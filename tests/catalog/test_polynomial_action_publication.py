@@ -95,10 +95,8 @@ def test_support_is_admitted_before_projection_and_catalog_publishes_operation()
     terms = tuple((1, (degree,)) for degree in range(64, 0, -1))
     with pytest.raises(OperationResourceAdmissionError):
         gm_generated_subrepresentation(
-            {
-                "action": {"variables": ["x"], "weights": [1]},
-                "generators": [_poly(("x",), *terms) for _ in range(5)],
-            }
+            {"variables": ["x"], "weights": [1]},
+            [_poly(("x",), *terms) for _ in range(5)],
         )
 
     operation = Catalog.open().operation(

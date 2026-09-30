@@ -2755,6 +2755,17 @@ def _differential_coefficient_input(
     return value, polynomials, maximum_degree, work_bound + boundary_work
 
 
+_SINGULAR_START_LIMIT = 4_096
+
+
+def _evaluate_index_polynomial(polynomial: _Poly, index: int) -> Fraction:
+    """Evaluate one cleared-denominator recurrence coefficient at an index."""
+    return sum(
+        (coefficient * index**degree for degree, coefficient in polynomial.items()),
+        Fraction(0),
+    )
+
+
 def _coefficient_recurrence_boundary_rows(
     polynomials: list[tuple[int, _Poly]], maximum_degree: int
 ) -> tuple[CoefficientRecurrenceBoundaryRow, ...]:
@@ -2863,6 +2874,15 @@ def differential_operator_to_coefficient_recurrence(
                 if target[power] == 0:
                     del target[power]
 
+    if len(recurrence_polynomials) > MAX_SHIFT_TERMS:
+        raise OperationResourceAdmissionError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_terms",
+            message=(
+                "the generated coefficient recurrence exceeds the admitted "
+                f"shift-term limit of {MAX_SHIFT_TERMS}"
+            ),
+        )
     recurrence_operator = ShiftOreOperator.model_validate(
         {
             "variable": "n",
@@ -2876,11 +2896,33 @@ def differential_operator_to_coefficient_recurrence(
             ],
         }
     )
-    boundary_rows = _coefficient_recurrence_boundary_rows(polynomials, maximum_degree)
+    # `valid_from` must be an index at which the leading coefficient is
+    # actually nonzero, otherwise the documented consumer rejects immediately
+    # on the result this operation just advertised as a starting point. The
+    # smallest admissible start is the first index at or after the largest
+    # coefficient degree at which the highest-shift coefficient is nonzero;
+    # every skipped equation becomes a boundary row, since it cannot solve for
+    # a coefficient. The leading coefficient is a polynomial in the index, so
+    # it has finitely many roots and this terminates.
+    leading = recurrence_polynomials.get(recurrence_operator.order, {})
+    valid_from = maximum_degree + minimum_slope
+    for index in range(valid_from, _SINGULAR_START_LIMIT):
+        if _evaluate_index_polynomial(leading, index) != 0:
+            valid_from = index
+            break
+    else:  # pragma: no cover - a nonzero polynomial has finitely many roots.
+        raise OperationDomainValidationError(
+            location=("operator",),
+            code="ore_algebra.coefficient_recurrence_singular",
+            message="the leading coefficient vanishes on every admitted start index",
+        )
+    # boundary rows cover exactly the indices below `valid_from`, which is the
+    # original `range(maximum_degree)` whenever the start did not have to move
+    boundary_rows = _coefficient_recurrence_boundary_rows(polynomials, valid_from)
     return DifferentialCoefficientRecurrence(
         operator=value,
         recurrence=recurrence_operator,
-        valid_from=maximum_degree + minimum_slope,
+        valid_from=valid_from,
         boundary_rows=boundary_rows,
     )
 

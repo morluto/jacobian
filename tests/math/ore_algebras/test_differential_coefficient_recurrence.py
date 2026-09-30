@@ -55,6 +55,16 @@ def _polynomial(coefficient) -> dict[int, Fraction]:
     }
 
 
+def _index_value(coefficient, index: int) -> Fraction:
+    """Evaluate one cleared-denominator recurrence coefficient at an index."""
+    total = Fraction(0)
+    for term in coefficient.numerator.terms:
+        total += term.coefficient.as_fraction() * Fraction(index) ** term.exponents[0]
+    for term in coefficient.denominator.terms:
+        total /= term.coefficient.as_fraction() * Fraction(index) ** term.exponents[0]
+    return total
+
+
 def test_exponential_equation_yields_factorial_recurrence() -> None:
     operator = DifferentialOreOperator.model_validate(
         _operator((0, [(0, -1)]), (1, [(0, 1)]))
@@ -116,17 +126,22 @@ def test_sinh_equation_has_exact_second_order_recurrence() -> None:
 
 
 def test_low_degree_boundary_row_is_retained() -> None:
-    # x*y' - y = 0 has the exceptional row -a_0=0 before (n-1)a_n=0.
+    # x*y' - y = 0 has the exceptional row -a_0=0 before (n-1)a_n=0. The
+    # leading coefficient n-1 vanishes at n=1, so the start advances to the
+    # first index where the equation can actually solve for a_n, and the
+    # skipped index 1 is retained as a boundary row.
     result = differential_operator_to_coefficient_recurrence(
         _operator((0, [(0, -1)]), (1, [(1, 1)]))
     )
-    assert result.valid_from == 1
-    assert len(result.boundary_rows) == 1
-    assert result.boundary_rows[0].degree == 0
+    assert result.valid_from == 2
+    assert [row.degree for row in result.boundary_rows] == [0, 1]
     assert [
         (term.index, term.coefficient.as_fraction())
         for term in result.boundary_rows[0].terms
     ] == [(0, Fraction(-1))]
+    leading = max(result.recurrence.terms, key=lambda term: term.exponent)
+    assert _index_value(leading.coefficient, 1) == 0
+    assert _index_value(leading.coefficient, result.valid_from) != 0
     assert result.recurrence.terms[0].exponent == 0
     assert _polynomial(result.recurrence.terms[0].coefficient) == {
         0: Fraction(-1),
@@ -280,4 +295,56 @@ def test_output_uses_canonical_shift_operator_through_maximum_shift_span() -> No
     assert (
         type(result.recurrence).model_validate_json(result.recurrence.model_dump_json())
         == result.recurrence
+    )
+
+
+def test_valid_from_advances_past_a_singular_leading_coefficient() -> None:
+    """`valid_from` must be an index the leading coefficient is nonzero at.
+
+    For `L = 1 - D + x D^2` the leading coefficient is `n^2 - 1`, so the
+    largest-coefficient-degree start of 1 is singular. The documented consumer
+    rejects a singular start immediately, so handing it this result unchanged
+    did not compose. The start now advances to the first admissible index and
+    the skipped equation is retained as a boundary row, since it cannot solve
+    for a coefficient.
+    """
+    operator = DifferentialOreOperator.model_validate(
+        _operator((0, [(0, 1)]), (1, [(0, -1)]), (2, [(1, 1)]))
+    )
+    result = differential_operator_to_coefficient_recurrence(operator)
+
+    leading = max(result.recurrence.terms, key=lambda term: term.exponent)
+    assert leading.exponent == result.recurrence.order
+    assert _polynomial(leading.coefficient) == {2: Fraction(1), 0: Fraction(-1)}
+    assert _index_value(leading.coefficient, 1) == 0
+    assert result.valid_from == 2
+    assert _index_value(leading.coefficient, result.valid_from) == 3
+    # the skipped index is retained rather than dropped
+    assert [row.degree for row in result.boundary_rows] == [0, 1]
+
+
+def test_generated_recurrence_term_count_is_admitted() -> None:
+    """A generated recurrence must fit its own carrier before construction.
+
+    A single order whose coefficient is `1 + x + ... + x^16` generates all 17
+    shifts from 0 through 16. `ShiftOreOperator` permits 16 terms, so the
+    result construction used to raise an unclassified Pydantic error after
+    admission had already accepted the request.
+    """
+    operator = DifferentialOreOperator.model_validate(
+        _operator((0, [(degree, 1) for degree in range(17)]))
+    )
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        differential_operator_to_coefficient_recurrence(operator)
+    assert error.value.errors()[0]["type"] == (
+        "ore_algebra.coefficient_recurrence_terms"
+    )
+
+    # 16 generated shifts still fit and are admitted
+    fitting = DifferentialOreOperator.model_validate(
+        _operator((0, [(degree, 1) for degree in range(16)]))
+    )
+    assert (
+        len(differential_operator_to_coefficient_recurrence(fitting).recurrence.terms)
+        == 16
     )

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
-from typing import Self
+from typing import Self, cast
 
 from pydantic import Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from jacobian._execution import request_checkpoint
-from jacobian._models import StrictModel
+from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.logic.automata.transducers.values import (
+    MAX_FST_ALPHABET,
+    MAX_FST_EDGES,
+    MAX_FST_WORD_LENGTH,
     FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
@@ -26,6 +29,83 @@ def _error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"rational_transducer.restrict_output.{reason}", message)
 
 
+def _require_bounded_relation_labels(relation: object) -> None:
+    """Check both retained label axes before parsing, copying, or replay."""
+    native = isinstance(relation, RationalTransducer)
+    if native:
+        fields = vars(relation)
+    elif type(relation) is dict:
+        fields = relation
+    else:
+        raise _error("edge_label_invalid", "relation label fields are malformed")
+    edges = fields.get("edges")
+    input_size = fields.get("input_alphabet_size")
+    output_size = fields.get("output_alphabet_size")
+    if (
+        type(input_size) is not int
+        or type(output_size) is not int
+        or not 1 <= input_size <= MAX_FST_ALPHABET
+        or not 1 <= output_size <= MAX_FST_ALPHABET
+        or type(edges) not in ((tuple,) if native else (tuple, list))
+    ):
+        raise _error("edge_label_invalid", "relation label axes are malformed")
+    edges = cast(tuple[object, ...] | list[object], edges)
+    if len(edges) > MAX_FST_EDGES:
+        raise _error("edge_label_invalid", "relation edge family exceeds its carrier")
+    label_cells = 0
+    for index, edge in enumerate(edges):
+        if index % 32 == 0:
+            request_checkpoint("during output-restriction label admission")
+        if type(edge) is RationalEdge:
+            edge_fields = vars(edge)
+            containers: tuple[type[object], ...] = (tuple,)
+        elif not native and type(edge) is dict:
+            edge_fields = edge
+            containers = (tuple, list)
+        else:
+            raise _error("edge_label_invalid", "relation label row is malformed")
+        for name, axis_size in (
+            ("input_label", input_size),
+            ("output_label", output_size),
+        ):
+            label = edge_fields.get(name, ())
+            if type(label) not in containers or len(label) > MAX_FST_WORD_LENGTH:
+                raise _error(
+                    "edge_label_invalid", "edge label exceeds its canonical carrier"
+                )
+            label_cells += len(label)
+            if label_cells > MAX_RESTRICT_OUTPUT_LABEL_CELLS:
+                raise _error(
+                    "edge_label_invalid",
+                    "retained labels exceed the admitted cell envelope",
+                )
+            if any(
+                type(symbol) is not int or not 0 <= symbol < axis_size
+                for symbol in label
+            ):
+                raise _error(
+                    "edge_label_invalid",
+                    "edge label must contain integer symbols on its axis",
+                )
+
+        if not edge_fields.get("input_label", ()) and not edge_fields.get(
+            "output_label", ()
+        ):
+            raise _error("edge_label_invalid", "an edge must have a nonempty label")
+
+
+def _preflight_retained_labels(data: object) -> None:
+    if isinstance(data, RestrictRationalOutputResult):
+        fields = vars(data)
+    elif type(data) is dict:
+        fields = data
+    else:
+        return
+    for name in ("source", "restricted"):
+        if name in fields:
+            _require_bounded_relation_labels(fields[name])
+
+
 def _output_edge_advances_language(
     transitions: dict[tuple[int, int], int],
     initial: int,
@@ -33,7 +113,9 @@ def _output_edge_advances_language(
     target: int,
 ) -> bool:
     state = initial
-    for symbol in label:
+    for index, symbol in enumerate(label):
+        if index % 256 == 0:
+            request_checkpoint("during output-restriction label replay")
         next_state = transitions.get((state, symbol))
         if next_state is None:
             return False
@@ -181,8 +263,16 @@ class RestrictRationalOutputResult(StrictModel):
         max_length=MAX_RESTRICT_OUTPUT_RESULT_EDGES
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_bounded_retained_labels(cls, data: object) -> object:
+        _preflight_retained_labels(data)
+        return canonicalize_json_containers(data)
+
     @model_validator(mode="after")
     def require_canonical_transports(self) -> Self:
+        # Existing native result instances may bypass before-validation.
+        _preflight_retained_labels(self)
         _require_transport_indices(self)
         source_edges = self.source.edges
         restricted_edges = self.restricted.edges

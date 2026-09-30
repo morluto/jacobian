@@ -21,6 +21,7 @@ from jacobian.catalog.models import (
 from jacobian.math.polynomials.local_series.newton_polygon import (
     LocalPolynomialCoefficient,
     LocalPolynomialInSeries,
+    local_polynomial_newton_polygon,
 )
 from jacobian.math.polynomials.local_series.newton_transform import (
     MAX_NEWTON_TRANSFORM_OUTPUT_CELLS,
@@ -573,3 +574,100 @@ def test_newton_still_transforms_wide_proper_fractions_exactly() -> None:
         Fraction(0),
     ]
     assert result.constant_term_valuation_lower_bound == 1
+
+
+def _wide_transform_source(
+    terms: int, *, width: int, retain_tail: bool
+) -> LocalPolynomialInSeries:
+    tail = [
+        Fraction(WIDE_DENOMINATOR - index, WIDE_DENOMINATOR)
+        for index in range(1, terms + 1)
+    ]
+    return _polynomial(
+        (
+            (0, _window([-1, *tail, *([0] * (width - terms - 1))])),
+            (1, _window([1, *([0] * (width - 1 if retain_tail else 1))])),
+        )
+    )
+
+
+def _polynomial_component_digits(source: LocalPolynomialInSeries) -> int:
+    return sum(
+        decimal_digit_width(value.numerator) + decimal_digit_width(value.denominator)
+        for row in source.coefficients
+        if row.series is not None
+        for coefficient in row.series.coefficients
+        for value in (coefficient.as_fraction(),)
+    )
+
+
+def test_newton_bounds_both_components_of_retained_output_fractions() -> None:
+    source = _wide_transform_source(1_250, width=1_251, retain_tail=True)
+    # F(t, 1+z) = z + sum_i (D-i)/D*t**i: every wide source fraction
+    # survives unchanged, so source and output together exceed the envelope.
+    assert 2 * _polynomial_component_digits(source) > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_transform(
+            NewtonTransformRequest(
+                polynomial=source, edge_index=0, initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.newton_transform_output_bound"
+
+
+def test_newton_counts_zero_slots_in_the_retained_source() -> None:
+    source = _wide_transform_source(1_950, width=4_096, retain_tail=False)
+    assert _polynomial_component_digits(source) > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        newton_transform(
+            NewtonTransformRequest(
+                polynomial=source, edge_index=0, initial_root=_rational(1)
+            )
+        )
+    assert _code(error.value) == "local_series.newton_transform_output_bound"
+
+
+def test_newton_retains_a_near_limit_wide_transform_exactly() -> None:
+    source = _wide_transform_source(900, width=901, retain_tail=True)
+    result = newton_transform(
+        NewtonTransformRequest(
+            polynomial=source, edge_index=0, initial_root=_rational(1)
+        )
+    )
+    constant, linear = result.transformed_polynomial.coefficients
+    original = source.coefficients[0].series
+    assert (
+        original is not None
+        and constant.series is not None
+        and linear.series is not None
+    )
+    assert constant.series.coefficients == (_rational(0), *original.coefficients[1:])
+    assert linear.series.coefficients == (
+        _rational(1),
+        *(_rational(0) for _ in range(900)),
+    )
+    digits = _polynomial_component_digits(source) + _polynomial_component_digits(
+        result.transformed_polynomial
+    )
+    assert 900_000 < digits < MAX_NEWTON_TRANSFORM_OUTPUT_CELLS
+    restored = type(result).model_validate_json(result.model_dump_json())
+    assert restored == result
+    polygon = local_polynomial_newton_polygon(restored.transformed_polynomial)
+    assert polygon.coefficient_valuations == ((0, 1), (1, 0))
+    assert polygon.edges[0].slope.as_fraction() == -1
+
+
+def test_newton_admits_full_width_zero_filled_windows() -> None:
+    source = _wide_transform_source(0, width=4_096, retain_tail=True)
+    result = newton_transform(
+        NewtonTransformRequest(
+            polynomial=source, edge_index=0, initial_root=_rational(1)
+        )
+    )
+    constant, linear = result.transformed_polynomial.coefficients
+    assert constant.series is not None and linear.series is not None
+    assert len(constant.series.coefficients) == len(linear.series.coefficients) == 4_096
+    assert all(value.as_fraction() == 0 for value in constant.series.coefficients)
+    assert linear.series.coefficients[0].as_fraction() == 1
+    assert all(value.as_fraction() == 0 for value in linear.series.coefficients[1:])
+    assert type(result).model_validate_json(result.model_dump_json()) == result

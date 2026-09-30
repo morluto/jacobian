@@ -277,7 +277,9 @@ def _admit_tree_automaton_carrier(
         )
     _preflight_automaton_shape(automaton)
     try:
-        return automaton_type.model_validate(
+        # The exact-class whitelist makes the concrete validator safe to call.
+        # Retain and re-establish determinism/completeness for native consumers.
+        return type(automaton).model_validate(
             automaton.model_dump(mode="python", warnings=False)
         )
     except Exception as exc:

@@ -251,6 +251,7 @@ def _classify_math_path(path: str, repository: Path) -> PathDecision:
             math_tests=selected,
             run_catalog=public_contract,
             run_catalog_examples=public_contract,
+            python_lanes=("dispatch",) if public_contract else (),
             run_scale=_includes_scale_tests(selected),
             boundary_lanes=(
                 ("process",)

@@ -123,10 +123,10 @@ make test-timings JUNIT=pytest.xml TIMING=timing.json
 Pull requests normally run static validation. The checked-in CI planner selects
 changed mathematical owners and changed dispatch, CLI, tooling, integration,
 process, MCP, Singular, QEPCAD, and installed-wheel boundaries. A public operation,
-model, admission, or canonical contract change also selects catalog conformance
-and the advertised-example integration test. Shared runtime, CI, dependency,
-and unmapped paths without a narrower ownership rule fail closed to the complete
-ordinary suite.
+model, admission, or canonical contract change also selects catalog conformance,
+the direct-dispatch lane, and the advertised-example integration test. Shared
+runtime, CI, dependency, and unmapped paths without a narrower ownership rule
+fail closed to the complete ordinary suite.
 
 The planner selects Singular and QEPCAD independently. Changes to
 `src/jacobian/process.py` select both runtime suites and the process boundary

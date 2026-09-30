@@ -200,6 +200,46 @@ def _edge_polynomial_value(
     return value, derivative
 
 
+def _canonical_center(source: LocalPolynomialInSeries) -> Fraction:
+    """Establish the source centre's canonical representation before use.
+
+    A native caller can bypass Pydantic with ``model_construct``, so the
+    reducedness, positive denominator, and strict-integer component
+    invariants are re-established here. Reading ``as_fraction()`` first would
+    leak a raw ``ZeroDivisionError`` from a malformed centre.
+    """
+    center = source.center
+    center_num = getattr(center, "num", None)
+    center_den = getattr(center, "den", None)
+    if type(center_num) is not int or type(center_den) is not int:
+        _domain(
+            "center_canonical",
+            "the local polynomial center must have strict integer components",
+            ("polynomial", "center"),
+        )
+    if center_den <= 0:
+        _domain(
+            "center_canonical",
+            "the local polynomial center must have a positive denominator",
+            ("polynomial", "center"),
+        )
+    try:
+        value = center.as_fraction()
+    except (TypeError, ValueError, ZeroDivisionError):
+        _domain(
+            "center_canonical",
+            "the local polynomial center must be a valid canonical rational",
+            ("polynomial", "center"),
+        )
+    if (center_num, center_den) != (value.numerator, value.denominator):
+        _domain(
+            "center_canonical",
+            "the local polynomial center must be reduced",
+            ("polynomial", "center"),
+        )
+    return value
+
+
 def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
     if not isinstance(request, NewtonTransformRequest):
         _domain("request_type", "request must select an edge and rational root", ())
@@ -216,7 +256,7 @@ def _admit_geometry(request: NewtonTransformRequest) -> _TransformGeometry:
             "polynomial must be a local series polynomial",
             ("polynomial",),
         )
-    if source.place != "FINITE" or source.center.as_fraction() != 0:
+    if source.place != "FINITE" or _canonical_center(source) != 0:
         _domain(
             "origin_only",
             "Newton transforms currently require a finite local parameter centered at zero",
@@ -540,11 +580,27 @@ def _admit(request: NewtonTransformRequest) -> _Admission:
         output_precisions,
     )
 
+    # The retained source scalars are already admitted individually, so their
+    # contribution is the sum of their measured widths rather than the global
+    # cap charged per slot. On the output side only the ``work`` slots that a
+    # nonzero source coefficient actually reaches can carry a wide value; the
+    # remaining retained entries are exact zeros and are charged as one cell
+    # each. Every retained output coefficient is at most ``coefficient_digits``
+    # wide, so ``work * coefficient_digits`` bounds the output digit sum
+    # without charging the global maximum to every window slot. Scalar
+    # magnitudes stay exact, so no encoded transport size enters admission.
+    source_digit_sum = sum(
+        _fraction_digits(coefficient.as_fraction())
+        for row in source_rows
+        for coefficient in row.series.coefficients
+        if coefficient.as_fraction()
+    )
     output_cells = (
-        source_slots * 2 * MAX_NEWTON_POLYGON_SCALAR_DIGITS
+        source_digit_sum
+        + output_slots
         + len(source_rows)
         + len(geometry.characteristic.terms)
-        + output_slots * 2 * coefficient_digits
+        + work * coefficient_digits
         + output_row_count
     )
     if output_cells > MAX_NEWTON_TRANSFORM_OUTPUT_CELLS:

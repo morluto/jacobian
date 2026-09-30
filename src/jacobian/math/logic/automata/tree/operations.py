@@ -271,6 +271,7 @@ def _admit_tree_automaton_carrier(
             code=code,
             message=description,
         )
+    _preflight_automaton_shape(automaton)
     try:
         return automaton_type.model_validate(
             automaton.model_dump(mode="python", warnings=False)
@@ -283,8 +284,8 @@ def _admit_tree_automaton_carrier(
         ) from exc
 
 
-def _preflight_complete_automaton(
-    automaton: CompleteDeterministicBottomUpTreeAutomaton,
+def _preflight_automaton_shape(
+    automaton: BottomUpTreeAutomaton,
 ) -> None:
     state_count = getattr(automaton, "state_count", None)
     arity = getattr(automaton, "arity", None)
@@ -317,6 +318,12 @@ def _preflight_complete_automaton(
             code="tree_context.automaton_signature",
             message="automaton arities must be integers in the supported range",
         )
+    if any(type(state) is not int for state in final_states):
+        raise OperationDomainValidationError(
+            location=("automaton", "final_states"),
+            code="tree_context.automaton_final_state_shape",
+            message="automaton final states must be integer indices",
+        )
     for transition in transitions:
         if (
             type(transition) is not TreeAutomatonTransition
@@ -324,6 +331,7 @@ def _preflight_complete_automaton(
             or type(getattr(transition, "child_states", None)) is not tuple
             or type(getattr(transition, "target_state", None)) is not int
             or len(transition.child_states) > MAX_TA_ARITY
+            or any(type(state) is not int for state in transition.child_states)
         ):
             raise OperationDomainValidationError(
                 location=("automaton", "transitions"),
@@ -379,7 +387,7 @@ def map_tree_context_states(
             code="tree_context.state_map.input_type",
             message="automaton and context must be canonical typed values",
         )
-    _preflight_complete_automaton(automaton)
+    _preflight_automaton_shape(automaton)
     context_nodes, _ = _preflight_context(context)
     state_context_work = (
         len(automaton.transitions)
@@ -423,7 +431,7 @@ def tree_context_transformation_monoid(
             code="tree_context.monoid.element_limit",
             message="max_elements must be an integer from 1 through 512",
         )
-    _preflight_complete_automaton(automaton)
+    _preflight_automaton_shape(automaton)
     # The reachable-state profile is a mandatory phase, so admit its full
     # preflight charge from the shared work envelope before the saturation
     # executes; witness and generator bounds are checked afterwards.

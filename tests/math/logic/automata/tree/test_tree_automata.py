@@ -1104,3 +1104,38 @@ def test_reachability_rejects_a_child_count_that_disagrees_with_its_arity() -> N
     )
     with pytest.raises(OperationDomainValidationError):
         reachable_state_profile(forged)
+
+
+@pytest.mark.parametrize("malformation", ["rows", "children", "finals"])
+def test_reachability_bounds_constructed_values_before_dumping(
+    monkeypatch: pytest.MonkeyPatch, malformation: str
+) -> None:
+    from jacobian.catalog.models import OperationResourceAdmissionError
+    from jacobian.math.logic.automata.tree.operations import tree_language_profile
+
+    row = TreeAutomatonTransition(symbol=0, child_states=(), target_state=0)
+    machine = BottomUpTreeAutomaton(
+        state_count=1, arity=(0,), transitions=(row,), final_states=(0,)
+    )
+    if malformation == "rows":
+        machine = machine.model_copy(
+            update={"transitions": (row,) * (MAX_TA_TRANSITIONS + 1)}
+        )
+    elif malformation == "children":
+        row = row.model_copy(update={"child_states": ([0] * 10_000,)})
+        machine = machine.model_copy(update={"transitions": (row,)})
+    else:
+        machine = machine.model_copy(update={"final_states": ([0] * 10_000,)})
+    dump_calls: list[bool] = []
+
+    def record_dump(*_args: object, **_kwargs: object) -> None:
+        dump_calls.append(True)
+        raise RuntimeError("unbounded input reached serialization")
+
+    monkeypatch.setattr(BottomUpTreeAutomaton, "model_dump", record_dump)
+    for operation in (reachable_state_profile, tree_language_profile):
+        with pytest.raises(
+            (OperationDomainValidationError, OperationResourceAdmissionError)
+        ):
+            operation(machine)
+    assert dump_calls == []

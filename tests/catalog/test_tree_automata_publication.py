@@ -107,3 +107,9 @@ def test_minimize_is_published_in_catalog() -> None:
         )
     )
     assert tool.run(request).minimized.state_count == 1
+
+
+def test_language_profile_stays_a_native_projection_of_reachability() -> None:
+    catalog = Catalog.open()
+    assert catalog.operation("tree_automaton.language.profile.compute") is None
+    assert catalog.operation("tree_automaton.states.reachable.compute") is not None

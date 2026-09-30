@@ -897,8 +897,12 @@ def function_field_element_norm(
     """Compute the exact relative norm to the rational function field GF(p)(x)."""
 
     field, canonical = _preflight_inverse_operand(element)
-    _admit_field(field)
+    # The norm envelope is a cheap growth question about the operand's
+    # coordinates, and the preflight has already bounded them. Field
+    # admission reaches an exact Gauss-lemma factorization, so it must not run
+    # for a request the norm bound already refuses.
     _admit_norm_growth(field, canonical)
+    _admit_field(field)
     prime = field.characteristic
     if field.degree == 1:
         norm = _to_internal_rational_function(canonical.coordinates[0])
@@ -3006,7 +3010,11 @@ def function_field_hyperelliptic_infinity_valuation(
     """
 
     if isinstance(place, FunctionFieldPlace):
-        place = _admit_place(place)
+        # A hyperelliptic infinity place is legitimately presented as a generic
+        # place, so only its shape is re-admitted here. The rational-place
+        # admission would refuse every supported ``y^2 = f(x)`` extension
+        # before the infinity kind check could be reached.
+        place = _canonical_place(place)
         if place.kind != "INFINITE":
             raise OperationDomainValidationError(
                 location=("place",),

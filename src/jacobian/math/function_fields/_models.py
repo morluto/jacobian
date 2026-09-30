@@ -241,6 +241,17 @@ class HyperellipticInfinityPlaceValuationResult(StrictModel):
     element: FiniteFunctionFieldElement
     valuation: FunctionFieldValuation
 
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        # The reported valuation has no meaning without a place-element
+        # pairing, so the two parents must be the same exact function field.
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "infinity_valuation_parent_mismatch",
+                "the infinity place and function element must retain the exact function field",
+            )
+        return self
+
 
 class FunctionFieldRiemannRochMembershipRequest(StrictModel):
     """A function and finite divisor whose exact Riemann-Roch membership is asked."""

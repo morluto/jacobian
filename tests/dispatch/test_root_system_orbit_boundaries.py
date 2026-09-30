@@ -16,6 +16,7 @@ from jacobian.math.groups.root_systems import (
     weyl_parabolic_weight_orbit,
     weyl_weight_orbit,
 )
+from jacobian.math.groups.root_systems import operations as rs_operations
 from jacobian.math.groups.root_systems._models import (
     MAX_LATTICE_COORDINATE_BITS,
     MAX_REFLECTION_REPRESENTABLE,
@@ -124,11 +125,31 @@ def test_proper_parabolic_checks_only_its_executed_reflections() -> None:
     assert public.output == native.model_dump(mode="json")
 
 
-@pytest.mark.parametrize("indices", [None, (0, 1), (1,)])
+@pytest.mark.parametrize(
+    ("indices", "weight"),
+    [
+        (None, (1, -MAX_REFLECTION_REPRESENTABLE)),
+        ((0, 1), (1, -MAX_REFLECTION_REPRESENTABLE)),
+        ((1,), (1, -MAX_REFLECTION_REPRESENTABLE)),
+        (None, (MAX_REFLECTION_REPRESENTABLE // 5 + 1,) * 2),
+        ((0, 1), (MAX_REFLECTION_REPRESENTABLE // 5 + 1,) * 2),
+    ],
+)
 def test_oversized_executed_orbit_is_a_public_resource_refusal(
     indices: tuple[int, ...] | None,
+    weight: tuple[int, ...],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    weight = (1, -MAX_REFLECTION_REPRESENTABLE)
+    reflected_weights: list[tuple[int, ...]] = []
+    reflect = rs_operations._weight_reflect
+
+    def recording_reflect(
+        value: tuple[int, ...], index: int, rows: tuple[tuple[int, ...], ...]
+    ) -> tuple[int, ...]:
+        reflected_weights.append(value)
+        return reflect(value, index, rows)
+
+    monkeypatch.setattr(rs_operations, "_weight_reflect", recording_reflect)
     if indices is not None:
         native_weight = weight_lattice_vector(_G2, weight)
         operation_id = _PARABOLIC
@@ -149,3 +170,5 @@ def test_oversized_executed_orbit_is_a_public_resource_refusal(
     for error in (native_error.value, public_error.value):
         assert error.errors()[0]["type"] == "root_system.weight_orbit_coordinate_bound"
         assert error.errors()[0]["loc"] == ("weight",)
+    # Both paths must refuse before chamber normalization or weight-orbit BFS.
+    assert reflected_weights == []

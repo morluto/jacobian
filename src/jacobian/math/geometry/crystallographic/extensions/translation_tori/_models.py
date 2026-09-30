@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from math import comb
 from typing import Annotated, Self
 
@@ -36,7 +37,8 @@ class BieberbachTranslationTorusChains(StrictModel):
     @model_validator(mode="after")
     def require_product_torus_chain(self) -> Self:
         chain = self.quotient_chain_complex
-        dimension = len(self.source.source.affine_realization.source.action_matrices[0])
+        extension = self.source.source.affine_realization.source
+        dimension = len(extension.action_matrices[0])
         expected_basis_sizes = tuple(
             comb(dimension, degree) for degree in range(dimension + 1)
         )
@@ -61,6 +63,53 @@ class BieberbachTranslationTorusChains(StrictModel):
             raise PydanticCustomError(
                 "crystallographic.translation_torus_chain",
                 "result must carry the product CW chain complex of a translation torus",
+            )
+        # The retained source must be a pure translation action, and the
+        # retained circle directions must actually generate its vertex set.
+        # Checking only the axes above let a checked Klein-bottle source be
+        # paired with any all-zero complex, so a caller could receive a value
+        # whose claimed torus does not describe its own retained source.
+        if not all(
+            all(
+                matrix[row][column] == (1 if row == column else 0)
+                for row in range(dimension)
+                for column in range(dimension)
+            )
+            for matrix in extension.action_matrices
+        ):
+            raise PydanticCustomError(
+                "crystallographic.translation_torus_holonomy",
+                "a translation torus requires a pure translation action with trivial holonomy",
+            )
+        points = frozenset(
+            tuple(value.as_fraction() for value in vertex.coordinates)
+            for vertex in self.source.source.facet_profile.vertices
+        )
+        if not points:
+            raise PydanticCustomError(
+                "crystallographic.translation_torus_directions",
+                "the retained fundamental domain has no vertices",
+            )
+        base = min(points)
+        generated = frozenset(
+            tuple(
+                base[axis]
+                + sum(
+                    (
+                        self.circle_directions[index][axis].as_fraction()
+                        for index in range(dimension)
+                        if mask & (1 << index)
+                    ),
+                    Fraction(0),
+                )
+                for axis in range(dimension)
+            )
+            for mask in range(1 << dimension)
+        )
+        if generated != points:
+            raise PydanticCustomError(
+                "crystallographic.translation_torus_directions",
+                "circle directions must generate the retained parallelepiped domain",
             )
         return self
 

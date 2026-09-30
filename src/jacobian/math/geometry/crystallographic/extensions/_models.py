@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from fractions import Fraction
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, StrictInt, model_validator
@@ -467,6 +468,40 @@ class BieberbachGroupRingBoundaryEntry(StrictModel):
     holonomy_element: GroupIndex
 
 
+MAX_FACE_ORBIT_VERTICES = 32
+
+
+def _affine_endpoint_matches(
+    realization: CrystallographicAffineRealization,
+    item: BieberbachFaceOrbitMap,
+    source_coordinate: tuple[CanonicalRational, ...],
+    target_coordinates: tuple[tuple[CanonicalRational, ...], ...],
+    target_vertex_index: int,
+) -> bool:
+    """Return whether an orbit map really lands on its declared endpoint.
+
+    The pairing acts affinely as ``A_g(x) = linear_part x + section_shift +
+    translation``. Checking only that the declared target vertex is *some*
+    vertex of the target facet leaves a payload free to swap it for the other
+    endpoint of the same edge, which is a mathematically false orbit map.
+    """
+    section_map = realization.section_maps[item.holonomy_element]
+    dimension = len(source_coordinate)
+    if len(target_coordinates[target_vertex_index]) != dimension:
+        return False
+    for row in range(dimension):
+        image = section_map.section_shift[row].as_fraction() + Fraction(
+            item.lattice_translation[row]
+        )
+        for column in range(dimension):
+            image += section_map.linear_part[row][column] * (
+                source_coordinate[column].as_fraction()
+            )
+        if image != target_coordinates[target_vertex_index][row].as_fraction():
+            return False
+    return True
+
+
 class BieberbachFaceOrbitComplex(StrictModel):
     """Two-dimensional quotient cell structure and its integral chains.
 
@@ -478,11 +513,25 @@ class BieberbachFaceOrbitComplex(StrictModel):
     """
 
     source: CrystallographicFundamentalDomainResult
-    vertex_orbits: tuple[tuple[StrictInt, ...], ...]
-    edge_orbit_representatives: tuple[StrictInt, ...]
-    orbit_maps: tuple[BieberbachFaceOrbitMap, ...]
-    boundary_1_to_0: tuple[BieberbachGroupRingBoundaryEntry, ...]
-    boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...]
+    # Field-level bounds keep an oversized caller-authored payload from
+    # materializing every nested boundary entry and orbit map before the
+    # after-validator can discover that the counts or coverage are invalid.
+    vertex_orbits: tuple[
+        Annotated[tuple[StrictInt, ...], Field(max_length=MAX_FACE_ORBIT_VERTICES)],
+        ...,
+    ] = Field(max_length=MAX_COMPUTED_FACETS)
+    edge_orbit_representatives: tuple[StrictInt, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS
+    )
+    orbit_maps: tuple[BieberbachFaceOrbitMap, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS * MAX_FACE_ORBIT_VERTICES
+    )
+    boundary_1_to_0: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
+        max_length=2 * MAX_COMPUTED_FACETS * MAX_FACE_ORBIT_VERTICES
+    )
+    boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
+        max_length=MAX_COMPUTED_FACETS
+    )
     quotient_chain_complex: ChainComplexValue
 
     @model_validator(mode="after")
@@ -582,6 +631,61 @@ class BieberbachFaceOrbitComplex(StrictModel):
             raise _error(
                 "face_orbit_boundary_axis",
                 "group-labelled boundary entry has an invalid cell index",
+            )
+        # The retained differentials must be exactly the augmentations of the
+        # retained group-ring incidences. Checking only the basis axes lets a
+        # payload swap in a different but still correctly shaped complex, which
+        # would then report homology the retained incidences do not support.
+        # d1 has one row per vertex orbit and one column per edge orbit; d2 has
+        # one row per edge orbit and the single top cell as its only column.
+        # Every orbit map must actually land on the endpoint the retained
+        # pairing sends its source vertex to, not merely on some vertex of the
+        # target facet. The affine image is evaluated once per map, which is
+        # bounded by the facet and vertex envelopes rather than a search.
+        realization = self.source.source.affine_realization
+        coordinates = tuple(tuple(vertex.coordinates) for vertex in profile.vertices)
+        if not all(
+            _affine_endpoint_matches(
+                realization,
+                item,
+                coordinates[item.source_vertex_index],
+                coordinates,
+                item.target_vertex_index,
+            )
+            for item in self.orbit_maps
+        ):
+            raise _error(
+                "face_orbit_endpoint",
+                "orbit map target vertex is not the affine image of its source vertex",
+            )
+        edge_count = len(self.edge_orbit_representatives)
+        vertex_count = len(self.vertex_orbits)
+        signed_1: dict[tuple[int, int], int] = {}
+        for entry in self.boundary_1_to_0:
+            key = (entry.target_cell_index, entry.source_cell_index)
+            signed_1[key] = signed_1.get(key, 0) + entry.coefficient
+        signed_2: dict[int, int] = {}
+        for entry in self.boundary_2_to_1:
+            signed_2[entry.target_cell_index] = (
+                signed_2.get(entry.target_cell_index, 0) + entry.coefficient
+            )
+        expected_d1 = tuple(
+            tuple(
+                signed_1.get((vertex_index, edge_index), 0)
+                for edge_index in range(edge_count)
+            )
+            for vertex_index in range(vertex_count)
+        )
+        expected_d2 = tuple(
+            (signed_2.get(edge_index, 0),) for edge_index in range(edge_count)
+        )
+        if self.quotient_chain_complex.differential_matrices != (
+            expected_d1,
+            expected_d2,
+        ):
+            raise _error(
+                "face_orbit_differential",
+                "quotient differentials must be the augmentations of the retained boundary incidences",
             )
         return self
 

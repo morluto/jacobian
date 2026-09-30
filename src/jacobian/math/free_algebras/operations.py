@@ -514,8 +514,11 @@ def _antiautomorphism_admission_work(value: FreeAlgebraPolynomial) -> int:
 
     # Dictionary admission and lookups are charged using the actual label
     # sizes. Canonical-key checks, reversal, and radix sorting each traverse
-    # the bounded word cells linearly.
-    label_work = 10 * (len(alphabet) + 1) * word_characters + 2 * alphabet_characters
+    # the bounded word cells linearly, and the reversal kernel performs one
+    # rank lookup per cell rather than an alphabet scan, so this charge is per
+    # retained character. Multiplying it by the alphabet width priced a scan
+    # the kernel never performs and refused valid multiplication results.
+    label_work = 10 * word_characters + 2 * alphabet_characters
     linear_work = 6 * total_cells + len(alphabet) * maximum_word_length
     coefficient_work = 4 * coefficient_digits + 2 * term_count
     return max(1, label_work + linear_work + coefficient_work)

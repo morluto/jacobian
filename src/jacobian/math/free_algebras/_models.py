@@ -271,6 +271,36 @@ class FreeAlgebraWordPairRequest(StrictModel):
         return self
 
 
+class FreeAlgebraCanonicalWordPairRequest(StrictModel):
+    """Two canonical words over one ordered alphabet for a non-growing compare.
+
+    ``free_word.order.compare`` reads two words and returns their comparison;
+    it never produces a longer word, so it admits the full canonical value
+    range that ``power_word`` and ``concatenate_words`` produce. The
+    source-word pair request keeps the 32-letter bound for the operations that
+    do concatenate.
+    """
+
+    left: FreeAlgebraWord = Field(description="Canonical word of at most 64 letters.")
+    right: FreeAlgebraWord = Field(description="Canonical word of at most 64 letters.")
+
+    @model_validator(mode="after")
+    def require_shared_alphabet(self) -> Self:
+        if self.left.alphabet != self.right.alphabet:
+            raise _validation_error(
+                "word_alphabet_mismatch", "words must use the same ordered alphabet"
+            )
+        if (
+            max(self.left.length, self.right.length)
+            > MAX_FREE_ALGEBRA_WORD_VALUE_LENGTH
+        ):
+            raise _validation_error(
+                "word_value_length",
+                "words may contain at most 64 letters",
+            )
+        return self
+
+
 class FreeAlgebraWordPairResult(StrictModel):
     """Concatenation with source intervals and degree addition."""
 
@@ -1234,6 +1264,7 @@ __all__ = [
     "MAX_FREE_WORD_OVERLAP_LETTER_CELLS",
     "MAX_FREE_WORD_POWER_EXPONENT",
     "DegreeBoundedGroebnerShirshovBasis",
+    "FreeAlgebraCanonicalWordPairRequest",
     "FreeAlgebraIdeal",
     "FreeAlgebraIdealPrefixRequest",
     "FreeAlgebraIdealPrefixResult",

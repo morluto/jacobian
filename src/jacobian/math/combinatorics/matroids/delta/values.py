@@ -315,6 +315,12 @@ class DeltaMatroidDistanceProfile(StrictModel):
                 "distance_histogram_mismatch",
                 "distance histogram must count the distance rows exactly",
             )
+        self._require_distance_relation(ground_size, expected, feasible_masks)
+        return self
+
+    def _require_distance_relation(
+        self, ground_size: int, expected: int, feasible_masks: set[int]
+    ) -> None:
         # The checks above constrain each row in isolation: a nonzero distance may
         # be any value up to the ground size, and a nearest count any value in
         # range. Both are consequences of the retained feasible family, so a
@@ -328,10 +334,16 @@ class DeltaMatroidDistanceProfile(StrictModel):
                 "distance_profile_evaluations",
                 "profile relation exceeds the admitted distance-evaluation envelope",
             )
+        completed_evaluations = 0
         for subset_mask in range(expected):
             minimum = ground_size + 1
             nearest_count = 0
             for feasible_mask in feasible_masks:
+                completed_evaluations += 1
+                if completed_evaluations % _CHECKPOINT_STRIDE == 0:
+                    request_checkpoint(
+                        "during delta-matroid distance-profile relation replay"
+                    )
                 distance = (subset_mask ^ feasible_mask).bit_count()
                 if distance < minimum:
                     minimum = distance
@@ -347,7 +359,6 @@ class DeltaMatroidDistanceProfile(StrictModel):
                     "distance and nearest-feasible counts must match the retained "
                     "feasible family for every ground subset",
                 )
-        return self
 
     @classmethod
     def _from_kernel(

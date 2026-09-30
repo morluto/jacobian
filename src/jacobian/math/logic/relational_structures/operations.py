@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.logic.relational_structures._admission import (
+    _bounded_sequence_snapshot,
     admit_binary_relation_transpose,
     admit_core_computation,
     admit_embedding_search,
@@ -307,14 +308,13 @@ def quotient_structure(
     """Form an exact quotient when every relation is saturated by a partition."""
 
     source = _admit_structure(source, "source")
-    if not isinstance(classes, Sequence) or isinstance(
-        classes, (str, bytes, bytearray)
-    ):
-        raise OperationDomainValidationError(
-            location=("classes",),
-            code="relational.quotient.partition_shape",
-            message="classes must be a finite sequence of exact integers",
-        )
+    classes = _bounded_sequence_snapshot(
+        classes,
+        source.carrier_size,
+        "classes",
+        "relational.quotient.partition_shape",
+        "classes must be a finite sequence of exact integers",
+    )
     if len(classes) != source.carrier_size:
         raise OperationDomainValidationError(
             location=("classes",),

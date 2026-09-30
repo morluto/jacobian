@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import itertools
+from collections.abc import Iterator, Sequence
+from typing import Any
 
 import pytest
 
@@ -14,7 +16,7 @@ from jacobian.math.logic.relational_structures import (
 )
 
 
-def _brute_quotient(source, partition):
+def _brute_quotient(source: Any, partition: Any) -> Any:
     """Independent truth-table definition over every quotient tuple cell."""
     blocks = sorted(
         set(partition),
@@ -92,3 +94,42 @@ def test_empty_carrier_has_empty_quotient_map() -> None:
     result = quotient_structure(source, ())
     assert result.quotient.carrier_size == 0
     assert result.quotient_map == ()
+
+
+class _EndlessSequence(Sequence[int]):
+    """A user-defined sequence that reports a length its iterator never reaches.
+
+    ``__len__`` claims the expected carrier size while ``__getitem__`` never
+    raises ``IndexError``, so trusting either the reported length or a later
+    ``enumerate`` lets an unbounded scan run. Admitting the sequence must read a
+    bounded snapshot from the iterator instead.
+    """
+
+    def __init__(self, reported: int) -> None:
+        self._reported = reported
+
+    def __len__(self) -> int:
+        return self._reported
+
+    def __getitem__(self, index: int) -> int:  # type: ignore[override]
+        return 0
+
+    def __iter__(self) -> Iterator[int]:
+        while True:
+            yield 0
+
+
+def test_a_sequence_whose_iterator_never_ends_is_refused_on_a_bounded_snapshot() -> (
+    None
+):
+    source = FiniteRelationalStructure(
+        carrier_size=2,
+        signature=(FiniteRelationSymbol(symbol_id="E", arity=2),),
+        relation_tables=(((0, 1), (1, 0)),),
+    )
+    honest = quotient_structure(source, (0, 1))
+    assert honest.quotient.carrier_size == 2
+
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        quotient_structure(source, _EndlessSequence(2))
+    assert refusal.value.errors()[0]["type"] == "relational.quotient.bounded_length"

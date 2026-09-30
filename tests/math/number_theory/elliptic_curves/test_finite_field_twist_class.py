@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from pydantic import ValidationError
 
@@ -14,6 +16,7 @@ from jacobian.math.finite_fields.values import (
 from jacobian.math.number_theory.elliptic_curves.finite_field import (
     FiniteFieldShortWeierstrassCurve,
     finite_field_quadratic_twist,
+    finite_field_quadratic_twist_relation,
 )
 from jacobian.math.number_theory.elliptic_curves.twist_class.operations import (
     FiniteFieldTwistClassResult,
@@ -103,7 +106,7 @@ def test_twist_class_works_over_a_nonprime_field_against_coordinate_oracle() -> 
     )
     target = finite_field_quadratic_twist(source)
 
-    def multiply(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    def multiply(left: Any, right: Any) -> Any:
         # In this presentation a^2 = -2 = 3 in F5.
         return (
             (left[0] * right[0] + 3 * left[1] * right[1]) % 5,
@@ -166,7 +169,9 @@ def test_twist_class_result_rejects_forged_j_invariant() -> None:
 
 
 @pytest.mark.parametrize("exceptional", [_f5_curve(0, 1), _f5_curve(1, 0)])
-def test_twist_class_rejects_automorphism_rich_j_values(exceptional) -> None:
+def test_twist_class_rejects_automorphism_rich_j_values(
+    exceptional: FiniteFieldShortWeierstrassCurve,
+) -> None:
     with pytest.raises(OperationDomainValidationError) as exc_info:
         finite_field_twist_class(exceptional, exceptional)
     assert exc_info.value.errors()[0]["type"] == (
@@ -187,4 +192,32 @@ def test_twist_class_rejects_field_above_complete_search_bound() -> None:
         finite_field_twist_class(curve, curve)
     assert exc_info.value.errors()[0]["type"] == (
         "elliptic_curve.finite_field.twist_class_order_bound"
+    )
+
+
+def test_the_twist_relation_retains_the_admitted_source_not_the_caller_value() -> None:
+    """A value that passes admission must also be the value a consumer reads.
+
+    ``finite_field_quadratic_twist`` computes from a re-established copy of the
+    curve. When the relation retained the caller-authored instance instead, a
+    ``model_construct`` curve whose nested coefficient data is malformed could
+    serialize to valid JSON, pass admission, and remain malformed inside
+    ``source_curve`` -- breaking a downstream consumer such as
+    ``_valid_twist_witness()`` on a value returned as typed.
+    """
+    curve = _f5_curve(1, 1)
+    relation = finite_field_quadratic_twist_relation(curve)
+    assert relation.source_curve == curve
+
+    forged: Any = FiniteFieldShortWeierstrassCurve.model_construct(
+        field=curve.field,
+        coefficient_a=curve.coefficient_a.model_copy(
+            update={"coordinates": (1, 0, 0, 0)}
+        ),
+        coefficient_b=curve.coefficient_b,
+    )
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        finite_field_quadratic_twist_relation(forged)
+    assert refusal.value.errors()[0]["type"] == (
+        "elliptic_curve.finite_field.invalid_curve"
     )

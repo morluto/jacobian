@@ -540,9 +540,14 @@ tracks the number but still pins the surrounding wording, so a reword or a
 different bound tripping first fails the test even though the contract holds.
 This is assertion debt: it couples the test to prose instead of behavior.
 
-Some failures have no stable, reason-specific code. A Python `ValueError` has
-no structured error identifier; a Pydantic `ValidationError` may expose a
-custom, owner-specific `errors()[0]["type"]`, or only a generic type such as
+Some failures have no stable, reason-specific code. A bare built-in `ValueError`
+has no structured error identifier. That does not extend to the owner errors
+that subclass it: `OperationDomainValidationError` and
+`OperationResourceAdmissionError` are `ValueError` subclasses, so a
+`pytest.raises(ValueError)` block catches them too, and they do expose a stable
+owner code through `errors()[0]["type"]`. Check for that structured interface
+first and assert the code. A Pydantic `ValidationError` may expose a custom,
+owner-specific `errors()[0]["type"]`, or only a generic type such as
 `value_error`. Prefer the specific type whenever it exists. Do not treat a
 generic type as identifying a particular bound when the message is the only
 thing that distinguishes it.
@@ -562,6 +567,7 @@ from jacobian.math.number_theory.diophantine_approximation._models import (
     _convergent_component_digit_cap,
 )
 
+# A bare built-in ValueError, which has no errors()[0]["type"] to assert.
 cap = _convergent_component_digit_cap(4)
 with pytest.raises(ValueError, match=rf"{cap}-digit"):
     ...

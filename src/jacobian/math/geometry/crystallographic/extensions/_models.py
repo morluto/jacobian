@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Annotated, Any, Literal, Self
+from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import (
     ConfigDict,
@@ -526,9 +526,9 @@ def _bounded_native_source(value: object) -> object:
             BieberbachFaceOrbitMap,
             BieberbachGroupRingBoundaryEntry,
         ):
-            assert isinstance(item, StrictModel)
-            fields = type(item).model_fields
-            contents = vars(item)
+            model = cast(StrictModel, item)
+            fields = type(model).model_fields
+            contents = vars(model)
             if len(contents) != len(fields) or any(
                 key not in fields for key in contents
             ):
@@ -720,7 +720,8 @@ class BieberbachFaceOrbitComplex(StrictModel):
                 "face-orbit collections must be ordinary tuples or arrays",
             )
         field = info.field_name
-        assert field is not None
+        if field not in _FACE_ORBIT_COLLECTION_LIMITS:
+            raise _error("face_orbit_collection", "unknown face-orbit collection field")
         if len(value) > _FACE_ORBIT_COLLECTION_LIMITS[field]:
             raise _error(
                 "face_orbit_bound",

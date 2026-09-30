@@ -390,6 +390,11 @@ class CubicalSkeletonResult(StrictModel):
 
     @model_validator(mode="after")
     def require_source_bound_skeleton(self) -> Self:
+        if not self.complex.cells or not self.skeleton.cells:
+            raise _validation_error(
+                "skeleton_empty_complex",
+                "a nonempty source has a nonempty skeleton",
+            )
         if self.skeleton.ambient_dimension != self.complex.ambient_dimension:
             raise _validation_error(
                 "skeleton_ambient_dimension_mismatch",
@@ -485,6 +490,11 @@ class CubicalProductResult(StrictModel):
 
     @model_validator(mode="after")
     def require_factor_axis_split(self) -> Self:
+        if not self.complex.cells:
+            raise _validation_error(
+                "product_empty_complex",
+                "a product of two nonempty factors is nonempty",
+            )
         if (
             self.left_ambient_dimension + self.right_ambient_dimension
             != self.complex.ambient_dimension

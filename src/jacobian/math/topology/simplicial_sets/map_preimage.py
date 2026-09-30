@@ -145,6 +145,17 @@ def _preflight(
             code="simplicial_map.preimage_target_mismatch",
             message="the target subobject must be included in the map target",
         )
+    # A forged non-injective inclusion can otherwise reach the lookup below and
+    # fail only when the result carrier is rebuilt. Reject it here with the
+    # operation's domain error.
+    try:
+        SimplicialSubsetPrefix(inclusion=checked_inclusion)
+    except ValidationError as exc:
+        raise OperationDomainValidationError(
+            location=("target_subset", "inclusion"),
+            code="simplicial_map.preimage_subset_invalid",
+            message="the target subobject must be an injective ordered inclusion",
+        ) from exc
 
     sizes = tuple(map(len, source.sets))
     subset_sizes = tuple(map(len, selected_target.sets))

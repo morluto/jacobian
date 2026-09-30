@@ -5,7 +5,10 @@ from __future__ import annotations
 from pydantic import Field, StrictInt, model_validator
 
 from jacobian._models import StrictModel
-from jacobian.catalog.models import OperationResourceAdmissionError
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.topology.chain_complexes.values import (
     ChainCoefficient,
     ChainComplexValue,
@@ -85,11 +88,39 @@ class DegenerateSubmoduleResult(StrictModel):
         return self
 
 
+def _canonical_scalar_context(
+    request: DegenerateSubmoduleRequest,
+) -> DegenerateSubmoduleRequest:
+    """Canonicalize the retained scalar fields before relying on their types.
+
+    Pydantic equality accepts the retained string ``"GF_p"`` as equal to the
+    enum, so without this step the primality gate is bypassed while later
+    identity checks see a non-enum carrier.
+    """
+    try:
+        coefficient_ring = (
+            request.coefficient_ring
+            if isinstance(request.coefficient_ring, CoefficientRing)
+            else CoefficientRing(request.coefficient_ring)
+        )
+        prime = request.prime
+        require_prime_field_admission(coefficient_ring, prime)
+    except (TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("coefficient_ring",),
+            code="simplicial_set.degenerate_submodule_scalar_context",
+            message="the degenerate submodule request must carry a canonical coefficient context",
+        ) from error
+    return request.model_copy(
+        update={"coefficient_ring": coefficient_ring, "prime": prime}
+    )
+
+
 def _admit(
     request: DegenerateSubmoduleRequest,
 ) -> tuple[FiniteTruncatedSimplicialSet, tuple[tuple[int, ...], ...]]:
     """Check scalars/source and admit the combined result before matrices."""
-    require_prime_field_admission(request.coefficient_ring, request.prime)
+    request = _canonical_scalar_context(request)
     source = chains_module._checked_simplicial_set(request.simplicial_set)
     basis_indices = _degenerate_indices(source)
     sizes = tuple(len(level) for level in source.sets)

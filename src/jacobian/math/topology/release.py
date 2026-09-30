@@ -14,6 +14,8 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.combinatorics.posets.core._models import (
+    MAX_POSET_ELEMENTS,
+    MAX_POSET_RELATIONS,
     ElementLabel,
     FinitePoset,
 )
@@ -664,6 +666,43 @@ def _enumerate_order_complex_chains(
     return closure, ordered_facets
 
 
+def _admit_poset_container_lengths(request: OrderComplexRequest) -> None:
+    """Check forged poset container lengths before recursive serialization."""
+    poset = getattr(request, "poset", None)
+    if poset is None:
+        raise OperationDomainValidationError(
+            location=(),
+            code="topology.order_complex.invalid_request",
+            message="order-complex input must be an OrderComplexRequest",
+        )
+    try:
+        containers = (
+            poset.elements,
+            poset.strict_order_pairs,
+            poset.cover_relations,
+            poset.incomparable_pairs,
+        )
+    except AttributeError as error:
+        raise OperationDomainValidationError(
+            location=("poset",),
+            code="topology.order_complex.invalid_poset",
+            message="poset claims do not describe its canonical finite poset",
+        ) from error
+    limits = (
+        MAX_POSET_ELEMENTS,
+        MAX_POSET_RELATIONS,
+        MAX_POSET_RELATIONS,
+        MAX_POSET_RELATIONS,
+    )
+    for container, limit in zip(containers, limits, strict=True):
+        if not isinstance(container, tuple) or len(container) > limit:
+            raise OperationResourceAdmissionError(
+                location=("poset",),
+                code="topology.order_complex.poset_container_budget",
+                message="poset containers exceed their admitted envelope",
+            )
+
+
 def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
     """Return the simplicial complex of all nonempty chains in a finite poset."""
     if not isinstance(request, OrderComplexRequest):
@@ -672,6 +711,7 @@ def order_complex(request: OrderComplexRequest) -> OrderComplexResult:
             code="topology.order_complex.invalid_request",
             message="order-complex input must be an OrderComplexRequest",
         )
+    _admit_poset_container_lengths(request)
     try:
         validated_request = OrderComplexRequest.model_validate(request.model_dump())
     except (ValidationError, TypeError, ValueError) as error:

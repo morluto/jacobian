@@ -171,6 +171,16 @@ Markers are execution tiers, not synonyms for slow tests:
 Keep a small ordinary regression for the same public behavior when moving a
 near-envelope case to `scale`.
 
+A `test_exhaustive_*` **name** is not a marker claim. That prefix is a
+repo-wide convention for a test that enumerates a complete small finite domain
+rather than sampling it, and it is orthogonal to the `exhaustive` marker: a
+marked sweep may or may not use the prefix, and most tests that use it are
+cheap enough to belong in the ordinary lane. Add the marker when a sweep is
+genuinely expensive to run repeatedly, and not merely because it enumerates
+everything in a small domain. Renaming an unmarked sweep to remove the prefix
+would make it inconsistent with the rest of the suite without changing which
+lane it runs in. See issue #4362.
+
 The marker-lane Make recipes derive their default collection roots with
 `tools/marker_test_roots.py` and then retain pytest's `-m` selection inside those
 files. Marker ownership must therefore use direct `pytest.mark.property`,

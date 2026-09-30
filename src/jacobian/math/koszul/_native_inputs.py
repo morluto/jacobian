@@ -1,6 +1,9 @@
 """Bound and snapshot authored Koszul domain carriers before revalidation."""
 
+from collections.abc import Mapping
 from typing import Any, Never
+
+from pydantic import BaseModel
 
 from jacobian._exact import MAX_CANONICAL_RATIONAL_DIGITS, CanonicalRational
 from jacobian._execution import request_checkpoint
@@ -182,24 +185,60 @@ class _Snapshot:
             ) from exc
 
 
-def native_payload(**arguments: object) -> dict[str, Any]:
-    """Snapshot exact bounded domain carriers before kernel revalidation."""
+_CARRIER_TYPES: Mapping[str, type] = {
+    "algebra": FiniteCommutativeAlgebra,
+    "source": BasedFiniteModule,
+    "target": BasedFiniteModule,
+    "complex": ModuleKoszulComplex,
+    "chain_map": ModuleKoszulChainMap,
+}
+_SCALAR_AXES: Mapping[str, tuple[int, ...]] = {
+    "sequence": (6, 6),
+    "map_matrix": (8, 8),
+    "change_matrix": (6, 6),
+}
+
+
+def native_arguments(**arguments: object) -> dict[str, Any]:
+    """Snapshot one operation's exact bounded domain arguments.
+
+    Each entry is a plain wire-shaped copy of a single argument, so the kernel
+    admits the argument set by validating the copy against its own request
+    model. A malformed or oversized argument is classified here, before the
+    kernel reads any field.
+    """
     snapshot = _Snapshot()
     payload: dict[str, Any] = {}
     for name, value in arguments.items():
-        if name == "sequence":
-            payload[name] = snapshot.axis(value, (6, 6), CanonicalRational)
-        elif name in ("map_matrix", "change_matrix"):
-            payload[name] = snapshot.axis(
-                value, (8, 8) if name == "map_matrix" else (6, 6), CanonicalRational
-            )
+        limits = _SCALAR_AXES.get(name)
+        if limits is None:
+            payload[name] = snapshot.model(value, _CARRIER_TYPES[name])
         else:
-            expected = {
-                "algebra": FiniteCommutativeAlgebra,
-                "source": BasedFiniteModule,
-                "target": BasedFiniteModule,
-                "complex": ModuleKoszulComplex,
-                "chain_map": ModuleKoszulChainMap,
-            }[name]
-            payload[name] = snapshot.model(value, expected)
+            payload[name] = snapshot.axis(value, limits, CanonicalRational)
     return payload
+
+
+def native_carrier(name: str, value: object) -> dict[str, Any]:
+    """Snapshot one exact bounded domain carrier by its argument name."""
+    carrier: dict[str, Any] = native_arguments(**{name: value})[name]
+    return carrier
+
+
+def admit_native_payload[CarrierT: BaseModel](
+    carrier: type[CarrierT], payload: dict[str, Any], *, code: str
+) -> CarrierT:
+    """Re-admit one bounded snapshot against the carrier's own wire contract.
+
+    The snapshot fixes each field's type and extent; this step runs the
+    declared structural contract, so a caller-authored value that survived the
+    raw copy is refused here as a domain failure rather than reaching the
+    kernel's attribute reads.
+    """
+    try:
+        return carrier.model_validate(payload)
+    except (TypeError, ValueError) as exc:
+        raise OperationDomainValidationError(
+            location=(),
+            code=code,
+            message=f"the supplied arguments are not a canonical {carrier.__name__}",
+        ) from exc

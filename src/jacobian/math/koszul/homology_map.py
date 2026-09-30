@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from fractions import Fraction
 from typing import Any
 
@@ -11,10 +10,10 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math.koszul._native_inputs import admit_native_payload, native_carrier
 from jacobian.math.koszul.module_models import (
+    ModuleKoszulChainMap,
     ModuleKoszulHomologyMap,
-    ModuleKoszulHomologyMapRequest,
-    ModuleKoszulMapRequest,
 )
 from jacobian.math.koszul.module_operations import (
     module_koszul_homology,
@@ -89,9 +88,7 @@ def _coordinates_mod_boundaries(
     return [rows[boundary_count + index][-1] for index in range(len(homology_basis))]
 
 
-def koszul_homology_map(
-    request: ModuleKoszulHomologyMapRequest | Mapping[str, Any],
-) -> ModuleKoszulHomologyMap:
+def koszul_homology_map(chain_map: ModuleKoszulChainMap) -> ModuleKoszulHomologyMap:
     """Compute the induced map on every homology group of a typed chain map.
 
     The input is treated as caller-supplied data: module-linearity and all
@@ -99,33 +96,20 @@ def koszul_homology_map(
     Homology coordinates are relative to the exact canonical bases returned
     alongside the matrices.
     """
-
-    try:
-        value = (
-            request
-            if isinstance(request, ModuleKoszulHomologyMapRequest)
-            else ModuleKoszulHomologyMapRequest.model_validate(request)
-        )
-        supplied = value.chain_map
-    except OperationResourceAdmissionError:
-        raise
-    except Exception as exc:
-        raise OperationDomainValidationError(
-            location=("request",),
-            code="koszul.module.homology_map_request",
-            message="the supplied Koszul chain map is not canonical",
-        ) from exc
+    supplied = admit_native_payload(
+        ModuleKoszulChainMap,
+        native_carrier("chain_map", chain_map),
+        code="koszul.module.homology_map_request",
+    )
 
     # Check serialized claims structurally against the canonical reconstruction;
     # do not trust retained complexes or degree maps supplied by the caller.
     verified = module_koszul_map(
-        ModuleKoszulMapRequest(
-            algebra=supplied.algebra,
-            source=supplied.source,
-            target=supplied.target,
-            sequence=supplied.sequence,
-            map_matrix=supplied.module_map,
-        )
+        supplied.algebra,
+        supplied.source,
+        supplied.target,
+        supplied.sequence,
+        supplied.module_map,
     )
     if supplied.module_map != verified.module_map:
         raise OperationDomainValidationError(

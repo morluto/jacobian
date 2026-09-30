@@ -5,6 +5,7 @@ from typing import Any
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
 from jacobian.math.koszul.dga_operations import module_koszul_dga
+from jacobian.math.koszul.homology_map import koszul_homology_map
 from jacobian.math.koszul.module_models import (
     ModuleKoszulChainMap,
     ModuleKoszulComplex,
@@ -40,15 +41,12 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_direct_sum,
     module_koszul_exactness_profile,
     module_koszul_homology,
-    module_koszul_quotient,
-    module_koszul_sequence_permute,
-    module_koszul_unit_contract,
-)
-from jacobian.math.koszul.native import (
-    koszul_homology_map,
     module_koszul_map,
+    module_koszul_quotient,
     module_koszul_sequence_linear_change,
+    module_koszul_sequence_permute,
     module_koszul_top_homology,
+    module_koszul_unit_contract,
 )
 from jacobian.math.koszul.operations import koszul_complex
 from jacobian.math.koszul.values import (

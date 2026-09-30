@@ -106,6 +106,17 @@ class SimplicialSetSkeletonResult(StrictModel):
             )
         return self
 
+    @classmethod
+    def _from_kernel(
+        cls,
+        *,
+        k: int,
+        skeleton: FiniteTruncatedSimplicialSet,
+        inclusion: TruncatedSimplicialMap,
+    ) -> Self:
+        """Retain the admitted restriction without replaying its construction."""
+        return cls.model_construct(k=k, skeleton=skeleton, inclusion=inclusion)
+
 
 def _preflight(
     source: FiniteTruncatedSimplicialSet, k: int, sizes: tuple[int, ...]
@@ -247,7 +258,9 @@ def simplicial_set_skeleton(
         source=skeleton, target=source, maps=source_indices
     )
 
-    return SimplicialSetSkeletonResult(k=k, skeleton=skeleton, inclusion=inclusion)
+    return SimplicialSetSkeletonResult._from_kernel(
+        k=k, skeleton=skeleton, inclusion=inclusion
+    )
 
 
 def _restrict_tables(

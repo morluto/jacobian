@@ -115,8 +115,13 @@ def _face_cells(
 ) -> tuple[CubicalCell, ...]:
     """Materialize the canonical face closure once during operation admission."""
     all_cells: set[tuple[tuple[int, int], ...]] = set()
+    visited = 0
 
     def add_faces(intervals: tuple[tuple[int, int], ...]) -> None:
+        nonlocal visited
+        if visited % 128 == 0:
+            request_checkpoint("during cubical face-closure expansion")
+        visited += 1
         if intervals in all_cells:
             return
         if len(all_cells) >= output_limit:
@@ -136,9 +141,16 @@ def _face_cells(
                     add_faces(tuple(face))
 
     for cell in cells:
-        request_checkpoint("during cubical face-closure expansion")
         add_faces(cell.intervals)
-    return tuple(CubicalCell(intervals=intervals) for intervals in sorted(all_cells))
+    request_checkpoint("before cubical face-closure ordering")
+    ordered_cells = sorted(all_cells)
+    request_checkpoint("after cubical face-closure ordering")
+    materialized: list[CubicalCell] = []
+    for index, intervals in enumerate(ordered_cells):
+        if index % 128 == 0:
+            request_checkpoint("during cubical face-closure materialization")
+        materialized.append(CubicalCell(intervals=intervals))
+    return tuple(materialized)
 
 
 def _canonical_complex(

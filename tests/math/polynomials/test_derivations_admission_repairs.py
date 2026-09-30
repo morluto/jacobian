@@ -6,7 +6,7 @@ bound still refuses the genuinely over-limit request.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import pytest
 
@@ -111,6 +111,73 @@ def test_gm_subrepresentation_still_enforces_the_generator_count() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         gm_generated_subrepresentation(action, generators, "t")
     assert error.value.errors()[0]["type"] == "gm_subrepresentation.generator_count"
+
+
+def test_excess_generators_are_refused_without_iteration_or_decoding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials.derivations import _weight_operations
+
+    class UnvisitedGenerators(list[RationalPolynomial]):
+        def __len__(self) -> int:
+            return 1_000_000
+
+        def __iter__(self) -> Iterator[RationalPolynomial]:
+            pytest.fail("an oversized generator sequence must not be iterated")
+
+    def unexpected_decode(value: object) -> RationalPolynomial:
+        pytest.fail("an oversized generator sequence must not be decoded")
+
+    monkeypatch.setattr(_weight_operations, "_as_decoded_polynomial", unexpected_decode)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gm_generated_subrepresentation(
+            _weight_action(("x",)), UnvisitedGenerators(), "t"
+        )
+    assert error.value.errors()[0]["type"] == "gm_subrepresentation.generator_count"
+
+
+def test_generator_collection_stays_bounded_when_sequence_length_is_wrong(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jacobian.math.polynomials.derivations import _weight_operations
+    from jacobian.math.polynomials.derivations._weight_models import (
+        MAX_GM_SUBREP_GENERATORS,
+    )
+
+    visited: list[int] = []
+    polynomial = _poly(("x",), [((1,), 1)])
+
+    class UnderreportedGenerators(list[RationalPolynomial]):
+        def __len__(self) -> int:
+            return 1
+
+        def __iter__(self) -> Iterator[RationalPolynomial]:
+            for index in range(1_000_000):
+                visited.append(index)
+                if len(visited) > MAX_GM_SUBREP_GENERATORS + 1:
+                    pytest.fail("generator collection must stop at its admitted bound")
+                yield polynomial
+
+    def unexpected_decode(value: object) -> RationalPolynomial:
+        pytest.fail("over-limit raw generators must be refused before decoding")
+
+    monkeypatch.setattr(_weight_operations, "_as_decoded_polynomial", unexpected_decode)
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        gm_generated_subrepresentation(
+            _weight_action(("x",)), UnderreportedGenerators(), "t"
+        )
+    assert error.value.errors()[0]["type"] == "gm_subrepresentation.generator_count"
+    assert len(visited) == MAX_GM_SUBREP_GENERATORS + 1
+
+
+@pytest.mark.parametrize("count", (0, 16))
+def test_generator_count_bound_keeps_empty_and_full_native_sequences(
+    count: int,
+) -> None:
+    generators = [_poly(("x",), [((1,), 1)])] * count
+    result = gm_generated_subrepresentation(_weight_action(("x",)), generators, "t")
+    assert result.generators == tuple(generators)
+    assert len(result.basis) == int(count > 0)
 
 
 # --- the subrepresentation ring admits the shared eight-variable maximum ---

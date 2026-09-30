@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping, Sequence
 from fractions import Fraction
+from itertools import islice
 from math import comb, lcm
 from typing import Any
 
@@ -518,6 +519,18 @@ def _project_generators_by_weight(
     return projections
 
 
+def _admit_subrepresentation_generator_count(count: int) -> None:
+    if count > MAX_GM_SUBREP_GENERATORS:
+        raise OperationResourceAdmissionError(
+            location=("generators",),
+            code="gm_subrepresentation.generator_count",
+            message=(
+                "the request exceeds the admitted "
+                f"{MAX_GM_SUBREP_GENERATORS}-generator envelope"
+            ),
+        )
+
+
 def _parse_subrepresentation_input(
     action: PolynomialWeightAction | Mapping[str, Any],
     generators: Sequence[RationalPolynomial | Mapping[str, Any]],
@@ -528,6 +541,11 @@ def _parse_subrepresentation_input(
     tuple[RationalPolynomial, ...],
 ]:
     try:
+        _admit_subrepresentation_generator_count(len(generators))
+        # Sequence implementations can misreport their length. Retain at most
+        # one over-limit raw item and decide admission before decoding any.
+        bounded_generators = tuple(islice(generators, MAX_GM_SUBREP_GENERATORS + 1))
+        _admit_subrepresentation_generator_count(len(bounded_generators))
         checked = _as_weight_action(
             action.model_dump()
             if isinstance(action, PolynomialWeightAction)
@@ -540,24 +558,17 @@ def _parse_subrepresentation_input(
                 if isinstance(generator, RationalPolynomial)
                 else generator
             )
-            for generator in generators
+            for generator in bounded_generators
         )
         _WEIGHT_PARAMETER_TYPE.validate_python(parameter, strict=True)
+    except OperationResourceAdmissionError:
+        raise
     except (ValidationError, TypeError, ValueError, PydanticCustomError) as exc:
         raise OperationDomainValidationError(
             location=("request",),
             code="gm_subrepresentation.request_shape",
             message="the request must bind polynomial generators to one diagonal G_m action",
         ) from exc
-    if len(parsed_generators) > MAX_GM_SUBREP_GENERATORS:
-        raise OperationResourceAdmissionError(
-            location=("generators",),
-            code="gm_subrepresentation.generator_count",
-            message=(
-                "the request exceeds the admitted "
-                f"{MAX_GM_SUBREP_GENERATORS}-generator envelope"
-            ),
-        )
     if parameter in checked.variables:
         raise OperationDomainValidationError(
             location=("parameter",),

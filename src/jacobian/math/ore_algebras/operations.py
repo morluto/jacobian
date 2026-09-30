@@ -1889,6 +1889,28 @@ def _admit_differential_operator(
     return value
 
 
+def _structural_differential_operator(
+    operator: DifferentialOreOperator, *, code: str
+) -> DifferentialOreOperator:
+    """Canonicalize an operator without the shift-arithmetic coefficient budget.
+
+    ``_admit_differential_operator`` applies the shift budget because shift
+    arithmetic raises and lowers operators. An operation that only adds,
+    scales, differentiates, and multiplies polynomial coefficients performs no
+    shift work, so it admits the wider QQ(x) representation envelope instead.
+    The carrier's own structural revalidation still runs, which is what
+    canonicalizes a caller-forged value.
+    """
+    try:
+        return DifferentialOreOperator.model_validate(operator.model_dump())
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("request",),
+            code=code,
+            message="the differential operator must be canonical over QQ(x)",
+        ) from exc
+
+
 def _polynomial_order_at_zero(value: SparseRationalPolynomial) -> int | None:
     """Return the least exponent, or None for the zero polynomial."""
     if not value.terms:

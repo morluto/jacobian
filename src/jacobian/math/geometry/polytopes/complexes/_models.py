@@ -470,7 +470,13 @@ class SplineSpaceResult(StrictModel):
 
 
 class SplineDimensionRequest(StrictModel):
-    """Compute only the exact dimension profile of a bounded spline space."""
+    """Compute the exact dimension profile of a bounded spline space.
+
+    Source facet forms bound remainder growth, column-cleared rank storage,
+    and matrix output before expansion. These joint degree/smoothness/source
+    bounds admit, for example, two 4-simplices with 32-digit rational vertices
+    at degree 4 and smoothness 3; independent field maxima do not suffice.
+    """
 
     complex: PolytopalComplexClosureResult
     degree: int = Field(ge=0, le=12)

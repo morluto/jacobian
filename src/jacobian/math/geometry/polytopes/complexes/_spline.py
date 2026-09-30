@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from itertools import combinations, product
-from math import comb, gcd
+from math import comb, factorial, gcd, lcm
 from typing import Any, NoReturn
 
 import sympy as sp
@@ -1221,6 +1221,37 @@ def spline_space(
     )
 
 
+def _spline_facet_remainders(
+    ell: Any,
+    monomials: tuple[tuple[int, ...], ...],
+    degree: int,
+    smoothness: int,
+) -> tuple[Any, ...]:
+    """Reduce in the facet's leading variable, retaining the ambient axes."""
+    symbols = ell.gens
+    leading = ell.terms()[0][0].index(1)
+    ordered = (symbols[leading], *symbols[:leading], *symbols[leading + 1 :])
+    # Poly.div treats the first generator as its main variable. With an
+    # inactive first ambient axis it can otherwise leave reducible terms.
+    divisor = (
+        sp.Poly(ell.monic().as_expr() ** (smoothness + 1), *ordered, domain=sp.QQ)
+        if degree > smoothness
+        else None
+    )
+    remainders = []
+    for monomial in monomials:
+        polynomial = sp.Poly(
+            sp.prod(
+                symbol**power for symbol, power in zip(symbols, monomial, strict=True)
+            ),
+            *ordered,
+            domain=sp.QQ,
+        )
+        remainder = polynomial.div(divisor)[1] if divisor is not None else polynomial
+        remainders.append(remainder.reorder(*symbols))
+    return tuple(remainders)
+
+
 def _spline_constraint_data(
     complex_value: PolytopalComplexClosureResult,
     degree: int,
@@ -1258,17 +1289,12 @@ def _spline_constraint_data(
         if len(supports) != 2 or face.dimension != dimension - 1 or smoothness < 0:
             continue
         ell = _linear_form(face, symbols)
-        divisor = sp.Poly(ell.as_expr() ** (smoothness + 1), *symbols, domain=sp.QQ)
-        remainders = []
-        for cell_id, sign in ((supports[0], 1), (supports[1], -1)):
-            for monomial in monomials:
-                expr = sp.Poly(
-                    sp.prod(symbols[i] ** monomial[i] for i in range(dimension)),
-                    *symbols,
-                    domain=sp.QQ,
-                )
-                rem = expr.div(divisor)[1] * sign
-                remainders.append((cell_id, monomial, rem))
+        facet_remainders = _spline_facet_remainders(ell, monomials, degree, smoothness)
+        remainders = [
+            (cell_id, monomial, remainder * sign)
+            for cell_id, sign in ((supports[0], 1), (supports[1], -1))
+            for monomial, remainder in zip(monomials, facet_remainders, strict=True)
+        ]
         support_coeffs: set[tuple[int, ...]] = set()
         for _, _, rem in remainders:
             support_coeffs.update(exp for exp, _ in rem.terms())
@@ -1311,6 +1337,150 @@ def _spline_constraint_matrix(
             for row in rows
         ),
     )
+
+
+def _facet_remainder_bounds(
+    ell: Any, degree: int, smoothness: int
+) -> tuple[int, tuple[tuple[int, int], ...], int]:
+    """Bound numerator and a common denominator by leading-variable exponent.
+
+    Clear denominators and primitive content: ell is a scalar multiple of
+    A*x + B(y), with x its lexicographic leading variable. Put k = r+1.
+    For m < k the remainder of x**m is x**m. Otherwise Taylor expansion at
+    x = -B/A gives, for 0 <= j < k, the coefficient of x**j as
+
+      (-1)**(m+k-1) * binom(m,j) * binom(m-j-1,k-j-1) * (B/A)**(m-j).
+
+    Only the magnitude matters here. The alternating partial binomial sum
+    gives the second binomial factor. Every coefficient of B**t is bounded
+    by ||B||_1**t, so A**m clears *all* denominators, and the maximum below
+    bounds every resulting integer coefficient. Other monomial factors only
+    shift exponents. This bounds every total degree <= degree without any
+    polynomial powers or divisions. Scalar rescaling of ell changes nothing.
+    """
+    _, integral = ell.clear_denoms(convert=True)
+    _, primitive = integral.primitive()
+    terms = primitive.terms()
+    leading = terms[0][0].index(1)
+    a = abs(int(terms[0][1]))
+    b = sum(abs(int(coefficient)) for _, coefficient in terms[1:])
+    k = smoothness + 1
+    bounds = []
+    for m in range(degree + 1):
+        if m < k or not b:
+            bounds.append((1, 1))
+        else:
+            numerator = max(
+                comb(m, j) * comb(m - j - 1, k - j - 1) * a**j * b ** (m - j)
+                for j in range(k)
+            )
+            bounds.append((numerator, a**m))
+    # Long division lowers the leading-variable exponent at every step.
+    # Its coefficient l1 norm grows by at most (1 + ||B||_1/|A|)**k
+    # per step, for at most degree-k+1 steps. This also bounds the monic
+    # divisor, quotient, and partial remainders, including before cancellation.
+    steps = k * max(0, degree - k + 1)
+    expansion_digits = 2 * steps * _scaled_component_width(a + b) + 1
+    return leading, tuple(bounds), expansion_digits
+
+
+def _admit_spline_dimension_height(
+    complex_value: PolytopalComplexClosureResult,
+    degree: int,
+    smoothness: int,
+    width: int,
+    row_bound: int,
+) -> tuple[int, int, int]:
+    """Admit expansion, stored rationals, and column-cleared integer rank.
+
+    For each column, multiply its incident-facet denominator bounds to get D.
+    The actual column LCD divides D. If N_f / D_f bounds a facet entry,
+    D * max_f(N_f / D_f) bounds the cleared column's integers. Decimal
+    upper bounds are accumulated without forming those products.
+
+    An h-minor is a sum of h! products of h entries in distinct columns.
+    Sum the largest h column heights, rather than charging every pivot the
+    widest entry. Fraction-free elimination stores minors; its pre-division
+    products/differences need at most twice that height plus one digit.
+    Column scaling preserves rank and leaves the returned rational matrix
+    unchanged. Unit remainder columns thus stay cheap even on wide facets.
+    """
+    if not row_bound:
+        return 1, 0, 0
+    dimension = len(complex_value.space.axes)
+    symbols = tuple(sp.Symbol(axis) for axis in complex_value.space.axes)
+    monomials = _monomials(dimension, degree)
+    cell_index = {
+        cell.cell_id: i
+        for i, cell in enumerate(
+            sorted(complex_value.maximal_cells, key=lambda cell: cell.cell_id)
+        )
+    }
+    denominator_digits = [0] * width
+    magnitude_digits = [0] * width
+    output_digits = 2 * row_bound * width
+    expansion_digits = 1
+    facet_rows = _facet_remainder_dimension(dimension, degree, smoothness)
+    for face in complex_value.faces:
+        if (
+            len(face.maximal_cell_ids) != 2
+            or face.dimension != dimension - 1
+            or smoothness < 0
+            or degree <= smoothness
+        ):
+            continue
+        leading, bounds, facet_expansion_digits = _facet_remainder_bounds(
+            _linear_form(face, symbols), degree, smoothness
+        )
+        expansion_digits = max(expansion_digits, facet_expansion_digits)
+        for cell_id in face.maximal_cell_ids:
+            offset = cell_index[cell_id] * len(monomials)
+            for index, monomial in enumerate(monomials):
+                numerator, denominator = bounds[monomial[leading]]
+                n_digits = _scaled_component_width(numerator)
+                d_digits = _scaled_component_width(denominator)
+                column = offset + index
+                denominator_digits[column] += d_digits
+                magnitude_digits[column] = max(
+                    magnitude_digits[column],
+                    n_digits - (decimal_digit_width(denominator) - 1),
+                )
+                entry_digits = max(1, n_digits, d_digits)
+                expansion_digits = max(expansion_digits, entry_digits)
+                output_digits += 2 * facet_rows * (entry_digits - 1)
+    column_digits = [
+        max(1, denominator + magnitude)
+        for denominator, magnitude in zip(
+            denominator_digits, magnitude_digits, strict=True
+        )
+    ]
+    pivots = min(row_bound, width)
+    minor_digits = sum(
+        sorted(column_digits, reverse=True)[:pivots]
+    ) + decimal_digit_width(factorial(pivots))
+    intermediate_digits = max(expansion_digits, 2 * minor_digits + 1)
+    # The dense elimination matrix stores minors, not pre-division products;
+    # only a constant number of scalar temporaries attain twice their height.
+    intermediate_bytes = (
+        row_bound * width * (2 * max(expansion_digits, minor_digits) + 16)
+        + 8 * intermediate_digits
+    )
+    if (
+        intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
+        or intermediate_bytes > MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES
+    ):
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_dimension_height",
+            message="spline dimension rank intermediates exceed their height or storage envelope",
+        )
+    if output_digits > MAX_SPLINE_DIMENSION_OUTPUT_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("degree",),
+            code="polytopal_complex.spline_dimension_output",
+            message="spline dimension exact matrix exceeds its output envelope",
+        )
+    return intermediate_digits, intermediate_bytes, output_digits
 
 
 def _admit_spline_dimension(
@@ -1358,22 +1528,8 @@ def _admit_spline_dimension(
             code="polytopal_complex.spline_dimension_work",
             message="spline dimension exact rank exceeds its admitted work envelope",
         )
+    _admit_spline_dimension_height(complex_value, degree, smoothness, width, row_bound)
     return complex_value, width, row_bound, rank_work
-
-
-def _spline_dimension_output_digit_bound(
-    rows: tuple[tuple[Fraction, ...], ...],
-    width: int,
-    max_entry_digits: int,
-) -> int:
-    """Bound the stored rational height of the exact compatibility matrix.
-
-    The complex and coefficient axis are fixed-cardinality structural data
-    already admitted by the input and width envelopes; the matrix is the only
-    component that can grow, and every stored cell is a reduced rational with
-    numerator and denominator within the measured entry-height bound.
-    """
-    return len(rows) * width * 2 * max_entry_digits
 
 
 def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
@@ -1384,8 +1540,7 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
         "spline_dimension_type",
         "expected a canonical spline dimension request",
     )
-    # Matrix construction has a row bound admitted above.  Measure exact scalar
-    # heights and serialized matrix output before handing the matrix to rank().
+    # Source admission precedes every polynomial power, remainder, and rank.
     complex_value, axis, rows, width = _spline_constraint_data(
         request.complex,
         request.degree,
@@ -1401,49 +1556,29 @@ def spline_dimension(request: SplineDimensionRequest) -> SplineDimensionResult:
     ) * _facet_remainder_dimension(dimension, request.degree, request.smoothness)
     if len(rows) > row_bound or any(len(row) != width for row in rows):
         raise ArithmeticError("spline dimension matrix shape admission mismatch")
-    max_entry_digits = max(
-        (
-            max(
-                decimal_digit_width(value.numerator),
-                decimal_digit_width(value.denominator),
-            )
-            for row in rows
-            for value in row
-        ),
-        default=1,
-    )
-    output_digits = _spline_dimension_output_digit_bound(rows, width, max_entry_digits)
-    if output_digits > MAX_SPLINE_DIMENSION_OUTPUT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_dimension_output",
-            message="spline dimension exact matrix exceeds its output envelope",
-        )
-    pivot_size = min(len(rows), width)
-    intermediate_digits = (pivot_size + 1) * (
-        max_entry_digits + len(str(max(len(rows), width))) + 2
-    )
-    intermediate_bytes = len(rows) * width * (2 * intermediate_digits + 16)
-    if (
-        intermediate_digits > MAX_SPLINE_DIMENSION_INTERMEDIATE_DIGITS
-        or intermediate_bytes > MAX_SPLINE_DIMENSION_INTERMEDIATE_BYTES
-    ):
-        raise OperationResourceAdmissionError(
-            location=("degree",),
-            code="polytopal_complex.spline_dimension_height",
-            message="spline dimension rank intermediates exceed their height or storage envelope",
-        )
     matrix = _spline_constraint_matrix(rows, width)
     if rows:
-        from flint import fmpq, fmpq_mat
+        from flint import fmpz_mat
 
-        backend = fmpq_mat(
+        # Source admission bounds the common denominator of each column.
+        # Clearing columns keeps all unit remainder columns at height one.
+        denominators = [
+            lcm(*(row[column].denominator for row in rows)) for column in range(width)
+        ]
+        backend = fmpz_mat(
             [
-                [fmpq(value.numerator, value.denominator) for value in row]
+                [
+                    value.numerator * (denominators[column] // value.denominator)
+                    for column, value in enumerate(row)
+                ]
                 for row in rows
             ]
         )
-        rank = int(backend.rank())
+        # Use FLINT's fraction-free elimination explicitly: its stored minors
+        # and two-product updates are exactly the source-admitted envelope.
+        # Generic rank() may select an RREF algorithm with extra allocations.
+        _, _, _, backend_rank = backend._fflu()
+        rank = int(backend_rank)
     else:
         rank = 0
     nullity = width - rank

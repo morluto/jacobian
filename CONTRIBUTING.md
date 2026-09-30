@@ -107,9 +107,11 @@ Commands for each stage:
 
 `tests/math` boots kernels and must not import `jacobian.catalog.builtins`,
 `jacobian.catalog.catalog`, `jacobian.dispatch`, `jacobian.cli`, or
-`jacobian.mcp`. A test that opens a
-catalog, dispatches by operation ID, or decodes a published example in its wire
-encoding belongs in `tests/catalog/`. The
+`jacobian.mcp`. Tests that open a catalog belong in `tests/catalog/`; tests of
+strict parsing or operation-ID dispatch belong in `tests/dispatch/`; tests that
+execute advertised invocation examples belong in `tests/integration/catalog/`.
+The lane follows what a test calls, including native-versus-dispatch parity
+checks. The
 [test lane ownership](docs/reference/testing-strategy.md#test-lane-ownership)
 section states the rule and the enforcement gate.
 

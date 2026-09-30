@@ -108,6 +108,15 @@ conclusion.
 The built-in MCP resource `operation://catalog` provides an exact bulk export;
 ordinary discovery should prefer `math.find`.
 
+## Retired operation identifiers
+
+A retired operation identifier is a deliberate breaking change: `math.run`
+reports it as unknown rather than executing a compatibility alias. Replace
+`hypergraph.coloring.non_monochromatic.decide` with
+`hypergraph.nonmonochromatic_vertex_coloring.q_decide`. Map its old boolean
+`colorable` field to `COLORABLE` or `NOT_COLORABLE`, and map its positional
+`coloring` tuple to the replacement operation's `witness.assignments`.
+
 ## Optional backend availability
 
 Operation declarations, matches, and browse cards include `runtime_requirements`.

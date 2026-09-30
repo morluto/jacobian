@@ -26,12 +26,10 @@ Native Python callers can use domain functions without a catalog or server.
 - [Product model](explanation/product-blueprint.md) — caller/server ownership and
   public contract boundaries.
 - [Architecture](explanation/architecture.md) — the responsibility map for
-- [Classical matrix groups](explanation/classical-matrix-groups-research.md) —
-  which classical families are deferred and what each one would require.
-- [Classical matrix groups](explanation/classical-matrix-groups-research.md) —
-  which classical families are deferred and what each one would require.
   library, publication, and delivery; values versus requests; trust and limit
   ownership; package organization; and a worked operation path.
+- [Classical matrix groups](explanation/classical-matrix-groups-research.md) —
+  which classical families are deferred and what each one would require.
 
 ### Deploy or contribute
 

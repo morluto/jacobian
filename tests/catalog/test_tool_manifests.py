@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import types
+from pathlib import Path
 
 import pytest
 
@@ -39,6 +40,18 @@ def test_hypergraph_coloring_has_one_bounded_decision_operation() -> None:
         is not None
     )
     assert catalog.operation("hypergraph.coloring.non_monochromatic.decide") is None
+
+
+def test_retired_hypergraph_coloring_identifier_has_a_documented_migration() -> None:
+    """A deliberately removed catalog ID must point callers to its replacement."""
+
+    migration = (
+        Path(__file__).resolve().parents[2] / "docs" / "reference" / "tools.md"
+    ).read_text()
+    assert "hypergraph.coloring.non_monochromatic.decide" in migration
+    assert "hypergraph.nonmonochromatic_vertex_coloring.q_decide" in migration
+    assert "COLORABLE" in migration
+    assert "witness.assignments" in migration
 
 
 def test_cyclotomic_inclusion_has_no_composition_operation() -> None:

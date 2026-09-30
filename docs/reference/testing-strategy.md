@@ -242,12 +242,14 @@ takes them. The rule covers direct imports and package-form imports such as
 `from jacobian.catalog import builtins`, including aliases. Contract-only imports
 from `jacobian.catalog.models` remain allowed.
 
-A test that opens a catalog, dispatches by operation ID, or decodes a published
-example in its wire encoding belongs in `tests/catalog/`. That includes a test
-that merely asserts a published example executes, and a test that compares a
-kernel result against the same operation reached through dispatch. Math-lane and
-catalog-lane tests may assert the same mathematical fact; the lane follows what
-the test *calls*, not what it concludes.
+A test that opens a catalog belongs in `tests/catalog/`. A test that checks
+strict parsing or dispatches by operation ID belongs in `tests/dispatch/`.
+A test executing an advertised invocation example belongs in
+`tests/integration/catalog/`. Those distinctions include a test that merely
+asserts a published example executes and a test that compares a kernel result
+against the same operation reached through dispatch. Math-lane and catalog-lane
+tests may assert the same mathematical fact; the lane follows what the test
+*calls*, not what it concludes.
 
 `test_math_tests_do_not_boot_complete_product_boundaries` enforces this. It has
 repeatedly caught the same mistake on re-lands, so treat a failure there as a

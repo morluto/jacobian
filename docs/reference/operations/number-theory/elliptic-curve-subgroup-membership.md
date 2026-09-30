@@ -14,9 +14,11 @@ contain their inverses, so this closure equals the subgroup they generate. A
 found candidate establishes membership; a negative result follows only after
 the reachable closure is exhausted.
 
-The Hasse upper bound must be at most 4,096, at most eight generators are
-accepted, and the conservative point-addition work and the result's retained
-entry envelope are admitted before closure expansion. Resource rejection does not imply
+For a nonempty generator tuple, the Hasse upper bound must be at most 4,096;
+at most eight generators are accepted either way. An empty generator tuple
+generates only the identity subgroup and returns before the Hasse-cap check.
+The conservative point-addition work and the result's retained entry envelope
+are admitted before closure expansion. Resource rejection does not imply
 nonmembership.
 
 [Finite-field elliptic group structures](elliptic-curve-group-structure.md) ·

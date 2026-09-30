@@ -33,8 +33,10 @@ the 512-digit numerator and denominator budget of each fixed representative and
 the actual admitted width of every coordinate cell.
 
 That envelope counts retained entries, not encoded bytes, so a wider exact
-coefficient does not by itself change admission: scalar magnitudes stay exact
-and unbounded, and only how much the result retains is charged.
+coefficient does not by itself increase the retained-entry charge. Scalar
+magnitudes remain exact, but they are separately admitted: fixed
+representatives are checked against a 512-digit numerator and denominator
+budget, while each retained coordinate cell has its own admitted width.
 
 This returns the fixed subspace inside one finite subrepresentation. It does
 not find all finite subrepresentations or claim to generate the invariant ring

@@ -88,10 +88,10 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
         operation_id="integer.squarefree_decomposition.compute",
         title="Compute squarefree decomposition",
         description=(
-            "Compute the unique decomposition n = s^2 * d where s >= 1 and |d| is "
+            "For nonzero n, compute the unique decomposition n = s^2 * d where s >= 1 and |d| is "
             "squarefree, returning the square factor and the signed squarefree "
             "part together with per-prime exponent rows and exact "
-            "reconstruction."
+            "reconstruction. Zero returns a ZERO variant without decomposition fields."
         ),
         request_type=IntegerRequest,
         result_type=SquarefreeDecompositionResult,
@@ -105,6 +105,22 @@ MULTIPLICATIVE_FORM_OPERATIONS: tuple[MathTool[Any, Any], ...] = (
             OperationExample(
                 name="squarefree_72",
                 description="Compute the squarefree decomposition of 72; n must be one canonical integer.",
+                input={"value": "72"},
+            ),
+        ),
+    ),
+    MathTool(
+        operation_id="quadratic_radical.positive_integer.normalize.compute",
+        title="Normalize positive integer square root",
+        description="Compute the canonical positive square root sqrt(n) = s * sqrt(d) with s >= 0, d >= 1 squarefree, and s^2 * d = n. Classifies as ZERO, RATIONAL_INTEGER, or IRRATIONAL_QUADRATIC. The radicand n must be a nonnegative integer.",
+        request_type=NonnegativeIntegerRequest,
+        result_type=NormalizedQuadraticRadicalResult,
+        run=_compute_normalized_quadratic_radical,
+        tags=("integer", "multiplicative", "exact"),
+        examples=(
+            OperationExample(
+                name="radical_72",
+                description="Normalize sqrt(72) = 6*sqrt(2); n must be a nonnegative integer.",
                 input={"value": "72"},
             ),
         ),

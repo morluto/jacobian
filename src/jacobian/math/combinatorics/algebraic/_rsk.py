@@ -262,7 +262,10 @@ def _admit_inverse_trace(pair: RSKTableauPair) -> tuple[RSKTableauPair, int]:
         raise OperationResourceAdmissionError(
             location=("pair",),
             code="algebraic_combinatorics.rsk_inverse_trace_output",
-            message="the complete reverse-insertion ledger exceeds the 8 MB result bound",
+            message=(
+                "the complete reverse-insertion ledger exceeds the "
+                f"{MAX_RSK_TRACE_LEDGER_CELLS}-cell result envelope"
+            ),
         )
 
     return pair, cell_count

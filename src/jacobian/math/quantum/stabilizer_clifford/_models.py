@@ -32,7 +32,10 @@ class StabilizerCliffordTransportRequest(StrictModel):
                 "max_source_generators": 64,
                 "max_gate_count": 1,
                 "max_work_units": 1_000_000,
-                "max_result_compact_json_bytes": 65_536,
+                # Structural result cells, not encoded bytes. Runtime admission
+                # counts cells and never measures serialized size, so a byte
+                # ceiling here would promise a delivery guarantee it cannot keep.
+                "max_result_cells": 65_536,
             }
         }
     )

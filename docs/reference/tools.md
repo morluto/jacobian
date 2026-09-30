@@ -114,8 +114,12 @@ A retired operation identifier is a deliberate breaking change: `math.run`
 reports it as unknown rather than executing a compatibility alias. Replace
 `hypergraph.coloring.non_monochromatic.decide` with
 `hypergraph.nonmonochromatic_vertex_coloring.q_decide`. Map its old boolean
-`colorable` field to `COLORABLE` or `NOT_COLORABLE`, and map its positional
-`coloring` tuple to the replacement operation's `witness.assignments`.
+`colorable` field to the replacement's `outcome`: `COLORABLE` or
+`NOT_COLORABLE`. For `COLORABLE`, zip the old positional `coloring` tuple with
+the retained `hypergraph.vertices` order to build `witness.assignments` as
+`(vertex_id, color)` pairs. For example, vertices `("a", "b")` and coloring
+`(1, 0)` become assignments `(("a", 1), ("b", 0))`. Preserve the hypergraph and
+palette size. For `NOT_COLORABLE`, omit `witness`.
 
 ## Optional backend availability
 

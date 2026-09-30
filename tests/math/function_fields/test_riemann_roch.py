@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from jacobian.catalog.models import (
     OperationDomainValidationError,
@@ -333,7 +334,10 @@ def test_riemann_roch_accepts_nonmonic_associate_of_x_place() -> None:
 
     space = function_field_riemann_roch_space(divisor)
 
-    assert space.divisor.terms[0].place.prime_polynomial.coefficients == (0, 1)
+    # The infinity place has no prime polynomial; this one is finite.
+    place_polynomial = space.divisor.terms[0].place.prime_polynomial
+    assert place_polynomial is not None
+    assert place_polynomial.coefficients == (0, 1)
     assert space.dimension == 2
     assert len(space.basis) == 2
     for element in space.basis:
@@ -362,3 +366,45 @@ def test_riemann_roch_rejects_unsupported_extension_fields() -> None:
     assert error.value.errors()[0]["type"] == (
         "function_field.riemann_roch_requires_supported_model"
     )
+
+
+def test_a_decoded_profile_must_re_derive_each_valuation_from_the_element() -> None:
+    """Row sums alone do not bind a profile to the element it describes.
+
+    ``require_exact_sum`` only relates ``sum`` to ``element_valuation``, and
+    both are caller-supplied, so a decoded profile could assert a valuation the
+    element does not have and a ``status`` derived from it would be false too.
+    """
+    field = _field()
+    element = _element(field, (0, 0, 1), (1,))  # x
+    divisor = _divisor(field, ())
+    genuine = function_field_riemann_roch_membership(element, divisor)
+    assert genuine.profile[0].element_valuation == 2  # x/(x+1) at x, per the kernel
+
+    forged_row = genuine.profile[0].model_copy(
+        update={"element_valuation": 1, "sum": 1}
+    )
+    payload = genuine.model_copy(
+        update={"profile": (forged_row,), "status": "IN_SPACE"}
+    ).model_dump()
+
+    with pytest.raises(ValidationError, match="exact valuation"):
+        FunctionFieldRiemannRochMembership.model_validate(payload)
+
+
+def test_a_genuine_profile_still_decodes_and_the_kernel_is_unchanged() -> None:
+    """Negative control: the re-derivation must not refuse a real profile."""
+    field = _field()
+    x_plus_one = _finite_place(field, (1, 1))
+    x_place = _finite_place(field, (0, 1))
+    infinity = _infinity(field)
+    divisor = _divisor(field, ((x_plus_one, 2), (x_place, -1), (infinity, 1)))
+    element = _element(field, (0, 1), (1, 2, 1))
+
+    result = function_field_riemann_roch_membership(element, divisor)
+    decoded = FunctionFieldRiemannRochMembership.model_validate(result.model_dump())
+
+    assert decoded.status == result.status
+    assert [row.element_valuation for row in decoded.profile] == [
+        row.element_valuation for row in result.profile
+    ]

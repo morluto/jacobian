@@ -345,7 +345,57 @@ class FunctionFieldRiemannRochMembership(StrictModel):
                 "riemann_roch_membership_status",
                 "membership status must agree with every returned valuation inequality",
             )
+        self.require_derived_valuations()
         return self
+
+    def require_derived_valuations(self) -> None:
+        """Re-derive every row's element valuation from the retained element.
+
+        ``require_exact_sum`` only proves a row is internally consistent: it
+        relates ``sum`` to ``element_valuation``, and both are caller-supplied.
+        A decoded profile could therefore assert a valuation the element does not
+        have, and the ``status`` derived from those rows would be false with it.
+
+        Re-deriving costs one exact valuation per profile row, so the producing
+        kernel builds through :meth:`_from_kernel` and pays nothing. The charge
+        lands on decoding, which is where an untrusted profile actually arrives.
+        """
+        from jacobian.math.function_fields.operations import (
+            function_field_place_valuation,
+        )
+
+        for row in self.profile:
+            try:
+                derived = function_field_place_valuation(row.place, self.element)
+            except Exception as exc:
+                raise _validation_error(
+                    "riemann_roch_membership_valuation",
+                    "every profile valuation must be derivable from the element",
+                ) from exc
+            if isinstance(derived, int) and derived == row.element_valuation:
+                continue
+            raise _validation_error(
+                "riemann_roch_membership_valuation",
+                "every profile valuation must equal the element's exact valuation "
+                "at that place",
+            )
+
+    @classmethod
+    def _from_kernel(
+        cls,
+        element: FiniteFunctionFieldElement,
+        divisor: FunctionFieldDivisor,
+        status: Literal["IN_SPACE", "NOT_IN_SPACE"],
+        profile: tuple[FunctionFieldRiemannRochMembershipRow, ...],
+    ) -> Self:
+        """Build a result the kernel has already established exactly.
+
+        The kernel computes the principal divisor and every row itself, so
+        re-deriving each valuation here would repeat that work on every call.
+        """
+        return cls.model_construct(
+            element=element, divisor=divisor, status=status, profile=profile
+        )
 
 
 class PrimeFieldPolynomial(StrictModel):

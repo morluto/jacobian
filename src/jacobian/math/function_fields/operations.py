@@ -3256,7 +3256,7 @@ def function_field_riemann_roch_membership(
     admitted_divisor = _admit_divisor(divisor)
     canonical_element = _canonical_element(element, admitted_divisor.field)
     if is_zero:
-        return FunctionFieldRiemannRochMembership(
+        return FunctionFieldRiemannRochMembership._from_kernel(
             element=canonical_element,
             divisor=admitted_divisor,
             status="IN_SPACE",
@@ -3295,7 +3295,7 @@ def function_field_riemann_roch_membership(
                 sum=total,
             )
         )
-    return FunctionFieldRiemannRochMembership(
+    return FunctionFieldRiemannRochMembership._from_kernel(
         element=principal.element,
         divisor=admitted_divisor,
         status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),

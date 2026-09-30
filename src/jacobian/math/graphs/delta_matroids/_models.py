@@ -13,7 +13,7 @@ from jacobian.math.combinatorics.matroids.delta.extra import (
     BinarySymmetricMatrix,
 )
 from jacobian.math.combinatorics.matroids.delta.values import FiniteDeltaMatroid
-from jacobian.math.graphs.values import LoopedSimpleGraph
+from jacobian.math.graphs.values import MAX_GRAPH_LABEL_BYTES, LoopedSimpleGraph
 
 
 class LoopedGraphDeltaMatroidRequest(StrictModel):
@@ -65,6 +65,7 @@ class LoopedGraphDeltaMatroidResult(StrictModel):
 def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
     """Revalidate the canonical carrier and enforce the operation work bound."""
     from pydantic import ValidationError
+    from pydantic_core import PydanticSerializationError
 
     from jacobian.catalog.models import (
         OperationDomainValidationError,
@@ -77,9 +78,69 @@ def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
             code="graph.looped_graph_invalid",
             message="graph must be a canonical LoopedSimpleGraph value",
         )
+    # Preflight the raw container before serializing. A native caller can
+    # bypass Pydantic with model_construct, and serializing an oversized or
+    # malformed payload would copy the whole vertex and edge graph before the
+    # O(1) length check below could refuse it.
+    raw_vertices = getattr(graph, "vertices", None)
+    if type(raw_vertices) is not tuple:
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.looped_graph_invalid",
+            message="graph vertices must be a canonical tuple of labels",
+        )
+    if len(raw_vertices) > MAX_BINARY_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertices"),
+            code="delta_matroid.binary_work",
+            message=f"looped graph conversion supports at most {MAX_BINARY_GROUND} vertices",
+        )
+    # All serialized storage, including malformed nested rows and labels, must
+    # be bounded. These cardinalities follow from a simple graph on this axis;
+    # they do not restrict any canonical graph admitted by the vertex envelope.
+    n = len(raw_vertices)
+
+    def bounded_container(
+        field: str, maximum: int
+    ) -> tuple[object, ...] | list[object]:
+        values = getattr(graph, field, None)
+        if (type(values) is not tuple and type(values) is not list) or len(
+            values
+        ) > maximum:
+            raise OperationDomainValidationError(
+                location=("graph", field),
+                code="graph.looped_graph_invalid",
+                message=f"graph {field} must fit the canonical vertex axis",
+            )
+        return values
+
+    raw_edges = bounded_container("edges", n * (n - 1) // 2)
+    raw_loops = bounded_container("loops", n)
+    labels = [*raw_vertices, *raw_loops]
+    for index, edge in enumerate(raw_edges):
+        if (type(edge) is not tuple and type(edge) is not list) or len(edge) != 2:
+            raise OperationDomainValidationError(
+                location=("graph", "edges", index),
+                code="graph.looped_graph_invalid",
+                message="graph edges must contain pairs of labels",
+            )
+        labels.extend(edge)
+    for label in labels:
+        if type(label) is not str or not 0 < len(label) <= MAX_GRAPH_LABEL_BYTES:
+            raise OperationDomainValidationError(
+                location=("graph",),
+                code="graph.looped_graph_invalid",
+                message="graph labels must be bounded canonical strings",
+            )
     try:
         canonical = LoopedSimpleGraph.model_validate(graph.model_dump())
-    except (ValidationError, AttributeError) as error:
+    except (
+        ValidationError,
+        AttributeError,
+        TypeError,
+        ValueError,
+        PydanticSerializationError,
+    ) as error:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.looped_graph_invalid",

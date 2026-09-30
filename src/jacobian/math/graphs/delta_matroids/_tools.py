@@ -27,7 +27,12 @@ TOOLS: MathTools = (
         examples=(
             OperationExample(
                 name="one_looped_edge",
-                description="Build the principal-minor delta-matroid of a looped edge.",
+                description=(
+                    "Build the principal-minor delta-matroid of a looped edge. "
+                    "The graph must use canonical vertex labels and orient every "
+                    "declared off-diagonal edge endpoint by label order, and the "
+                    "computation admits at most 8 vertices."
+                ),
                 input={
                     "graph": {
                         "vertices": ["a", "b"],

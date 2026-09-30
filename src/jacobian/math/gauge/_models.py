@@ -46,11 +46,6 @@ def _has_canonical_path_steps(path: object) -> bool:
     return _has_canonical_steps(getattr(path, "steps", None))
 
 
-def _has_valid_permutation_degree(field: object) -> bool:
-    degree = getattr(field, "degree", None)
-    return type(degree) is int and 1 <= degree <= 8
-
-
 def _raw_fields(
     value: object,
     models: tuple[type[StrictModel], ...],
@@ -175,8 +170,12 @@ def _raw_face_step_count(face: object) -> int:
         raise _validation_error(
             "complex_face_shape", "each face must be a labelled walk"
         )
+    return _raw_path_step_count(fields.get("boundary"))
+
+
+def _raw_path_step_count(value: object) -> int:
     boundary = _raw_fields(
-        fields.get("boundary"),
+        value,
         (OrientedGaugePath,),
         {"steps", "basepoint"},
         "complex_boundary_shape",
@@ -1197,6 +1196,82 @@ def _loop_family_output_units(
     return units
 
 
+def _check_raw_permutation_shape(value: object) -> None:
+    fields = _raw_fields(
+        value, (PermutationLabel,), {"degree", "image"}, "loop_family_parent"
+    )
+    degree = fields.get("degree")
+    if type(degree) is not int or not MIN_GAUGE_DEGREE <= degree <= MAX_GAUGE_DEGREE:
+        raise ValueError("permutation degree must be bounded")
+    image = _raw_sequence(fields.get("image"), MAX_GAUGE_DEGREE, "loop_family_parent")
+    if len(image) != degree or any(
+        type(entry) is not int or not 0 <= entry < degree for entry in image
+    ):
+        raise ValueError("permutation images must contain bounded scalar indices")
+
+
+def _preflight_loop_family(value: object) -> None:
+    """Bound native and raw fields before nested validation, counting, or copies."""
+    try:
+        family = _raw_fields(
+            value,
+            (GaugeLoopFamilyHolonomies,),
+            {"field", "loops"},
+            "loop_family_parent",
+        )
+        field = _raw_fields(
+            family.get("field"),
+            (GaugeField,),
+            {"lattice", "degree", "edge_labels"},
+            "loop_family_parent",
+        )
+        _check_raw_lattice_shape(field.get("lattice"))
+        degree = field.get("degree")
+        if (
+            type(degree) is not int
+            or not MIN_GAUGE_DEGREE <= degree <= MAX_GAUGE_DEGREE
+        ):
+            raise ValueError("field degree must be bounded")
+        labels = _raw_sequence(
+            field.get("edge_labels"), MAX_GAUGE_EDGES, "loop_family_parent"
+        )
+        for label in labels:
+            fields = _raw_fields(
+                label,
+                (GaugeFieldEdgeLabel,),
+                {"edge_id", "label"},
+                "loop_family_parent",
+            )
+            if not _is_raw_label(fields.get("edge_id")):
+                raise ValueError("field edge IDs must be bounded scalar labels")
+            _check_raw_permutation_shape(fields.get("label"))
+        loops = _raw_sequence(
+            family.get("loops"), MAX_GAUGE_LOOP_FAMILY_SIZE, "loop_family_parent"
+        )
+        total_steps = 0
+        for entry in loops:
+            fields = _raw_fields(
+                entry,
+                (GaugeLoopHolonomy,),
+                {"path", "basepoint", "holonomy"},
+                "loop_family_parent",
+            )
+            if not _is_raw_label(fields.get("basepoint")):
+                raise ValueError("loop basepoints must be bounded scalar labels")
+            total_steps += _raw_path_step_count(fields.get("path"))
+            _check_raw_permutation_shape(fields.get("holonomy"))
+    except (AttributeError, TypeError, ValueError):
+        raise _validation_error(
+            "loop_family_parent",
+            "loop-family source and entries must be bounded canonical carriers",
+        ) from None
+    if total_steps > MAX_GAUGE_LOOP_FAMILY_STEPS:
+        raise _validation_error(
+            "loop_family_steps",
+            "aggregate loop-family paths may contain at most 4096 steps",
+        )
+
+
 class GaugeLoopFamilyHolonomies(StrictModel):
     """Holonomies of explicit loops, bound to one source field exactly once."""
 
@@ -1210,62 +1285,18 @@ class GaugeLoopFamilyHolonomies(StrictModel):
         ),
     )
 
-    @model_validator(mode="after")
-    def require_bounded_family_steps(self) -> Self:
-        """Bound the aggregate step count retained by this loop family."""
-        if (
-            sum(len(entry.path.steps) for entry in self.loops)
-            > MAX_GAUGE_LOOP_FAMILY_STEPS
-        ):
-            raise _validation_error(
-                "loop_family_steps",
-                "aggregate loop-family paths may contain at most "
-                f"{MAX_GAUGE_LOOP_FAMILY_STEPS} steps",
-            )
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_nested_carriers(cls, value: object) -> object:
+        _preflight_loop_family(value)
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:
+        # Existing model instances may skip the before-validator. Establish the
+        # same bounded shape facts before traversing or dumping their children.
+        _preflight_loop_family(self)
         try:
-            if type(self.loops) is not tuple or any(
-                type(entry) is not GaugeLoopHolonomy
-                or type(getattr(entry, "path", None)) is not OrientedGaugePath
-                or type(getattr(getattr(entry, "path", None), "steps", None))
-                is not tuple
-                or any(
-                    type(step) is not GaugePathStep
-                    or type(getattr(step, "edge_id", None)) is not str
-                    or type(getattr(step, "forward", None)) is not bool
-                    for step in getattr(getattr(entry, "path", None), "steps", ())
-                )
-                or type(getattr(entry, "holonomy", None)) is not PermutationLabel
-                or type(getattr(getattr(entry, "holonomy", None), "image", None))
-                is not tuple
-                for entry in self.loops
-            ):
-                raise ValueError("loop-family entries must be canonical values")
-            if (
-                type(getattr(self, "field", None)) is not GaugeField
-                or type(getattr(getattr(self, "field", None), "edge_labels", None))
-                is not tuple
-                or type(
-                    getattr(
-                        getattr(getattr(self, "field", None), "lattice", None),
-                        "vertices",
-                        None,
-                    )
-                )
-                is not tuple
-                or type(
-                    getattr(
-                        getattr(getattr(self, "field", None), "lattice", None),
-                        "edges",
-                        None,
-                    )
-                )
-                is not tuple
-            ):
-                raise ValueError("source field is not immutable")
             field = GaugeField.model_validate(self.field.model_dump())
             loops = tuple(
                 GaugeLoopHolonomy.model_validate(entry.model_dump())
@@ -1277,60 +1308,15 @@ class GaugeLoopFamilyHolonomies(StrictModel):
             raise _validation_error(
                 "loop_family_parent", "loop-family source is malformed"
             ) from None
-        if not _has_valid_permutation_degree(self.field):
-            raise _validation_error(
-                "loop_family_degree", "source field has an invalid permutation degree"
-            )
-        total_steps = 0
+        by_id = {edge.edge_id: edge for edge in field.lattice.edges}
         for entry in loops:
-            if (
-                not isinstance(entry, GaugeLoopHolonomy)
-                or not isinstance(entry.path, OrientedGaugePath)
-                or type(entry.basepoint) is not str
-                or not isinstance(entry.holonomy, PermutationLabel)
-                or type(entry.path.steps) is not tuple
-                or any(
-                    not isinstance(step, GaugePathStep)
-                    or type(step.edge_id) is not str
-                    or type(step.forward) is not bool
-                    for step in entry.path.steps
-                )
-                or any(type(value) is not int for value in entry.holonomy.image)
-                or type(entry.holonomy.image) is not tuple
-                or type(entry.holonomy.degree) is not int
-                or (
-                    entry.path.basepoint is not None
-                    and type(entry.path.basepoint) is not str
-                )
-            ):
-                raise _validation_error(
-                    "loop_family_path", "loop-family values are malformed"
-                )
             path = entry.path
-            steps = path.steps
-            total_steps += len(steps)
-            if total_steps > MAX_GAUGE_LOOP_FAMILY_STEPS:
-                raise _validation_error(
-                    "loop_family_steps",
-                    "aggregate loop-family paths may contain at most 4096 steps",
-                )
-            if (
-                entry.holonomy.degree != field.degree
-                or len(entry.holonomy.image) != field.degree
-                or sorted(entry.holonomy.image) != list(range(field.degree))
-            ):
+            if entry.holonomy.degree != field.degree:
                 raise _validation_error(
                     "loop_family_holonomy",
                     "every loop holonomy must belong to the source permutation group",
                 )
-            # Each declared holonomy is the product along a closed walk of the
-            # retained lattice, so a decoded family must describe such a walk
-            # rather than an arbitrary permutation: edges must exist, steps
-            # must chain head-to-tail, the walk must close, and its basepoint
-            # must be the vertex it starts from.
-            loop_first, loop_last = _lattice_walk_endpoints(
-                {edge.edge_id: edge for edge in field.lattice.edges}, steps
-            )
+            loop_first, loop_last = _lattice_walk_endpoints(by_id, path.steps)
             if loop_first is None:
                 loop_first = loop_last = path.basepoint
             if (
@@ -1343,9 +1329,7 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                     "loop_family_path",
                     "each loop must be a closed walk based at its declared basepoint",
                 )
-        if _loop_family_output_units(field, loops) > (
-            MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS
-        ):
+        if _loop_family_output_units(field, loops) > MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS:
             raise _validation_error(
                 "loop_family_output",
                 "source-bound loop family exceeds its exact output envelope",

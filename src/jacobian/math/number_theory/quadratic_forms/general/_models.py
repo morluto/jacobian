@@ -241,25 +241,12 @@ class IntegralContentRequest(StrictModel):
     form: RationalQuadraticForm = Field(
         description=(
             "The integral polynomial quadratic form whose coefficient content is "
-            "requested. Structural and integrality rules are enforced here; the "
-            "retained-support traversal limit is a capacity bound enforced by the "
-            "operation as a resource refusal, so an over-large form is reported as "
-            "an execution bound rather than an invalid request."
+            "requested. The operation admits retained support before checking "
+            "integrality. Its traversal limit is a capacity bound enforced as a "
+            "resource refusal, so an over-large form is reported as an execution "
+            "bound rather than an invalid request."
         )
     )
-
-    @model_validator(mode="after")
-    def require_integral_coefficients(self) -> Self:
-        coefficients = (
-            *self.form.diagonal_coefficients,
-            *(t.coefficient for t in self.form.cross_terms),
-        )
-        if any(value.den != 1 for value in coefficients):
-            raise _validation_error(
-                "nonintegral_form",
-                "coefficient content requires integer polynomial coefficients",
-            )
-        return self
 
 
 class IntegralContentResult(StrictModel):

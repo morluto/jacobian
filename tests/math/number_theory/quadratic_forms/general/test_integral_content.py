@@ -4,7 +4,6 @@ from fractions import Fraction
 from itertools import combinations, islice
 
 import pytest
-from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.catalog.models import (
@@ -52,17 +51,38 @@ def test_large_content_uses_decimal_string_json_encoding() -> None:
     assert result.model_dump(mode="json")["content"] == "100000000000000000000"
 
 
-def test_zero_form_has_zero_content_and_zero_primitive_part() -> None:
-    form = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(0),))
+@pytest.mark.parametrize("axis", [(), ("x",)])
+def test_zero_form_has_zero_content_and_zero_primitive_part(
+    axis: tuple[str, ...],
+) -> None:
+    form = RationalQuadraticForm(
+        axis=axis, diagonal_coefficients=tuple(_q(0) for _ in axis)
+    )
     result = integral_coefficient_content(form)
+    result = IntegralContentResult.model_validate_json(result.model_dump_json())
     assert result.content == 0
     assert result.primitive_part == form
+    assert integral_coefficient_content(result.primitive_part).content == 0
+
+
+def test_integral_content_accepts_coefficient_digit_boundary() -> None:
+    edge = 10**256 - 1
+    form = RationalQuadraticForm(
+        axis=("x", "y"), diagonal_coefficients=(_q(-edge), _q(edge))
+    )
+    result = integral_coefficient_content(form)
+    restored = IntegralContentResult.model_validate_json(result.model_dump_json())
+    assert restored.content == edge
+    assert restored.form == form
+    assert restored.primitive_part.diagonal_coefficients == (_q(-1), _q(1))
 
 
 def test_integral_content_rejects_rational_coefficients() -> None:
     rational = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(1, 2),))
-    with pytest.raises(ValidationError, match="integer polynomial coefficients"):
-        IntegralContentRequest(form=rational)
+    request = IntegralContentRequest(form=rational)
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        integral_coefficient_content(request.form)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.nonintegral_form"
 
 
 def test_integral_content_refuses_oversized_support_as_a_resource_bound() -> None:
@@ -159,6 +179,70 @@ def test_integral_content_refuses_missing_native_collections(field: str) -> None
     form = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(6),))
     forged = form.model_copy(update={field: None})
 
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        integral_coefficient_content(forged)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"
+
+
+@pytest.mark.parametrize(
+    "field,replacement",
+    [
+        ("axis", (["x"] * 4097, "y")),
+        ("axis", ("x" * 65, "y")),
+        ("diagonal_coefficients", ((_q(6),) * 4097, _q(10))),
+        (
+            "diagonal_coefficients",
+            (CanonicalRational.model_construct(num=[6], den=1), _q(10)),
+        ),
+        (
+            "diagonal_coefficients",
+            (CanonicalRational.model_construct(num=10**256, den=1), _q(10)),
+        ),
+        (
+            "diagonal_coefficients",
+            (CanonicalRational.model_construct(num=6, den=None), _q(10)),
+        ),
+        ("cross_terms", (("nested",) * 4097,)),
+        (
+            "cross_terms",
+            (QuadraticCrossTerm.model_construct(left=[], right=1, coefficient=_q(2)),),
+        ),
+        (
+            "cross_terms",
+            (QuadraticCrossTerm.model_construct(left=0, right=1, coefficient=[2]),),
+        ),
+        ("domain", ["QQ"]),
+    ],
+)
+def test_integral_content_rejects_forged_leaves_before_serializing(
+    field: str, replacement: object, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    form = RationalQuadraticForm(axis=("x", "y"), diagonal_coefficients=(_q(6), _q(10)))
+    forged = form.model_copy(update={field: replacement})
+
+    def refuse_dump(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("malformed native leaves must not be serialized")
+
+    monkeypatch.setattr(RationalQuadraticForm, "model_dump", refuse_dump)
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        integral_coefficient_content(forged)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"
+
+
+@pytest.mark.parametrize(
+    "coefficient",
+    [
+        CanonicalRational.model_construct(num=6, den=0),
+        CanonicalRational.model_construct(num=6, den=2),
+        CanonicalRational.model_construct(num=True, den=1),
+    ],
+)
+def test_integral_content_rejects_forged_scalar_invariants(
+    coefficient: CanonicalRational,
+) -> None:
+    forged = RationalQuadraticForm.model_construct(
+        axis=("x",), diagonal_coefficients=(coefficient,)
+    )
     with pytest.raises(OperationDomainValidationError) as refusal:
         integral_coefficient_content(forged)
     assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"

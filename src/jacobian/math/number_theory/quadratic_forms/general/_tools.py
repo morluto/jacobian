@@ -4,7 +4,11 @@
 from typing import Any
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.models import MathTool, OperationExample
+from jacobian.catalog.models import (
+    MathTool,
+    OperationDomainValidationError,
+    OperationExample,
+)
 from jacobian.math.number_theory.quadratic_forms.general._extra_models import (
     FiniteBoxProfileRequest,
     FiniteBoxProfileResult,
@@ -93,6 +97,18 @@ def compute_bilinear_pairing(
 def compute_integral_content(
     request: IntegralContentRequest,
 ) -> IntegralContentResult:
+    if not isinstance(request, IntegralContentRequest):
+        raise OperationDomainValidationError(
+            location=("request",),
+            code="quadratic_form.content_request_type",
+            message="request must be an integral-content request",
+        )
+    if not hasattr(request, "form"):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_type",
+            message="request must retain its rational quadratic form",
+        )
     return integral_coefficient_content(request.form)
 
 

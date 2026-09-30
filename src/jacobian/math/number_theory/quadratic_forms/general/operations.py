@@ -10,6 +10,7 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
+from jacobian.math._labels import MAX_OPAQUE_LABEL_LENGTH
 from jacobian.math.matrices.values import RationalMatrix, rational_matrix_from_fractions
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     MAX_COEFFICIENT_MATRIX_AXIS,
@@ -17,12 +18,15 @@ from jacobian.math.number_theory.quadratic_forms.general._models import (
     IntegralContentResult,
 )
 from jacobian.math.number_theory.quadratic_forms.general.values import (
+    MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS,
     QuadraticCrossTerm,
     RationalCoordinateVector,
     RationalQuadraticForm,
     require_bilinear_pairing_budget,
     require_evaluation_budget,
 )
+
+_CONTENT_COEFFICIENT_LIMIT = 10**MAX_QUADRATIC_FORM_COEFFICIENT_DIGITS
 
 
 def evaluate_rational_quadratic_form(
@@ -173,6 +177,21 @@ def coefficient_matrix(form: RationalQuadraticForm) -> RationalMatrix:
     return rational_matrix_from_fractions(entries)
 
 
+def _content_coefficient_has_bounded_shape(value: object) -> bool:
+    """Bound scalar cloning before canonical-rational validation does arithmetic."""
+
+    if type(value) is not CanonicalRational:
+        return False
+    numerator = getattr(value, "num", None)
+    denominator = getattr(value, "den", None)
+    return (
+        type(numerator) is int
+        and type(denominator) is int
+        and -_CONTENT_COEFFICIENT_LIMIT < numerator < _CONTENT_COEFFICIENT_LIMIT
+        and 0 < denominator < _CONTENT_COEFFICIENT_LIMIT
+    )
+
+
 def integral_coefficient_content(
     form: RationalQuadraticForm,
 ) -> IntegralContentResult:
@@ -182,7 +201,7 @@ def integral_coefficient_content(
     primitive part by convention.
     """
 
-    if not isinstance(form, RationalQuadraticForm):
+    if type(form) is not RationalQuadraticForm:
         raise OperationDomainValidationError(
             location=("form",),
             code="quadratic_form.form_type",
@@ -191,6 +210,11 @@ def integral_coefficient_content(
     # Bound every retained collection before cloning the carrier. Matching the
     # axis length also prevents a forged short diagonal from hiding a large axis.
     try:
+        if any(
+            type(collection) is not tuple
+            for collection in (form.axis, form.diagonal_coefficients, form.cross_terms)
+        ):
+            raise TypeError("form collections must be tuples")
         axis_size = len(form.axis)
         diagonal_size = len(form.diagonal_coefficients)
         cross_size = len(form.cross_terms)
@@ -211,6 +235,35 @@ def integral_coefficient_content(
             location=("form",),
             code="quadratic_form.invariant_support_bound",
             message=f"integral form support exceeds {MAX_INTEGRAL_INVARIANT_SUPPORT} terms",
+        )
+    # Forged leaves can contain arbitrarily nested containers even when their
+    # outer support is small. Admit only bounded native leaves before dumping.
+    if (
+        type(getattr(form, "domain", None)) is not str
+        or form.domain != "QQ"
+        or any(
+            type(label) is not str or not 1 <= len(label) <= MAX_OPAQUE_LABEL_LENGTH
+            for label in form.axis
+        )
+        or any(
+            not _content_coefficient_has_bounded_shape(value)
+            for value in form.diagonal_coefficients
+        )
+        or any(
+            type(term) is not QuadraticCrossTerm
+            or type(getattr(term, "left", None)) is not int
+            or type(getattr(term, "right", None)) is not int
+            or not 0 <= term.left < term.right < axis_size
+            or not _content_coefficient_has_bounded_shape(
+                getattr(term, "coefficient", None)
+            )
+            for term in form.cross_terms
+        )
+    ):
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_structure",
+            message="quadratic-form fields must have their bounded native shape",
         )
     # Re-establish the admitted carrier's remaining structural invariants before
     # reading coefficients; native callers can bypass its constructors.

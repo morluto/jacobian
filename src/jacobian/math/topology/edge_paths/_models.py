@@ -10,6 +10,7 @@ from pydantic_core import PydanticCustomError
 from jacobian._models import StrictModel
 from jacobian.math.matrices.values import IntegerMatrix
 from jacobian.math.topology._models import (
+    MAX_TOPOLOGY_VERTICES,
     FiniteSimplicialComplex,
     SimplicialComplexRequest,
     VertexLabel,
@@ -406,8 +407,52 @@ class PresentationTransportedSimplicialMap(StrictModel):
     simplicial_map: SimplicialMap
     basepoint_path: PresentationBasepointChangePath
 
+    def _require_typed_members(self) -> Self:
+        mapped = getattr(self, "simplicial_map", None)
+        path = getattr(self, "basepoint_path", None)
+        if not isinstance(mapped, SimplicialMap) or not isinstance(
+            path, PresentationBasepointChangePath
+        ):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "transport requires a typed simplicial map and basepoint path",
+            )
+        if any(
+            not isinstance(getattr(mapped, field, None), FiniteSimplicialComplex)
+            for field in ("source", "target")
+        ) or not isinstance(getattr(path, "complex", None), FiniteSimplicialComplex):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "typed transport members must retain canonical complexes",
+            )
+        axes = (
+            getattr(mapped.source, "vertices", None),
+            getattr(mapped.target, "vertices", None),
+            getattr(mapped, "vertex_map", None),
+        )
+        if any(
+            not isinstance(axis, (tuple, list))
+            or len(axis) > MAX_TOPOLOGY_VERTICES
+            or any(not isinstance(vertex, str) for vertex in axis)
+            for axis in axes
+        ):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "typed transport maps must retain bounded scalar vertex axes",
+            )
+        if not isinstance(getattr(path, "path_vertices", None), (tuple, list)) or any(
+            not isinstance(getattr(path, field, None), str)
+            for field in ("source_base_vertex", "target_base_vertex")
+        ):
+            raise _validation_error(
+                "fundamental_group_map.transport_structure",
+                "typed basepoint paths must retain vertex endpoints and an ordered path",
+            )
+        return self
+
     @model_validator(mode="after")
     def require_target_path(self) -> Self:
+        self._require_typed_members()
         if self.simplicial_map.target != self.basepoint_path.complex:
             raise _validation_error(
                 "fundamental_group_map.transport_target",
@@ -454,6 +499,7 @@ class FundamentalGroupMapResult(StrictModel):
             ).get(self.source_presentation.base_vertex)
             bases_match = source_base_image == self.target_presentation.base_vertex
         elif isinstance(self.map, PresentationTransportedSimplicialMap):
+            self.map._require_typed_members()
             source_complex = self.map.simplicial_map.source
             target_complex = self.map.simplicial_map.target
             source_base_image = dict(

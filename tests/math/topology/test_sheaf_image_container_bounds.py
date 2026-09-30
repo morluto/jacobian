@@ -143,3 +143,62 @@ def test_image_preserves_zero_rank_and_full_rank_restriction_matrices(
     )
     decoded = SheafMorphismImageResult.model_validate_json(result.model_dump_json())
     assert image_of_morphism(decoded.inclusion).image == result.image
+
+
+@pytest.mark.parametrize(
+    "field", ("stalks", "cover_restrictions", "derived_restrictions")
+)
+@pytest.mark.parametrize("value", (None, 1, "invalid", {"nested": [1] * 1000}))
+def test_malformed_parent_container_kinds_are_refused_before_copy(
+    field: str, value: object
+) -> None:
+    vertices = ("a", "b", "c")
+    sheaf = constant_sheaf(canonical_complex(vertices, (vertices,)))
+    malformed = sheaf.model_copy(update={field: value})
+    forged = _identity(sheaf).model_copy(update={"source": malformed})
+    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+        image_of_morphism(forged)
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    (
+        ("prime", {}),
+        ("diamonds", []),
+        ("comparable_pairs", ()),
+        ("coefficient_field", {}),
+        ("complex", None),
+    ),
+)
+def test_parent_scalar_and_complex_fields_reject_nested_containers(
+    field: str, value: object
+) -> None:
+    sheaf = constant_sheaf(canonical_complex(("a",), (("a",),)))
+    malformed = sheaf.model_copy(update={field: value})
+    with pytest.raises(OperationDomainValidationError):
+        image_of_morphism(_identity(sheaf).model_copy(update={"source": malformed}))
+
+
+def test_parent_models_reject_undeclared_nested_fields_before_copy() -> None:
+    sheaf = constant_sheaf(canonical_complex(("a",), (("a",),)))
+    nested: object = 1
+    for _ in range(1500):
+        nested = (nested,)
+    malformed = sheaf.model_copy(update={"undeclared": nested})
+    with pytest.raises(OperationDomainValidationError, match="structurally valid"):
+        image_of_morphism(_identity(sheaf).model_copy(update={"source": malformed}))
+
+
+def test_empty_stalk_images_admit_the_full_simplex_count_envelope() -> None:
+    vertices = tuple(f"v{i:02}" for i in range(64))
+    sheaf = constant_sheaf(
+        canonical_complex(vertices, tuple((vertex,) for vertex in vertices)), basis=()
+    )
+    identity = morphism(
+        sheaf, sheaf, tuple((face, ()) for face in sheaf.canonical_face_order)
+    )
+    result = image_of_morphism(identity)
+    assert len(result.image.stalks) == 64
+    assert all(not stalk.basis for stalk in result.image.stalks)
+    decoded = SheafMorphismImageResult.model_validate_json(result.model_dump_json())
+    assert image_of_morphism(decoded.inclusion).image == result.image

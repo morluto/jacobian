@@ -13,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.matrices.values import IntegerMatrix
+from jacobian.math.topology._models import FiniteSimplicialComplex
 from jacobian.math.topology._request_admission import run_topology_admission
 from jacobian.math.topology.cohomology.operations._models import SimplicialMap
 from jacobian.math.topology.edge_paths._models import (
@@ -938,6 +939,36 @@ def _compose_relator_images(
     return tuple(composed)
 
 
+def _admit_composition_path(
+    path: PresentationBasepointChangePath, location: tuple[str, ...]
+) -> PresentationBasepointChangePath:
+    vertices = getattr(path, "path_vertices", None)
+    if not isinstance(vertices, (tuple, list)):
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.composition_path_shape",
+            message="a typed basepoint path must retain an ordered vertex tuple",
+        )
+    if len(vertices) > MAX_WORD + 1:
+        raise OperationResourceAdmissionError(
+            location=(*location, "path_vertices"),
+            code="fundamental_group_map.composition_path_output",
+            message="the basepoint path exceeds the admitted word bound",
+        )
+    if not isinstance(getattr(path, "complex", None), FiniteSimplicialComplex) or any(
+        not isinstance(vertex, str) for vertex in vertices
+    ):
+        raise OperationDomainValidationError(
+            location=location,
+            code="fundamental_group_map.composition_path_shape",
+            message="a typed basepoint path must retain a canonical complex and scalar vertex labels",
+        )
+    return run_topology_admission(
+        lambda: PresentationBasepointChangePath.model_validate(path.model_dump()),
+        location=location,
+    )
+
+
 def _composition_carrier(
     result: FundamentalGroupMapResult,
     location: tuple[str, ...],
@@ -945,14 +976,16 @@ def _composition_carrier(
     """Normalize a bound carrier to a simplicial map and target edge path."""
     carrier = result.map
     if isinstance(carrier, PresentationTransportedSimplicialMap):
-        mapped, path = carrier.simplicial_map, carrier.basepoint_path
+        run_topology_admission(carrier._require_typed_members, location=location)
+        mapped = carrier.simplicial_map
+        path = _admit_composition_path(carrier.basepoint_path, location)
     elif isinstance(carrier, PresentationBasepointChangePath):
+        path = _admit_composition_path(carrier, location)
         mapped = SimplicialMap(
-            source=carrier.complex,
-            target=carrier.complex,
-            vertex_map=carrier.complex.vertices,
+            source=path.complex,
+            target=path.complex,
+            vertex_map=path.complex.vertices,
         )
-        path = carrier
     elif isinstance(carrier, SimplicialMap):
         mapped, path = carrier, None
     else:
@@ -960,17 +993,6 @@ def _composition_carrier(
             location=location,
             code="fundamental_group_map.composition_carrier_kind",
             message="composition requires simplicial maps or typed basepoint transport",
-        )
-    if path is not None:
-        if len(path.path_vertices) > MAX_WORD + 1:
-            raise OperationResourceAdmissionError(
-                location=(*location, "path_vertices"),
-                code="fundamental_group_map.composition_path_output",
-                message="the basepoint path exceeds the admitted word bound",
-            )
-        run_topology_admission(
-            lambda: PresentationBasepointChangePath.model_validate(path.model_dump()),
-            location=location,
         )
     run_topology_admission(lambda: _validate_simplicial_map(mapped), location=location)
     run_topology_admission(result._require_structural_binding, location=location)

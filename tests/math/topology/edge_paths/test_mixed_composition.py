@@ -176,3 +176,58 @@ def test_native_composition_rechecks_forged_transported_path_binding() -> None:
     )
     with pytest.raises(OperationDomainValidationError, match="basepoint"):
         compose_fundamental_group_maps(request)
+
+
+@pytest.mark.parametrize("field", ("basepoint_path", "simplicial_map"))
+@pytest.mark.parametrize("replacement", (None, 1, {}, ()))
+def test_transported_carrier_rejects_malformed_nested_types(
+    field: str, replacement: object
+) -> None:
+    source = _circle(("a", "b", "c"))
+    result = _compose(
+        _path(source, ("a", "b")), _map(source, source, source.vertices, "b", "b")
+    )
+    assert isinstance(result.map, PresentationTransportedSimplicialMap)
+    malformed = result.map.model_copy(update={field: replacement})
+    forged = result.model_copy(update={"map": malformed})
+    identity = _map(source, source, source.vertices, "b", "b")
+    with pytest.raises(ValidationError):
+        PresentationMapCompositionRequest(first=forged, second=identity)
+    request = PresentationMapCompositionRequest.model_construct(
+        first=forged, second=identity
+    )
+    with pytest.raises(OperationDomainValidationError, match="typed"):
+        compose_fundamental_group_maps(request)
+
+
+@pytest.mark.parametrize(
+    "member, field",
+    (
+        ("simplicial_map", "source"),
+        ("simplicial_map", "target"),
+        ("simplicial_map", "vertex_map"),
+        ("basepoint_path", "complex"),
+        ("basepoint_path", "path_vertices"),
+        ("basepoint_path", "source_base_vertex"),
+    ),
+)
+def test_transported_carrier_rejects_malformed_member_fields(
+    member: str, field: str
+) -> None:
+    source = _circle(("a", "b", "c"))
+    result = _compose(
+        _path(source, ("a", "b")), _map(source, source, source.vertices, "b", "b")
+    )
+    assert isinstance(result.map, PresentationTransportedSimplicialMap)
+    malformed = getattr(result.map, member).model_copy(update={field: None})
+    forged = result.model_copy(
+        update={"map": result.map.model_copy(update={member: malformed})}
+    )
+    identity = _map(source, source, source.vertices, "b", "b")
+    with pytest.raises(ValidationError):
+        PresentationMapCompositionRequest(first=forged, second=identity)
+    request = PresentationMapCompositionRequest.model_construct(
+        first=forged, second=identity
+    )
+    with pytest.raises(OperationDomainValidationError, match="typed"):
+        compose_fundamental_group_maps(request)

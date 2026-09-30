@@ -541,7 +541,11 @@ def _parse_subrepresentation_input(
     tuple[RationalPolynomial, ...],
 ]:
     try:
-        _admit_subrepresentation_generator_count(len(generators))
+        try:
+            generator_count = len(generators)
+        except OverflowError:
+            generator_count = MAX_GM_SUBREP_GENERATORS + 1
+        _admit_subrepresentation_generator_count(generator_count)
         # Sequence implementations can misreport their length. Retain at most
         # one over-limit raw item and decide admission before decoding any.
         bounded_generators = tuple(islice(generators, MAX_GM_SUBREP_GENERATORS + 1))

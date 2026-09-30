@@ -113,14 +113,16 @@ def test_gm_subrepresentation_still_enforces_the_generator_count() -> None:
     assert error.value.errors()[0]["type"] == "gm_subrepresentation.generator_count"
 
 
+@pytest.mark.parametrize("reported_count", (1_000_000, 10**100))
 def test_excess_generators_are_refused_without_iteration_or_decoding(
+    reported_count: int,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from jacobian.math.polynomials.derivations import _weight_operations
 
     class UnvisitedGenerators(list[RationalPolynomial]):
         def __len__(self) -> int:
-            return 1_000_000
+            return reported_count
 
         def __iter__(self) -> Iterator[RationalPolynomial]:
             pytest.fail("an oversized generator sequence must not be iterated")

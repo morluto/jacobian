@@ -1,19 +1,22 @@
-# Finite lattice loop-family holonomies
+# Native finite lattice loop-family holonomies
 
 [Documentation home](../../index.md) · [Tool surface](../tools.md) · [Operation references](index.md)
 
-`lattice_gauge.loop_family.holonomies.compute` evaluates an explicitly
-supplied finite tuple of based closed paths over one permutation-valued gauge
-field. Each output entry retains its path, basepoint, and exact holonomy. The
-result retains the source field once, so a family does not repeat the entire
-lattice and link assignment per loop. Empty identity paths are allowed when
-their basepoint is a source vertex; an empty family returns the same source
-field with no loop entries.
+The native helper `jacobian.math.gauge.loop_family_holonomies` evaluates an
+explicitly supplied finite tuple or list of based closed paths over one
+permutation-valued gauge field. Each output entry retains its path, basepoint,
+and exact holonomy. The result retains the source field once, so a family does
+not repeat the entire lattice and link assignment per loop. Empty identity
+paths are allowed when their basepoint is a source vertex; an empty family
+returns the same source field with no loop entries. This helper is part of the
+[Python API](../python-api.md), not a published `math.find` / `math.run`
+operation. Catalog callers can evaluate each supplied path with
+`lattice_gauge.holonomy.compute`.
 
-For each path \(\gamma=e_1\cdots e_m\), the operation returns
+For each path \(\gamma=e_1\cdots e_m\), the helper returns
 \(\operatorname{Hol}_U(\gamma)=U_{e_1}\cdots U_{e_m}\) in traversal order,
 using the exact inverse label for reverse steps. Every path must chain on the
-source lattice and close at its basepoint. The operation evaluates only the
+source lattice and close at its basepoint. The helper evaluates only the
 provided paths; it does not search for loops or choose a generating family.
 
 Admission allows at most 128 loops, 256 steps per loop, and 4096 steps across

@@ -33,7 +33,12 @@ zero-step path returns the table identity at its named lattice vertex.
 The path convention is `h_0 = 1` and `h_i = h_{i-1} * U_i` in traversal
 order. This matters for noncommutative groups such as S3.
 
-`lattice_gauge.finite_group.gauge_transform.compute` applies the exact vertex
+### Native transform and conjugacy helpers
+
+The following helpers are part of the [Python API](../python-api.md); neither
+is published as a `math.find` / `math.run` operation.
+
+`jacobian.math.gauge.finite_group_gauge_transform` applies the exact vertex
 action `U'_(u->v) = g_u U_(u->v) g_v^-1` to every edge. It requires one
 parent-bound group element for every source vertex and returns a field over the
 same lattice and multiplication-table parent, along with the source field and
@@ -45,17 +50,19 @@ per-edge products, and repeated parent-table output size before constructing
 the target field. This is a supplied finite action, not a gauge-equivalence
 search or gauge fixing operation.
 
-`lattice_gauge.holonomy.conjugacy_profile.compute computes the holonomy of
-the supplied field and path, then returns its complete conjugacy class as sorted
-indices in the retained group parent. The least index is the deterministic
-class representative; class size is derived from the complete orbit. It admits
-the group table, quadratic conjugation work, source-bound result size, and
-class-axis size before building the orbit. This is a finite-group conjugacy
-observable; arbitrary characters and Wilson traces in general representations
-remain separate operations.
+`jacobian.math.gauge.finite_group_holonomy_conjugacy_profile` computes the
+holonomy of the supplied field and closed based path, then returns its complete
+conjugacy class as sorted indices in the retained group parent. The least index
+is the deterministic class representative; class size is derived from the
+complete orbit. It admits the group table, quadratic conjugation work,
+source-bound result size, and class-axis size before building the orbit. This
+is a finite-group conjugacy observable; arbitrary characters and Wilson traces
+in general representations are outside this helper's contract.
 
-lattice_gauge.finite_group.complex.construct.compute` supplies the missing
-source-bound 2-cell carrier for that path operation. Each face stores an
+### Finite 2-cell complexes
+
+`lattice_gauge.finite_group.complex.construct.compute` constructs the
+source-bound 2-cell carrier for finite-group path holonomy. Each face stores an
 ordered, closed attaching walk over the exact `GaugeLattice` and retains the
 same `FiniteGroupTable` parent used by finite-group edge fields. The walk is
 the oriented attaching map, so reversing a face reverses step order and flips

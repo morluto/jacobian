@@ -221,3 +221,64 @@ def test_catalog_publishes_the_basepoint_transport_operation() -> None:
         tool.operation_id == "lattice_gauge.finite_group.basepoint_transport.compute"
         for tool in TOOLS
     )
+
+
+@pytest.mark.parametrize("reverse_loop", (False, True))
+@pytest.mark.parametrize("reverse_connector", (False, True))
+def test_transport_round_trips_with_non_involutive_reverse_labels(
+    reverse_loop: bool, reverse_connector: bool
+) -> None:
+    field, index = _nonabelian_field()
+    labels = {"ab": (1, 0, 2), "bc": (1, 2, 0), "ca": (1, 2, 0)}
+    field = FiniteGroupGaugeField(
+        lattice=field.lattice,
+        group=field.group,
+        edge_values=tuple(
+            FiniteGroupGaugeEdgeLabel(
+                edge_id=edge_id,
+                value=FiniteGroupTableElement(group=field.group, index=index[label]),
+            )
+            for edge_id, label in labels.items()
+        ),
+    )
+    loop = _loop()
+    if reverse_loop:
+        loop = OrientedGaugePath(
+            steps=tuple(
+                GaugePathStep(edge_id=step.edge_id, forward=False)
+                for step in reversed(loop.steps)
+            ),
+            basepoint="a",
+        )
+    connector = OrientedGaugePath(
+        steps=(
+            GaugePathStep(
+                edge_id="ca" if reverse_connector else "ab",
+                forward=not reverse_connector,
+            ),
+        ),
+        basepoint="a",
+    )
+
+    def permutation_product(path: OrientedGaugePath) -> tuple[int, ...]:
+        product: tuple[int, ...] = (0, 1, 2)
+        for step in path.steps:
+            element: tuple[int, ...] = labels[step.edge_id]
+            if not step.forward:
+                element = tuple(element.index(i) for i in range(3))
+            product = _compose(product, element)
+        return product
+
+    result = finite_group_gauge_basepoint_transport(field, loop, connector)
+    assert result.source_holonomy.index == index[permutation_product(loop)]
+    assert result.connector_holonomy.index == index[permutation_product(connector)]
+    assert (
+        result.transported_holonomy.index
+        == index[permutation_product(result.transported_loop)]
+    )
+    assert type(result).model_validate(result.model_dump()) == result
+    decoded = type(result).model_validate_json(result.model_dump_json())
+    assert (
+        finite_group_gauge_holonomy(decoded.field, decoded.transported_loop).holonomy
+        == result.transported_holonomy
+    )

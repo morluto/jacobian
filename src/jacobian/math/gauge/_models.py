@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Self
+from collections.abc import Mapping
+from typing import Annotated, Self, TypeGuard
 
 from pydantic import (
     AfterValidator,
@@ -27,85 +28,130 @@ def _validation_error(reason: str, message: str) -> PydanticCustomError:
     return PydanticCustomError(f"lattice_gauge.{reason}", message)
 
 
-def _has_canonical_path_steps(path: object) -> bool:
-    steps = getattr(path, "steps", None)
-    return type(steps) is tuple and all(
-        isinstance(step, GaugePathStep)
-        and type(step.edge_id) is str
-        and type(step.forward) is bool
-        for step in steps
+def _has_canonical_steps(steps: object) -> TypeGuard[tuple[GaugePathStep, ...]]:
+    return (
+        isinstance(steps, tuple)
+        and type(steps) is tuple
+        and len(steps) <= MAX_GAUGE_PATH_LENGTH
+        and all(
+            type(step) is GaugePathStep
+            and _is_raw_label(getattr(step, "edge_id", None))
+            and type(getattr(step, "forward", None)) is bool
+            for step in steps
+        )
     )
 
 
-def _has_valid_permutation_degree(field: object) -> bool:
-    degree = getattr(field, "degree", None)
-    return type(degree) is int and 1 <= degree <= 8
+def _has_canonical_path_steps(path: object) -> bool:
+    return _has_canonical_steps(getattr(path, "steps", None))
+
+
+def _raw_fields(
+    value: object,
+    models: tuple[type[StrictModel], ...],
+    allowed: set[str],
+    code: str,
+) -> dict[str, object]:
+    """Inspect a closed raw object or canonical native carrier without copying."""
+    if isinstance(value, dict) and type(value) is dict:
+        fields = value
+    elif isinstance(value, StrictModel) and type(value) in models:
+        fields = value.__dict__
+    else:
+        raise _validation_error(code, "expected a canonical object with named fields")
+    if len(fields) > len(allowed) or any(
+        type(key) is not str or key not in allowed for key in fields
+    ):
+        raise _validation_error(code, "object has unknown fields")
+    return fields
+
+
+def _raw_sequence(
+    value: object, limit: int, code: str
+) -> tuple[object, ...] | list[object]:
+    if (
+        not isinstance(value, (tuple, list))
+        or type(value) not in (tuple, list)
+        or len(value) > limit
+    ):
+        raise _validation_error(
+            code, f"expected a sequence with at most {limit} entries"
+        )
+    return value
 
 
 def _check_raw_complex_shape(value: object) -> None:
-    """Bound every public array before copying JSON lists into canonical tuples."""
-    if not isinstance(value, dict):
-        return
-    if set(value) - {"lattice", "group", "faces"}:
-        raise _validation_error(
-            "complex_request_shape", "complex request has unknown fields"
-        )
-    _check_raw_lattice_shape(value.get("lattice"))
-    _check_raw_group_shape(value.get("group"))
-    _check_raw_faces_shape(value.get("faces"))
+    """Bound every nested container before canonical JSON copying begins."""
+    fields = _raw_fields(
+        value,
+        (FiniteGroupGaugeComplex, FiniteGroupGaugeComplexRequest),
+        {"lattice", "group", "faces"},
+        "complex_request_shape",
+    )
+    _check_raw_lattice_shape(fields.get("lattice"))
+    _check_raw_group_shape(fields.get("group"))
+    _check_raw_faces_shape(fields.get("faces"))
 
 
 def _check_raw_lattice_shape(lattice: object) -> None:
-    if isinstance(lattice, dict):
-        if set(lattice) - {"vertices", "edges"}:
+    fields = _raw_fields(
+        lattice, (GaugeLattice,), {"vertices", "edges"}, "complex_lattice_shape"
+    )
+    vertices = _raw_sequence(
+        fields.get("vertices"), MAX_GAUGE_VERTICES, "complex_vertex_bound"
+    )
+    edges = _raw_sequence(fields.get("edges"), MAX_GAUGE_EDGES, "complex_edge_bound")
+    if any(not _is_raw_label(vertex) for vertex in vertices):
+        raise _validation_error(
+            "complex_vertex_shape", "each vertex must be a gauge label"
+        )
+    for edge in edges:
+        edge_fields = _raw_fields(
+            edge, (GaugeEdge,), {"edge_id", "tail", "head"}, "complex_edge_shape"
+        )
+        if any(
+            not _is_raw_label(edge_fields.get(key))
+            for key in ("edge_id", "tail", "head")
+        ):
             raise _validation_error(
-                "complex_lattice_shape", "lattice has unknown fields"
-            )
-        vertices = lattice.get("vertices")
-        edges = lattice.get("edges")
-        if isinstance(vertices, (tuple, list)) and len(vertices) > MAX_GAUGE_VERTICES:
-            raise _validation_error(
-                "complex_vertex_bound", "lattice exceeds the vertex bound"
-            )
-        if isinstance(edges, (tuple, list)) and len(edges) > MAX_GAUGE_EDGES:
-            raise _validation_error(
-                "complex_edge_bound", "lattice exceeds the edge bound"
+                "complex_edge_shape", "each edge must carry gauge labels"
             )
 
 
 def _check_raw_group_shape(group: object) -> None:
-    if isinstance(group, dict):
-        if set(group) - {"multiplication", "identity", "inverse"}:
-            raise _validation_error(
-                "complex_group_shape", "group table has unknown fields"
-            )
-        multiplication = group.get("multiplication")
-        inverse = group.get("inverse")
-        if isinstance(multiplication, (tuple, list)) and (
-            len(multiplication) > MAX_FINITE_TABLE_GROUP_ORDER
-            or any(
-                isinstance(row, (tuple, list))
-                and len(row) > MAX_FINITE_TABLE_GROUP_ORDER
-                for row in multiplication
-            )
+    fields = _raw_fields(
+        group,
+        (FiniteGroupTable,),
+        {"multiplication", "identity", "inverse"},
+        "complex_group_shape",
+    )
+    rows = _raw_sequence(
+        fields.get("multiplication"),
+        MAX_FINITE_TABLE_GROUP_ORDER,
+        "complex_group_bound",
+    )
+    inverse = _raw_sequence(
+        fields.get("inverse"), MAX_FINITE_TABLE_GROUP_ORDER, "complex_group_bound"
+    )
+    for row in rows:
+        for entry in _raw_sequence(
+            row, MAX_FINITE_TABLE_GROUP_ORDER, "complex_group_bound"
         ):
-            raise _validation_error(
-                "complex_group_bound", "group table exceeds order 24"
-            )
-        if (
-            isinstance(inverse, (tuple, list))
-            and len(inverse) > MAX_FINITE_TABLE_GROUP_ORDER
-        ):
-            raise _validation_error(
-                "complex_group_bound", "group table exceeds order 24"
-            )
+            _check_raw_group_index(entry)
+    _check_raw_group_index(fields.get("identity"))
+    for entry in inverse:
+        _check_raw_group_index(entry)
+
+
+def _check_raw_group_index(value: object) -> None:
+    if type(value) is not int or not 0 <= value < MAX_FINITE_TABLE_GROUP_ORDER:
+        raise _validation_error(
+            "complex_group_shape", "group entries must be bounded integer indices"
+        )
 
 
 def _check_raw_faces_shape(faces: object) -> None:
-    if not isinstance(faces, (tuple, list)):
-        return
-    if len(faces) > MAX_GAUGE_FACES:
-        raise _validation_error("complex_face_bound", "complex exceeds the face bound")
+    faces = _raw_sequence(faces, MAX_GAUGE_FACES, "complex_face_bound")
     total_steps = 0
     for face in faces:
         total_steps += _raw_face_step_count(face)
@@ -117,28 +163,81 @@ def _check_raw_faces_shape(faces: object) -> None:
 
 
 def _raw_face_step_count(face: object) -> int:
-    if not isinstance(face, dict):
-        return 0
-    if set(face) - {"face_id", "boundary"}:
-        raise _validation_error("complex_face_shape", "face has unknown fields")
-    boundary = face.get("boundary")
-    if not isinstance(boundary, dict):
-        return 0
-    if set(boundary) - {"steps", "basepoint"}:
-        raise _validation_error("complex_boundary_shape", "boundary has unknown fields")
-    steps = boundary.get("steps")
-    if not isinstance(steps, (tuple, list)):
-        return 0
-    if len(steps) > MAX_GAUGE_PATH_LENGTH:
+    fields = _raw_fields(
+        face, (FiniteGroupGaugeFace,), {"face_id", "boundary"}, "complex_face_shape"
+    )
+    if not _is_raw_label(fields.get("face_id")):
         raise _validation_error(
-            "complex_face_length", "face exceeds 256 boundary steps"
+            "complex_face_shape", "each face must be a labelled walk"
+        )
+    return _raw_path_step_count(fields.get("boundary"))
+
+
+def _raw_path_step_count(value: object) -> int:
+    boundary = _raw_fields(
+        value,
+        (OrientedGaugePath,),
+        {"steps", "basepoint"},
+        "complex_boundary_shape",
+    )
+    steps = _raw_sequence(
+        boundary.get("steps"), MAX_GAUGE_PATH_LENGTH, "complex_face_length"
+    )
+    basepoint = boundary.get("basepoint")
+    if basepoint is not None and not _is_raw_label(basepoint):
+        raise _validation_error(
+            "complex_boundary_shape", "a boundary basepoint must be a gauge label"
         )
     for step in steps:
-        if isinstance(step, dict) and set(step) - {"edge_id", "forward"}:
+        step_fields = _raw_fields(
+            step, (GaugePathStep,), {"edge_id", "forward"}, "complex_step_shape"
+        )
+        if (
+            not _is_raw_label(step_fields.get("edge_id"))
+            or type(step_fields.get("forward")) is not bool
+        ):
             raise _validation_error(
-                "complex_step_shape", "face step has unknown fields"
+                "complex_step_shape", "face steps must be labelled boolean traversals"
             )
     return len(steps)
+
+
+def _lattice_walk_endpoints(
+    by_id: Mapping[str, GaugeEdge],
+    steps: object,
+) -> tuple[str | None, str | None]:
+    """Return the first and last vertex of a walk over the retained lattice.
+
+    Every step must name a lattice edge, traverse it in one of its two
+    directions, and continue from the previous head. A consumer reads these
+    walks directly, so a decoded path must be one the lattice admits.
+    """
+    if not _has_canonical_steps(steps):
+        raise _validation_error(
+            "lattice_walk", "walk steps must be bounded canonical lattice traversals"
+        )
+    cursor: str | None = None
+    first: str | None = None
+    for step in steps:
+        edge = by_id.get(step.edge_id)
+        if edge is None or type(step.forward) is not bool:
+            raise _validation_error(
+                "lattice_walk", "walk steps must be typed lattice traversals"
+            )
+        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+        if cursor is not None and tail != cursor:
+            raise _validation_error(
+                "lattice_walk", "walk steps must chain head-to-tail"
+            )
+        if first is None:
+            first = tail
+        cursor = head
+    return first, cursor
+
+
+def _is_raw_label(value: object) -> bool:
+    """One retained label is a bounded string, not a container of strings."""
+    return type(value) is str and 1 <= len(value) <= MAX_GAUGE_LABEL_LENGTH
 
 
 MAX_GAUGE_VERTICES = 64
@@ -336,7 +435,14 @@ class OrientedGaugePath(StrictModel):
 
     @model_validator(mode="after")
     def require_basepoint_for_empty_path(self) -> Self:
-        if not self.steps and self.basepoint is None:
+        basepoint = getattr(self, "basepoint", None)
+        if not _has_canonical_path_steps(self) or (
+            basepoint is not None and not _is_raw_label(basepoint)
+        ):
+            raise _validation_error(
+                "path_shape", "paths must retain bounded canonical steps and basepoints"
+            )
+        if not self.steps and basepoint is None:
             raise _validation_error(
                 "empty_path_basepoint",
                 "a zero-length path must name its identity-path basepoint",
@@ -542,6 +648,90 @@ class FiniteGroupGaugeFaceCurvature(StrictModel):
     value: FiniteGroupTableElement
 
 
+def _check_raw_table_element_shape(value: object) -> None:
+    fields = _raw_fields(
+        value,
+        (FiniteGroupTableElement,),
+        {"group", "index"},
+        "curvature_shape",
+    )
+    _check_raw_group_shape(fields.get("group"))
+    _check_raw_group_index(fields.get("index"))
+
+
+def _check_raw_finite_group_field_shape(value: object) -> None:
+    field = _raw_fields(
+        value,
+        (FiniteGroupGaugeField,),
+        {"lattice", "group", "edge_values"},
+        "curvature_shape",
+    )
+    _check_raw_lattice_shape(field.get("lattice"))
+    _check_raw_group_shape(field.get("group"))
+    for entry in _raw_sequence(
+        field.get("edge_values"), MAX_GAUGE_EDGES, "curvature_shape"
+    ):
+        fields = _raw_fields(
+            entry,
+            (FiniteGroupGaugeEdgeLabel,),
+            {"edge_id", "value"},
+            "curvature_shape",
+        )
+        if not _is_raw_label(fields.get("edge_id")):
+            raise ValueError("edge IDs must be bounded scalar labels")
+        _check_raw_table_element_shape(fields.get("value"))
+
+
+def _require_native_carrier_containers(value: object, *, native: bool = False) -> None:
+    """Check native immutability only after every owned subtree is bounded."""
+    if isinstance(value, StrictModel):
+        for child in value.__dict__.values():
+            _require_native_carrier_containers(child, native=True)
+    elif type(value) is dict:
+        if native:
+            raise ValueError("native carriers must retain typed children")
+        for child in value.values():
+            _require_native_carrier_containers(child)
+    elif isinstance(value, (tuple, list)) and type(value) in (tuple, list):
+        if native and type(value) is not tuple:
+            raise ValueError("native carriers must retain immutable axes")
+        for child in value:
+            _require_native_carrier_containers(child, native=native)
+
+
+def _preflight_curvature_result(value: object) -> None:
+    """Bound source, row, and repeated table carriers before parsing or dumping."""
+    try:
+        result = _raw_fields(
+            value,
+            (FiniteGroupGaugeCurvatureResult,),
+            {"complex", "field", "face_values", "flat"},
+            "curvature_shape",
+        )
+        _check_raw_complex_shape(result.get("complex"))
+        _check_raw_finite_group_field_shape(result.get("field"))
+        for row in _raw_sequence(
+            result.get("face_values"), MAX_GAUGE_FACES, "curvature_shape"
+        ):
+            fields = _raw_fields(
+                row,
+                (FiniteGroupGaugeFaceCurvature,),
+                {"face_id", "value"},
+                "curvature_shape",
+            )
+            if not _is_raw_label(fields.get("face_id")):
+                raise ValueError("face IDs must be bounded scalar labels")
+            _check_raw_table_element_shape(fields.get("value"))
+        if type(result.get("flat")) is not bool:
+            raise ValueError("flatness must be a boolean")
+        _require_native_carrier_containers(value)
+    except (AttributeError, TypeError, ValueError):
+        raise _validation_error(
+            "curvature_shape",
+            "curvature sources and rows must be bounded canonical carriers",
+        ) from None
+
+
 class FiniteGroupGaugeCurvatureResult(StrictModel):
     """Face holonomies and flatness, bound to their complex and edge field."""
 
@@ -551,6 +741,81 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
         min_length=1, max_length=MAX_GAUGE_FACES
     )
     flat: StrictBool
+
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_nested_carriers(cls, value: object) -> object:
+        _preflight_curvature_result(value)
+        return canonicalize_json_containers(value)
+
+    @model_validator(mode="after")
+    def require_source_binding(self) -> Self:
+        """Bind the rows and the flatness claim to the retained parents.
+
+        The rows are the face holonomies of ``self.complex`` in its own face
+        order, and ``flat`` is their own identity claim. Neither is a caller
+        statement: a consumer of this carrier reads the face set, the group
+        element, and the flatness flag without re-deriving them.
+        """
+        # Existing native result instances can skip the before-validator.
+        # Re-establish bounded shape before copying any nested source or row.
+        _preflight_curvature_result(self)
+        try:
+            complex_value = FiniteGroupGaugeComplex.model_validate(
+                self.complex.model_dump()
+            )
+            field = FiniteGroupGaugeField.model_validate(self.field.model_dump())
+            rows = tuple(
+                FiniteGroupGaugeFaceCurvature.model_validate(row.model_dump())
+                for row in self.face_values
+            )
+            if (
+                complex_value != self.complex
+                or field != self.field
+                or rows != self.face_values
+            ):
+                raise ValueError("curvature carriers are not canonical")
+        except (AttributeError, TypeError, ValueError):
+            raise _validation_error(
+                "curvature_shape", "curvature sources and rows are malformed"
+            ) from None
+        if (
+            self.complex.lattice != self.field.lattice
+            or self.complex.group != self.field.group
+        ):
+            raise _validation_error(
+                "curvature_parent",
+                "the field must retain the complex lattice and group",
+            )
+        order = len(self.complex.group.multiplication)
+        if tuple(row.face_id for row in self.face_values) != tuple(
+            face.face_id for face in self.complex.faces
+        ):
+            raise _validation_error(
+                "curvature_face_binding",
+                "curvature rows must cover the retained complex faces in order",
+            )
+        for row in self.face_values:
+            if row.value.group != self.complex.group or row.value.group != (
+                self.field.group
+            ):
+                raise _validation_error(
+                    "curvature_parent",
+                    "each curvature element must belong to the retained group",
+                )
+            index = row.value.index
+            if type(index) is not int or not 0 <= index < order:
+                raise _validation_error(
+                    "curvature_element", "curvature elements must be table indices"
+                )
+        if self.flat != all(
+            row.value.index == self.complex.group.identity for row in self.face_values
+        ):
+            raise _validation_error(
+                "curvature_flatness",
+                "flatness must be the identity claim of the retained rows",
+            )
+        return self
 
 
 class FiniteGroupGaugeHolonomyRequest(StrictModel):
@@ -627,6 +892,41 @@ class FiniteGroupGaugeBasepointTransportRequest(StrictModel):
     connector: OrientedGaugePath
 
 
+def _preflight_basepoint_transport(value: object) -> None:
+    """Bound all retained transport carriers before lookup or canonical copying."""
+    try:
+        result = _raw_fields(
+            value,
+            (FiniteGroupGaugeBasepointTransportResult,),
+            {
+                "field",
+                "loop",
+                "connector",
+                "transported_loop",
+                "source_basepoint",
+                "target_basepoint",
+                "source_holonomy",
+                "connector_holonomy",
+                "transported_holonomy",
+            },
+            "basepoint_transport_shape",
+        )
+        _check_raw_finite_group_field_shape(result.get("field"))
+        for name in ("loop", "connector", "transported_loop"):
+            _raw_path_step_count(result.get(name))
+        for name in ("source_basepoint", "target_basepoint"):
+            if not _is_raw_label(result.get(name)):
+                raise ValueError("transport basepoints must be bounded scalar labels")
+        for name in ("source_holonomy", "connector_holonomy", "transported_holonomy"):
+            _check_raw_table_element_shape(result.get(name))
+        _require_native_carrier_containers(value)
+    except (AttributeError, TypeError, ValueError):
+        raise _validation_error(
+            "basepoint_transport_shape",
+            "transport sources, paths, and values must be bounded canonical carriers",
+        ) from None
+
+
 class FiniteGroupGaugeBasepointTransportResult(StrictModel):
     """The source loop, connector, and exactly conjugated loop holonomy."""
 
@@ -640,8 +940,46 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
     connector_holonomy: FiniteGroupTableElement
     transported_holonomy: FiniteGroupTableElement
 
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_nested_carriers(cls, value: object) -> object:
+        _preflight_basepoint_transport(value)
+        return canonicalize_json_containers(value)
+
     @model_validator(mode="after")
     def require_parent_binding(self) -> Self:
+        # Native result instances can skip the before-validator. Bound every
+        # owned subtree before re-establishing the retained field's structure.
+        _preflight_basepoint_transport(self)
+        try:
+            field = FiniteGroupGaugeField.model_validate(self.field.model_dump())
+            paths = tuple(
+                OrientedGaugePath.model_validate(path.model_dump())
+                for path in (self.loop, self.connector, self.transported_loop)
+            )
+            values = tuple(
+                FiniteGroupTableElement.model_validate(value.model_dump())
+                for value in (
+                    self.source_holonomy,
+                    self.connector_holonomy,
+                    self.transported_holonomy,
+                )
+            )
+            if (
+                field != self.field
+                or paths != (self.loop, self.connector, self.transported_loop)
+                or values
+                != (
+                    self.source_holonomy,
+                    self.connector_holonomy,
+                    self.transported_holonomy,
+                )
+            ):
+                raise ValueError("transport carriers are not canonical")
+        except (AttributeError, TypeError, ValueError):
+            raise _validation_error(
+                "basepoint_transport_shape", "transport carriers are malformed"
+            ) from None
         if (
             not isinstance(self.field, FiniteGroupGaugeField)
             or not isinstance(self.loop, OrientedGaugePath)
@@ -664,7 +1002,77 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
                 "basepoint_transport_parent",
                 "transport paths, endpoints, and holonomies must bind to the field",
             )
+        self._require_closed_walks()
         return self
+
+    def _require_closed_walks(self) -> None:
+        """Every declared path must be a walk of the retained lattice.
+
+        The transported loop is the mathematical claim of this result — it is
+        read as a path and its holonomy as a product — so a decoded value must
+        not be able to present an open loop, an unrelated connector, or a path
+        that never existed on this lattice.
+        """
+        by_id = {edge.edge_id: edge for edge in self.field.lattice.edges}
+
+        def walk_of(path: OrientedGaugePath) -> tuple[str | None, str | None]:
+            try:
+                first, last = _lattice_walk_endpoints(
+                    by_id, getattr(path, "steps", None)
+                )
+            except ValueError as exc:
+                raise _validation_error("basepoint_transport_walk", str(exc)) from None
+            basepoint = getattr(path, "basepoint", None)
+            if first is None:
+                first = last = basepoint
+            if (
+                (basepoint is not None and not _is_raw_label(basepoint))
+                or first not in self.field.lattice.vertices
+                or last not in self.field.lattice.vertices
+                or (basepoint is not None and basepoint != first)
+            ):
+                raise _validation_error(
+                    "basepoint_transport_walk",
+                    "each path must retain its lattice basepoint",
+                )
+            return first, last
+
+        loop_first, loop_end = walk_of(self.loop)
+        if loop_end != self.source_basepoint or loop_first != self.source_basepoint:
+            raise _validation_error(
+                "basepoint_transport_loop",
+                "the source loop must be closed at the source basepoint",
+            )
+        connector_first, connector_end = walk_of(self.connector)
+        if (
+            connector_first != self.source_basepoint
+            or connector_end != self.target_basepoint
+        ):
+            raise _validation_error(
+                "basepoint_transport_connector",
+                "the connector must join the source and target basepoints",
+            )
+        if self.transported_loop.steps != (
+            tuple(
+                GaugePathStep(edge_id=step.edge_id, forward=not step.forward)
+                for step in reversed(self.connector.steps)
+            )
+            + tuple(self.loop.steps)
+            + tuple(self.connector.steps)
+        ):
+            raise _validation_error(
+                "basepoint_transport_walk",
+                "the transported loop must be the conjugated source walk",
+            )
+        transported_first, transported_end = walk_of(self.transported_loop)
+        if (
+            transported_first != self.target_basepoint
+            or transported_end != self.target_basepoint
+        ):
+            raise _validation_error(
+                "basepoint_transport_walk",
+                "the transported loop must be closed at the target basepoint",
+            )
 
 
 class FiniteGroupGaugeVertexValue(StrictModel):
@@ -973,6 +1381,82 @@ def _loop_family_output_units(
     return units
 
 
+def _check_raw_permutation_shape(value: object) -> None:
+    fields = _raw_fields(
+        value, (PermutationLabel,), {"degree", "image"}, "loop_family_parent"
+    )
+    degree = fields.get("degree")
+    if type(degree) is not int or not MIN_GAUGE_DEGREE <= degree <= MAX_GAUGE_DEGREE:
+        raise ValueError("permutation degree must be bounded")
+    image = _raw_sequence(fields.get("image"), MAX_GAUGE_DEGREE, "loop_family_parent")
+    if len(image) != degree or any(
+        type(entry) is not int or not 0 <= entry < degree for entry in image
+    ):
+        raise ValueError("permutation images must contain bounded scalar indices")
+
+
+def _preflight_loop_family(value: object) -> None:
+    """Bound native and raw fields before nested validation, counting, or copies."""
+    try:
+        family = _raw_fields(
+            value,
+            (GaugeLoopFamilyHolonomies,),
+            {"field", "loops"},
+            "loop_family_parent",
+        )
+        field = _raw_fields(
+            family.get("field"),
+            (GaugeField,),
+            {"lattice", "degree", "edge_labels"},
+            "loop_family_parent",
+        )
+        _check_raw_lattice_shape(field.get("lattice"))
+        degree = field.get("degree")
+        if (
+            type(degree) is not int
+            or not MIN_GAUGE_DEGREE <= degree <= MAX_GAUGE_DEGREE
+        ):
+            raise ValueError("field degree must be bounded")
+        labels = _raw_sequence(
+            field.get("edge_labels"), MAX_GAUGE_EDGES, "loop_family_parent"
+        )
+        for label in labels:
+            fields = _raw_fields(
+                label,
+                (GaugeFieldEdgeLabel,),
+                {"edge_id", "label"},
+                "loop_family_parent",
+            )
+            if not _is_raw_label(fields.get("edge_id")):
+                raise ValueError("field edge IDs must be bounded scalar labels")
+            _check_raw_permutation_shape(fields.get("label"))
+        loops = _raw_sequence(
+            family.get("loops"), MAX_GAUGE_LOOP_FAMILY_SIZE, "loop_family_parent"
+        )
+        total_steps = 0
+        for entry in loops:
+            fields = _raw_fields(
+                entry,
+                (GaugeLoopHolonomy,),
+                {"path", "basepoint", "holonomy"},
+                "loop_family_parent",
+            )
+            if not _is_raw_label(fields.get("basepoint")):
+                raise ValueError("loop basepoints must be bounded scalar labels")
+            total_steps += _raw_path_step_count(fields.get("path"))
+            _check_raw_permutation_shape(fields.get("holonomy"))
+    except (AttributeError, TypeError, ValueError):
+        raise _validation_error(
+            "loop_family_parent",
+            "loop-family source and entries must be bounded canonical carriers",
+        ) from None
+    if total_steps > MAX_GAUGE_LOOP_FAMILY_STEPS:
+        raise _validation_error(
+            "loop_family_steps",
+            "aggregate loop-family paths may contain at most 4096 steps",
+        )
+
+
 class GaugeLoopFamilyHolonomies(StrictModel):
     """Holonomies of explicit loops, bound to one source field exactly once."""
 
@@ -986,62 +1470,18 @@ class GaugeLoopFamilyHolonomies(StrictModel):
         ),
     )
 
-    @model_validator(mode="after")
-    def require_bounded_family_steps(self) -> Self:
-        """Bound the aggregate step count retained by this loop family."""
-        if (
-            sum(len(entry.path.steps) for entry in self.loops)
-            > MAX_GAUGE_LOOP_FAMILY_STEPS
-        ):
-            raise _validation_error(
-                "loop_family_steps",
-                "aggregate loop-family paths may contain at most "
-                f"{MAX_GAUGE_LOOP_FAMILY_STEPS} steps",
-            )
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_nested_carriers(cls, value: object) -> object:
+        _preflight_loop_family(value)
+        return canonicalize_json_containers(value)
 
     @model_validator(mode="after")
     def require_source_bound_closed_loops(self) -> Self:
+        # Existing model instances may skip the before-validator. Establish the
+        # same bounded shape facts before traversing or dumping their children.
+        _preflight_loop_family(self)
         try:
-            if type(self.loops) is not tuple or any(
-                type(entry) is not GaugeLoopHolonomy
-                or type(getattr(entry, "path", None)) is not OrientedGaugePath
-                or type(getattr(getattr(entry, "path", None), "steps", None))
-                is not tuple
-                or any(
-                    type(step) is not GaugePathStep
-                    or type(getattr(step, "edge_id", None)) is not str
-                    or type(getattr(step, "forward", None)) is not bool
-                    for step in getattr(getattr(entry, "path", None), "steps", ())
-                )
-                or type(getattr(entry, "holonomy", None)) is not PermutationLabel
-                or type(getattr(getattr(entry, "holonomy", None), "image", None))
-                is not tuple
-                for entry in self.loops
-            ):
-                raise ValueError("loop-family entries must be canonical values")
-            if (
-                type(getattr(self, "field", None)) is not GaugeField
-                or type(getattr(getattr(self, "field", None), "edge_labels", None))
-                is not tuple
-                or type(
-                    getattr(
-                        getattr(getattr(self, "field", None), "lattice", None),
-                        "vertices",
-                        None,
-                    )
-                )
-                is not tuple
-                or type(
-                    getattr(
-                        getattr(getattr(self, "field", None), "lattice", None),
-                        "edges",
-                        None,
-                    )
-                )
-                is not tuple
-            ):
-                raise ValueError("source field is not immutable")
             field = GaugeField.model_validate(self.field.model_dump())
             loops = tuple(
                 GaugeLoopHolonomy.model_validate(entry.model_dump())
@@ -1053,55 +1493,28 @@ class GaugeLoopFamilyHolonomies(StrictModel):
             raise _validation_error(
                 "loop_family_parent", "loop-family source is malformed"
             ) from None
-        if not _has_valid_permutation_degree(self.field):
-            raise _validation_error(
-                "loop_family_degree", "source field has an invalid permutation degree"
-            )
-        total_steps = 0
+        by_id = {edge.edge_id: edge for edge in field.lattice.edges}
         for entry in loops:
-            if (
-                not isinstance(entry, GaugeLoopHolonomy)
-                or not isinstance(entry.path, OrientedGaugePath)
-                or type(entry.basepoint) is not str
-                or not isinstance(entry.holonomy, PermutationLabel)
-                or type(entry.path.steps) is not tuple
-                or any(
-                    not isinstance(step, GaugePathStep)
-                    or type(step.edge_id) is not str
-                    or type(step.forward) is not bool
-                    for step in entry.path.steps
-                )
-                or any(type(value) is not int for value in entry.holonomy.image)
-                or type(entry.holonomy.image) is not tuple
-                or type(entry.holonomy.degree) is not int
-                or (
-                    entry.path.basepoint is not None
-                    and type(entry.path.basepoint) is not str
-                )
-            ):
-                raise _validation_error(
-                    "loop_family_path", "loop-family values are malformed"
-                )
             path = entry.path
-            steps = path.steps
-            total_steps += len(steps)
-            if total_steps > MAX_GAUGE_LOOP_FAMILY_STEPS:
-                raise _validation_error(
-                    "loop_family_steps",
-                    "aggregate loop-family paths may contain at most 4096 steps",
-                )
-            if (
-                entry.holonomy.degree != field.degree
-                or len(entry.holonomy.image) != field.degree
-                or sorted(entry.holonomy.image) != list(range(field.degree))
-            ):
+            if entry.holonomy.degree != field.degree:
                 raise _validation_error(
                     "loop_family_holonomy",
                     "every loop holonomy must belong to the source permutation group",
                 )
-        if _loop_family_output_units(field, loops) > (
-            MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS
-        ):
+            loop_first, loop_last = _lattice_walk_endpoints(by_id, path.steps)
+            if loop_first is None:
+                loop_first = loop_last = path.basepoint
+            if (
+                loop_first not in field.lattice.vertices
+                or loop_first != loop_last
+                or entry.basepoint != loop_first
+                or (path.basepoint is not None and path.basepoint != loop_first)
+            ):
+                raise _validation_error(
+                    "loop_family_path",
+                    "each loop must be a closed walk based at its declared basepoint",
+                )
+        if _loop_family_output_units(field, loops) > MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS:
             raise _validation_error(
                 "loop_family_output",
                 "source-bound loop family exceeds its exact output envelope",

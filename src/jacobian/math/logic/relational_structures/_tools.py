@@ -1005,9 +1005,10 @@ TOOLS: MathTools = (
             "the complete function space to "
             f"{MAX_RELATIONAL_POLYMORPHISM_FAMILY_SIZE} candidates, aggregate "
             f"table-generation/preservation work to {MAX_POLYMORPHISM_FAMILY_WORK} "
-            "steps, and the complete serialized result to "
-            f"{MAX_POLYMORPHISM_FAMILY_RESULT_CELLS} bytes before allocating "
-            "candidate tables; canonical relation-row membership scans are "
+            "steps, and the retained result entries to "
+            f"{MAX_POLYMORPHISM_FAMILY_RESULT_CELLS} cells before allocating "
+            "candidate tables. That is a structural cell envelope, not an "
+            "encoded-byte limit; canonical relation-row membership scans are "
             "included in the work bound."
         ),
         request_type=RelationalPolymorphismEnumerationRequest,
@@ -1048,8 +1049,9 @@ TOOLS: MathTools = (
             "relation of the exact source before closure. Admission bounds the "
             f"power to {MAX_RELATIONAL_INVARIANT_CLOSURE_TUPLES} rows, all "
             f"preservation and incremental closure work to {MAX_RELATIONAL_INVARIANT_CLOSURE_WORK} "
-            "steps, and a conservative result size to "
-            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS} bytes before expansion. This "
+            "steps, and the retained result entries to "
+            f"{MAX_RELATIONAL_INVARIANT_CLOSURE_RESULT_CELLS} cells before expansion. "
+            "That is a structural cell envelope, not an encoded-byte limit. This "
             "computes closure under the supplied finite operations; it does not "
             "claim the input is a complete polymorphism clone."
         ),

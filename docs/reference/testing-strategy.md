@@ -242,14 +242,27 @@ takes them. The rule covers direct imports and package-form imports such as
 `from jacobian.catalog import builtins`, including aliases. Contract-only imports
 from `jacobian.catalog.models` remain allowed.
 
-`tests/catalog/` covers catalog discovery, declarations, and individual
-published-operation contracts. These tests may invoke operations by ID, decode
-their advertised examples, or compare native and dispatched results.
-`tests/dispatch/` covers the shared strict-parsing and dispatch infrastructure.
-`tests/integration/catalog/` contains the aggregate advertised-example runner
-and broader operation-composition checks. Using dispatch or an advertised
-example alone does not force an individual operation contract test out of the
-catalog lane. Keep these catalog-backed checks outside `tests/math/`.
+Place new tests according to the boundary under test and its existing Make
+target:
+
+- `tests/catalog/` covers immutable catalog membership, declarations, schema
+  checks, and discovery. `make test-catalog` uses a 30-second per-test timeout.
+- `tests/dispatch/` covers strict parsing and direct operation-ID execution,
+  including regressions for individual operations and native-versus-dispatch
+  parity checks. `make test-dispatch` uses a 120-second per-test timeout.
+- `tests/integration/catalog/` contains advertised-example execution coverage,
+  including the aggregate example runner, and broader operation-composition
+  checks. An advertised example used only as a regression fixture does not
+  change the owning boundary: a direct-dispatch regression still uses the
+  dispatch lane.
+
+Some existing catalog modules, including
+`tests/catalog/test_periodic_congruence_operations.py`, still contain direct
+dispatch and example-execution checks. These are legacy placements that have
+not been comprehensively migrated. Put new execution regressions in the lanes
+above; when moving legacy tests, preserve their fixtures and select the owning
+Make target so they receive its execution budget. Keep every catalog-backed
+check outside `tests/math/`.
 
 `test_math_tests_do_not_boot_complete_product_boundaries` enforces the math
 lane's import boundary. It does not enforce placement among catalog, dispatch,

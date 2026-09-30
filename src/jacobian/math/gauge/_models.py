@@ -648,6 +648,88 @@ class FiniteGroupGaugeFaceCurvature(StrictModel):
     value: FiniteGroupTableElement
 
 
+def _check_raw_curvature_element(value: object) -> None:
+    fields = _raw_fields(
+        value,
+        (FiniteGroupTableElement,),
+        {"group", "index"},
+        "curvature_shape",
+    )
+    _check_raw_group_shape(fields.get("group"))
+    _check_raw_group_index(fields.get("index"))
+
+
+def _require_native_curvature_containers(
+    value: object, *, native: bool = False
+) -> None:
+    """Check native immutability only after every owned subtree is bounded."""
+    if isinstance(value, StrictModel):
+        for child in value.__dict__.values():
+            _require_native_curvature_containers(child, native=True)
+    elif type(value) is dict:
+        if native:
+            raise ValueError("native curvature carriers must retain typed children")
+        for child in value.values():
+            _require_native_curvature_containers(child)
+    elif isinstance(value, (tuple, list)) and type(value) in (tuple, list):
+        if native and type(value) is not tuple:
+            raise ValueError("native curvature carriers must retain immutable axes")
+        for child in value:
+            _require_native_curvature_containers(child, native=native)
+
+
+def _preflight_curvature_result(value: object) -> None:
+    """Bound source, row, and repeated table carriers before parsing or dumping."""
+    try:
+        result = _raw_fields(
+            value,
+            (FiniteGroupGaugeCurvatureResult,),
+            {"complex", "field", "face_values", "flat"},
+            "curvature_shape",
+        )
+        _check_raw_complex_shape(result.get("complex"))
+        field = _raw_fields(
+            result.get("field"),
+            (FiniteGroupGaugeField,),
+            {"lattice", "group", "edge_values"},
+            "curvature_shape",
+        )
+        _check_raw_lattice_shape(field.get("lattice"))
+        _check_raw_group_shape(field.get("group"))
+        for entry in _raw_sequence(
+            field.get("edge_values"), MAX_GAUGE_EDGES, "curvature_shape"
+        ):
+            fields = _raw_fields(
+                entry,
+                (FiniteGroupGaugeEdgeLabel,),
+                {"edge_id", "value"},
+                "curvature_shape",
+            )
+            if not _is_raw_label(fields.get("edge_id")):
+                raise ValueError("edge IDs must be bounded scalar labels")
+            _check_raw_curvature_element(fields.get("value"))
+        for row in _raw_sequence(
+            result.get("face_values"), MAX_GAUGE_FACES, "curvature_shape"
+        ):
+            fields = _raw_fields(
+                row,
+                (FiniteGroupGaugeFaceCurvature,),
+                {"face_id", "value"},
+                "curvature_shape",
+            )
+            if not _is_raw_label(fields.get("face_id")):
+                raise ValueError("face IDs must be bounded scalar labels")
+            _check_raw_curvature_element(fields.get("value"))
+        if type(result.get("flat")) is not bool:
+            raise ValueError("flatness must be a boolean")
+        _require_native_curvature_containers(value)
+    except (AttributeError, TypeError, ValueError):
+        raise _validation_error(
+            "curvature_shape",
+            "curvature sources and rows must be bounded canonical carriers",
+        ) from None
+
+
 class FiniteGroupGaugeCurvatureResult(StrictModel):
     """Face holonomies and flatness, bound to their complex and edge field."""
 
@@ -658,6 +740,12 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
     )
     flat: StrictBool
 
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_nested_carriers(cls, value: object) -> object:
+        _preflight_curvature_result(value)
+        return canonicalize_json_containers(value)
+
     @model_validator(mode="after")
     def require_source_binding(self) -> Self:
         """Bind the rows and the flatness claim to the retained parents.
@@ -667,6 +755,28 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
         statement: a consumer of this carrier reads the face set, the group
         element, and the flatness flag without re-deriving them.
         """
+        # Existing native result instances can skip the before-validator.
+        # Re-establish bounded shape before copying any nested source or row.
+        _preflight_curvature_result(self)
+        try:
+            complex_value = FiniteGroupGaugeComplex.model_validate(
+                self.complex.model_dump()
+            )
+            field = FiniteGroupGaugeField.model_validate(self.field.model_dump())
+            rows = tuple(
+                FiniteGroupGaugeFaceCurvature.model_validate(row.model_dump())
+                for row in self.face_values
+            )
+            if (
+                complex_value != self.complex
+                or field != self.field
+                or rows != self.face_values
+            ):
+                raise ValueError("curvature carriers are not canonical")
+        except (AttributeError, TypeError, ValueError):
+            raise _validation_error(
+                "curvature_shape", "curvature sources and rows are malformed"
+            ) from None
         if (
             self.complex.lattice != self.field.lattice
             or self.complex.group != self.field.group

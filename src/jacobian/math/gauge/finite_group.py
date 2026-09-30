@@ -408,11 +408,15 @@ def finite_group_gauge_basepoint_transport(
     ``s``, the returned loop is ``reverse(gamma) * ell * gamma``. Its
     holonomy is therefore ``Hol(gamma)^-1 Hol(ell) Hol(gamma)``.
     """
+    # A native caller can reach this kernel through ``model_construct`` and
+    # bypass the field validators, so read the parent with a guarded probe
+    # instead of leaking ``AttributeError`` from the guard itself.
+    group = getattr(field, "group", None)
     if (
         not isinstance(field, FiniteGroupGaugeField)
         or not isinstance(loop, OrientedGaugePath)
         or not isinstance(connector, OrientedGaugePath)
-        or not isinstance(field.group, FiniteGroupTable)
+        or not isinstance(group, FiniteGroupTable)
     ):
         _reject(
             "request",
@@ -546,12 +550,23 @@ def finite_group_gauge_curvature(
             "lattice_gauge.finite_group.curvature_request_shape",
             "complex and field must be typed values",
         )
-    group = complex_value.group
+    # Read every parent through a guarded probe: a bypass-constructed complex
+    # or field must produce the operation's typed domain error, not an
+    # ``AttributeError`` from the comparison itself.
+    group = getattr(complex_value, "group", None)
+    field_lattice = getattr(field, "lattice", None)
+    field_group = getattr(field, "group", None)
     if (
         not isinstance(group, FiniteGroupTable)
-        or complex_value.lattice != field.lattice
-        or group != field.group
+        or not isinstance(field_lattice, GaugeLattice)
+        or not isinstance(field_group, FiniteGroupTable)
     ):
+        _reject(
+            "request",
+            "lattice_gauge.finite_group.curvature_request_shape",
+            "complex and field must carry their exact lattice and group parents",
+        )
+    if complex_value.lattice != field_lattice or group != field_group:
         _reject(
             "request",
             "lattice_gauge.finite_group.curvature_parent_mismatch",

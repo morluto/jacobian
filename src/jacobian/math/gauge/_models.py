@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Annotated, Self
 
 from pydantic import (
@@ -71,6 +72,30 @@ def _check_raw_lattice_shape(lattice: object) -> None:
             raise _validation_error(
                 "complex_edge_bound", "lattice exceeds the edge bound"
             )
+        # Bound each nested value before canonicalization copies the container
+        # tree. An outer count alone lets one malformed label carry an
+        # unbounded inner array, which is then materialized before the field
+        # rejects it.
+        for vertex in vertices if isinstance(vertices, (tuple, list)) else ():
+            if not _is_raw_label(vertex):
+                raise _validation_error(
+                    "complex_vertex_shape", "each vertex must be a gauge label"
+                )
+        for edge in edges if isinstance(edges, (tuple, list)) else ():
+            if not isinstance(edge, dict) or set(edge) - {
+                "edge_id",
+                "tail",
+                "head",
+            }:
+                raise _validation_error(
+                    "complex_edge_shape", "each edge must be a lattice edge"
+                )
+            for key in ("edge_id", "tail", "head"):
+                if not _is_raw_label(edge.get(key)):
+                    raise _validation_error(
+                        "complex_edge_shape",
+                        "each edge must be a lattice edge",
+                    )
 
 
 def _check_raw_group_shape(group: object) -> None:
@@ -133,12 +158,62 @@ def _raw_face_step_count(face: object) -> int:
         raise _validation_error(
             "complex_face_length", "face exceeds 256 boundary steps"
         )
+    if not _is_raw_label(face.get("face_id")):
+        raise _validation_error(
+            "complex_face_shape", "each face must be a labelled walk"
+        )
+    basepoint = boundary.get("basepoint")
+    if basepoint is not None and not _is_raw_label(basepoint):
+        raise _validation_error(
+            "complex_boundary_shape", "a boundary basepoint must be a gauge label"
+        )
     for step in steps:
         if isinstance(step, dict) and set(step) - {"edge_id", "forward"}:
             raise _validation_error(
                 "complex_step_shape", "face step has unknown fields"
             )
+        if (isinstance(step, dict) and not _is_raw_label(step.get("edge_id"))) or (
+            type(step.get("forward")) is not bool
+        ):
+            raise _validation_error(
+                "complex_step_shape",
+                "face steps must be labelled boolean traversals",
+            )
     return len(steps)
+
+
+def _lattice_walk_endpoints(
+    by_id: Mapping[str, GaugeEdge],
+    steps: tuple[GaugePathStep, ...],
+) -> tuple[str | None, str | None]:
+    """Return the first and last vertex of a walk over the retained lattice.
+
+    Every step must name a lattice edge, traverse it in one of its two
+    directions, and continue from the previous head. A consumer reads these
+    walks directly, so a decoded path must be one the lattice admits.
+    """
+    cursor: str | None = None
+    first: str | None = None
+    for step in steps:
+        edge = by_id.get(step.edge_id)
+        if edge is None or type(step.forward) is not bool:
+            raise _validation_error(
+                "lattice_walk", "walk steps must be typed lattice traversals"
+            )
+        tail, head = (edge.tail, edge.head) if step.forward else (edge.head, edge.tail)
+        if cursor is not None and tail != cursor:
+            raise _validation_error(
+                "lattice_walk", "walk steps must chain head-to-tail"
+            )
+        if first is None:
+            first = tail
+        cursor = head
+    return first, cursor
+
+
+def _is_raw_label(value: object) -> bool:
+    """One retained label is a bounded string, not a container of strings."""
+    return isinstance(value, str) and 1 <= len(value) <= MAX_GAUGE_LABEL_LENGTH
 
 
 MAX_GAUGE_VERTICES = 64
@@ -552,6 +627,45 @@ class FiniteGroupGaugeCurvatureResult(StrictModel):
     )
     flat: StrictBool
 
+    @model_validator(mode="after")
+    def require_source_binding(self) -> Self:
+        """Bind the rows and the flatness claim to the retained parents.
+
+        The rows are the face holonomies of ``self.complex`` in its own face
+        order, and ``flat`` is their own identity claim. Neither is a caller
+        statement: a consumer of this carrier reads the face set, the group
+        element, and the flatness flag without re-deriving them.
+        """
+        order = len(self.complex.group.multiplication)
+        if tuple(row.face_id for row in self.face_values) != tuple(
+            face.face_id for face in self.complex.faces
+        ):
+            raise _validation_error(
+                "curvature_face_binding",
+                "curvature rows must cover the retained complex faces in order",
+            )
+        for row in self.face_values:
+            if row.value.group != self.complex.group or row.value.group != (
+                self.field.group
+            ):
+                raise _validation_error(
+                    "curvature_parent",
+                    "each curvature element must belong to the retained group",
+                )
+            index = row.value.index
+            if type(index) is not int or not 0 <= index < order:
+                raise _validation_error(
+                    "curvature_element", "curvature elements must be table indices"
+                )
+        if self.flat != all(
+            row.value.index == self.complex.group.identity for row in self.face_values
+        ):
+            raise _validation_error(
+                "curvature_flatness",
+                "flatness must be the identity claim of the retained rows",
+            )
+        return self
+
 
 class FiniteGroupGaugeHolonomyRequest(StrictModel):
     field: FiniteGroupGaugeField
@@ -664,7 +778,106 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
                 "basepoint_transport_parent",
                 "transport paths, endpoints, and holonomies must bind to the field",
             )
+        self._require_closed_walks()
+        self._require_conjugation()
         return self
+
+    def _require_closed_walks(self) -> None:
+        """Every declared path must be a walk of the retained lattice.
+
+        The transported loop is the mathematical claim of this result — it is
+        read as a path and its holonomy as a product — so a decoded value must
+        not be able to present an open loop, an unrelated connector, or a path
+        that never existed on this lattice.
+        """
+        by_id = {edge.edge_id: edge for edge in self.field.lattice.edges}
+
+        def walk_of(path: OrientedGaugePath) -> tuple[str | None, str | None]:
+            try:
+                return _lattice_walk_endpoints(by_id, path.steps)
+            except ValueError as exc:
+                raise _validation_error("basepoint_transport_walk", str(exc)) from None
+
+        loop_first, loop_end = walk_of(self.loop)
+        if loop_first is not None and (
+            loop_end != loop_first or loop_first != self.source_basepoint
+        ):
+            raise _validation_error(
+                "basepoint_transport_loop",
+                "the source loop must be closed at the source basepoint",
+            )
+        connector_first, _connector_end = walk_of(self.connector)
+        if connector_first is not None and connector_first != self.source_basepoint:
+            raise _validation_error(
+                "basepoint_transport_connector",
+                "the connector must start at the source basepoint",
+            )
+        if self.transported_loop.steps != (
+            tuple(
+                GaugePathStep(edge_id=step.edge_id, forward=not step.forward)
+                for step in reversed(self.connector.steps)
+            )
+            + tuple(self.loop.steps)
+            + tuple(self.connector.steps)
+        ):
+            raise _validation_error(
+                "basepoint_transport_walk",
+                "the transported loop must be the conjugated source walk",
+            )
+        transported_first, transported_end = walk_of(self.transported_loop)
+        if transported_first is not None and (
+            transported_first != self.target_basepoint
+            or transported_end != self.target_basepoint
+        ):
+            raise _validation_error(
+                "basepoint_transport_walk",
+                "the transported loop must be closed at the target basepoint",
+            )
+
+    def _require_conjugation(self) -> None:
+        """Recompute the declared holonomies from the retained edge values.
+
+        This is a bounded recomputation over the transported walk, not a
+        verification of a producer's history: the three indices are the whole
+        content of the result, and a consumer reads them directly.
+        """
+        table = self.field.group.multiplication
+        order = len(table)
+        identity = self.field.group.identity
+        element_by_edge = {
+            label.edge_id: label.value.index for label in self.field.edge_values
+        }
+
+        def product_of(path: OrientedGaugePath) -> int:
+            product = identity
+            for step in path.steps:
+                element = element_by_edge.get(step.edge_id)
+                if element is None or not 0 <= element < order:
+                    raise _validation_error(
+                        "basepoint_transport_holonomy",
+                        "transport steps must resolve in the retained edge field",
+                    )
+                product = table[product][element]
+            return product
+
+        source_holonomy = product_of(self.loop)
+        connector_holonomy = product_of(self.connector)
+        connector_inverse = next(
+            candidate
+            for candidate in range(order)
+            if table[candidate][connector_holonomy] == identity
+            and table[connector_holonomy][candidate] == identity
+        )
+        expected = table[table[connector_inverse][source_holonomy]][connector_holonomy]
+        if (
+            self.source_holonomy.index != source_holonomy
+            or self.connector_holonomy.index != connector_holonomy
+            or self.transported_holonomy.index != expected
+        ):
+            raise _validation_error(
+                "basepoint_transport_holonomy",
+                "transport holonomies must be the conjugated source product",
+            )
 
 
 class FiniteGroupGaugeVertexValue(StrictModel):
@@ -1098,6 +1311,21 @@ class GaugeLoopFamilyHolonomies(StrictModel):
                 raise _validation_error(
                     "loop_family_holonomy",
                     "every loop holonomy must belong to the source permutation group",
+                )
+            # Each declared holonomy is the product along a closed walk of the
+            # retained lattice, so a decoded family must describe such a walk
+            # rather than an arbitrary permutation: edges must exist, steps
+            # must chain head-to-tail, the walk must close, and its basepoint
+            # must be the vertex it starts from.
+            loop_first, loop_last = _lattice_walk_endpoints(
+                {edge.edge_id: edge for edge in field.lattice.edges}, steps
+            )
+            if loop_first is not None and (
+                loop_first != loop_last or entry.basepoint != loop_first
+            ):
+                raise _validation_error(
+                    "loop_family_path",
+                    "each loop must be a closed walk based at its declared basepoint",
                 )
         if _loop_family_output_units(field, loops) > (
             MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS

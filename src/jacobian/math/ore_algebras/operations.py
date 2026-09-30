@@ -2463,6 +2463,8 @@ __all__ = [
     "differential_operator_apply",
     "differential_operator_multiply",
     "differential_operator_normalize_polynomial_coefficients",
+    "differential_series_construct",
+    "differential_series_generate_prefix",
     "shift_operator_multiply",
     "shift_operator_power",
 ]
@@ -2489,7 +2491,48 @@ def _admit_dfinite_series(value: DFinitePowerSeries) -> DFinitePowerSeries:
     canonical re-admission helper is the established path for native callers.
     """
 
-    operator = _admit_differential_operator(_as_differential_operator(value.operator))
+    # The DFinitePowerSeries carrier stores coefficients without performing
+    # differential or shift arithmetic, so re-admit against the same
+    # rational-function representation envelope its constructor used rather
+    # than the narrower shift-arithmetic budget. That budget exists for
+    # operations which actually raise and lower operators.
+    try:
+        operator = DifferentialOreOperator.model_validate(
+            _as_differential_operator(value.operator).model_dump()
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("series", "operator"),
+            code="ore_algebra.dfinite_prefix_request",
+            message=(
+                "the series prefix request must contain an ordinary-point "
+                "D-finite value and a bounded count"
+            ),
+        ) from exc
+    for index, term in enumerate(operator.terms):
+        try:
+            require_canonical_rational_function(
+                term.coefficient,
+                maximum_terms=MAX_RATIONAL_FUNCTION_TERMS,
+                maximum_exponent=MAX_RATIONAL_FUNCTION_REPRESENTATION_EXPONENT,
+                maximum_coefficient_digits=MAX_RATIONAL_FUNCTION_COEFFICIENT_DIGITS,
+                label=f"differential coefficient {index}",
+            )
+        except Exception as exc:
+            raise OperationDomainValidationError(
+                location=("series", "operator", "terms", index),
+                code="ore_algebra.differential_coefficient",
+                message=str(exc),
+            ) from exc
+    if not operator.terms or len(value.initial_derivatives.values) != operator.order:
+        raise OperationDomainValidationError(
+            location=("series",),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be nonzero and have exactly "
+                "order(operator) initial derivatives"
+            ),
+        )
     try:
         initial = FiniteRationalSequence.model_validate(
             value.initial_derivatives.model_dump()
@@ -2683,6 +2726,36 @@ def _compute_admitted_dfinite_prefix(
         for exponent, polynomial in polynomials
     ]
     leading = next(polynomial for exponent, polynomial in scaled if exponent == order)
+    # Every differential coefficient may share a power of x, and dividing the
+    # whole equation by that common factor leaves the solved recurrence
+    # unchanged. An equation such as x*D + x is ordinary at 0 only after that
+    # division, so shift the exponents down before requiring a nonzero leading
+    # constant rather than refusing an equation that does have a Taylor series.
+    common_x_order = (
+        min(
+            min(
+                (degree for degree, value in polynomial.items() if value),
+                default=0,
+            )
+            for _, polynomial in scaled
+        )
+        if scaled
+        else 0
+    )
+    if common_x_order:
+        scaled = [
+            (
+                exponent,
+                {
+                    degree - common_x_order: value
+                    for degree, value in polynomial.items()
+                },
+            )
+            for exponent, polynomial in scaled
+        ]
+        leading = next(
+            polynomial for exponent, polynomial in scaled if exponent == order
+        )
     leading_constant = leading.get(0, 0)
     if leading_constant == 0:
         raise OperationDomainValidationError(
@@ -2693,6 +2766,7 @@ def _compute_admitted_dfinite_prefix(
     values = list(initial)
     steps = max(0, count - order) if order else count
     for m in range(steps):
+        request_checkpoint("during D-finite Taylor prefix recurrence")
         accumulated = Fraction(0)
         for exponent, polynomial in scaled:
             for degree, coefficient in polynomial.items():

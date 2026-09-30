@@ -139,15 +139,14 @@ def test_residue_detects_zero_before_the_valuation_routine(
     # The order-division routine cannot express the valuation of zero.  The
     # residue operation must detect the zero rational function structurally
     # rather than relying on the routine to mishandle it.
-    import jacobian.math.function_fields.valuation as valuation
+    import jacobian.math.function_fields.operations as operations
 
     def forbidden(value: object, place: object) -> int:
         raise AssertionError("zero element reached the valuation routine")
 
-    # The routine now lives in the shared `valuation` module, which both the
-    # contracts and the kernels import, so that a contract module never has to
-    # re-enter its owner's operations.
-    monkeypatch.setattr(valuation, "place_valuation_of_rational_function", forbidden)
+    # Patch the consumer's imported alias so every call made by the residue
+    # operation is observable, even though the routine lives in another module.
+    monkeypatch.setattr(operations, "place_valuation_of_rational_function", forbidden)
     result = function_field_place_residue(_finite_place((0, 1)), _element((0,)))
     assert result.residue.coordinates == (0,)
 

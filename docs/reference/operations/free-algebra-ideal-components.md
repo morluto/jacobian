@@ -28,9 +28,9 @@ system against its word coefficient vector.
 
 Admission is performed before context generation or matrix construction. One
 request is limited to 128 ambient words, 256 context rows, 32,768 matrix cells,
-64 decimal digits in the Hadamard bound for rational row reduction, and a
-conservative 2 MB serialized result estimate including the source presentation.
-These are operation limits; they
+64 decimal digits in the Hadamard bound for rational row reduction, and a final
+150,000-cell result allocation that includes the source presentation. Transport
+may separately enforce a delivery byte ceiling. These are operation limits; they
 do not assert that larger homogeneous components are mathematically undefined.
 
 ## Bounded ideal membership

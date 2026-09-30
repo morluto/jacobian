@@ -89,7 +89,8 @@ superseded contract in the PR description. After catalog-conflict resolution,
 run catalog conformance and compare the final diff with intended public symbols.
 Fetch immediately before pushing and inspect a changed head. Respect repository
 branch protection; never use an available bypass to push directly to a protected
-branch. If direct push is rejected, use an authorized topic branch and PR. Never
+branch. Before any push, create or switch to the authorized topic branch, then
+open a PR. Never
 push to a merged or closed PR head; use a follow-up branch.
 
 Complete authorized implementation, relevant validation, and repairs caused by

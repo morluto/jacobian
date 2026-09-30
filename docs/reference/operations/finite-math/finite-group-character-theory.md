@@ -105,24 +105,27 @@ relations directly from admitted canonical class partitions.
 ## Class multiplication constants
 
 `group.class_multiplication_constants.compute` returns the multiplication
-constants of the class algebra: the number of pairs of class elements whose
-product lands in a given class. The result stays exact for every admitted
-constant. This is group data, not a convolution of a particular character, so a
-consumer combining it with a class function must check the class axis it uses.
+constants of the class algebra. Each constant is the number of ordered pairs of
+class elements whose product equals one fixed element of the target class, not
+the total number of pairs landing anywhere in that class. The implementation
+divides the raw pair count by the target class size and retains an exact result
+for every admitted constant. This is group data, not a convolution of a
+particular character, so a consumer combining it with a class function must
+check the class axis it uses.
 
 ## Character kernel
 
-`character.kernel.compute` returns the virtual character whose value at `g` is
-the sum of `chi(h)` over every `h` in the kernel class of `g`. A character whose
-values are all nonconstant averages to zero on the identity's class, and the
-result reports that exactly rather than asserting the character is trivial.
+`character.kernel.compute` returns a `CharacterKernel` containing the ambient
+group and the subgroup whose elements satisfy `chi(g) == chi(1)`. It does not
+return a virtual character, sum over a kernel class, or average values. The
+result's subgroup is the exact kernel of the supplied ordinary character.
 
 ## Character center
 
-`character.center.compute` returns the virtual character whose value at `g` is
-the average of `chi(h)` over the centralizer of `g`. A nonconstant irreducible
-character has value zero wherever the centralizer is smaller than the group, so
-this is a genuinely different projection from the class-algebra kernel.
+`character.center.compute` returns a `CharacterCenter` containing the source
+character, the subgroup on which the representation acts by scalars, and the
+selected class indices with their normalized scalar values. It does not perform
+centralizer averaging or return a virtual-character projection.
 
 ## Symmetric and exterior squares
 

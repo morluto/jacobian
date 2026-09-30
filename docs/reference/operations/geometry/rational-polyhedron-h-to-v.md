@@ -22,8 +22,10 @@ theorem-backed ray and candidate-pair bounds, coefficient growth, weighted
 exact-arithmetic work, affine-dimension rank work, and a conservative upper
 bound on the result's decimal digits against this operation's own
 10,485,760-digit envelope. That envelope is the operation's declared limit; it
-is not inherited from a delivery or JSON egress ceiling. Requests whose exact result can exceed the serializable rational
-envelope or the transport limit are rejected as resource refusals.
+is not inherited from a delivery or JSON egress ceiling. Requests whose exact
+result can exceed the serializable rational envelope are rejected as resource
+refusals. A transport layer may separately refuse delivery at its own boundary,
+but that delivery policy is not native admission.
 
 The value permits zero-dimensional ambient space. Constant inequalities are
 classified exactly: `0 <= b` is redundant when `b >= 0`, and `0 <= b` makes the

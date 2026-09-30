@@ -25,8 +25,9 @@ point-count formula; see MIT 18.783, *Elliptic Curves*, Lecture 8, §8.5
 `F5` fixture independently enumerates both curves' affine points and includes
 the point at infinity.
 
-The field order, twist-search work, and the complete relation's retained-digit
-envelope are admitted before nonsquare search. The operation currently requires `q <=
+The field order and twist-search work are admitted before nonsquare search.
+The operation does not separately admit a retained-digit envelope for the
+returned three-curve/parameter relation. The operation currently requires `q <=
 4096`; characteristics 2 and 3, singular curves, and larger fields are
 outside its contract.
 

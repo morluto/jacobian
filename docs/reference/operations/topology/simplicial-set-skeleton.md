@@ -22,7 +22,8 @@ the derived skeleton and inclusion are built through trusted kernel constructors
 without replaying those consequences.
 
 The exact admission bounds the input identity scan, closure and inclusion scans,
-and the serialized result before constructing derived tables. It uses the
+and the derived tables' structural cells before constructing them. A transport
+layer separately enforces its own byte ceiling. It uses the
 canonical `FiniteTruncatedSimplicialSet` and `TruncatedSimplicialMap` values, so
 the result composes with the existing map operations.
 

@@ -45,8 +45,9 @@ basis identifier. Equality of vectors is equivalent to equality of the
 represented forms because the q-Sturm RREF basis is linearly independent and
 determining through the Sturm bound. The basis producer checks its dimension
 against the independent formula and verifies the full q-Sturm rank before it
-publishes the basis. Equality revalidates the exact character parent, basis
-identifier, coordinate count, and coefficient field; it does not replay basis
+publishes the basis. All of that support is generic equality for the
+coordinates it covers; equality revalidates the exact character parent, basis
+identifier, coordinate count, and coefficient field, and does not replay basis
 construction or expand q-series.
 
 This equality slice admits levels at most 39, character unit tables of at most
@@ -59,8 +60,12 @@ space presentations remain unsupported.
 The basis producer checks its dimension against the independent formula and
 verifies the full q-Sturm rank before it publishes the basis. Beyond the
 existing character-specific transport and comparison path, these generalized
-bases do not add generic equality, Hecke actions, cross-level transport, or
-nonidentity coefficient-field maps.
+bases do not add cross-level transport or nonidentity coefficient-field maps.
+The only Hecke actions are the existing one-dimensional `T_n` matrix support
+and the bad-prime `U_p` support published by
+`modular_form.character_coordinates.u_prime.apply` for `(N, p)` equal to
+`(26, 2)`, `(26, 13)`, `(39, 3)`, or `(39, 13)`; all other generic Hecke
+actions remain unsupported.
 
 [Gamma0 basis construction](modular-forms-gamma0-rational-bases.md) ·
 [Number-theory operations](index.md)

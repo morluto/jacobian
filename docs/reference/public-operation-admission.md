@@ -267,9 +267,11 @@ For a catalog-changing pull request:
    sharper bound safely admits materially larger source-backed cases. Bounds
    must count structural quantities (terms, cells, digits, matrix dimensions);
    a bound derived from serialized JSON bytes, `model_dump_json` length, or a
-   transport `CanonicalLimits` ceiling is a delivery measure, not admission,
-   and the architecture checker rejects it. If an inherited bound uses one,
-   replace it with the structural quantity it was estimating.
+   transport `CanonicalLimits` ceiling is a delivery measure, not admission.
+   The architecture checker flags the recognized byte-policy patterns it knows,
+   not every serialized-byte or transport-ceiling construction, so human review
+   must still reject an inherited bound that uses one. Replace it with the
+   structural quantity it was estimating.
 3. Add a declaration to the owner's `_tools.py` only when the operation passes
    the gates. Keep native-only functions in the owning public module's
    `__all__` without a declaration. Never export a transport `Request` or
@@ -284,11 +286,13 @@ For a catalog-changing pull request:
    schema fixtures that exist, and run the catalog, native-API, and owning
    mathematical tests. Include schema/parser agreement and serialized
    producer-consumer tests when those contracts change; do not introduce a
-   parallel hand-maintained schema inventory. Always run the catalog-examples
+   parallel hand-maintained schema inventory. Run the catalog-examples
    integration lane (`tests/integration/catalog/test_builtin_examples.py`) for
-   a new or changed advertised example: the unit-level catalog tests do not
-   execute examples against their own request schemas, so a malformed example
-   passes locally and fails only in CI.
+   a new or changed ordinary advertised example: the unit-level catalog tests do
+   not execute examples against their own request schemas, so a malformed example
+   passes locally and fails only in CI. Run `make test-singular` for an example
+   marked `singular_catalog_example`, because the catalog-examples lane
+   explicitly excludes those backend-dependent cases.
 
 Publication review is not a runtime recommendation or execution-planning
 layer. Request admission remains inside the native operation and is computed

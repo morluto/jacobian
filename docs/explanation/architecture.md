@@ -145,8 +145,11 @@ declaration:
   Leave it unpublished, and do not add a request carrier for it either — a
   carrier with no producer and no consumer is dead weight that implies a
   contract the catalog does not offer.
-- If no such test exists, the omission is probably real. Confirm the operation
-  establishes a reusable postcondition, then publish it.
+- If no such test exists, the omission may be intentional or real. Confirm the
+  operation establishes a reusable postcondition, then complete the normal
+  public-operation admission review—gap diagnosis, boundedness review,
+  declaration/schema work, and public-boundary evidence—before publishing it.
+  Do not publish directly from helper discovery.
 
 Reaching for the catalog as the sole evidence inverts the answer in both
 directions: it manufactures work that was already decided against, and it

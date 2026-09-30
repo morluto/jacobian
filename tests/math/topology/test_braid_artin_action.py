@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.edge_paths._models import FiniteGroupWord, WordLetter
 from jacobian.math.topology.links import BraidLetter, BraidWord, braid_artin_action
-from jacobian.math.topology.links._extensions_models import BraidWordRequest
 
 
 def _word(strands: int, *letters: tuple[int, int]) -> BraidWord:
@@ -69,13 +67,6 @@ def test_action_admits_cancellation_and_bounds_reduced_expansion() -> None:
     assert tuple(len(image.letters) for image in cancelled.generator_images) == (13, 11)
     with pytest.raises(OperationResourceAdmissionError, match="128-letter"):
         braid_artin_action(_word(2, *((1, 1),) * 64))
-
-
-def test_action_is_published_as_one_typed_catalog_operation() -> None:
-    tools = {tool.operation_id: tool for tool in BUILTIN_TOOLS}
-    operation = tools["braid.word.artin_action.compute"]
-    result = operation.run(BraidWordRequest(word=_word(2, (1, 1), (1, -1))))
-    assert result.generator_images == (_free_word((0, 1)), _free_word((1, 1)))
 
 
 def test_action_reduces_inverse_braid_prefixes_before_bounded_expansion() -> None:

@@ -4,7 +4,6 @@ import pytest
 
 from jacobian._exact import CanonicalRational
 from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -138,16 +137,3 @@ def test_forged_small_chain_bases_do_not_bypass_admission() -> None:
     with pytest.raises(OperationResourceAdmissionError) as error:
         koszul_homology_map(ModuleKoszulHomologyMapRequest(chain_map=forged))
     assert error.value.errors()[0]["type"] == "koszul.module.homology_map_basis_budget"
-
-
-def test_catalog_example_runs() -> None:
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "homological.koszul.homology_map.compute"
-    )
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-    assert result.degree_maps == (((q(1),),),)

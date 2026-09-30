@@ -50,7 +50,10 @@ def _admit_source_graph(
         + 4 * edge_count * max(1, places)
         + state_count
         + edge_count
-        + parented_markings * places * transitions
+        # The preflight's fourth value is already the total matrix-cell work of
+        # every parent-bound marking; multiplying it by the source dimensions
+        # again squared that cost.
+        + parented_markings
         + label_characters
         + parented_markings * sum(len(label) for label in base_labels)
         + 4 * state_count * max(1, (state_count - 1).bit_length())

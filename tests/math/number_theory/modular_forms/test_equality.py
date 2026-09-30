@@ -60,8 +60,9 @@ def test_global_equality_rejects_different_exact_spaces() -> None:
     left = _form(1, 12, (1, 0))
     right = _form(2, 4, (2, 3))
 
-    with pytest.raises(OperationDomainValidationError, match="equal weights"):
+    with pytest.raises(OperationDomainValidationError) as error:
         modular_form_coordinates_equal(left, right)
+    assert error.value.errors()[0]["type"] == "modular_form.equality_weight_mismatch"
 
 
 def test_global_equality_compares_forms_across_nested_levels() -> None:
@@ -122,8 +123,9 @@ def test_global_equality_re_admits_model_constructed_values() -> None:
         coordinates=(CanonicalRational(num=1, den=2),),
     )
 
-    with pytest.raises(OperationDomainValidationError, match="coordinate count"):
+    with pytest.raises(OperationDomainValidationError) as error:
         modular_form_coordinates_equal(valid, forged)
+    assert error.value.errors()[0]["type"] == "modular_form.coordinates_shape"
 
 
 def test_global_equality_rejects_noncanonical_forged_rationals() -> None:

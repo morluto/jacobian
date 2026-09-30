@@ -642,3 +642,35 @@ def test_strict_lds_matches_independent_subsequence_enumeration() -> None:
             ]
             assert result.length == max(feasible_lengths, default=0)
             assert result.values == tuple(letters[index] for index in result.indices)
+
+
+def test_inverse_word_trace_admits_the_same_words_as_the_forward_path() -> None:
+    """The reverse ledger is charged structurally, like the forward one.
+
+    The inverse admission used a serialized-byte formula charged against the
+    same cell constant, so it grew with `MAX_SYMBOL_LENGTH` and refused pairs
+    the forward path accepts: a 255-letter word over a one-character alphabet
+    charged 250,934 against the 250,000-cell limit although the ledger holds
+    255 events and no bump steps at all, and a 500-letter pair was refused too.
+    """
+    from jacobian.math.combinatorics.algebraic._rsk import (
+        FiniteWord,
+        _admit_inverse_trace,
+    )
+    from jacobian.math.combinatorics.algebraic._rsk import (
+        row_insertion_rsk as _row_insertion,
+    )
+
+    inverse_tool = next(
+        tool
+        for tool in TOOLS
+        if tool.operation_id == "tableau.rsk.inverse_word.trace.compute"
+    )
+
+    for length in (253, 255, 256, 300, 500):
+        word = FiniteWord(alphabet=("a",), letters=("a",) * length)
+        pair = _row_insertion(word)
+        # the structural ledger counts events plus bump steps, not symbol widths
+        _admit_inverse_trace(pair)
+        result = inverse_tool.run(RSKInverseWordRequest(pair=pair))
+        assert result.word == word

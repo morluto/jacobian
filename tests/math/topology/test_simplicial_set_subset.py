@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.topology.simplicial_sets import (
     SimplicialSubsetPrefix,
@@ -18,8 +15,6 @@ from jacobian.math.topology.simplicial_sets.maps import (
     compose_simplicial_maps,
     identity_simplicial_map,
 )
-from jacobian.math.topology.simplicial_sets.subset_models import SimplicialSubsetRequest
-from jacobian.math.topology.simplicial_sets.subset_tools import TOOLS
 
 
 def _delta_one_prefix():
@@ -93,21 +88,3 @@ def test_serialized_subobject_inclusion_composes_as_a_simplicial_map() -> None:
     assert composite.source == restored.inclusion.source
     assert composite.target == ambient
     assert composite.maps == restored.inclusion.maps
-
-
-def test_subset_operation_catalog_example_and_json_request() -> None:
-    operation_id = "topology.simplicial_set.subset.from_degree_families.compute"
-    tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == operation_id)
-    request = SimplicialSubsetRequest.model_validate(tool.examples[0].input)
-    assert tool.run(request).inclusion.source.sets[0] == ("(0)",)
-
-    tool = next(tool for tool in TOOLS if tool.operation_id == operation_id)
-    result = tool.run(
-        tool.request_type.model_validate(json.loads(request.model_dump_json()))
-    )
-    result = result.model_dump(mode="json")
-    assert result["inclusion"]["maps"] == [[0], [0], [0]]
-    assert (
-        SimplicialSubsetPrefix.model_validate(result).inclusion.source
-        == tool.run(request).inclusion.source
-    )

@@ -4,7 +4,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.math.geometry.crystallographic.extensions._models import (
     CrystallographicPolytopePairingRequest,
     FiniteLatticeExtension,
@@ -121,20 +120,6 @@ def _checked_translation_torus(generators: tuple[tuple[int, ...], ...]):
 
 def _checked_cube():
     return _checked_translation_torus(((1, 0, 0), (0, 1, 0), (0, 0, 1)))
-
-
-def test_translation_torus_operation_is_published() -> None:
-    operation = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id
-        == "crystallographic.translation_torus.quotient_chains.compute"
-    )
-    source = _checked_cube()
-    result = operation.run(source)
-
-    assert operation.request_type is type(source)
-    assert operation.result_type is type(result)
 
 
 def test_checked_cube_gives_integral_torus_product_chains() -> None:

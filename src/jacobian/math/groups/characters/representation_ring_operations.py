@@ -1023,7 +1023,14 @@ def _admit_tensor_arithmetic(
         + max(0, dimension - 1)
         + 2
     )
-    predicted_digits = product_digits + table_digits + len(str(order)) + (order - 1)
+    # Summing `order` rationals of width d grows the numerator by at most
+    # len(str(order)) digits, which is charged here. The previous formula also
+    # added (order - 1) digits, which is dimensionally wrong: it made the
+    # predicted width grow linearly in the group order, and since this value is
+    # squared and multiplied by rows*classes*dimension it produced an order**4
+    # term that rejected documented cyclic groups (C11 charged 243M units
+    # against a 50M cap while actually taking about 20ms).
+    predicted_digits = product_digits + table_digits + len(str(order))
     # Two input expansions and one exact reconstruction of the result are
     # mandatory. This includes the source-only group-order enumeration once.
     work = (
@@ -1031,7 +1038,6 @@ def _admit_tensor_arithmetic(
         + classes * dimension * dimension * product_digits**2
         + rows
         * classes
-        * order
         * (order + 4 * dimension * dimension)
         * (product_digits + table_digits) ** 2
         + rows * classes * dimension * predicted_digits**2

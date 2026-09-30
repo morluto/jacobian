@@ -295,6 +295,23 @@ def _preflight_complete_automaton(
                 code="tree_context.automaton_transition_shape",
                 message="automaton transitions must be canonical bounded rows",
             )
+    # The checks above cover row field types and child length only. A
+    # model_construct carrier can still carry an out-of-range target state, a
+    # symbol/rank mismatch, or duplicate keys: a one-state unary carrier whose
+    # sole transition targets state 1 passed and produced the state map (1,),
+    # which its own result contract rejects, while a duplicate key escaped as a
+    # raw KeyError. Revalidate the carrier through its model so native and
+    # catalog execution share one boundary.
+    try:
+        CompleteDeterministicBottomUpTreeAutomaton.model_validate(
+            automaton.model_dump(), strict=True
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code="tree_context.automaton_transition_shape",
+            message="automaton transitions must be canonical bounded rows",
+        ) from exc
 
 
 def plug_tree_context_operation(

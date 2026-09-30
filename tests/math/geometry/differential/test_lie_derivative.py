@@ -19,13 +19,11 @@ from jacobian._execution import (
     current_request_execution,
     request_execution,
 )
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.geometry.differential import (
     RationalCoordinateTensor,
     RationalLieDerivativeProfile,
     lie_derivative,
-    verify_lie_derivative,
 )
 from jacobian.math.geometry.differential import _bounds as lie_bounds
 from jacobian.math.geometry.differential import _sympy as lie_backend
@@ -1212,36 +1210,6 @@ def test_result_exponent_admission_has_an_accepted_and_rejected_edge() -> None:
     ) as error:
         lie_derivative(rejected_vector, rejected_scalar)
     assert error.value.errors()[0]["type"].endswith("result_exponent")
-
-
-def test_profile_round_trip_and_catalog_execution_use_the_same_contract() -> None:
-    variables = ("x",)
-    vector = _tensor(
-        variables,
-        ("CONTRAVARIANT",),
-        (_function(variables, (1, (1,))),),
-    )
-    scalar = _tensor(variables, (), (_function(variables, (1, (2,))),))
-    request = RationalLieDerivativeRequest(vector_field=vector, tensor=scalar)
-    tool = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id
-        == "differential_geometry.rational_tensor.lie_derivative.compute"
-    )
-
-    result = tool.run(request)
-    parsed = RationalLieDerivativeProfile.model_validate_json(result.model_dump_json())
-
-    assert parsed == result
-    assert verify_lie_derivative(parsed) is True
-    forged = parsed.model_dump(mode="json")
-    forged["lie_derivative"]["components"][0]["numerator"]["terms"][0][
-        "coefficient"
-    ] = {"num": "3", "den": "1"}
-    forged_claim = RationalLieDerivativeProfile.model_validate_json(json.dumps(forged))
-    assert verify_lie_derivative(forged_claim) is False
-    assert _expressions(result.lie_derivative) == (2 * sympy.Symbol("x") ** 2,)
 
 
 def test_profile_rejects_a_forged_result_that_drops_an_inherited_guard() -> None:

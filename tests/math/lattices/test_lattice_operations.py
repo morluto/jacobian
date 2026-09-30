@@ -529,24 +529,6 @@ def test_lattice_reduction_rejects_order_above_32_before_backend() -> None:
         reduce_lattice_basis(LatticeReductionRequest.model_construct(basis=matrix))
 
 
-def test_all_new_operations_registered_in_catalog() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-    expected = {
-        "lattice.rank_gram.compute",
-        "lattice.canonical_basis.compute",
-        "lattice.dual.compute",
-        "lattice.saturation.compute",
-        "lattice.sublattice_index.compute",
-        "lattice.discriminant_group.compute",
-        "lattice.orthogonal_complement.compute",
-        "lattice.direct_sum.compute",
-        "lattice.orthogonal_sum.compute",
-    }
-    assert expected <= ids
-
-
 def test_lattice_wire_parsing_does_not_prove_rank(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

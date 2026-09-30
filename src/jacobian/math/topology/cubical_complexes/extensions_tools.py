@@ -109,27 +109,16 @@ TOOLS = (
         request_type=CubicalTriangulationRequest,
         result_type=CubicalTriangulationResult,
         run=_triangulate,
-        tags=("topology", "cubical", "triangulation", "exact"),
+        tags=("topology", "cubical", "triangulation", "staircase", "exact"),
+        discovery_terms=(
+            "triangulate cubical cells",
+            "staircase triangulation",
+            "Freudenthal triangulation",
+        ),
         examples=(
             OperationExample(
                 name="square_freudenthal_triangulation",
                 description="Triangulate one unit square into its two canonical path triangles and return a composable finite simplicial complex.",
-                input=_SQUARE,
-            ),
-        ),
-    ),
-    MathTool(
-        operation_id="cubical.triangulation.compute",
-        title="Triangulate finite cubical cells",
-        description="Return the deterministic staircase triangulation of each source cube and its ambient lattice-point axis.",
-        request_type=CubicalTriangulationRequest,
-        result_type=CubicalTriangulationResult,
-        run=_triangulate,
-        tags=("topology", "cubical", "triangulation", "exact"),
-        examples=(
-            OperationExample(
-                name="square_staircase",
-                description="Triangulate one unit square by its two staircase triangles; source intervals must be unit lattice intervals.",
                 input=_SQUARE,
             ),
         ),

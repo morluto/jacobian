@@ -365,7 +365,18 @@ def _compose_coefficients(
         return result
     inner_power = [Fraction(1)] + [Fraction(0)] * (n - 1)
     result = [outer_coefficients[0] * value for value in inner_power]
-    for outer_degree in range(1, n):
+    # Stop at the highest nonzero outer coefficient. The kernel only ever
+    # *adds* `inner_power` when the outer coefficient is nonzero, so powers past
+    # the last nonzero degree are computed and discarded. Stopping there matches
+    # the arithmetic actually performed and is what the admission path's
+    # skip-zero-powers branch already assumed; leaving the loop running produced
+    # an intermediate at order n-1 whose numerator is 256*(n-1) digits, far past
+    # the 4,096-digit result envelope the admission is meant to enforce.
+    highest_outer = max(
+        (degree for degree, value in enumerate(outer_coefficients) if value),
+        default=0,
+    )
+    for outer_degree in range(1, min(highest_outer, n - 1) + 1):
         inner_power = _cauchy_convolve(inner_power, inner_coefficients, n)
         for degree in range(n):
             result[degree] += outer_coefficients[outer_degree] * inner_power[degree]

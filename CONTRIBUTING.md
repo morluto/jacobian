@@ -107,13 +107,14 @@ Commands for each stage:
 
 `tests/math` boots kernels and must not import `jacobian.catalog.builtins`,
 `jacobian.catalog.catalog`, `jacobian.dispatch`, `jacobian.cli`, or
-`jacobian.mcp`. Tests that open a catalog belong in `tests/catalog/`; tests of
-strict parsing or operation-ID dispatch belong in `tests/dispatch/`; tests that
-execute advertised invocation examples belong in `tests/integration/catalog/`.
-The lane follows what a test calls, including native-versus-dispatch parity
-checks. The
+`jacobian.mcp`. Catalog discovery and individual published-operation contract
+tests belong in `tests/catalog/`, including operation-ID invocation, advertised
+example decoding, and native-versus-dispatch parity checks. Shared parsing and
+dispatch infrastructure tests belong in `tests/dispatch/`; the aggregate
+advertised-example runner and broader composition checks live in
+`tests/integration/catalog/`. The
 [test lane ownership](docs/reference/testing-strategy.md#test-lane-ownership)
-section states the rule and the enforcement gate.
+section describes these owners and the enforced math-lane import boundary.
 
 `make check` and `make check-all` take the worktree-local broad-validation
 lease. Run `make validation-status` if one is already running. The

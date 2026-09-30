@@ -242,19 +242,19 @@ takes them. The rule covers direct imports and package-form imports such as
 `from jacobian.catalog import builtins`, including aliases. Contract-only imports
 from `jacobian.catalog.models` remain allowed.
 
-A test that opens a catalog belongs in `tests/catalog/`. A test that checks
-strict parsing or dispatches by operation ID belongs in `tests/dispatch/`.
-A test executing an advertised invocation example belongs in
-`tests/integration/catalog/`. Those distinctions include a test that merely
-asserts a published example executes and a test that compares a kernel result
-against the same operation reached through dispatch. Math-lane and catalog-lane
-tests may assert the same mathematical fact; the lane follows what the test
-*calls*, not what it concludes.
+`tests/catalog/` covers catalog discovery, declarations, and individual
+published-operation contracts. These tests may invoke operations by ID, decode
+their advertised examples, or compare native and dispatched results.
+`tests/dispatch/` covers the shared strict-parsing and dispatch infrastructure.
+`tests/integration/catalog/` contains the aggregate advertised-example runner
+and broader operation-composition checks. Using dispatch or an advertised
+example alone does not force an individual operation contract test out of the
+catalog lane. Keep these catalog-backed checks outside `tests/math/`.
 
-`test_math_tests_do_not_boot_complete_product_boundaries` enforces this. It has
-repeatedly caught the same mistake on re-lands, so treat a failure there as a
-lane placement problem rather than a tooling defect: move the test, do not relax
-the gate.
+`test_math_tests_do_not_boot_complete_product_boundaries` enforces the math
+lane's import boundary. It does not enforce placement among catalog, dispatch,
+and integration lanes. Treat a failure of that import guard as a lane placement
+problem: move the test, do not relax the gate.
 
 ### What an operation's tests should cover
 

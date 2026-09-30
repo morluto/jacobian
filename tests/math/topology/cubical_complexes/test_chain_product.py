@@ -1,4 +1,5 @@
 from collections import Counter
+from collections.abc import Iterable
 
 import pytest
 
@@ -22,7 +23,11 @@ from jacobian.math.topology.cubical_complexes._models import (
 from jacobian.math.topology.cubical_complexes._tools import TOOLS
 
 
-def _chain(ambient_dimension, degree, terms):
+def _chain(
+    ambient_dimension: int,
+    degree: int,
+    terms: Iterable[tuple[tuple[tuple[int, int], ...], int]],
+) -> CubicalChainValue:
     return CubicalChainValue(
         ambient_dimension=ambient_dimension,
         degree=degree,
@@ -35,10 +40,12 @@ def _chain(ambient_dimension, degree, terms):
     )
 
 
-def _direct_boundary(intervals):
+def _direct_boundary(
+    intervals: tuple[tuple[int, int], ...],
+) -> list[tuple[tuple[tuple[int, int], ...], int]]:
     """Independent cubical endpoint formula used only as a test oracle."""
     active_axes = [i for i, (lower, upper) in enumerate(intervals) if lower < upper]
-    boundary_terms = []
+    boundary_terms: list[tuple[tuple[tuple[int, int], ...], int]] = []
     for position, axis in enumerate(active_axes):
         lower, upper = intervals[axis]
         orientation = 1 if position % 2 == 0 else -1
@@ -49,8 +56,10 @@ def _direct_boundary(intervals):
     return boundary_terms
 
 
-def _boundary_of_chain(chain):
-    result = Counter()
+def _boundary_of_chain(
+    chain: CubicalChainValue,
+) -> Counter[tuple[tuple[int, int], ...]]:
+    result: Counter[tuple[tuple[int, int], ...]] = Counter()
     for term in chain.terms:
         for face, coefficient in _direct_boundary(term.cell.intervals):
             result[face] += term.coefficient * coefficient
@@ -59,10 +68,13 @@ def _boundary_of_chain(chain):
     )
 
 
-def _direct_product(left_terms, right_terms):
+def _direct_product(
+    left_terms: Iterable[tuple[tuple[tuple[int, int], ...], int]],
+    right_terms: Iterable[tuple[tuple[tuple[int, int], ...], int]],
+) -> Counter[tuple[tuple[int, int], ...]]:
     left_terms = tuple(left_terms)
     right_terms = tuple(right_terms)
-    result = Counter()
+    result: Counter[tuple[tuple[int, int], ...]] = Counter()
     for left_cell, left_coefficient in left_terms:
         for right_cell, right_coefficient in right_terms:
             result[left_cell + right_cell] += left_coefficient * right_coefficient
@@ -78,7 +90,9 @@ def _direct_product(left_terms, right_terms):
         (2, ((0, 1), (5, 5), (-2, -1))),
     ],
 )
-def test_chain_product_obeys_graded_boundary_identity(left_degree, left_cell):
+def test_chain_product_obeys_graded_boundary_identity(
+    left_degree: int, left_cell: tuple[tuple[int, int], ...]
+) -> None:
     left = _chain(2 if left_degree == 1 else 3, left_degree, [(left_cell, -2)])
     right_cell = ((3, 3), (-4, -3))
     right = _chain(2, 1, [(right_cell, 3)])
@@ -109,7 +123,7 @@ def test_chain_product_obeys_graded_boundary_identity(left_degree, left_cell):
     assert lhs == rhs
 
 
-def test_zero_chain_keeps_its_degree_and_product_ambient_context():
+def test_zero_chain_keeps_its_degree_and_product_ambient_context() -> None:
     zero = _chain(2, 1, [])
     point = _chain(1, 0, [(((7, 7),), 5)])
 
@@ -120,7 +134,7 @@ def test_zero_chain_keeps_its_degree_and_product_ambient_context():
     assert result.terms == ()
 
 
-def test_chain_product_result_can_be_reused_with_a_large_exact_coefficient():
+def test_chain_product_result_can_be_reused_with_a_large_exact_coefficient() -> None:
     coefficient = 10**127
     left = _chain(1, 1, [(((0, 1),), coefficient)])
     right = _chain(1, 0, [(((5, 5),), 1)])
@@ -136,7 +150,7 @@ def test_chain_product_result_can_be_reused_with_a_large_exact_coefficient():
     assert reusable.ambient_dimension == 3
 
 
-def test_chain_product_readmits_untrusted_nested_chain_values():
+def test_chain_product_readmits_untrusted_nested_chain_values() -> None:
     malformed = CubicalChainValue.model_construct(
         ambient_dimension=1,
         degree=0,
@@ -152,7 +166,9 @@ def test_chain_product_readmits_untrusted_nested_chain_values():
         chain_product(request.left, request.right)
 
 
-def test_chain_product_preflights_term_growth_before_constructing_cells(monkeypatch):
+def test_chain_product_preflights_term_growth_before_constructing_cells(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     left = _chain(
         2,
         1,
@@ -180,8 +196,8 @@ def test_chain_product_preflights_term_growth_before_constructing_cells(monkeypa
 
 
 def test_chain_product_preflights_coefficient_growth_before_constructing_cells(
-    monkeypatch,
-):
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     left = _chain(1, 1, [(((0, 1),), 10**100)])
     right = _chain(1, 1, [(((2, 3),), 10**100)])
     request = CubicalChainProductRequest(left=left, right=right)
@@ -201,7 +217,9 @@ def test_chain_product_preflights_coefficient_growth_before_constructing_cells(
     )
 
 
-def test_chain_product_preflights_digit_volume_before_constructing_cells(monkeypatch):
+def test_chain_product_preflights_digit_volume_before_constructing_cells(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     base = 10**63
     left = _chain(
         5,
@@ -239,10 +257,11 @@ def test_chain_product_preflights_digit_volume_before_constructing_cells(monkeyp
         ),
     )
 
-    # 2048 terms x 10 ambient axes x 63-digit coordinates is well past the
-    # structural digit-volume bound, which replaces the old serialized-byte
-    # estimate over the same growth.
-    assert MAX_CUBICAL_CHAIN_PRODUCT_DIGIT_VOLUME < 2048 * 10 * 63
+    # 2048 terms x 10 ambient axes x 2 endpoints x 63-digit coordinates, plus
+    # one coefficient digit per term, is well past the structural digit-volume
+    # bound, which replaces the old serialized-byte estimate over the same
+    # growth.
+    assert MAX_CUBICAL_CHAIN_PRODUCT_DIGIT_VOLUME < 2048 * (2 * 10 * 63 + 1)
     with pytest.raises(OperationResourceAdmissionError) as error:
         operations.chain_product(request.left, request.right)
     assert (
@@ -250,7 +269,47 @@ def test_chain_product_preflights_digit_volume_before_constructing_cells(monkeyp
     )
 
 
-def test_chain_product_accepts_exact_term_bound_and_catalog_round_trips():
+def test_chain_product_charges_both_endpoints_and_the_coefficient() -> None:
+    """The volume bound must measure the digits the expansion materializes.
+
+    1,638 terms in ambient dimension 2 with 20-digit coordinates and 20-digit
+    coefficients. Charging one coordinate digit per axis admits 65,520 against a
+    65,536 envelope, while the terms that are actually built carry
+    1,638 * (2 * 2 * 20 + 20) = 163,800 scalar digits.
+    """
+    left = _chain(
+        1,
+        0,
+        [(((10**19 + index, 10**19 + index),), 9 * 10**9) for index in range(63)],
+    )
+    right = _chain(
+        1,
+        0,
+        [
+            (((10**19 + 100 + index, 10**19 + 100 + index),), 9 * 10**9)
+            for index in range(26)
+        ],
+    )
+    term_count = 63 * 26
+    coordinate_digits = 20
+    coefficient_digits = 20
+    ambient_dimension = 2
+    under_charge = (
+        term_count * ambient_dimension * max(coordinate_digits, coefficient_digits)
+    )
+    materialized = term_count * (
+        2 * ambient_dimension * coordinate_digits + coefficient_digits
+    )
+    assert under_charge <= MAX_CUBICAL_CHAIN_PRODUCT_DIGIT_VOLUME < materialized
+
+    with pytest.raises(OperationResourceAdmissionError) as error:
+        operations.chain_product(left, right)
+    assert (
+        error.value.errors()[0]["type"] == "cubical_complex.chain_product_result_size"
+    )
+
+
+def test_chain_product_accepts_exact_term_bound_and_catalog_round_trips() -> None:
     left = _chain(
         2,
         1,

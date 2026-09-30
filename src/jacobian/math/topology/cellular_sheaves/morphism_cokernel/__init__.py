@@ -199,8 +199,6 @@ class _AdmittedCokernelMorphism:
     target: FiniteCellularSheaf
     field: _ExactField
     target_cover: dict[tuple[tuple[str, ...], tuple[str, ...]], SheafRestriction]
-    input_digits: int
-    morphism_work: int
     cells: tuple[tuple[str, ...], ...]
     source_stalks: dict[tuple[str, ...], SheafStalk]
     target_stalks: dict[tuple[str, ...], SheafStalk]
@@ -243,14 +241,6 @@ def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMor
             raise _domain(
                 "component_structure", "components must be bounded simplex-matrix pairs"
             )
-    try:
-        _readmit_parent_sheaf(source, role="source")
-        _readmit_parent_sheaf(target, role="target")
-    except OperationDomainValidationError as exc:
-        raise _domain(
-            "parent_diagram_not_admitted",
-            "parent restrictions must equal the reconstructed functor diagram",
-        ) from exc
     cells = source.canonical_face_order
     if (
         tuple(stalk.simplex for stalk in source.stalks) != cells
@@ -281,50 +271,6 @@ def _admit_cokernel_morphism(value: SheafMorphismResult) -> _AdmittedCokernelMor
             raise _domain("component_shape", "components must match the stalk axes")
         components[cell] = matrix
         canonical_components.append((cell, field.render(matrix)))
-    checked = SheafMorphismResult(
-        source=source,
-        target=target,
-        components=tuple(canonical_components),
-        natural=True,
-    )
-    checked = SheafMorphismResult(
-        source=source,
-        target=target,
-        components=tuple(canonical_components),
-        natural=True,
-    )
-    return _AdmittedCokernelMorphism(
-        source,
-        target,
-        field,
-        target_cover,
-        input_digits,
-        morphism_work,
-        cells,
-        source_stalks,
-        target_stalks,
-        components,
-        checked,
-    )
-
-
-def cokernel_of_morphism(
-    value: SheafMorphismResult,
-) -> SheafMorphismCokernelResult:
-    """Compute the pointwise quotient sheaf and its target projection."""
-    admitted = _admit_cokernel_morphism(value)
-    source = admitted.source
-    target = admitted.target
-    field = admitted.field
-    target_cover = admitted.target_cover
-    input_digits = admitted.input_digits
-    morphism_work = admitted.morphism_work
-    cells = admitted.cells
-    source_stalks = admitted.source_stalks
-    target_stalks = admitted.target_stalks
-    components = admitted.components
-    checked = admitted.checked
-
     target_restrictions = {
         (item.source, item.target): item
         for item in (*target.cover_restrictions, *target.derived_restrictions)
@@ -349,13 +295,6 @@ def cokernel_of_morphism(
         )
         for lower, upper in target_restrictions
     )
-    reconstruction_work, reconstruction_digit_work = _parent_reconstruction_bounds(
-        (source, target), input_digits=input_digits
-    )
-    if work + reconstruction_work > MAX_SHEAF_MORPHISM_WORK:
-        raise _resource(
-            "work_bound", "cokernel and parent reconstruction exceed work bounds"
-        )
     output_cells = (
         restriction_cells
         + sum(len(stalk.basis) ** 2 for stalk in target.stalks)
@@ -367,6 +306,17 @@ def cokernel_of_morphism(
         if source.coefficient_field.value == "QQ"
         else max(input_digits, len(str(source.prime)))
     )
+    # Admit the whole envelope from the authored geometry before either parent
+    # diagram is reconstructed. Reconstruction expands exact matrices, so a
+    # request this operation rejects must not pay for it. This is the order the
+    # kernel and image paths already use.
+    reconstruction_work, reconstruction_digit_work = _parent_reconstruction_bounds(
+        (source, target), input_digits=input_digits
+    )
+    if work + reconstruction_work > MAX_SHEAF_MORPHISM_WORK:
+        raise _resource(
+            "work_bound", "cokernel and parent reconstruction exceed work bounds"
+        )
     if (
         MAX_SHEAF_MORPHISM_PARENT_CELLS
         + reconstruction_digit_work
@@ -376,6 +326,47 @@ def cokernel_of_morphism(
         raise _resource(
             "output_bound", "cokernel quotient maps exceed the output envelope"
         )
+    try:
+        _readmit_parent_sheaf(source, role="source")
+        _readmit_parent_sheaf(target, role="target")
+    except OperationDomainValidationError as exc:
+        raise _domain(
+            "parent_diagram_not_admitted",
+            "parent restrictions must equal the reconstructed functor diagram",
+        ) from exc
+    checked = SheafMorphismResult(
+        source=source,
+        target=target,
+        components=tuple(canonical_components),
+        natural=True,
+    )
+    return _AdmittedCokernelMorphism(
+        source,
+        target,
+        field,
+        target_cover,
+        cells,
+        source_stalks,
+        target_stalks,
+        components,
+        checked,
+    )
+
+
+def cokernel_of_morphism(
+    value: SheafMorphismResult,
+) -> SheafMorphismCokernelResult:
+    """Compute the pointwise quotient sheaf and its target projection."""
+    admitted = _admit_cokernel_morphism(value)
+    source = admitted.source
+    target = admitted.target
+    field = admitted.field
+    target_cover = admitted.target_cover
+    cells = admitted.cells
+    source_stalks = admitted.source_stalks
+    target_stalks = admitted.target_stalks
+    components = admitted.components
+    checked = admitted.checked
 
     for item in source.cover_restrictions:
         source_map = tuple(tuple(field.parse(x) for x in row) for row in item.entries)

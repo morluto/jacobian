@@ -9,6 +9,7 @@ from typing import Any, Literal, Self
 from pydantic import Field, ValidationError, model_validator
 
 from jacobian._models import StrictModel
+from jacobian.canonical import decimal_digit_width
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -1196,6 +1197,22 @@ def _check_filtered_chain_map_axes(
             )
 
 
+def _scalar_digit_width(value: int | Fraction) -> int:
+    """Exact decimal digits one retained scalar contributes to an envelope.
+
+    Admission must measure growth without asking Python to format a caller
+    integer: ``len(str(value))`` raises beyond ``sys.int_max_str_digits``,
+    which would surface as a raw ``ValueError`` instead of the operation's own
+    domain error. A rational is charged for both of its exact components, which
+    is at least what its decimal rendering cost before.
+    """
+    if isinstance(value, Fraction):
+        return decimal_digit_width(value.numerator) + decimal_digit_width(
+            value.denominator
+        )
+    return decimal_digit_width(value)
+
+
 def _admit_e0_map_request(
     chain_map: ChainMapValue,
     source_filtration: tuple[FiltrationLevel, ...],
@@ -1249,7 +1266,7 @@ def _admit_e0_map_request(
     )
     max_map_digits = max(
         (
-            len(str(value))
+            _scalar_digit_width(value)
             for matrix in chain_map.map_matrices
             for row in matrix
             for value in row
@@ -1258,7 +1275,7 @@ def _admit_e0_map_request(
     )
     max_filtration_digits = max(
         (
-            len(str(value))
+            _scalar_digit_width(value)
             for complex_value, filtration in (
                 (chain_map.source, source_filtration),
                 (chain_map.target, target_filtration),
@@ -1273,7 +1290,7 @@ def _admit_e0_map_request(
         max_filtration_digits,
         max(
             (
-                len(str(value))
+                _scalar_digit_width(value)
                 for filtration in (
                     source_filtration,
                     target_filtration,
@@ -1347,7 +1364,7 @@ def _admit_e0_map_request(
             )
         ),
     ):
-        value_chars = len(str(value))
+        value_chars = _scalar_digit_width(value)
         input_digits += value_chars
         scalar_count += 1
         max_scalar_digits = max(max_scalar_digits, value_chars)

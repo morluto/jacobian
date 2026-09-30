@@ -1635,9 +1635,11 @@ def chain_product(
     # volume the expansion must materialize. This replaces a serialized-byte
     # bound, which measured the same growth under a transport encoding. A plain
     # coordinate count would be vacuous here, since term_count and
-    # ambient_dimension already cap it at 40,960.
-    digit_volume = (
-        term_count * ambient_dimension * max(coordinate_digits, coefficient_digits)
+    # ambient_dimension already cap it at 40,960. Every axis retains two
+    # endpoints and every term one coefficient, so charging one scalar per axis
+    # under-measured the expansion by more than half.
+    digit_volume = term_count * (
+        2 * ambient_dimension * coordinate_digits + coefficient_digits
     )
     if digit_volume > MAX_CUBICAL_CHAIN_PRODUCT_DIGIT_VOLUME:
         raise OperationResourceAdmissionError(

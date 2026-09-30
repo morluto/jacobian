@@ -272,6 +272,77 @@ def test_page_zero_output_estimate_separates_large_map_coefficients() -> None:
     assert result.maps[0][0][0][0] == large
 
 
+def test_page_zero_preflight_reports_an_unvalidated_scalar_with_its_own_error() -> None:
+    """A preflight must not format a caller integer to measure its growth.
+
+    ``len(str(value))`` raises a raw ``ValueError`` beyond Python's
+    integer-to-string limit, so an unvalidated carrier carrying one leaked an
+    internal error instead of the operation's stable domain refusal.
+    """
+    huge = 10**5_000
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=2,
+        basis_sizes=(1, 1, 1),
+        differential_matrices=(((1,),), ((0,),)),
+    )
+    basis = ((1,),)
+    filtration = (
+        FiltrationLevel(
+            subspaces=(FilteredSubspace(vectors=basis),) * 3,
+        ),
+    )
+    for huge_value in (huge, Fraction(huge, 3)):
+        forged = ChainMapValue.model_construct(
+            source=complex_value,
+            target=complex_value,
+            map_matrices=(((huge_value,),), ((1,),), ((1,),)),
+            source_basis_labels=None,
+            target_basis_labels=None,
+        )
+        with pytest.raises(OperationDomainValidationError) as excinfo:
+            filtered_chain_map_page_zero(forged, filtration, filtration)
+        assert excinfo.value.errors()[0]["type"] == "filtered_chain_map.entry_invalid"
+
+
+def test_page_zero_preflight_measures_scalars_without_formatting_them() -> None:
+    """The envelope must not be measured by asking Python to format a scalar.
+
+    A small value whose rendering fails still reaches the semantic path, which
+    only holds if admission measures growth through the exact digit width.
+    """
+
+    class UnformattableInt(int):
+        def __str__(self) -> str:
+            raise AssertionError("admission must not format caller integers")
+
+    complex_value = ChainComplexValue(
+        coefficient_ring=CoefficientRing.RATIONAL,
+        degree_min=0,
+        degree_max=2,
+        basis_sizes=(1, 1, 1),
+        differential_matrices=(((1,),), ((0,),)),
+    )
+    basis = ((1,),)
+    filtration = (FiltrationLevel(subspaces=(FilteredSubspace(vectors=basis),) * 3),)
+    forged = ChainMapValue.model_construct(
+        source=complex_value,
+        target=complex_value,
+        map_matrices=(
+            ((UnformattableInt(1),),),
+            ((UnformattableInt(1),),),
+            ((UnformattableInt(1),),),
+        ),
+        source_basis_labels=None,
+        target_basis_labels=None,
+    )
+
+    result = filtered_chain_map_page_zero(forged, filtration, filtration)
+
+    assert result.maps[0][0][0][0] == 1
+
+
 def test_page_zero_map_tool_has_the_native_result_contract() -> None:
     tool = next(
         item

@@ -736,6 +736,33 @@ def _integer_matrix(
     return tuple(rows)
 
 
+def _admit_projection_product(
+    rows: int, columns: int, entry_bits: int, input_bits: int
+) -> tuple[int, int]:
+    """Admit one exact matrix-vector product by shape instead of by value.
+
+    Both admission points charge the same envelope: the post-execution check
+    has the materialized matrix, the pre-execution preflight only has the
+    admitted plan facts that bound it. Sharing this helper keeps the digit
+    guard and the work formula single-sourced.
+    """
+    if not rows or not columns:
+        return 0, 0
+    output_bits = entry_bits + input_bits + (columns - 1).bit_length()
+    output_digits = (output_bits * 30_103 + 99_999) // 100_000
+    if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_projection_height_exceeded",
+            message="homology-coordinate projection exceeds the admitted exact integer height",
+        )
+    entry_limbs = max(1, (entry_bits + 63) // 64)
+    input_limbs = max(1, (input_bits + 63) // 64)
+    output_limbs = max(1, (output_bits + 63) // 64)
+    work = rows * columns * (entry_limbs * input_limbs + output_limbs)
+    return output_bits, work
+
+
 def _admit_projection_mat_vec(
     matrix: tuple[tuple[int, ...], ...],
     input_bits: int,
@@ -751,7 +778,25 @@ def _admit_projection_mat_vec(
         entry_bits = max(
             (abs(value).bit_length() for row in matrix for value in row), default=1
         )
-    output_bits = entry_bits + input_bits + (columns - 1).bit_length()
+    return _admit_projection_product(
+        len(matrix), columns, entry_bits=entry_bits, input_bits=input_bits
+    )
+
+
+def _admit_projection_scalar_product(
+    left_bits: int, right_bits: int, count: int
+) -> tuple[int, int]:
+    """Admit one exact scalar product materialized entry by entry.
+
+    The torsion witness comparisons multiply a retained torsion order by every
+    retained cycle or image coordinate, reaching roughly twice the height of
+    its inputs. The surrounding matrix-vector products do not price those
+    entries, so without this charge the projection preflight admits a witness
+    expansion the digit and work envelopes were meant to bound.
+    """
+    if count <= 0:
+        return 0, 0
+    output_bits = left_bits + right_bits
     output_digits = (output_bits * 30_103 + 99_999) // 100_000
     if output_digits > MAX_CANONICAL_INTEGER_DIGITS:
         raise OperationResourceAdmissionError(
@@ -759,11 +804,174 @@ def _admit_projection_mat_vec(
             code="simplicial_set.induced_homology_projection_height_exceeded",
             message="homology-coordinate projection exceeds the admitted exact integer height",
         )
-    entry_limbs = max(1, (entry_bits + 63) // 64)
-    input_limbs = max(1, (input_bits + 63) // 64)
+    left_limbs = max(1, (left_bits + 63) // 64)
+    right_limbs = max(1, (right_bits + 63) // 64)
     output_limbs = max(1, (output_bits + 63) // 64)
-    work = sum(len(row) * (entry_limbs * input_limbs + output_limbs) for row in matrix)
-    return output_bits, work
+    return output_bits, count * (left_limbs * right_limbs + output_limbs)
+
+
+def _admit_homology_projection_plan(
+    chain_map: ChainMapValue,
+    source_plan: IntegralHomologyExecutionPlan,
+    target_plan: IntegralHomologyExecutionPlan,
+) -> int:
+    """Bound the homology-coordinate projection from admitted endpoint plans.
+
+    The projection work is decided from the endpoint Smith certificates, so a
+    request whose projection exceeds the envelope should be refused before
+    either Smith backend runs. This preflight reads only admitted plan facts:
+    each cycle height, the transformation heights the plan already validated,
+    and the chain-map matrices the caller supplied. It is conservative, so it
+    can only reject earlier than the exact post-execution check, which remains
+    the authority on the realized projection.
+    """
+    chain_entry_bits = 1
+    scan_work = 0
+    for matrix in (
+        *chain_map.source.differential_matrices,
+        *chain_map.target.differential_matrices,
+        *chain_map.map_matrices,
+    ):
+        for row in matrix:
+            for value in row:
+                integer = value if type(value) is int else _as_integer(value)
+                chain_entry_bits = max(chain_entry_bits, abs(integer).bit_length())
+            scan_work += len(row)
+    if scan_work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_projection_work_exceeded",
+            message="homology-coordinate matrix scans exceed the admitted work envelope",
+        )
+
+    work = scan_work
+    output_scalars = 0
+    for index, (source_degree, target_degree) in enumerate(
+        zip(source_plan.degrees, target_plan.degrees, strict=True)
+    ):
+        if index:
+            _bits, cost = _admit_projection_product(
+                source_degree.incoming_chain_rank,
+                source_degree.chain_rank,
+                chain_entry_bits,
+                max(source_degree.output_bits_by_cycle_rank, default=1),
+            )
+            work += cost
+        _bits, cost = _admit_projection_product(
+            target_degree.incoming_chain_rank,
+            source_degree.chain_rank,
+            chain_entry_bits,
+            max(source_degree.output_bits_by_cycle_rank, default=1),
+        )
+        work += cost
+        if index:
+            _bits, cost = _admit_projection_product(
+                target_degree.chain_rank,
+                target_degree.incoming_chain_rank,
+                chain_entry_bits,
+                max(source_degree.output_bits_by_cycle_rank, default=1),
+            )
+            work += cost
+        transformation_bits = max(
+            target_degree.outgoing_height.maximum_bits,
+            max(target_degree.output_bits_by_cycle_rank, default=1),
+            max(target_degree.coordinate_bits_by_cycle_rank, default=1),
+            max(
+                (
+                    height.maximum_bits
+                    for height in target_degree.incoming_heights_by_cycle_rank
+                ),
+                default=1,
+            ),
+        )
+        image_bits = max(source_degree.output_bits_by_cycle_rank, default=1) + (
+            chain_entry_bits if index else 0
+        )
+        coordinate_bits, cost = _admit_projection_product(
+            target_degree.incoming_chain_rank,
+            target_degree.incoming_chain_rank,
+            transformation_bits,
+            image_bits,
+        )
+        work += cost
+        _bits, cost = _admit_projection_product(
+            target_degree.incoming_chain_rank,
+            target_degree.incoming_chain_rank,
+            transformation_bits,
+            coordinate_bits,
+        )
+        work += cost
+        # A torsion generator adds its bounding-chain products and both witness
+        # products to the same envelope.
+        bounding_bits = max(source_degree.output_bits_by_cycle_rank, default=1)
+        _bits, cost = _admit_projection_product(
+            source_degree.chain_rank,
+            source_degree.incoming_chain_rank,
+            chain_entry_bits,
+            bounding_bits,
+        )
+        work += cost
+        mapped_bits, cost = _admit_projection_product(
+            target_degree.chain_rank,
+            source_degree.incoming_chain_rank,
+            chain_entry_bits,
+            bounding_bits,
+        )
+        work += cost
+        _bits, cost = _admit_projection_product(
+            target_degree.incoming_chain_rank,
+            target_degree.chain_rank,
+            chain_entry_bits,
+            mapped_bits,
+        )
+        work += cost
+        torsion_order_bits = max(
+            (
+                height.diagonal_bits
+                for height in target_degree.incoming_heights_by_cycle_rank
+            ),
+            default=1,
+        )
+        _bits, cost = _admit_projection_scalar_product(
+            torsion_order_bits,
+            max(source_degree.output_bits_by_cycle_rank, default=1),
+            max(1, source_degree.incoming_chain_rank),
+        )
+        work += cost
+        _bits, cost = _admit_projection_scalar_product(
+            torsion_order_bits, image_bits, max(1, target_degree.incoming_chain_rank)
+        )
+        work += cost
+        generator_bound = max(1, source_degree.incoming_chain_rank)
+        output_scalars += generator_bound * max(1, target_degree.incoming_chain_rank)
+        if work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
+            raise OperationResourceAdmissionError(
+                location=("map", "homology"),
+                code="simplicial_set.induced_homology_projection_work_exceeded",
+                message=(
+                    "homology-coordinate projection exceeds the "
+                    f"{MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK}-unit work envelope"
+                ),
+            )
+    if output_scalars > MAX_INDUCED_CHAIN_MAP_OUTPUT_CELLS:
+        raise OperationResourceAdmissionError(
+            location=("map", "homology"),
+            code="simplicial_set.induced_homology_projection_output_exceeded",
+            message="induced homology coordinates exceed their output reservation",
+        )
+    return work
+
+
+def _as_integer(value: int | Fraction) -> int:
+    if isinstance(value, Fraction) and value.denominator == 1:
+        return value.numerator
+    if isinstance(value, Fraction):
+        raise OperationDomainValidationError(
+            location=("chain_map",),
+            code="simplicial_set.induced_homology_requires_integral_map",
+            message="normalized simplicial homology maps require integral coefficients",
+        )
+    return int(value)
 
 
 def _admit_homology_projection(
@@ -872,6 +1080,18 @@ def _admit_homology_projection(
                 )
                 work += cost
                 _, cost = admit_mat_vec(target_differentials[degree], mapped_bound_bits)
+                work += cost
+                # The witness comparisons below multiply the retained torsion
+                # order by every cycle and image coordinate, so both scalar
+                # products are charged before they are materialized.
+                order_bits = int(generator.order).bit_length()
+                _, cost = _admit_projection_scalar_product(
+                    order_bits, cycle_bits, len(cycle)
+                )
+                work += cost
+                _, cost = _admit_projection_scalar_product(
+                    order_bits, image_bits, target_coordinates
+                )
                 work += cost
             if work > MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK:
                 raise OperationResourceAdmissionError(
@@ -1212,6 +1432,10 @@ def induced_normalized_homology_map(
         else admit_integral_homology(chain_map.target)
     )
     _admit_endpoint_plans(source_plan, target_plan)
+    # Decide the coordinate projection from the admitted endpoint plans before
+    # either Smith backend runs, so a request already outside the projection
+    # envelope never pays for the endpoint reductions.
+    _admit_homology_projection_plan(chain_map, source_plan, target_plan)
     prepared = _prepare_induced_normalized_homology_map(
         canonical_map, chain_map, source_plan, target_plan, []
     )
@@ -1311,18 +1535,35 @@ def compose_simplicial_homology_maps(
         )
 
     endpoint_cache: list[_NormalizedHomologyEndpoint] = []
+    first_plan = (
+        plan_for(first_map.source, first_chain.source),
+        plan_for(first_map.target, first_chain.target),
+    )
+    second_plan = (
+        plan_for(second_map.source, second_chain.source),
+        plan_for(second_map.target, second_chain.target),
+    )
+    # Decide both coordinate projections before any endpoint homology runs.
+    first_projection_work = _admit_homology_projection_plan(first_chain, *first_plan)
+    second_projection_work = _admit_homology_projection_plan(second_chain, *second_plan)
+    if first_projection_work + second_projection_work > (
+        MAX_HOMOLOGY_COORDINATE_PROJECTION_WORK
+    ):
+        raise OperationResourceAdmissionError(
+            location=("homology_map",),
+            code="simplicial_set.induced_homology_projection_work_exceeded",
+            message="combined homology-coordinate authentication exceeds its admitted work envelope",
+        )
     first_prepared = _prepare_induced_normalized_homology_map(
         first_map,
         first_chain,
-        plan_for(first_map.source, first_chain.source),
-        plan_for(first_map.target, first_chain.target),
+        *first_plan,
         endpoint_cache,
     )
     second_prepared = _prepare_induced_normalized_homology_map(
         second_map,
         second_chain,
-        plan_for(second_map.source, second_chain.source),
-        plan_for(second_map.target, second_chain.target),
+        *second_plan,
         endpoint_cache,
     )
     if (

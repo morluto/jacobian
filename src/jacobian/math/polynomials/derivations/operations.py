@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from pydantic_core import PydanticCustomError
 
 from jacobian._exact import CanonicalRational
+from jacobian._execution import request_checkpoint
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -279,8 +280,12 @@ def _partial(terms: _TermMap, axis: int) -> _TermMap:
 
 def _multiply(left: _TermMap, right: _TermMap) -> _TermMap:
     product: _TermMap = {}
+    work = 0
     for left_exponents, left_coefficient in left.items():
         for right_exponents, right_coefficient in right.items():
+            if work % 128 == 0:
+                request_checkpoint("during polynomial derivation multiplication")
+            work += 1
             exponents = tuple(
                 left_exponent + right_exponent
                 for left_exponent, right_exponent in zip(

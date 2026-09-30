@@ -1400,6 +1400,7 @@ def weyl_element_from_word(
 
 def _integer_inverse(
     matrix: tuple[tuple[int, ...], ...],
+    location: str = "element",
 ) -> tuple[tuple[int, ...], ...]:
     """Invert an admitted unimodular integer matrix exactly."""
     from fractions import Fraction
@@ -1414,7 +1415,7 @@ def _integer_inverse(
         pivot = next((row for row in range(column, rank) if work[row][column]), None)
         if pivot is None:
             raise OperationDomainValidationError(
-                location=("matrix",),
+                location=(location, "root_action"),
                 code="root_system.noninvertible_weyl_action",
                 message="a Weyl action matrix must be invertible",
             )
@@ -1430,7 +1431,7 @@ def _integer_inverse(
     inverse = tuple(tuple(value for value in row[rank:]) for row in work)
     if any(value.denominator != 1 for row in inverse for value in row):
         raise OperationDomainValidationError(
-            location=("element", "root_action"),
+            location=(location, "root_action"),
             code="root_system.nonintegral_weyl_inverse",
             message="a Weyl action matrix must have an integral inverse",
         )
@@ -1477,7 +1478,7 @@ def _admit_weyl_element_value(
             tuple(int(i == j) for j in range(rank)) for i in range(rank)
         ):
             return action
-        inverse = _integer_inverse(reduced)
+        inverse = _integer_inverse(reduced, location)
         descent = next(
             (
                 index
@@ -1529,7 +1530,7 @@ def weyl_element_inverse(element: WeylElement) -> WeylElement:
     """Return the inverse of an admitted finite Weyl element."""
     from jacobian.math.matrices.values import IntegerMatrix
 
-    action = _admit_weyl_element_value(element)
+    action = _admit_weyl_element_value(element, location="element")
     inverse = _integer_inverse(action)
     rank = len(action)
     return WeylElement.model_construct(
@@ -2156,9 +2157,14 @@ def weyl_antidominant_representative(
             element,
         )
 
-    # Each performed reflection checks its actual resulting coordinates in
-    # _weight_reflect. An orbit-wide norm estimate is only an upper bound and
-    # can reject a representable chamber-normalization path.
+    # The invariant positive-definite norm bounds every intermediate image
+    # without imposing the public coordinate limit on private reflection
+    # prefixes, which can legitimately reach twice that limit. Each performed
+    # reflection is checked against it, exactly as the dominant path does;
+    # _weight_reflect itself performs no check.
+    intermediate_bounds = _weight_coordinate_bounds(
+        rows, weight, enforce_interoperable_bound=False
+    )
     longest_word_work_bound = (
         (MAX_POSITIVE_ROOTS + 1) * rank * MAX_POSITIVE_ROOTS * rank
     )
@@ -2213,6 +2219,11 @@ def weyl_antidominant_representative(
         root_action = _left_apply_root_reflection_to_action(root_action, index, rows)
     for index in longest_word:
         antidominant = _weight_reflect(antidominant, index, rows)
+        if any(
+            abs(value) > bound
+            for value, bound in zip(antidominant, intermediate_bounds, strict=True)
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         root_action = _left_apply_root_reflection_to_action(root_action, index, rows)
     if any(value > 0 for value in antidominant):
         raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
@@ -2258,6 +2269,7 @@ def _enumerate_weight_orbit(
             image = _weight_reflect(current, index, rows)
             if any(
                 abs(value) > coordinate_bounds[coordinate_index]
+                or abs(value) > MAX_REFLECTION_REPRESENTABLE
                 for coordinate_index, value in enumerate(image)
             ):
                 raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
@@ -2302,15 +2314,14 @@ def weyl_weight_orbit(
             message="weight must have one bounded integer fundamental-weight coordinate per simple coroot",
         )
 
-    # The norm gives a representation-safe coordinate bound for every orbit
-    # element before any reflection or output construction.
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.weight_orbit_coordinate_bound",
-            message="some Weyl image coordinate may exceed the interoperable integer bound",
-        )
+    # The invariant positive-definite norm bounds every intermediate image
+    # before any reflection or output construction. It is a worst-case estimate,
+    # so it is a growth envelope only: representability is decided on the
+    # images the traversal actually produces, which the complete orbit may
+    # satisfy even when the estimate does not.
+    coordinate_bounds = _weight_coordinate_bounds(
+        rows, weight, enforce_interoperable_bound=False
+    )
 
     group_order = _weyl_group_order(rows)
     if not 1 <= group_order <= MAX_WEYL_GROUP_ORDER:
@@ -2364,7 +2375,7 @@ def weyl_parabolic_weight_orbit(
     rows = datum.cartan_matrix.entries
     indices = simple_root_indices
     if tuple(sorted(set(indices))) != indices or any(
-        index >= len(rows) for index in indices
+        not 0 <= index < len(rows) for index in indices
     ):
         raise OperationDomainValidationError(
             location=("simple_root_indices",),
@@ -2373,16 +2384,22 @@ def weyl_parabolic_weight_orbit(
         )
 
     # The full Weyl norm bounds every parabolic image coordinate and is
-    # admitted before any subgroup or orbit expansion.
-    coordinate_bounds = _weight_coordinate_bounds(rows, weight)
-    if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
-        raise OperationDomainValidationError(
-            location=("weight",),
-            code="root_system.weight_orbit_coordinate_bound",
-            message="some parabolic weight image coordinate may exceed the interoperable integer bound",
-        )
-
+    # admitted before any subgroup or orbit expansion. A parabolic with no
+    # generators performs no reflection at all, so its only image is the source
+    # and the lattice carrier's own output bound is the executed bound; the
+    # ambient norm would otherwise refuse a representable singleton orbit.
     subgroup = tuple(tuple(rows[i][j] for j in indices) for i in indices)
+    if subgroup:
+        coordinate_bounds = _weight_coordinate_bounds(rows, weight)
+        if any(bound > MAX_REFLECTION_REPRESENTABLE for bound in coordinate_bounds):
+            raise OperationDomainValidationError(
+                location=("weight",),
+                code="root_system.weight_orbit_coordinate_bound",
+                message=(
+                    "some parabolic weight image coordinate may exceed the "
+                    "interoperable integer bound"
+                ),
+            )
     if subgroup:
         _admit_cartan_finite_type(subgroup)
         subgroup_order = _weyl_order_from_exponents(subgroup)

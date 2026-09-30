@@ -184,10 +184,31 @@ def _require_image_diagram_axes(
             raise ValueError(
                 f"image {kind} must retain the complete parent diagram axes"
             )
-    for kind in ("diamonds", "comparable_pairs"):
-        value = getattr(image, kind)
-        if value != getattr(source, kind) or value != getattr(target, kind):
-            raise ValueError(f"image must retain parent {kind} accounting")
+    expected_comparable_pairs = len(expected_cover_axes) + len(expected_derived_axes)
+    expected_diamonds = 0
+    for earlier in cells:
+        for later in cells:
+            if len(later) != len(earlier) + 2 or not set(earlier) < set(later):
+                continue
+            middles = sum(
+                1
+                for middle in cells
+                if len(middle) == len(earlier) + 1
+                and set(earlier) < set(middle) < set(later)
+            )
+            expected_diamonds += middles * (middles - 1) // 2
+    for role, sheaf in (
+        ("image", image),
+        ("source", source),
+        ("target", target),
+    ):
+        if (
+            sheaf.diamonds != expected_diamonds
+            or sheaf.comparable_pairs != expected_comparable_pairs
+        ):
+            raise ValueError(
+                f"{role} must retain the diagram counters derived from its complex"
+            )
 
 
 def _require_component_shapes(

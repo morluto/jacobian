@@ -16,7 +16,10 @@ from jacobian.math.topology.simplicial_sets._models import (
     MAX_TOTAL_SIMPLICES,
     FiniteTruncatedSimplicialSet,
 )
-from jacobian.math.topology.simplicial_sets.maps import TruncatedSimplicialMap
+from jacobian.math.topology.simplicial_sets.maps import (
+    TruncatedSimplicialMap,
+    _require_naturality,
+)
 from jacobian.math.topology.simplicial_sets.operations import (
     _from_admitted_tables,
     admit_tables,
@@ -72,12 +75,14 @@ class SimplicialSetSkeletonResult(StrictModel):
                 }
             )
             SimplicialSubsetPrefix(inclusion=inclusion)
+            _require_naturality(inclusion, location="inclusion")
         except (
             ValidationError,
             AttributeError,
             TypeError,
             ValueError,
             IndexError,
+            OperationDomainValidationError,
         ) as error:
             raise ValueError(
                 "the result must retain canonical simplicial sets and an injective inclusion"
@@ -171,18 +176,22 @@ def simplicial_set_skeleton(
             code="simplicial_set.skeleton_source_invalid",
             message="simplicial_set must be a finite truncated simplicial set",
         )
+    try:
+        max_degree = simplicial_set.max_degree
+        sets = simplicial_set.sets
+        face_maps = simplicial_set.face_maps
+        degeneracy_maps = simplicial_set.degeneracy_maps
+        total_simplices = simplicial_set.total_simplices
+    except AttributeError as error:
+        raise OperationDomainValidationError(
+            location=("simplicial_set",),
+            code="simplicial_set.skeleton_source_invalid",
+            message="simplicial_set must be a finite truncated simplicial set",
+        ) from error
     source = simplicial_set
-    sizes = admit_tables(
-        source.max_degree,
-        source.sets,
-        source.face_maps,
-        source.degeneracy_maps,
-    )
+    sizes = admit_tables(max_degree, sets, face_maps, degeneracy_maps)
     admitted_total = sum(sizes)
-    if (
-        type(source.total_simplices) is not int
-        or source.total_simplices != admitted_total
-    ):
+    if type(total_simplices) is not int or total_simplices != admitted_total:
         raise OperationDomainValidationError(
             location=("simplicial_set", "total_simplices"),
             code="simplicial_set.total_simplex_count_mismatch",

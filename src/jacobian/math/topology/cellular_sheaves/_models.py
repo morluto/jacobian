@@ -506,7 +506,10 @@ class SheafCochainComplex(StrictModel):
         matrix_cells = 0
         for matrix in value:
             if not isinstance(matrix, (tuple, list)):
-                return value
+                raise _validation_error(
+                    "coboundary_shape_invalid",
+                    "a coboundary must be a matrix before its cells are counted",
+                )
             if len(matrix) > MAX_SHEAF_TOTAL_STALK_RANK:
                 raise _validation_error(
                     "coboundary_shape_exceeded",
@@ -514,7 +517,11 @@ class SheafCochainComplex(StrictModel):
                 )
             for row in matrix:
                 if not isinstance(row, (tuple, list)):
-                    return value
+                    raise _validation_error(
+                        "coboundary_shape_invalid",
+                        "a coboundary row must be a coordinate sequence before its "
+                        "cells are counted",
+                    )
                 if len(row) > MAX_SHEAF_TOTAL_STALK_RANK:
                     raise _validation_error(
                         "coboundary_shape_exceeded",

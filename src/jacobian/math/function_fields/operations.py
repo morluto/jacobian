@@ -100,6 +100,9 @@ from jacobian.math.function_fields._models import (
     _from_internal_rational_function,
     _to_internal_rational_function,
 )
+from jacobian.math.function_fields.valuation import (
+    place_valuation_of_rational_function,
+)
 
 
 def _is_prime(value: int) -> bool:
@@ -1572,58 +1575,6 @@ def _admit_place(place: FunctionFieldPlace) -> FunctionFieldPlace:
     return place
 
 
-def _rf_valuation(value: PrimeFieldRationalFunction, place: FunctionFieldPlace) -> int:
-    prime = value.characteristic
-    num = list(value.numerator.coefficients)
-    den = list(value.denominator.coefficients)
-    if place.kind == "INFINITE":
-        return (len(den) - 1) - (len(num) - 1)
-    place_polynomial = place.prime_polynomial
-    if place_polynomial is None:
-        raise OperationDomainValidationError(
-            location=("place", "prime_polynomial"),
-            code="function_field.finite_place_polynomial",
-            message="a finite place requires its prime polynomial",
-        )
-    divisor = list(place_polynomial.coefficients)
-
-    def order(poly: list[int]) -> int:
-        count = 0
-        while len(poly) >= len(divisor):
-            quotient, remainder = _poly_divmod_local(poly, divisor, prime)
-            if any(remainder):
-                break
-            count += 1
-            poly = quotient
-        return count
-
-    return order(num) - order(den)
-
-
-def _poly_divmod_local(
-    dividend: list[int], divisor: list[int], prime: int
-) -> tuple[list[int], list[int]]:
-    dividend = [x % prime for x in dividend]
-    while len(dividend) > 1 and dividend[-1] == 0:
-        dividend.pop()
-    divisor = [x % prime for x in divisor]
-    while len(divisor) > 1 and divisor[-1] == 0:
-        divisor.pop()
-    if len(dividend) < len(divisor):
-        return [0], dividend
-    quotient = [0] * (len(dividend) - len(divisor) + 1)
-    inv = pow(divisor[-1], -1, prime)
-    while len(dividend) >= len(divisor) and any(dividend):
-        shift = len(dividend) - len(divisor)
-        factor = dividend[-1] * inv % prime
-        quotient[shift] = factor
-        for i, c in enumerate(divisor):
-            dividend[shift + i] = (dividend[shift + i] - factor * c) % prime
-        while len(dividend) > 1 and dividend[-1] == 0:
-            dividend.pop()
-    return quotient, dividend
-
-
 def function_field_place_valuation(
     place: FunctionFieldPlace, element: FiniteFunctionFieldElement
 ) -> int | FunctionFieldPositiveInfinityValuation:
@@ -1651,7 +1602,7 @@ def function_field_place_valuation(
     coordinate = element.coordinates[0]
     if coordinate.numerator.is_zero():
         return FunctionFieldPositiveInfinityValuation(kind="POSITIVE_INFINITY")
-    return _rf_valuation(coordinate, place)
+    return place_valuation_of_rational_function(coordinate, place)
 
 
 def function_field_place_uniformizer(
@@ -1793,7 +1744,7 @@ def function_field_place_residue(
     if not any(rational[0]):
         valuation = 0
     else:
-        valuation = _rf_valuation(
+        valuation = place_valuation_of_rational_function(
             _from_internal_rational_function(rational, prime), place
         )
     if valuation < 0:
@@ -1953,7 +1904,7 @@ def function_field_principal_divisor(
                 (previous[1] if previous else 0) + sign * multiplicity,
             )
     infinity_place = FunctionFieldPlace(field=field, kind="INFINITE", degree=1)
-    infinity = _rf_valuation(value, infinity_place)
+    infinity = place_valuation_of_rational_function(value, infinity_place)
     if infinity:
         key = infinity_place.model_dump_json()
         support[key] = (infinity_place, infinity)
@@ -3256,7 +3207,7 @@ def function_field_riemann_roch_membership(
     admitted_divisor = _admit_divisor(divisor)
     canonical_element = _canonical_element(element, admitted_divisor.field)
     if is_zero:
-        return FunctionFieldRiemannRochMembership(
+        return FunctionFieldRiemannRochMembership._from_kernel(
             element=canonical_element,
             divisor=admitted_divisor,
             status="IN_SPACE",
@@ -3295,7 +3246,7 @@ def function_field_riemann_roch_membership(
                 sum=total,
             )
         )
-    return FunctionFieldRiemannRochMembership(
+    return FunctionFieldRiemannRochMembership._from_kernel(
         element=principal.element,
         divisor=admitted_divisor,
         status=("IN_SPACE" if all(row.sum >= 0 for row in profile) else "NOT_IN_SPACE"),

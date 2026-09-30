@@ -247,7 +247,7 @@ def _require_same_mapped_character(
 
 
 def _mapped_prefix(
-    form: ModularFormCoordinates,
+    coordinates: tuple[RationalCyclotomicElement, ...],
     context: _CoordinateSpace,
     image: RationalCyclotomicElement,
     target: RationalCyclotomicField,
@@ -270,10 +270,6 @@ def _mapped_prefix(
         field,
         precision,
         normalization_precision=source_precision,
-    )
-    coordinates = tuple(
-        _map_element(cast(RationalCyclotomicElement, value), image, target)
-        for value in form.coordinates
     )
     mapped_basis = tuple(
         tuple(_map_element(value, image, target) for value in vector)
@@ -438,8 +434,33 @@ def modular_form_coordinates_global_equal(
         * common_field.degree
         * (2 * MAX_CYCLIC_FIELD_ELEMENT_DIGITS + 32)
     )
+    # Mapping can add distinct rational coordinates, growing their reduced
+    # denominators. Admit the exact bounded coordinate images before the Sturm
+    # worker, and reuse them in both prefixes rather than mapping twice.
+    mapped_left = tuple(
+        _map_element(value, left_image, common_field)
+        for value in _admitted_cyclotomic_coordinates(left, "left")
+    )
+    mapped_right = tuple(
+        _map_element(value, right_image, common_field)
+        for value in _admitted_cyclotomic_coordinates(right, "right")
+    )
+    mapped_height = max(
+        (
+            canonical_rational_component_digits(value)
+            for coordinates in (mapped_left, mapped_right)
+            for coordinate in coordinates
+            for value in coordinate.coefficients_ascending
+        ),
+        default=1,
+    )
+    common_degree = max(common_field.degree, 1)
+    cyclotomic_product_digits = (
+        mapped_height * (2 * common_degree + 2) + len(str(common_degree)) + 2
+    )
     if (
         intermediate_digits > 100_000
+        or cyclotomic_product_digits > MAX_CYCLIC_FIELD_ELEMENT_DIGITS
         or worker_cells > MAX_GLOBAL_EQUALITY_OUTPUT_CELLS
         or rref_cells + mapped_cells > MAX_GLOBAL_EQUALITY_INTERMEDIATE_CELLS
     ):
@@ -451,10 +472,10 @@ def modular_form_coordinates_global_equal(
     if left_dimension == 0 and right_dimension == 0:
         return True
     left_prefix = _mapped_prefix(
-        left, left_context, left_image, common_field, precision
+        mapped_left, left_context, left_image, common_field, precision
     )
     right_prefix = _mapped_prefix(
-        right, right_context, right_image, common_field, precision
+        mapped_right, right_context, right_image, common_field, precision
     )
     return left_prefix == right_prefix
 

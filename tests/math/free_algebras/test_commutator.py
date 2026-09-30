@@ -192,3 +192,65 @@ def test_commutator_rejects_candidate_output_before_convolution() -> None:
     assert caught.value.errors()[0]["type"] == (
         "free_algebra.commutator.result_term_budget"
     )
+
+
+def _accumulating_pair() -> tuple[FreeAlgebraPolynomial, FreeAlgebraPolynomial]:
+    """``w = x**16 y**16`` with a wide coefficient on each proper prefix.
+
+    All 961 products pass the per-pair admission, but the coefficient of ``w``
+    collects 31 of them and accumulates to ``31 * 10**63``, which is 65 digits
+    against the 64-digit exact-output bound.
+    """
+    word = ("x",) * 16 + ("y",) * 16
+    left = tuple((word[:split], Fraction(10**63)) for split in range(1, len(word)))
+    right = tuple((word[split:], Fraction(1)) for split in range(1, len(word)))
+    return _polynomial(left), _polynomial(right)
+
+
+def test_the_accumulated_output_width_is_bounded_before_result_construction() -> None:
+    """Admitting every pair individually does not bound their sum.
+
+    Exact signed accumulation runs under its admitted integer-work envelope.
+    A word can exceed the final digit bound even when each contribution fits;
+    refuse that result before canonical term assembly.
+    """
+    left, right = _accumulating_pair()
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        commutator(left, right)
+    assert (
+        refusal.value.errors()[0]["type"]
+        == "free_algebra.commutator.accumulated_coefficient_growth"
+    )
+
+
+def test_a_cancellable_pair_still_widens_nothing() -> None:
+    """Negative control: the bound must read reduced contributions.
+
+    An input-only bound charges this pair two full operand widths and refuses,
+    even though the product is exactly 1. Working from the reduced
+    contribution is what keeps it admitted.
+    """
+    n = 10**63 + 7
+    left = _polynomial(((("x",), Fraction(1, n)),))
+    right = _polynomial(((("y",), Fraction(n)),))
+
+    result = commutator(left, right).commutator
+
+    assert {term.word: term.coefficient.as_fraction() for term in result.terms} == {
+        ("x", "y"): Fraction(1),
+        ("y", "x"): Fraction(-1),
+    }
+
+
+def test_a_cheap_commutator_still_computes_exactly() -> None:
+    """Negative control: ordinary input is unaffected by the accumulation bound."""
+    left = _polynomial(((("x",), Fraction(1)), (("y",), Fraction(2))))
+    right = _polynomial(((("x",), Fraction(3)), (("y",), Fraction(4))))
+
+    result = commutator(left, right).commutator
+
+    # (x + 2y)(3x + 4y) - (3x + 4y)(x + 2y) = -2xy + 2yx
+    assert {term.word: term.coefficient.as_fraction() for term in result.terms} == {
+        ("x", "y"): Fraction(-2),
+        ("y", "x"): Fraction(2),
+    }

@@ -41,7 +41,9 @@ def _finite_place(coefficients: tuple[int, ...]) -> FunctionFieldPlace:
     )
 
 
-def _element(numerator: tuple[int, ...], denominator: tuple[int, ...] = (1,)):
+def _element(
+    numerator: tuple[int, ...], denominator: tuple[int, ...] = (1,)
+) -> FiniteFunctionFieldElement:
     field = _field()
     return FiniteFunctionFieldElement(
         field=field, coordinates=(_rf(numerator, denominator),)
@@ -131,7 +133,9 @@ def test_zero_element_has_zero_residue_at_every_place() -> None:
     assert at_infinity.residue.coordinates == (0,)
 
 
-def test_residue_detects_zero_before_the_valuation_routine(monkeypatch) -> None:
+def test_residue_detects_zero_before_the_valuation_routine(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     # The order-division routine cannot express the valuation of zero.  The
     # residue operation must detect the zero rational function structurally
     # rather than relying on the routine to mishandle it.
@@ -140,7 +144,9 @@ def test_residue_detects_zero_before_the_valuation_routine(monkeypatch) -> None:
     def forbidden(value: object, place: object) -> int:
         raise AssertionError("zero element reached the valuation routine")
 
-    monkeypatch.setattr(operations, "_rf_valuation", forbidden)
+    # Patch the consumer's imported alias so every call made by the residue
+    # operation is observable, even though the routine lives in another module.
+    monkeypatch.setattr(operations, "place_valuation_of_rational_function", forbidden)
     result = function_field_place_residue(_finite_place((0, 1)), _element((0,)))
     assert result.residue.coordinates == (0,)
 

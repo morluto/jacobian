@@ -51,7 +51,8 @@ def _require_raw_permutation(member: object, degree: int) -> None:
 
 def _admit_raw_class_algebra_size(request: object) -> None:
     """Bound every retained native container before recursive serialization."""
-    if not isinstance(request, ClassMultiplicationConstantsRequest):
+    # A direct subclass dump also includes declared fields outside partition.
+    if type(request) is not ClassMultiplicationConstantsRequest:
         raise _raw_request_error()
     partition = getattr(request, "partition", None)
     if not isinstance(partition, GroupConjugacyClassesResult):

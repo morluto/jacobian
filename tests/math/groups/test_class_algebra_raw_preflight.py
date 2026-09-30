@@ -141,3 +141,29 @@ def test_bounded_native_partition_preserves_cyclic_products_and_roundtrip(
         ClassMultiplicationConstantsResult.model_validate_json(result.model_dump_json())
         == result
     )
+
+
+def test_request_subclass_fields_cannot_bypass_pre_dump_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class ExtendedRequest(ClassMultiplicationConstantsRequest):
+        payload: tuple[int, ...]
+
+    request = ExtendedRequest.model_construct(
+        partition=_request("valid").partition, payload=(0,) * 65
+    )
+    # Pydantic includes this declared field when directly dumping the subclass.
+    assert request.model_dump()["payload"] == (0,) * 65
+    dumps: list[object] = []
+
+    def unexpected_dump(self: ClassMultiplicationConstantsRequest) -> dict[str, object]:
+        dumps.append(self)
+        raise AssertionError("unbounded subclass field reached recursive dump")
+
+    monkeypatch.setattr(
+        ClassMultiplicationConstantsRequest, "model_dump", unexpected_dump
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        class_multiplication_constants(request)
+    assert error.value.errors()[0]["type"] == "groups.characters.class_algebra_request"
+    assert dumps == []

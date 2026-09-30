@@ -5,9 +5,6 @@ from typing import Any
 from jacobian.catalog.models import MathTool, MathTools, OperationExample
 from jacobian.math.koszul._models import KoszulComplexRequest
 from jacobian.math.koszul.dga_operations import module_koszul_dga
-from jacobian.math.koszul.homology_map import (
-    koszul_homology_map,
-)
 from jacobian.math.koszul.module_models import (
     ModuleKoszulChainMap,
     ModuleKoszulComplex,
@@ -43,12 +40,15 @@ from jacobian.math.koszul.module_operations import (
     module_koszul_direct_sum,
     module_koszul_exactness_profile,
     module_koszul_homology,
-    module_koszul_map,
     module_koszul_quotient,
-    module_koszul_sequence_linear_change,
     module_koszul_sequence_permute,
-    module_koszul_top_homology,
     module_koszul_unit_contract,
+)
+from jacobian.math.koszul.native import (
+    koszul_homology_map,
+    module_koszul_map,
+    module_koszul_sequence_linear_change,
+    module_koszul_top_homology,
 )
 from jacobian.math.koszul.operations import koszul_complex
 from jacobian.math.koszul.values import (
@@ -485,7 +485,7 @@ TOOLS: MathTools = (
         ),
         request_type=ModuleKoszulHomologyMapRequest,
         result_type=ModuleKoszulHomologyMap,
-        run=koszul_homology_map,
+        run=lambda request: koszul_homology_map(request.chain_map),
         tags=("koszul", "homology", "chain-map", "exact"),
         discovery_terms=(
             "induced map on Koszul homology",
@@ -543,7 +543,13 @@ TOOLS: MathTools = (
         ),
         request_type=ModuleKoszulMapRequest,
         result_type=ModuleKoszulChainMap,
-        run=module_koszul_map,
+        run=lambda request: module_koszul_map(
+            request.algebra,
+            request.source,
+            request.target,
+            request.sequence,
+            request.map_matrix,
+        ),
         tags=("koszul", "module", "chain-map", "exact"),
         discovery_terms=(
             "module homomorphism induces map on Koszul complexes",
@@ -577,7 +583,9 @@ TOOLS: MathTools = (
         ),
         request_type=ModuleKoszulSequenceLinearChangeRequest,
         result_type=ModuleKoszulSequenceLinearChange,
-        run=module_koszul_sequence_linear_change,
+        run=lambda request: module_koszul_sequence_linear_change(
+            request.complex, request.change_matrix
+        ),
         tags=("koszul", "sequence", "linear-change", "chain-isomorphism", "exact"),
         discovery_terms=(
             "Koszul sequence recombination",
@@ -636,7 +644,7 @@ TOOLS: MathTools = (
         ),
         request_type=ModuleKoszulTopHomologyRequest,
         result_type=ModuleKoszulTopHomology,
-        run=module_koszul_top_homology,
+        run=lambda request: module_koszul_top_homology(request.complex),
         tags=("koszul", "top-homology", "annihilator", "exact"),
         discovery_terms=(
             "top Koszul homology",

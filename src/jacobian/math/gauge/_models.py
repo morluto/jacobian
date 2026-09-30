@@ -648,7 +648,7 @@ class FiniteGroupGaugeFaceCurvature(StrictModel):
     value: FiniteGroupTableElement
 
 
-def _check_raw_curvature_element(value: object) -> None:
+def _check_raw_table_element_shape(value: object) -> None:
     fields = _raw_fields(
         value,
         (FiniteGroupTableElement,),
@@ -659,23 +659,44 @@ def _check_raw_curvature_element(value: object) -> None:
     _check_raw_group_index(fields.get("index"))
 
 
-def _require_native_curvature_containers(
-    value: object, *, native: bool = False
-) -> None:
+def _check_raw_finite_group_field_shape(value: object) -> None:
+    field = _raw_fields(
+        value,
+        (FiniteGroupGaugeField,),
+        {"lattice", "group", "edge_values"},
+        "curvature_shape",
+    )
+    _check_raw_lattice_shape(field.get("lattice"))
+    _check_raw_group_shape(field.get("group"))
+    for entry in _raw_sequence(
+        field.get("edge_values"), MAX_GAUGE_EDGES, "curvature_shape"
+    ):
+        fields = _raw_fields(
+            entry,
+            (FiniteGroupGaugeEdgeLabel,),
+            {"edge_id", "value"},
+            "curvature_shape",
+        )
+        if not _is_raw_label(fields.get("edge_id")):
+            raise ValueError("edge IDs must be bounded scalar labels")
+        _check_raw_table_element_shape(fields.get("value"))
+
+
+def _require_native_carrier_containers(value: object, *, native: bool = False) -> None:
     """Check native immutability only after every owned subtree is bounded."""
     if isinstance(value, StrictModel):
         for child in value.__dict__.values():
-            _require_native_curvature_containers(child, native=True)
+            _require_native_carrier_containers(child, native=True)
     elif type(value) is dict:
         if native:
-            raise ValueError("native curvature carriers must retain typed children")
+            raise ValueError("native carriers must retain typed children")
         for child in value.values():
-            _require_native_curvature_containers(child)
+            _require_native_carrier_containers(child)
     elif isinstance(value, (tuple, list)) and type(value) in (tuple, list):
         if native and type(value) is not tuple:
-            raise ValueError("native curvature carriers must retain immutable axes")
+            raise ValueError("native carriers must retain immutable axes")
         for child in value:
-            _require_native_curvature_containers(child, native=native)
+            _require_native_carrier_containers(child, native=native)
 
 
 def _preflight_curvature_result(value: object) -> None:
@@ -688,26 +709,7 @@ def _preflight_curvature_result(value: object) -> None:
             "curvature_shape",
         )
         _check_raw_complex_shape(result.get("complex"))
-        field = _raw_fields(
-            result.get("field"),
-            (FiniteGroupGaugeField,),
-            {"lattice", "group", "edge_values"},
-            "curvature_shape",
-        )
-        _check_raw_lattice_shape(field.get("lattice"))
-        _check_raw_group_shape(field.get("group"))
-        for entry in _raw_sequence(
-            field.get("edge_values"), MAX_GAUGE_EDGES, "curvature_shape"
-        ):
-            fields = _raw_fields(
-                entry,
-                (FiniteGroupGaugeEdgeLabel,),
-                {"edge_id", "value"},
-                "curvature_shape",
-            )
-            if not _is_raw_label(fields.get("edge_id")):
-                raise ValueError("edge IDs must be bounded scalar labels")
-            _check_raw_curvature_element(fields.get("value"))
+        _check_raw_finite_group_field_shape(result.get("field"))
         for row in _raw_sequence(
             result.get("face_values"), MAX_GAUGE_FACES, "curvature_shape"
         ):
@@ -719,10 +721,10 @@ def _preflight_curvature_result(value: object) -> None:
             )
             if not _is_raw_label(fields.get("face_id")):
                 raise ValueError("face IDs must be bounded scalar labels")
-            _check_raw_curvature_element(fields.get("value"))
+            _check_raw_table_element_shape(fields.get("value"))
         if type(result.get("flat")) is not bool:
             raise ValueError("flatness must be a boolean")
-        _require_native_curvature_containers(value)
+        _require_native_carrier_containers(value)
     except (AttributeError, TypeError, ValueError):
         raise _validation_error(
             "curvature_shape",
@@ -890,6 +892,41 @@ class FiniteGroupGaugeBasepointTransportRequest(StrictModel):
     connector: OrientedGaugePath
 
 
+def _preflight_basepoint_transport(value: object) -> None:
+    """Bound all retained transport carriers before lookup or canonical copying."""
+    try:
+        result = _raw_fields(
+            value,
+            (FiniteGroupGaugeBasepointTransportResult,),
+            {
+                "field",
+                "loop",
+                "connector",
+                "transported_loop",
+                "source_basepoint",
+                "target_basepoint",
+                "source_holonomy",
+                "connector_holonomy",
+                "transported_holonomy",
+            },
+            "basepoint_transport_shape",
+        )
+        _check_raw_finite_group_field_shape(result.get("field"))
+        for name in ("loop", "connector", "transported_loop"):
+            _raw_path_step_count(result.get(name))
+        for name in ("source_basepoint", "target_basepoint"):
+            if not _is_raw_label(result.get(name)):
+                raise ValueError("transport basepoints must be bounded scalar labels")
+        for name in ("source_holonomy", "connector_holonomy", "transported_holonomy"):
+            _check_raw_table_element_shape(result.get(name))
+        _require_native_carrier_containers(value)
+    except (AttributeError, TypeError, ValueError):
+        raise _validation_error(
+            "basepoint_transport_shape",
+            "transport sources, paths, and values must be bounded canonical carriers",
+        ) from None
+
+
 class FiniteGroupGaugeBasepointTransportResult(StrictModel):
     """The source loop, connector, and exactly conjugated loop holonomy."""
 
@@ -903,8 +940,46 @@ class FiniteGroupGaugeBasepointTransportResult(StrictModel):
     connector_holonomy: FiniteGroupTableElement
     transported_holonomy: FiniteGroupTableElement
 
+    @model_validator(mode="before")
+    @classmethod
+    def preflight_nested_carriers(cls, value: object) -> object:
+        _preflight_basepoint_transport(value)
+        return canonicalize_json_containers(value)
+
     @model_validator(mode="after")
     def require_parent_binding(self) -> Self:
+        # Native result instances can skip the before-validator. Bound every
+        # owned subtree before re-establishing the retained field's structure.
+        _preflight_basepoint_transport(self)
+        try:
+            field = FiniteGroupGaugeField.model_validate(self.field.model_dump())
+            paths = tuple(
+                OrientedGaugePath.model_validate(path.model_dump())
+                for path in (self.loop, self.connector, self.transported_loop)
+            )
+            values = tuple(
+                FiniteGroupTableElement.model_validate(value.model_dump())
+                for value in (
+                    self.source_holonomy,
+                    self.connector_holonomy,
+                    self.transported_holonomy,
+                )
+            )
+            if (
+                field != self.field
+                or paths != (self.loop, self.connector, self.transported_loop)
+                or values
+                != (
+                    self.source_holonomy,
+                    self.connector_holonomy,
+                    self.transported_holonomy,
+                )
+            ):
+                raise ValueError("transport carriers are not canonical")
+        except (AttributeError, TypeError, ValueError):
+            raise _validation_error(
+                "basepoint_transport_shape", "transport carriers are malformed"
+            ) from None
         if (
             not isinstance(self.field, FiniteGroupGaugeField)
             or not isinstance(self.loop, OrientedGaugePath)

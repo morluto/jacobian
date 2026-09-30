@@ -12,13 +12,23 @@ from jacobian._execution import request_checkpoint
 from jacobian._models import StrictModel, canonicalize_json_containers
 from jacobian.math.logic.automata.transducers.values import (
     MAX_FST_ALPHABET,
+    MAX_FST_ALPHABET_ID_LENGTH,
+    MAX_FST_ALPHABET_SYMBOL_LENGTH,
     MAX_FST_EDGES,
+    MAX_FST_STATES,
     MAX_FST_WORD_LENGTH,
     FiniteAlphabet,
     RationalEdge,
     RationalTransducer,
 )
-from jacobian.math.logic.languages.regular.values import DFA
+from jacobian.math.logic.languages.regular.values import (
+    DFA,
+    MAX_DFA_ALPHABET,
+    MAX_DFA_ALPHABET_ID_LENGTH,
+    MAX_DFA_STATES,
+    MAX_DFA_TRANSITIONS,
+    DFATransition,
+)
 
 MAX_RESTRICT_OUTPUT_LABEL_CELLS = 250_000
 MAX_RESTRICT_OUTPUT_RESULT_EDGES = 4096
@@ -94,16 +104,131 @@ def _require_bounded_relation_labels(relation: object) -> None:
             raise _error("edge_label_invalid", "an edge must have a nonempty label")
 
 
-def _preflight_retained_labels(data: object) -> None:
-    if isinstance(data, RestrictRationalOutputResult):
-        fields = vars(data)
-    elif type(data) is dict:
-        fields = data
+def _raw_fields(
+    value: object, model: type[StrictModel], *, allow_mapping: bool = True
+) -> tuple[dict[str, object], bool]:
+    native = type(value) is model
+    if native:
+        fields = vars(value)
+    elif allow_mapping and type(value) is dict:
+        fields = value
     else:
-        return
+        raise _error("result_shape_invalid", "retained value has a noncanonical type")
+    declared = model.model_fields
+    if len(fields) > len(declared) or any(
+        type(name) is not str or name not in declared for name in fields
+    ):
+        raise _error("result_shape_invalid", "retained value has unknown fields")
+    if any(
+        field.is_required() and name not in fields for name, field in declared.items()
+    ):
+        raise _error(
+            "result_shape_invalid", "retained value is missing required fields"
+        )
+    return cast(dict[str, object], fields), native
+
+
+def _raw_int(value: object, minimum: int, maximum: int) -> int:
+    if type(value) is not int or not minimum <= value <= maximum:
+        raise _error("result_shape_invalid", "retained integer leaves its bounded axis")
+    return value
+
+
+def _raw_sequence(
+    value: object, maximum: int, native: bool
+) -> tuple[object, ...] | list[object]:
+    if type(value) not in ((tuple,) if native else (tuple, list)):
+        raise _error(
+            "result_shape_invalid", "retained axis must be a canonical sequence"
+        )
+    sequence = cast(tuple[object, ...] | list[object], value)
+    if len(sequence) > maximum:
+        raise _error("result_shape_invalid", "retained axis exceeds its carrier bound")
+    return sequence
+
+
+def _raw_text(value: object, maximum: int) -> str:
+    if type(value) is not str or len(value) > maximum:
+        raise _error("result_shape_invalid", "retained text exceeds its carrier bound")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise _error("result_shape_invalid", "retained text must be UTF-8") from exc
+    return value
+
+
+def _preflight_alphabet(value: object, *, allow_mapping: bool) -> None:
+    fields, native = _raw_fields(value, FiniteAlphabet, allow_mapping=allow_mapping)
+    symbols = _raw_sequence(fields["symbols"], MAX_FST_ALPHABET, native)
+    if not symbols:
+        raise _error("result_shape_invalid", "retained alphabet must be nonempty")
+    for symbol in symbols:
+        if not _raw_text(symbol, MAX_FST_ALPHABET_SYMBOL_LENGTH):
+            raise _error("result_shape_invalid", "alphabet symbols must be nonempty")
+
+
+def _preflight_state_axis(value: object, state_count: int, native: bool) -> None:
+    for state in _raw_sequence(value, MAX_FST_STATES, native):
+        _raw_int(state, 0, state_count - 1)
+
+
+def _preflight_relation(value: object, *, allow_mapping: bool) -> None:
+    fields, native = _raw_fields(value, RationalTransducer, allow_mapping=allow_mapping)
+    _require_bounded_relation_labels(value)
+    state_count = _raw_int(fields["state_count"], 1, MAX_FST_STATES)
+    for name in ("initial_states", "accepting_states"):
+        _preflight_state_axis(fields[name], state_count, native)
+    for name in ("input_alphabet_id", "output_alphabet_id"):
+        if fields.get(name) is not None:
+            _raw_text(fields[name], MAX_FST_ALPHABET_ID_LENGTH)
+    for name in ("input_alphabet", "output_alphabet"):
+        if fields.get(name) is not None:
+            _preflight_alphabet(fields[name], allow_mapping=not native)
+    for edge in _raw_sequence(fields["edges"], MAX_FST_EDGES, native):
+        row, _ = _raw_fields(edge, RationalEdge, allow_mapping=not native)
+        _raw_int(row["source"], 0, state_count - 1)
+        _raw_int(row["target"], 0, state_count - 1)
+
+
+def _preflight_language(value: object, *, allow_mapping: bool) -> None:
+    fields, native = _raw_fields(value, DFA, allow_mapping=allow_mapping)
+    state_count = _raw_int(fields["state_count"], 1, MAX_DFA_STATES)
+    alphabet_size = _raw_int(fields["alphabet_size"], 0, MAX_DFA_ALPHABET)
+    _raw_int(fields["initial_state"], 0, state_count - 1)
+    _preflight_state_axis(fields["accepting_states"], state_count, native)
+    if fields.get("alphabet_id") is not None:
+        _raw_text(fields["alphabet_id"], MAX_DFA_ALPHABET_ID_LENGTH)
+    if fields.get("alphabet") is not None:
+        _preflight_alphabet(fields["alphabet"], allow_mapping=not native)
+    for index, transition in enumerate(
+        _raw_sequence(fields["transitions"], MAX_DFA_TRANSITIONS, native)
+    ):
+        if index % 256 == 0:
+            request_checkpoint("during output-restriction language admission")
+        row, _ = _raw_fields(transition, DFATransition, allow_mapping=not native)
+        _raw_int(row["source"], 0, state_count - 1)
+        _raw_int(row["target"], 0, state_count - 1)
+        _raw_int(row["symbol"], 0, alphabet_size - 1)
+
+
+def _preflight_retained_result(data: object) -> None:
+    """Bound the complete retained shape before recursive canonicalization."""
+    fields, native = _raw_fields(data, RestrictRationalOutputResult)
     for name in ("source", "restricted"):
-        if name in fields:
-            _require_bounded_relation_labels(fields[name])
+        _preflight_relation(fields[name], allow_mapping=not native)
+    _preflight_language(fields["output_language"], allow_mapping=not native)
+    _preflight_alphabet(fields["output_alphabet"], allow_mapping=not native)
+    for name, model, maximum in (
+        ("product_states", RestrictOutputProductState, MAX_FST_STATES),
+        ("edge_sources", RestrictOutputEdgeSource, MAX_RESTRICT_OUTPUT_RESULT_EDGES),
+    ):
+        rows = _raw_sequence(fields[name], maximum, native)
+        for index, item in enumerate(rows):
+            if index % 256 == 0:
+                request_checkpoint("during output-restriction transport admission")
+            row, _ = _raw_fields(item, model, allow_mapping=not native)
+            for entry in row.values():
+                _raw_int(entry, 0, maximum - 1)
 
 
 def _output_edge_advances_language(
@@ -265,14 +390,14 @@ class RestrictRationalOutputResult(StrictModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_bounded_retained_labels(cls, data: object) -> object:
-        _preflight_retained_labels(data)
+    def require_bounded_retained_result(cls, data: object) -> object:
+        _preflight_retained_result(data)
         return canonicalize_json_containers(data)
 
     @model_validator(mode="after")
     def require_canonical_transports(self) -> Self:
         # Existing native result instances may bypass before-validation.
-        _preflight_retained_labels(self)
+        _preflight_retained_result(self)
         _require_transport_indices(self)
         source_edges = self.source.edges
         restricted_edges = self.restricted.edges

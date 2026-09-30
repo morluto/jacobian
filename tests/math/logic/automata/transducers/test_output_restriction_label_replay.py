@@ -174,25 +174,40 @@ def test_valid_maximum_labels_preserve_the_single_state_relation(
 
 @pytest.mark.parametrize("relation_name", ("source", "restricted"))
 @pytest.mark.parametrize("label_name", ("input_label", "output_label"))
-def test_wire_label_is_bounded_before_container_canonicalization(
-    monkeypatch: pytest.MonkeyPatch, relation_name: str, label_name: str
+def test_raw_label_is_rejected_before_parser_iteration(
+    relation_name: str, label_name: str
 ) -> None:
+    iterations: list[str] = []
+
+    class UncopyableLabel:
+        def __iter__(self) -> Iterator[int]:
+            iterations.append("iterated")
+            raise AssertionError("raw label reached parser iteration")
+
     payload = _result().model_dump(mode="json")
-    payload[relation_name]["edges"][0][label_name] = [0] * 513
-    copies: list[object] = []
-
-    def unexpected_copy(data: object) -> object:
-        copies.append(data)
-        raise AssertionError("oversized wire label reached canonicalization")
-
-    monkeypatch.setattr(_models, "canonicalize_json_containers", unexpected_copy)
+    payload[relation_name]["edges"][0][label_name] = UncopyableLabel()
     with pytest.raises(ValidationError) as error:
         RestrictRationalOutputResult.model_validate(payload)
     assert (
         error.value.errors()[0]["type"]
         == "rational_transducer.restrict_output.edge_label_invalid"
     )
-    assert copies == []
+    assert iterations == []
+
+
+@pytest.mark.parametrize("relation_name", ("source", "restricted"))
+@pytest.mark.parametrize("label_name", ("input_label", "output_label"))
+def test_oversized_wire_label_is_refused_by_preflight(
+    relation_name: str, label_name: str
+) -> None:
+    payload = _result().model_dump(mode="json")
+    payload[relation_name]["edges"][0][label_name] = [0] * 513
+    with pytest.raises(ValidationError) as error:
+        RestrictRationalOutputResult.model_validate(payload)
+    assert (
+        error.value.errors()[0]["type"]
+        == "rational_transducer.restrict_output.edge_label_invalid"
+    )
 
 
 @pytest.mark.parametrize("relation_name", ("source", "restricted"))

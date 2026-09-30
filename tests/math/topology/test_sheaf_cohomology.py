@@ -344,15 +344,33 @@ class TestAdversarial:
         sheaf = _constant_sheaf(_TRIANGLE)
         derived = list(sheaf.derived_restrictions)
         tampered = derived[0].model_copy(
-            update={"entries": ((("7",),),) * len(derived[0].entries)}
+            update={"entries": ((_q(7),),) * len(derived[0].entries)}
         )
         derived[0] = tampered
         forged = sheaf.model_copy(update={"derived_restrictions": tuple(derived)})
 
         with pytest.raises(OperationDomainValidationError) as error:
             _native(forged)
-        # rejected on re-admission, before any complex is assembled
-        assert "structural contract" in str(error.value)
+        assert "cover-map composite" in str(error.value)
+        # This is a well-shaped exact carrier with a false derived relation.
+        assert FiniteCellularSheaf.model_validate(forged.model_dump()) == forged
+        from jacobian.math.topology.cellular_sheaves.cohomology_maps import (
+            cohomology_map,
+        )
+        from jacobian.math.topology.cellular_sheaves.extensions import (
+            SheafMorphismResult,
+        )
+
+        claimed = SheafMorphismResult(
+            source=forged,
+            target=sheaf,
+            components=tuple(
+                (face, ((_q(1),),)) for face in sheaf.canonical_face_order
+            ),
+            natural=True,
+        )
+        with pytest.raises(OperationDomainValidationError, match="cover-map composite"):
+            cohomology_map(claimed)
 
     def test_stalk_rank_above_the_envelope_is_a_resource_rejection(self) -> None:
         from jacobian.catalog.models import OperationResourceAdmissionError

@@ -2,6 +2,7 @@
 
 import json
 from fractions import Fraction
+from unittest.mock import patch
 
 import pytest
 
@@ -12,6 +13,7 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.topology._models import canonical_complex
+from jacobian.math.topology.cellular_sheaves import _kernel as sheaf_kernel
 from jacobian.math.topology.cellular_sheaves._models import (
     CoverRestrictionMatrix,
     FiniteCellularSheaf,
@@ -258,3 +260,30 @@ def test_nonnatural_morphism_has_no_induced_cohomology_map() -> None:
     assert not nonnatural.natural
     with pytest.raises(OperationDomainValidationError, match="natural"):
         cohomology_map(nonnatural)
+
+
+def test_cohomology_map_reuses_both_canonical_parent_admissions() -> None:
+    sheaf = _circle_sheaf()
+    claimed = SheafMorphismResult(
+        source=sheaf,
+        target=sheaf,
+        components=tuple((face, ((_q(3),),)) for face in sheaf.canonical_face_order),
+        natural=False,
+        obstruction="caller supplied stale claim",
+    )
+    # Wrap the actual canonical rebuild, preserving all exact mathematics.
+    with patch.object(
+        sheaf_kernel, "from_cover_maps", wraps=sheaf_kernel.from_cover_maps
+    ) as rebuild:
+        result = cohomology_map(claimed)
+    assert rebuild.call_count == 2
+    assert result.components == (((_q(3),),), ((_q(3),),))
+    assert tuple(group.betti_number for group in result.source_groups) == (1, 1)
+    assert result.morphism.source == result.morphism.target == sheaf
+
+    with patch.object(
+        sheaf_kernel, "from_cover_maps", wraps=sheaf_kernel.from_cover_maps
+    ) as rebuild:
+        direct = sheaf_kernel.sheaf_cohomology(sheaf)
+    assert rebuild.call_count == 1
+    assert direct.groups == result.source_groups

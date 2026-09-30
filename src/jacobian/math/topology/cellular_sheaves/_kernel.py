@@ -895,7 +895,13 @@ def sheaf_cohomology(
     sheaf: FiniteCellularSheaf,
 ) -> SheafCohomologyResult:
     """Compute cohomology from the checked cellular sheaf cochain complex."""
-    sheaf = require_canonical_sheaf_admission(sheaf)
+    return _sheaf_cohomology_admitted(require_canonical_sheaf_admission(sheaf))
+
+
+def _sheaf_cohomology_admitted(
+    sheaf: FiniteCellularSheaf,
+) -> SheafCohomologyResult:
+    """Reduce a sheaf already canonically admitted in the current request."""
     cochain_complex, field, scalar_coboundaries = _assemble_sheaf_cochain_complex(sheaf)
     cochain_sizes = list(cochain_complex.cochain_dimensions)
     cochain_bases = [list(basis) for basis in cochain_complex.cochain_bases]

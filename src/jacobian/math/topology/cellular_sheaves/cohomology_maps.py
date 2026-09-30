@@ -14,7 +14,7 @@ from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.cellular_sheaves._kernel import (
     _cochain_rref,
     _ExactField,
-    sheaf_cohomology,
+    _sheaf_cohomology_admitted,
 )
 from jacobian.math.topology.cellular_sheaves._models import (
     MAX_SHEAF_COHOMOLOGY_CELLS,
@@ -368,8 +368,10 @@ def cohomology_map(value: SheafMorphismResult) -> SheafCohomologyMapResult:
             f"cohomology-map quotient reduction needs at most {work_bound} scalar steps, "
             f"above the {MAX_SHEAF_COHOMOLOGY_MAP_WORK}-step bound",
         )
-    source = sheaf_cohomology(induced_cochains.morphism.source)
-    target = sheaf_cohomology(induced_cochains.morphism.target)
+    # cochain_map established both canonical parent diagrams through morphism.
+    # Reuse that request-local admission rather than rebuilding each parent.
+    source = _sheaf_cohomology_admitted(induced_cochains.morphism.source)
+    target = _sheaf_cohomology_admitted(induced_cochains.morphism.target)
     images_by_degree = _admit_quotient_reduction(
         induced_cochains, source, target, field
     )

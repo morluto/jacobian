@@ -6,6 +6,7 @@ from jacobian.catalog.models import (
     OperationExample,
 )
 from jacobian.math.free_algebras._models import (
+    FreeAlgebraCanonicalWordPairRequest,
     FreeAlgebraFactorAvoidanceRequest,
     FreeAlgebraIdealDegreeComponentRequest,
     FreeAlgebraIdealDegreeComponentResult,
@@ -111,7 +112,7 @@ def _run_word_suffixes(
 
 
 def _run_word_compare(
-    request: FreeAlgebraWordPairRequest,
+    request: FreeAlgebraCanonicalWordPairRequest,
 ) -> FreeAlgebraWordCompareResult:
     return compare_words(request.left, request.right)
 
@@ -329,7 +330,8 @@ TOOLS = (
             "result is returned as the canonical degree-lexicographically "
             "ordered polynomial; distinct words such as xy and yx stay "
             "distinct. Each operand is limited to 64 terms of word length at "
-            "most 32. Admission bounds the 128-term worst-case support, "
+            "most 64, the canonical value range that multiplication results "
+            "occupy. Admission bounds the 128-term worst-case support, "
             "coefficient growth, and a 150,000-cell output allocation before "
             "aggregation."
         ),
@@ -502,8 +504,8 @@ TOOLS = (
     MathTool(
         operation_id="free_word.order.compare",
         title="Compare free-algebra words",
-        description="Compare words over the same ordered alphabet in degree-lexicographic order. Return degree comparison, first differing position and generator ranks, and the total comparison; host string ordering is not used.",
-        request_type=FreeAlgebraWordPairRequest,
+        description="Compare words over the same ordered alphabet in degree-lexicographic order. Return degree comparison, first differing position and generator ranks, and the total comparison; host string ordering is not used. Both words may use the full 64-letter canonical range, so a word produced by a power or a concatenation compares directly.",
+        request_type=FreeAlgebraCanonicalWordPairRequest,
         result_type=FreeAlgebraWordCompareResult,
         run=_run_word_compare,
         tags=("free-word", "order", "degree-lexicographic", "exact"),

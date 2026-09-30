@@ -132,21 +132,7 @@ def _preflight(
     # Each contribution is itself a possible output coefficient, so admitting
     # an over-cap contribution would violate the exact-output bound during
     # convolution even when subsequent unrelated terms happen to cancel it.
-    for left_term in left.terms:
-        left_coefficient = left_term.coefficient.as_fraction()
-        for right_term in right.terms:
-            contribution = left_coefficient * right_term.coefficient.as_fraction()
-            if (
-                max(
-                    len(str(abs(contribution.numerator))),
-                    len(str(contribution.denominator)),
-                )
-                > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
-            ):
-                _reject_resource(
-                    "coefficient_growth",
-                    "exact commutator contribution exceeds the 64-digit bound",
-                )
+    _reject_oversized_contributions(left, right)
 
     left_denominator_sizes = tuple(
         len(str(term.coefficient.as_fraction().denominator)) for term in left.terms
@@ -217,6 +203,38 @@ def _preflight(
     return left_scaled, right_scaled, left_common, right_common
 
 
+def _reject_oversized_contributions(
+    left: FreeAlgebraPolynomial,
+    right: FreeAlgebraPolynomial,
+) -> None:
+    """Refuse a reduced pair product that could become an output coefficient.
+
+    Each contribution is itself a possible output coefficient, so admitting an
+    over-cap contribution would violate the exact-output bound during
+    convolution even when later unrelated terms happen to cancel it. A pair
+    whose two concatenations are the same word contributes nothing at all: its
+    signed contributions cancel on one key, so charging it a coefficient would
+    refuse an identically zero result.
+    """
+    for left_term in left.terms:
+        left_coefficient = left_term.coefficient.as_fraction()
+        for right_term in right.terms:
+            if left_term.word + right_term.word == right_term.word + left_term.word:
+                continue
+            contribution = left_coefficient * right_term.coefficient.as_fraction()
+            if (
+                max(
+                    len(str(abs(contribution.numerator))),
+                    len(str(contribution.denominator)),
+                )
+                > MAX_FREE_ALGEBRA_COEFFICIENT_DIGITS
+            ):
+                _reject_resource(
+                    "coefficient_growth",
+                    "exact commutator contribution exceeds the 64-digit bound",
+                )
+
+
 def _commutator_numerators(
     left: tuple[tuple[tuple[str, ...], int], ...],
     right: tuple[tuple[tuple[str, ...], int], ...],
@@ -241,6 +259,18 @@ def commutator(
     left = _admit_polynomial(left, label="left")
     right = _admit_polynomial(right, label="right")
     _preflight(left, right)
+    if left == right:
+        # [f, f] is identically zero, and the preflight has already decided that
+        # plan. Convolving anyway would run the largest convolution the module
+        # can be handed, past the work and term bounds every admitted
+        # non-trivial request is held to, and discard the result.
+        return FreeAlgebraCommutatorResult.model_construct(
+            left=left,
+            right=right,
+            commutator=FreeAlgebraPolynomial.model_construct(
+                alphabet=left.alphabet, terms=()
+            ),
+        )
     # Accumulate reduced rational contributions directly. A common product of
     # operand denominators can exceed the result cap even when factors cancel
     # (for example (1/N)x and N*y), so admission must bound inputs/work while

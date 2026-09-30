@@ -29,7 +29,7 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
     overcount_divisor: int | None = Field(
         default=None, ge=1, le=MAX_ANONYMOUS_VERTEX_DECK_ORDER - 2
     )
-    source_edge_count: int = Field(
+    implied_edge_count: int = Field(
         ge=0,
         le=MAX_ANONYMOUS_VERTEX_DECK_ORDER * (MAX_ANONYMOUS_VERTEX_DECK_ORDER - 1) // 2,
     )
@@ -46,7 +46,7 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
                 or any(item.representative.edges for item in self.deck.classes)
                 or self.card_edge_total != 0
                 or self.overcount_divisor is not None
-                or self.source_edge_count != 0
+                or self.implied_edge_count != 0
             ):
                 raise ValueError("orders zero and one have no edges or Kelly divisor")
             return self

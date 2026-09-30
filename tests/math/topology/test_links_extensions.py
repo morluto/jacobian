@@ -31,6 +31,7 @@ from jacobian.math.topology.links._extensions_models import (
     AlexanderPolynomialResult,
     BraidClosureResult,
     GoeritzDataResult,
+    LinkBlackboardGraph,
     WirtingerPresentationResult,
 )
 from jacobian.math.topology.links._models import OrientedLinkDiagram
@@ -143,6 +144,132 @@ class TestGoeritzData:
         assert result.absolute_determinant == link_determinant(diagram).determinant == 3
         assert len(result.blackboard_graph.edges) == 3
         assert GoeritzDataResult.model_validate_json(result.model_dump_json()) == result
+
+    def test_forged_tait_sign_is_rejected_before_a_wrong_determinant(self) -> None:
+        """A caller-authored Tait sign must be recomputed, not trusted.
+
+        The Goeritz matrix and the incidence numbers are built straight from it,
+        so flipping one sign on a trefoil returned determinant 1 instead of 3.
+        """
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        edges = list(graph.edges)
+        edges[0] = edges[0].model_copy(update={"tait_sign": -edges[0].tait_sign})
+        forged = graph.model_copy(update={"edges": tuple(edges)})
+
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate(forged.model_dump())
+        assert error.value.errors()[0]["type"] == "link_diagram.blackboard_tait_sign"
+
+    def test_fabricated_region_incidence_is_rejected(self) -> None:
+        """Region boundaries must be the diagram's own face cycles.
+
+        Attributing a dart to the wrong region produced a Goeritz determinant of
+        2 for a trefoil, and reversing a region's cyclic order was accepted too.
+        """
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+
+        # swap one dart between two regions
+        first, second = graph.regions[0], graph.regions[1]
+        regions = [r.model_copy() for r in graph.regions]
+        regions[0] = first.model_copy(
+            update={
+                "boundary_darts": first.boundary_darts[1:] + first.boundary_darts[:1]
+            }
+        )
+        regions[1] = second.model_copy(
+            update={"boundary_darts": second.boundary_darts + first.boundary_darts[:1]}
+        )
+        regions[0] = regions[0].model_copy(
+            update={"boundary_darts": first.boundary_darts[1:]}
+        )
+        forged = graph.model_copy(update={"regions": tuple(regions)})
+        # Depending on which dart moves, the first structural check to fire is
+        # the edge-endpoint one or the face-cycle one; both are the point here,
+        # since before the fix neither fired and the Goeritz matrix was built
+        # from data the diagram does not support.
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate(forged.model_dump())
+        assert error.value.errors()[0]["type"] in {
+            "link_diagram.blackboard_edge_endpoints",
+            "link_diagram.blackboard_region_faces",
+        }
+
+    def test_reversed_region_boundary_order_is_rejected(self) -> None:
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        region = next(r for r in graph.regions if len(r.boundary_darts) > 1)
+        regions = tuple(
+            r.model_copy(update={"boundary_darts": tuple(reversed(r.boundary_darts))})
+            if r.region_id == region.region_id
+            else r
+            for r in graph.regions
+        )
+        forged = graph.model_copy(update={"regions": regions})
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate(forged.model_dump())
+        assert error.value.errors()[0]["type"] == "link_diagram.blackboard_region_faces"
+
+    def test_permuted_face_axes_with_consistent_incidence_are_rejected(self) -> None:
+        graph = link_blackboard_graph(braid_closure(_two_braid(1, 1, 1)).diagram)
+        # Swap the seed face with an unshaded face and consistently recolor.
+        # All cycles, corner incidences, and Tait signs remain individually valid;
+        # only their attachment to the canonical region IDs is false.
+        other = next(
+            index for index, region in enumerate(graph.regions) if not region.shaded
+        )
+        permutation = list(range(len(graph.regions)))
+        permutation[0], permutation[other] = permutation[other], permutation[0]
+        regions = tuple(
+            graph.regions[old_index].model_copy(
+                update={
+                    "region_id": f"region_{index:03d}",
+                    "shaded": not graph.regions[old_index].shaded,
+                }
+            )
+            for index, old_index in enumerate(permutation)
+        )
+        region_of = {
+            dart: region for region in regions for dart in region.boundary_darts
+        }
+        edges = []
+        for edge, crossing in zip(graph.edges, graph.diagram.crossings, strict=True):
+            corners = tuple(
+                index
+                for index, dart in enumerate(crossing.half_edges)
+                if region_of[dart].shaded
+            )
+            edges.append(
+                edge.model_copy(
+                    update={
+                        "first_region_id": region_of[
+                            crossing.half_edges[corners[0]]
+                        ].region_id,
+                        "second_region_id": region_of[
+                            crossing.half_edges[corners[1]]
+                        ].region_id,
+                        "first_corner_index": corners[0],
+                        "second_corner_index": corners[1],
+                        "tait_sign": 1
+                        if set(corners) == set(crossing.over_pair)
+                        else -1,
+                    }
+                )
+            )
+        forged = graph.model_copy(
+            update={
+                "regions": regions,
+                "shaded_region_ids": tuple(
+                    region.region_id for region in regions if region.shaded
+                ),
+                "edges": tuple(edges),
+            }
+        )
+        with pytest.raises(ValidationError) as error:
+            LinkBlackboardGraph.model_validate_json(forged.model_dump_json())
+        assert error.value.errors()[0]["type"] == "link_diagram.blackboard_region_faces"
+        with pytest.raises(
+            OperationDomainValidationError, match="bounded checkerboard graph contract"
+        ):
+            link_goeritz_data(forged)
 
     def test_mirror_negates_matrix_and_preserves_absolute_determinant(self) -> None:
         right = link_goeritz_data(

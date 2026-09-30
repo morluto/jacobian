@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 from fractions import Fraction
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import MathTool
 from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.cellular_sheaves import (
     FiniteCellularSheaf,
@@ -37,8 +39,11 @@ def _q(value: str | int) -> CanonicalRational:
     return CanonicalRational.from_fraction(Fraction(value))
 
 
-def _tool():
-    return next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
+def _tool() -> MathTool[SheafCohomologyRequest, SheafCohomologyResult]:
+    return cast(
+        MathTool[SheafCohomologyRequest, SheafCohomologyResult],
+        next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID),
+    )
 
 
 def _cells(complex_: FiniteSimplicialComplex) -> list[tuple[str, ...]]:
@@ -103,11 +108,26 @@ def _bettis(result: SheafCohomologyResult) -> list[int]:
 
 
 def _parse_matrix(
-    matrix: tuple[tuple[str, ...], ...], prime: int | None
+    matrix: tuple[tuple[CanonicalRational | int, ...], ...], prime: int | None
 ) -> list[list[Fraction | int]]:
     if prime is None:
-        return [[Fraction(entry.num, entry.den) for entry in row] for row in matrix]
-    return [[int(entry) % prime for entry in row] for row in matrix]
+        return [
+            [
+                entry.as_fraction()
+                if isinstance(entry, CanonicalRational)
+                else Fraction(entry)
+                for entry in row
+            ]
+            for row in matrix
+        ]
+    return [
+        [
+            int(entry.as_fraction() if isinstance(entry, CanonicalRational) else entry)
+            % prime
+            for entry in row
+        ]
+        for row in matrix
+    ]
 
 
 def _mat_mul(
@@ -311,6 +331,46 @@ class TestAdversarial:
         forged = sheaf.model_copy(update={"cover_restrictions": restrictions})
         with pytest.raises(OperationDomainValidationError):
             _native(forged)
+
+    def test_tampered_derived_restriction_is_rejected_before_assembly(self) -> None:
+        """The authored sheaf is re-admitted before the complex is assembled.
+
+        Assembly consumes only codimension-one restrictions, so an altered
+        derived restriction passed the coboundary and square-zero checks and
+        produced Betti numbers for a sheaf the diagram does not support.
+        """
+        from jacobian.catalog.models import OperationDomainValidationError
+
+        sheaf = _constant_sheaf(_TRIANGLE)
+        derived = list(sheaf.derived_restrictions)
+        tampered = derived[0].model_copy(
+            update={"entries": ((_q(7),),) * len(derived[0].entries)}
+        )
+        derived[0] = tampered
+        forged = sheaf.model_copy(update={"derived_restrictions": tuple(derived)})
+
+        with pytest.raises(OperationDomainValidationError) as error:
+            _native(forged)
+        assert "cover-map composite" in str(error.value)
+        # This is a well-shaped exact carrier with a false derived relation.
+        assert FiniteCellularSheaf.model_validate(forged.model_dump()) == forged
+        from jacobian.math.topology.cellular_sheaves.cohomology_maps import (
+            cohomology_map,
+        )
+        from jacobian.math.topology.cellular_sheaves.extensions import (
+            SheafMorphismResult,
+        )
+
+        claimed = SheafMorphismResult(
+            source=forged,
+            target=sheaf,
+            components=tuple(
+                (face, ((_q(1),),)) for face in sheaf.canonical_face_order
+            ),
+            natural=True,
+        )
+        with pytest.raises(OperationDomainValidationError, match="cover-map composite"):
+            cohomology_map(claimed)
 
     def test_stalk_rank_above_the_envelope_is_a_resource_rejection(self) -> None:
         from jacobian.catalog.models import OperationResourceAdmissionError

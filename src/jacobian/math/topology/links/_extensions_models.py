@@ -205,6 +205,36 @@ class LinkBlackboardGraph(StrictModel):
                     "blackboard_edge_endpoints",
                     "crossing edge endpoints must match its opposite shaded source corners",
                 )
+        # The Tait sign is derived data, not a caller claim: the Goeritz matrix
+        # and the incidence numbers are built straight from it, so a forged
+        # sign silently returns a wrong link invariant (a trefoil determinant
+        # of 1 instead of 3). Recompute it from the crossing's over-pair and
+        # the shaded corners established above.
+        for edge, crossing in zip(self.edges, self.diagram.crossings, strict=True):
+            expected_sign = (
+                1
+                if {edge.first_corner_index, edge.second_corner_index}
+                == set(crossing.over_pair)
+                else -1
+            )
+            if edge.tait_sign != expected_sign:
+                raise _validation_error(
+                    "blackboard_tait_sign",
+                    "each Tait sign must be the sign of its crossing over-pair",
+                )
+        # Region boundaries are the diagram's own face cycles. The Goeritz
+        # assembly trusts them, so a fabricated attribution (or a reversed
+        # cyclic order) would return a matrix built from no diagram at all.
+        # Recompute the projection and require the authored regions to match.
+        from jacobian.math.topology.links.extensions import _projection_faces
+
+        canonical_faces, _face_of, _adjacency = _projection_faces(self.diagram)
+        authored_faces = tuple(region.boundary_darts for region in self.regions)
+        if canonical_faces != authored_faces:
+            raise _validation_error(
+                "blackboard_region_faces",
+                "region boundaries must be the diagram's own face cycles in canonical order",
+            )
         return self
 
 

@@ -2014,6 +2014,7 @@ def _dominant_weight(
     rows: tuple[tuple[int, ...], ...],
     weight: tuple[int, ...],
     *,
+    coordinate_bounds: tuple[int, ...],
     word: list[int] | None = None,
     max_steps: int = MAX_WEIGHT_ORBIT_SIZE,
     bound_code: str = "root_system.weight_orbit_size_bound",
@@ -2037,6 +2038,11 @@ def _dominant_weight(
                 message=bound_message,
             )
         dominant = _weight_reflect(dominant, negative, rows)
+        if any(
+            abs(value) > bound
+            for value, bound in zip(dominant, coordinate_bounds, strict=True)
+        ):
+            raise OperationBackendError(BackendFailureReason.INVALID_OUTPUT)
         if word is not None:
             word.append(negative)
         normalization_steps += 1
@@ -2213,7 +2219,7 @@ def weyl_antidominant_representative(
 
     # The invariant positive-definite norm bounds every intermediate image
     # without imposing the public coordinate limit on private reflection
-    # prefixes, which can legitimately reach twice that limit. Each performed
+    # prefixes, which can legitimately exceed that limit. Each performed
     # reflection is checked against it, exactly as the dominant path does;
     # _weight_reflect itself performs no check.
     intermediate_bounds = _weight_coordinate_bounds(
@@ -2251,6 +2257,7 @@ def weyl_antidominant_representative(
     dominant = _dominant_weight(
         rows,
         weight,
+        coordinate_bounds=intermediate_bounds,
         word=dominant_word,
         max_steps=MAX_WEYL_WORD_LENGTH,
         bound_code="root_system.antidominant_representative_word_bound",
@@ -2384,7 +2391,7 @@ def weyl_weight_orbit(
     # Move to the dominant chamber using strictly increasing pairing with
     # rho^vee. The finite 4096-step cap is admitted before this normalization;
     # exceeding it proves the orbit itself cannot fit the public orbit cap.
-    dominant = _dominant_weight(rows, weight)
+    dominant = _dominant_weight(rows, weight, coordinate_bounds=coordinate_bounds)
 
     # For dominant lambda, its stabilizer is the parabolic subgroup generated
     # by the zero simple-coroot pairings. Orbit-stabilizer gives the exact
@@ -2450,7 +2457,9 @@ def weyl_parabolic_weight_orbit(
         _admit_cartan_finite_type(subgroup)
         subgroup_order = _weyl_order_from_exponents(subgroup)
         restricted_dominant = _dominant_weight(
-            subgroup, tuple(weight[index] for index in indices)
+            subgroup,
+            tuple(weight[index] for index in indices),
+            coordinate_bounds=tuple(coordinate_bounds[index] for index in indices),
         )
         zero_indices = tuple(
             index for index, value in enumerate(restricted_dominant) if value == 0

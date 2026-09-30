@@ -249,3 +249,31 @@ def test_singular_weyl_action_is_refused_with_the_action_location() -> None:
             "root_system.action_not_root_automorphism",
             "root_system.action_not_weyl_element",
         }
+
+
+@pytest.mark.parametrize("consumer", ("antidominant", "full_orbit", "parabolic_orbit"))
+def test_chamber_normalization_rejects_a_reflection_outside_its_admitted_bounds(
+    consumer: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from jacobian._execution import BackendFailureReason, OperationBackendError
+
+    calls: list[int] = []
+
+    def invalid_prefix(
+        value: tuple[int, ...], index: int, rows: tuple[tuple[int, ...], ...]
+    ) -> tuple[int, ...]:
+        calls.append(index)
+        if len(calls) > 1:
+            pytest.fail("an invalid prefix must stop before another weight reflection")
+        return (1_000_000,) * len(value)
+
+    monkeypatch.setattr(rs_operations, "_weight_reflect", invalid_prefix)
+    with pytest.raises(OperationBackendError) as error:
+        if consumer == "antidominant":
+            weyl_antidominant_representative(G2, (1, -1))
+        elif consumer == "full_orbit":
+            weyl_weight_orbit(G2, (1, -1))
+        else:
+            weyl_parabolic_weight_orbit(weight_lattice_vector(G2, (1, -1)), (0, 1))
+    assert error.value.reason is BackendFailureReason.INVALID_OUTPUT
+    assert calls == [1]

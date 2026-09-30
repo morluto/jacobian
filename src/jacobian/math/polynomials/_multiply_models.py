@@ -67,6 +67,11 @@ def _coefficient_content(polynomial: RationalPolynomial) -> tuple[int, int]:
     return numerator_content, denominator_content
 
 
+def _factor_width(value: int) -> int:
+    """A unit factor contributes no growth to a product."""
+    return 0 if abs(value) == 1 else decimal_digit_width(value)
+
+
 def _reduced_component_widths(
     polynomial: RationalPolynomial, content: tuple[int, int]
 ) -> tuple[int, int]:
@@ -77,16 +82,16 @@ def _reduced_component_widths(
     """
 
     numerator_content, denominator_content = content
-    numerator_width = 1
-    denominator_width = 1
+    numerator_width = 0
+    denominator_width = 0
     for term in polynomial.polynomial.terms:
         numerator_width = max(
             numerator_width,
-            decimal_digit_width(term.coefficient.num // numerator_content),
+            _factor_width(term.coefficient.num // numerator_content),
         )
         denominator_width = max(
             denominator_width,
-            decimal_digit_width(term.coefficient.den // denominator_content),
+            _factor_width(term.coefficient.den // denominator_content),
         )
     return numerator_width, denominator_width
 
@@ -139,15 +144,13 @@ def _maximum_product_coefficient_digits(
     numerator_bound = (
         product_numerator_width
         + (product_count - 1) * product_denominator_width
-        + len(str(product_count))
-        + decimal_digit_width(product_numerator)
+        + (0 if product_count == 1 else len(str(product_count)))
+        + _factor_width(product_numerator)
     )
-    denominator_bound = (
-        product_count * product_denominator_width
-        + len(str(product_count))
-        + decimal_digit_width(product_denominator)
+    denominator_bound = product_count * product_denominator_width + _factor_width(
+        product_denominator
     )
-    return max(numerator_bound, denominator_bound)
+    return max(1, numerator_bound, denominator_bound)
 
 
 class RationalPolynomialMultiplyRequest(StrictModel):

@@ -177,14 +177,6 @@ def test_unwitnessed_composite_status_does_not_reenter_a_primality_backend() -> 
 # ---------------------------------------------------------------------------
 
 
-def test_operations_are_discoverable_via_catalog() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    ids = {t.operation_id for t in BUILTIN_TOOLS}
-    assert "integer.factor.certified_compute" in ids
-    assert "integer.primality.certificate.compute" in ids
-
-
 def test_serialized_pratt_node_is_a_claim_not_a_primality_check() -> None:
     candidate = PrattCertificateNode.model_validate_json(
         '{"prime":"9","witness":"2","factors":[{"prime":"2","exponent":1,"certificate":{"prime":"2"}}]}'

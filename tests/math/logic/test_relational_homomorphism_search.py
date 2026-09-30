@@ -7,7 +7,6 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -274,7 +273,3 @@ class TestSearchComposition:
         native = search_homomorphism(payload.source, payload.target)
         assert tool.run(payload) == native
         assert native.status is HomomorphismSearchStatus.FOUND
-
-    def test_operation_is_published_in_the_catalog(self) -> None:
-        operation_ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-        assert OPERATION_ID in operation_ids

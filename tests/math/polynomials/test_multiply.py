@@ -474,3 +474,50 @@ def test_dense_sign_product_matches_integer_convolution(denominator: int) -> Non
         for k in range(2 * n - 1)
     }
     assert actual == {k: v for k, v in expected.items() if v}
+
+
+@pytest.mark.parametrize(
+    "digits",
+    (
+        MAX_CANONICAL_RATIONAL_DIGITS - 1,
+        MAX_CANONICAL_RATIONAL_DIGITS,
+        MAX_CANONICAL_RATIONAL_DIGITS + 1,
+    ),
+)
+@pytest.mark.parametrize("reciprocal", (False, True))
+@pytest.mark.parametrize("sign", (-1, 1))
+def test_single_nonunit_product_preserves_exact_component_boundary(
+    digits: int, reciprocal: bool, sign: int
+) -> None:
+    def constant(numerator: int, denominator: int) -> RationalPolynomial:
+        return RationalPolynomial(
+            variables=("x",),
+            polynomial=SparseRationalPolynomial(
+                terms=(
+                    RationalPolynomialTerm(
+                        coefficient=CanonicalRational(num=numerator, den=denominator),
+                        exponents=(0,),
+                    ),
+                )
+            ),
+        )
+
+    large = 5 * 10 ** (digits - 2)
+    request = RationalPolynomialMultiplyRequest(
+        left=constant(sign, large) if reciprocal else constant(sign * large, 1),
+        right=constant(1, 2) if reciprocal else constant(2, 1),
+    )
+    if digits > MAX_CANONICAL_RATIONAL_DIGITS:
+        with pytest.raises(OperationDomainValidationError):
+            rational_polynomial_multiply(request)
+    else:
+        result = rational_polynomial_multiply(request)
+        expected = (
+            Fraction(sign, 10 ** (digits - 1))
+            if reciprocal
+            else Fraction(sign * 10 ** (digits - 1))
+        )
+        assert result.polynomial.terms[0].coefficient.as_fraction() == expected
+        assert (
+            RationalPolynomial.model_validate_json(result.model_dump_json()) == result
+        )

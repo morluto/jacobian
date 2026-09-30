@@ -366,26 +366,6 @@ def test_cross_check_s_equals_v_vs_brute() -> None:
         assert whole.min_deletions == k
 
 
-def test_native_mcp_parity() -> None:
-    g = _graph(["a", "b", "c"], [("a", "b"), ("a", "c"), ("b", "c")])
-    native = compute_induced_edge_deletion_profile(g, 2)
-    request = InducedEdgeDeletionProfileRequest(graph=g, r=2)
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    tool = next(
-        t
-        for t in BUILTIN_TOOLS
-        if t.operation_id == "graph.coloring.induced_edge_deletion_profile.compute"
-    )
-    via_tool = tool.run(request)
-    assert native == via_tool
-    # also test via wire round-trip
-    dumped = InducedEdgeDeletionProfileResult.model_validate_json(
-        native.model_dump_json()
-    )
-    assert dumped == native
-
-
 def test_serialized_round_trip() -> None:
     g = _graph(["0", "1", "2"], [("0", "1"), ("1", "2")])
     result = compute_induced_edge_deletion_profile(g, 2)

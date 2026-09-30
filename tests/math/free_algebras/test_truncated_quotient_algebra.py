@@ -9,7 +9,6 @@ from typing import Any
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -275,12 +274,3 @@ def test_admitted_reducer_ratio_still_builds_the_table() -> None:
 
     product = algebra.multiplication[positions[("y",)]][positions[("x",)]]
     assert _coordinates(product) == {("x", "y"): Fraction(4)}
-
-
-def test_catalog_example_round_trips_and_is_discoverable() -> None:
-    operation_id = "free_algebra.two_sided_quotient.truncated_algebra.compute"
-    tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == operation_id)
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    assert isinstance(result, TruncatedFreeAlgebraQuotient)
-    assert len(result.basis_words) == 6

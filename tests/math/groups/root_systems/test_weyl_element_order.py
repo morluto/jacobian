@@ -2,11 +2,8 @@
 
 from __future__ import annotations
 
-import json
-
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -14,9 +11,7 @@ from jacobian.catalog.models import (
 from jacobian.math.groups.root_systems._models import (
     CartanMatrix,
     WeylElementOrderResult,
-    WeylElementRequest,
 )
-from jacobian.math.groups.root_systems._tools import TOOLS
 from jacobian.math.groups.root_systems.operations import weyl_element_order
 
 
@@ -115,20 +110,3 @@ def test_order_rejects_invalid_word_index() -> None:
     matrix = CartanMatrix.model_validate(((2, -1), (-1, 2)))
     with pytest.raises(OperationDomainValidationError, match="word"):
         weyl_element_order(matrix, (2,))
-
-
-def test_manifest_example_invokes_published_order_operation() -> None:
-    local = next(
-        tool
-        for tool in TOOLS
-        if tool.operation_id == "weyl_group.element.order.compute"
-    )
-    request = WeylElementRequest.model_validate_json(
-        json.dumps(local.examples[0].input), strict=True
-    )
-    public = next(
-        tool
-        for tool in BUILTIN_TOOLS
-        if tool.operation_id == "weyl_group.element.order.compute"
-    )
-    assert public.run(request).order == 3

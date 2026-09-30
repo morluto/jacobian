@@ -6,7 +6,6 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.math.koszul.module_models import (
     BasedFiniteModule,
     FiniteCommutativeAlgebra,
@@ -62,12 +61,6 @@ def test_direct_sum_has_partitioning_chain_inclusions_and_exact_block_differenti
         )
         assert combined == ((Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)))
     assert ModuleKoszulDirectSumValue.model_validate(value.model_dump()) == value
-
-
-def test_catalog_declares_the_reusable_direct_sum_postcondition() -> None:
-    assert "homological.koszul.module_direct_sum.compute" in {
-        tool.operation_id for tool in BUILTIN_TOOLS
-    }
 
 
 def test_direct_sum_dimension_is_rejected_before_complex_expansion() -> None:

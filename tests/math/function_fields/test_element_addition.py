@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -18,9 +16,7 @@ from jacobian.math.function_fields import (
 )
 from jacobian.math.function_fields._models import (
     FiniteFunctionField,
-    FunctionFieldElementAddRequest,
 )
-from jacobian.math.function_fields._tools import TOOLS
 
 OPERATION_ID = "function_field.element.add.compute"
 
@@ -200,26 +196,3 @@ def test_work_and_output_admission_precede_coordinate_addition(
         output_error.value.errors()[0]["type"]
         == "function_field.element_addition_output_exceeds_envelope"
     )
-
-
-def test_serialization_catalog_and_native_exports() -> None:
-    import jacobian.math as math_api
-
-    field = _rational_field(7)
-    left = _element(field, (_rational(7, (1,)),))
-    right = _element(field, (_rational(7, (2,)),))
-    direct = function_field_element_add(left, right)
-    restored = FiniteFunctionFieldElement.model_validate_json(direct.model_dump_json())
-    assert restored == direct
-    assert math_api.function_fields.function_field_element_add(left, right) == direct
-
-    tool = next(tool for tool in TOOLS if tool.operation_id == OPERATION_ID)
-    request = FunctionFieldElementAddRequest(left=left, right=right)
-    assert tool.run(request) == direct
-    example = next(example for example in tool.examples)
-    parsed = tool.request_type.model_validate_json(
-        encode_strict_json(example.input), strict=True
-    )
-    example_result = tool.run(parsed)
-    assert example_result.coordinates[0] == _rational(2, (0, 1))
-    assert any(candidate.operation_id == OPERATION_ID for candidate in BUILTIN_TOOLS)

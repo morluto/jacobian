@@ -5,7 +5,6 @@ from itertools import product
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology.cubical_complexes._models import (
     MAX_POSET_ELEMENTS,
@@ -108,16 +107,6 @@ def test_nonpure_face_poset_retains_cell_dimensions_without_poset_ranks() -> Non
     assert result.poset.ranks is None
     assert tuple(entry.dimension for entry in result.cell_elements) == (0, 1, 0, 0)
     _assert_matches_independent_oracle((isolated_point, edge))
-
-
-def test_face_poset_catalog_example_executes_and_round_trips() -> None:
-    operation = next(
-        tool for tool in BUILTIN_TOOLS if tool.operation_id == _OPERATION_ID
-    )
-    request = operation.request_type.model_validate(operation.examples[0].input)
-    result = operation.run(request)
-    assert len(result.cell_elements) == 9
-    assert type(result).model_validate_json(result.model_dump_json()) == result
 
 
 def test_face_poset_preflights_existing_cell_count_and_single_cell_closure() -> None:

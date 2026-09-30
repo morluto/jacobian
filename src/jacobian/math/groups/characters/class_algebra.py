@@ -7,7 +7,11 @@ from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
 )
-from jacobian.math.groups._models import GroupConjugacyClassesResult
+from jacobian.math.groups._models import (
+    MAX_GROUP_DEGREE,
+    GroupConjugacyClassesResult,
+    PermutationGroup,
+)
 from jacobian.math.groups.characters._models import (
     ClassMultiplicationConstantsRequest,
     ClassMultiplicationConstantsResult,
@@ -28,33 +32,55 @@ def _compose(first: tuple[int, ...], second: tuple[int, ...]) -> tuple[int, ...]
     return tuple(second[first[index]] for index in range(len(first)))
 
 
-def _admit_raw_class_algebra_size(request: object) -> None:
-    """Bound the nested partition's raw counts before anything copies it.
+def _raw_request_error() -> OperationDomainValidationError:
+    return OperationDomainValidationError(
+        location=("partition",),
+        code="groups.characters.class_algebra_request",
+        message="class algebra request is malformed",
+    )
 
-    A ``model_construct``-created request bypasses every field bound, so the
-    revalidation below would first ``model_dump`` the whole forged structure. A
-    two-million-class partition costs 15 seconds and several gigabytes that way,
-    before the size admission that exists to prevent exactly that. Count the
-    raw tuples in place, stopping as soon as the bound is passed, and refuse
-    with the same codes the admission owns. Anything not shaped like a
-    partition is left to the revalidation, which reports it as malformed.
-    """
+
+def _require_raw_permutation(member: object, degree: int) -> None:
+    if (
+        type(member) is not tuple
+        or len(member) != degree
+        or any(type(point) is not int for point in member)
+    ):
+        raise _raw_request_error()
+
+
+def _admit_raw_class_algebra_size(request: object) -> None:
+    """Bound every retained native container before recursive serialization."""
+    if not isinstance(request, ClassMultiplicationConstantsRequest):
+        raise _raw_request_error()
     partition = getattr(request, "partition", None)
+    if not isinstance(partition, GroupConjugacyClassesResult):
+        raise _raw_request_error()
     classes = getattr(partition, "classes", None)
-    degree = getattr(getattr(partition, "source", None), "degree", None)
-    if not isinstance(classes, tuple) or not isinstance(degree, int):
-        return
+    if type(classes) is not tuple or not classes:
+        raise _raw_request_error()
+    # Inspect the outer count before any child, including malformed children.
     claimed_count = len(classes)
+    _admit_class_algebra_size(0, claimed_count, 0)
+    source = getattr(partition, "source", None)
+    if not isinstance(source, PermutationGroup):
+        raise _raw_request_error()
+    degree = getattr(source, "degree", None)
+    generators = getattr(source, "generators", None)
+    if type(degree) is not int or not 1 <= degree <= MAX_GROUP_DEGREE:
+        raise _raw_request_error()
+    if type(generators) is not tuple or not 1 <= len(generators) <= MAX_GROUP_DEGREE:
+        raise _raw_request_error()
+    for generator in generators:
+        _require_raw_permutation(generator, degree)
     claimed_order = 0
     for conjugacy_class in classes:
-        if not isinstance(conjugacy_class, tuple):
-            return
+        if type(conjugacy_class) is not tuple or not conjugacy_class:
+            raise _raw_request_error()
         claimed_order += len(conjugacy_class)
-        if (
-            claimed_count > MAX_CLASS_ALGEBRA_CLASS_COUNT
-            or claimed_order > MAX_CLASS_ALGEBRA_GROUP_ORDER
-        ):
-            _admit_class_algebra_size(claimed_order, claimed_count, degree)
+        _admit_class_algebra_size(claimed_order, claimed_count, degree)
+        for member in conjugacy_class:
+            _require_raw_permutation(member, degree)
 
 
 def class_multiplication_constants(

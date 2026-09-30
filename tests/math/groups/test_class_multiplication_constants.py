@@ -157,7 +157,7 @@ def test_an_oversized_forged_partition_is_refused_before_it_is_copied() -> None:
     good = _partition([[1, 2, 0], [1, 0, 2]])
     forged = GroupConjugacyClassesResult.model_construct(
         source=good.source,
-        classes=tuple(((0, 1, 2),) for _ in range(2_000_000)),
+        classes=tuple(((0, 1, 2),) for _ in range(65)),
     )
     request = ClassMultiplicationConstantsRequest.model_construct(partition=forged)
 

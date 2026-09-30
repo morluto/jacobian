@@ -4,6 +4,8 @@ from typing import Any
 
 from jacobian.catalog.models import MathTool, OperationExample
 from jacobian.math.function_fields._models import (
+    MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS,
+    MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS,
     FiniteFunctionFieldElement,
     FunctionFieldBaseEmbeddingApplyRequest,
     FunctionFieldBaseEmbeddingApplyResult,
@@ -883,9 +885,11 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "Compute the exact field norm from a presented finite separable "
             "extension GF(p)(x)[y]/(f) to GF(p)(x), retaining the source field "
             "and element alongside the rational-function result. The norm is "
-            "the determinant of multiplication by the element. Coefficient "
-            "degree, intermediate work, and output size are admitted before "
-            "exact rational-function expansion."
+            "the determinant of multiplication by the element. The "
+            "cancellation-blind growth bound and the intermediate expansion "
+            "work are admitted before exact rational-function expansion, and "
+            "the exact reduced norm degree is checked on the normalized "
+            "result, because determinant cancellation can lower it."
         ),
         request_type=FunctionFieldNormRequest,
         result_type=FunctionFieldNormResult,
@@ -973,8 +977,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
         description=(
             "Compute an exact valuation at the unique GF(p)-rational point at "
             "infinity of an odd-characteristic squarefree model y^2=f(x) with "
-            "odd deg(f). The place retains the exact curve and GF(p) residue "
-            "parent; finite values include zero and the zero element returns "
+            "odd deg(f). Accept the typed infinity place or the generic INFINITE "
+            "FunctionFieldPlace retained by a Riemann-Roch divisor. The returned "
+            "place retains the exact curve and GF(p) residue parent; finite "
+            "values include zero and the zero element returns "
             "the structural POSITIVE_INFINITY branch."
         ),
         request_type=HyperellipticInfinityPlaceValuationRequest,
@@ -1006,6 +1012,21 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                     "element": _GF5_HYPERELLIPTIC_Y,
                 },
             ),
+            OperationExample(
+                name="valuation_at_generic_divisor_infinity",
+                description=(
+                    "Compute v(y)=-3 using generic divisor support; the place "
+                    "must be INFINITE on the odd-degree model y^2=x^3-x over GF(5)."
+                ),
+                input={
+                    "place": {
+                        "field": _GF5_HYPERELLIPTIC_FIELD,
+                        "kind": "INFINITE",
+                        "degree": 1,
+                    },
+                    "element": _GF5_HYPERELLIPTIC_Y,
+                },
+            ),
         ),
     ),
     MathTool(
@@ -1016,8 +1037,10 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "the complete exact valuation inequalities on the union of the "
             "function's principal-divisor support and D's support. The zero "
             "function is always included through a structural empty-profile branch. "
-            "The operation admits at most 256 divisor places, 281 profile places, "
-            "and a 4 MiB conservative output envelope."
+            "The operation admits at most 256 divisor places, at most "
+            f"{MAX_RIEMANN_ROCH_MEMBERSHIP_PROFILE_ROWS} profile places, and at "
+            f"most {MAX_RIEMANN_ROCH_MEMBERSHIP_OUTPUT_CELLS} profile cells. "
+            "A deployment's encoded size is not a native admission bound."
         ),
         request_type=FunctionFieldRiemannRochMembershipRequest,
         result_type=FunctionFieldRiemannRochMembership,

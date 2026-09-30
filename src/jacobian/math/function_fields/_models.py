@@ -232,7 +232,14 @@ class HyperellipticInfinityPlace(StrictModel):
 
 
 class HyperellipticInfinityPlaceValuationRequest(StrictModel):
-    place: HyperellipticInfinityPlace
+    place: HyperellipticInfinityPlace | FunctionFieldPlace = Field(
+        description=(
+            "The typed hyperelliptic infinity place or a FunctionFieldPlace with "
+            "kind INFINITE, degree one, and no prime polynomial, as retained in "
+            "a Riemann-Roch divisor. Both require an odd-degree squarefree "
+            "hyperelliptic model over an odd prime field."
+        )
+    )
     element: FiniteFunctionFieldElement
 
 
@@ -240,6 +247,17 @@ class HyperellipticInfinityPlaceValuationResult(StrictModel):
     place: HyperellipticInfinityPlace
     element: FiniteFunctionFieldElement
     valuation: FunctionFieldValuation
+
+    @model_validator(mode="after")
+    def require_shared_parent(self) -> Self:
+        # The reported valuation has no meaning without a place-element
+        # pairing, so the two parents must be the same exact function field.
+        if self.place.field != self.element.field:
+            raise _validation_error(
+                "infinity_valuation_parent_mismatch",
+                "the infinity place and function element must retain the exact function field",
+            )
+        return self
 
 
 class FunctionFieldRiemannRochMembershipRequest(StrictModel):

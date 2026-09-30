@@ -21,6 +21,14 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
     Orders zero and one use the unique empty-edge graph convention and have no
     divisor. Order two is excluded because its two vertex cards are identical
     for both possible source edge counts.
+
+    Every source edge of an ``n``-vertex graph is retained by exactly ``n-2``
+    of its ``n`` vertex-deleted cards, so the card edge total is
+    ``(n-2)|E|``. That identity is necessary, not sufficient: it fixes the edge
+    count of a realizing graph without establishing that any realizing graph
+    exists. ``realizing_edge_count`` is named for that presupposition rather
+    than for a witnessed source graph, and divisibility alone does not supply
+    it.
     """
 
     deck: AnonymousGraphCardMultiset
@@ -29,9 +37,16 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
     overcount_divisor: int | None = Field(
         default=None, ge=1, le=MAX_ANONYMOUS_VERTEX_DECK_ORDER - 2
     )
-    implied_edge_count: int = Field(
+    realizing_edge_count: int = Field(
         ge=0,
         le=MAX_ANONYMOUS_VERTEX_DECK_ORDER * (MAX_ANONYMOUS_VERTEX_DECK_ORDER - 1) // 2,
+        description=(
+            "The edge count every source graph realizing this deck must have, "
+            "that is the card edge total divided by source_order minus two. "
+            "This operation does not establish that the deck is realizable, so "
+            "this is a necessary consequence of the deck rather than a "
+            "witnessed source edge count."
+        ),
     )
 
     @model_validator(mode="after")
@@ -46,7 +61,7 @@ class AnonymousVertexDeckEdgeCount(StrictModel):
                 or any(item.representative.edges for item in self.deck.classes)
                 or self.card_edge_total != 0
                 or self.overcount_divisor is not None
-                or self.implied_edge_count != 0
+                or self.realizing_edge_count != 0
             ):
                 raise ValueError("orders zero and one have no edges or Kelly divisor")
             return self

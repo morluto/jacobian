@@ -36,9 +36,9 @@ def _vertex_deck(graph: SimpleUndirectedGraph) -> AnonymousGraphCardMultiset:
     )
 
 
-def test_exhaustive_small_graphs_recover_direct_implied_edge_count() -> None:
+def test_exhaustive_small_graphs_recover_direct_realizing_edge_count() -> None:
     empty_deck = anonymous_graph_card_multiset(card_order=0, cards=())
-    assert anonymous_vertex_deck_edge_count(empty_deck).implied_edge_count == 0
+    assert anonymous_vertex_deck_edge_count(empty_deck).realizing_edge_count == 0
     for order in range(1, 5):
         for mask in range(1 << (order * (order - 1) // 2)):
             source = _graph(order, mask)
@@ -48,14 +48,14 @@ def test_exhaustive_small_graphs_recover_direct_implied_edge_count() -> None:
                 continue
             result = anonymous_vertex_deck_edge_count(_vertex_deck(source))
             assert result.source_order == order
-            assert result.implied_edge_count == len(source.edges)
+            assert result.realizing_edge_count == len(source.edges)
             assert result.card_edge_total == sum(
                 len(item.representative.edges) * item.multiplicity
                 for item in result.deck.classes
             )
 
 
-def test_order_two_vertex_deck_does_not_determine_implied_edge_count() -> None:
+def test_order_two_vertex_deck_does_not_determine_realizing_edge_count() -> None:
     empty = _vertex_deck(_graph(2, 0))
     one_edge = _vertex_deck(_graph(2, 1))
     assert empty == one_edge
@@ -81,10 +81,10 @@ def test_result_round_trip_preserves_typed_input_deck_and_quotient() -> None:
     forged = AnonymousVertexDeckEdgeCount.model_validate(
         {
             **result.model_dump(mode="python"),
-            "implied_edge_count": result.implied_edge_count + 1,
+            "realizing_edge_count": result.realizing_edge_count + 1,
         }
     )
-    assert forged.implied_edge_count == result.implied_edge_count + 1
+    assert forged.realizing_edge_count == result.realizing_edge_count + 1
 
 
 def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() -> None:
@@ -95,7 +95,7 @@ def test_catalog_publishes_operation_composable_from_anonymous_card_carrier() ->
     )
     assert tool.request_type.__name__ == "AnonymousGraphCardMultiset"
     result = tool.run(_vertex_deck(_graph(3, 0b011)))
-    assert result.implied_edge_count == 2
+    assert result.realizing_edge_count == 2
 
 
 def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None:
@@ -115,7 +115,7 @@ def test_order_nine_edgeless_deck_is_accepted_without_canonicalization() -> None
     )
     result = anonymous_vertex_deck_edge_count(deck)
     assert result.source_order == 9
-    assert result.implied_edge_count == 0
+    assert result.realizing_edge_count == 0
 
 
 def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
@@ -131,7 +131,7 @@ def test_full_carrier_order_ten_edgeless_deck_is_admitted() -> None:
 
     assert result.source_order == 11
     assert result.card_edge_total == 0
-    assert result.implied_edge_count == 0
+    assert result.realizing_edge_count == 0
 
 
 @pytest.mark.parametrize("missing", ["vertices", "edges"])

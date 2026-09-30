@@ -22,10 +22,12 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "edge appears in exactly n-2 cards, so the total card edge count "
             "divided by n-2 is the implied edge count. Divisibility is "
             "necessary but does not establish deck realizability, so the result "
-            "is the quotient any realizing graph must have, not a witnessed "
-            "source graph. Order zero and one use the empty-edge convention; "
-            "order two is rejected because its deck does not determine whether "
-            "the source edge exists."
+            "field is named realizing_edge_count: it is the edge count that any "
+            "source graph realizing this deck must have, and this operation "
+            "returns it whether or not such a graph exists. It is not a "
+            "witnessed source graph and is not a realizability decision. Order "
+            "zero and one use the empty-edge convention; order two is rejected "
+            "because its deck does not determine whether the source edge exists."
         ),
         request_type=AnonymousGraphCardMultiset,
         result_type=AnonymousVertexDeckEdgeCount,
@@ -41,7 +43,9 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
                 name="path_p3_edge_count",
                 description=(
                     "The anonymous vertex deck of P3 has card edge total two; "
-                    "dividing by n-2 recovers its two source edges."
+                    "dividing by n-2 gives realizing_edge_count two. The deck "
+                    "is realizable, so this does match P3's two source edges, "
+                    "but the operation does not itself establish realizability."
                 ),
                 input={
                     "card_order": 2,

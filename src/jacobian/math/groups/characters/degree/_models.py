@@ -7,12 +7,6 @@ from jacobian._models import StrictModel
 from jacobian.math.groups.characters._models import CharacterRingElement
 
 
-class CharacterDegreeRequest(StrictModel):
-    """An ordinary character in the irreducible basis of a finite-group table."""
-
-    character: CharacterRingElement
-
-
 class CharacterDegree(StrictModel):
     """The exact dimension of an ordinary character, retaining its source basis."""
 
@@ -20,4 +14,4 @@ class CharacterDegree(StrictModel):
     degree: ExactInteger
 
 
-__all__ = ["CharacterDegree", "CharacterDegreeRequest"]
+__all__ = ["CharacterDegree"]

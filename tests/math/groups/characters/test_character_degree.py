@@ -5,19 +5,21 @@ from __future__ import annotations
 import pytest
 
 import jacobian.math.groups.characters.degree.operations as degree_operations
-from jacobian.catalog.catalog import Catalog
 from jacobian.catalog.models import (
     OperationDomainValidationError,
+    OperationResourceAdmissionError,
 )
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
 from jacobian.math.groups.characters._models import (
     CharacterRingElement,
+    CharacterRow,
     CharacterTableResult,
+)
+from jacobian.math.groups.characters.degree import (
+    CharacterDegree,
 )
 from jacobian.math.groups.characters.operations import character_table
 from jacobian.math.groups.operations import group_conjugacy_classes
-
-OPERATION_ID = "character.degree.compute"
 
 
 def _s3_table() -> CharacterTableResult:
@@ -90,63 +92,180 @@ def test_forged_character_table_is_rejected_after_source_authentication() -> Non
     )
 
 
-def test_degree_does_not_reexpand_the_source_group() -> None:
-    """A projection must not redo the work the public table operation did.
-
-    The earlier implementation re-derived the source group, its conjugacy
-    classes, and the entire character table only to confirm that the caller's
-    retained copy was canonical. That made a dot product of two already-public
-    fields cost more than computing the table in the first place.
-    """
-    character = CharacterRingElement.model_validate(
-        CharacterRingElement(
-            table=_s3_table(), irreducible_multiplicities=(1, 0, 0)
-        ).model_dump(mode="python")
-    )
-    assert degree_operations.character_degree(character).degree == 1
-
-
-def test_degree_is_native_only_and_agrees_with_the_published_table() -> None:
-    """`character.degree.compute` is a projection, so it is not in the catalog.
-
-    chi(1) is the dot product of the irreducible multiplicities with the row
-    degrees, and both already appear in public results. The native helper stays
-    reachable; publishing it would be a second discovery target for a
-    postcondition `finite_group.character_table.compute` already establishes.
-    """
-    assert Catalog.open().operation(OPERATION_ID) is None
-
-    from jacobian.math.groups.characters.degree.operations import character_degree
-
+def test_unsupported_source_order_rejects_before_class_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     table = _s3_table()
-    character = CharacterRingElement.model_validate(
-        CharacterRingElement(
-            table=_s3_table(), irreducible_multiplicities=(1, 0, 0)
-        ).model_dump(mode="python")
+    cycle = (*range(1, 61), 0)
+    unsupported = PermutationGroup(degree=61, generators=(cycle,))
+    extended_classes = tuple(
+        tuple(element + tuple(range(3, 61)) for element in cls)
+        for cls in table.partition.classes
     )
-    result = character_degree(character)
-    assert result.degree == 1
-
-    # the same dot product computed from the two published values
-    assert result.degree == sum(
-        multiplicity * row.degree
-        for multiplicity, row in zip(
-            character.irreducible_multiplicities, table.rows, strict=True
-        )
+    partition = table.partition.model_copy(
+        update={"source": unsupported, "classes": extended_classes}
     )
-    # The regular character of S3 is the sum of the irreducibles weighted by
-    # their degrees, so its degree is |S3| = 6. Rows here have degrees 1, 1, 2,
-    # giving multiplicities 1, 1, 2 and a total of 1 + 1 + 4.
-    regular = CharacterRingElement(
-        table=_s3_table(), irreducible_multiplicities=(1, 1, 2)
+    axis = table.axis.model_copy(
+        update={
+            "group": unsupported,
+            "class_representatives": tuple(cls[0] for cls in extended_classes),
+        }
     )
-    assert character_degree(regular).degree == 6
-
-
-def test_degree_rejects_a_negative_multiplicity() -> None:
+    forged_table = table.model_copy(update={"partition": partition, "axis": axis})
     character = CharacterRingElement.model_construct(
-        table=_s3_table(),
-        irreducible_multiplicities=(-1, 0, 0),
+        table=forged_table,
+        irreducible_multiplicities=(1, 0, 0),
     )
+
+    def fail_if_expanded(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("unsupported source order must reject before class expansion")
+
+    monkeypatch.setattr(degree_operations, "group_conjugacy_classes", fail_if_expanded)
+    with pytest.raises(OperationResourceAdmissionError):
+        degree_operations.character_degree(character)
+
+
+@pytest.mark.parametrize("missing", ["label", "degree"])
+def test_missing_constructed_row_metadata_has_a_domain_error(missing: str) -> None:
+    table = _s3_table()
+    fields = dict(table.rows[0])
+    del fields[missing]
+    row = CharacterRow.model_construct(**fields)
+    forged_table = table.model_copy(update={"rows": (row, *table.rows[1:])})
+    character = CharacterRingElement.model_construct(
+        table=forged_table, irreducible_multiplicities=(1, 0, 0)
+    )
+
+    with pytest.raises(OperationDomainValidationError) as error:
+        degree_operations.character_degree(character)
+    assert error.value.errors()[0]["loc"] == (
+        "character",
+        "table",
+        "rows",
+        "0",
+        missing,
+    )
+
+
+@pytest.mark.parametrize(
+    "owner,missing",
+    [
+        ("table", "degree_square_sum"),
+        ("axis", "group_order"),
+        ("axis", "cyclotomic_order"),
+        ("group", "degree"),
+        ("group", "generators"),
+        ("coefficient", "num"),
+        ("coefficient", "den"),
+    ],
+)
+def test_missing_constructed_table_metadata_has_a_domain_error(
+    owner: str, missing: str
+) -> None:
+    table = _s3_table().model_copy(deep=True)
+    target = {
+        "table": table,
+        "axis": table.axis,
+        "group": table.axis.group,
+        "coefficient": table.rows[0].values[0].coefficients[0],
+    }[owner]
+    # The axis group may alias the partition source; construct a separate
+    # claim so this exercises the retained metadata boundary specifically.
+    if owner == "group":
+        assert table.axis.group is not None
+        target = table.axis.group.model_copy()
+        table = table.model_copy(
+            update={"axis": table.axis.model_copy(update={"group": target})}
+        )
+    assert target is not None
+    del target.__dict__[missing]
+    character = CharacterRingElement.model_construct(
+        table=table, irreducible_multiplicities=(1, 0, 0)
+    )
+
     with pytest.raises(OperationDomainValidationError):
         degree_operations.character_degree(character)
+
+
+@pytest.mark.parametrize(
+    "multiplicities", [(0, 0, 0), (1, 1, 2), (65, 0, 0), (10**512 - 1,) * 3]
+)
+def test_native_degree_round_trip_at_zero_and_coordinate_digit_boundary(
+    multiplicities: tuple[int, ...],
+) -> None:
+    character = CharacterRingElement(
+        table=_s3_table(), irreducible_multiplicities=multiplicities
+    )
+    result = degree_operations.character_degree(character)
+    assert (
+        result.degree == multiplicities[0] + multiplicities[1] + 2 * multiplicities[2]
+    )
+    decoded = CharacterDegree.model_validate_json(result.model_dump_json())
+    assert degree_operations.character_degree(decoded.character) == decoded
+
+
+def test_character_degree_expands_conjugacy_classes_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import jacobian.math.groups.operations as group_operations
+
+    character = CharacterRingElement(
+        table=_s3_table(), irreducible_multiplicities=(2, 1, 3)
+    )
+    calls = 0
+
+    def count_expansion(
+        degree: int, generators: list[list[int]]
+    ) -> list[list[list[int]]]:
+        nonlocal calls
+        calls += 1
+        return group_conjugacy_classes(degree, generators)
+
+    monkeypatch.setattr(group_operations, "group_conjugacy_classes", count_expansion)
+    monkeypatch.setattr(degree_operations, "group_conjugacy_classes", count_expansion)
+    assert degree_operations.character_degree(character).degree == 9
+    assert calls == 1
+
+
+def test_structurally_valid_forged_row_degrees_are_not_authenticated() -> None:
+    table = _s3_table()
+    # Swap degrees while preserving the sum of squares. Shape validators
+    # accept this claim, but the standard row still has identity value 2.
+    forged_table = table.model_copy(
+        update={
+            "rows": (
+                table.rows[0].model_copy(update={"degree": 2}),
+                table.rows[1],
+                table.rows[2].model_copy(update={"degree": 1}),
+            )
+        }
+    )
+    character = CharacterRingElement.model_validate_json(
+        CharacterRingElement(
+            table=forged_table, irreducible_multiplicities=(0, 0, 1)
+        ).model_dump_json()
+    )
+    with pytest.raises(OperationDomainValidationError) as error:
+        degree_operations.character_degree(character)
+    assert error.value.errors()[0]["type"] == (
+        "groups.characters.degree_noncanonical_table"
+    )
+
+
+def test_oversized_constructed_rows_reject_before_serialization_or_expansion(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    table = _s3_table()
+    table = table.model_copy(update={"rows": (table.rows[0],) * 10_000})
+    character = CharacterRingElement.model_construct(
+        table=table, irreducible_multiplicities=(1, 0, 0)
+    )
+
+    def fail_if_expanded(*_args: object, **_kwargs: object) -> None:
+        pytest.fail("oversized raw shapes must reject before dumping or expansion")
+
+    monkeypatch.setattr(CharacterRingElement, "model_dump", fail_if_expanded)
+    monkeypatch.setattr(degree_operations, "group_conjugacy_classes", fail_if_expanded)
+    with pytest.raises(OperationDomainValidationError) as error:
+        degree_operations.character_degree(character)
+    assert error.value.errors()[0]["type"] == "groups.characters.degree_table_shape"

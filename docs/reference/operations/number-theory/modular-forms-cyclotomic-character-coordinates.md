@@ -54,18 +54,22 @@ This equality slice admits levels at most 39, character unit tables of at most
 24 entries, basis dimension at most 32, field-element coordinates of at most
 256 decimal digits, and exact comparison work at most 1,000,000 units. It
 compares coordinates in the same parent only. Cross-level or cross-character
-transport, nonidentity coefficient-field maps, Hecke actions on these generic
-vectors outside the one-dimensional slice above, and equality of unrelated
-space presentations remain unsupported.
+transport, nonidentity coefficient-field maps, and equality of unrelated space
+presentations remain unsupported.
 The basis producer checks its dimension against the independent formula and
 verifies the full q-Sturm rank before it publishes the basis. Beyond the
 existing character-specific transport and comparison path, these generalized
 bases do not add cross-level transport or nonidentity coefficient-field maps.
-The only Hecke actions are the existing one-dimensional `T_n` matrix support
-and the bad-prime `U_p` support published by
+Published Hecke support includes the existing one-dimensional `T_n` matrix and
+coordinate operations. For admitted weight-two character spaces of dimension
+at least two over `Q(zeta_6)`,
+`modular_form.character_hecke_matrix.multidimensional.compute` returns `T_n` in
+the exact q-Sturm RREF basis for indices at most eight coprime to the level.
+Each image is reconstructed through the complete Sturm prefix. Direct `T_n`
+application to multidimensional coordinate vectors remains unsupported.
+The bad-prime `U_p` coordinate action is published by
 `modular_form.character_coordinates.u_prime.apply` for `(N, p)` equal to
-`(26, 2)`, `(26, 13)`, `(39, 3)`, or `(39, 13)`; all other generic Hecke
-actions remain unsupported.
+`(26, 2)`, `(26, 13)`, `(39, 3)`, or `(39, 13)`.
 
 [Gamma0 basis construction](modular-forms-gamma0-rational-bases.md) ·
 [Number-theory operations](index.md)

@@ -3,10 +3,19 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import Field, StrictInt, model_validator
-from pydantic_core import PydanticCustomError
+from pydantic import (
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    GetPydanticSchema,
+    StrictInt,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
+from pydantic_core import PydanticCustomError, core_schema
 
 from jacobian._exact import (
     MAX_CANONICAL_INTEGER_DIGITS,
@@ -18,11 +27,16 @@ from jacobian._models import StrictModel
 from jacobian.math.geometry.polytopes._models import (
     MAX_COMPUTED_FACETS,
     MAX_FACET_DIMENSION,
+    MAX_FACET_INCIDENCES,
     MAX_VERTICES,
     CoordinateAxis,
     FacetIncidenceResult,
+    PrimitiveFacet,
+    RationalCoordinateSpace,
+    RationalPolytopeVertex,
     RationalVPolytope,
 )
+from jacobian.math.geometry.polytopes.values import Halfspace, Vertex
 from jacobian.math.topology.chain_complexes.values import (
     ChainComplexValue,
     CoefficientRing,
@@ -400,6 +414,12 @@ class CrystallographicPolytopePairingResult(StrictModel):
             or tuple(item.source_facet_index for item in self.pairings)
             != tuple(range(len(self.facet_profile.facets)))
             or len(self.pairings) != len(self.facet_profile.facets)
+            or any(
+                item.target_facet_index >= len(self.facet_profile.facets)
+                or item.holonomy_element >= len(self.affine_realization.section_maps)
+                or len(item.lattice_translation) != rank
+                for item in self.pairings
+            )
         ):
             raise _error(
                 "polytope_pairing_result",
@@ -446,6 +466,120 @@ class CrystallographicFundamentalDomainResult(StrictModel):
         return self
 
 
+_NATIVE_SOURCE_MODELS = (
+    CrystallographicFundamentalDomainResult,
+    CrystallographicPolytopePairingResult,
+    CrystallographicAffineRealization,
+    CrystallographicAffineSectionMap,
+    FiniteLatticeExtension,
+    CrystallographicPolytopePairing,
+    RationalVPolytope,
+    RationalCoordinateSpace,
+    RationalPolytopeVertex,
+    FacetIncidenceResult,
+    PrimitiveFacet,
+    Halfspace,
+    Vertex,
+    CanonicalRational,
+    ChainComplexValue,
+)
+
+
+def _bounded_native_source(value: object) -> object:
+    """Revalidate bypassed native carriers without invoking their serializers.
+
+    A source has at most MAX_FACET_INCIDENCES incidence leaves, plus bounded
+    vertex/facet records. Sixteen nodes per possible incidence, facet, or
+    vertex conservatively covers every declared container and rational leaf;
+    the source schema has fewer than sixteen nested container levels. These
+    are structural preflight bounds, not another geometric admission or solve.
+    """
+    remaining = 16 * (MAX_FACET_INCIDENCES + MAX_COMPUTED_FACETS + MAX_VERTICES)
+    max_fields = max(len(model.model_fields) for model in _NATIVE_SOURCE_MODELS)
+
+    def project(item: object, depth: int) -> object:
+        nonlocal remaining
+        remaining -= 1
+        if remaining < 0 or depth > 16:
+            raise _error(
+                "source_bound", "native source exceeds its structural envelope"
+            )
+        if type(item) is CoefficientRing:
+            return item
+        if item is None or type(item) is bool:
+            return item
+        if type(item) is int:
+            if item.bit_length() > 4 * MAX_CANONICAL_INTEGER_DIGITS:
+                raise _error(
+                    "source_bound",
+                    "native source scalar exceeds its exact encoding envelope",
+                )
+            return item
+        if type(item) is str:
+            if len(item) > MAX_CANONICAL_INTEGER_DIGITS:
+                raise _error(
+                    "source_bound", "native source text exceeds its encoding envelope"
+                )
+            return item
+        if type(item) in (
+            *_NATIVE_SOURCE_MODELS,
+            BieberbachFaceOrbitMap,
+            BieberbachGroupRingBoundaryEntry,
+        ):
+            assert isinstance(item, StrictModel)
+            fields = type(item).model_fields
+            contents = vars(item)
+            if len(contents) != len(fields) or any(
+                key not in fields for key in contents
+            ):
+                raise _error(
+                    "source_shape",
+                    "native source model fields are incomplete or malformed",
+                )
+            return {key: project(contents[key], depth + 1) for key in fields}
+        if type(item) is dict:
+            if len(item) > max_fields or any(type(key) is not str for key in item):
+                raise _error(
+                    "source_shape", "native source record fields are malformed"
+                )
+            return {key: project(child, depth + 1) for key, child in item.items()}
+        if type(item) is tuple or type(item) is list:
+            if len(item) > MAX_FACET_INCIDENCES:
+                raise _error(
+                    "source_bound",
+                    "native source container exceeds its structural envelope",
+                )
+            return tuple(project(child, depth + 1) for child in item)
+        raise _error(
+            "source_shape",
+            "native source must contain canonical values and ordinary containers",
+        )
+
+    return project(value, 0)
+
+
+def _native_source_schema(
+    source_type: Any, handler: GetCoreSchemaHandler
+) -> core_schema.CoreSchema:
+    schema = handler(source_type)
+    return core_schema.json_or_python_schema(
+        json_schema=schema,
+        python_schema=core_schema.no_info_before_validator_function(
+            _bounded_native_source, schema
+        ),
+    )
+
+
+_BoundedFundamentalDomainSource = Annotated[
+    CrystallographicFundamentalDomainResult, GetPydanticSchema(_native_source_schema)
+]
+
+
+_BoundedChainComplex = Annotated[
+    ChainComplexValue, GetPydanticSchema(_native_source_schema)
+]
+
+
 class BieberbachFaceOrbitMap(StrictModel):
     """One exact vertex map induced by a directed paired polygon edge."""
 
@@ -469,6 +603,39 @@ class BieberbachGroupRingBoundaryEntry(StrictModel):
 
 
 MAX_FACE_ORBIT_VERTICES = 32
+_FACE_ORBIT_COLLECTION_LIMITS = {
+    "vertex_orbits": MAX_COMPUTED_FACETS,
+    "edge_orbit_representatives": MAX_COMPUTED_FACETS,
+    "orbit_maps": MAX_COMPUTED_FACETS * MAX_FACE_ORBIT_VERTICES,
+    "boundary_1_to_0": 2 * MAX_COMPUTED_FACETS * MAX_FACE_ORBIT_VERTICES,
+    "boundary_2_to_1": MAX_COMPUTED_FACETS,
+}
+
+
+def _face_orbit_json_entries(
+    entries: list[object] | tuple[object, ...],
+) -> tuple[object, ...]:
+    """Project only the declared translation tuple after admitting each row."""
+    projected: list[object] = []
+    for entry in entries:
+        if type(entry) is not dict:
+            raise _error(
+                "face_orbit_collection", "face-orbit ledger rows must be objects"
+            )
+        # Both endpoint maps and group-ring incidences declare six fields.
+        if len(entry) > 6:
+            raise _error(
+                "face_orbit_bound", "face-orbit ledger row exceeds its field bound"
+            )
+        translation = entry.get("lattice_translation")
+        if type(translation) is list:
+            if len(translation) > MAX_EXTENSION_LATTICE_RANK:
+                raise _error(
+                    "face_orbit_bound", "face-orbit translation exceeds its rank bound"
+                )
+            entry = {**entry, "lattice_translation": tuple(translation)}
+        projected.append(entry)
+    return tuple(projected)
 
 
 def _affine_endpoint_matches(
@@ -512,10 +679,11 @@ class BieberbachFaceOrbitComplex(StrictModel):
     this value does not claim to contain or verify a free ZGamma-resolution.
     """
 
-    source: CrystallographicFundamentalDomainResult
-    # Field-level bounds keep an oversized caller-authored payload from
-    # materializing every nested boundary entry and orbit map before the
-    # after-validator can discover that the counts or coverage are invalid.
+    model_config = ConfigDict(revalidate_instances="always")
+
+    source: _BoundedFundamentalDomainSource
+    # Schema bounds describe the envelope; the raw field preflight below also
+    # rejects oversized malformed rows before nested error expansion.
     vertex_orbits: tuple[
         Annotated[tuple[StrictInt, ...], Field(max_length=MAX_FACE_ORBIT_VERTICES)],
         ...,
@@ -532,7 +700,54 @@ class BieberbachFaceOrbitComplex(StrictModel):
     boundary_2_to_1: tuple[BieberbachGroupRingBoundaryEntry, ...] = Field(
         max_length=MAX_COMPUTED_FACETS
     )
-    quotient_chain_complex: ChainComplexValue
+    quotient_chain_complex: _BoundedChainComplex
+
+    @field_validator(
+        "vertex_orbits",
+        "edge_orbit_representatives",
+        "orbit_maps",
+        "boundary_1_to_0",
+        "boundary_2_to_1",
+        mode="before",
+    )
+    @classmethod
+    def require_bounded_raw_collections(
+        cls, value: object, info: ValidationInfo
+    ) -> object:
+        if type(value) is not list and type(value) is not tuple:
+            raise _error(
+                "face_orbit_collection",
+                "face-orbit collections must be ordinary tuples or arrays",
+            )
+        field = info.field_name
+        assert field is not None
+        if len(value) > _FACE_ORBIT_COLLECTION_LIMITS[field]:
+            raise _error(
+                "face_orbit_bound",
+                "face-orbit collection exceeds its admitted length",
+            )
+        if field == "vertex_orbits":
+            for orbit in value:
+                if type(orbit) is not list and type(orbit) is not tuple:
+                    raise _error(
+                        "face_orbit_collection",
+                        "vertex-orbit rows must be ordinary tuples or arrays",
+                    )
+                if len(orbit) > MAX_FACE_ORBIT_VERTICES:
+                    raise _error(
+                        "face_orbit_bound",
+                        "vertex-orbit row exceeds its admitted length",
+                    )
+        # Strict JSON loses its array provenance after a before-field hook.
+        # Project only declared tuple paths after admission; scalar containers
+        # remain untouched for their leaf validators to reject without copying.
+        if info.mode != "json":
+            return _bounded_native_source(value)
+        if field == "vertex_orbits":
+            return tuple(tuple(orbit) for orbit in value)
+        if field == "edge_orbit_representatives":
+            return tuple(value)
+        return _face_orbit_json_entries(value)
 
     @model_validator(mode="after")
     def require_bounded_two_dimensional_source(self) -> Self:

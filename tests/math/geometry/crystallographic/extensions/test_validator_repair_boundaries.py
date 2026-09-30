@@ -7,10 +7,12 @@ materialized.
 
 from __future__ import annotations
 
+import json
 import time
 from fractions import Fraction
 
 import pytest
+from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
 from jacobian.math.geometry.crystallographic.extensions._models import (
@@ -242,8 +244,16 @@ def test_real_payload_homology_is_unchanged() -> None:
     from jacobian.math.topology.chain_complexes.operations import homology_groups
 
     original = _real_complex()
-    groups = homology_groups(original.quotient_chain_complex)
-    assert groups is not None
+    from jacobian.math.topology.chain_complexes.values import IntegralHomologyGroupValue
+
+    decoded = type(original).model_validate_json(original.model_dump_json())
+    groups = homology_groups(decoded.quotient_chain_complex).homology_groups
+    integral = []
+    for group in groups:
+        assert isinstance(group, IntegralHomologyGroupValue)
+        integral.append(group)
+    assert tuple(group.free_rank for group in integral) == (1, 1, 0)
+    assert integral[1].torsion_invariant_factors == (2,)
 
 
 def test_a_non_realization_is_still_refused_by_the_operation() -> None:
@@ -261,3 +271,31 @@ def test_a_non_realization_is_still_refused_by_the_operation() -> None:
             request.lattice_axes,
             request.pairings,
         )
+
+
+@pytest.mark.parametrize("wire", [False, True])
+@pytest.mark.parametrize(
+    "field,value",
+    [("holonomy_element", 2), ("lattice_translation", [0]), ("target_facet_index", 4)],
+)
+def test_pairing_source_axes_are_validated_before_endpoint_arithmetic(
+    field: str, value: object, wire: bool
+) -> None:
+    payload = _real_complex().model_dump(mode="json" if wire else "python")
+    if field == "lattice_translation":
+        value = ["0"] if wire else (0,)
+    # Preserve the duplicated pairing/map claim so the source-relative shape
+    # check, rather than disagreement between two copies, must reject it.
+    for pairing in payload["source"]["source"]["pairings"]:
+        pairing[field] = value
+    for orbit_map in payload["orbit_maps"]:
+        orbit_map[field] = value
+    with pytest.raises(ValidationError) as error:
+        if wire:
+            BieberbachFaceOrbitComplex.model_validate_json(json.dumps(payload))
+        else:
+            BieberbachFaceOrbitComplex.model_validate(payload)
+    assert any(
+        item["type"] == "crystallographic.extension.polytope_pairing_result"
+        for item in error.value.errors()
+    )

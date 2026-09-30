@@ -245,3 +245,83 @@ def test_a_forged_vertex_map_is_still_refused() -> None:
     payload["vertex_maps"] = [tuple(row) for row in maps]
     with pytest.raises(ValueError):
         VertexDeckIsomorphismProfile.model_validate(payload)
+
+
+@pytest.mark.parametrize("wire", [False, True])
+def test_authored_vertex_partition_does_not_authenticate_its_quotient(
+    wire: bool,
+) -> None:
+    """A split P3 class is structural data, not evidence of distinct classes."""
+    source = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "d"),
+        edges=(("a", "b"), ("a", "c"), ("a", "d")),
+    )
+    original = vertex_deck_isomorphism_profile(vertex_deletion_family(source))
+    payload = original.model_dump(mode="json")
+    path_class = payload["classes"][1]
+    relabelled = {
+        **path_class,
+        "representative": {
+            **path_class["representative"],
+            "edges": [["v00", "v01"], ["v00", "v02"]],
+        },
+        "multiplicity": 1,
+        "card_indices": [1],
+    }
+    remaining = {**path_class, "multiplicity": 2, "card_indices": [2, 3]}
+    payload["classes"] = [payload["classes"][0], relabelled, remaining]
+    payload["class_indices"] = [0, 1, 2, 2]
+    payload["vertex_maps"][1] = [0, 1, 2]
+    decoded = (
+        VertexDeckIsomorphismProfile.model_validate_json(json.dumps(payload))
+        if wire
+        else VertexDeckIsomorphismProfile.model_validate(payload)
+    )
+    assert len(decoded.classes) == 3
+    # The admitted operation consumes the retained family, not the authored
+    # quotient claim. K1,3 has one empty card and three isomorphic P3 cards.
+    recomputed = vertex_deck_isomorphism_profile(decoded.family)
+    assert recomputed == original
+    assert tuple(item.multiplicity for item in recomputed.classes) == (1, 3)
+    assert recomputed.class_indices == (0, 1, 1, 1)
+
+
+@pytest.mark.parametrize("wire", [False, True])
+def test_authored_edge_partition_does_not_authenticate_its_quotient(wire: bool) -> None:
+    """All three edge cards of K1,3 belong to the same isomorphism class."""
+    source = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "d"),
+        edges=(("a", "b"), ("a", "c"), ("a", "d")),
+    )
+    original = edge_deck_isomorphism_profile(edge_deletion_family(source))
+    payload = original.model_dump(mode="json")
+    path_class = payload["classes"][0]
+    relabelled = {
+        **path_class,
+        "representative": {
+            **path_class["representative"],
+            "edges": [["v00", "v02"], ["v00", "v03"]],
+        },
+        "multiplicity": 1,
+        "card_indices": [0],
+        "deleted_edges": path_class["deleted_edges"][:1],
+    }
+    remaining = {
+        **path_class,
+        "multiplicity": 2,
+        "card_indices": [1, 2],
+        "deleted_edges": path_class["deleted_edges"][1:],
+    }
+    payload["classes"] = [relabelled, remaining]
+    payload["class_indices"] = [0, 1, 1]
+    payload["vertex_maps"][0] = [0, 1, 2, 3]
+    decoded = (
+        EdgeDeckIsomorphismProfile.model_validate_json(json.dumps(payload))
+        if wire
+        else EdgeDeckIsomorphismProfile.model_validate(payload)
+    )
+    assert len(decoded.classes) == 2
+    recomputed = edge_deck_isomorphism_profile(decoded.family)
+    assert recomputed == original
+    assert tuple(item.multiplicity for item in recomputed.classes) == (3,)
+    assert recomputed.class_indices == (0, 0, 0)

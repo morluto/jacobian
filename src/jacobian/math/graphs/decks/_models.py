@@ -1037,10 +1037,24 @@ class VertexDeckIsomorphismClass(StrictModel):
 
 
 class VertexDeckIsomorphismProfile(StrictModel):
-    """Canonical classes and explicit vertex bijections for every deck card."""
+    """Source-bound card partition and explicit vertex bijections.
+
+    The producer establishes canonical representatives and the exact
+    isomorphism quotient. Decoding checks bounded structure, the partition,
+    and the supplied bijections; it does not authenticate an authored claim
+    that differently labelled representatives are nonisomorphic. To establish
+    that claim, run ``vertex_deck_isomorphism_profile`` on the retained family
+    under its native admission rather than trusting a decoded class count.
+    """
 
     family: VertexDeletionFamily
-    classes: tuple[VertexDeckIsomorphismClass, ...]
+    classes: tuple[VertexDeckIsomorphismClass, ...] = Field(
+        description=(
+            "Canonical isomorphism classes established by the producer. "
+            "Decoding validates their structural partition and maps without "
+            "repeating the canonicalization search or proving class distinctness."
+        )
+    )
     class_indices: tuple[int, ...]
     vertex_maps: tuple[tuple[int, ...], ...]
 
@@ -1645,10 +1659,24 @@ class EdgeDeckIsomorphismClass(StrictModel):
 
 
 class EdgeDeckIsomorphismProfile(StrictModel):
-    """Canonical edge-card classes and explicit card-vertex bijections."""
+    """Source-bound edge-card partition and explicit vertex bijections.
+
+    The producer establishes canonical representatives and the exact
+    isomorphism quotient. Decoding checks bounded structure, the partition,
+    and the supplied bijections; it does not authenticate an authored claim
+    that differently labelled representatives are nonisomorphic. To establish
+    that claim, run ``edge_deck_isomorphism_profile`` on the retained family
+    under its native admission rather than trusting a decoded class count.
+    """
 
     family: EdgeDeletionFamily
-    classes: tuple[EdgeDeckIsomorphismClass, ...]
+    classes: tuple[EdgeDeckIsomorphismClass, ...] = Field(
+        description=(
+            "Canonical isomorphism classes established by the producer. "
+            "Decoding validates their structural partition and maps without "
+            "repeating the canonicalization search or proving class distinctness."
+        )
+    )
     class_indices: tuple[int, ...]
     vertex_maps: tuple[tuple[int, ...], ...]
 

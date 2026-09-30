@@ -17,11 +17,11 @@ from jacobian.math.gauge._models import FiniteGroupGaugeComplexRequest
 from jacobian.math.groups._table_models import FiniteGroupTable
 
 
-def _group():
+def _group() -> FiniteGroupTable:
     return FiniteGroupTable(multiplication=((0,),), identity=0, inverse=(0,))
 
 
-def _square():
+def _square() -> tuple[GaugeLattice, OrientedGaugePath, OrientedGaugePath]:
     lattice = GaugeLattice(
         vertices=("a", "b", "c", "d"),
         edges=(
@@ -45,7 +45,7 @@ def _square():
     return lattice, forward, reversed_path
 
 
-def test_oriented_square_and_reversed_face_round_trip_with_same_parents():
+def test_oriented_square_and_reversed_face_round_trip_with_same_parents() -> None:
     lattice, forward, reversed_path = _square()
     request = FiniteGroupGaugeComplexRequest(
         lattice=lattice,
@@ -69,7 +69,9 @@ def test_oriented_square_and_reversed_face_round_trip_with_same_parents():
     assert decoded == result
 
 
-def test_constant_and_backtracking_attaching_maps_are_distinct_degenerate_faces():
+def test_constant_and_backtracking_attaching_maps_are_distinct_degenerate_faces() -> (
+    None
+):
     lattice = GaugeLattice(
         vertices=("v",), edges=(GaugeEdge(edge_id="loop", tail="v", head="v"),)
     )
@@ -100,7 +102,7 @@ def test_constant_and_backtracking_attaching_maps_are_distinct_degenerate_faces(
     assert result.faces[1].boundary.basepoint == "v"
 
 
-def test_open_or_foreign_face_boundary_is_rejected():
+def test_open_or_foreign_face_boundary_is_rejected() -> None:
     lattice, _, _ = _square()
     request = FiniteGroupGaugeComplexRequest.model_construct(
         lattice=lattice,
@@ -140,7 +142,7 @@ def test_open_or_foreign_face_boundary_is_rejected():
         FiniteGroupGaugeComplex.model_validate(foreign.model_dump())
 
 
-def test_aggregate_face_growth_is_rejected_before_nested_value_parsing():
+def test_aggregate_face_growth_is_rejected_before_nested_value_parsing() -> None:
     lattice = {
         "vertices": ["v"],
         "edges": [{"edge_id": "e", "tail": "v", "head": "v"}],
@@ -155,7 +157,7 @@ def test_aggregate_face_growth_is_rejected_before_nested_value_parsing():
         FiniteGroupGaugeComplexRequest.model_validate(raw)
 
 
-def test_face_orientation_requires_a_strict_boolean():
+def test_face_orientation_requires_a_strict_boolean() -> None:
     raw = {
         "lattice": {
             "vertices": ["v"],
@@ -173,7 +175,7 @@ def test_face_orientation_requires_a_strict_boolean():
         FiniteGroupGaugeComplexRequest.model_validate(raw)
 
 
-def test_exact_aggregate_face_step_bound_is_accepted():
+def test_exact_aggregate_face_step_bound_is_accepted() -> None:
     edge_id = "e" * 64
     lattice = GaugeLattice(
         vertices=("v",), edges=(GaugeEdge(edge_id=edge_id, tail="v", head="v"),)
@@ -199,7 +201,7 @@ def test_exact_aggregate_face_step_bound_is_accepted():
     )
 
 
-def test_maximum_length_labels_are_not_rejected_by_a_serialized_size_estimate():
+def test_maximum_length_labels_are_not_rejected_by_a_serialized_size_estimate() -> None:
     """Native admission bounds materialized cells, not encoded characters.
 
     Every label here is at the MAX_GAUGE_LABEL_LENGTH ceiling and the lattice,
@@ -239,31 +241,44 @@ def test_maximum_length_labels_are_not_rejected_by_a_serialized_size_estimate():
     assert type(complex_).model_validate_json(complex_.model_dump_json()) == complex_
 
 
-def test_output_cell_envelope_is_the_structural_worst_case() -> None:
-    """The aggregate envelope bounds materialized cells, so it must equal the
-    worst case implied by the per-component bounds. An encoded-size constant
-    here would drift silently away from the structure it claims to bound."""
-    from jacobian.math.gauge._models import (
-        _GAUGE_CELLS_PER_EDGE,
-        _GAUGE_CELLS_PER_FACE,
-        _GAUGE_CELLS_PER_GROUP_ELEMENT,
-        _GAUGE_CELLS_PER_VERTEX,
-        _GAUGE_COMPLEX_BASE_CELLS,
-        MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS,
-        MAX_GAUGE_EDGES,
-        MAX_GAUGE_FACES,
-        MAX_GAUGE_TOTAL_FACE_STEPS,
-        MAX_GAUGE_VERTICES,
+@pytest.mark.parametrize("admission", ("native", "value"))
+def test_maximum_mixed_step_and_constant_faces_are_accepted(admission: str) -> None:
+    """Saturated step counts can coexist with 112 constant-face basepoints."""
+    vertices = tuple(f"v{i:02}" for i in range(64))
+    lattice = GaugeLattice(
+        vertices=vertices,
+        edges=tuple(
+            GaugeEdge(edge_id=f"e{i:03}", tail=vertices[0], head=vertices[0])
+            for i in range(128)
+        ),
     )
-    from jacobian.math.groups._table_models import MAX_FINITE_TABLE_GROUP_ORDER
-
-    structural_worst_case = (
-        _GAUGE_COMPLEX_BASE_CELLS
-        + MAX_GAUGE_VERTICES * _GAUGE_CELLS_PER_VERTEX
-        + MAX_GAUGE_EDGES * _GAUGE_CELLS_PER_EDGE
-        + MAX_GAUGE_FACES * _GAUGE_CELLS_PER_FACE
-        + MAX_GAUGE_TOTAL_FACE_STEPS
-        + MAX_FINITE_TABLE_GROUP_ORDER**2
-        + MAX_FINITE_TABLE_GROUP_ORDER * _GAUGE_CELLS_PER_GROUP_ELEMENT
+    group = FiniteGroupTable(
+        multiplication=tuple(tuple((i + j) % 24 for j in range(24)) for i in range(24)),
+        identity=0,
+        inverse=tuple((-i) % 24 for i in range(24)),
     )
-    assert structural_worst_case == MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS
+    boundary = OrientedGaugePath(
+        steps=(GaugePathStep(edge_id="e000", forward=True),) * 256
+    )
+    constant = OrientedGaugePath(steps=(), basepoint=vertices[0])
+    faces = tuple(
+        FiniteGroupGaugeFace(
+            face_id=f"f{i:03}", boundary=boundary if i < 16 else constant
+        )
+        for i in range(128)
+    )
+    request = FiniteGroupGaugeComplexRequest(lattice=lattice, group=group, faces=faces)
+    if admission == "native":
+        result = construct_finite_group_gauge_complex(
+            request.lattice, request.group, request.faces
+        )
+    else:
+        result = FiniteGroupGaugeComplex.model_validate_json(request.model_dump_json())
+    assert result.lattice == lattice
+    assert result.group == group
+    assert result.faces == faces
+    assert sum(len(face.boundary.steps) for face in result.faces) == 4096
+    assert sum(not face.boundary.steps for face in result.faces) == 112
+    assert (
+        FiniteGroupGaugeComplex.model_validate_json(result.model_dump_json()) == result
+    )

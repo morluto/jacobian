@@ -174,7 +174,7 @@ MAX_GAUGE_LOOP_FAMILY_WORK = 750_000
 
 MAX_GAUGE_LOOP_FAMILY_OUTPUT_UNITS = 350_000
 """Maximum value cells and scalar text units for one loop family result."""
-MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 5_464
+MAX_FINITE_GROUP_GAUGE_COMPLEX_OUTPUT_UNITS = 5_576
 """Maximum materialized value cells retained by one finite gauge complex.
 
 This is an operation-owned structural bound, not an encoded-size estimate.
@@ -184,7 +184,10 @@ mathematical domain; encoded-byte limits belong to the delivery boundary.
 
 The value is the structural worst case of the per-component bounds
 (64 base + 64 vertices + 3*128 edges + 2*128 faces + 4096 face steps +
-24**2 table cells + 24 elements), so this aggregate check is a
+112 constant-face basepoints + 24**2 table cells + 24 elements). At most
+256 steps fit in one face, so saturating 4096 steps needs at least 16
+nonconstant faces and leaves 128 - 16 constant faces. Reducing the step count
+cannot increase the combined step/basepoint count. This aggregate check is a
 defence-in-depth guard rather than the primary limit.
 """
 

@@ -2,6 +2,7 @@
 
 import json
 from itertools import permutations
+from typing import Never
 
 import pytest
 from pydantic import ValidationError
@@ -12,13 +13,16 @@ from jacobian.catalog.models import (
     OperationResourceAdmissionError,
 )
 from jacobian.math.groups._models import GroupConjugacyClassesResult, PermutationGroup
-from jacobian.math.groups.characters._models import CharacterRingElement
+from jacobian.math.groups.characters._models import (
+    CharacterRingElement,
+    CharacterTableResult,
+)
 from jacobian.math.groups.characters.adams._models import AdamsOperationRequest
 from jacobian.math.groups.characters.operations import character_table
 from jacobian.math.groups.operations import group_conjugacy_classes
 
 
-def _s3_table(*, degree: int = 3):
+def _s3_table(*, degree: int = 3) -> CharacterTableResult:
     generators = tuple(
         tuple(list(generator) + list(range(3, degree)))
         for generator in ((1, 2, 0), (1, 0, 2))
@@ -37,7 +41,7 @@ def _s3_table(*, degree: int = 3):
     return character_table(partition)
 
 
-def _cyclic_three_table():
+def _cyclic_three_table() -> CharacterTableResult:
     group = PermutationGroup(degree=3, generators=((1, 2, 0),))
     classes = group_conjugacy_classes(3, [[1, 2, 0]])
     partition = GroupConjugacyClassesResult._from_kernel(
@@ -86,16 +90,18 @@ def _irreducible_value(permutation: tuple[int, ...], index: int) -> int:
 
 
 @pytest.fixture(scope="module")
-def s3_table():
+def s3_table() -> CharacterTableResult:
     return _s3_table()
 
 
 @pytest.fixture(scope="module")
-def cyclic_three_table():
+def cyclic_three_table() -> CharacterTableResult:
     return _cyclic_three_table()
 
 
-def test_s3_adams_coordinates_match_direct_element_enumeration(s3_table) -> None:
+def test_s3_adams_coordinates_match_direct_element_enumeration(
+    s3_table: CharacterTableResult,
+) -> None:
     table = s3_table
     source_coordinates = (2, -1, 1)
     source = CharacterRingElement(
@@ -129,7 +135,9 @@ def test_s3_adams_coordinates_match_direct_element_enumeration(s3_table) -> None
     )
 
 
-def test_large_cyclic_three_adams_exponent_is_trivial(cyclic_three_table) -> None:
+def test_large_cyclic_three_adams_exponent_is_trivial(
+    cyclic_three_table: CharacterTableResult,
+) -> None:
     table = cyclic_three_table
     nontrivial_row = CharacterRingElement(
         table=table,
@@ -150,7 +158,7 @@ def test_large_cyclic_three_adams_exponent_is_trivial(cyclic_three_table) -> Non
     )
 
 
-def test_adams_exponent_contract_rejects_zero(s3_table) -> None:
+def test_adams_exponent_contract_rejects_zero(s3_table: CharacterTableResult) -> None:
     table = s3_table
     character = CharacterRingElement(table=table, irreducible_multiplicities=(1, 0, 0))
     with pytest.raises(ValidationError):
@@ -158,7 +166,7 @@ def test_adams_exponent_contract_rejects_zero(s3_table) -> None:
 
 
 def test_adams_work_bound_rejects_huge_bit_length_before_class_expansion(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     wide_table = _s3_table(degree=64)
     wide_character = CharacterRingElement(
@@ -170,7 +178,7 @@ def test_adams_work_bound_rejects_huge_bit_length_before_class_expansion(
         exponent=10**32_767 + 2,
     )
 
-    def fail_if_expanded(*args, **kwargs):
+    def fail_if_expanded(*args: object, **kwargs: object) -> Never:
         pytest.fail("admission must reject before conjugacy-class expansion")
 
     monkeypatch.setattr(adams_operations, "group_conjugacy_classes", fail_if_expanded)

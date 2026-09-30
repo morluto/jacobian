@@ -295,6 +295,16 @@ def theta_selected_coefficients(
     """
 
     dimension, support, determinant_work, cofactor_work = _require_input_envelope(form)
+    # The cutoff is read positionally below, so the selection must be a
+    # non-empty, strictly increasing, in-range sequence. The request schema
+    # already owns that rule; a native caller bypasses it, and an empty
+    # selection would otherwise escape as a bare IndexError from ``indices[-1]``.
+    if not indices or tuple(sorted(set(indices))) != indices:
+        raise OperationDomainValidationError(
+            location=("indices",),
+            code="quadratic_form.theta_indices",
+            message="theta indices must be non-empty, strictly increasing, and distinct",
+        )
     _, determinant, diagonal_cofactors = _positive_definite_matrix(form, dimension)
     radii = _admit_box_and_output(
         form,

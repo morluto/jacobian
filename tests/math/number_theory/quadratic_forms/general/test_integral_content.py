@@ -6,6 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
+from jacobian.catalog.models import (
+    OperationDomainValidationError,
+    OperationResourceAdmissionError,
+)
 from jacobian.math.number_theory.quadratic_forms.general._models import (
     IntegralContentRequest,
 )
@@ -53,14 +57,53 @@ def test_zero_form_has_zero_content_and_zero_primitive_part() -> None:
     assert result.primitive_part == form
 
 
-def test_integral_content_rejects_rational_coefficients_and_oversized_support() -> None:
+def test_integral_content_rejects_rational_coefficients() -> None:
     rational = RationalQuadraticForm(axis=("x",), diagonal_coefficients=(_q(1, 2),))
     with pytest.raises(ValidationError, match="integer polynomial coefficients"):
         IntegralContentRequest(form=rational)
 
+
+def test_integral_content_refuses_oversized_support_as_a_resource_bound() -> None:
+    """The retained-support ceiling is a capacity, not a request-validity rule.
+
+    A form past the traversal limit is a well-formed integral form that this
+    operation declines to enumerate, so the refusal carries the operation's
+    resource-admission classification rather than a request validation error.
+    """
     axis = tuple(f"x{i}" for i in range(4097))
     oversized = RationalQuadraticForm(
         axis=axis, diagonal_coefficients=tuple(_q(1) for _ in axis)
     )
-    with pytest.raises(ValidationError, match="support exceeds 4096"):
-        IntegralContentRequest(form=oversized)
+    admitted = IntegralContentRequest(form=oversized)
+    with pytest.raises(OperationResourceAdmissionError) as refusal:
+        integral_coefficient_content(admitted.form)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.invariant_support_bound"
+
+
+def test_integral_content_refuses_a_forged_form_before_reading_coefficients() -> None:
+    """A native caller can build a form whose collections disagree.
+
+    The kernel reads the diagonal positionally, so a forged short diagonal
+    would otherwise yield a plausible but meaningless content. The carrier's own
+    structural invariants are re-established at this trust boundary first.
+    """
+    forged = RationalQuadraticForm.model_construct(
+        axis=("x", "y", "z"),
+        diagonal_coefficients=(_q(6), _q(10)),
+        cross_terms=(),
+    )
+    with pytest.raises(OperationDomainValidationError) as refusal:
+        integral_coefficient_content(forged)
+    assert refusal.value.errors()[0]["type"] == "quadratic_form.form_structure"
+
+
+def test_integral_content_still_returns_the_content_of_a_well_formed_form() -> None:
+    """Negative control: revalidation must not change an accepted result."""
+    form = RationalQuadraticForm(
+        axis=("x", "y", "z"),
+        diagonal_coefficients=(_q(6), _q(10), _q(15)),
+        cross_terms=(QuadraticCrossTerm(left=0, right=1, coefficient=_q(21)),),
+    )
+    result = integral_coefficient_content(form)
+    assert result.content == 1
+    assert result.primitive_part == form

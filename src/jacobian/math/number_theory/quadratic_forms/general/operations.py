@@ -188,6 +188,18 @@ def integral_coefficient_content(
             code="quadratic_form.form_type",
             message="form must be a rational quadratic form value",
         )
+    # Re-establish the carrier's own structural invariants. A native caller can
+    # build a form whose collections are inconsistent, and this function reads
+    # them positionally, so a forged form would otherwise yield a plausible but
+    # meaningless content. Revalidate before any coefficient is read.
+    try:
+        form = RationalQuadraticForm.model_validate(form.model_dump(mode="python"))
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("form",),
+            code="quadratic_form.form_structure",
+            message=f"the quadratic form is structurally invalid: {exc}",
+        ) from exc
     if (
         len(form.diagonal_coefficients) + len(form.cross_terms)
         > MAX_INTEGRAL_INVARIANT_SUPPORT

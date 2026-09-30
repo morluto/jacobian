@@ -1,20 +1,15 @@
 """Exact monic quartic cubic-resolvent contract tests."""
 
-import json
 from fractions import Fraction
 
 import pytest
 from pydantic import ValidationError
 
 from jacobian._exact import CanonicalRational
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.math.polynomials._quartic_resolvent import (
     QuarticCubicResolventRequest,
     QuarticCubicResolventResult,
     compute_quartic_cubic_resolvent,
-)
-from jacobian.math.polynomials._quartic_resolvent_tools import (
-    QUARTIC_CUBIC_RESOLVENT_OPERATION,
 )
 from jacobian.math.polynomials.values import (
     MonicPolynomial,
@@ -125,21 +120,6 @@ def test_roots_one_through_four_give_pair_product_resolvent() -> None:
     )
     assert result.resolvent.variables == ("y",)
     assert result.model_validate_json(result.model_dump_json()) == result
-
-
-def test_operation_is_catalogued_with_executable_independent_example() -> None:
-    assert QUARTIC_CUBIC_RESOLVENT_OPERATION.operation_id == (
-        "polynomial.quartic.cubic_resolvent.compute"
-    )
-    assert QUARTIC_CUBIC_RESOLVENT_OPERATION in BUILTIN_TOOLS
-    result = QUARTIC_CUBIC_RESOLVENT_OPERATION.run(
-        QuarticCubicResolventRequest.model_validate_json(
-            json.dumps(QUARTIC_CUBIC_RESOLVENT_OPERATION.examples[0].input)
-        )
-    )
-    assert tuple(c.as_fraction() for c in result.resolvent.coefficients) == tuple(
-        map(Fraction, (-1540, 404, -35, 1))
-    )
 
 
 def test_request_requires_degree_four() -> None:

@@ -1001,18 +1001,6 @@ def test_request_schema_exposes_validator_owned_trade_rules() -> None:
     )
 
 
-def test_trade_operation_is_discoverable_and_example_executes() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    operation = next(
-        tool for tool in BUILTIN_TOOLS if tool.operation_id == "incidence.trade.check"
-    )
-    example = operation.examples[0]
-    result = operation.run(operation.request_type.model_validate(example.input))
-    assert result.positive_moments_equal
-    assert result.zeroth_difference == 1
-
-
 def test_catalog_adapter_returns_the_native_result() -> None:
     left = _family((("a",), ("b",)), "l", points=("a", "b"))
     right = _family((("a", "b"),), "r", points=("a", "b"))

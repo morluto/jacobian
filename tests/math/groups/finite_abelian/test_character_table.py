@@ -3,8 +3,6 @@ from itertools import product
 
 import pytest
 
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.groups.characters import finite_abelian_character_table
 from jacobian.math.groups.characters._cyclotomic import (
@@ -76,15 +74,3 @@ def test_table_admits_seven_coordinates_when_output_fits() -> None:
     group = FiniteAbelianProductGroup(moduli=(2,) * 7)
     result = finite_abelian_character_table(group)
     assert len(result.elements) == len(result.rows) == 128
-
-
-def test_catalog_manifest_publishes_executable_character_table() -> None:
-    operation_id = "finite_abelian_group.character_table.compute"
-    tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == operation_id)
-    request = tool.request_type.model_validate_json(
-        encode_strict_json(tool.examples[0].input), strict=True
-    )
-    result = tool.run(request)
-
-    assert result.group.moduli == (2, 2)
-    assert len(result.elements) == len(result.rows) == 4

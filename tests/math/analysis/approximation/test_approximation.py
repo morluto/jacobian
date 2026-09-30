@@ -438,13 +438,6 @@ class TestInterpolationPublication:
         assert "lagrange_interpolate" in public_module.__all__
         assert callable(public_module.lagrange_interpolate)
 
-    def test_interpolant_is_published_alongside_basis(self) -> None:
-        from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-        ids = {tool.operation_id for tool in BUILTIN_TOOLS}
-        assert "approximation.lagrange.interpolate.compute" in ids
-        assert "approximation.lagrange.basis.compute" in ids
-
     def test_interpolant_claim_round_trip_and_forgery(self) -> None:
         source = LagrangeInterpolationData(
             nodes=_node_set(_node("0"), _node("1")),

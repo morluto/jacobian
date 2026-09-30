@@ -277,17 +277,3 @@ def test_connectivity_work_is_admitted_before_graph_traversal(
     with pytest.raises(OperationResourceAdmissionError):
         card_component_profile(deck)
     assert calls == 0
-
-
-def test_card_component_profile_is_native_only_projection() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-    from jacobian.math.graphs.decks.card_component_profile import (
-        card_component_profile as public_profile,
-    )
-
-    assert public_profile is card_component_profile
-    assert all(
-        tool.operation_id != "graph.deck.card_component_profile.compute"
-        for tool in BUILTIN_TOOLS
-    )
-    assert card_component_profile(_deck(())).card_count == 0

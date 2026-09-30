@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import pytest
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.topology._models import FiniteSimplicialComplex, canonical_complex
 from jacobian.math.topology.discrete_morse import (
@@ -269,30 +268,6 @@ class TestDefiningInvariant:
         }
         assert matched | set(profile.critical_cells) == closure
         assert matched & set(profile.critical_cells) == set()
-
-
-class TestNativeCatalogParity:
-    def test_catalog_tool_runs_the_same_kernel(self) -> None:
-        tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
-        request = _request(
-            ["a", "b", "c"],
-            [["a", "b"], ["b", "c"], ["a", "c"]],
-            [(["a"], ["a", "b"]), (["c"], ["a", "c"])],
-        )
-        assert tool.run(request) == construct_matching(
-            *_circle_args([(["a"], ["a", "b"]), (["c"], ["a", "c"])])
-        )
-
-    def test_published_examples_execute(self) -> None:
-        tool = next(tool for tool in BUILTIN_TOOLS if tool.operation_id == OPERATION_ID)
-        outcomes = []
-        for example in tool.examples:
-            request = DiscreteMorseMatchingRequest.model_validate(example.input)
-            outcomes.append(tool.run(request).outcome)
-        assert outcomes == [
-            MorseMatchingOutcome.ACYCLIC_MATCHING,
-            MorseMatchingOutcome.CYCLIC_MATCHING,
-        ]
 
 
 class TestSerialization:

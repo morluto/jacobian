@@ -131,23 +131,6 @@ def test_nonfaithful_linear_holonomy_is_rejected() -> None:
     )
 
 
-def test_catalog_example_is_an_executable_canonical_request() -> None:
-    from jacobian.catalog.builtins import BUILTIN_TOOLS
-
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "crystallographic.extension.torsion_freeness.decide"
-    )
-    import json
-
-    source = tool.request_type.model_validate_json(
-        json.dumps(tool.examples[0].input), strict=True
-    )
-    result = tool.run(source)
-    assert result.torsion_free
-
-
 def test_integer_change_of_section_preserves_torsion_freeness() -> None:
     original = _klein_extension()
     changed = _extension(

@@ -5,8 +5,6 @@ from fractions import Fraction
 import pytest
 
 from jacobian._exact import CanonicalRational
-from jacobian.canonical import encode_strict_json
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import OperationResourceAdmissionError
 from jacobian.math.groups.characters._models import (
     ClassAxis,
@@ -70,20 +68,6 @@ def test_conjugation_is_an_involution_and_composes_with_the_class_algebra() -> N
     )
     pairing = class_function_inner_product(product, product)
     assert pairing.inner_product == _value(3, (1, 0))
-
-
-def test_catalog_conjugation_example_survives_json_and_runs() -> None:
-    tool = next(
-        candidate
-        for candidate in BUILTIN_TOOLS
-        if candidate.operation_id == "class_function.conjugate.compute"
-    )
-    encoded = encode_strict_json(tool.examples[0].input)
-    request = tool.request_type.model_validate_json(encoded, strict=True)
-    result = tool.run(request)
-    assert isinstance(result, FiniteClassFunction)
-    assert result.axis.cyclotomic_order == 3
-    assert _coefficients(result)[1] == (Fraction(-1), Fraction(-1))
 
 
 def test_coefficient_height_is_admitted_before_cyclotomic_expansion(

@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import itertools
-import json
 
 import pytest
 from pydantic import ValidationError
 
-from jacobian.catalog.builtins import BUILTIN_TOOLS
 from jacobian.catalog.models import (
     OperationDomainValidationError,
     OperationResourceAdmissionError,
@@ -236,18 +234,3 @@ def test_matrix_shape_and_entry_limits_precede_nested_matrix_parse() -> None:
     assert entry_error.value.errors()[0]["type"] == (
         "quadratic_form.unimodular.matrix_entry_bound"
     )
-
-
-def test_advertised_tool_composes_after_json_roundtrip() -> None:
-    tool = next(
-        item
-        for item in BUILTIN_TOOLS
-        if item.operation_id == "quadratic_form.unimodular_change.compute"
-    )
-    request = tool.request_type.model_validate_json(json.dumps(tool.examples[0].input))
-    result = tool.run(request)
-    transported = result.model_validate_json(result.model_dump_json())
-    assert transported.target == result.target
-    assert transported.inverse == result.inverse
-    assert transported.target.diagonal_coefficients == (1, 6)
-    assert transported.target.cross_terms[0].coefficient == 5

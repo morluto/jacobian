@@ -15,9 +15,11 @@ from jacobian.math.logic.automata.tree import (
     DeterministicBottomUpTreeAutomaton,
     RankedTree,
     TreeAutomatonTransition,
+    TreeContextFrame,
     boolean_product_tree_automata,
 )
 from jacobian.math.logic.automata.tree._models import TreeAutomatonBooleanProductRequest
+from jacobian.math.logic.automata.tree.contexts import FiniteTreeContext
 
 
 def _trees(arity: tuple[int, ...], height: int) -> list[RankedTree]:
@@ -236,3 +238,34 @@ def test_native_product_rejects_forged_complete_carrier() -> None:
         boolean_product_tree_automata(forged, _machine(()), "intersection")
 
     assert raised.value.errors()[0]["type"] == "tree_automata.product_automaton_shape"
+
+
+def test_forged_complete_automaton_is_rejected_at_the_preflight() -> None:
+    """The complete-carrier preflight must revalidate, not just count.
+
+    It checked row field types and child length only, so a `model_construct`
+    carrier with an out-of-range target state passed and produced the state map
+    `(1,)`, which its own result contract rejects as a non-permutation; a
+    duplicate-key carrier escaped as a raw `KeyError`.
+    """
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.logic.automata.tree.operations import (
+        map_tree_context_states,
+    )
+
+    forged = CompleteDeterministicBottomUpTreeAutomaton.model_construct(
+        state_count=1,
+        arity=(1,),
+        transitions=(
+            TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),
+        ),
+        final_states=(0,),
+    )
+
+    context = FiniteTreeContext(
+        arity=(1,),
+        frames=(TreeContextFrame(symbol=0, hole_child=0, siblings=()),),
+    )
+
+    with pytest.raises(OperationDomainValidationError):
+        map_tree_context_states(forged, context)

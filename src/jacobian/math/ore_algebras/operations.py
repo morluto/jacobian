@@ -2498,6 +2498,22 @@ def _admit_dfinite_series(value: DFinitePowerSeries) -> DFinitePowerSeries:
                 "D-finite value and a bounded count"
             ),
         ) from exc
+    # The DFinitePowerSeries validator checks only that the operator is nonzero
+    # and that the initial list matches the order, so a series supplied as JSON
+    # or via model_validate never established the ordinary-point condition. The
+    # prefix path then returned an initial-only fast path for an equation whose
+    # x^0 row forces f(0) = 0, reporting a value for a series that cannot exist.
+    try:
+        _require_ordinary_series_operator(operator)
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("series", "operator"),
+            code="ore_algebra.dfinite_series_initial_value_problem",
+            message=(
+                "the differential equation must be regular at x=0 and have a "
+                "nonzero leading coefficient at its ordinary center x=0"
+            ),
+        ) from exc
     return DFinitePowerSeries(operator=operator, initial_derivatives=initial, center=0)
 
 

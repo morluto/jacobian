@@ -941,7 +941,8 @@ TOOLS: tuple[MathTool[Any, Any], ...] = (
             "language. One productive final state is used directly; multiple "
             "productive final states get a synthetic start whose productions copy "
             "productive-final-target rows. The empty-language case returns an empty "
-            "grammar. Work, production count, "
+            "grammar. Productivity saturation and conversion share one work "
+            "envelope. Work, production count, "
             "nonterminal count, and output cells are admitted before productions "
             "are constructed; unrepresentable results are refused exactly."
         ),

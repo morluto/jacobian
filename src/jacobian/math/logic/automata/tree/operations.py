@@ -1054,7 +1054,7 @@ def tree_automaton_to_regular_tree_grammar(
     # The saturation rescans every row once per newly productive state, so its
     # pass count is part of this operation's work and must be admitted with it
     # rather than left to the row order of the caller's transition table.
-    _admit_productivity_saturation(automaton)
+    saturation_work = _admit_productivity_saturation(automaton)
     productive: set[int] = set()
     changed = True
     while changed:
@@ -1114,7 +1114,8 @@ def tree_automaton_to_regular_tree_grammar(
     )
     input_work = sum(2 + len(row.child_states) for row in automaton.transitions)
     work_bound = (
-        input_work
+        saturation_work
+        + input_work
         + sort_work
         + 16 * production_work
         + 8 * nonterminal_count
@@ -1162,7 +1163,7 @@ def tree_automaton_to_regular_tree_grammar(
     )
 
 
-def _admit_productivity_saturation(automaton: BottomUpTreeAutomaton) -> None:
+def _admit_productivity_saturation(automaton: BottomUpTreeAutomaton) -> int:
     """Admit the fixed-point saturation before the loop performs it.
 
     Each pass that discovers a new productive state is followed by a full
@@ -1183,6 +1184,7 @@ def _admit_productivity_saturation(automaton: BottomUpTreeAutomaton) -> None:
                 "productivity saturation exceeds the automaton-to-grammar work envelope"
             ),
         )
+    return saturation_work
 
 
 def _preflight_tree_automaton_for_grammar(

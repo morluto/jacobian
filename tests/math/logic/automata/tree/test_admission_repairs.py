@@ -126,11 +126,11 @@ def test_productivity_saturation_is_admitted_before_it_runs(
 
     monkeypatch.undo()
     calls: list[int] = []
-    admitted = tree_operations.__dict__["_admit_productivity_saturation"]
+    admitted = tree_operations._admit_productivity_saturation
 
-    def recording(value: BottomUpTreeAutomaton) -> None:
+    def recording(value: BottomUpTreeAutomaton) -> int:
         calls.append(1)
-        admitted(value)
+        return admitted(value)
 
     monkeypatch.setattr(tree_operations, "_admit_productivity_saturation", recording)
     grammar = tree_automaton_to_regular_tree_grammar(

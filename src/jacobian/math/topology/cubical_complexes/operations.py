@@ -366,7 +366,9 @@ def face_poset(cells: tuple[CubicalCell, ...]) -> CubicalFacePosetResult:
 
 def _counts(complex_: CubicalComplex) -> FVector:
     by_dimension = [0] * (complex_.ambient_dimension + 1)
-    for cell in complex_.cells:
+    for index, cell in enumerate(complex_.cells):
+        if index % 128 == 0:
+            request_checkpoint("during cubical dimension counting")
         by_dimension[cell.dimension] += 1
     return FVector(
         dimension_axis=tuple(range(complex_.ambient_dimension + 1)),
@@ -1667,6 +1669,18 @@ def chain_product(
     )
 
 
+def _exposed_boundary_facets(
+    facet_incidence: dict[tuple[tuple[int, int], ...], int],
+) -> tuple[CubicalCell, ...]:
+    exposed: list[CubicalCell] = []
+    for index, (intervals, incidence) in enumerate(sorted(facet_incidence.items())):
+        if index % 128 == 0:
+            request_checkpoint("during cubical exposed-facet materialization")
+        if incidence == 1:
+            exposed.append(CubicalCell(intervals=intervals))
+    return tuple(exposed)
+
+
 def boundary_subcomplex(
     cells: tuple[CubicalCell, ...],
 ) -> CubicalBoundarySubcomplexResult:
@@ -1823,11 +1837,7 @@ def boundary_subcomplex(
                 face[axis] = (endpoint, endpoint)
                 face_key = tuple(face)
                 facet_incidence[face_key] = facet_incidence.get(face_key, 0) + 1
-    exposed_facets = tuple(
-        CubicalCell(intervals=intervals)
-        for intervals, incidence in sorted(facet_incidence.items())
-        if incidence == 1
-    )
+    exposed_facets = _exposed_boundary_facets(facet_incidence)
     boundary_cells = _face_cells(exposed_facets)
     return CubicalBoundarySubcomplexResult.model_construct(
         complex=complex_,

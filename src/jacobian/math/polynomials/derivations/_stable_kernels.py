@@ -387,7 +387,13 @@ def _coordinate_frame(
     """Precompute an exact coordinate map from independent monomial rows."""
     size = len(basis)
     support = sorted(
-        {term.exponents for value in basis for term in value.polynomial.terms},
+        {
+            term.exponents
+            for value in basis
+            for term in _checkpointed(
+                value.polynomial.terms, "during coordinate-frame support collection"
+            )
+        },
         reverse=True,
     )
     basis_term_count = sum(len(value.polynomial.terms) for value in basis)
@@ -403,7 +409,9 @@ def _coordinate_frame(
             next(
                 (
                     term.coefficient.as_fraction()
-                    for term in value.polynomial.terms
+                    for term in _checkpointed(
+                        value.polynomial.terms, "during coordinate-frame source rows"
+                    )
                     if term.exponents == monomial
                 ),
                 Fraction(0),
@@ -415,8 +423,10 @@ def _coordinate_frame(
     echelon: list[tuple[int, list[Fraction]]] = []
     pivot_monomials: list[tuple[int, ...]] = []
     for monomial, source in zip(support, source_rows, strict=True):
+        request_checkpoint("during coordinate-frame echelon reduction")
         working = source.copy()
         for pivot, normalized in echelon:
+            request_checkpoint("during coordinate-frame echelon reduction")
             if working[pivot]:
                 scale = working[pivot]
                 working = [
@@ -453,6 +463,7 @@ def _coordinate_frame(
         for i, row in enumerate(pivot_rows)
     ]
     for column in range(size):
+        request_checkpoint("during coordinate-frame inversion")
         selected = next(
             (row for row in range(column, size) if augmented[row][column]), None
         )
@@ -465,6 +476,7 @@ def _coordinate_frame(
         pivot_scale = augmented[column][column]
         augmented[column] = [value / pivot_scale for value in augmented[column]]
         for row in range(size):
+            request_checkpoint("during coordinate-frame inversion")
             if row != column and augmented[row][column]:
                 row_scale = augmented[row][column]
                 augmented[row] = [
@@ -507,15 +519,26 @@ def _coordinates(
     )
     coordinates = tuple(
         sum(
-            (inverse[row][column] * pivot_values[column] for column in range(size)),
+            (
+                inverse[row][column] * pivot_values[column]
+                for column in _checkpointed(
+                    range(size),
+                    "during stable-subrepresentation coordinate dot products",
+                )
+            ),
             Fraction(0),
         )
-        for row in range(size)
+        for row in _checkpointed(
+            range(size), "during stable-subrepresentation coordinate dot products"
+        )
     )
     reconstructed: dict[tuple[int, ...], Fraction] = {}
     for value, coordinate in zip(basis, coordinates, strict=True):
         request_checkpoint("during stable-subrepresentation coordinate reconstruction")
-        for term in value.polynomial.terms:
+        for term in _checkpointed(
+            value.polynomial.terms,
+            "during stable-subrepresentation coordinate reconstruction",
+        ):
             exponents = tuple(term.exponents)
             reconstructed[exponents] = (
                 reconstructed.get(exponents, Fraction(0))
@@ -590,6 +613,7 @@ def _admit_basis(
     max_source_digits = 1
     max_source_degree = 0
     for index, value in enumerate(basis):
+        request_checkpoint("during stable-subrepresentation basis admission")
         try:
             require_polynomial_budget(
                 value,
@@ -707,7 +731,9 @@ def _compute_matrix(
     for value in basis:
         expanded = _substitute_basis(action, value)
         by_parameter: dict[int, dict[tuple[int, ...], Fraction]] = {}
-        for exponents, coefficient in expanded.items():
+        for exponents, coefficient in _checkpointed(
+            expanded.items(), "during stable-subrepresentation parameter grouping"
+        ):
             by_parameter.setdefault(exponents[-1], {})[exponents[:-1]] = coefficient
         column: list[dict[int, Fraction]] = [{} for _ in basis]
         for parameter_degree, target in by_parameter.items():
@@ -742,7 +768,9 @@ def _compute_matrix(
                     for degree, coefficient in columns[col][row].items()
                 },
             )
-            for col in range(len(basis))
+            for col in _checkpointed(
+                range(len(basis)), "during stable-subrepresentation matrix encoding"
+            )
         )
         for row in range(len(basis))
     )
@@ -775,7 +803,10 @@ def _infinitesimal_matrix(
     matrix = [[Fraction(0) for _ in range(size)] for _ in range(size)]
     for row in range(size):
         for column in range(size):
-            for term in representation.action_matrix[row][column].polynomial.terms:
+            for term in _checkpointed(
+                representation.action_matrix[row][column].polynomial.terms,
+                "during fixed-space infinitesimal matrix construction",
+            ):
                 if term.exponents == (1,):
                     matrix[row][column] = term.coefficient.as_fraction()
                     break
@@ -810,6 +841,7 @@ def _admit_and_integerize_kernel_matrix(
 
     row_denominators: list[int] = []
     for row in matrix:
+        request_checkpoint("during fixed-space denominator admission")
         if any(
             max(_integer_digits(value.numerator), _integer_digits(value.denominator))
             > MAX_DERIVATION_COEFFICIENT_DIGITS
@@ -838,6 +870,7 @@ def _admit_and_integerize_kernel_matrix(
     integer_matrix: list[list[Fraction]] = []
     maximum_entry_digits = 1
     for row, denominator in zip(matrix, row_denominators, strict=True):
+        request_checkpoint("during fixed-space integerization")
         integer_row = []
         for value in row:
             integer = value.numerator * (denominator // value.denominator)
@@ -865,6 +898,7 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
     pivot_columns: list[int] = []
     pivot_row = 0
     for column in range(size):
+        request_checkpoint("during fixed-space elimination")
         selected = next(
             (row for row in range(pivot_row, size) if matrix[row][column]), None
         )
@@ -874,6 +908,7 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
         leading_entry = matrix[pivot_row][column]
         matrix[pivot_row] = [value / leading_entry for value in matrix[pivot_row]]
         for row in range(size):
+            request_checkpoint("during fixed-space elimination")
             if row != pivot_row and matrix[row][column]:
                 factor = matrix[row][column]
                 matrix[row] = [
@@ -890,6 +925,7 @@ def _rational_kernel_basis(matrix: list[list[Fraction]]) -> list[tuple[Fraction,
     free_columns = [column for column in range(size) if column not in pivot_rows]
     basis = []
     for free in free_columns:
+        request_checkpoint("during fixed-space kernel assembly")
         vector = [Fraction(0) for _ in range(size)]
         vector[free] = Fraction(1)
         for pivot_column, row in pivot_rows.items():
@@ -930,7 +966,9 @@ def _admit_claimed_action_matrix(
     term_count = 0
     for row in representation.action_matrix:
         for entry in row:
-            for term in entry.polynomial.terms:
+            for term in _checkpointed(
+                entry.polynomial.terms, "during fixed-space claimed matrix admission"
+            ):
                 component_digits = canonical_rational_component_digits(term.coefficient)
                 if component_digits > MAX_DERIVATION_COEFFICIENT_DIGITS:
                     raise OperationResourceAdmissionError(
@@ -1044,15 +1082,21 @@ def _fixed_polynomial_basis(
         request_checkpoint("during fixed-subspace polynomial reconstruction")
         grouped: dict[tuple[int, ...], list[Fraction]] = {}
         for coordinate, polynomial in zip(vector, representation.basis, strict=True):
-            for term in polynomial.polynomial.terms:
+            for term in _checkpointed(
+                polynomial.polynomial.terms, "during fixed-polynomial accumulation"
+            ):
                 if coordinate:
                     grouped.setdefault(term.exponents, []).append(
                         coordinate * term.coefficient.as_fraction()
                     )
         terms = []
-        for exponents, contributions in grouped.items():
+        for exponents, contributions in _checkpointed(
+            grouped.items(), "during fixed-polynomial coefficient grouping"
+        ):
             denominator = 1
-            for value in contributions:
+            for value in _checkpointed(
+                contributions, "during fixed-polynomial coefficient grouping"
+            ):
                 factor = denominator // gcd(denominator, value.denominator)
                 if (
                     len(str(factor)) + len(str(value.denominator))
@@ -1167,8 +1211,13 @@ def ga_fixed_subspace(
     return PolynomialGaFixedSubspace.model_construct(
         subrepresentation=checked,
         coordinates=tuple(
-            tuple(CanonicalRational.from_fraction(value) for value in vector)
-            for vector in coordinate_vectors
+            tuple(
+                CanonicalRational.from_fraction(value)
+                for value in _checkpointed(vector, "during fixed result encoding")
+            )
+            for vector in _checkpointed(
+                coordinate_vectors, "during fixed result encoding"
+            )
         ),
         basis=tuple(fixed_basis),
     )

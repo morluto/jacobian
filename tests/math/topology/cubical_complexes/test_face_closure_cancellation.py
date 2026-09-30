@@ -15,7 +15,7 @@ from jacobian.math.topology.cubical_complexes._models import CubicalCell
 
 @pytest.mark.parametrize(
     ("phase", "dimension"),
-    [("expansion", 10), ("materialization", 5)],
+    [("expansion", 10), ("materialization", 5), ("dimension counting", 5)],
 )
 def test_face_closure_cancels_after_work_has_started(
     monkeypatch: pytest.MonkeyPatch, phase: str, dimension: int
@@ -46,3 +46,30 @@ def test_face_closure_preserves_complete_sorted_faces() -> None:
     assert result.total_cells == 3**4
     intervals = tuple(cell.intervals for cell in result.complex.cells)
     assert intervals == tuple(sorted(set(intervals)))
+
+
+def test_boundary_cancels_during_exposed_facet_materialization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    cells = tuple(CubicalCell(intervals=((3 * i, 3 * i + 1),)) for i in range(65))
+    assert len(operations.boundary_subcomplex(cells).exposed_facets) == 130
+    cancelled = Event()
+    observed: list[str] = []
+
+    def cancel_after_first_batch(stage: str) -> None:
+        if "exposed-facet materialization" in stage:
+            observed.append(stage)
+            if len(observed) == 2:
+                cancelled.set()
+        request_checkpoint(stage)
+
+    monkeypatch.setattr(operations, "request_checkpoint", cancel_after_first_batch)
+    with (
+        request_cancellation(cancelled),
+        pytest.raises(
+            OperationExecutionCancelledError, match="exposed-facet materialization"
+        ),
+    ):
+        operations.boundary_subcomplex(cells)
+    assert len(observed) == 2
+    assert cancelled.is_set()

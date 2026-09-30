@@ -65,6 +65,7 @@ class LoopedGraphDeltaMatroidResult(StrictModel):
 def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
     """Revalidate the canonical carrier and enforce the operation work bound."""
     from pydantic import ValidationError
+    from pydantic_core import PydanticSerializationError
 
     from jacobian.catalog.models import (
         OperationDomainValidationError,
@@ -77,9 +78,32 @@ def admit_looped_graph(graph: LoopedSimpleGraph) -> LoopedSimpleGraph:
             code="graph.looped_graph_invalid",
             message="graph must be a canonical LoopedSimpleGraph value",
         )
+    # Preflight the raw container before serializing. A native caller can
+    # bypass Pydantic with model_construct, and serializing an oversized or
+    # malformed payload would copy the whole vertex and edge graph before the
+    # O(1) length check below could refuse it.
+    raw_vertices = getattr(graph, "vertices", None)
+    if not isinstance(raw_vertices, tuple):
+        raise OperationDomainValidationError(
+            location=("graph", "vertices"),
+            code="graph.looped_graph_invalid",
+            message="graph vertices must be a canonical tuple of labels",
+        )
+    if len(raw_vertices) > MAX_BINARY_GROUND:
+        raise OperationResourceAdmissionError(
+            location=("graph", "vertices"),
+            code="delta_matroid.binary_work",
+            message=f"looped graph conversion supports at most {MAX_BINARY_GROUND} vertices",
+        )
     try:
         canonical = LoopedSimpleGraph.model_validate(graph.model_dump())
-    except (ValidationError, AttributeError) as error:
+    except (
+        ValidationError,
+        AttributeError,
+        TypeError,
+        ValueError,
+        PydanticSerializationError,
+    ) as error:
         raise OperationDomainValidationError(
             location=("graph",),
             code="graph.looped_graph_invalid",

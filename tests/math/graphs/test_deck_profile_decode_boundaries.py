@@ -6,15 +6,21 @@ normalizer must bound attacker-controlled rows before copying them.
 
 from __future__ import annotations
 
+import json
+from typing import Any
+
 import pytest
 
 from jacobian.catalog.models import OperationDomainValidationError
 from jacobian.math.graphs.decks import _models as models_module
 from jacobian.math.graphs.decks._models import (
+    EdgeDeckIsomorphismProfile,
     VertexDeckIsomorphismProfile,
     VertexDeletionFamily,
 )
 from jacobian.math.graphs.decks.operations import (
+    edge_deck_isomorphism_profile,
+    edge_deletion_family,
     unlabelled_vertex_deck,
     vertex_deck_isomorphism_profile,
     vertex_deletion_family,
@@ -39,33 +45,64 @@ def _profile(order: int = 4) -> VertexDeckIsomorphismProfile:
 # --- result decoding does not replay the canonicalization search -----------
 
 
+@pytest.mark.parametrize("edge_deck", [False, True])
 def test_result_decode_does_not_recanonicalize(
     monkeypatch: pytest.MonkeyPatch,
+    edge_deck: bool,
 ) -> None:
     """Decoding an admitted result must not enumerate vertex permutations."""
-    original = _profile()
+    original = (
+        edge_deck_isomorphism_profile(edge_deletion_family(_source()))
+        if edge_deck
+        else _profile()
+    )
     calls = 0
     real = models_module._canonical_card_edges
 
-    def counting(vertices, edges):  # type: ignore[no-untyped-def]
+    def counting(
+        vertices: tuple[str, ...], edges: tuple[tuple[str, str], ...]
+    ) -> tuple[tuple[str, str], ...]:
         nonlocal calls
         calls += 1
         return real(vertices, edges)
 
     monkeypatch.setattr(models_module, "_canonical_card_edges", counting)
-    VertexDeckIsomorphismProfile.model_validate(original.model_dump())
+    assert type(original).model_validate(original.model_dump()) == original
+    assert type(original).model_validate_json(original.model_dump_json()) == original
     assert calls == 0
 
 
 def test_canonicalization_is_still_used_by_the_producer() -> None:
-    """The producer keeps canonicalizing; only result decoding stopped."""
-    import inspect
+    """K1,3 gives noncanonical cards with independently known normal forms."""
+    source = SimpleUndirectedGraph(
+        vertices=("a", "b", "c", "d"),
+        edges=(("a", "b"), ("a", "c"), ("a", "d")),
+    )
+    vertex_profile = vertex_deck_isomorphism_profile(vertex_deletion_family(source))
+    # Deleting the center leaves three isolated vertices. Deleting a leaf
+    # leaves P3, whose least adjacency bit string is 011, with center v02.
+    assert tuple(
+        (item.representative.edges, item.multiplicity)
+        for item in vertex_profile.classes
+    ) == (((), 1), ((("v00", "v02"), ("v01", "v02")), 3))
+    assert vertex_profile.class_indices == (0, 1, 1, 1)
+    assert (
+        VertexDeckIsomorphismProfile.model_validate_json(
+            vertex_profile.model_dump_json()
+        )
+        == vertex_profile
+    )
 
-    import jacobian.math.graphs.decks.operations as deck_operations
-
-    source = inspect.getsource(deck_operations)
-    assert "_canonical_card_edges(" in source
-    assert models_module._canonical_card_edges is not None
+    edge_profile = edge_deck_isomorphism_profile(edge_deletion_family(source))
+    # Every edge deletion leaves P3 plus one isolated vertex: 000011.
+    assert tuple(
+        (item.representative.edges, item.multiplicity) for item in edge_profile.classes
+    ) == (((("v01", "v03"), ("v02", "v03")), 3),)
+    assert edge_profile.class_indices == (0, 0, 0)
+    assert (
+        EdgeDeckIsomorphismProfile.model_validate_json(edge_profile.model_dump_json())
+        == edge_profile
+    )
 
 
 # --- oversized rows are bounded before the normalizer copies them ----------
@@ -81,7 +118,7 @@ def test_oversized_vertex_map_row_is_bounded_before_copying(
     reached: list[bool] = []
     real = models_module._normalize_vertex_iso_profile_result
 
-    def spy(value):  # type: ignore[no-untyped-def]
+    def spy(value: Any) -> Any:
         reached.append(True)
         return real(value)
 
@@ -99,7 +136,7 @@ def test_oversized_class_index_rows_are_bounded_before_copying(
     reached: list[bool] = []
     real = models_module._normalize_vertex_iso_profile_result
 
-    def spy(value):  # type: ignore[no-untyped-def]
+    def spy(value: Any) -> Any:
         reached.append(True)
         return real(value)
 
@@ -123,6 +160,35 @@ def test_oversized_class_representative_is_bounded() -> None:
         VertexDeckIsomorphismProfile.model_validate(payload)
 
 
+@pytest.mark.parametrize("wire", [False, True])
+@pytest.mark.parametrize("field", ["vertices", "edge_endpoints"])
+def test_representative_axes_are_bounded_before_normalization(
+    monkeypatch: pytest.MonkeyPatch, wire: bool, field: str
+) -> None:
+    payload = _profile().model_dump(mode="json")
+    representative = payload["classes"][0]["representative"]
+    if field == "vertices":
+        representative["vertices"] = ["v00"] * 50_000
+    else:
+        representative["edges"] = [["v00"] * 50_000]
+    encoded = json.dumps(payload)
+    reached = False
+    real = models_module._normalize_vertex_iso_profile_result
+
+    def spy(value: Any) -> Any:
+        nonlocal reached
+        reached = True
+        return real(value)
+
+    monkeypatch.setattr(models_module, "_normalize_vertex_iso_profile_result", spy)
+    with pytest.raises(ValueError):
+        if wire:
+            VertexDeckIsomorphismProfile.model_validate_json(encoded)
+        else:
+            VertexDeckIsomorphismProfile.model_validate(payload)
+    assert not reached
+
+
 # --- a forged family carrier is refused, not dereferenced -----------------
 
 
@@ -144,10 +210,23 @@ def test_forged_family_with_non_tuple_cards_is_refused() -> None:
 # --- negative controls -----------------------------------------------------
 
 
-def test_profile_round_trips_unchanged() -> None:
-    original = _profile()
+@pytest.mark.parametrize("order", [0, 1, 8])
+def test_profile_round_trips_unchanged(order: int) -> None:
+    original = _profile(order)
     again = VertexDeckIsomorphismProfile.model_validate(original.model_dump())
     assert again == original
+    assert (
+        VertexDeckIsomorphismProfile.model_validate_json(
+            original.model_dump_json(), strict=True
+        )
+        == original
+    )
+    assert sum(item.multiplicity for item in original.classes) == order
+    if order:
+        assert len(original.classes) == 1
+        assert original.classes[0].representative == _source(order - 1)
+    else:
+        assert original.classes == ()
 
 
 def test_valid_family_is_still_quotiented() -> None:

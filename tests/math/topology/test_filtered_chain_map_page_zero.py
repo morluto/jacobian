@@ -314,6 +314,9 @@ def test_page_zero_preflight_measures_scalars_without_formatting_them() -> None:
     """
 
     class UnformattableInt(int):
+        def __int__(self) -> int:
+            raise AssertionError("admission must not invoke caller conversion")
+
         def __str__(self) -> str:
             raise AssertionError("admission must not format caller integers")
 
@@ -351,3 +354,21 @@ def test_page_zero_map_tool_has_the_native_result_contract() -> None:
     )
     assert isinstance(tool, MathTool)
     assert tool.result_type is FilteredChainMapPageZeroResult
+
+
+@pytest.mark.parametrize("scalar", ("bad", "2", None, [], 1.5, True))
+def test_page_zero_preflight_rejects_noncanonical_native_scalars(
+    scalar: object,
+) -> None:
+    complex_value = _complex()
+    forged = ChainMapValue.model_construct(
+        source=complex_value,
+        target=complex_value,
+        map_matrices=(((scalar, 0), (0, 1)),),
+        source_basis_labels=None,
+        target_basis_labels=None,
+    )
+    filtration = _filtration((1, 0))
+    with pytest.raises(OperationDomainValidationError) as error:
+        filtered_chain_map_page_zero(forged, filtration, filtration)
+    assert error.value.errors()[0]["type"] == "filtered_chain_map.entry_invalid"

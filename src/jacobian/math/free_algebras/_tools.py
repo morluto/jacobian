@@ -1076,8 +1076,10 @@ TOOLS = (
         description=(
             "Compute a nonnegative integer power in a free associative QQ-algebra. "
             "Exponentiation by squaring uses the existing exact product kernel; "
-            "each intermediate term-pair convolution, coefficient-growth bound, "
-            "and output allocation is admitted before expansion. Exponents range "
+            "each intermediate term-pair count, result support, and predicted "
+            "coefficient growth is admitted before expansion. Retained word "
+            "content is bounded by the term and word-length limits, with no "
+            "separate total output-allocation check. Exponents range "
             "from 0 through 64. Exponent zero returns the unit polynomial over "
             "the input alphabet, and exponent one returns the input value."
         ),

@@ -1034,3 +1034,73 @@ class TestValidation:
         request = AcceptedTreeCountRequest(automaton=automaton, tree_size=100)
         with pytest.raises(OperationDomainValidationError, match="work"):
             compute_accepted_tree_count(request)
+
+
+def test_reachability_rejects_a_forged_automaton_carrier() -> None:
+    """A `model_construct` carrier must not reach the saturation unchecked.
+
+    `model_construct` populates a carrier without running the model validators.
+    A one-state unary automaton whose only transition targets state 1 therefore
+    looked well-formed, and the fixed point reported state 0 as unreachable --
+    an exact result built from a state that does not exist.
+    """
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.logic.automata.tree.operations import (
+        reachable_state_profile,
+        tree_language_profile,
+    )
+    from jacobian.math.logic.automata.tree.values import (
+        BottomUpTreeAutomaton,
+        TreeAutomatonTransition,
+    )
+
+    forged = BottomUpTreeAutomaton.model_construct(
+        state_count=1,
+        arity=(1,),
+        transitions=(
+            TreeAutomatonTransition.model_construct(
+                symbol=0, child_states=(0,), target_state=1
+            ),
+        ),
+        final_states=(0,),
+    )
+    for operation in (reachable_state_profile, tree_language_profile):
+        with pytest.raises(OperationDomainValidationError):
+            operation(forged)
+
+    # a well-formed carrier over the same shape is admitted, so the refusal is
+    # the contract and not a blanket rejection
+    sound = BottomUpTreeAutomaton(
+        state_count=2,
+        arity=(1, 0),
+        transitions=(
+            TreeAutomatonTransition(symbol=1, child_states=(), target_state=0),
+            TreeAutomatonTransition(symbol=0, child_states=(0,), target_state=1),
+        ),
+        final_states=(1,),
+    )
+    assert reachable_state_profile(sound).reachable_states == (0, 1)
+
+
+def test_reachability_rejects_a_child_count_that_disagrees_with_its_arity() -> None:
+    """Every carrier invariant the saturation relies on is re-checked."""
+    from jacobian.catalog.models import OperationDomainValidationError
+    from jacobian.math.logic.automata.tree.operations import reachable_state_profile
+    from jacobian.math.logic.automata.tree.values import (
+        BottomUpTreeAutomaton,
+        TreeAutomatonTransition,
+    )
+
+    # a binary symbol carrying one child state
+    forged = BottomUpTreeAutomaton.model_construct(
+        state_count=2,
+        arity=(2,),
+        transitions=(
+            TreeAutomatonTransition.model_construct(
+                symbol=0, child_states=(0,), target_state=1
+            ),
+        ),
+        final_states=(1,),
+    )
+    with pytest.raises(OperationDomainValidationError):
+        reachable_state_profile(forged)

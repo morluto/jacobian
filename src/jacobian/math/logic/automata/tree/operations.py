@@ -248,6 +248,41 @@ def _preflight_tree(tree: RankedTree) -> tuple[int, int]:
     return nodes, depth_bound
 
 
+def _admit_tree_automaton_carrier(
+    automaton: object,
+    automaton_type: type[BottomUpTreeAutomaton],
+    code: str,
+    description: str,
+) -> BottomUpTreeAutomaton:
+    """Re-establish a native automaton's structural contract before use.
+
+    ``model_construct`` populates a carrier without running the model
+    validators, so a native caller can hand these operations a state index
+    outside the state range, a symbol outside the ranked alphabet, a child
+    count that disagrees with its symbol's arity, or duplicate rows. Every one
+    of those reaches the saturation as a silently wrong fixpoint or as an
+    untyped ``KeyError``. Re-validating the carrier here re-runs the owner's
+    invariants at the boundary that actually relies on them.
+    """
+
+    if not isinstance(automaton, automaton_type):
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code=code,
+            message=description,
+        )
+    try:
+        return automaton_type.model_validate(
+            automaton.model_dump(mode="python", warnings=False)
+        )
+    except Exception as exc:
+        raise OperationDomainValidationError(
+            location=("automaton",),
+            code=code,
+            message=description,
+        ) from exc
+
+
 def _preflight_complete_automaton(
     automaton: CompleteDeterministicBottomUpTreeAutomaton,
 ) -> None:
@@ -1629,6 +1664,12 @@ def reachable_state_profile(
 ) -> ReachableStateProfile:
     """Return each reachable state and its canonical minimum-node witness tree."""
 
+    automaton = _admit_tree_automaton_carrier(
+        automaton,
+        BottomUpTreeAutomaton,
+        "tree_automata.reachability.value_type",
+        "automaton must be a canonical bottom-up tree automaton",
+    )
     return _build_reachable_state_profile(automaton)
 
 
@@ -1644,12 +1685,12 @@ def tree_language_profile(
     state survives the reachability filter.
     """
 
-    if type(automaton) is not BottomUpTreeAutomaton:
-        raise OperationDomainValidationError(
-            location=("automaton",),
-            code="tree_automata.language_profile.value_type",
-            message="automaton must be a canonical bottom-up tree automaton",
-        )
+    automaton = _admit_tree_automaton_carrier(
+        automaton,
+        BottomUpTreeAutomaton,
+        "tree_automata.language_profile.value_type",
+        "automaton must be a canonical bottom-up tree automaton",
+    )
     profile = _build_reachable_state_profile(automaton)
     final_states = set(automaton.final_states)
     accepting = tuple(

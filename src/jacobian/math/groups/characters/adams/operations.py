@@ -83,14 +83,16 @@ def character_adams_operation(
     )
     element = request.character
     _admit_ring_element_shape(element, "character")
-    if all(multiplicity == 0 for multiplicity in element.irreducible_multiplicities):
-        # The Adams operations fix zero: psi^k(0) = 0 without any table
-        # reconstruction or inner products, so admit it before work admission.
-        return CharacterRingElement(
-            table=element.table,
-            irreducible_multiplicities=element.irreducible_multiplicities,
-        )
     source = element.table.partition.source
+
+    is_zero = all(
+        multiplicity == 0 for multiplicity in element.irreducible_multiplicities
+    )
+
+    # Admit the work before any expansion. The zero shortcut still has to
+    # authenticate the retained table, and that costs a canonical class and
+    # table reconstruction, but it performs no inner products, so it is charged
+    # only the group-order envelope rather than the Adams work envelope.
     group_order, source_work = _admit_source_group_order(source)
     if group_order > MAX_CYCLOTOMIC_ORDER:
         raise OperationResourceAdmissionError(
@@ -98,8 +100,13 @@ def character_adams_operation(
             code="groups.characters.adams_group_order_exceeds_envelope",
             message="Adams operations currently admit group order at most 60",
         )
-    _admit_adams_work(element, request.exponent, source_work, group_order)
+    if not is_zero:
+        _admit_adams_work(element, request.exponent, source_work, group_order)
 
+    # Authenticate the retained table. The result contract promises a canonical
+    # retained table, so a structurally valid but forged table must be rejected
+    # on every path; the zero shortcut would otherwise echo the caller's table
+    # back as canonical.
     raw_classes = group_conjugacy_classes(
         source.degree, [list(generator) for generator in source.generators]
     )
@@ -115,6 +122,14 @@ def character_adams_operation(
             "groups.characters.adams_noncanonical_table",
             "input must retain the exact canonical character table for its group",
             ("character", "table"),
+        )
+
+    if is_zero:
+        # The Adams operations fix zero: psi^k(0) = 0, so no class-power map or
+        # inner products are needed once the table is authenticated above.
+        return CharacterRingElement(
+            table=table,
+            irreducible_multiplicities=element.irreducible_multiplicities,
         )
 
     element_to_class = {

@@ -18,10 +18,10 @@ class StabilizerCliffordTransportRequest(StrictModel):
     """Conjugate one exact stabilizer group by a named elementary gate.
 
     Source relation checks, register and generator validation, gate
-    transformation work, and the compact serialized result are bounded before
+    transformation work, and structural result cells are bounded before
     the independent family is reduced or transformed rows are allocated. The
     current envelope supports at most 32 qubits, 64 source generators,
-    1,000,000 work units, and 65,536 compact result bytes, independent of the
+    1,000,000 work units, and 65,536 structural result cells, independent of the
     exponentially larger group order.
     """
 

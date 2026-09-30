@@ -175,17 +175,32 @@ class DifferentialCoefficientRecurrenceRequest(StrictModel):
     operator: DifferentialOreOperator
 
 
+# A boundary row at Taylor degree `d` collects a_k with k = d - c + order, so
+# k is bounded by the row degree cap plus the differential order, independently
+# of the normalized recurrence's shift span.
+MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE = 63
+MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX = (
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + MAX_DIFFERENTIAL_ORDER
+)
+
+# The recurrence coordinate n = m + minimum_slope can exceed its Taylor
+# boundary cutoff by at most the differential order.
+MAX_COEFFICIENT_RECURRENCE_START_INDEX = (
+    MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE + 1 + MAX_DIFFERENTIAL_ORDER
+)
+
+
 class CoefficientRecurrenceBoundaryTerm(StrictModel):
     """One exact coefficient of a_k in an exceptional initial row."""
 
-    index: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
+    index: StrictInt = Field(ge=0, le=MAX_COEFFICIENT_RECURRENCE_BOUNDARY_INDEX)
     coefficient: CanonicalRational
 
 
 class CoefficientRecurrenceBoundaryRow(StrictModel):
     """The coefficient equation at one Taylor degree before stable recurrence."""
 
-    degree: StrictInt = Field(ge=0, le=63)
+    degree: StrictInt = Field(ge=0, le=MAX_COEFFICIENT_RECURRENCE_BOUNDARY_DEGREE)
     terms: tuple[CoefficientRecurrenceBoundaryTerm, ...] = Field(max_length=80)
 
     @model_validator(mode="after")
@@ -204,7 +219,15 @@ class DifferentialCoefficientRecurrence(StrictModel):
 
     operator: DifferentialOreOperator
     recurrence: ShiftOreOperator
-    valid_from: StrictInt = Field(ge=0, le=MAX_SHIFT_ORDER)
+    valid_from: StrictInt = Field(
+        ge=0,
+        le=MAX_COEFFICIENT_RECURRENCE_START_INDEX,
+        description=(
+            "First normalized recurrence index after every integral root of its "
+            "leading coefficient. The corresponding Taylor boundary cutoff "
+            "must fit the 64-row boundary envelope."
+        ),
+    )
     boundary_rows: tuple[CoefficientRecurrenceBoundaryRow, ...] = Field(max_length=64)
 
     @model_validator(mode="after")

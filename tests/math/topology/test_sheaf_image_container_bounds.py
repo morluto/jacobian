@@ -1,5 +1,7 @@
 """Image admission uses each canonical restriction container's own envelope."""
 
+from collections.abc import Iterator
+
 import pytest
 
 from jacobian._exact import CanonicalRational
@@ -202,3 +204,64 @@ def test_empty_stalk_images_admit_the_full_simplex_count_envelope() -> None:
     assert all(not stalk.basis for stalk in result.image.stalks)
     decoded = SheafMorphismImageResult.model_validate_json(result.model_dump_json())
     assert image_of_morphism(decoded.inclusion).image == result.image
+
+
+@pytest.mark.parametrize("role", ("source", "target"))
+def test_parent_sheaf_subclasses_are_rejected_before_copy(role: str) -> None:
+    class ExtendedSheaf(FiniteCellularSheaf):
+        payload: object = None
+
+    sheaf = constant_sheaf(canonical_complex(("a",), (("a",),)))
+    nested: object = 1
+    for _ in range(1500):
+        nested = (nested,)
+    parent = ExtendedSheaf.model_construct(**sheaf.__dict__, payload=nested)
+    forged = _identity(sheaf).model_copy(update={role: parent})
+    with pytest.raises(
+        OperationDomainValidationError, match="canonical finite cellular sheaves"
+    ):
+        image_of_morphism(forged)
+
+
+class _UnvisitedList(list[object]):
+    def __len__(self) -> int:
+        raise AssertionError("a noncanonical container length was inspected")
+
+    def __iter__(self) -> Iterator[object]:
+        raise AssertionError("a noncanonical container was traversed")
+
+
+@pytest.mark.parametrize(
+    "field", ("stalks", "cover_restrictions", "derived_restrictions")
+)
+def test_parent_container_subclasses_are_refused_without_inspection(field: str) -> None:
+    sheaf = constant_sheaf(canonical_complex(("a", "b", "c"), (("a", "b", "c"),)))
+    parent = sheaf.model_copy(update={field: _UnvisitedList()})
+    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+        image_of_morphism(_identity(sheaf).model_copy(update={"source": parent}))
+
+
+@pytest.mark.parametrize(
+    "field", ("row_basis", "column_basis", "entries", "row", "cover_path")
+)
+def test_restriction_container_subclasses_are_refused_without_inspection(
+    field: str,
+) -> None:
+    sheaf = constant_sheaf(canonical_complex(("a", "b"), (("a", "b"),)))
+    update = (
+        {"entries": (_UnvisitedList(),)}
+        if field == "row"
+        else {field: _UnvisitedList()}
+    )
+    restriction = sheaf.cover_restrictions[0].model_copy(update=update)
+    parent = sheaf.model_copy(update={"cover_restrictions": (restriction,)})
+    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+        image_of_morphism(_identity(sheaf).model_copy(update={"target": parent}))
+
+
+def test_stalk_basis_subclasses_are_refused_without_inspection() -> None:
+    sheaf = constant_sheaf(canonical_complex(("a",), (("a",),)))
+    stalk = sheaf.stalks[0].model_copy(update={"basis": _UnvisitedList()})
+    parent = sheaf.model_copy(update={"stalks": (stalk,)})
+    with pytest.raises(OperationDomainValidationError, match="ordered container"):
+        image_of_morphism(_identity(sheaf).model_copy(update={"source": parent}))

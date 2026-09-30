@@ -136,7 +136,7 @@ def _resource(code: str, message: str) -> OperationResourceAdmissionError:
 def _bounded_restriction_sequence(
     value: object, limit: int, role: str, field: str
 ) -> tuple[object, ...] | list[object]:
-    if not isinstance(value, (tuple, list)):
+    if not isinstance(value, (tuple, list)) or type(value) not in (tuple, list):
         raise _domain(
             "parent_restriction_structure",
             f"{role} restriction {field} must be an ordered container",
@@ -272,7 +272,11 @@ def _reject_malformed_stalk(stalk: object, role: str) -> None:
     if type(stalk) is not SheafStalk:
         raise _domain("parent_stalk_type", f"{role} parent stalks must be typed")
     basis = getattr(stalk, "basis", None)
-    if isinstance(basis, (tuple, list)) and len(basis) > MAX_SHEAF_STALK_RANK:
+    if (
+        isinstance(basis, (tuple, list))
+        and type(basis) in (tuple, list)
+        and len(basis) > MAX_SHEAF_STALK_RANK
+    ):
         raise _resource(
             "parent_stalk_rank",
             f"{role} morphism parent retains a stalk above the rank envelope",
@@ -296,7 +300,7 @@ def _reject_oversized_parent_container(parent: object, role: str) -> None:
     payload has been rebuilt.
     """
     stalks = getattr(parent, "stalks", None)
-    if not isinstance(stalks, (tuple, list)):
+    if not isinstance(stalks, (tuple, list)) or type(stalks) not in (tuple, list):
         raise _domain(
             "parent_container_type", f"{role} stalks must be an ordered container"
         )
@@ -310,7 +314,10 @@ def _reject_oversized_parent_container(parent: object, role: str) -> None:
         ("derived_restrictions", MAX_SHEAF_DERIVED_RESTRICTIONS),
     ):
         container = getattr(parent, attribute, None)
-        if not isinstance(container, (tuple, list)):
+        if not isinstance(container, (tuple, list)) or type(container) not in (
+            tuple,
+            list,
+        ):
             raise _domain(
                 "parent_container_type",
                 f"{role} {attribute} must be an ordered container",
@@ -353,12 +360,14 @@ def _unvalidated_payload(value: object) -> object:
                 "parent models must retain exactly their declared fields",
             )
         return {key: _unvalidated_payload(item) for key, item in value.__dict__.items()}
-    if isinstance(value, tuple):
+    if type(value) is tuple:
         return tuple(_unvalidated_payload(item) for item in value)
-    if isinstance(value, list):
+    if type(value) is list:
         return [_unvalidated_payload(item) for item in value]
-    if isinstance(value, dict):
-        return {key: _unvalidated_payload(item) for key, item in value.items()}
+    if isinstance(value, (tuple, list, dict)):
+        raise _domain(
+            "parent_structure", "parent fields must use canonical builtin containers"
+        )
     return value
 
 
@@ -538,11 +547,12 @@ def image_of_morphism(value: SheafMorphismResult) -> SheafMorphismImageResult:
     """Compute the image sheaf and exact factorization ``F -> im(phi) -> G``."""
     if type(value) is not SheafMorphismResult:
         raise _domain("morphism_type", "input must be a typed sheaf morphism")
-    if not isinstance(
-        getattr(value, "source", None), FiniteCellularSheaf
-    ) or not isinstance(getattr(value, "target", None), FiniteCellularSheaf):
+    if (
+        type(getattr(value, "source", None)) is not FiniteCellularSheaf
+        or type(getattr(value, "target", None)) is not FiniteCellularSheaf
+    ):
         raise _domain(
-            "parent_type", "morphism parents must be typed finite cellular sheaves"
+            "parent_type", "morphism parents must be canonical finite cellular sheaves"
         )
     source, target = value.source, value.target
     # Bound the parent container sizes before the recursive rebuild below. A

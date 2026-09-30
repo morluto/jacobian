@@ -122,6 +122,29 @@ def _admit_vector(vector: TropicalVector) -> None:
             code="tropical.vector_type",
             message="expected a tropical vector",
         )
+    # A caller may hand over a value built with ``model_construct``, so the
+    # semiring convention and the axis labels are re-admitted here. Without
+    # this an empty vector with a fabricated convention is projected outright,
+    # and an invalid label only surfaces later as a carrier validation error
+    # instead of this operation's declared domain error.
+    if (
+        type(vector.semiring) is not TropicalSemiring
+        or type(vector.axis) is not tuple
+        or type(vector.entries) is not tuple
+    ):
+        raise OperationDomainValidationError(
+            location=("vector",),
+            code="tropical.vector_shape",
+            message="vector axis, entries, and semiring must be canonical values",
+        )
+    try:
+        TropicalSemiring.model_validate(vector.semiring.model_dump(mode="python"))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise OperationDomainValidationError(
+            location=("vector", "semiring"),
+            code="tropical.semiring_invalid",
+            message="vector semiring must satisfy the tropical semiring contract",
+        ) from error
     if len(vector.axis) != len(vector.entries) or len(set(vector.axis)) != len(
         vector.axis
     ):
@@ -129,6 +152,12 @@ def _admit_vector(vector: TropicalVector) -> None:
             location=("vector",),
             code="tropical.vector_shape",
             message="vector axis and entries must have the same unique labels",
+        )
+    if any(not _is_valid_tropical_axis_label(label) for label in vector.axis):
+        raise OperationDomainValidationError(
+            location=("vector", "axis"),
+            code="tropical.vector_axis_label",
+            message="vector axis labels must satisfy the opaque-label contract",
         )
     if len(vector.entries) > 128:
         raise OperationResourceAdmissionError(
@@ -328,6 +357,12 @@ def _check_fraction_sum_growth(
     left: CanonicalRational, right: CanonicalRational
 ) -> None:
     """Preflight numerator/denominator growth for exact rational addition."""
+    # Both operands are canonical reduced rationals with positive denominators,
+    # so an exact cancellation is recognised by integer comparison alone. The
+    # reduced result is then exactly zero, which no digit envelope can exclude,
+    # while the unreduced cross-products can still be twice the input width.
+    if left.num == -right.num and left.den == right.den:
+        return
     numerator_digits = (
         max(
             _digits(left.num) + _digits(right.den),
@@ -846,6 +881,13 @@ def tropical_polynomial_power(
             {tuple(0 for _ in polynomial.variables): zero},
         )
 
+    if exponent == 1:
+        # No convolution runs, so every coefficient is the admitted input
+        # unchanged. Bounding it as ``max_input_digits * 1 + 1`` would reject
+        # a polynomial whose own coefficients already satisfy the shared
+        # scalar digit envelope.
+        return polynomial
+
     result_support = _power_support(polynomial, exponent)
     _admit_power_coefficients_and_output(polynomial, exponent, result_support)
 
@@ -1343,14 +1385,11 @@ def tropical_polynomial_active_terms(
 
 def _univariate_root_values(poly: TropicalPolynomial) -> tuple[Fraction, ...]:
     """Compute finite hull breakpoints for an already-admitted polynomial."""
-    term_count = len(poly.terms)
-    pair_count = term_count * (term_count - 1) // 2
-    if pair_count > MAX_TROPICAL_ROOT_CROSSOVER_PAIRS:
-        raise OperationResourceAdmissionError(
-            location=("polynomial", "terms"),
-            code="tropical.root_crossover_work",
-            message="pairwise tropical root crossover work exceeds the admitted bound",
-        )
+    # This hull scan sorts the terms and pushes/pops each line at most once, so
+    # it is linear in the term count rather than quadratic. Only the separate
+    # root-profile path, which rescans every line at each breakpoint, carries a
+    # crossover-pair envelope; charging it here excluded valid inputs that the
+    # split-form term and output bounds already admit.
     is_max = poly.semiring.convention == "MAX_PLUS"
     lines = [
         (
@@ -1416,21 +1455,27 @@ def tropical_polynomial_univariate_roots(
             message="pairwise tropical root crossover work exceeds the admitted bound",
         )
 
-    coefficient_digits = max(
-        max(_digits(term.coefficient.value.num), _digits(term.coefficient.value.den))
-        for term in poly.terms
-        if term.coefficient.value is not None
-    )
     # A line intersection subtracts two rationals, so numerator and
     # denominator products are bounded by twice the largest admitted input.
     # Reserve a few digits for subtraction and the (bounded) slope difference.
-    root_digit_bound = 2 * coefficient_digits + 8
-    if root_digit_bound > MAX_TROPICAL_ROOT_DIGITS:
-        raise OperationResourceAdmissionError(
-            location=("polynomial", "terms", "coefficient"),
-            code="tropical.root_digit_bound",
-            message="worst-case exact root size exceeds the admitted root digit bound",
+    # A monomial has no pair of lines to intersect, so the estimate is only
+    # meaningful once at least two terms can produce a crossover.
+    if term_count > 1:
+        coefficient_digits = max(
+            max(
+                _digits(term.coefficient.value.num),
+                _digits(term.coefficient.value.den),
+            )
+            for term in poly.terms
+            if term.coefficient.value is not None
         )
+        root_digit_bound = 2 * coefficient_digits + 8
+        if root_digit_bound > MAX_TROPICAL_ROOT_DIGITS:
+            raise OperationResourceAdmissionError(
+                location=("polynomial", "terms", "coefficient"),
+                code="tropical.root_digit_bound",
+                message="worst-case exact root size exceeds the admitted root digit bound",
+            )
     # The profile has at most n-1 roots; across all corners at most 2n terms
     # can be tied (each affine line meets the lower/upper envelope in at most
     # one interval or point). This conservative JSON-size estimate is checked

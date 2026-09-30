@@ -1494,7 +1494,11 @@ def _canonical_spline_evaluation_inputs(
 
 
 def _decimal_digits_upper(value: int) -> int:
-    return decimal_digit_width(value)
+    if value == 0:
+        return 1
+    # log10(2) < 30103/100000. Shared admission must not allocate decimal
+    # strings for every coefficient before the aggregate bound is known.
+    return (abs(value).bit_length() * 30_103) // 100_000 + 1
 
 
 def _scaled_component_width(value: int) -> int:
